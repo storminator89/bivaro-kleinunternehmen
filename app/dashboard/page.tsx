@@ -449,6 +449,55 @@ export default function Dashboard() {
     }).format(amount);
   };
 
+  // CSV-Export für die EÜR
+  const handleExportEUR = () => {
+    // Aktuelles Datum für den Dateinamen
+    const date = new Date().toISOString().split('T')[0];
+    const fileName = `eur-export-${date}.csv`;
+    
+    // CSV-Header
+    let csvContent = "Kategorie;Betrag (EUR)\n";
+    
+    // Einnahmen hinzufügen
+    csvContent += "BETRIEBSEINNAHMEN;\n";
+    csvContent += `Einnahmen (steuerpflichtig);${totalIncome.toFixed(2).replace('.', ',')}\n`;
+    csvContent += `Summe Betriebseinnahmen;${totalIncome.toFixed(2).replace('.', ',')}\n\n`;
+    
+    // Ausgaben nach Kategorie hinzufügen
+    csvContent += "BETRIEBSAUSGABEN;\n";
+    
+    // Gruppierte Ausgaben nach Kategorie
+    const expensesByCategory = Array.from(
+      expenses.reduce((acc, expense) => {
+        if (!expense.taxRelevant) return acc;
+        const category = expense.category || 'Sonstiges';
+        acc.set(category, (acc.get(category) || 0) + expense.amount);
+        return acc;
+      }, new Map<string, number>())
+    );
+    
+    // Alle Ausgabenkategorien hinzufügen
+    expensesByCategory.forEach(([category, amount]) => {
+      csvContent += `${category};${amount.toFixed(2).replace('.', ',')}\n`;
+    });
+    
+    csvContent += `Summe Betriebsausgaben;${totalExpense.toFixed(2).replace('.', ',')}\n\n`;
+    
+    // Gewinn/Verlust hinzufügen
+    csvContent += `GEWINN/VERLUST;${profit.toFixed(2).replace('.', ',')}\n`;
+    
+    // CSV-Datei erstellen und herunterladen
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Hauptkomponente rendern
   return (
     <div className="container py-8">
@@ -932,7 +981,7 @@ export default function Dashboard() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button>EÜR exportieren</Button>
+              <Button onClick={handleExportEUR}>EÜR als CSV exportieren</Button>
             </CardFooter>
           </Card>
         </TabsContent>
