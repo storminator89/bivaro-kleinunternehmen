@@ -806,6 +806,16 @@ export default function Dashboard() {
                               variant="outline" 
                               size="sm"
                               onClick={() => {
+                                // Direkter Download der Rechnung über den neuen API-Endpunkt
+                                window.open(`/api/invoices/download?id=${invoice.id}`, '_blank');
+                              }}
+                            >
+                              Download
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
                                 // In einer erweiterten Version könnte hier ein Modal 
                                 // zur Bearbeitung der Rechnungsdaten geöffnet werden
                                 alert('Rechnungsdetails anzeigen - In einer zukünftigen Version verfügbar');

@@ -4,6 +4,8 @@ import { writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -34,6 +36,19 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
     const filePath = join(tempDir, file.name);
     await writeFile(filePath, buffer);
+    
+    // Generiere einen eindeutigen Dateinamen für die dauerhafte Speicherung
+    const uniqueFileName = `${uuidv4()}_${file.name.replace(/\s+/g, '_')}`;
+    const uploadDir = path.join(process.cwd(), 'public/uploads');
+    const permanentFilePath = path.join(uploadDir, uniqueFileName);
+    
+    // Stelle sicher, dass das Verzeichnis existiert
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    // Kopiere die Datei in das dauerhafte Verzeichnis
+    fs.copyFileSync(filePath, permanentFilePath);
     
     // In einer realen Implementierung würden wir hier die eingebettete ZUGFeRD-XML extrahieren
     // Da wir aber auf Probleme mit PDF-Bibliotheken stoßen, verwenden wir hier eine Simulation
@@ -75,7 +90,7 @@ export async function POST(request: NextRequest) {
     const customerMatch = zugferdXmlContent.match(/Gerabo GmbH/);
     const customerName = customerMatch ? customerMatch[0] : null;
     
-    // Bereinigen (Datei löschen)
+    // Bereinigen (temporäre Datei löschen)
     try {
       fs.unlinkSync(filePath);
     } catch (error) {
@@ -124,6 +139,7 @@ export async function POST(request: NextRequest) {
     const invoice = await prisma.invoice.create({
       data: {
         fileName: file.name,
+        storedFileName: uniqueFileName, // Speichere den Namen der gespeicherten Datei
         invoiceNumber: invoiceNumber || `RG-${new Date().getTime()}`, // Fallback
         invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
         dueDate: dueDate ? new Date(dueDate) : null,
