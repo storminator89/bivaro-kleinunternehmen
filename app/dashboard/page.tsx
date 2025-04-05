@@ -500,19 +500,19 @@ export default function Dashboard() {
 
   // Hauptkomponente rendern
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-background">
       <div className="container max-w-7xl mx-auto px-4 py-10">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10">
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-600 mb-2">
+            <h1 className="text-4xl font-extrabold tracking-tight mb-2">
               Buchhaltung für Kleinunternehmer
             </h1>
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-muted-foreground">
               Verwalten Sie Ihre Finanzen einfach und effizient
             </p>
           </div>
           <div className="mt-4 md:mt-0">
-            <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-1 rounded-md text-sm font-medium">
+            <span className="bg-muted text-muted-foreground px-3 py-1 rounded-md text-sm font-medium">
               {new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}
             </span>
           </div>
@@ -521,55 +521,55 @@ export default function Dashboard() {
         {/* Übersichtskarte */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
           <div className="lg:col-span-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-all hover:shadow-md">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md">
               <div className="px-6 pt-6 pb-4">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-1">
+                <h2 className="text-xl font-semibold text-card-foreground mb-1">
                   Finanzübersicht
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Stand: {new Date().toLocaleDateString('de-DE')}
                 </p>
               </div>
               <div className="p-6 pt-2">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-emerald-900/20 dark:to-green-900/30 dark:bg-gray-800 rounded-xl border border-green-100 dark:border-emerald-800/30">
+                  <div className="p-5 bg-card rounded-xl border">
                     <div className="flex items-center">
-                      <div className="mr-4 bg-green-100 dark:bg-emerald-800/30 p-3 rounded-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <div className="mr-4 bg-green-100 dark:bg-green-900/30 p-3 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
                       <div>
-                        <h3 className="font-medium text-green-700 dark:text-green-400 mb-1">Einnahmen</h3>
-                        <p className="text-2xl font-bold text-green-600 dark:text-green-300">{formatCurrency(totalIncome)}</p>
+                        <h3 className="font-medium text-green-700 dark:text-green-500 mb-1">Einnahmen</h3>
+                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(totalIncome)}</p>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="p-5 bg-gradient-to-br from-red-50 to-rose-50 dark:from-rose-900/20 dark:to-red-900/30 dark:bg-gray-800 rounded-xl border border-red-100 dark:border-red-800/30">
+                  <div className="p-5 bg-card rounded-xl border">
                     <div className="flex items-center">
-                      <div className="mr-4 bg-red-100 dark:bg-red-800/30 p-3 rounded-lg">
+                      <div className="mr-4 bg-red-100 dark:bg-red-900/30 p-3 rounded-lg">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
                       <div>
-                        <h3 className="font-medium text-red-700 dark:text-red-400 mb-1">Ausgaben</h3>
-                        <p className="text-2xl font-bold text-red-600 dark:text-red-300">{formatCurrency(totalExpense)}</p>
+                        <h3 className="font-medium text-red-700 dark:text-red-500 mb-1">Ausgaben</h3>
+                        <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalExpense)}</p>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-indigo-900/20 dark:to-blue-900/30 dark:bg-gray-800 rounded-xl border border-blue-100 dark:border-blue-800/30">
+                  <div className="p-5 bg-card rounded-xl border">
                     <div className="flex items-center">
-                      <div className="mr-4 bg-blue-100 dark:bg-blue-800/30 p-3 rounded-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <div className="mr-4 bg-card p-3 rounded-lg border">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-card-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
                       </div>
                       <div>
-                        <h3 className="font-medium text-blue-700 dark:text-blue-400 mb-1">Gewinn</h3>
-                        <p className={`text-2xl font-bold ${profit >= 0 ? 'text-blue-600 dark:text-blue-300' : 'text-red-600 dark:text-red-300'}`}>
+                        <h3 className="font-medium text-card-foreground mb-1">Gewinn</h3>
+                        <p className={`text-2xl font-bold ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           {formatCurrency(profit)}
                         </p>
                       </div>
@@ -583,29 +583,29 @@ export default function Dashboard() {
       
         {/* Tabs für verschiedene Sektionen */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-1 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="bg-card rounded-xl p-1 shadow-sm border">
             <TabsList className="w-full grid grid-cols-4 gap-2 bg-transparent">
               <TabsTrigger 
                 value="expenses" 
-                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 dark:data-[state=active]:bg-indigo-900/30 dark:data-[state=active]:text-indigo-300 rounded-lg"
+                className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
               >
                 Ausgaben
               </TabsTrigger>
               <TabsTrigger 
                 value="incomes" 
-                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 dark:data-[state=active]:bg-indigo-900/30 dark:data-[state=active]:text-indigo-300 rounded-lg"
+                className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
               >
                 Einnahmen
               </TabsTrigger>
               <TabsTrigger 
                 value="invoices" 
-                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 dark:data-[state=active]:bg-indigo-900/30 dark:data-[state=active]:text-indigo-300 rounded-lg"
+                className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
               >
                 Rechnungen
               </TabsTrigger>
               <TabsTrigger 
                 value="eur" 
-                className="data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 dark:data-[state=active]:bg-indigo-900/30 dark:data-[state=active]:text-indigo-300 rounded-lg"
+                className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
               >
                 EÜR
               </TabsTrigger>
@@ -614,17 +614,17 @@ export default function Dashboard() {
         
           {/* Ausgaben Tab */}
           <TabsContent value="expenses" className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Neue Ausgabe erfassen</h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                    <h2 className="text-xl font-semibold mb-1">Neue Ausgabe erfassen</h2>
+                    <p className="text-sm text-muted-foreground">
                       Erfassen Sie hier Ihre geschäftlichen Ausgaben
                     </p>
                   </div>
-                  <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="flex items-center text-xs text-muted-foreground bg-muted rounded-lg px-3 py-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Steuerlich relevante Ausgaben werden in der EÜR berücksichtigt
@@ -640,7 +640,6 @@ export default function Dashboard() {
                         id="description" 
                         value={newExpense.description}
                         onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
-                        className="bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700"
                         placeholder="z.B. Büromaterial"
                         required
                       />
@@ -653,7 +652,6 @@ export default function Dashboard() {
                         step="0.01"
                         value={newExpense.amount}
                         onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
-                        className="bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700"
                         placeholder="0.00"
                         required
                       />
@@ -664,7 +662,6 @@ export default function Dashboard() {
                         id="category" 
                         value={newExpense.category}
                         onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
-                        className="bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700"
                         placeholder="z.B. Bürobedarf"
                       />
                     </div>
@@ -673,7 +670,7 @@ export default function Dashboard() {
                         <input
                           type="checkbox"
                           id="taxRelevant"
-                          className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 h-4 w-4"
+                          className="rounded border-input text-primary h-4 w-4"
                           checked={newExpense.taxRelevant}
                           onChange={(e) => setNewExpense({...newExpense, taxRelevant: e.target.checked})}
                         />
@@ -682,7 +679,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div>
-                    <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                    <Button type="submit" className="text-white bg-red-600 hover:bg-red-700">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
@@ -693,16 +690,16 @@ export default function Dashboard() {
               </div>
             </div>
           
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Ihre Ausgaben</h2>
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b">
+                <h2 className="text-xl font-semibold">Ihre Ausgaben</h2>
               </div>
               <div className="overflow-hidden">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableCaption>Alle erfassten Geschäftsausgaben</TableCaption>
                     <TableHeader>
-                      <TableRow className="bg-gray-50 dark:bg-gray-700/50">
+                      <TableRow className="bg-muted/50">
                         <TableHead className="font-medium">Datum</TableHead>
                         <TableHead className="font-medium">Beschreibung</TableHead>
                         <TableHead className="font-medium">Kategorie</TableHead>
@@ -714,15 +711,15 @@ export default function Dashboard() {
                     <TableBody>
                       {expenses.length > 0 ? (
                         expenses.map((expense) => (
-                          <TableRow key={expense.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                            <TableCell className="text-gray-600 dark:text-gray-300">{new Date(expense.date).toLocaleDateString('de-DE')}</TableCell>
-                            <TableCell className="font-medium text-gray-900 dark:text-white">{expense.description}</TableCell>
-                            <TableCell className="text-gray-600 dark:text-gray-300">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+                          <TableRow key={expense.id} className="hover:bg-muted/50 transition-colors">
+                            <TableCell className="text-muted-foreground">{new Date(expense.date).toLocaleDateString('de-DE')}</TableCell>
+                            <TableCell className="font-medium">{expense.description}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
                                 {expense.category || 'Sonstiges'}
                               </span>
                             </TableCell>
-                            <TableCell className="text-right font-medium text-gray-900 dark:text-white">{formatCurrency(expense.amount)}</TableCell>
+                            <TableCell className="text-right font-medium text-red-600 dark:text-red-500">{formatCurrency(expense.amount)}</TableCell>
                             <TableCell className="text-center">
                               {expense.taxRelevant ? (
                                 <span className="inline-flex items-center justify-center w-5 h-5 bg-green-100 dark:bg-green-800/30 rounded-full">
@@ -743,7 +740,6 @@ export default function Dashboard() {
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-gray-600 border-gray-300 hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700/50 h-8" 
                                   onClick={() => openEditModal(expense, 'expense')}
                                 >
                                   Bearbeiten
@@ -751,7 +747,7 @@ export default function Dashboard() {
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20 h-8"
+                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
                                   onClick={() => handleDelete(expense.id, 'expense')}
                                   disabled={isDeleting}
                                 >
@@ -763,9 +759,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             <div className="flex flex-col items-center justify-center">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-muted-foreground/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                               <span>Keine Ausgaben vorhanden. Erfassen Sie Ihre erste Ausgabe oben.</span>
@@ -782,12 +778,12 @@ export default function Dashboard() {
         
           {/* Einnahmen Tab */}
           <TabsContent value="incomes" className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Neue Einnahme erfassen</h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                    <h2 className="text-xl font-semibold mb-1">Neue Einnahme erfassen</h2>
+                    <p className="text-sm text-muted-foreground">
                       Erfassen Sie hier Ihre geschäftlichen Einnahmen
                     </p>
                   </div>
@@ -802,7 +798,6 @@ export default function Dashboard() {
                         id="incomeDescription" 
                         value={newIncome.description}
                         onChange={(e) => setNewIncome({...newIncome, description: e.target.value})}
-                        className="bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700"
                         placeholder="z.B. Beratungsleistung"
                         required
                       />
@@ -815,7 +810,6 @@ export default function Dashboard() {
                         step="0.01"
                         value={newIncome.amount}
                         onChange={(e) => setNewIncome({...newIncome, amount: e.target.value})}
-                        className="bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700"
                         placeholder="0.00"
                         required
                       />
@@ -826,7 +820,6 @@ export default function Dashboard() {
                         id="customer" 
                         value={newIncome.customer}
                         onChange={(e) => setNewIncome({...newIncome, customer: e.target.value})}
-                        className="bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700"
                         placeholder="z.B. Firma XYZ GmbH"
                       />
                     </div>
@@ -835,7 +828,7 @@ export default function Dashboard() {
                         <input
                           type="checkbox"
                           id="incomeTaxRelevant"
-                          className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 h-4 w-4"
+                          className="rounded border-input text-primary h-4 w-4"
                           checked={newIncome.taxRelevant}
                           onChange={(e) => setNewIncome({...newIncome, taxRelevant: e.target.checked})}
                         />
@@ -844,7 +837,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div>
-                    <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                    <Button type="submit" className="text-white bg-green-600 hover:bg-green-700">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
@@ -855,16 +848,16 @@ export default function Dashboard() {
               </div>
             </div>
           
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Ihre Einnahmen</h2>
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b">
+                <h2 className="text-xl font-semibold">Ihre Einnahmen</h2>
               </div>
               <div className="overflow-hidden">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableCaption>Alle erfassten Geschäftseinnahmen</TableCaption>
                     <TableHeader>
-                      <TableRow className="bg-gray-50 dark:bg-gray-700/50">
+                      <TableRow className="bg-muted/50">
                         <TableHead className="font-medium">Datum</TableHead>
                         <TableHead className="font-medium">Beschreibung</TableHead>
                         <TableHead className="font-medium">Kunde</TableHead>
@@ -876,17 +869,17 @@ export default function Dashboard() {
                     <TableBody>
                       {incomes.length > 0 ? (
                         incomes.map((income) => (
-                          <TableRow key={income.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                            <TableCell className="text-gray-600 dark:text-gray-300">{new Date(income.date).toLocaleDateString('de-DE')}</TableCell>
-                            <TableCell className="font-medium text-gray-900 dark:text-white">{income.description}</TableCell>
-                            <TableCell className="text-gray-600 dark:text-gray-300">
+                          <TableRow key={income.id} className="hover:bg-muted/50 transition-colors">
+                            <TableCell className="text-muted-foreground">{new Date(income.date).toLocaleDateString('de-DE')}</TableCell>
+                            <TableCell className="font-medium">{income.description}</TableCell>
+                            <TableCell className="text-muted-foreground">
                               {income.customer ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-800/30 text-blue-800 dark:text-blue-300">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
                                   {income.customer}
                                 </span>
                               ) : "-"}
                             </TableCell>
-                            <TableCell className="text-right font-medium text-green-600 dark:text-green-400">{formatCurrency(income.amount)}</TableCell>
+                            <TableCell className="text-right font-medium text-green-600 dark:text-green-500">{formatCurrency(income.amount)}</TableCell>
                             <TableCell className="text-center">
                               {income.taxRelevant ? (
                                 <span className="inline-flex items-center justify-center w-5 h-5 bg-green-100 dark:bg-green-800/30 rounded-full">
@@ -907,7 +900,6 @@ export default function Dashboard() {
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-gray-600 border-gray-300 hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700/50 h-8"
                                   onClick={() => openEditModal(income, 'income')}
                                 >
                                   Bearbeiten
@@ -915,7 +907,7 @@ export default function Dashboard() {
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20 h-8"
+                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
                                   onClick={() => handleDelete(income.id, 'income')}
                                   disabled={isDeleting}
                                 >
@@ -927,9 +919,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             <div className="flex flex-col items-center justify-center">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-muted-foreground/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
                               </svg>
                               <span>Keine Einnahmen vorhanden. Erfassen Sie Ihre erste Einnahme oben.</span>
@@ -946,12 +938,12 @@ export default function Dashboard() {
         
           {/* Rechnungen Tab */}
           <TabsContent value="invoices" className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-white">ZUGFeRD-Rechnung hochladen</h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                    <h2 className="text-xl font-semibold mb-1">ZUGFeRD-Rechnung hochladen</h2>
+                    <p className="text-sm text-muted-foreground">
                       Laden Sie Ihre ZUGFeRD-kompatiblen PDF-Rechnungen hoch. 
                       Die Daten werden automatisch extrahiert und verarbeitet.
                     </p>
@@ -962,7 +954,7 @@ export default function Dashboard() {
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2">
-                      <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+                      <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center">
                         <Input 
                           id="invoiceFile" 
                           type="file" 
@@ -974,13 +966,13 @@ export default function Dashboard() {
                           htmlFor="invoiceFile" 
                           className="cursor-pointer flex flex-col items-center justify-center h-full"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400 dark:text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-muted-foreground/50 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                           </svg>
-                          <span className="text-gray-600 dark:text-gray-400 font-medium">
+                          <span className="text-foreground font-medium">
                             {selectedFile ? selectedFile.name : 'Klicken Sie hier, um eine Datei auszuwählen'}
                           </span>
-                          <span className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                          <span className="text-sm text-muted-foreground mt-1">
                             Unterstützt wird das PDF-Format
                           </span>
                         </Label>
@@ -990,7 +982,7 @@ export default function Dashboard() {
                       <Button 
                         onClick={handleFileUpload} 
                         disabled={!selectedFile || isUploading}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white w-full h-12 text-base"
+                        className="w-full h-12 text-base"
                       >
                         {isUploading ? (
                           <>
@@ -1009,7 +1001,7 @@ export default function Dashboard() {
                           </>
                         )}
                       </Button>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-3">
+                      <p className="text-xs text-muted-foreground text-center mt-3">
                         Die Daten werden automatisch extrahiert und in Ihre Buchhaltung übernommen
                       </p>
                     </div>
@@ -1018,16 +1010,16 @@ export default function Dashboard() {
               </div>
             </div>
           
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Ihre Rechnungen</h2>
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b">
+                <h2 className="text-xl font-semibold">Ihre Rechnungen</h2>
               </div>
               <div className="overflow-hidden">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableCaption>Alle hochgeladenen Rechnungen</TableCaption>
                     <TableHeader>
-                      <TableRow className="bg-gray-50 dark:bg-gray-700/50">
+                      <TableRow className="bg-muted/50">
                         <TableHead className="font-medium">Datum</TableHead>
                         <TableHead className="font-medium">Rechnungsnummer</TableHead>
                         <TableHead className="font-medium">Dateiname</TableHead>
@@ -1039,17 +1031,17 @@ export default function Dashboard() {
                     <TableBody>
                       {invoices.length > 0 ? (
                         invoices.map((invoice) => (
-                          <TableRow key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                            <TableCell className="text-gray-600 dark:text-gray-300">
+                          <TableRow key={invoice.id} className="hover:bg-muted/50 transition-colors">
+                            <TableCell className="text-muted-foreground">
                               {invoice.invoiceDate 
                                 ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE') 
                                 : new Date(invoice.uploadedAt).toLocaleDateString('de-DE')}
                             </TableCell>
-                            <TableCell className="font-medium text-gray-900 dark:text-white">
+                            <TableCell className="font-medium">
                               {invoice.invoiceNumber || 
-                                <span className="text-gray-400 dark:text-gray-500 italic text-xs">Nicht verfügbar</span>}
+                                <span className="text-muted-foreground italic text-xs">Nicht verfügbar</span>}
                             </TableCell>
-                            <TableCell className="text-gray-600 dark:text-gray-300 max-w-[200px] truncate">
+                            <TableCell className="text-muted-foreground max-w-[200px] truncate">
                               <div className="flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -1057,10 +1049,10 @@ export default function Dashboard() {
                                 {invoice.fileName}
                               </div>
                             </TableCell>
-                            <TableCell className="text-right font-medium text-gray-900 dark:text-white">
+                            <TableCell className="text-right font-medium">
                               {invoice.totalAmount 
                                 ? formatCurrency(invoice.totalAmount) 
-                                : <span className="text-gray-400 dark:text-gray-500 italic text-xs">Nicht verfügbar</span>}
+                                : <span className="text-muted-foreground italic text-xs">Nicht verfügbar</span>}
                             </TableCell>
                             <TableCell className="text-center">
                               <button 
@@ -1083,7 +1075,6 @@ export default function Dashboard() {
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-gray-600 border-gray-300 hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700/50 h-8"
                                   onClick={() => {
                                     window.open(`/api/invoices/download?id=${invoice.id}`, '_blank');
                                   }}
@@ -1096,7 +1087,6 @@ export default function Dashboard() {
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-gray-600 border-gray-300 hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700/50 h-8"
                                   onClick={() => {
                                     alert('Rechnungsdetails anzeigen - In einer zukünftigen Version verfügbar');
                                   }}
@@ -1106,7 +1096,7 @@ export default function Dashboard() {
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20 h-8"
+                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
                                   onClick={() => handleInvoiceDelete(invoice.id)}
                                   disabled={isDeleting}
                                 >
@@ -1121,9 +1111,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             <div className="flex flex-col items-center justify-center">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-muted-foreground/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                               <span>Keine Rechnungen vorhanden. Laden Sie Ihre erste Rechnung oben hoch.</span>
@@ -1140,18 +1130,18 @@ export default function Dashboard() {
         
           {/* EÜR Tab */}
           <TabsContent value="eur" className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Einnahmen-Überschuss-Rechnung</h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                    <h2 className="text-xl font-semibold mb-1">Einnahmen-Überschuss-Rechnung</h2>
+                    <p className="text-sm text-muted-foreground">
                       Ihre EÜR-Übersicht für steuerliche Zwecke
                     </p>
                   </div>
                   <Button 
                     onClick={handleExportEUR} 
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white self-start"
+                    className="self-start"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
@@ -1162,9 +1152,9 @@ export default function Dashboard() {
               </div>
               <div className="p-6">
                 <div className="space-y-8">
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 rounded-lg p-6 border border-green-100 dark:border-green-800/20">
-                    <h3 className="text-base sm:text-lg font-semibold text-green-800 dark:text-green-400 flex items-center mb-4">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="bg-muted rounded-lg p-6 border border-green-100 dark:border-green-800/20">
+                    <h3 className="text-base sm:text-lg font-semibold text-green-700 flex items-center mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       Betriebseinnahmen
@@ -1172,28 +1162,28 @@ export default function Dashboard() {
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow className="border-green-200 dark:border-green-800/30 bg-green-100/50 dark:bg-green-900/20">
-                            <TableHead className="font-medium text-green-800 dark:text-green-400">Kategorie</TableHead>
-                            <TableHead className="text-right font-medium text-green-800 dark:text-green-400">Betrag</TableHead>
+                          <TableRow className="bg-muted/70 border-border">
+                            <TableHead className="font-medium">Kategorie</TableHead>
+                            <TableHead className="text-right font-medium">Betrag</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          <TableRow className="border-green-200 dark:border-green-800/30">
-                            <TableCell className="text-green-700 dark:text-green-300">Einnahmen (steuerpflichtig)</TableCell>
-                            <TableCell className="text-right font-medium text-green-700 dark:text-green-300">{formatCurrency(totalIncome)}</TableCell>
+                          <TableRow className="border-border">
+                            <TableCell className="text-foreground">Einnahmen (steuerpflichtig)</TableCell>
+                            <TableCell className="text-right font-medium text-green-600">{formatCurrency(totalIncome)}</TableCell>
                           </TableRow>
-                          <TableRow className="font-bold border-green-200 dark:border-green-800/30 bg-green-100/50 dark:bg-green-900/20">
-                            <TableCell className="text-green-800 dark:text-green-400">Summe Betriebseinnahmen</TableCell>
-                            <TableCell className="text-right text-green-800 dark:text-green-400">{formatCurrency(totalIncome)}</TableCell>
+                          <TableRow className="font-bold bg-muted/70 border-border">
+                            <TableCell className="text-foreground">Summe Betriebseinnahmen</TableCell>
+                            <TableCell className="text-right text-green-600">{formatCurrency(totalIncome)}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
                     </div>
                   </div>
                   
-                  <div className="bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/10 dark:to-rose-900/10 rounded-lg p-6 border border-red-100 dark:border-red-800/20">
-                    <h3 className="text-base sm:text-lg font-semibold text-red-800 dark:text-red-400 flex items-center mb-4">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="bg-muted rounded-lg p-6 border border-red-100 dark:border-red-800/20">
+                    <h3 className="text-base sm:text-lg font-semibold text-red-700 flex items-center mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       Betriebsausgaben
@@ -1201,9 +1191,9 @@ export default function Dashboard() {
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow className="border-red-200 dark:border-red-800/30 bg-red-100/50 dark:bg-red-900/20">
-                            <TableHead className="font-medium text-red-800 dark:text-red-400">Kategorie</TableHead>
-                            <TableHead className="text-right font-medium text-red-800 dark:text-red-400">Betrag</TableHead>
+                          <TableRow className="bg-muted/70 border-border">
+                            <TableHead className="font-medium">Kategorie</TableHead>
+                            <TableHead className="text-right font-medium">Betrag</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1216,29 +1206,29 @@ export default function Dashboard() {
                               return acc;
                             }, new Map<string, number>())
                           ).map(([category, amount]) => (
-                            <TableRow key={category} className="border-red-200 dark:border-red-800/30">
-                              <TableCell className="text-red-700 dark:text-red-300">{category}</TableCell>
-                              <TableCell className="text-right font-medium text-red-700 dark:text-red-300">{formatCurrency(amount)}</TableCell>
+                            <TableRow key={category} className="border-border">
+                              <TableCell className="text-foreground">{category}</TableCell>
+                              <TableCell className="text-right font-medium text-red-600">{formatCurrency(amount)}</TableCell>
                             </TableRow>
                           ))}
                           
-                          <TableRow className="font-bold border-red-200 dark:border-red-800/30 bg-red-100/50 dark:bg-red-900/20">
-                            <TableCell className="text-red-800 dark:text-red-400">Summe Betriebsausgaben</TableCell>
-                            <TableCell className="text-right text-red-800 dark:text-red-400">{formatCurrency(totalExpense)}</TableCell>
+                          <TableRow className="font-bold bg-muted/70 border-border">
+                            <TableCell className="text-foreground">Summe Betriebsausgaben</TableCell>
+                            <TableCell className="text-right text-red-600">{formatCurrency(totalExpense)}</TableCell>
                           </TableRow>
                         </TableBody>
                       </Table>
                     </div>
                   </div>
                   
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-lg p-6 border border-blue-100 dark:border-blue-800/20">
+                  <div className="bg-muted rounded-lg p-6 border">
                     <div className="overflow-x-auto">
                       <Table>
                         <TableBody>
-                          <TableRow className="font-bold text-lg border-blue-200 dark:border-blue-800/30 bg-blue-100/50 dark:bg-blue-900/20">
-                            <TableCell className="text-blue-800 dark:text-blue-400">Gewinn/Verlust</TableCell>
+                          <TableRow className="font-bold text-lg bg-muted/70 border-border">
+                            <TableCell className="text-foreground">Gewinn/Verlust</TableCell>
                             <TableCell className="text-right">
-                              <span className={`text-lg font-bold ${profit >= 0 ? 'text-blue-600 dark:text-blue-300' : 'text-red-600 dark:text-red-300'}`}>
+                              <span className={`text-lg font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {formatCurrency(profit)}
                               </span>
                             </TableCell>
