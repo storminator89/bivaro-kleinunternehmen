@@ -26,6 +26,7 @@ type Expense = {
   date: string;
   category?: string;
   taxRelevant: boolean;
+  taxDeductiblePercentage?: number; // Steuerlich ansetzbarer Anteil
   receiptFileName?: string;  // Name der hochgeladenen Belegdatei
   storedReceiptFileName?: string;  // Gespeicherter Dateiname des Belegs
 };
@@ -154,6 +155,25 @@ const EditModal = ({ isOpen, onClose, onSave, data, type }: EditModalProps) => {
             />
             <Label htmlFor="edit-taxRelevant" className="font-normal">Steuerlich relevant</Label>
           </div>
+          
+          {type === 'expense' && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-taxDeductiblePercentage">Steuerlich ansetzbarer Anteil (%)</Label>
+              <Input 
+                id="edit-taxDeductiblePercentage" 
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={formData.taxDeductiblePercentage || 100}
+                onChange={(e) => setFormData({...formData, taxDeductiblePercentage: parseInt(e.target.value) || 100})}
+                placeholder="100"
+              />
+              <p className="text-xs text-muted-foreground">
+                Bei gemischter privater/geschäftlicher Nutzung: Prozentsatz des geschäftlich nutzbaren Anteils
+              </p>
+            </div>
+          )}
           
           <div className="flex justify-end space-x-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -387,7 +407,8 @@ export default function Dashboard() {
     description: '',
     amount: '',
     category: 'Sonstiges',
-    taxRelevant: true
+    taxRelevant: true,
+    taxDeductiblePercentage: 100
   });
   
   const [newIncome, setNewIncome] = useState({
@@ -438,6 +459,7 @@ export default function Dashboard() {
       formData.append('amount', newExpense.amount);
       formData.append('category', newExpense.category);
       formData.append('taxRelevant', newExpense.taxRelevant.toString());
+      formData.append('taxDeductiblePercentage', newExpense.taxDeductiblePercentage.toString());
       if (expenseReceipt) {
         formData.append('receipt', expenseReceipt);
       }
@@ -454,7 +476,8 @@ export default function Dashboard() {
           description: '',
           amount: '',
           category: 'Sonstiges',
-          taxRelevant: true
+          taxRelevant: true,
+          taxDeductiblePercentage: 100
         });
         setExpenseReceipt(null);
       }
@@ -647,7 +670,7 @@ export default function Dashboard() {
     income.taxRelevant ? sum + income.amount : sum, 0);
   
   const totalExpense = expenses.reduce((sum, expense) => 
-    expense.taxRelevant ? sum + expense.amount : sum, 0);
+    expense.taxRelevant ? sum + (expense.amount * (expense.taxDeductiblePercentage || 100) / 100) : sum, 0);
   
   const profit = totalIncome - totalExpense;
 
@@ -681,7 +704,8 @@ export default function Dashboard() {
       expenses.reduce((acc, expense) => {
         if (!expense.taxRelevant) return acc;
         const category = expense.category || 'Sonstiges';
-        acc.set(category, (acc.get(category) || 0) + expense.amount);
+        const deductibleAmount = expense.amount * (expense.taxDeductiblePercentage || 100) / 100;
+        acc.set(category, (acc.get(category) || 0) + deductibleAmount);
         return acc;
       }, new Map<string, number>())
     );
@@ -898,6 +922,22 @@ export default function Dashboard() {
                         />
                         <Label htmlFor="taxRelevant" className="ml-2 text-sm font-medium">Steuerlich relevant</Label>
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="taxDeductiblePercentage" className="text-sm font-medium">Steuerlich ansetzbarer Anteil (%)</Label>
+                      <Input
+                        id="taxDeductiblePercentage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={newExpense.taxDeductiblePercentage}
+                        onChange={(e) => setNewExpense({...newExpense, taxDeductiblePercentage: parseInt(e.target.value) || 100})}
+                        placeholder="100"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Bei gemischter privater/geschäftlicher Nutzung: Prozentsatz des geschäftlich nutzbaren Anteils
+                      </p>
                     </div>
                   </div>
                   <div>
@@ -1879,7 +1919,8 @@ export default function Dashboard() {
                             expenses.reduce((acc, expense) => {
                               if (!expense.taxRelevant) return acc;
                               const category = expense.category || 'Sonstiges';
-                              acc.set(category, (acc.get(category) || 0) + expense.amount);
+                              const deductibleAmount = expense.amount * (expense.taxDeductiblePercentage || 100) / 100;
+                              acc.set(category, (acc.get(category) || 0) + deductibleAmount);
                               return acc;
                             }, new Map<string, number>())
                           ).map(([category, amount]) => (

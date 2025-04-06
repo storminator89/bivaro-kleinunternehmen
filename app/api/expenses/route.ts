@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
           amount: parseFloat(amount),
           category: category || null,
           taxRelevant,
+          taxDeductiblePercentage: formData.get('taxDeductiblePercentage') ? parseInt(formData.get('taxDeductiblePercentage') as string) : 100,
           receiptFileName,
           storedReceiptFileName,
         },
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(expense);
     } else {
       // Verarbeite regulären JSON-Request ohne Datei
-      const { description, amount, category, taxRelevant } = await request.json();
+      const { description, amount, category, taxRelevant, taxDeductiblePercentage } = await request.json();
       
       if (!description || !amount) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest) {
           amount: parseFloat(amount.toString()),
           category: category || null,
           taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
+          taxDeductiblePercentage: taxDeductiblePercentage || 100,
         },
       });
       
@@ -125,7 +127,7 @@ export async function GET() {
 
 // Neue Methode zum Aktualisieren einer Ausgabe
 export async function PUT(request: Request) {
-  const { id, description, amount, category, taxRelevant, receiptUrl } = await request.json();
+  const { id, description, amount, category, taxRelevant, taxDeductiblePercentage, receiptUrl } = await request.json();
 
   if (!id || !description || !amount) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -139,6 +141,7 @@ export async function PUT(request: Request) {
         amount: parseFloat(amount.toString()),
         category: category || null,
         taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
+        taxDeductiblePercentage: taxDeductiblePercentage || 100,
         receiptUrl: receiptUrl || null,
       },
     });
