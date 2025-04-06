@@ -1,56 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import * as fs from 'fs';
 
 const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const id = url.searchParams.get('id');
-  
-  if (!id) {
-    return NextResponse.json({ error: 'Rechnungs-ID ist erforderlich' }, { status: 400 });
-  }
-  
   try {
-    // Rechnung aus der Datenbank abrufen
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: Number(id) }
-    });
-    
-    if (!invoice) {
-      return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
-    }
-    
-    // Pfad zur gespeicherten PDF-Datei
-    const uploadDir = path.join(process.cwd(), 'public/uploads');
-    const filePath = path.join(uploadDir, invoice.storedFileName);
-    
-    try {
-      // Prüfen, ob die Datei existiert
-      await fs.access(filePath);
-      
-      // Datei lesen
-      const fileBuffer = await fs.readFile(filePath);
-      
-      // Erstelle Antwort mit PDF-Inhalt
-      const response = new NextResponse(fileBuffer);
-      
-      // Setze Header für PDF-Download
-      response.headers.set('Content-Type', 'application/pdf');
-      response.headers.set('Content-Disposition', `attachment; filename="${invoice.fileName || `Rechnung-${invoice.invoiceNumber || id}.pdf`}"`);
-      
-      return response;
-    } catch (fileError) {
-      console.error('Fehler beim Lesen der PDF-Datei:', fileError);
-      
-      // Wenn die Datei nicht gefunden wurde, gib eine entsprechende Fehlermeldung zurück
+    const url = new URL(request.url);
+    const id = url.searchParams.get('id');
+    const download = url.searchParams.get('download') === 'true';
+
+    if (!id) {
       return NextResponse.json(
-        { error: 'Die Original-PDF-Datei konnte nicht gefunden werden.' },
+        { error: 'ID ist erforderlich' },
+        { status: 400 }
+      );
+    }
+
+    // Rechnung mit dem angegebenen ID abrufen
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!invoice) {
+      return NextResponse.json(
+        { error: 'Rechnung nicht gefunden' },
         { status: 404 }
       );
     }
+
+    // Pfad zur gespeicherten Datei
+    const filePath = join(process.cwd(), 'public/uploads', invoice.storedFileName);
+
+    // Prüfen, ob die Datei existiert
+    if (!fs.existsSync(filePath)) {
+      return NextResponse.json(
+        { error: 'Datei nicht gefunden' },
+        { status: 404 }
+      );
+    }
+
+    // Datei einlesen
+    const fileBuffer = await readFile(filePath);
+    
+    // Bestimmen des Content-Types - bei Rechnungen sollte es immer PDF sein
+    const contentType = 'application/pdf';
+
+    // Header für die Response
+    const headers: HeadersInit = {
+      'Content-Type': contentType,
+    };
+    
+    // Wenn download=true übergeben wurde, setze den Content-Disposition Header für Download
+    if (download) {
+      headers['Content-Disposition'] = `attachment; filename="${invoice.fileName}"`;
+    } else {
+      // Für Vorschau im Browser: inline statt attachment
+      headers['Content-Disposition'] = `inline; filename="${invoice.fileName}"`;
+    }
+
+    const response = new NextResponse(fileBuffer, {
+      status: 200,
+      headers: headers,
+    });
+
+    return response;
   } catch (error) {
     console.error('Fehler beim Herunterladen der Rechnung:', error);
     return NextResponse.json(

@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
+    const download = url.searchParams.get('download') === 'true';
 
     if (!id) {
       return NextResponse.json(
@@ -68,19 +69,28 @@ export async function GET(request: NextRequest) {
     const downloadFilename = expense.receiptFileName || expense.storedReceiptFileName;
 
     // Response mit Datei und korrekten Headers
+    const headers: HeadersInit = {
+      'Content-Type': contentType,
+    };
+    
+    // Wenn download=true übergeben wurde, setze den Content-Disposition Header für Download
+    if (download) {
+      headers['Content-Disposition'] = `attachment; filename="${downloadFilename}"`;
+    } else {
+      // Für Vorschau im Browser: inline statt attachment
+      headers['Content-Disposition'] = `inline; filename="${downloadFilename}"`;
+    }
+
     const response = new NextResponse(fileBuffer, {
       status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${downloadFilename}"`,
-      },
+      headers: headers,
     });
 
     return response;
   } catch (error) {
-    console.error('Fehler beim Herunterladen des Belegs:', error);
+    console.error('Fehler beim Laden des Belegs:', error);
     return NextResponse.json(
-      { error: 'Fehler beim Herunterladen des Belegs: ' + (error instanceof Error ? error.message : String(error)) },
+      { error: 'Fehler beim Laden des Belegs: ' + (error instanceof Error ? error.message : String(error)) },
       { status: 500 }
     );
   }
