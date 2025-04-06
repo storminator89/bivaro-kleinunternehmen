@@ -50,6 +50,28 @@ type Invoice = {
   dueDate?: string;
 };
 
+// Filter-Typen für die Tabellenansichten
+type FilterState = {
+  expenses: {
+    category: string;
+    dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
+    taxRelevant: 'all' | 'yes' | 'no';
+    hasReceipt: 'all' | 'yes' | 'no';
+    searchTerm: string;
+  };
+  incomes: {
+    customer: string;
+    dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
+    taxRelevant: 'all' | 'yes' | 'no';
+    searchTerm: string;
+  };
+  invoices: {
+    paidStatus: 'all' | 'paid' | 'unpaid';
+    dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
+    searchTerm: string;
+  };
+};
+
 // Das Modal für die Bearbeitung
 type EditModalProps = {
   isOpen: boolean;
@@ -170,6 +192,189 @@ export default function Dashboard() {
   const [editType, setEditType] = useState<'expense' | 'income'>('expense');
   const [itemToEdit, setItemToEdit] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Filter States
+  const [filters, setFilters] = useState<FilterState>({
+    expenses: {
+      category: '',
+      dateRange: 'all',
+      taxRelevant: 'all',
+      hasReceipt: 'all',
+      searchTerm: '',
+    },
+    incomes: {
+      customer: '',
+      dateRange: 'all',
+      taxRelevant: 'all',
+      searchTerm: '',
+    },
+    invoices: {
+      paidStatus: 'all',
+      dateRange: 'all',
+      searchTerm: '',
+    }
+  });
+
+  // Gefilterte Daten
+  const filteredExpenses = expenses.filter(expense => {
+    // Kategoriefilter
+    if (filters.expenses.category && expense.category !== filters.expenses.category) {
+      return false;
+    }
+    
+    // Steuerrelevanzfilter
+    if (filters.expenses.taxRelevant === 'yes' && !expense.taxRelevant) {
+      return false;
+    }
+    if (filters.expenses.taxRelevant === 'no' && expense.taxRelevant) {
+      return false;
+    }
+    
+    // Belegfilter
+    if (filters.expenses.hasReceipt === 'yes' && !expense.storedReceiptFileName) {
+      return false;
+    }
+    if (filters.expenses.hasReceipt === 'no' && expense.storedReceiptFileName) {
+      return false;
+    }
+    
+    // Datumsfilter
+    if (filters.expenses.dateRange !== 'all') {
+      const expenseDate = new Date(expense.date);
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+      
+      if (filters.expenses.dateRange === 'thisMonth' && 
+          (expenseDate.getMonth() !== thisMonth || expenseDate.getFullYear() !== thisYear)) {
+        return false;
+      }
+      
+      if (filters.expenses.dateRange === 'lastMonth') {
+        const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+        const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+        if (expenseDate.getMonth() !== lastMonth || expenseDate.getFullYear() !== lastMonthYear) {
+          return false;
+        }
+      }
+      
+      if (filters.expenses.dateRange === 'thisYear' && expenseDate.getFullYear() !== thisYear) {
+        return false;
+      }
+    }
+    
+    // Suchbegriff
+    if (filters.expenses.searchTerm) {
+      const searchTerm = filters.expenses.searchTerm.toLowerCase();
+      return expense.description.toLowerCase().includes(searchTerm) || 
+             (expense.category && expense.category.toLowerCase().includes(searchTerm));
+    }
+    
+    return true;
+  });
+
+  const filteredIncomes = incomes.filter(income => {
+    // Kundenfilter
+    if (filters.incomes.customer && income.customer !== filters.incomes.customer) {
+      return false;
+    }
+    
+    // Steuerrelevanzfilter
+    if (filters.incomes.taxRelevant === 'yes' && !income.taxRelevant) {
+      return false;
+    }
+    if (filters.incomes.taxRelevant === 'no' && income.taxRelevant) {
+      return false;
+    }
+    
+    // Datumsfilter
+    if (filters.incomes.dateRange !== 'all') {
+      const incomeDate = new Date(income.date);
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+      
+      if (filters.incomes.dateRange === 'thisMonth' && 
+          (incomeDate.getMonth() !== thisMonth || incomeDate.getFullYear() !== thisYear)) {
+        return false;
+      }
+      
+      if (filters.incomes.dateRange === 'lastMonth') {
+        const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+        const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+        if (incomeDate.getMonth() !== lastMonth || incomeDate.getFullYear() !== lastMonthYear) {
+          return false;
+        }
+      }
+      
+      if (filters.incomes.dateRange === 'thisYear' && incomeDate.getFullYear() !== thisYear) {
+        return false;
+      }
+    }
+    
+    // Suchbegriff
+    if (filters.incomes.searchTerm) {
+      const searchTerm = filters.incomes.searchTerm.toLowerCase();
+      return income.description.toLowerCase().includes(searchTerm) || 
+             (income.customer && income.customer.toLowerCase().includes(searchTerm));
+    }
+    
+    return true;
+  });
+
+  const filteredInvoices = invoices.filter(invoice => {
+    // Bezahlstatusfilter
+    if (filters.invoices.paidStatus === 'paid' && !invoice.paidStatus) {
+      return false;
+    }
+    if (filters.invoices.paidStatus === 'unpaid' && invoice.paidStatus) {
+      return false;
+    }
+    
+    // Datumsfilter
+    if (filters.invoices.dateRange !== 'all') {
+      let invoiceDate;
+      if (invoice.invoiceDate) {
+        invoiceDate = new Date(invoice.invoiceDate);
+      } else {
+        invoiceDate = new Date(invoice.uploadedAt);
+      }
+      
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+      
+      if (filters.invoices.dateRange === 'thisMonth' && 
+          (invoiceDate.getMonth() !== thisMonth || invoiceDate.getFullYear() !== thisYear)) {
+        return false;
+      }
+      
+      if (filters.invoices.dateRange === 'lastMonth') {
+        const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+        const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+        if (invoiceDate.getMonth() !== lastMonth || invoiceDate.getFullYear() !== lastMonthYear) {
+          return false;
+        }
+      }
+      
+      if (filters.invoices.dateRange === 'thisYear' && invoiceDate.getFullYear() !== thisYear) {
+        return false;
+      }
+    }
+    
+    // Suchbegriff
+    if (filters.invoices.searchTerm) {
+      const searchTerm = filters.invoices.searchTerm.toLowerCase();
+      return invoice.fileName.toLowerCase().includes(searchTerm) || 
+             (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm));
+    }
+    
+    return true;
+  });
+
+  // Einzigartige Kategorien und Kunden für Filter
+  const uniqueCategories = Array.from(new Set(expenses.map(expense => expense.category || 'Sonstiges')));
+  const uniqueCustomers = Array.from(new Set(incomes.map(income => income.customer || '').filter(Boolean)));
 
   // Tab-Änderung
   const handleTabChange = (value: string) => {
@@ -709,10 +914,192 @@ export default function Dashboard() {
           
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
               <div className="px-6 pt-6 pb-4 border-b">
-                <h2 className="text-xl font-semibold">Ihre Ausgaben</h2>
+                <h2 className="text-xl font-semibold mb-2">Ihre Ausgaben</h2>
+                <p className="text-sm text-muted-foreground mb-4">Filtern Sie Ihre Ausgaben nach verschiedenen Kriterien.</p>
+                <div className="bg-muted/40 rounded-xl p-4 border">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div>
+                      <Label htmlFor="expense-category-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Kategorie</Label>
+                      <div className="relative">
+                        <select 
+                          id="expense-category-filter"
+                          className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                          value={filters.expenses.category}
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            expenses: {
+                              ...filters.expenses,
+                              category: e.target.value
+                            }
+                          })}
+                        >
+                          <option value="">Alle Kategorien</option>
+                          {uniqueCategories.map(category => (
+                            <option key={category} value={category}>{category}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="expense-date-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Zeitraum</Label>
+                      <div className="relative">
+                        <select 
+                          id="expense-date-filter"
+                          className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                          value={filters.expenses.dateRange}
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            expenses: {
+                              ...filters.expenses,
+                              dateRange: e.target.value as any
+                            }
+                          })}
+                        >
+                          <option value="all">Alle Zeiträume</option>
+                          <option value="thisMonth">Aktueller Monat</option>
+                          <option value="lastMonth">Letzter Monat</option>
+                          <option value="thisYear">Aktuelles Jahr</option>
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="expense-tax-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Steuerlich relevant</Label>
+                      <div className="relative">
+                        <select 
+                          id="expense-tax-filter"
+                          className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                          value={filters.expenses.taxRelevant}
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            expenses: {
+                              ...filters.expenses,
+                              taxRelevant: e.target.value as any
+                            }
+                          })}
+                        >
+                          <option value="all">Alle</option>
+                          <option value="yes">Ja</option>
+                          <option value="no">Nein</option>
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="expense-receipt-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Beleg vorhanden</Label>
+                      <div className="relative">
+                        <select 
+                          id="expense-receipt-filter"
+                          className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                          value={filters.expenses.hasReceipt}
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            expenses: {
+                              ...filters.expenses,
+                              hasReceipt: e.target.value as any
+                            }
+                          })}
+                        >
+                          <option value="all">Alle</option>
+                          <option value="yes">Ja</option>
+                          <option value="no">Nein</option>
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="expense-search" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Suche</Label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        </div>
+                        <Input 
+                          id="expense-search"
+                          type="text"
+                          placeholder="Beschreibung, Kategorie..."
+                          value={filters.expenses.searchTerm}
+                          className="pl-9 pr-8 h-10"
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            expenses: {
+                              ...filters.expenses,
+                              searchTerm: e.target.value
+                            }
+                          })}
+                        />
+                        {filters.expenses.searchTerm && (
+                          <button 
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                            onClick={() => setFilters({
+                              ...filters,
+                              expenses: {
+                                ...filters.expenses,
+                                searchTerm: ''
+                              }
+                            })}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex mt-4 items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">{filteredExpenses.length}</span> Ausgaben gefunden
+                    </div>
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs"
+                      onClick={() => setFilters({
+                        ...filters,
+                        expenses: {
+                          category: '',
+                          dateRange: 'all',
+                          taxRelevant: 'all',
+                          hasReceipt: 'all',
+                          searchTerm: '',
+                        }
+                      })}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Filter zurücksetzen
+                    </Button>
+                  </div>
+                </div>
               </div>
               <div className="overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto p-6">
                   <Table>
                     <TableCaption>Alle erfassten Geschäftsausgaben</TableCaption>
                     <TableHeader>
@@ -726,8 +1113,8 @@ export default function Dashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {expenses.length > 0 ? (
-                        expenses.map((expense) => (
+                      {filteredExpenses.length > 0 ? (
+                        filteredExpenses.map((expense) => (
                           <TableRow key={expense.id} className="hover:bg-muted/50 transition-colors">
                             <TableCell className="text-muted-foreground">{new Date(expense.date).toLocaleDateString('de-DE')}</TableCell>
                             <TableCell className="font-medium">{expense.description}</TableCell>
@@ -808,7 +1195,7 @@ export default function Dashboard() {
                           <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             <div className="flex flex-col items-center justify-center">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-muted-foreground/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 00-2-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                               <span>Keine Ausgaben vorhanden. Erfassen Sie Ihre erste Ausgabe oben.</span>
                             </div>
@@ -896,10 +1283,164 @@ export default function Dashboard() {
           
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
               <div className="px-6 pt-6 pb-4 border-b">
-                <h2 className="text-xl font-semibold">Ihre Einnahmen</h2>
+                <h2 className="text-xl font-semibold mb-2">Ihre Einnahmen</h2>
+                <p className="text-sm text-muted-foreground mb-4">Filtern Sie Ihre Einnahmen nach verschiedenen Kriterien.</p>
+                <div className="bg-muted/40 rounded-xl p-4 border">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <Label htmlFor="income-customer-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Kunde</Label>
+                      <div className="relative">
+                        <select 
+                          id="income-customer-filter"
+                          className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                          value={filters.incomes.customer}
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            incomes: {
+                              ...filters.incomes,
+                              customer: e.target.value
+                            }
+                          })}
+                        >
+                          <option value="">Alle Kunden</option>
+                          {uniqueCustomers.map(customer => (
+                            <option key={customer} value={customer}>{customer}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="income-date-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Zeitraum</Label>
+                      <div className="relative">
+                        <select 
+                          id="income-date-filter"
+                          className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                          value={filters.incomes.dateRange}
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            incomes: {
+                              ...filters.incomes,
+                              dateRange: e.target.value as any
+                            }
+                          })}
+                        >
+                          <option value="all">Alle Zeiträume</option>
+                          <option value="thisMonth">Aktueller Monat</option>
+                          <option value="lastMonth">Letzter Monat</option>
+                          <option value="thisYear">Aktuelles Jahr</option>
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="income-tax-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Steuerlich relevant</Label>
+                      <div className="relative">
+                        <select 
+                          id="income-tax-filter"
+                          className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                          value={filters.incomes.taxRelevant}
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            incomes: {
+                              ...filters.incomes,
+                              taxRelevant: e.target.value as any
+                            }
+                          })}
+                        >
+                          <option value="all">Alle</option>
+                          <option value="yes">Ja</option>
+                          <option value="no">Nein</option>
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="income-search" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Suche</Label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        </div>
+                        <Input 
+                          id="income-search"
+                          type="text"
+                          placeholder="Beschreibung, Kunde..."
+                          value={filters.incomes.searchTerm}
+                          className="pl-9 pr-8 h-10"
+                          onChange={(e) => setFilters({
+                            ...filters,
+                            incomes: {
+                              ...filters.incomes,
+                              searchTerm: e.target.value
+                            }
+                          })}
+                        />
+                        {filters.incomes.searchTerm && (
+                          <button 
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                            onClick={() => setFilters({
+                              ...filters,
+                              incomes: {
+                                ...filters.incomes,
+                                searchTerm: ''
+                              }
+                            })}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex mt-4 items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">{filteredIncomes.length}</span> Einnahmen gefunden
+                    </div>
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs"
+                      onClick={() => setFilters({
+                        ...filters,
+                        incomes: {
+                          customer: '',
+                          dateRange: 'all',
+                          taxRelevant: 'all',
+                          searchTerm: '',
+                        }
+                      })}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Filter zurücksetzen
+                    </Button>
+                  </div>
+                </div>
               </div>
               <div className="overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto p-6">
                   <Table>
                     <TableCaption>Alle erfassten Geschäftseinnahmen</TableCaption>
                     <TableHeader>
@@ -913,8 +1454,8 @@ export default function Dashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {incomes.length > 0 ? (
-                        incomes.map((income) => (
+                      {filteredIncomes.length > 0 ? (
+                        filteredIncomes.map((income) => (
                           <TableRow key={income.id} className="hover:bg-muted/50 transition-colors">
                             <TableCell className="text-muted-foreground">{new Date(income.date).toLocaleDateString('de-DE')}</TableCell>
                             <TableCell className="font-medium">{income.description}</TableCell>
@@ -936,7 +1477,7 @@ export default function Dashboard() {
                               ) : (
                                 <span className="inline-flex items-center justify-center w-5 h-5 bg-red-100 dark:bg-red-800/30 rounded-full">
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-red-600 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414z" clipRule="evenodd" />
                                   </svg>
                                 </span>
                               )}
@@ -1059,9 +1600,86 @@ export default function Dashboard() {
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
               <div className="px-6 pt-6 pb-4 border-b">
                 <h2 className="text-xl font-semibold">Ihre Rechnungen</h2>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="invoice-status-filter" className="text-sm">Zahlungsstatus</Label>
+                    <select 
+                      id="invoice-status-filter"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={filters.invoices.paidStatus}
+                      onChange={(e) => setFilters({
+                        ...filters,
+                        invoices: {
+                          ...filters.invoices,
+                          paidStatus: e.target.value as any
+                        }
+                      })}
+                    >
+                      <option value="all">Alle</option>
+                      <option value="paid">Bezahlt</option>
+                      <option value="unpaid">Offen</option>
+                    </select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="invoice-date-filter" className="text-sm">Zeitraum</Label>
+                    <select 
+                      id="invoice-date-filter"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={filters.invoices.dateRange}
+                      onChange={(e) => setFilters({
+                        ...filters,
+                        invoices: {
+                          ...filters.invoices,
+                          dateRange: e.target.value as any
+                        }
+                      })}
+                    >
+                      <option value="all">Alle Zeiträume</option>
+                      <option value="thisMonth">Aktueller Monat</option>
+                      <option value="lastMonth">Letzter Monat</option>
+                      <option value="thisYear">Aktuelles Jahr</option>
+                    </select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="invoice-search" className="text-sm">Suche</Label>
+                    <div className="relative">
+                      <Input 
+                        id="invoice-search"
+                        type="text"
+                        placeholder="Rechnungsnummer oder Dateiname suchen..."
+                        value={filters.invoices.searchTerm}
+                        onChange={(e) => setFilters({
+                          ...filters,
+                          invoices: {
+                            ...filters.invoices,
+                            searchTerm: e.target.value
+                          }
+                        })}
+                      />
+                      {filters.invoices.searchTerm && (
+                        <button 
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setFilters({
+                            ...filters,
+                            invoices: {
+                              ...filters.invoices,
+                              searchTerm: ''
+                            }
+                          })}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto p-6">
                   <Table>
                     <TableCaption>Alle hochgeladenen Rechnungen</TableCaption>
                     <TableHeader>
@@ -1075,8 +1693,8 @@ export default function Dashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {invoices.length > 0 ? (
-                        invoices.map((invoice) => (
+                      {filteredInvoices.length > 0 ? (
+                        filteredInvoices.map((invoice) => (
                           <TableRow key={invoice.id} className="hover:bg-muted/50 transition-colors">
                             <TableCell className="text-muted-foreground">
                               {invoice.invoiceDate 
