@@ -72,7 +72,7 @@ export default function Home() {
             {/* Subtiler Hover-Effekt für das Bild ohne Rotation */}
             <div className="relative z-10 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl dark:shadow-gray-900/30">
               <Image 
-                src="/dashboard-preview.png" 
+                src="/public/screenshot/dashboard.png" 
                 width={600} 
                 height={400} 
                 alt="Dashboard Vorschau" 

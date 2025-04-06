@@ -26,6 +26,8 @@ type Expense = {
   date: string;
   category?: string;
   taxRelevant: boolean;
+  receiptFileName?: string;  // Name der hochgeladenen Belegdatei
+  storedReceiptFileName?: string;  // Gespeicherter Dateiname des Belegs
 };
 
 type Income = {
@@ -192,6 +194,7 @@ export default function Dashboard() {
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [expenseReceipt, setExpenseReceipt] = useState<File | null>(null);
 
   // Daten laden
   useEffect(() => {
@@ -225,17 +228,18 @@ export default function Dashboard() {
     e.preventDefault();
     
     try {
+      const formData = new FormData();
+      formData.append('description', newExpense.description);
+      formData.append('amount', newExpense.amount);
+      formData.append('category', newExpense.category);
+      formData.append('taxRelevant', newExpense.taxRelevant.toString());
+      if (expenseReceipt) {
+        formData.append('receipt', expenseReceipt);
+      }
+
       const response = await fetch('/api/expenses', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          description: newExpense.description,
-          amount: parseFloat(newExpense.amount),
-          category: newExpense.category,
-          taxRelevant: newExpense.taxRelevant
-        }),
+        body: formData,
       });
 
       if (response.ok) {
@@ -247,6 +251,7 @@ export default function Dashboard() {
           category: 'Sonstiges',
           taxRelevant: true
         });
+        setExpenseReceipt(null);
       }
     } catch (error) {
       console.error('Error creating expense:', error);
@@ -665,6 +670,18 @@ export default function Dashboard() {
                         placeholder="z.B. Bürobedarf"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="receipt" className="text-sm font-medium">Beleg hochladen (optional)</Label>
+                      <Input
+                        id="receipt"
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setExpenseReceipt(e.target.files ? e.target.files[0] : null)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Unterstützte Formate: PDF, JPG, PNG
+                      </p>
+                    </div>
                     <div className="flex items-center space-x-2 h-full pt-6">
                       <div className="relative inline-flex items-center">
                         <input
@@ -730,13 +747,27 @@ export default function Dashboard() {
                               ) : (
                                 <span className="inline-flex items-center justify-center w-5 h-5 bg-red-100 dark:bg-red-800/30 rounded-full">
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-red-600 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414z" clipRule="evenodd" />
                                   </svg>
                                 </span>
                               )}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">
+                                {expense.storedReceiptFileName && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => {
+                                      window.open(`/api/expenses/download?id=${expense.id}`, '_blank');
+                                    }}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
+                                    </svg>
+                                    Beleg
+                                  </Button>
+                                )}
                                 <Button 
                                   variant="outline" 
                                   size="sm"
@@ -762,7 +793,7 @@ export default function Dashboard() {
                           <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             <div className="flex flex-col items-center justify-center">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-muted-foreground/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                               <span>Keine Ausgaben vorhanden. Erfassen Sie Ihre erste Ausgabe oben.</span>
                             </div>
@@ -1044,7 +1075,7 @@ export default function Dashboard() {
                             <TableCell className="text-muted-foreground max-w-[200px] truncate">
                               <div className="flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                                 {invoice.fileName}
                               </div>
@@ -1114,7 +1145,7 @@ export default function Dashboard() {
                           <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             <div className="flex flex-col items-center justify-center">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-muted-foreground/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                               <span>Keine Rechnungen vorhanden. Laden Sie Ihre erste Rechnung oben hoch.</span>
                             </div>
