@@ -87,21 +87,21 @@ type EditModalProps = {
 // Einfache Modal-Komponente für die Bearbeitung
 const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: EditModalProps) => {
   const [formData, setFormData] = useState(data);
-  
+
   if (!isOpen) return null;
-  
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
   };
-  
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+      <div className="bg-white dark:bg-gray-800 dark:text-gray-200 rounded-lg p-6 w-full max-w-md">
         <h2 className="text-xl font-bold mb-4">
           {type === 'expense' ? 'Ausgabe bearbeiten' : 'Einnahme bearbeiten'}
         </h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="edit-description">Beschreibung</Label>
@@ -110,9 +110,10 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
               required
+              className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="edit-amount">Betrag (€)</Label>
             <Input 
@@ -122,9 +123,10 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
               value={formData.amount}
               onChange={(e) => setFormData({...formData, amount: e.target.value})}
               required
+              className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
             />
           </div>
-          
+
           {type === 'expense' && (
             <div className="space-y-2">
               <Label htmlFor="edit-category">Kategorie</Label>
@@ -132,10 +134,11 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
                 id="edit-category" 
                 value={formData.category || ''}
                 onChange={(e) => setFormData({...formData, category: e.target.value})}
+                className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
               />
             </div>
           )}
-          
+
           {type === 'income' && (
             <div className="space-y-2">
               <Label htmlFor="edit-customer">Kunde</Label>
@@ -144,6 +147,7 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
                 value={formData.customer || ''}
                 onChange={(e) => setFormData({...formData, customer: e.target.value})}
                 list="edit-customer-suggestions"
+                className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
               />
               <datalist id="edit-customer-suggestions">
                 {customers.map((customer) => (
@@ -152,18 +156,18 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
               </datalist>
             </div>
           )}
-          
+
           <div className="flex items-center space-x-2">
             <input
               type="checkbox"
               id="edit-taxRelevant"
-              className="h-4 w-4"
+              className="h-4 w-4 dark:bg-gray-700 dark:border-gray-600"
               checked={formData.taxRelevant}
               onChange={(e) => setFormData({...formData, taxRelevant: e.target.checked})}
             />
             <Label htmlFor="edit-taxRelevant" className="font-normal">Steuerlich relevant</Label>
           </div>
-          
+
           {type === 'expense' && (
             <div className="space-y-2">
               <Label htmlFor="edit-taxDeductiblePercentage">Steuerlich ansetzbarer Anteil (%)</Label>
@@ -176,18 +180,19 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
                 value={formData.taxDeductiblePercentage || 100}
                 onChange={(e) => setFormData({...formData, taxDeductiblePercentage: parseInt(e.target.value) || 100})}
                 placeholder="100"
+                className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground dark:text-gray-400">
                 Bei gemischter privater/geschäftlicher Nutzung: Prozentsatz des geschäftlich nutzbaren Anteils
               </p>
             </div>
           )}
-          
+
           <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} className="dark:bg-gray-700 dark:border-gray-600">
               Abbrechen
             </Button>
-            <Button type="submit">
+            <Button type="submit" className="dark:bg-blue-600 dark:hover:bg-blue-700">
               Speichern
             </Button>
           </div>
