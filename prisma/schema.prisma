@@ -16,14 +16,15 @@ model User {
 }
 
 model Expense {
-  id                   Int      @id @default(autoincrement())
-  description          String
-  amount               Float
-  date                 DateTime @default(now())
-  category             String?
-  receiptUrl           String?
-  taxRelevant          Boolean  @default(true)
-  receiptFileName      String?  // Originalname der hochgeladenen Belegdatei
+  id                    Int      @id @default(autoincrement())
+  description           String
+  amount                Float
+  date                  DateTime @default(now())
+  category              String?
+  receiptUrl            String?
+  taxRelevant           Boolean  @default(true)
+  taxDeductiblePercentage Float?  // Adding back the dropped field
+  receiptFileName       String?  // Originalname der hochgeladenen Belegdatei
   storedReceiptFileName String?  // Eindeutiger gespeicherter Dateiname des Belegs
 }
 
