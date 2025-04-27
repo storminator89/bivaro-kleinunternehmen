@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Buchhaltung
+
+Buchhaltung is a web-based accounting application designed to help users manage their finances, track expenses and incomes, and handle invoices efficiently. Built with Next.js, TypeScript, and Prisma, it provides a modern and secure platform for personal or small business bookkeeping.
+
+## Features
+
+- User authentication and registration
+- Dashboard overview of financial data
+- Expense and income tracking
+- Invoice management (upload, download, and storage)
+- Tax-deductible percentage tracking for expenses
+- Secure file uploads for receipts and invoices
+- Responsive and modern UI
+
+## Tech Stack
+
+- Next.js (React)
+- TypeScript
+- Prisma (SQLite)
+- NextAuth.js (Authentication)
+- Tailwind CSS (Styling)
+- PostCSS
 
 ## Getting Started
 
-First, run the development server:
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/storminator89/bivaro-kleinunternehmen
+   cd buchhaltung
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. **Set up the database:**
+   ```bash
+   npx prisma migrate dev
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+4. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+- `app/` - Main application pages and API routes
+- `components/` - Reusable UI and logic components
+- `lib/` - Utility functions and Prisma client
+- `prisma/` - Database schema and migrations
+- `public/` - Static files and uploads
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Screenshots
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+![Dashboard Screenshot](public/screenshot/dashboard.png)
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is licensed under the MIT License.
