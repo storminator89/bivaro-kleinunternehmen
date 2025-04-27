@@ -46,6 +46,23 @@ Buchhaltung is a web-based accounting application designed to help users manage 
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## Environment Variables
+
+Create a `.env` file in the `buchhaltung/` directory with the following variables:
+
+```
+DATABASE_URL="file:./dev.db"
+# NextAuth configuration
+NEXTAUTH_SECRET="your-secret-key"
+NEXTAUTH_URL="http://localhost:3000"
+```
+
+- `DATABASE_URL`: Path to your SQLite database file (default: `file:./dev.db`).
+- `NEXTAUTH_SECRET`: Secret key for NextAuth session encryption. Change this in production.
+- `NEXTAUTH_URL`: The base URL of your application (e.g., `http://localhost:3000`).
+
+You can use the provided `.env.example` as a template.
+
 ## Project Structure
 
 - `app/` - Main application pages and API routes
