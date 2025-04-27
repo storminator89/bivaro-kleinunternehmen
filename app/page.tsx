@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, PieChart, FileText, BarChart3, CheckCircle, Shield, Zap, Star } from "lucide-react";
@@ -21,6 +22,8 @@ const styles = {
 };
 
 export default function Home() {
+  const { data: session, status } = useSession();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-950">
       {/* Dekorative Elemente - Modern Blob Shapes */}
@@ -48,19 +51,31 @@ export default function Home() {
               <span className="block mt-2 text-blue-600 dark:text-blue-400 font-medium">Einfacher. Schneller. Moderner.</span>
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10">
-              <Link href="/dashboard">
-                <Button size="lg" className={`px-8 py-6 text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg ${styles.modernButton} group relative overflow-hidden`}>
-                  <span className="relative z-10">Zum Dashboard</span>
-                  <ArrowRight className={`ml-2 h-5 w-5 relative z-10 ${styles.modernArrow}`} />
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                </Button>
-              </Link>
-              <Link href="/dashboard?tab=invoices">
-                <Button size="lg" variant="outline" className={`px-8 py-6 text-lg border-2 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 ${styles.modernButton} relative overflow-hidden group`}>
-                  <span className="relative z-10">Rechnungen verwalten</span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-100/40 to-indigo-100/40 dark:from-blue-900/40 dark:to-indigo-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                </Button>
-              </Link>
+              {status === "authenticated" ? (
+                <Link href="/dashboard">
+                  <Button size="lg" className={`px-8 py-6 text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg ${styles.modernButton} group relative overflow-hidden`}>
+                    <span className="relative z-10">Zum Dashboard</span>
+                    <ArrowRight className={`ml-2 h-5 w-5 relative z-10 ${styles.modernArrow}`} />
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/register">
+                    <Button size="lg" className={`px-8 py-6 text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg ${styles.modernButton} group relative overflow-hidden`}>
+                      <span className="relative z-10">Jetzt registrieren</span>
+                      <ArrowRight className={`ml-2 h-5 w-5 relative z-10 ${styles.modernArrow}`} />
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </Button>
+                  </Link>
+                  <Link href="/login">
+                    <Button size="lg" variant="outline" className={`px-8 py-6 text-lg border-2 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 ${styles.modernButton} relative overflow-hidden group`}>
+                      <span className="relative z-10">Anmelden</span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-100/40 to-indigo-100/40 dark:from-blue-900/40 dark:to-indigo-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
             <div className="flex items-center justify-center lg:justify-start gap-3 text-sm">
               <span className="flex items-center gap-1 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded-full">
@@ -354,12 +369,27 @@ export default function Home() {
                 Starten Sie noch heute und erleben Sie, wie einfach Buchhaltung sein kann.
                 Keine versteckten Kosten, keine komplizierten Einrichtungen.
               </p>
-              <div className="mb-6">
-                <Link href="/dashboard">
-                  <Button size="lg" className={`px-10 py-6 text-lg bg-white text-blue-600 hover:bg-blue-50 shadow-xl ${styles.modernButton}`}>
-                    Jetzt kostenlos starten
-                  </Button>
-                </Link>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+                {status === "authenticated" ? (
+                  <Link href="/dashboard">
+                    <Button size="lg" className={`px-10 py-6 text-lg bg-white text-blue-600 hover:bg-blue-50 shadow-xl ${styles.modernButton}`}>
+                      Zum Dashboard
+                    </Button>
+                  </Link>
+                ) : (
+                  <>
+                    <Link href="/register">
+                      <Button size="lg" className={`px-10 py-6 text-lg bg-white text-blue-600 hover:bg-blue-50 shadow-xl ${styles.modernButton}`}>
+                        Jetzt kostenlos registrieren
+                      </Button>
+                    </Link>
+                    <Link href="/login">
+                      <Button size="lg" variant="outline" className={`px-10 py-6 text-lg border-2 border-white text-white hover:bg-white/10 ${styles.modernButton}`}>
+                        Anmelden
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
               <div className="mt-10 p-4 bg-white/10 backdrop-blur rounded-xl inline-block">
                 <p className="text-blue-100 text-sm flex items-center gap-2 justify-center">
