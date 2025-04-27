@@ -80,10 +80,11 @@ type EditModalProps = {
   onSave: (data: any) => void;
   data: any;
   type: 'expense' | 'income';
+  customers?: string[]; // Neue Prop für die Kundenliste
 };
 
 // Einfache Modal-Komponente für die Bearbeitung
-const EditModal = ({ isOpen, onClose, onSave, data, type }: EditModalProps) => {
+const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: EditModalProps) => {
   const [formData, setFormData] = useState(data);
   
   if (!isOpen) return null;
@@ -141,7 +142,13 @@ const EditModal = ({ isOpen, onClose, onSave, data, type }: EditModalProps) => {
                 id="edit-customer" 
                 value={formData.customer || ''}
                 onChange={(e) => setFormData({...formData, customer: e.target.value})}
+                list="edit-customer-suggestions"
               />
+              <datalist id="edit-customer-suggestions">
+                {customers.map((customer) => (
+                  <option key={customer} value={customer} />
+                ))}
+              </datalist>
             </div>
           )}
           
@@ -1294,7 +1301,13 @@ export default function Dashboard() {
                         value={newIncome.customer}
                         onChange={(e) => setNewIncome({...newIncome, customer: e.target.value})}
                         placeholder="z.B. Firma XYZ GmbH"
+                        list="customer-suggestions"
                       />
+                      <datalist id="customer-suggestions">
+                        {uniqueCustomers.map((customer) => (
+                          <option key={customer} value={customer} />
+                        ))}
+                      </datalist>
                     </div>
                     <div className="flex items-center space-x-2 h-full pt-6">
                       <div className="relative inline-flex items-center">
@@ -1969,6 +1982,7 @@ export default function Dashboard() {
             onSave={handleEditSave}
             data={itemToEdit}
             type={editType}
+            customers={uniqueCustomers}
           />
         )}
       </div>
