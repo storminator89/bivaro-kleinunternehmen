@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-switch";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,8 +45,8 @@ export default function RootLayout({
                       Bivaro
                     </Link>
                   </div>
-                  <nav>
-                    <ul className="flex space-x-6">
+                  <nav className="flex items-center">
+                    <ul className="flex space-x-6 mr-4">
                       <li>
                         <Link href="/" className="text-muted-foreground hover:text-foreground">
                           Start
@@ -57,6 +58,7 @@ export default function RootLayout({
                         </Link>
                       </li>
                     </ul>
+                    <ThemeToggle />
                   </nav>
                 </div>
               </div>
