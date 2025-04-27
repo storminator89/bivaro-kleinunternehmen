@@ -38,6 +38,7 @@ type Income = {
   date: string;
   customer?: string;
   taxRelevant: boolean;
+  invoicePaidStatus?: boolean; // Hinzugefügt: Status der zugehörigen Rechnung
 };
 
 type Invoice = {
@@ -1497,14 +1498,7 @@ export default function Dashboard() {
                   <Table>
                     <TableCaption>Alle erfassten Geschäftseinnahmen</TableCaption>
                     <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="font-medium">Datum</TableHead>
-                        <TableHead className="font-medium">Beschreibung</TableHead>
-                        <TableHead className="font-medium">Kunde</TableHead>
-                        <TableHead className="text-right font-medium">Betrag</TableHead>
-                        <TableHead className="text-center font-medium">Steuerrelevant</TableHead>
-                        <TableHead className="text-right font-medium">Aktionen</TableHead>
-                      </TableRow>
+                      <TableRow className="bg-muted/50"><TableHead className="font-medium">Datum</TableHead><TableHead className="font-medium">Beschreibung</TableHead><TableHead className="font-medium">Kunde</TableHead><TableHead className="text-center font-medium">Steuerrelevant</TableHead><TableHead className="text-center font-medium">Rechnungsstatus</TableHead>{/* Neue Spalte */}<TableHead className="text-right font-medium">Betrag</TableHead><TableHead className="text-right font-medium">Aktionen</TableHead></TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredIncomes.length > 0 ? (
@@ -1519,7 +1513,6 @@ export default function Dashboard() {
                                 </span>
                               ) : "-"}
                             </TableCell>
-                            <TableCell className="text-right font-medium text-green-600 dark:text-green-500">{formatCurrency(income.amount)}</TableCell>
                             <TableCell className="text-center">
                               {income.taxRelevant ? (
                                 <span className="inline-flex items-center justify-center w-5 h-5 bg-green-100 dark:bg-green-800/30 rounded-full">
@@ -1535,6 +1528,15 @@ export default function Dashboard() {
                                 </span>
                               )}
                             </TableCell>
+                            <TableCell className="text-center">
+                              {/* Anzeige des Rechnungsstatus */}
+                              {income.invoicePaidStatus === true ? 
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Bezahlt</span> : 
+                               income.invoicePaidStatus === false ? 
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Offen</span> : 
+                                <span className="text-muted-foreground">-</span>}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-green-600 dark:text-green-500">{formatCurrency(income.amount)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">
                                 <Button 

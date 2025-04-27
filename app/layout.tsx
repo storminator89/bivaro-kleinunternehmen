@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kleinunternehmer Buchhaltung",
+  title: "Bivaro – Rechnungen und Belege im Griff",
   description: "Eine einfache Buchhaltungsanwendung für Kleinunternehmer",
 };
 
@@ -34,7 +34,7 @@ export default function RootLayout({
               <div className="flex justify-between items-center">
                 <div>
                   <Link href="/" className="text-lg font-bold text-gray-900">
-                    Buchhaltung für Kleinunternehmer
+                    Bivaro
                   </Link>
                 </div>
                 <nav>
@@ -62,7 +62,7 @@ export default function RootLayout({
           <footer className="bg-white border-t border-gray-200 py-6">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
               <p className="text-center text-gray-500 text-sm">
-                &copy; {new Date().getFullYear()} Buchhaltung für Kleinunternehmer | 
+                &copy; {new Date().getFullYear()} Bivaro | 
                 Alle Beträge werden in Euro (€) angezeigt
               </p>
             </div>

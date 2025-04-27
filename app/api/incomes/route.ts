@@ -27,8 +27,19 @@ export async function GET() {
     orderBy: {
       date: 'desc',
     },
+    include: {
+      invoice: true, // Verknüpfte Rechnung einschließen
+    },
   });
-  return NextResponse.json(incomes);
+
+  // Transformiere die Daten, um invoicePaidStatus hinzuzufügen
+  const incomesWithInvoiceStatus = incomes.map(income => ({
+    ...income,
+    invoicePaidStatus: income.invoice ? income.invoice.paidStatus : undefined,
+    invoice: undefined, // Entferne das vollständige Invoice-Objekt, um die Antwort schlank zu halten
+  }));
+
+  return NextResponse.json(incomesWithInvoiceStatus);
 }
 
 // Neue Methode zum Aktualisieren einer Einnahme

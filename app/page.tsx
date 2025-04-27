@@ -376,7 +376,7 @@ export default function Home() {
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
               <div>
-                <h3 className="font-bold text-xl mb-4 text-gray-800 dark:text-gray-200">KleinBuch</h3>
+                <h3 className="font-bold text-xl mb-4 text-gray-800 dark:text-gray-200">Bivaro</h3>
                 <p className="text-gray-600 dark:text-gray-400 mb-6">Eine moderne Buchhaltungslösung, speziell entwickelt für Kleinunternehmer in Deutschland.</p>
                 <div className="flex items-center gap-4">
                   <a href="#" className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -426,7 +426,7 @@ export default function Home() {
               </div>
             </div>
             <div className="pt-8 border-t border-gray-200/50 dark:border-gray-700/50 text-center text-gray-500 dark:text-gray-400 text-sm">
-              <p className="mb-2">© 2025 KleinBuch • Eine moderne Lösung für Kleinunternehmer • Alle Rechte vorbehalten</p>
+              <p className="mb-2">© 2025 Bivaro • Eine moderne Lösung für Kleinunternehmer • Alle Rechte vorbehalten</p>
               <p>Designed mit ♥ in Deutschland</p>
             </div>
           </div>
