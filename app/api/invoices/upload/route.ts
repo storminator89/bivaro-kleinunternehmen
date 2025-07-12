@@ -1,181 +1,175 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { writeFile, readFile } from 'fs/promises';
+import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import { PDFDocument, PDFName, PDFDict, PDFArray, PDFHexString, PDFString, PDFStream } from 'pdf-lib';
+import { parseStringPromise } from 'xml2js';
 
 const prisma = new PrismaClient();
 
+async function extractAttachments(pdfDoc: PDFDocument) {
+    const rawAttachments = (() => {
+        if (!pdfDoc.catalog.has(PDFName.of('Names'))) return [];
+        const Names = pdfDoc.catalog.lookup(PDFName.of('Names'), PDFDict);
+
+        if (!Names.has(PDFName.of('EmbeddedFiles'))) return [];
+        const EmbeddedFiles = Names.lookup(PDFName.of('EmbeddedFiles'), PDFDict);
+
+        if (!EmbeddedFiles.has(PDFName.of('Names'))) return [];
+        const EFNames = EmbeddedFiles.lookup(PDFName.of('Names'), PDFArray);
+
+        const attachments = [];
+        for (let idx = 0, len = EFNames.size(); idx < len; idx += 2) {
+            const fileName = EFNames.lookup(idx) as PDFHexString | PDFString;
+            const fileSpec = EFNames.lookup(idx + 1, PDFDict);
+            attachments.push({ fileName, fileSpec });
+        }
+        return attachments;
+    })();
+
+    return rawAttachments.map(({ fileName, fileSpec }) => {
+        const stream = fileSpec.lookup(PDFName.of('EF'), PDFDict).lookup(PDFName.of('F'), PDFStream);
+        return {
+            name: fileName.decodeText(),
+            data: stream.getContents(),
+        };
+    });
+}
+
+
+async function extractZugferdXml(pdfBuffer: Buffer): Promise<string | null> {
+    const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+    const attachments = await extractAttachments(pdfDoc);
+    for (const attachment of attachments) {
+        if (attachment.name.toLowerCase().includes('zugferd-invoice.xml') || attachment.name.toLowerCase().includes('factur-x.xml') || attachment.name.toLowerCase().includes('xrechnung.xml')) {
+            return new TextDecoder().decode(attachment.data);
+        }
+    }
+    return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Temporäres Verzeichnis für hochgeladene Dateien
     const tempDir = os.tmpdir();
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
-      return NextResponse.json(
-        { error: 'Keine Datei hochgeladen' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 });
     }
-    
-    // Dateityp prüfen
+
     if (file.type !== 'application/pdf') {
-      return NextResponse.json(
-        { error: 'Nur PDF-Dateien werden unterstützt' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Nur PDF-Dateien werden unterstützt' }, { status: 400 });
     }
-    
-    // Datei in temporäres Verzeichnis speichern
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const filePath = join(tempDir, file.name);
     await writeFile(filePath, buffer);
-    
-    // Generiere einen eindeutigen Dateinamen für die dauerhafte Speicherung
+
     const uniqueFileName = `${uuidv4()}_${file.name.replace(/\s+/g, '_')}`;
     const uploadDir = path.join(process.cwd(), 'public/uploads');
     const permanentFilePath = path.join(uploadDir, uniqueFileName);
-    
-    // Stelle sicher, dass das Verzeichnis existiert
+
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
-    
-    // Kopiere die Datei in das dauerhafte Verzeichnis
+
     fs.copyFileSync(filePath, permanentFilePath);
-    
-    // In einer realen Implementierung würden wir hier die eingebettete ZUGFeRD-XML extrahieren
-    // Da wir aber auf Probleme mit PDF-Bibliotheken stoßen, verwenden wir hier eine Simulation
-    
-    // Extrahiere ZUGFeRD-XML-Inhalte (simuliert mit dem gegebenen String)
-    // In einer echten Implementierung würde dies aus dem PDF extrahiert werden
-    const zugferdXmlContent = `urn:fdc:peppol.eu:2017:poacc:billing:01:1.0 urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0 2025-01 380 20250328 1 IHK - Training KI Manager K4 (FJ25/K4) 14.03.2025 4. Modul Tag 1 114.00 1 3 VAT Gemäß § 19 UStG wird keine Umsatzsteuer berechnet. E 0 342.00 2 IHK - Training KI Manager K4 (FJ25/K4) 21.03.2025 4. Modul Tag 2 114.00 1 3 VAT Gemäß § 19 UStG wird keine Umsatzsteuer berechnet. E 0 342.00 3 IHK - Training KI Manager K6 (FJ25/K6) 28.03.2025 4. Modul Tag 1 114.00 1 3 VAT Gemäß § 19 UStG wird keine Umsatzsteuer berechnet. E 0 342.00 0 dfsfsdfsf +445545 p.meyhoefer@gmail.com 68229 Straßburger Ring 2 Mannheim DE p.meyhoefer@gmail.com 455445 Gerabo GmbH Daniel rechnung@test.de 22763 Holstentwiete 27 Hamburg DE rechnung@gerabo.de 20250328 EUR 58 SEPA credit transfer DE3553535 Patrick COBADEFFXXX 0.00 VAT Gemäß § 19 UStG wird keine Umsatzsteuer berechnet. 1026.00 E 0 20250314 20250328 Bitte überweisen Sie den Rechnungsbetrag in Höhe von 1.026,00 EUR bis zum Fälligkeitsdatum . 1026.00 1026.00 0.00 1026.00 1026.00`;
-    
-    // Parsen der Daten aus dem XML-String
-    // Diese vereinfachte Implementierung sucht nach bestimmten Mustern im String
-    
-    // Finden der Rechnungsnummer - "2025-01 380" format ist "JAHR-MONAT NUMMER"
-    const invoiceNumberMatch = zugferdXmlContent.match(/(\d{4}-\d{2}\s+\d+)/);
-    let invoiceNumber = invoiceNumberMatch ? invoiceNumberMatch[1] : null;
-    
-    // Finden des Rechnungsdatums - Format YYYYMMDD, hier "20250328"
-    const invoiceDateMatch = zugferdXmlContent.match(/\s(\d{8})\s/g);
-    let invoiceDate = null;
-    if (invoiceDateMatch && invoiceDateMatch.length > 0) {
-      const dateStr = invoiceDateMatch[0].trim();
-      // Konvertieren in ISO-Format YYYY-MM-DD
-      invoiceDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
+
+    const zugferdXmlContent = await extractZugferdXml(buffer);
+
+    if (!zugferdXmlContent) {
+      return NextResponse.json({ error: 'Keine ZUGFeRD-XML in der PDF-Datei gefunden' }, { status: 400 });
     }
+
+    const parsedXml = await parseStringPromise(zugferdXmlContent, { explicitArray: false });
+
+    const exchangedDoc = parsedXml['rsm:CrossIndustryInvoice']['rsm:ExchangedDocument'];
+    const tradeTransaction = parsedXml['rsm:CrossIndustryInvoice']['rsm:SupplyChainTradeTransaction'];
+
+    const invoiceNumber = exchangedDoc['ram:ID'];
+    const invoiceDateStr = exchangedDoc['ram:IssueDateTime']['udt:DateTimeString']['_'];
+    const invoiceDate = new Date(invoiceDateStr.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'));
+
+    const dueDateStr = tradeTransaction['ram:ApplicableHeaderTradeSettlement']['ram:SpecifiedTradePaymentTerms']?.['ram:DueDateDateTime']?.['udt:DateTimeString']?.['_'];
+    const dueDate = dueDateStr ? new Date(dueDateStr.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')) : null;
+
+    const totalAmount = parseFloat(tradeTransaction['ram:ApplicableHeaderTradeSettlement']['ram:SpecifiedTradeSettlementHeaderMonetarySummation']['ram:GrandTotalAmount']);
+    const customerName = tradeTransaction['ram:ApplicableHeaderTradeAgreement']['ram:BuyerTradeParty']['ram:Name'];
+
+    const lineItemsData = tradeTransaction['ram:IncludedSupplyChainTradeLineItem'];
+    const lineItems = (Array.isArray(lineItemsData) ? lineItemsData : [lineItemsData]).map(item => ({
+      positionNumber: item['ram:AssociatedDocumentLineDocument']['ram:LineID'],
+      description: item['ram:SpecifiedTradeProduct']['ram:Name'],
+      date: item['ram:SpecifiedLineTradeDelivery']['ram:BilledQuantity']['_'],
+      details: item['ram:SpecifiedTradeProduct']['ram:Description'],
+      amount: parseFloat(item['ram:SpecifiedLineTradeSettlement']['ram:SpecifiedTradeSettlementLineMonetarySummation']['ram:LineTotalAmount'])
+    }));
     
-    // Finden des Fälligkeitsdatums - Annahme: letztes 8-stelliges Datum im String
-    const dueDateMatches = [...zugferdXmlContent.matchAll(/\s(\d{8})\s/g)];
-    let dueDate = null;
-    if (dueDateMatches.length > 1) {
-      const dateStr = dueDateMatches[dueDateMatches.length - 1][1].trim();
-      // Konvertieren in ISO-Format YYYY-MM-DD
-      dueDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
-    }
-    
-    // Finden des Gesamtbetrags - am Ende des Strings nach "Fälligkeitsdatum"
-    const totalAmountMatch = zugferdXmlContent.match(/1026\.00/g);
-    let totalAmount = totalAmountMatch ? 1026.00 : 0; // Der XML-String enthält mehrere "1026.00"
-    
-    // Finden des Kundennamens
-    const customerMatch = zugferdXmlContent.match(/Gerabo GmbH/);
-    const customerName = customerMatch ? customerMatch[0] : null;
-    
-    // Bereinigen (temporäre Datei löschen)
+    const buyerTradeParty = tradeTransaction['ram:ApplicableHeaderTradeAgreement']['ram:BuyerTradeParty'];
+    const buyerInfo = {
+        email: buyerTradeParty['ram:DefinedTradeContact']['ram:EmailURIUniversalCommunication']['ram:URIID'],
+        zipCode: buyerTradeParty['ram:PostalTradeAddress']['ram:PostcodeCode'],
+        address: buyerTradeParty['ram:PostalTradeAddress']['ram:LineOne'],
+        city: buyerTradeParty['ram:PostalTradeAddress']['ram:CityName'],
+        country: buyerTradeParty['ram:PostalTradeAddress']['ram:CountryID'],
+    };
+
+    const sellerTradeParty = tradeTransaction['ram:ApplicableHeaderTradeAgreement']['ram:SellerTradeParty'];
+    const sellerInfo = {
+        name: sellerTradeParty['ram:Name'],
+        email: sellerTradeParty['ram:DefinedTradeContact']['ram:EmailURIUniversalCommunication']['ram:URIID'],
+        zipCode: sellerTradeParty['ram:PostalTradeAddress']['ram:PostcodeCode'],
+        address: sellerTradeParty['ram:PostalTradeAddress']['ram:LineOne'],
+        city: sellerTradeParty['ram:PostalTradeAddress']['ram:CityName'],
+        country: sellerTradeParty['ram:PostalTradeAddress']['ram:CountryID'],
+    };
+
     try {
       fs.unlinkSync(filePath);
     } catch (error) {
       console.error('Fehler beim Löschen der temporären Datei:', error);
     }
-    
-    // Parsen der einzelnen Positionen aus der XML
-    const lineItems = [];
-    
-    // Suchen nach Positionsdaten - Format: "1 IHK - Training KI Manager K4 (FJ25/K4) 14.03.2025 4. Modul Tag 1 114.00"
-    const lineItemsRegex = /(\d+)\s+(IHK - Training.*?)(\d{2}\.\d{2}\.\d{4})(.*?)(\d+\.\d{2})/g;
-    const lineItemMatches = [...zugferdXmlContent.matchAll(lineItemsRegex)];
-    
-    for (const match of lineItemMatches) {
-      lineItems.push({
-        positionNumber: match[1],
-        description: match[2].trim(),
-        date: match[3],
-        details: match[4].trim(),
-        amount: parseFloat(match[5])
-      });
-    }
-    
-    // Extraktion der Kunden- und Verkäuferinformationen
-    const buyerMatch = zugferdXmlContent.match(/p\.meyhoefer@gmail\.com\s+(\d+)\s+(Straßburger Ring \d+)\s+(Mannheim)/);
-    const sellerMatch = zugferdXmlContent.match(/Gerabo GmbH.*?rechnung@test\.de\s+(\d+)\s+(Holstentwiete \d+)\s+(Hamburg)/s);
-    
-    const buyerInfo = buyerMatch ? {
-      email: 'p.meyhoefer@gmail.com',
-      zipCode: buyerMatch[1],
-      address: buyerMatch[2],
-      city: buyerMatch[3],
-      country: 'DE'
-    } : null;
-    
-    const sellerInfo = sellerMatch ? {
-      name: 'Gerabo GmbH',
-      email: 'rechnung@test.de',
-      zipCode: sellerMatch[1],
-      address: sellerMatch[2],
-      city: sellerMatch[3],
-      country: 'DE'
-    } : null;
-    
-    // Rechnung in Datenbank speichern
+
     const invoice = await prisma.invoice.create({
       data: {
         fileName: file.name,
-        storedFileName: uniqueFileName, // Speichere den Namen der gespeicherten Datei
-        invoiceNumber: invoiceNumber || `RG-${new Date().getTime()}`, // Fallback
-        invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
-        dueDate: dueDate ? new Date(dueDate) : null,
+        storedFileName: uniqueFileName,
+        invoiceNumber: invoiceNumber || `RG-${new Date().getTime()}`,
+        invoiceDate: invoiceDate,
+        dueDate: dueDate,
         totalAmount,
         parsedData: {
           invoiceNumber,
-          invoiceDate,
-          dueDate,
+          invoiceDate: invoiceDate.toISOString(),
+          dueDate: dueDate ? dueDate.toISOString() : null,
           totalAmount,
           customerName,
           lineItems,
           buyerInfo,
           sellerInfo,
-          rawXml: zugferdXmlContent // Speichere die gesamte XML für spätere Verwendung
+          rawXml: zugferdXmlContent
         },
         paidStatus: false,
       },
     });
-    
-    // Optional: Wenn eine Rechnung hochgeladen wird und ein Betrag vorhanden ist,
-    // erstellen wir automatisch eine Einnahme
+
     if (totalAmount > 0) {
-      // Nur die Rechnungsnummer für die Beschreibung verwenden, ohne zusätzliche Details
       const description = `Rechnung ${invoiceNumber || 'ohne Nummer'}`;
-        
       const income = await prisma.income.create({
         data: {
-          description: description.substring(0, 255), // Beschränkung der Länge
+          description: description.substring(0, 255),
           amount: totalAmount,
           customer: customerName,
           invoiceId: invoice.id,
           taxRelevant: true,
         },
       });
-      
-      // Aktualisiere die Rechnung mit der verknüpften Einnahme-ID
       await prisma.invoice.update({
         where: { id: invoice.id },
         data: { 
@@ -183,7 +177,7 @@ export async function POST(request: NextRequest) {
         },
       });
     }
-    
+
     return NextResponse.json(invoice);
   } catch (error) {
     console.error('Fehler beim Hochladen der Rechnung:', error);
