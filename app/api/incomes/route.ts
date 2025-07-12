@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
-  const { description, amount, customer, taxRelevant } = await request.json();
+  const { description, amount, customerId, taxRelevant } = await request.json();
 
   if (!description || !amount) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     data: {
       description,
       amount: parseFloat(amount.toString()),
-      customer: customer || null,
+      customer: customerId ? { connect: { id: customerId } } : undefined,
       taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
     },
   });
@@ -29,22 +29,25 @@ export async function GET() {
     },
     include: {
       invoice: true, // Verknüpfte Rechnung einschließen
+      customer: true, // Verknüpften Kunden einschließen
     },
   });
 
-  // Transformiere die Daten, um invoicePaidStatus hinzuzufügen
-  const incomesWithInvoiceStatus = incomes.map(income => ({
+  // Transformiere die Daten, um invoicePaidStatus und customerName hinzuzufügen
+  const incomesWithDetails = incomes.map(income => ({
     ...income,
     invoicePaidStatus: income.invoice ? income.invoice.paidStatus : undefined,
+    customerName: income.customer ? income.customer.name : undefined,
     invoice: undefined, // Entferne das vollständige Invoice-Objekt, um die Antwort schlank zu halten
+    customer: undefined, // Entferne das vollständige Customer-Objekt
   }));
 
-  return NextResponse.json(incomesWithInvoiceStatus);
+  return NextResponse.json(incomesWithDetails);
 }
 
 // Neue Methode zum Aktualisieren einer Einnahme
 export async function PUT(request: Request) {
-  const { id, description, amount, customer, taxRelevant } = await request.json();
+  const { id, description, amount, customerId, taxRelevant } = await request.json();
 
   if (!id || !description || !amount) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -56,7 +59,7 @@ export async function PUT(request: Request) {
       data: {
         description,
         amount: parseFloat(amount.toString()),
-        customer: customer || null,
+        customer: customerId ? { connect: { id: customerId } } : { disconnect: true },
         taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
       },
     });

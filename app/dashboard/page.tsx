@@ -37,9 +37,19 @@ type Income = {
   description: string;
   amount: number;
   date: string;
-  customer?: string;
+  customerId?: number; // Verknüpfung zur Customer ID
+  customerName?: string; // Name des verknüpften Kunden
   taxRelevant: boolean;
   invoicePaidStatus?: boolean; // Hinzugefügt: Status der zugehörigen Rechnung
+};
+
+type Customer = {
+  id: number;
+  name: string;
+  email?: string;
+  address?: string;
+  taxNumber?: string;
+  createdAt: string;
 };
 
 type Invoice = {
@@ -82,7 +92,7 @@ type EditModalProps = {
   onSave: (data: any) => void;
   data: any;
   type: 'expense' | 'income';
-  customers?: string[]; // Neue Prop für die Kundenliste
+  customers: Customer[]; // Kundenliste als Customer-Objekte
 };
 
 // Einfache Modal-Komponente für die Bearbeitung
@@ -143,18 +153,19 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
           {type === 'income' && (
             <div className="space-y-2">
               <Label htmlFor="edit-customer">Kunde</Label>
-              <Input 
-                id="edit-customer" 
-                value={formData.customer || ''}
-                onChange={(e) => setFormData({...formData, customer: e.target.value})}
-                list="edit-customer-suggestions"
-                className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
-              />
-              <datalist id="edit-customer-suggestions">
+              <select
+                id="edit-customer"
+                value={formData.customerId || ''}
+                onChange={(e) => setFormData({...formData, customerId: e.target.value ? parseInt(e.target.value) : undefined})}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
+              >
+                <option value="">Kunde auswählen (optional)</option>
                 {customers.map((customer) => (
-                  <option key={customer} value={customer} />
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </div>
           )}
 
@@ -213,6 +224,7 @@ export default function Dashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   
   // Tabs-State
   const [activeTab, setActiveTab] = useState(
@@ -310,7 +322,7 @@ export default function Dashboard() {
 
   const filteredIncomes = incomes.filter(income => {
     // Kundenfilter
-    if (filters.incomes.customer && income.customer !== filters.incomes.customer) {
+    if (filters.incomes.customer && income.customerName !== filters.incomes.customer) {
       return false;
     }
     
@@ -351,7 +363,7 @@ export default function Dashboard() {
     if (filters.incomes.searchTerm) {
       const searchTerm = filters.incomes.searchTerm.toLowerCase();
       return income.description.toLowerCase().includes(searchTerm) || 
-             (income.customer && income.customer.toLowerCase().includes(searchTerm));
+             (income.customerName && income.customerName.toLowerCase().includes(searchTerm));
     }
     
     return true;
@@ -409,7 +421,7 @@ export default function Dashboard() {
 
   // Einzigartige Kategorien und Kunden für Filter
   const uniqueCategories = Array.from(new Set(expenses.map(expense => expense.category || 'Sonstiges')));
-  const uniqueCustomers = Array.from(new Set(incomes.map(income => income.customer || '').filter(Boolean)));
+  const uniqueCustomers = Array.from(new Set(incomes.map(income => income.customerName || '').filter(Boolean)));
 
   // Tab-Änderung
   const handleTabChange = (value: string) => {
@@ -429,7 +441,7 @@ export default function Dashboard() {
   const [newIncome, setNewIncome] = useState({
     description: '',
     amount: '',
-    customer: '',
+    customerId: undefined, // customerId statt customer
     taxRelevant: true
   });
   
@@ -455,6 +467,11 @@ export default function Dashboard() {
 
         if (invoicesResponse.ok) {
           setInvoices(await invoicesResponse.json());
+        }
+
+        const customersResponse = await fetch('/api/customers');
+        if (customersResponse.ok) {
+          setCustomers(await customersResponse.json());
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -513,7 +530,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           description: newIncome.description,
           amount: parseFloat(newIncome.amount),
-          customer: newIncome.customer,
+          customerId: newIncome.customerId,
           taxRelevant: newIncome.taxRelevant
         }),
       });
@@ -534,36 +551,79 @@ export default function Dashboard() {
   };
 
   // Bearbeitungs- und Löschfunktionen
-  const openEditModal = (item: any, type: 'expense' | 'income') => {
-    setItemToEdit({...item, amount: item.amount.toString()});
+  const openEditModal = (item: any, type: 'expense' | 'income', isDuplicate: boolean = false) => {
+    if (isDuplicate) {
+      const duplicatedItem = {
+        ...item,
+        id: undefined, // Backend sollte neue ID generieren
+        date: new Date().toISOString(),
+        receiptFileName: undefined, // Beleg nicht duplizieren
+        storedReceiptFileName: undefined, // Beleg nicht duplizieren
+        customerId: item.customerId, // customerId beibehalten
+      };
+      setItemToEdit({...duplicatedItem, amount: duplicatedItem.amount.toString()});
+    } else {
+      setItemToEdit({...item, amount: item.amount.toString()});
+    }
     setEditType(type);
     setEditModalOpen(true);
+  };
+
+  const handleDuplicate = (item: any, type: 'expense' | 'income') => {
+    openEditModal(item, type, true);
   };
   
   const handleEditSave = async (formData: any) => {
     try {
+      const isNewItem = formData.id === undefined;
+      const method = isNewItem ? 'POST' : 'PUT';
       const endpoint = editType === 'expense' ? '/api/expenses' : '/api/incomes';
+
+      const dataToSend = { ...formData };
+      if (isNewItem) {
+        delete dataToSend.id; // ID entfernen, da sie vom Backend generiert wird
+        // Für duplizierte Ausgaben, die keinen Beleg haben sollen
+        if (editType === 'expense') {
+          delete dataToSend.receiptFileName;
+          delete dataToSend.storedReceiptFileName;
+        }
+      }
+      dataToSend.amount = parseFloat(dataToSend.amount); // Betrag als Zahl senden
+
       const response = await fetch(endpoint, {
-        method: 'PUT',
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(dataToSend),
       });
 
       if (response.ok) {
         const updatedItem = await response.json();
         
         if (editType === 'expense') {
-          setExpenses(expenses.map(item => item.id === updatedItem.id ? updatedItem : item));
-        } else {
-          setIncomes(incomes.map(item => item.id === updatedItem.id ? updatedItem : item));
+          if (isNewItem) {
+            setExpenses([updatedItem, ...expenses]); // Neue Ausgabe hinzufügen
+          } else {
+            setExpenses(expenses.map(item => item.id === updatedItem.id ? updatedItem : item));
+          }
+        } else { // income
+          if (isNewItem) {
+            setIncomes([updatedItem, ...incomes]); // Neue Einnahme hinzufügen
+          } else {
+            setIncomes(incomes.map(item => item.id === updatedItem.id ? updatedItem : item));
+          }
         }
         
         setEditModalOpen(false);
+      } else {
+        const errorData = await response.json();
+        console.error(`Error ${method}ing ${editType}:`, errorData);
+        alert(`Fehler beim Speichern: ${errorData.error || 'Unbekannter Fehler'}`);
       }
     } catch (error) {
-      console.error(`Error updating ${editType}:`, error);
+      console.error(`Error ${editType}:`, error);
+      alert(`Ein unerwarteter Fehler ist aufgetreten: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
   
@@ -1367,6 +1427,13 @@ type ChartData = {
                                 <Button 
                                   variant="outline" 
                                   size="sm"
+                                  onClick={() => handleDuplicate(expense, 'expense')}
+                                >
+                                  Duplizieren
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
                                   onClick={() => openEditModal(expense, 'expense')}
                                 >
                                   Bearbeiten
@@ -1442,20 +1509,21 @@ type ChartData = {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="customer" className="text-sm font-medium">Kunde/Auftraggeber</Label>
-                      <Input 
-                        id="customer" 
-                        value={newIncome.customer}
-                        onChange={(e) => setNewIncome({...newIncome, customer: e.target.value})}
-                        placeholder="z.B. Firma XYZ GmbH"
-                        list="customer-suggestions"
-                      />
-                      <datalist id="customer-suggestions">
-                        {uniqueCustomers.map((customer) => (
-                          <option key={customer} value={customer} />
-                        ))}
-                      </datalist>
-                    </div>
+            <Label htmlFor="customer">Kunde/Auftraggeber</Label>
+            <select
+              id="customer"
+              value={newIncome.customerId || ''}
+              onChange={(e) => setNewIncome({...newIncome, customerId: e.target.value ? parseInt(e.target.value) : undefined})}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">Kunde auswählen (optional)</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+          </div>
                     <div className="flex items-center space-x-2 h-full pt-6">
                       <div className="relative inline-flex items-center">
                         <input
@@ -1653,9 +1721,9 @@ type ChartData = {
                             <TableCell className="text-muted-foreground">{new Date(income.date).toLocaleDateString('de-DE')}</TableCell>
                             <TableCell className="font-medium">{income.description}</TableCell>
                             <TableCell className="text-muted-foreground">
-                              {income.customer ? (
+                              {income.customerName ? (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
-                                  {income.customer}
+                                  {income.customerName}
                                 </span>
                               ) : "-"}
                             </TableCell>
@@ -1685,6 +1753,13 @@ type ChartData = {
                             <TableCell className="text-right font-medium text-green-600 dark:text-green-500">{formatCurrency(income.amount)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleDuplicate(income, 'income')}
+                                >
+                                  Duplizieren
+                                </Button>
                                 <Button 
                                   variant="outline" 
                                   size="sm"

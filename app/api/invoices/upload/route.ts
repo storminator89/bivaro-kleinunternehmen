@@ -161,12 +161,26 @@ export async function POST(request: NextRequest) {
 
     if (totalAmount > 0) {
       const description = `Rechnung ${invoiceNumber || 'ohne Nummer'}`;
+
+      let customerRecord = null;
+      if (customerName) {
+        customerRecord = await prisma.customer.findFirst({
+          where: { name: customerName },
+        });
+
+        if (!customerRecord) {
+          customerRecord = await prisma.customer.create({
+            data: { name: customerName },
+          });
+        }
+      }
+
       const income = await prisma.income.create({
         data: {
           description: description.substring(0, 255),
           amount: totalAmount,
-          customer: customerName,
-          invoiceId: invoice.id,
+          customer: customerRecord ? { connect: { id: customerRecord.id } } : undefined,
+          invoice: { connect: { id: invoice.id } },
           taxRelevant: true,
         },
       });

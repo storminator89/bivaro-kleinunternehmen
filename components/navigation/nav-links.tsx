@@ -27,14 +27,24 @@ export function NavLinks() {
         
         {/* Show these links to all users */}
         {status === "authenticated" && (
-          <li>
-            <Link 
-              href="/dashboard" 
-              className={`${isActive('/dashboard') ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              Dashboard
-            </Link>
-          </li>
+          <>
+            <li>
+              <Link 
+                href="/dashboard" 
+                className={`${isActive('/dashboard') ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Dashboard
+              </Link>
+            </li>
+            <li>
+              <Link 
+                href="/customers" 
+                className={`${isActive('/customers') ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Kunden
+              </Link>
+            </li>
+          </>
         )}
         
         {/* Authentication links */}
