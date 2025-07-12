@@ -15,8 +15,9 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { format } from 'date-fns';
+import { format, subMonths, startOfMonth, getMonth, getYear } from 'date-fns';
 import { useSearchParams, useRouter } from 'next/navigation';
+import OverviewChart from '@/components/charts/overview-chart';
 
 // Typdefinitionen
 type Expense = {
@@ -225,6 +226,7 @@ export default function Dashboard() {
   const [editType, setEditType] = useState<'expense' | 'income'>('expense');
   const [itemToEdit, setItemToEdit] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedTimeRange, setSelectedTimeRange] = useState<'all' | 'last3Months' | 'last6Months' | 'thisYear' | 'lastYear'>('last6Months');
 
   // Filter States
   const [filters, setFilters] = useState<FilterState>({
@@ -679,13 +681,130 @@ export default function Dashboard() {
   };
 
   // Berechnungen für EÜR
-  const totalIncome = incomes.reduce((sum, income) => 
-    income.taxRelevant ? sum + income.amount : sum, 0);
+  const totalIncome = incomes.reduce((sum, income) => {
+    const incomeDate = new Date(income.date);
+    const today = new Date();
+
+    let includeIncome = false;
+    if (selectedTimeRange === 'all') {
+      includeIncome = true;
+    } else if (selectedTimeRange === 'last3Months') {
+      const threeMonthsAgo = subMonths(today, 3);
+      includeIncome = incomeDate >= threeMonthsAgo;
+    } else if (selectedTimeRange === 'last6Months') {
+      const sixMonthsAgo = subMonths(today, 6);
+      includeIncome = incomeDate >= sixMonthsAgo;
+    } else if (selectedTimeRange === 'thisYear') {
+      includeIncome = incomeDate.getFullYear() === today.getFullYear();
+    } else if (selectedTimeRange === 'lastYear') {
+      includeIncome = incomeDate.getFullYear() === today.getFullYear() - 1 && incomeDate.getFullYear() === today.getFullYear() - 1;
+    }
+
+    return income.taxRelevant && includeIncome ? sum + income.amount : sum;
+  }, 0);
   
-  const totalExpense = expenses.reduce((sum, expense) => 
-    expense.taxRelevant ? sum + (expense.amount * (expense.taxDeductiblePercentage || 100) / 100) : sum, 0);
+  const totalExpense = expenses.reduce((sum, expense) => {
+    const expenseDate = new Date(expense.date);
+    const today = new Date();
+
+    let includeExpense = false;
+    if (selectedTimeRange === 'all') {
+      includeExpense = true;
+    } else if (selectedTimeRange === 'last3Months') {
+      const threeMonthsAgo = subMonths(today, 3);
+      includeExpense = expenseDate >= threeMonthsAgo;
+    } else if (selectedTimeRange === 'last6Months') {
+      const sixMonthsAgo = subMonths(today, 6);
+      includeExpense = expenseDate >= sixMonthsAgo;
+    } else if (selectedTimeRange === 'thisYear') {
+      includeExpense = expenseDate.getFullYear() === today.getFullYear();
+    } else if (selectedTimeRange === 'lastYear') {
+      includeExpense = expenseDate.getFullYear() === today.getFullYear() - 1 && expenseDate.getFullYear() === today.getFullYear() - 1;
+    }
+
+    return expense.taxRelevant && includeExpense ? sum + (expense.amount * (expense.taxDeductiblePercentage || 100) / 100) : sum;
+  }, 0);
   
   const profit = totalIncome - totalExpense;
+
+  // Daten für das Monatsdiagramm vorbereiten
+  const [chartData, setChartData] = useState<ChartData[]>([]);
+
+  useEffect(() => {
+    const prepareChartData = () => {
+      const monthlyData: { [key: string]: { Einnahmen: number; Ausgaben: number } } = {};
+      const today = new Date();
+      let startDate = new Date();
+      let endDate = today;
+
+      if (selectedTimeRange === 'last3Months') {
+        startDate = subMonths(today, 3);
+      } else if (selectedTimeRange === 'last6Months') {
+        startDate = subMonths(today, 6);
+      } else if (selectedTimeRange === 'thisYear') {
+        startDate = new Date(today.getFullYear(), 0, 1);
+      } else if (selectedTimeRange === 'lastYear') {
+        startDate = new Date(today.getFullYear() - 1, 0, 1);
+        endDate = new Date(today.getFullYear() - 1, 11, 31); // End of last year
+      } else { // 'all'
+        const allDates = [...incomes.map(i => new Date(i.date)), ...expenses.map(e => new Date(e.date))];
+        if (allDates.length > 0) {
+          startDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+        } else {
+          startDate = today; // No data, start from today
+        }
+      }
+
+      // Initialisiere Daten für die relevanten Monate
+      let currentDate = startOfMonth(startDate);
+      while (currentDate <= endDate) {
+        const monthYear = format(currentDate, 'MMM yy');
+        monthlyData[monthYear] = { Einnahmen: 0, Ausgaben: 0 };
+        currentDate = subMonths(currentDate, -1); // Go to next month
+      }
+
+      // Aggregiere Einnahmen
+      incomes.forEach(income => {
+        const incomeDate = new Date(income.date);
+        if (income.taxRelevant && incomeDate >= startDate && incomeDate <= endDate) {
+          const monthYear = format(incomeDate, 'MMM yy');
+          if (monthlyData[monthYear]) {
+            monthlyData[monthYear].Einnahmen += income.amount;
+          }
+        }
+      });
+
+      // Aggregiere Ausgaben
+      expenses.forEach(expense => {
+        const expenseDate = new Date(expense.date);
+        if (expense.taxRelevant && expenseDate >= startDate && expenseDate <= endDate) {
+          const monthYear = format(expenseDate, 'MMM yy');
+          if (monthlyData[monthYear]) {
+            monthlyData[monthYear].Ausgaben += expense.amount * (expense.taxDeductiblePercentage || 100) / 100;
+          }
+        }
+      });
+
+      // Konvertiere zu Array und sortiere chronologisch
+      const sortedData = Object.keys(monthlyData)
+        .sort((a, b) => {
+          const [monthA, yearA] = a.split(' ');
+          const [monthB, yearB] = b.split(' ');
+          const dateA = new Date(`01 ${monthA} ${yearA}`);
+          const dateB = new Date(`01 ${monthB} ${yearB}`);
+          return dateA.getTime() - dateB.getTime();
+        })
+        .map(monthYear => ({
+          name: monthYear,
+          Einnahmen: parseFloat(monthlyData[monthYear].Einnahmen.toFixed(2)),
+          Ausgaben: parseFloat(monthlyData[monthYear].Ausgaben.toFixed(2)),
+        }));
+      
+      setChartData(sortedData);
+    };
+
+    prepareChartData();
+  }, [expenses, incomes, selectedTimeRange]);
 
   // Formatierungsfunktion
   const formatCurrency = (amount: number) => {
@@ -694,6 +813,13 @@ export default function Dashboard() {
       currency: 'EUR' 
     }).format(amount);
   };
+
+  // Typdefinition für ChartData
+type ChartData = {
+  name: string;
+  Einnahmen: number;
+  Ausgaben: number;
+};
 
   // CSV-Export für die EÜR
   const handleExportEUR = () => {
@@ -773,8 +899,19 @@ export default function Dashboard() {
                 <h2 className="text-xl font-semibold text-card-foreground mb-1">
                   Finanzübersicht
                 </h2>
-                <p className="text-sm text-muted-foreground">
-                  Stand: {new Date().toLocaleDateString('de-DE')}
+                <p className="text-sm text-muted-foreground flex items-center justify-between">
+                  <span>Stand: {new Date().toLocaleDateString('de-DE')}</span>
+                  <select
+                    value={selectedTimeRange}
+                    onChange={(e) => setSelectedTimeRange(e.target.value as any)}
+                    className="ml-2 p-1 border rounded-md text-sm bg-background"
+                  >
+                    <option value="all">Gesamt</option>
+                    <option value="last3Months">Letzte 3 Monate</option>
+                    <option value="last6Months">Letzte 6 Monate</option>
+                    <option value="thisYear">Dieses Jahr</option>
+                    <option value="lastYear">Letztes Jahr</option>
+                  </select>
                 </p>
               </div>
               <div className="p-6 pt-2">
@@ -822,6 +959,10 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
+                </div>
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-4">Einnahmen & Ausgaben (letzte 6 Monate)</h3>
+                  <OverviewChart data={chartData} />
                 </div>
               </div>
             </div>
