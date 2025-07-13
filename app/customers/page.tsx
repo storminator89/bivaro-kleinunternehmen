@@ -14,6 +14,14 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 type Customer = {
   id: number;
@@ -52,21 +60,21 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
     }
   }, [customer]);
 
-  if (!isOpen) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 dark:text-gray-200 rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
-          {customer ? 'Kunden bearbeiten' : 'Neuen Kunden hinzufügen'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{customer ? 'Kunden bearbeiten' : 'Neuen Kunden hinzufügen'}</DialogTitle>
+          <DialogDescription>
+            Nehmen Sie Änderungen am Kunden vor oder fügen Sie einen neuen Kunden hinzu. Klicken Sie auf Speichern, wenn Sie fertig sind.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
@@ -109,17 +117,15 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
             />
           </div>
 
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="dark:bg-gray-700 dark:border-gray-600">
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
               Abbrechen
             </Button>
-            <Button type="submit" className="dark:bg-blue-600 dark:hover:bg-blue-700">
-              Speichern
-            </Button>
-          </div>
+            <Button type="submit">Speichern</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

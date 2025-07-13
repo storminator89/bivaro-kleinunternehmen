@@ -92,6 +92,15 @@ type FilterState = {
   };
 };
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
 // Das Modal für die Bearbeitung
 type EditModalProps = {
   isOpen: boolean;
@@ -106,7 +115,9 @@ type EditModalProps = {
 const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: EditModalProps) => {
   const [formData, setFormData] = useState(data);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setFormData(data);
+  }, [data]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,12 +125,14 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 dark:text-gray-200 rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
-          {type === 'expense' ? 'Ausgabe bearbeiten' : 'Einnahme bearbeiten'}
-        </h2>
-
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{type === 'expense' ? 'Ausgabe bearbeiten' : 'Einnahme bearbeiten'}</DialogTitle>
+          <DialogDescription>
+            Nehmen Sie Änderungen an Ihrer {type === 'expense' ? 'Ausgabe' : 'Einnahme'} vor. Klicken Sie auf Speichern, wenn Sie fertig sind.
+          </DialogDescription>
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="edit-description">Beschreibung</Label>
@@ -201,23 +214,17 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
                 placeholder="100"
                 className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
               />
-              <p className="text-xs text-muted-foreground dark:text-gray-400">
-                Bei gemischter privater/geschäftlicher Nutzung: Prozentsatz des geschäftlich nutzbaren Anteils
-              </p>
             </div>
           )}
-
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="dark:bg-gray-700 dark:border-gray-600">
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
               Abbrechen
             </Button>
-            <Button type="submit" className="dark:bg-blue-600 dark:hover:bg-blue-700">
-              Speichern
-            </Button>
-          </div>
+            <Button type="submit">Speichern</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
