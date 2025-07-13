@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { KpiCard } from "./kpi-card";
+import { DollarSign, CreditCard, Banknote, TrendingUp, TrendingDown } from "lucide-react";
 import { RecentActivity } from "./recent-activity";
 
 interface KpiData {
   revenueThisMonth: number;
   expensesThisMonth: number;
   openInvoices: number;
+  totalRevenue: number;
+  totalExpenses: number;
   recentActivities: any[];
 }
 
@@ -45,9 +48,11 @@ export function DashboardClient() {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <KpiCard title="Umsatz diesen Monat" value={formatCurrency(data.revenueThisMonth)} />
-        <KpiCard title="Ausgaben diesen Monat" value={formatCurrency(data.expensesThisMonth)} />
-        <KpiCard title="Offene Forderungen" value={formatCurrency(data.openInvoices)} />
+        <KpiCard title="Umsatz diesen Monat" value={formatCurrency(data.revenueThisMonth)} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />} />
+        <KpiCard title="Ausgaben diesen Monat" value={formatCurrency(data.expensesThisMonth)} icon={<CreditCard className="h-4 w-4 text-muted-foreground" />} />
+        <KpiCard title="Offene Forderungen" value={formatCurrency(data.openInvoices)} icon={<Banknote className="h-4 w-4 text-muted-foreground" />} />
+        <KpiCard title="Gesamtumsatz" value={formatCurrency(data.totalRevenue)} icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />} />
+        <KpiCard title="Gesamtausgaben" value={formatCurrency(data.totalExpenses)} icon={<TrendingDown className="h-4 w-4 text-muted-foreground" />} />
       </div>
       <RecentActivity activities={data.recentActivities} />
     </div>

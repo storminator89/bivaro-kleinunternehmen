@@ -40,6 +40,18 @@ export async function GET() {
     },
   });
 
+  const totalRevenue = await prisma.income.aggregate({
+    _sum: {
+      amount: true,
+    },
+  });
+
+  const totalExpenses = await prisma.expense.aggregate({
+    _sum: {
+      amount: true,
+    },
+  });
+
   const recentIncomes = await prisma.income.findMany({
     take: 5,
     orderBy: {
@@ -70,6 +82,8 @@ export async function GET() {
     revenueThisMonth: revenueThisMonth._sum.amount || 0,
     expensesThisMonth: expensesThisMonth._sum.amount || 0,
     openInvoices: openInvoices._sum.totalAmount || 0,
+    totalRevenue: totalRevenue._sum.amount || 0,
+    totalExpenses: totalExpenses._sum.amount || 0,
     recentActivities,
   });
 }
