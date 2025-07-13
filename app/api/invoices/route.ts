@@ -67,19 +67,18 @@ export async function DELETE(request: Request) {
   }
 }
 
-// Neue Methode zum Aktualisieren des Zahlungsstatus einer Rechnung
 export async function PUT(request: Request) {
-  const { id, paidStatus } = await request.json();
+  const { id, status } = await request.json();
 
-  if (!id) {
-    return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
+  if (!id || !status) {
+    return NextResponse.json({ error: 'ID und Status sind erforderlich' }, { status: 400 });
   }
 
   try {
     const updatedInvoice = await prisma.invoice.update({
       where: { id: Number(id) },
       data: { 
-        paidStatus: paidStatus 
+        status: status 
       },
       include: {
         income: true,

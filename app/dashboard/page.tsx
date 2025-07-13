@@ -15,9 +15,16 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { format, subMonths, startOfMonth, getMonth, getYear } from 'date-fns';
 import { useSearchParams, useRouter } from 'next/navigation';
-import OverviewChart from '@/components/charts/overview-chart';
+import { StatusBadge } from "@/components/dashboard/status-badge";
+import { DashboardClient } from "@/components/dashboard/dashboard-client";
 
 // Typdefinitionen
 type Expense = {
@@ -58,7 +65,7 @@ type Invoice = {
   uploadedAt: string;
   invoiceNumber?: string;
   totalAmount?: number;
-  paidStatus: boolean;
+  status: string;
   invoiceDate?: string;
   dueDate?: string;
 };
@@ -161,7 +168,7 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
               >
                 <option value="">Kunde auswählen (optional)</option>
                 {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
+                <option key={customer.id} value={customer.id}>
                     {customer.name}
                   </option>
                 ))}
@@ -714,8 +721,7 @@ export default function Dashboard() {
     }
   };
 
-  // Handler zur Änderung des Zahlungsstatus einer Rechnung
-  const handleToggleInvoiceStatus = async (id: number, currentStatus: boolean) => {
+  const handleInvoiceStatusChange = async (id: number, newStatus: string) => {
     try {
       const response = await fetch('/api/invoices', {
         method: 'PUT',
@@ -724,13 +730,12 @@ export default function Dashboard() {
         },
         body: JSON.stringify({
           id,
-          paidStatus: !currentStatus, // Status umkehren
+          status: newStatus,
         }),
       });
 
       if (response.ok) {
         const updatedInvoice = await response.json();
-        // Aktualisiere die Rechnung in der lokalen Liste
         setInvoices(invoices.map(invoice => 
           invoice.id === id ? updatedInvoice : invoice
         ));
@@ -951,83 +956,7 @@ type ChartData = {
           </div>
         </header>
       
-        {/* Übersichtskarte */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-          <div className="lg:col-span-4">
-            <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md">
-              <div className="px-6 pt-6 pb-4">
-                <h2 className="text-xl font-semibold text-card-foreground mb-1">
-                  Finanzübersicht
-                </h2>
-                <p className="text-sm text-muted-foreground flex items-center justify-between">
-                  <span>Stand: {new Date().toLocaleDateString('de-DE')}</span>
-                  <select
-                    value={selectedTimeRange}
-                    onChange={(e) => setSelectedTimeRange(e.target.value as any)}
-                    className="ml-2 p-1 border rounded-md text-sm bg-background"
-                  >
-                    <option value="all">Gesamt</option>
-                    <option value="last3Months">Letzte 3 Monate</option>
-                    <option value="last6Months">Letzte 6 Monate</option>
-                    <option value="thisYear">Dieses Jahr</option>
-                    <option value="lastYear">Letztes Jahr</option>
-                  </select>
-                </p>
-              </div>
-              <div className="p-6 pt-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-5 bg-card rounded-xl border">
-                    <div className="flex items-center">
-                      <div className="mr-4 bg-green-100 dark:bg-green-900/30 p-3 rounded-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-green-700 dark:text-green-500 mb-1">Einnahmen</h3>
-                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(totalIncome)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-5 bg-card rounded-xl border">
-                    <div className="flex items-center">
-                      <div className="mr-4 bg-red-100 dark:bg-red-900/30 p-3 rounded-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-red-700 dark:text-red-500 mb-1">Ausgaben</h3>
-                        <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalExpense)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-5 bg-card rounded-xl border">
-                    <div className="flex items-center">
-                      <div className="mr-4 bg-card p-3 rounded-lg border">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-card-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-card-foreground mb-1">Gewinn</h3>
-                        <p className={`text-2xl font-bold ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {formatCurrency(profit)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-4">Einnahmen & Ausgaben (letzte 6 Monate)</h3>
-                  <OverviewChart data={chartData} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DashboardClient />
       
         {/* Tabs für verschiedene Sektionen */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
@@ -1363,7 +1292,7 @@ type ChartData = {
                         <TableHead className="font-medium">Kategorie</TableHead>
                         <TableHead className="text-right font-medium">Betrag</TableHead>
                         <TableHead className="text-center font-medium">Steuerrelevant</TableHead>
-                        <TableHead className="text-right font-medium">Aktionen</TableHead>
+                        <TableHead className="text-right font-medium"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1371,9 +1300,9 @@ type ChartData = {
                         filteredExpenses.map((expense) => (
                           <TableRow key={expense.id} className="hover:bg-muted/50 transition-colors">
                             <TableCell className="text-muted-foreground">{new Date(expense.date).toLocaleDateString('de-DE')}</TableCell>
-                            <TableCell className="font-medium">{expense.description}</TableCell>
-                            <TableCell className="text-muted-foreground">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
+                            <TableCell className="font-medium text-base">{expense.description}</TableCell>
+                            <TableCell className="text-muted-foreground text-base">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-muted text-foreground">
                                 {expense.category || 'Sonstiges'}
                               </span>
                             </TableCell>
@@ -1394,60 +1323,101 @@ type ChartData = {
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end space-x-2">
-                                {expense.storedReceiptFileName && (
-                                  <>
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => {
-                                        window.open(`/api/expenses/download?id=${expense.id}`, '_blank');
-                                      }}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                      </svg>
-                                      Beleg
-                                    </Button>
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => {
-                                        window.open(`/api/expenses/download?id=${expense.id}&download=true`, '_blank');
-                                      }}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
-                                      </svg>
-                                      Download
-                                    </Button>
-                                  </>
-                                )}
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => handleDuplicate(expense, 'expense')}
-                                >
-                                  Duplizieren
-                                </Button>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => openEditModal(expense, 'expense')}
-                                >
-                                  Bearbeiten
-                                </Button>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
-                                  onClick={() => handleDelete(expense.id, 'expense')}
-                                  disabled={isDeleting}
-                                >
-                                  Löschen
-                                </Button>
-                              </div>
+                              <TooltipProvider>
+                                <div className="flex justify-end space-x-2">
+                                  {expense.storedReceiptFileName && (
+                                    <>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button 
+                                            variant="outline" 
+                                            size="icon"
+                                            onClick={() => {
+                                              window.open(`/api/expenses/download?id=${expense.id}`, '_blank');
+                                            }}
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>Beleg anzeigen</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button 
+                                            variant="outline" 
+                                            size="icon"
+                                            onClick={() => {
+                                              window.open(`/api/expenses/download?id=${expense.id}&download=true`, '_blank');
+                                            }}
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
+                                            </svg>
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>Beleg herunterladen</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </>
+                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button 
+                                        variant="outline" 
+                                        size="icon"
+                                        onClick={() => handleDuplicate(expense, 'expense')}
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h6a2 2 0 002-2v-8a2 2 0 00-2-2h-6a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Duplizieren</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button 
+                                        variant="outline" 
+                                        size="icon"
+                                        onClick={() => openEditModal(expense, 'expense')}
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Bearbeiten</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button 
+                                        variant="outline" 
+                                        size="icon"
+                                        className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
+                                        onClick={() => handleDelete(expense.id, 'expense')}
+                                        disabled={isDeleting}
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Löschen</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </TooltipProvider>
                             </TableCell>
                           </TableRow>
                         ))
@@ -1712,7 +1682,7 @@ type ChartData = {
                   <Table>
                     <TableCaption>Alle erfassten Geschäftseinnahmen</TableCaption>
                     <TableHeader>
-                      <TableRow className="bg-muted/50"><TableHead className="font-medium">Datum</TableHead><TableHead className="font-medium">Beschreibung</TableHead><TableHead className="font-medium">Kunde</TableHead><TableHead className="text-center font-medium">Steuerrelevant</TableHead><TableHead className="text-center font-medium">Rechnungsstatus</TableHead>{/* Neue Spalte */}<TableHead className="text-right font-medium">Betrag</TableHead><TableHead className="text-right font-medium">Aktionen</TableHead></TableRow>
+                      <TableRow className="bg-muted/50"><TableHead className="font-medium">Datum</TableHead><TableHead className="font-medium">Beschreibung</TableHead><TableHead className="font-medium">Kunde</TableHead><TableHead className="text-center font-medium">Steuerrelevant</TableHead><TableHead className="text-center font-medium">Rechnungsstatus</TableHead><TableHead className="text-right font-medium">Betrag</TableHead><TableHead className="text-right font-medium">Aktionen</TableHead></TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredIncomes.length > 0 ? (
@@ -1743,12 +1713,14 @@ type ChartData = {
                               )}
                             </TableCell>
                             <TableCell className="text-center">
-                              {/* Anzeige des Rechnungsstatus */}
-                              {income.invoicePaidStatus === true ? 
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Bezahlt</span> : 
-                               income.invoicePaidStatus === false ? 
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Offen</span> : 
-                                <span className="text-muted-foreground">-</span>}
+                              {income.invoiceStatus ? (
+                                <StatusBadge 
+                                  status={income.invoiceStatus} 
+                                  onStatusChange={(newStatus) => handleInvoiceStatusChange(income.invoiceId, newStatus)}
+                                />
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
                             </TableCell>
                             <TableCell className="text-right font-medium text-green-600 dark:text-green-500">{formatCurrency(income.amount)}</TableCell>
                             <TableCell className="text-right">
@@ -1995,20 +1967,10 @@ type ChartData = {
                                 : <span className="text-muted-foreground italic text-xs">Nicht verfügbar</span>}
                             </TableCell>
                             <TableCell className="text-center">
-                              <button 
-                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium 
-                                  ${invoice.paidStatus 
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                  } hover:bg-opacity-80 transition-colors`}
-                                onClick={() => handleToggleInvoiceStatus(invoice.id, invoice.paidStatus)}
-                                title={`Klicken, um Status auf "${invoice.paidStatus ? 'Offen' : 'Bezahlt'}" zu ändern`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full mr-1.5 inline-block
-                                  ${invoice.paidStatus ? 'bg-green-500 dark:bg-green-400' : 'bg-yellow-500 dark:bg-yellow-400'}`}>
-                                </span>
-                                {invoice.paidStatus ? 'Bezahlt' : 'Offen'}
-                              </button>
+                              <StatusBadge 
+                                status={invoice.status} 
+                                onStatusChange={(newStatus) => handleInvoiceStatusChange(invoice.id, newStatus)}
+                              />
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">

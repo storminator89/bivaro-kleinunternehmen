@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
           sellerInfo,
           rawXml: zugferdXmlContent
         },
-        paidStatus: false,
+        
       },
     });
 

@@ -33,10 +33,9 @@ export async function GET() {
     },
   });
 
-  // Transformiere die Daten, um invoicePaidStatus und customerName hinzuzufügen
   const incomesWithDetails = incomes.map(income => ({
     ...income,
-    invoicePaidStatus: income.invoice ? income.invoice.paidStatus : undefined,
+    invoiceStatus: income.invoice ? income.invoice.status : undefined,
     customerName: income.customer ? income.customer.name : undefined,
     invoice: undefined, // Entferne das vollständige Invoice-Objekt, um die Antwort schlank zu halten
     customer: undefined, // Entferne das vollständige Customer-Objekt

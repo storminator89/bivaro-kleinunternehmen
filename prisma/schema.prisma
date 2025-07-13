@@ -50,8 +50,8 @@ model Invoice {
   invoiceNumber String?
   parsedData    Json
   totalAmount   Float?
-  paidStatus    Boolean   @default(false)
-  paidDate      DateTime?
+  status        String    @default("DRAFT") // DRAFT, SENT, PAID
+  paidAt        DateTime?
   customerId    Int?
   income        Income?
   customer      Customer? @relation(fields: [customerId], references: [id])
