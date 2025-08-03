@@ -1,19 +1,19 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Table, 
-  TableBody, 
-  TableCaption, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import {
   Tooltip,
@@ -136,10 +136,10 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="edit-description">Beschreibung</Label>
-            <Input 
-              id="edit-description" 
+            <Input
+              id="edit-description"
               value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               required
               className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
             />
@@ -147,12 +147,12 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
 
           <div className="space-y-2">
             <Label htmlFor="edit-amount">Betrag (€)</Label>
-            <Input 
-              id="edit-amount" 
+            <Input
+              id="edit-amount"
               type="number"
               step="0.01"
               value={formData.amount}
-              onChange={(e) => setFormData({...formData, amount: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
               required
               className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
             />
@@ -161,10 +161,10 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
           {type === 'expense' && (
             <div className="space-y-2">
               <Label htmlFor="edit-category">Kategorie</Label>
-              <Input 
-                id="edit-category" 
+              <Input
+                id="edit-category"
                 value={formData.category || ''}
-                onChange={(e) => setFormData({...formData, category: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
               />
             </div>
@@ -176,12 +176,12 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
               <select
                 id="edit-customer"
                 value={formData.customerId || ''}
-                onChange={(e) => setFormData({...formData, customerId: e.target.value ? parseInt(e.target.value) : undefined})}
+                onChange={(e) => setFormData({ ...formData, customerId: e.target.value ? parseInt(e.target.value) : undefined })}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
               >
                 <option value="">Kunde auswählen (optional)</option>
                 {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
+                  <option key={customer.id} value={customer.id}>
                     {customer.name}
                   </option>
                 ))}
@@ -195,7 +195,7 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
               id="edit-taxRelevant"
               className="h-4 w-4 dark:bg-gray-700 dark:border-gray-600"
               checked={formData.taxRelevant}
-              onChange={(e) => setFormData({...formData, taxRelevant: e.target.checked})}
+              onChange={(e) => setFormData({ ...formData, taxRelevant: e.target.checked })}
             />
             <Label htmlFor="edit-taxRelevant" className="font-normal">Steuerlich relevant</Label>
           </div>
@@ -203,14 +203,14 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
           {type === 'expense' && (
             <div className="space-y-2">
               <Label htmlFor="edit-taxDeductiblePercentage">Steuerlich ansetzbarer Anteil (%)</Label>
-              <Input 
-                id="edit-taxDeductiblePercentage" 
+              <Input
+                id="edit-taxDeductiblePercentage"
                 type="number"
                 min="0"
                 max="100"
                 step="1"
                 value={formData.taxDeductiblePercentage || 100}
-                onChange={(e) => setFormData({...formData, taxDeductiblePercentage: parseInt(e.target.value) || 100})}
+                onChange={(e) => setFormData({ ...formData, taxDeductiblePercentage: parseInt(e.target.value) || 100 })}
                 placeholder="100"
                 className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
               />
@@ -228,25 +228,25 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
   );
 };
 
-export default function Dashboard() {
+function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
   const searchParams = useSearchParams();
   const router = useRouter();
   const tabParam = searchParams.get('tab');
-  
+
   // State Definitionen
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  
+
   // Tabs-State
   const [activeTab, setActiveTab] = useState(
     tabParam === 'expenses' || tabParam === 'incomes' || tabParam === 'invoices' || tabParam === 'eur'
       ? tabParam
       : 'expenses'
   );
-  
+
   // Modal States
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editType, setEditType] = useState<'expense' | 'income'>('expense');
@@ -282,7 +282,7 @@ export default function Dashboard() {
     if (filters.expenses.category && expense.category !== filters.expenses.category) {
       return false;
     }
-    
+
     // Steuerrelevanzfilter
     if (filters.expenses.taxRelevant === 'yes' && !expense.taxRelevant) {
       return false;
@@ -290,7 +290,7 @@ export default function Dashboard() {
     if (filters.expenses.taxRelevant === 'no' && expense.taxRelevant) {
       return false;
     }
-    
+
     // Belegfilter
     if (filters.expenses.hasReceipt === 'yes' && !expense.storedReceiptFileName) {
       return false;
@@ -298,19 +298,19 @@ export default function Dashboard() {
     if (filters.expenses.hasReceipt === 'no' && expense.storedReceiptFileName) {
       return false;
     }
-    
+
     // Datumsfilter
     if (filters.expenses.dateRange !== 'all') {
       const expenseDate = new Date(expense.date);
       const now = new Date();
       const thisMonth = now.getMonth();
       const thisYear = now.getFullYear();
-      
-      if (filters.expenses.dateRange === 'thisMonth' && 
-          (expenseDate.getMonth() !== thisMonth || expenseDate.getFullYear() !== thisYear)) {
+
+      if (filters.expenses.dateRange === 'thisMonth' &&
+        (expenseDate.getMonth() !== thisMonth || expenseDate.getFullYear() !== thisYear)) {
         return false;
       }
-      
+
       if (filters.expenses.dateRange === 'lastMonth') {
         const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
         const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
@@ -318,19 +318,19 @@ export default function Dashboard() {
           return false;
         }
       }
-      
+
       if (filters.expenses.dateRange === 'thisYear' && expenseDate.getFullYear() !== thisYear) {
         return false;
       }
     }
-    
+
     // Suchbegriff
     if (filters.expenses.searchTerm) {
       const searchTerm = filters.expenses.searchTerm.toLowerCase();
-      return expense.description.toLowerCase().includes(searchTerm) || 
-             (expense.category && expense.category.toLowerCase().includes(searchTerm));
+      return expense.description.toLowerCase().includes(searchTerm) ||
+        (expense.category && expense.category.toLowerCase().includes(searchTerm));
     }
-    
+
     return true;
   });
 
@@ -339,7 +339,7 @@ export default function Dashboard() {
     if (filters.incomes.customer && income.customerName !== filters.incomes.customer) {
       return false;
     }
-    
+
     // Steuerrelevanzfilter
     if (filters.incomes.taxRelevant === 'yes' && !income.taxRelevant) {
       return false;
@@ -347,19 +347,19 @@ export default function Dashboard() {
     if (filters.incomes.taxRelevant === 'no' && income.taxRelevant) {
       return false;
     }
-    
+
     // Datumsfilter
     if (filters.incomes.dateRange !== 'all') {
       const incomeDate = new Date(income.date);
       const now = new Date();
       const thisMonth = now.getMonth();
       const thisYear = now.getFullYear();
-      
-      if (filters.incomes.dateRange === 'thisMonth' && 
-          (incomeDate.getMonth() !== thisMonth || incomeDate.getFullYear() !== thisYear)) {
+
+      if (filters.incomes.dateRange === 'thisMonth' &&
+        (incomeDate.getMonth() !== thisMonth || incomeDate.getFullYear() !== thisYear)) {
         return false;
       }
-      
+
       if (filters.incomes.dateRange === 'lastMonth') {
         const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
         const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
@@ -367,19 +367,19 @@ export default function Dashboard() {
           return false;
         }
       }
-      
+
       if (filters.incomes.dateRange === 'thisYear' && incomeDate.getFullYear() !== thisYear) {
         return false;
       }
     }
-    
+
     // Suchbegriff
     if (filters.incomes.searchTerm) {
       const searchTerm = filters.incomes.searchTerm.toLowerCase();
-      return income.description.toLowerCase().includes(searchTerm) || 
-             (income.customerName && income.customerName.toLowerCase().includes(searchTerm));
+      return income.description.toLowerCase().includes(searchTerm) ||
+        (income.customerName && income.customerName.toLowerCase().includes(searchTerm));
     }
-    
+
     return true;
   });
 
@@ -391,7 +391,7 @@ export default function Dashboard() {
     if (filters.invoices.paidStatus === 'unpaid' && invoice.paidStatus) {
       return false;
     }
-    
+
     // Datumsfilter
     if (filters.invoices.dateRange !== 'all') {
       let invoiceDate;
@@ -400,16 +400,16 @@ export default function Dashboard() {
       } else {
         invoiceDate = new Date(invoice.uploadedAt);
       }
-      
+
       const now = new Date();
       const thisMonth = now.getMonth();
       const thisYear = now.getFullYear();
-      
-      if (filters.invoices.dateRange === 'thisMonth' && 
-          (invoiceDate.getMonth() !== thisMonth || invoiceDate.getFullYear() !== thisYear)) {
+
+      if (filters.invoices.dateRange === 'thisMonth' &&
+        (invoiceDate.getMonth() !== thisMonth || invoiceDate.getFullYear() !== thisYear)) {
         return false;
       }
-      
+
       if (filters.invoices.dateRange === 'lastMonth') {
         const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
         const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
@@ -417,19 +417,19 @@ export default function Dashboard() {
           return false;
         }
       }
-      
+
       if (filters.invoices.dateRange === 'thisYear' && invoiceDate.getFullYear() !== thisYear) {
         return false;
       }
     }
-    
+
     // Suchbegriff
     if (filters.invoices.searchTerm) {
       const searchTerm = filters.invoices.searchTerm.toLowerCase();
-      return invoice.fileName.toLowerCase().includes(searchTerm) || 
-             (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm));
+      return invoice.fileName.toLowerCase().includes(searchTerm) ||
+        (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm));
     }
-    
+
     return true;
   });
 
@@ -442,7 +442,7 @@ export default function Dashboard() {
     setActiveTab(value);
     router.push(`/dashboard?tab=${value}`, { scroll: false });
   };
-  
+
   // Form States
   const [newExpense, setNewExpense] = useState({
     description: '',
@@ -451,14 +451,14 @@ export default function Dashboard() {
     taxRelevant: true,
     taxDeductiblePercentage: 100
   });
-  
+
   const [newIncome, setNewIncome] = useState({
     description: '',
     amount: '',
     customerId: undefined, // customerId statt customer
     taxRelevant: true
   });
-  
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [expenseReceipt, setExpenseReceipt] = useState<File | null>(null);
@@ -498,7 +498,7 @@ export default function Dashboard() {
   // Handlers
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const formData = new FormData();
       formData.append('description', newExpense.description);
@@ -534,7 +534,7 @@ export default function Dashboard() {
 
   const handleIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const response = await fetch('/api/incomes', {
         method: 'POST',
@@ -575,9 +575,9 @@ export default function Dashboard() {
         storedReceiptFileName: undefined, // Beleg nicht duplizieren
         customerId: item.customerId, // customerId beibehalten
       };
-      setItemToEdit({...duplicatedItem, amount: duplicatedItem.amount.toString()});
+      setItemToEdit({ ...duplicatedItem, amount: duplicatedItem.amount.toString() });
     } else {
-      setItemToEdit({...item, amount: item.amount.toString()});
+      setItemToEdit({ ...item, amount: item.amount.toString() });
     }
     setEditType(type);
     setEditModalOpen(true);
@@ -586,7 +586,7 @@ export default function Dashboard() {
   const handleDuplicate = (item: any, type: 'expense' | 'income') => {
     openEditModal(item, type, true);
   };
-  
+
   const handleEditSave = async (formData: any) => {
     try {
       const isNewItem = formData.id === undefined;
@@ -614,7 +614,7 @@ export default function Dashboard() {
 
       if (response.ok) {
         const updatedItem = await response.json();
-        
+
         if (editType === 'expense') {
           if (isNewItem) {
             setExpenses([updatedItem, ...expenses]); // Neue Ausgabe hinzufügen
@@ -628,7 +628,7 @@ export default function Dashboard() {
             setIncomes(incomes.map(item => item.id === updatedItem.id ? updatedItem : item));
           }
         }
-        
+
         setEditModalOpen(false);
       } else {
         const errorData = await response.json();
@@ -640,14 +640,14 @@ export default function Dashboard() {
       alert(`Ein unerwarteter Fehler ist aufgetreten: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
-  
+
   const handleDelete = async (id: number, type: 'expense' | 'income') => {
     if (!confirm(`Sind Sie sicher, dass Sie diese ${type === 'expense' ? 'Ausgabe' : 'Einnahme'} löschen möchten?`)) {
       return;
     }
-    
+
     setIsDeleting(true);
-    
+
     try {
       const endpoint = type === 'expense' ? `/api/expenses?id=${id}` : `/api/incomes?id=${id}`;
       const response = await fetch(endpoint, {
@@ -676,12 +676,12 @@ export default function Dashboard() {
 
   const handleFileUpload = async () => {
     if (!selectedFile) return;
-    
+
     setIsUploading(true);
-    
+
     const formData = new FormData();
     formData.append('file', selectedFile);
-    
+
     try {
       const response = await fetch('/api/invoices/upload', {
         method: 'POST',
@@ -692,7 +692,7 @@ export default function Dashboard() {
         const newInvoice = await response.json();
         setInvoices([newInvoice, ...invoices]);
         setSelectedFile(null);
-        
+
         // Wenn die Rechnung automatisch eine Einnahme erstellt hat
         const incomesResponse = await fetch('/api/incomes');
         if (incomesResponse.ok) {
@@ -743,7 +743,7 @@ export default function Dashboard() {
 
       if (response.ok) {
         const updatedInvoice = await response.json();
-        setInvoices(invoices.map(invoice => 
+        setInvoices(invoices.map(invoice =>
           invoice.id === id ? updatedInvoice : invoice
         ));
       }
@@ -774,7 +774,7 @@ export default function Dashboard() {
 
     return income.taxRelevant && includeIncome ? sum + income.amount : sum;
   }, 0);
-  
+
   const totalExpense = expenses.reduce((sum, expense) => {
     const expenseDate = new Date(expense.date);
     const today = new Date();
@@ -796,7 +796,7 @@ export default function Dashboard() {
 
     return expense.taxRelevant && includeExpense ? sum + (expense.amount * (expense.taxDeductiblePercentage || 100) / 100) : sum;
   }, 0);
-  
+
   const profit = totalIncome - totalExpense;
 
   // Daten für das Monatsdiagramm vorbereiten
@@ -871,7 +871,7 @@ export default function Dashboard() {
           Einnahmen: parseFloat(monthlyData[monthYear].Einnahmen.toFixed(2)),
           Ausgaben: parseFloat(monthlyData[monthYear].Ausgaben.toFixed(2)),
         }));
-      
+
       setChartData(sortedData);
     };
 
@@ -880,36 +880,36 @@ export default function Dashboard() {
 
   // Formatierungsfunktion
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('de-DE', { 
-      style: 'currency', 
-      currency: 'EUR' 
+    return new Intl.NumberFormat('de-DE', {
+      style: 'currency',
+      currency: 'EUR'
     }).format(amount);
   };
 
   // Typdefinition für ChartData
-type ChartData = {
-  name: string;
-  Einnahmen: number;
-  Ausgaben: number;
-};
+  type ChartData = {
+    name: string;
+    Einnahmen: number;
+    Ausgaben: number;
+  };
 
   // CSV-Export für die EÜR
   const handleExportEUR = () => {
     // Aktuelles Datum für den Dateinamen
     const date = new Date().toISOString().split('T')[0];
     const fileName = `eur-export-${date}.csv`;
-    
+
     // CSV-Header
     let csvContent = "Kategorie;Betrag (EUR)\n";
-    
+
     // Einnahmen hinzufügen
     csvContent += "BETRIEBSEINNAHMEN;\n";
     csvContent += `Einnahmen (steuerpflichtig);${totalIncome.toFixed(2).replace('.', ',')}\n`;
     csvContent += `Summe Betriebseinnahmen;${totalIncome.toFixed(2).replace('.', ',')}\n\n`;
-    
+
     // Ausgaben nach Kategorie hinzufügen
     csvContent += "BETRIEBSAUSGABEN;\n";
-    
+
     // Gruppierte Ausgaben nach Kategorie
     const expensesByCategory = Array.from(
       expenses.reduce((acc, expense) => {
@@ -920,17 +920,17 @@ type ChartData = {
         return acc;
       }, new Map<string, number>())
     );
-    
+
     // Alle Ausgabenkategorien hinzufügen
     expensesByCategory.forEach(([category, amount]) => {
       csvContent += `${category};${amount.toFixed(2).replace('.', ',')}\n`;
     });
-    
+
     csvContent += `Summe Betriebsausgaben;${totalExpense.toFixed(2).replace('.', ',')}\n\n`;
-    
+
     // Gewinn/Verlust hinzufügen
     csvContent += `GEWINN/VERLUST;${profit.toFixed(2).replace('.', ',')}\n`;
-    
+
     // CSV-Datei erstellen und herunterladen
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -962,40 +962,40 @@ type ChartData = {
             </span>
           </div>
         </header>
-      
+
         <DashboardClient />
-      
+
         {/* Tabs für verschiedene Sektionen */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
           <div className="bg-card rounded-xl p-1 shadow-sm border">
             <TabsList className="w-full grid grid-cols-4 gap-2 bg-transparent">
-              <TabsTrigger 
-                value="expenses" 
+              <TabsTrigger
+                value="expenses"
                 className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
               >
                 Ausgaben
               </TabsTrigger>
-              <TabsTrigger 
-                value="incomes" 
+              <TabsTrigger
+                value="incomes"
                 className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
               >
                 Einnahmen
               </TabsTrigger>
-              <TabsTrigger 
-                value="invoices" 
+              <TabsTrigger
+                value="invoices"
                 className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
               >
                 Rechnungen
               </TabsTrigger>
-              <TabsTrigger 
-                value="eur" 
+              <TabsTrigger
+                value="eur"
                 className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
               >
                 EÜR
               </TabsTrigger>
             </TabsList>
           </div>
-        
+
           {/* Ausgaben Tab */}
           <TabsContent value="expenses" className="space-y-6">
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
@@ -1020,32 +1020,32 @@ type ChartData = {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="description" className="text-sm font-medium">Beschreibung</Label>
-                      <Input 
-                        id="description" 
+                      <Input
+                        id="description"
                         value={newExpense.description}
-                        onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
+                        onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
                         placeholder="z.B. Büromaterial"
                         required
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="amount" className="text-sm font-medium">Betrag (€)</Label>
-                      <Input 
-                        id="amount" 
+                      <Input
+                        id="amount"
                         type="number"
                         step="0.01"
                         value={newExpense.amount}
-                        onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+                        onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
                         placeholder="0.00"
                         required
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="category" className="text-sm font-medium">Kategorie</Label>
-                      <Input 
-                        id="category" 
+                      <Input
+                        id="category"
                         value={newExpense.category}
-                        onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
+                        onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
                         placeholder="z.B. Bürobedarf"
                       />
                     </div>
@@ -1068,7 +1068,7 @@ type ChartData = {
                           id="taxRelevant"
                           className="rounded border-input text-primary h-4 w-4"
                           checked={newExpense.taxRelevant}
-                          onChange={(e) => setNewExpense({...newExpense, taxRelevant: e.target.checked})}
+                          onChange={(e) => setNewExpense({ ...newExpense, taxRelevant: e.target.checked })}
                         />
                         <Label htmlFor="taxRelevant" className="ml-2 text-sm font-medium">Steuerlich relevant</Label>
                       </div>
@@ -1082,7 +1082,7 @@ type ChartData = {
                         max="100"
                         step="1"
                         value={newExpense.taxDeductiblePercentage}
-                        onChange={(e) => setNewExpense({...newExpense, taxDeductiblePercentage: parseInt(e.target.value) || 100})}
+                        onChange={(e) => setNewExpense({ ...newExpense, taxDeductiblePercentage: parseInt(e.target.value) || 100 })}
                         placeholder="100"
                       />
                       <p className="text-xs text-muted-foreground">
@@ -1101,7 +1101,7 @@ type ChartData = {
                 </form>
               </div>
             </div>
-          
+
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
               <div className="px-6 pt-6 pb-4 border-b">
                 <h2 className="text-xl font-semibold mb-2">Ihre Ausgaben</h2>
@@ -1111,7 +1111,7 @@ type ChartData = {
                     <div>
                       <Label htmlFor="expense-category-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Kategorie</Label>
                       <div className="relative">
-                        <select 
+                        <select
                           id="expense-category-filter"
                           className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
                           value={filters.expenses.category}
@@ -1135,11 +1135,11 @@ type ChartData = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="expense-date-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Zeitraum</Label>
                       <div className="relative">
-                        <select 
+                        <select
                           id="expense-date-filter"
                           className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
                           value={filters.expenses.dateRange}
@@ -1163,11 +1163,11 @@ type ChartData = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="expense-tax-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Steuerlich relevant</Label>
                       <div className="relative">
-                        <select 
+                        <select
                           id="expense-tax-filter"
                           className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
                           value={filters.expenses.taxRelevant}
@@ -1190,11 +1190,11 @@ type ChartData = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="expense-receipt-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Beleg vorhanden</Label>
                       <div className="relative">
-                        <select 
+                        <select
                           id="expense-receipt-filter"
                           className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
                           value={filters.expenses.hasReceipt}
@@ -1217,7 +1217,7 @@ type ChartData = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="expense-search" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Suche</Label>
                       <div className="relative">
@@ -1226,7 +1226,7 @@ type ChartData = {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                           </svg>
                         </div>
-                        <Input 
+                        <Input
                           id="expense-search"
                           type="text"
                           placeholder="Beschreibung, Kategorie..."
@@ -1241,7 +1241,7 @@ type ChartData = {
                           })}
                         />
                         {filters.expenses.searchTerm && (
-                          <button 
+                          <button
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                             onClick={() => setFilters({
                               ...filters,
@@ -1264,10 +1264,10 @@ type ChartData = {
                     <div className="text-sm text-muted-foreground">
                       <span className="font-medium text-foreground">{filteredExpenses.length}</span> Ausgaben gefunden
                     </div>
-                    
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="h-8 text-xs"
                       onClick={() => setFilters({
                         ...filters,
@@ -1336,8 +1336,8 @@ type ChartData = {
                                     <>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <Button 
-                                            variant="outline" 
+                                          <Button
+                                            variant="outline"
                                             size="icon"
                                             onClick={() => {
                                               window.open(`/api/expenses/download?id=${expense.id}`, '_blank');
@@ -1355,8 +1355,8 @@ type ChartData = {
                                       </Tooltip>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <Button 
-                                            variant="outline" 
+                                          <Button
+                                            variant="outline"
                                             size="icon"
                                             onClick={() => {
                                               window.open(`/api/expenses/download?id=${expense.id}&download=true`, '_blank');
@@ -1375,8 +1375,8 @@ type ChartData = {
                                   )}
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button 
-                                        variant="outline" 
+                                      <Button
+                                        variant="outline"
                                         size="icon"
                                         onClick={() => handleDuplicate(expense, 'expense')}
                                       >
@@ -1391,8 +1391,8 @@ type ChartData = {
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button 
-                                        variant="outline" 
+                                      <Button
+                                        variant="outline"
                                         size="icon"
                                         onClick={() => openEditModal(expense, 'expense')}
                                       >
@@ -1407,8 +1407,8 @@ type ChartData = {
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Button 
-                                        variant="outline" 
+                                      <Button
+                                        variant="outline"
                                         size="icon"
                                         className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
                                         onClick={() => handleDelete(expense.id, 'expense')}
@@ -1446,7 +1446,7 @@ type ChartData = {
               </div>
             </div>
           </TabsContent>
-        
+
           {/* Einnahmen Tab */}
           <TabsContent value="incomes" className="space-y-6">
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
@@ -1465,42 +1465,42 @@ type ChartData = {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="incomeDescription" className="text-sm font-medium">Beschreibung</Label>
-                      <Input 
-                        id="incomeDescription" 
+                      <Input
+                        id="incomeDescription"
                         value={newIncome.description}
-                        onChange={(e) => setNewIncome({...newIncome, description: e.target.value})}
+                        onChange={(e) => setNewIncome({ ...newIncome, description: e.target.value })}
                         placeholder="z.B. Beratungsleistung"
                         required
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="incomeAmount" className="text-sm font-medium">Betrag (€)</Label>
-                      <Input 
-                        id="incomeAmount" 
+                      <Input
+                        id="incomeAmount"
                         type="number"
                         step="0.01"
                         value={newIncome.amount}
-                        onChange={(e) => setNewIncome({...newIncome, amount: e.target.value})}
+                        onChange={(e) => setNewIncome({ ...newIncome, amount: e.target.value })}
                         placeholder="0.00"
                         required
                       />
                     </div>
                     <div className="space-y-2">
-            <Label htmlFor="customer">Kunde/Auftraggeber</Label>
-            <select
-              id="customer"
-              value={newIncome.customerId || ''}
-              onChange={(e) => setNewIncome({...newIncome, customerId: e.target.value ? parseInt(e.target.value) : undefined})}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">Kunde auswählen (optional)</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
-          </div>
+                      <Label htmlFor="customer">Kunde/Auftraggeber</Label>
+                      <select
+                        id="customer"
+                        value={newIncome.customerId || ''}
+                        onChange={(e) => setNewIncome({ ...newIncome, customerId: e.target.value ? parseInt(e.target.value) : undefined })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">Kunde auswählen (optional)</option>
+                        {customers.map((customer) => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex items-center space-x-2 h-full pt-6">
                       <div className="relative inline-flex items-center">
                         <input
@@ -1508,7 +1508,7 @@ type ChartData = {
                           id="incomeTaxRelevant"
                           className="rounded border-input text-primary h-4 w-4"
                           checked={newIncome.taxRelevant}
-                          onChange={(e) => setNewIncome({...newIncome, taxRelevant: e.target.checked})}
+                          onChange={(e) => setNewIncome({ ...newIncome, taxRelevant: e.target.checked })}
                         />
                         <Label htmlFor="incomeTaxRelevant" className="ml-2 text-sm font-medium">Steuerlich relevant</Label>
                       </div>
@@ -1525,7 +1525,7 @@ type ChartData = {
                 </form>
               </div>
             </div>
-          
+
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
               <div className="px-6 pt-6 pb-4 border-b">
                 <h2 className="text-xl font-semibold mb-2">Ihre Einnahmen</h2>
@@ -1535,7 +1535,7 @@ type ChartData = {
                     <div>
                       <Label htmlFor="income-customer-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Kunde</Label>
                       <div className="relative">
-                        <select 
+                        <select
                           id="income-customer-filter"
                           className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
                           value={filters.incomes.customer}
@@ -1559,11 +1559,11 @@ type ChartData = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="income-date-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Zeitraum</Label>
                       <div className="relative">
-                        <select 
+                        <select
                           id="income-date-filter"
                           className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
                           value={filters.incomes.dateRange}
@@ -1587,11 +1587,11 @@ type ChartData = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="income-tax-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Steuerlich relevant</Label>
                       <div className="relative">
-                        <select 
+                        <select
                           id="income-tax-filter"
                           className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
                           value={filters.incomes.taxRelevant}
@@ -1614,7 +1614,7 @@ type ChartData = {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="income-search" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Suche</Label>
                       <div className="relative">
@@ -1623,7 +1623,7 @@ type ChartData = {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                           </svg>
                         </div>
-                        <Input 
+                        <Input
                           id="income-search"
                           type="text"
                           placeholder="Beschreibung, Kunde..."
@@ -1638,7 +1638,7 @@ type ChartData = {
                           })}
                         />
                         {filters.incomes.searchTerm && (
-                          <button 
+                          <button
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                             onClick={() => setFilters({
                               ...filters,
@@ -1661,10 +1661,10 @@ type ChartData = {
                     <div className="text-sm text-muted-foreground">
                       <span className="font-medium text-foreground">{filteredIncomes.length}</span> Einnahmen gefunden
                     </div>
-                    
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="h-8 text-xs"
                       onClick={() => setFilters({
                         ...filters,
@@ -1721,8 +1721,8 @@ type ChartData = {
                             </TableCell>
                             <TableCell className="text-center">
                               {income.invoiceStatus ? (
-                                <StatusBadge 
-                                  status={income.invoiceStatus} 
+                                <StatusBadge
+                                  status={income.invoiceStatus}
                                   onStatusChange={(newStatus) => handleInvoiceStatusChange(income.invoiceId, newStatus)}
                                 />
                               ) : (
@@ -1732,22 +1732,22 @@ type ChartData = {
                             <TableCell className="text-right font-medium text-green-600 dark:text-green-500">{formatCurrency(income.amount)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
                                   onClick={() => handleDuplicate(income, 'income')}
                                 >
                                   Duplizieren
                                 </Button>
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
                                   onClick={() => openEditModal(income, 'income')}
                                 >
                                   Bearbeiten
                                 </Button>
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
                                   className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
                                   onClick={() => handleDelete(income.id, 'income')}
@@ -1777,7 +1777,7 @@ type ChartData = {
               </div>
             </div>
           </TabsContent>
-        
+
           {/* Rechnungen Tab */}
           <TabsContent value="invoices" className="space-y-6">
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
@@ -1786,7 +1786,7 @@ type ChartData = {
                   <div>
                     <h2 className="text-xl font-semibold mb-1">ZUGFeRD-Rechnung hochladen</h2>
                     <p className="text-sm text-muted-foreground">
-                      Laden Sie Ihre ZUGFeRD-kompatiblen PDF-Rechnungen hoch. 
+                      Laden Sie Ihre ZUGFeRD-kompatiblen PDF-Rechnungen hoch.
                       Die Daten werden automatisch extrahiert und verarbeitet.
                     </p>
                   </div>
@@ -1797,15 +1797,15 @@ type ChartData = {
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2">
                       <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center">
-                        <Input 
-                          id="invoiceFile" 
-                          type="file" 
+                        <Input
+                          id="invoiceFile"
+                          type="file"
                           accept=".pdf"
                           onChange={handleFileChange}
                           className="hidden"
                         />
-                        <Label 
-                          htmlFor="invoiceFile" 
+                        <Label
+                          htmlFor="invoiceFile"
                           className="cursor-pointer flex flex-col items-center justify-center h-full"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-muted-foreground/50 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1821,8 +1821,8 @@ type ChartData = {
                       </div>
                     </div>
                     <div className="flex flex-col justify-center">
-                      <Button 
-                        onClick={handleFileUpload} 
+                      <Button
+                        onClick={handleFileUpload}
                         disabled={!selectedFile || isUploading}
                         className="w-full h-12 text-base"
                       >
@@ -1851,14 +1851,14 @@ type ChartData = {
                 </div>
               </div>
             </div>
-          
+
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
               <div className="px-6 pt-6 pb-4 border-b">
                 <h2 className="text-xl font-semibold">Ihre Rechnungen</h2>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="invoice-status-filter" className="text-sm">Zahlungsstatus</Label>
-                    <select 
+                    <select
                       id="invoice-status-filter"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={filters.invoices.paidStatus}
@@ -1875,10 +1875,10 @@ type ChartData = {
                       <option value="unpaid">Offen</option>
                     </select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="invoice-date-filter" className="text-sm">Zeitraum</Label>
-                    <select 
+                    <select
                       id="invoice-date-filter"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={filters.invoices.dateRange}
@@ -1896,11 +1896,11 @@ type ChartData = {
                       <option value="thisYear">Aktuelles Jahr</option>
                     </select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="invoice-search" className="text-sm">Suche</Label>
                     <div className="relative">
-                      <Input 
+                      <Input
                         id="invoice-search"
                         type="text"
                         placeholder="Rechnungsnummer oder Dateiname suchen..."
@@ -1914,7 +1914,7 @@ type ChartData = {
                         })}
                       />
                       {filters.invoices.searchTerm && (
-                        <button 
+                        <button
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           onClick={() => setFilters({
                             ...filters,
@@ -1952,12 +1952,12 @@ type ChartData = {
                         filteredInvoices.map((invoice) => (
                           <TableRow key={invoice.id} className="hover:bg-muted/50 transition-colors">
                             <TableCell className="text-muted-foreground">
-                              {invoice.invoiceDate 
-                                ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE') 
+                              {invoice.invoiceDate
+                                ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE')
                                 : new Date(invoice.uploadedAt).toLocaleDateString('de-DE')}
                             </TableCell>
                             <TableCell className="font-medium">
-                              {invoice.invoiceNumber || 
+                              {invoice.invoiceNumber ||
                                 <span className="text-muted-foreground italic text-xs">Nicht verfügbar</span>}
                             </TableCell>
                             <TableCell className="text-muted-foreground max-w-[200px] truncate">
@@ -1969,20 +1969,20 @@ type ChartData = {
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-medium">
-                              {invoice.totalAmount 
-                                ? formatCurrency(invoice.totalAmount) 
+                              {invoice.totalAmount
+                                ? formatCurrency(invoice.totalAmount)
                                 : <span className="text-muted-foreground italic text-xs">Nicht verfügbar</span>}
                             </TableCell>
                             <TableCell className="text-center">
-                              <StatusBadge 
-                                status={invoice.status} 
+                              <StatusBadge
+                                status={invoice.status}
                                 onStatusChange={(newStatus) => handleInvoiceStatusChange(invoice.id, newStatus)}
                               />
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
                                   onClick={() => {
                                     window.open(`/api/invoices/download?id=${invoice.id}`, '_blank');
@@ -1994,8 +1994,8 @@ type ChartData = {
                                   </svg>
                                   Anzeigen
                                 </Button>
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
                                   onClick={() => {
                                     window.open(`/api/invoices/download?id=${invoice.id}&download=true`, '_blank');
@@ -2006,8 +2006,8 @@ type ChartData = {
                                   </svg>
                                   Download
                                 </Button>
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
                                   onClick={() => {
                                     alert('Rechnungsdetails anzeigen - In einer zukünftigen Version verfügbar');
@@ -2015,8 +2015,8 @@ type ChartData = {
                                 >
                                   Details
                                 </Button>
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
                                   className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
                                   onClick={() => handleInvoiceDelete(invoice.id)}
@@ -2049,7 +2049,7 @@ type ChartData = {
               </div>
             </div>
           </TabsContent>
-        
+
           {/* EÜR Tab */}
           <TabsContent value="eur" className="space-y-6">
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
@@ -2061,8 +2061,8 @@ type ChartData = {
                       Ihre EÜR-Übersicht für steuerliche Zwecke
                     </p>
                   </div>
-                  <Button 
-                    onClick={handleExportEUR} 
+                  <Button
+                    onClick={handleExportEUR}
                     className="self-start"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2102,7 +2102,7 @@ type ChartData = {
                       </Table>
                     </div>
                   </div>
-                  
+
                   <div className="bg-muted rounded-lg p-6 border border-red-100 dark:border-red-800/20">
                     <h3 className="text-base sm:text-lg font-semibold text-red-700 flex items-center mb-4">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2134,7 +2134,7 @@ type ChartData = {
                               <TableCell className="text-right font-medium text-red-600">{formatCurrency(amount)}</TableCell>
                             </TableRow>
                           ))}
-                          
+
                           <TableRow className="font-bold bg-muted/70 border-border">
                             <TableCell className="text-foreground">Summe Betriebsausgaben</TableCell>
                             <TableCell className="text-right text-red-600">{formatCurrency(totalExpense)}</TableCell>
@@ -2143,7 +2143,7 @@ type ChartData = {
                       </Table>
                     </div>
                   </div>
-                  
+
                   <div className="bg-muted rounded-lg p-6 border">
                     <div className="overflow-x-auto">
                       <Table>
@@ -2165,10 +2165,10 @@ type ChartData = {
             </div>
           </TabsContent>
         </Tabs>
-      
+
         {/* Bearbeitungs-Modal */}
         {editModalOpen && itemToEdit && (
-          <EditModal 
+          <EditModal
             isOpen={editModalOpen}
             onClose={() => setEditModalOpen(false)}
             onSave={handleEditSave}
@@ -2179,5 +2179,13 @@ type ChartData = {
         )}
       </div>
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }
