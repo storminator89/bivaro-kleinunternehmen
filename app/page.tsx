@@ -34,7 +34,7 @@ export default function Home() {
       </div>
       
       {/* Hero Section */}
-      <div className="container py-24 px-4 mx-auto relative z-10">
+      <div className="py-24 px-4 mx-auto relative z-10">
         <div className="flex flex-col lg:flex-row items-center gap-16 mb-32">
           <div className="lg:w-1/2 text-center lg:text-left">
             <div className="inline-block p-2 px-4 mb-6 bg-blue-50 dark:bg-blue-950 rounded-full text-blue-700 dark:text-blue-300 font-medium text-sm border border-blue-100 dark:border-blue-800 shadow-sm">
