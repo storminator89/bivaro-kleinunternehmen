@@ -1182,35 +1182,51 @@ function DashboardContent() {
 
         {/* Tabs für verschiedene Sektionen */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6 mt-8">
-          <div className="bg-card rounded-xl p-1 shadow-sm border">
-            <TabsList className="w-full grid grid-cols-4 gap-2 bg-transparent">
+          <div className="bg-card rounded-xl p-2 shadow-sm border">
+            <TabsList className="w-full flex justify-between gap-1 bg-muted/50 p-1 rounded-lg">
               <TabsTrigger
                 value="expenses"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200 relative overflow-hidden group"
+                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
               >
-                <span className="relative z-10">Ausgaben</span>
-                <span className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
+                <div className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="font-medium whitespace-nowrap">Ausgaben</span>
+                </div>
               </TabsTrigger>
               <TabsTrigger
                 value="incomes"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200 relative overflow-hidden group"
+                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
               >
-                <span className="relative z-10">Einnahmen</span>
-                <span className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
+                <div className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="font-medium whitespace-nowrap">Einnahmen</span>
+                </div>
               </TabsTrigger>
               <TabsTrigger
                 value="invoices"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200 relative overflow-hidden group"
+                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
               >
-                <span className="relative z-10">Rechnungen</span>
-                <span className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
+                <div className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 9.414V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="font-medium whitespace-nowrap">Rechnungen</span>
+                </div>
               </TabsTrigger>
               <TabsTrigger
                 value="eur"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200 relative overflow-hidden group"
+                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
               >
-                <span className="relative z-10">EÜR</span>
-                <span className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
+                <div className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <span className="font-medium whitespace-nowrap">EÜR</span>
+                </div>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -1275,14 +1291,31 @@ function DashboardContent() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="receipt" className="text-sm font-medium">Beleg hochladen (optional)</Label>
-                      <Input
-                        id="receipt"
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => setExpenseReceipt(e.target.files ? e.target.files[0] : null)}
-                      />
+                      <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center transition-colors hover:border-primary/50 hover:bg-muted/50">
+                        <Input
+                          id="receipt"
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={(e) => setExpenseReceipt(e.target.files ? e.target.files[0] : null)}
+                          className="hidden"
+                        />
+                        <Label
+                          htmlFor="receipt"
+                          className="cursor-pointer flex flex-col items-center justify-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-muted-foreground mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <span className="text-foreground font-medium">
+                            {expenseReceipt ? expenseReceipt.name : 'Klicken Sie hier, um eine Datei auszuwählen'}
+                          </span>
+                          <span className="text-sm text-muted-foreground mt-1">
+                            Unterstützt wird: PDF, JPG, PNG
+                          </span>
+                        </Label>
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        Unterstützte Formate: PDF, JPG, PNG
+                        Bei geschäftlichen Ausgaben hilft der Beleg bei der Steuererklärung
                       </p>
                     </div>
                     <div className="flex items-center space-x-2 h-full pt-6">
