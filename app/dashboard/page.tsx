@@ -333,6 +333,100 @@ const InvoiceDetailsModal = ({ isOpen, onClose, invoice }: { isOpen: boolean; on
   );
 };
 
+// Modal-Komponente für Beleganzeige
+const ReceiptModal = ({ isOpen, onClose, receiptUrl }: { isOpen: boolean; onClose: () => void; receiptUrl: string | null }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(true);
+      setError(false);
+    }
+  }, [isOpen]);
+
+  if (!receiptUrl) return null;
+
+  const handleLoad = () => {
+    setLoading(false);
+  };
+
+  const handleError = () => {
+    setLoading(false);
+    setError(true);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Beleg anzeigen</DialogTitle>
+          <DialogDescription>
+            Vorschau des Belegs
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-4">
+          {loading && (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            </div>
+          )}
+          
+          {error ? (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="text-muted-foreground mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.462-.881-6.07-2.33.007.077.025.153.052.227l.005.014c.002.005.006.01.009.015l.003.005c.004.007.008.013.013.02.008.01.016.02.025.028.01.008.02.016.03.024.01.008.02.015.03.022.01.007.02.014.03.02.01.006.02.012.03.018.01.006.02.01.03.015.01.005.02.01.03.015.01.004.02.008.03.012.01.004.02.007.03.01.01.003.02.006.03.009.01.002.02.004.03.006.01.002.02.003.03.004.01.001.02.002.03.003.01.001.02.001.03.001.01 0 .02.001.03.001.01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0" />
+                </svg>
+                <p className="mb-2">Vorschau konnte nicht geladen werden</p>
+                <p className="text-sm">Der Beleg kann aufgrund von Sicherheitseinschränkungen nicht direkt angezeigt werden.</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  window.open(receiptUrl, '_blank');
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
+                </svg>
+                Beleg herunterladen
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <iframe 
+                src={receiptUrl} 
+                className={`w-full h-[70vh] ${loading ? 'hidden' : ''}`} 
+                title="Beleg Vorschau"
+                onLoad={handleLoad}
+                onError={handleError}
+              />
+            </div>
+          )}
+        </div>
+        {!error && (
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Schließen
+            </Button>
+            <Button 
+              type="button" 
+              onClick={() => {
+                window.open(receiptUrl, '_blank');
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
+              </svg>
+              Herunterladen
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
   const searchParams = useSearchParams();
@@ -358,6 +452,8 @@ function DashboardContent() {
   const [itemToEdit, setItemToEdit] = useState<any>(null);
   const [invoiceDetailsModalOpen, setInvoiceDetailsModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedTimeRange, setSelectedTimeRange] = useState<'all' | 'last3Months' | 'last6Months' | 'thisYear' | 'lastYear'>('last6Months');
 
@@ -838,6 +934,11 @@ function DashboardContent() {
   const openInvoiceDetails = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setInvoiceDetailsModalOpen(true);
+  };
+
+  const openReceiptModal = (receiptUrl: string) => {
+    setSelectedReceiptUrl(receiptUrl);
+    setReceiptModalOpen(true);
   };
 
   const handleInvoiceStatusChange = async (id: number, newStatus: string) => {
@@ -1452,7 +1553,7 @@ function DashboardContent() {
                                             variant="outline"
                                             size="icon"
                                             onClick={() => {
-                                              window.open(`/api/expenses/download?id=${expense.id}`, '_blank');
+                                              openReceiptModal(`/api/expenses/download?id=${expense.id}`);
                                             }}
                                           >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1471,7 +1572,7 @@ function DashboardContent() {
                                             variant="outline"
                                             size="icon"
                                             onClick={() => {
-                                              window.open(`/api/expenses/download?id=${expense.id}&download=true`, '_blank');
+                                              window.open(`/api/expenses/download?id=${expense.id}&download=true`, 'Beleg Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
                                             }}
                                           >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2129,7 +2230,7 @@ function DashboardContent() {
                                         variant="outline"
                                         size="icon"
                                         onClick={() => {
-                                          window.open(`/api/invoices/download?id=${invoice.id}`, '_blank');
+                                          openReceiptModal(`/api/invoices/download?id=${invoice.id}`);
                                         }}
                                       >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2148,7 +2249,7 @@ function DashboardContent() {
                                         variant="outline"
                                         size="icon"
                                         onClick={() => {
-                                          window.open(`/api/invoices/download?id=${invoice.id}&download=true`, '_blank');
+                                          window.open(`/api/invoices/download?id=${invoice.id}&download=true`, 'Rechnung Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
                                         }}
                                       >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2343,6 +2444,15 @@ function DashboardContent() {
             isOpen={invoiceDetailsModalOpen}
             onClose={() => setInvoiceDetailsModalOpen(false)}
             invoice={selectedInvoice}
+          />
+        )}
+
+        {/* Beleganzeige-Modal */}
+        {receiptModalOpen && selectedReceiptUrl && (
+          <ReceiptModal
+            isOpen={receiptModalOpen}
+            onClose={() => setReceiptModalOpen(false)}
+            receiptUrl={selectedReceiptUrl}
           />
         )}
 
