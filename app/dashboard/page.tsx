@@ -126,27 +126,27 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{type === 'expense' ? 'Ausgabe bearbeiten' : 'Einnahme bearbeiten'}</DialogTitle>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
+        <DialogHeader className="border-b pb-4">
+          <DialogTitle className="text-xl font-semibold">{type === 'expense' ? 'Ausgabe bearbeiten' : 'Einnahme bearbeiten'}</DialogTitle>
           <DialogDescription>
             Nehmen Sie Änderungen an Ihrer {type === 'expense' ? 'Ausgabe' : 'Einnahme'} vor. Klicken Sie auf Speichern, wenn Sie fertig sind.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="edit-description">Beschreibung</Label>
+            <Label htmlFor="edit-description" className="text-sm font-medium">Beschreibung</Label>
             <Input
               id="edit-description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               required
-              className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
+              className="dark:bg-background dark:border-input"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-amount">Betrag (€)</Label>
+            <Label htmlFor="edit-amount" className="text-sm font-medium">Betrag (€)</Label>
             <Input
               id="edit-amount"
               type="number"
@@ -154,30 +154,30 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
               value={formData.amount}
               onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
               required
-              className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
+              className="dark:bg-background dark:border-input"
             />
           </div>
 
           {type === 'expense' && (
             <div className="space-y-2">
-              <Label htmlFor="edit-category">Kategorie</Label>
+              <Label htmlFor="edit-category" className="text-sm font-medium">Kategorie</Label>
               <Input
                 id="edit-category"
                 value={formData.category || ''}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
+                className="dark:bg-background dark:border-input"
               />
             </div>
           )}
 
           {type === 'income' && (
             <div className="space-y-2">
-              <Label htmlFor="edit-customer">Kunde</Label>
+              <Label htmlFor="edit-customer" className="text-sm font-medium">Kunde</Label>
               <select
                 id="edit-customer"
                 value={formData.customerId || ''}
                 onChange={(e) => setFormData({ ...formData, customerId: e.target.value ? parseInt(e.target.value) : undefined })}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">Kunde auswählen (optional)</option>
                 {customers.map((customer) => (
@@ -193,7 +193,7 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
             <input
               type="checkbox"
               id="edit-taxRelevant"
-              className="h-4 w-4 dark:bg-gray-700 dark:border-gray-600"
+              className="h-4 w-4 rounded border-input bg-background"
               checked={formData.taxRelevant}
               onChange={(e) => setFormData({ ...formData, taxRelevant: e.target.checked })}
             />
@@ -202,7 +202,7 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
 
           {type === 'expense' && (
             <div className="space-y-2">
-              <Label htmlFor="edit-taxDeductiblePercentage">Steuerlich ansetzbarer Anteil (%)</Label>
+              <Label htmlFor="edit-taxDeductiblePercentage" className="text-sm font-medium">Steuerlich ansetzbarer Anteil (%)</Label>
               <Input
                 id="edit-taxDeductiblePercentage"
                 type="number"
@@ -212,11 +212,11 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
                 value={formData.taxDeductiblePercentage || 100}
                 onChange={(e) => setFormData({ ...formData, taxDeductiblePercentage: parseInt(e.target.value) || 100 })}
                 placeholder="100"
-                className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
+                className="dark:bg-background dark:border-input"
               />
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Abbrechen
             </Button>
@@ -234,14 +234,14 @@ const InvoiceDetailsModal = ({ isOpen, onClose, invoice }: { isOpen: boolean; on
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Rechnungsdetails</DialogTitle>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
+        <DialogHeader className="border-b pb-4">
+          <DialogTitle className="text-xl font-semibold">Rechnungsdetails</DialogTitle>
           <DialogDescription>
             Detaillierte Informationen zur Rechnung
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-sm font-medium">Rechnungsnummer</Label>
@@ -300,7 +300,7 @@ const InvoiceDetailsModal = ({ isOpen, onClose, invoice }: { isOpen: boolean; on
             </p>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="border-t pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
             Schließen
           </Button>
@@ -358,9 +358,9 @@ const ReceiptModal = ({ isOpen, onClose, receiptUrl }: { isOpen: boolean; onClos
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Beleg anzeigen</DialogTitle>
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
+        <DialogHeader className="border-b pb-4">
+          <DialogTitle className="text-xl font-semibold">Beleg anzeigen</DialogTitle>
           <DialogDescription>
             Vorschau des Belegs
           </DialogDescription>
@@ -368,7 +368,7 @@ const ReceiptModal = ({ isOpen, onClose, receiptUrl }: { isOpen: boolean; onClos
         <div className="mt-4">
           {loading && (
             <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
           )}
           
@@ -376,7 +376,7 @@ const ReceiptModal = ({ isOpen, onClose, receiptUrl }: { isOpen: boolean; onClos
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <div className="text-muted-foreground mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.462-.881-6.07-2.33.007.077.025.153.052.227l.005.014c.002.005.006.01.009.015l.003.005c.004.007.008.013.013.02.008.01.016.02.025.028.01.008.02.016.03.024.01.008.02.015.03.022.01.007.02.014.03.02.01.006.02.012.03.018.01.006.02.01.03.015.01.005.02.01.03.015.01.004.02.008.03.012.01.004.02.007.03.01.01.003.02.006.03.009.01.002.02.004.03.006.01.002.02.003.03.004.01.001.02.002.03.003.01.001.02.001.03.001.01 0 .02.001.03.001.01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.462-.881-6.07-2.33.007.077.025.153.052.227l.005.014c.002.005.006.01.009.015l.003.005c.004.007.008.013.013.02.008.01.016.02.025.028.01.008.02.016.03.024.01.008.02.015.03.022.01.007.02.014.03.02.01.006.02.012.03.018.01.006.02.01.03.015.01.005.02.01.03.015.01.004.02.008.03.012.01.004.02.007.03.01.01.003.02.006.03.009.01.002.02.004.03.006.01.002.02.003.03.004.01.001.02.002.03.003.01.001.02.001.03.001.01 0 .02.001.03.001.01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0 .01 0 .02 0 .03 0" />
                 </svg>
                 <p className="mb-2">Vorschau konnte nicht geladen werden</p>
                 <p className="text-sm">Der Beleg kann aufgrund von Sicherheitseinschränkungen nicht direkt angezeigt werden.</p>
@@ -405,7 +405,7 @@ const ReceiptModal = ({ isOpen, onClose, receiptUrl }: { isOpen: boolean; onClos
           )}
         </div>
         {!error && (
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Schließen
             </Button>
