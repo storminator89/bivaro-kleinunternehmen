@@ -1159,10 +1159,10 @@ function DashboardContent() {
   // Hauptkomponente rendern
   return (
     <div className="min-h-screen bg-background">
-      <div className="container max-w-7xl mx-auto px-4 py-10">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10">
+      <div className="container max-w-7xl mx-auto px-4 py-8">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight mb-2">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
               Buchhaltung für Kleinunternehmer
             </h1>
             <p className="text-muted-foreground">
@@ -1170,52 +1170,63 @@ function DashboardContent() {
             </p>
           </div>
           <div className="mt-4 md:mt-0">
-            <span className="bg-muted text-muted-foreground px-3 py-1 rounded-md text-sm font-medium">
-              {new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}
-            </span>
+            <div className="bg-card border rounded-lg px-4 py-2 shadow-sm">
+              <span className="text-foreground font-medium">
+                {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              </span>
+            </div>
           </div>
         </header>
 
         <DashboardClient />
 
         {/* Tabs für verschiedene Sektionen */}
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6 mt-8">
           <div className="bg-card rounded-xl p-1 shadow-sm border">
             <TabsList className="w-full grid grid-cols-4 gap-2 bg-transparent">
               <TabsTrigger
                 value="expenses"
-                className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200 relative overflow-hidden group"
               >
-                Ausgaben
+                <span className="relative z-10">Ausgaben</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
               </TabsTrigger>
               <TabsTrigger
                 value="incomes"
-                className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200 relative overflow-hidden group"
               >
-                Einnahmen
+                <span className="relative z-10">Einnahmen</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
               </TabsTrigger>
               <TabsTrigger
                 value="invoices"
-                className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200 relative overflow-hidden group"
               >
-                Rechnungen
+                <span className="relative z-10">Rechnungen</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
               </TabsTrigger>
               <TabsTrigger
                 value="eur"
-                className="data-[state=active]:bg-muted data-[state=active]:text-foreground rounded-lg"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all duration-200 relative overflow-hidden group"
               >
-                EÜR
+                <span className="relative z-10">EÜR</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></span>
               </TabsTrigger>
             </TabsList>
           </div>
 
           {/* Ausgaben Tab */}
           <TabsContent value="expenses" className="space-y-6">
-            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
+              <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-red-50/50 to-red-50/30 dark:from-red-900/10 dark:to-red-900/5">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold mb-1">Neue Ausgabe erfassen</h2>
+                    <h2 className="text-xl font-semibold mb-1 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Neue Ausgabe erfassen
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                       Erfassen Sie hier Ihre geschäftlichen Ausgaben
                     </p>
@@ -1662,11 +1673,16 @@ function DashboardContent() {
 
           {/* Einnahmen Tab */}
           <TabsContent value="incomes" className="space-y-6">
-            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
+              <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-green-50/50 to-green-50/30 dark:from-green-900/10 dark:to-green-900/5">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold mb-1">Neue Einnahme erfassen</h2>
+                    <h2 className="text-xl font-semibold mb-1 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Neue Einnahme erfassen
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                       Erfassen Sie hier Ihre geschäftlichen Einnahmen
                     </p>
@@ -2022,11 +2038,16 @@ function DashboardContent() {
 
           {/* Rechnungen Tab */}
           <TabsContent value="invoices" className="space-y-6">
-            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
+              <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-blue-50/50 to-blue-50/30 dark:from-blue-900/10 dark:to-blue-900/5">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold mb-1">ZUGFeRD-Rechnung hochladen</h2>
+                    <h2 className="text-xl font-semibold mb-1 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 9.414V19a2 2 0 01-2 2z" />
+                      </svg>
+                      ZUGFeRD-Rechnung hochladen
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                       Laden Sie Ihre ZUGFeRD-kompatiblen PDF-Rechnungen hoch.
                       Die Daten werden automatisch extrahiert und verarbeitet.
@@ -2324,11 +2345,16 @@ function DashboardContent() {
 
           {/* EÜR Tab */}
           <TabsContent value="eur" className="space-y-6">
-            <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
+              <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-purple-50/50 to-purple-50/30 dark:from-purple-900/10 dark:to-purple-900/5">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold mb-1">Einnahmen-Überschuss-Rechnung</h2>
+                    <h2 className="text-xl font-semibold mb-1 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      Einnahmen-Überschuss-Rechnung
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                       Ihre EÜR-Übersicht für steuerliche Zwecke
                     </p>
