@@ -122,6 +122,12 @@
 }
 
 @layer utilities {
+  /* Sidebar brand behaviour on collapse */
+  .brand-compact { display: none; }
+  aside.w-20 .sidebar-header { align-items: center; justify-content: center; padding-left: .5rem; padding-right: .5rem; }
+  aside.w-20 .brand-full { display: none; }
+  aside.w-20 .brand-compact { display: block; }
+
   .section {
     position: relative;
     isolation: isolate;

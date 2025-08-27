@@ -46,15 +46,22 @@ export default function RootLayout({
             <div className="flex min-h-screen">
               {/* Sidebar for desktop */}
               <aside className="hidden bg-background border-r border-border md:flex md:flex-col shadow-sm h-screen sticky top-0 w-64 transition-all duration-300">
-                <div className="p-4 pb-4 flex items-center justify-between">
-                  <Link href="/" className="text-xl font-bold text-foreground whitespace-nowrap overflow-hidden">
+                <div className="sidebar-header relative p-4 pb-4 flex items-center justify-center">
+                  <Link href="/" className="brand-link text-xl font-bold text-foreground">
                     <img
                       src="/Bivaro_Logo.png"
                       alt="Bivaro Logo"
-                      className="h-12 w-auto"
+                      className="brand-full h-12 w-auto max-w-full object-contain"
+                    />
+                    <img
+                      src="/Bivaro_Logo.png"
+                      alt="Bivaro Logo kompakt"
+                      className="brand-compact h-8 w-auto max-w-full object-contain"
                     />
                   </Link>
-                  <CollapseButton />
+                  <div className="absolute right-3 top-3">
+                    <CollapseButton />
+                  </div>
                 </div>
                 <nav className="flex-1 px-4 py-2 overflow-y-auto">
                   <NavLinks />
