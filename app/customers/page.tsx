@@ -67,57 +67,53 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{customer ? 'Kunden bearbeiten' : 'Neuen Kunden hinzufügen'}</DialogTitle>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
+        <DialogHeader className="border-b pb-4">
+          <DialogTitle className="text-xl font-semibold">{customer ? 'Kunden bearbeiten' : 'Neuen Kunden hinzufügen'}</DialogTitle>
           <DialogDescription>
             Nehmen Sie Änderungen am Kunden vor oder fügen Sie einen neuen Kunden hinzu. Klicken Sie auf Speichern, wenn Sie fertig sind.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name" className="text-sm font-medium">Name</Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
-              className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">E-Mail</Label>
+            <Label htmlFor="email" className="text-sm font-medium">E-Mail</Label>
             <Input
               id="email"
               type="email"
               value={formData.email || ''}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="address">Adresse</Label>
+            <Label htmlFor="address" className="text-sm font-medium">Adresse</Label>
             <Input
               id="address"
               value={formData.address || ''}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="taxNumber">Steuernummer</Label>
+            <Label htmlFor="taxNumber" className="text-sm font-medium">Steuernummer</Label>
             <Input
               id="taxNumber"
               value={formData.taxNumber || ''}
               onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
-              className="dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
               Abbrechen
             </Button>

@@ -48,9 +48,11 @@ export default function RootLayout({
               <aside className="hidden bg-background border-r border-border md:flex md:flex-col shadow-sm h-screen sticky top-0 w-64 transition-all duration-300">
                 <div className="p-4 pb-4 flex items-center justify-between">
                   <Link href="/" className="text-xl font-bold text-foreground whitespace-nowrap overflow-hidden">
-                    <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                      Bivaro
-                    </span>
+                    <img
+                      src="/Bivaro_Logo.png"
+                      alt="Bivaro Logo"
+                      className="h-12 w-auto"
+                    />
                   </Link>
                   <CollapseButton />
                 </div>
@@ -71,9 +73,11 @@ export default function RootLayout({
                     <div className="flex flex-col h-full bg-background">
                       <div className="p-6 pb-4 border-b border-border">
                         <Link href="/" className="flex items-center text-2xl font-bold text-foreground">
-                          <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                            Bivaro
-                          </span>
+                          <img
+                            src="/Bivaro_Logo.png"
+                            alt="Bivaro Logo"
+                            className="h-12 w-auto"
+                          />
                         </Link>
                       </div>
                       <nav className="flex-1 px-4 py-4">
