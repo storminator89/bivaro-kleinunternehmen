@@ -120,3 +120,81 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .section {
+    position: relative;
+    isolation: isolate;
+  }
+  .section-glow::before {
+    content: "";
+    position: absolute;
+    inset: -160px -40px auto -40px;
+    height: 420px;
+    background: radial-gradient(60% 60% at 50% 0%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 60%);
+    filter: blur(30px);
+    z-index: -1;
+    pointer-events: none;
+  }
+  .subtle-grid::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.25), transparent 70%);
+    opacity: .35;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .accent-orb {
+    position: absolute;
+    border-radius: 9999px;
+    pointer-events: none;
+    z-index: -1;
+    background: radial-gradient(closest-side, hsl(var(--primary) / 0.18), transparent 65%);
+    filter: blur(8px);
+  }
+  .accent-orb--lg { width: 420px; height: 420px; }
+  .accent-orb--md { width: 260px; height: 260px; }
+  .accent-orb--sm { width: 160px; height: 160px; }
+
+  .accent-stripe {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.35), transparent);
+    opacity: .5;
+  }
+
+  .accent-underline {
+    position: relative;
+  }
+  .accent-underline::after {
+    content: "";
+    display: block;
+    width: 72px;
+    height: 3px;
+    margin-top: 10px;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, hsl(var(--primary)), transparent);
+  }
+
+  /* Small color accents (dots, pills, icon backgrounds) */
+  .dots-row { display: inline-flex; gap: 8px; align-items: center; }
+  .dot { width: 6px; height: 6px; border-radius: 9999px; opacity: .9; }
+  .dot-1 { background: hsl(var(--chart-1)); }
+  .dot-2 { background: hsl(var(--chart-2)); }
+  .dot-3 { background: hsl(var(--chart-3)); }
+  .dot-4 { background: hsl(var(--chart-4)); }
+  .dot-5 { background: hsl(var(--chart-5)); }
+
+  .icon-accent {
+    color: hsl(var(--accent, var(--primary)));
+    background: color-mix(in oklab, hsl(var(--accent, var(--primary))) 12%, transparent);
+  }
+  .pill-accent {
+    color: hsl(var(--accent, var(--primary)));
+    background: color-mix(in oklab, hsl(var(--accent, var(--primary))) 14%, transparent);
+    border: 1px solid color-mix(in oklab, hsl(var(--accent, var(--primary))) 22%, transparent);
+  }
+}
