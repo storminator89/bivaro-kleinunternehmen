@@ -479,166 +479,12 @@ function DashboardContent() {
     }
   });
 
-  // Gefilterte Daten
-  const filteredExpenses = expenses.filter(expense => {
-    // Kategoriefilter
-    if (filters.expenses.category && expense.category !== filters.expenses.category) {
-      return false;
-    }
-
-    // Steuerrelevanzfilter
-    if (filters.expenses.taxRelevant === 'yes' && !expense.taxRelevant) {
-      return false;
-    }
-    if (filters.expenses.taxRelevant === 'no' && expense.taxRelevant) {
-      return false;
-    }
-
-    // Belegfilter
-    if (filters.expenses.hasReceipt === 'yes' && !expense.storedReceiptFileName) {
-      return false;
-    }
-    if (filters.expenses.hasReceipt === 'no' && expense.storedReceiptFileName) {
-      return false;
-    }
-
-    // Datumsfilter
-    if (filters.expenses.dateRange !== 'all') {
-      const expenseDate = new Date(expense.date);
-      const now = new Date();
-      const thisMonth = now.getMonth();
-      const thisYear = now.getFullYear();
-
-      if (filters.expenses.dateRange === 'thisMonth' &&
-        (expenseDate.getMonth() !== thisMonth || expenseDate.getFullYear() !== thisYear)) {
-        return false;
-      }
-
-      if (filters.expenses.dateRange === 'lastMonth') {
-        const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-        const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-        if (expenseDate.getMonth() !== lastMonth || expenseDate.getFullYear() !== lastMonthYear) {
-          return false;
-        }
-      }
-
-      if (filters.expenses.dateRange === 'thisYear' && expenseDate.getFullYear() !== thisYear) {
-        return false;
-      }
-    }
-
-    // Suchbegriff
-    if (filters.expenses.searchTerm) {
-      const searchTerm = filters.expenses.searchTerm.toLowerCase();
-      return expense.description.toLowerCase().includes(searchTerm) ||
-        (expense.category && expense.category.toLowerCase().includes(searchTerm));
-    }
-
-    return true;
-  });
-
-  const filteredIncomes = incomes.filter(income => {
-    // Kundenfilter
-    if (filters.incomes.customer && income.customerName !== filters.incomes.customer) {
-      return false;
-    }
-
-    // Steuerrelevanzfilter
-    if (filters.incomes.taxRelevant === 'yes' && !income.taxRelevant) {
-      return false;
-    }
-    if (filters.incomes.taxRelevant === 'no' && income.taxRelevant) {
-      return false;
-    }
-
-    // Datumsfilter
-    if (filters.incomes.dateRange !== 'all') {
-      const incomeDate = new Date(income.date);
-      const now = new Date();
-      const thisMonth = now.getMonth();
-      const thisYear = now.getFullYear();
-
-      if (filters.incomes.dateRange === 'thisMonth' &&
-        (incomeDate.getMonth() !== thisMonth || incomeDate.getFullYear() !== thisYear)) {
-        return false;
-      }
-
-      if (filters.incomes.dateRange === 'lastMonth') {
-        const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-        const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-        if (incomeDate.getMonth() !== lastMonth || incomeDate.getFullYear() !== lastMonthYear) {
-          return false;
-        }
-      }
-
-      if (filters.incomes.dateRange === 'thisYear' && incomeDate.getFullYear() !== thisYear) {
-        return false;
-      }
-    }
-
-    // Suchbegriff
-    if (filters.incomes.searchTerm) {
-      const searchTerm = filters.incomes.searchTerm.toLowerCase();
-      return income.description.toLowerCase().includes(searchTerm) ||
-        (income.customerName && income.customerName.toLowerCase().includes(searchTerm));
-    }
-
-    return true;
-  });
-
-  const filteredInvoices = invoices.filter(invoice => {
-    // Bezahlstatusfilter
-    if (filters.invoices.paidStatus === 'paid' && !invoice.paidStatus) {
-      return false;
-    }
-    if (filters.invoices.paidStatus === 'unpaid' && invoice.paidStatus) {
-      return false;
-    }
-
-    // Datumsfilter
-    if (filters.invoices.dateRange !== 'all') {
-      let invoiceDate;
-      if (invoice.invoiceDate) {
-        invoiceDate = new Date(invoice.invoiceDate);
-      } else {
-        invoiceDate = new Date(invoice.uploadedAt);
-      }
-
-      const now = new Date();
-      const thisMonth = now.getMonth();
-      const thisYear = now.getFullYear();
-
-      if (filters.invoices.dateRange === 'thisMonth' &&
-        (invoiceDate.getMonth() !== thisMonth || invoiceDate.getFullYear() !== thisYear)) {
-        return false;
-      }
-
-      if (filters.invoices.dateRange === 'lastMonth') {
-        const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-        const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-        if (invoiceDate.getMonth() !== lastMonth || invoiceDate.getFullYear() !== lastMonthYear) {
-          return false;
-        }
-      }
-
-      if (filters.invoices.dateRange === 'thisYear' && invoiceDate.getFullYear() !== thisYear) {
-        return false;
-      }
-    }
-
-    // Suchbegriff
-    if (filters.invoices.searchTerm) {
-      const searchTerm = filters.invoices.searchTerm.toLowerCase();
-      return invoice.fileName.toLowerCase().includes(searchTerm) ||
-        (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm));
-    }
-
-    return true;
-  });
+  // Daten werden serverseitig gefiltert, hier nur Alias für Anzeige
+  const filteredExpenses = expenses;
+  const filteredIncomes = incomes;
+  const filteredInvoices = invoices;
 
   // Einzigartige Kategorien und Kunden für Filter
-  const uniqueCategories = Array.from(new Set(expenses.map(expense => expense.category || 'Sonstiges')));
-  const uniqueCustomers = Array.from(new Set(incomes.map(income => income.customerName || '').filter(Boolean)));
 
   // Tab-Änderung
   const handleTabChange = (value: string) => {
@@ -666,24 +512,119 @@ function DashboardContent() {
   const [isUploading, setIsUploading] = useState(false);
   const [expenseReceipt, setExpenseReceipt] = useState<File | null>(null);
 
-  // Daten laden
+  // Pagination state
+  const [expensesPage, setExpensesPage] = useState(1);
+  const [expensesPageSize, setExpensesPageSize] = useState(10);
+  const [expensesTotal, setExpensesTotal] = useState(0);
+
+  const [incomesPage, setIncomesPage] = useState(1);
+  const [incomesPageSize, setIncomesPageSize] = useState(10);
+  const [incomesTotal, setIncomesTotal] = useState(0);
+
+  const [invoicesPage, setInvoicesPage] = useState(1);
+  const [invoicesPageSize, setInvoicesPageSize] = useState(10);
+  const [invoicesTotal, setInvoicesTotal] = useState(0);
+
+  // Full datasets for EÜR and Charts
+  const [expensesAll, setExpensesAll] = useState<Expense[]>([]);
+  const [incomesAll, setIncomesAll] = useState<Income[]>([]);
+
+  const expensesTotalPages = Math.max(1, Math.ceil(expensesTotal / Math.max(1, expensesPageSize)));
+  const incomesTotalPages = Math.max(1, Math.ceil(incomesTotal / Math.max(1, incomesPageSize)));
+  const invoicesTotalPages = Math.max(1, Math.ceil(invoicesTotal / Math.max(1, invoicesPageSize)));
+
+  // Einzigartige Kategorien und Kunden für Filter (nach Initialisierung der Full-Datasets)
+  const uniqueCategories = Array.from(new Set(expensesAll.map(expense => expense.category || 'Sonstiges')));
+  const uniqueCustomers = Array.from(new Set(incomesAll.map(income => income.customerName || '').filter(Boolean)));
+
+  // Helper: load paginated lists
+  function toQuery(params: Record<string, string | number | undefined>) {
+    const usp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== '') usp.append(k, String(v));
+    });
+    return usp.toString();
+  }
+
+  async function loadExpenses(page = expensesPage, pageSize = expensesPageSize) {
+    const q = toQuery({
+      page,
+      pageSize,
+      category: filters.expenses.category || undefined,
+      dateRange: filters.expenses.dateRange !== 'all' ? filters.expenses.dateRange : undefined,
+      taxRelevant: filters.expenses.taxRelevant !== 'all' ? filters.expenses.taxRelevant : undefined,
+      hasReceipt: filters.expenses.hasReceipt !== 'all' ? filters.expenses.hasReceipt : undefined,
+      search: filters.expenses.searchTerm || undefined,
+    });
+    const res = await fetch(`/api/expenses?${q}`);
+    if (res.ok) {
+      const data = await res.json();
+      setExpenses(data.items);
+      setExpensesTotal(data.total);
+      setExpensesPage(data.page);
+      setExpensesPageSize(data.pageSize);
+    }
+  }
+
+  async function loadIncomes(page = incomesPage, pageSize = incomesPageSize) {
+    const q = toQuery({
+      page,
+      pageSize,
+      customer: filters.incomes.customer || undefined,
+      dateRange: filters.incomes.dateRange !== 'all' ? filters.incomes.dateRange : undefined,
+      taxRelevant: filters.incomes.taxRelevant !== 'all' ? filters.incomes.taxRelevant : undefined,
+      search: filters.incomes.searchTerm || undefined,
+    });
+    const res = await fetch(`/api/incomes?${q}`);
+    if (res.ok) {
+      const data = await res.json();
+      setIncomes(data.items);
+      setIncomesTotal(data.total);
+      setIncomesPage(data.page);
+      setIncomesPageSize(data.pageSize);
+    }
+  }
+
+  async function loadInvoices(page = invoicesPage, pageSize = invoicesPageSize) {
+    const q = toQuery({
+      page,
+      pageSize,
+      paidStatus: filters.invoices.paidStatus !== 'all' ? filters.invoices.paidStatus : undefined,
+      dateRange: filters.invoices.dateRange !== 'all' ? filters.invoices.dateRange : undefined,
+      search: filters.invoices.searchTerm || undefined,
+    });
+    const res = await fetch(`/api/invoices?${q}`);
+    if (res.ok) {
+      const data = await res.json();
+      setInvoices(data.items);
+      setInvoicesTotal(data.total);
+      setInvoicesPage(data.page);
+      setInvoicesPageSize(data.pageSize);
+    }
+  }
+
+  // Initial load: paginated lists + full datasets for calculations
   useEffect(() => {
-    async function fetchData() {
+    async function fetchAll() {
       try {
-        const expensesResponse = await fetch('/api/expenses');
-        const incomesResponse = await fetch('/api/incomes');
-        const invoicesResponse = await fetch('/api/invoices');
+        await Promise.all([
+          loadExpenses(1, expensesPageSize),
+          loadIncomes(1, incomesPageSize),
+          loadInvoices(1, invoicesPageSize),
+        ]);
 
-        if (expensesResponse.ok) {
-          setExpenses(await expensesResponse.json());
+        // Load full datasets for EÜR/Charts (simple approach: large pageSize)
+        const [allExpRes, allIncRes] = await Promise.all([
+          fetch('/api/expenses?page=1&pageSize=10000'),
+          fetch('/api/incomes?page=1&pageSize=10000'),
+        ]);
+        if (allExpRes.ok) {
+          const d = await allExpRes.json();
+          setExpensesAll(d.items);
         }
-
-        if (incomesResponse.ok) {
-          setIncomes(await incomesResponse.json());
-        }
-
-        if (invoicesResponse.ok) {
-          setInvoices(await invoicesResponse.json());
+        if (allIncRes.ok) {
+          const d = await allIncRes.json();
+          setIncomesAll(d.items);
         }
 
         const customersResponse = await fetch('/api/customers');
@@ -694,9 +635,40 @@ function DashboardContent() {
         console.error('Error fetching data:', error);
       }
     }
-
-    fetchData();
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Reload lists when filters change
+  useEffect(() => {
+    loadExpenses(1, expensesPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filters.expenses.category,
+    filters.expenses.dateRange,
+    filters.expenses.taxRelevant,
+    filters.expenses.hasReceipt,
+    filters.expenses.searchTerm,
+  ]);
+
+  useEffect(() => {
+    loadIncomes(1, incomesPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filters.incomes.customer,
+    filters.incomes.dateRange,
+    filters.incomes.taxRelevant,
+    filters.incomes.searchTerm,
+  ]);
+
+  useEffect(() => {
+    loadInvoices(1, invoicesPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filters.invoices.paidStatus,
+    filters.invoices.dateRange,
+    filters.invoices.searchTerm,
+  ]);
 
   // Handlers
   const handleExpenseSubmit = async (e: React.FormEvent) => {
@@ -719,8 +691,13 @@ function DashboardContent() {
       });
 
       if (response.ok) {
-        const createdExpense = await response.json();
-        setExpenses([createdExpense, ...expenses]);
+        // Reload first page and full dataset for calculations
+        await loadExpenses(1, expensesPageSize);
+        const allExpRes = await fetch('/api/expenses?page=1&pageSize=10000');
+        if (allExpRes.ok) {
+          const d = await allExpRes.json();
+          setExpensesAll(d.items);
+        }
         setNewExpense({
           description: '',
           amount: '',
@@ -753,8 +730,12 @@ function DashboardContent() {
       });
 
       if (response.ok) {
-        const createdIncome = await response.json();
-        setIncomes([createdIncome, ...incomes]);
+        await loadIncomes(1, incomesPageSize);
+        const allIncRes = await fetch('/api/incomes?page=1&pageSize=10000');
+        if (allIncRes.ok) {
+          const d = await allIncRes.json();
+          setIncomesAll(d.items);
+        }
         setNewIncome({
           description: '',
           amount: '',
@@ -892,14 +873,15 @@ function DashboardContent() {
       });
 
       if (response.ok) {
-        const newInvoice = await response.json();
-        setInvoices([newInvoice, ...invoices]);
+        // Reload invoices page 1
+        await loadInvoices(1, invoicesPageSize);
         setSelectedFile(null);
-
-        // Wenn die Rechnung automatisch eine Einnahme erstellt hat
-        const incomesResponse = await fetch('/api/incomes');
-        if (incomesResponse.ok) {
-          setIncomes(await incomesResponse.json());
+        // Reload incomes datasets (upload may create an income)
+        await loadIncomes(incomesPage, incomesPageSize);
+        const allIncRes = await fetch('/api/incomes?page=1&pageSize=10000');
+        if (allIncRes.ok) {
+          const d = await allIncRes.json();
+          setIncomesAll(d.items);
         }
       }
     } catch (error) {
@@ -922,7 +904,7 @@ function DashboardContent() {
       });
 
       if (response.ok) {
-        setInvoices(invoices.filter(invoice => invoice.id !== id));
+        await loadInvoices(invoicesPage, invoicesPageSize);
       }
     } catch (error) {
       console.error('Error deleting invoice:', error);
@@ -955,10 +937,7 @@ function DashboardContent() {
       });
 
       if (response.ok) {
-        const updatedInvoice = await response.json();
-        setInvoices(invoices.map(invoice =>
-          invoice.id === id ? updatedInvoice : invoice
-        ));
+        await loadInvoices(invoicesPage, invoicesPageSize);
       }
     } catch (error) {
       console.error('Error updating invoice status:', error);
@@ -966,7 +945,7 @@ function DashboardContent() {
   };
 
   // Berechnungen für EÜR
-  const totalIncome = incomes.reduce((sum, income) => {
+  const totalIncome = incomesAll.reduce((sum, income) => {
     const incomeDate = new Date(income.date);
     const today = new Date();
 
@@ -988,7 +967,7 @@ function DashboardContent() {
     return income.taxRelevant && includeIncome ? sum + income.amount : sum;
   }, 0);
 
-  const totalExpense = expenses.reduce((sum, expense) => {
+  const totalExpense = expensesAll.reduce((sum, expense) => {
     const expenseDate = new Date(expense.date);
     const today = new Date();
 
@@ -1698,11 +1677,55 @@ function DashboardContent() {
                         </TableRow>
                       )}
                     </TableBody>
-                  </Table>
-                </div>
+              </Table>
+            </div>
+            {/* Pagination: Expenses */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 pb-6">
+              <div className="text-sm text-muted-foreground">
+                Seite {expensesPage} von {expensesTotalPages} · {expensesTotal} Einträge
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="expenses-page-size" className="text-sm">Pro Seite</Label>
+                <select
+                  id="expenses-page-size"
+                  value={expensesPageSize}
+                  onChange={async (e) => {
+                    const size = parseInt(e.target.value);
+                    setExpensesPageSize(size);
+                    setExpensesPage(1);
+                    await loadExpenses(1, size);
+                  }}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={expensesPage <= 1}
+                  onClick={async () => {
+                    const p = Math.max(1, expensesPage - 1);
+                    setExpensesPage(p);
+                    await loadExpenses(p, expensesPageSize);
+                  }}
+                >Zurück</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={expensesPage >= expensesTotalPages}
+                  onClick={async () => {
+                    const p = Math.min(expensesTotalPages, expensesPage + 1);
+                    setExpensesPage(p);
+                    await loadExpenses(p, expensesPageSize);
+                  }}
+                >Weiter</Button>
               </div>
             </div>
-          </TabsContent>
+          </div>
+        </div>
+      </TabsContent>
 
           {/* Einnahmen Tab */}
           <TabsContent value="incomes" className="space-y-6">
@@ -2065,6 +2088,50 @@ function DashboardContent() {
                     </TableBody>
                   </Table>
                 </div>
+                {/* Pagination: Incomes */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 pb-6">
+                  <div className="text-sm text-muted-foreground">
+                    Seite {incomesPage} von {incomesTotalPages} · {incomesTotal} Einträge
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="incomes-page-size" className="text-sm">Pro Seite</Label>
+                    <select
+                      id="incomes-page-size"
+                      value={incomesPageSize}
+                      onChange={async (e) => {
+                        const size = parseInt(e.target.value);
+                        setIncomesPageSize(size);
+                        setIncomesPage(1);
+                        await loadIncomes(1, size);
+                      }}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={incomesPage <= 1}
+                      onClick={async () => {
+                        const p = Math.max(1, incomesPage - 1);
+                        setIncomesPage(p);
+                        await loadIncomes(p, incomesPageSize);
+                      }}
+                    >Zurück</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={incomesPage >= incomesTotalPages}
+                      onClick={async () => {
+                        const p = Math.min(incomesTotalPages, incomesPage + 1);
+                        setIncomesPage(p);
+                        await loadIncomes(p, incomesPageSize);
+                      }}
+                    >Weiter</Button>
+                  </div>
+                </div>
               </div>
             </div>
           </TabsContent>
@@ -2371,6 +2438,50 @@ function DashboardContent() {
                       )}
                     </TableBody>
                   </Table>
+                </div>
+                {/* Pagination: Invoices */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 pb-6">
+                  <div className="text-sm text-muted-foreground">
+                    Seite {invoicesPage} von {invoicesTotalPages} · {invoicesTotal} Einträge
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="invoices-page-size" className="text-sm">Pro Seite</Label>
+                    <select
+                      id="invoices-page-size"
+                      value={invoicesPageSize}
+                      onChange={async (e) => {
+                        const size = parseInt(e.target.value);
+                        setInvoicesPageSize(size);
+                        setInvoicesPage(1);
+                        await loadInvoices(1, size);
+                      }}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={invoicesPage <= 1}
+                      onClick={async () => {
+                        const p = Math.max(1, invoicesPage - 1);
+                        setInvoicesPage(p);
+                        await loadInvoices(p, invoicesPageSize);
+                      }}
+                    >Zurück</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={invoicesPage >= invoicesTotalPages}
+                      onClick={async () => {
+                        const p = Math.min(invoicesTotalPages, invoicesPage + 1);
+                        setInvoicesPage(p);
+                        await loadInvoices(p, invoicesPageSize);
+                      }}
+                    >Weiter</Button>
+                  </div>
                 </div>
               </div>
             </div>

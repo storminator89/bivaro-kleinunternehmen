@@ -22,26 +22,74 @@ export async function POST(request: Request) {
   return NextResponse.json(income);
 }
 
-export async function GET() {
-  const incomes = await prisma.income.findMany({
-    orderBy: {
-      date: 'desc',
-    },
-    include: {
-      invoice: true, // Verknüpfte Rechnung einschließen
-      customer: true, // Verknüpften Kunden einschließen
-    },
-  });
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
+  const skip = (page - 1) * pageSize;
 
-  const incomesWithDetails = incomes.map(income => ({
+  // Filters
+  const search = url.searchParams.get('search') || '';
+  const customer = url.searchParams.get('customer') || '';
+  const taxRelevant = url.searchParams.get('taxRelevant'); // 'yes' | 'no' | null
+  const dateRange = url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
+
+  const where: any = {};
+
+  if (customer) {
+    where.customer = { name: customer };
+  }
+  if (taxRelevant === 'yes') where.taxRelevant = true;
+  if (taxRelevant === 'no') where.taxRelevant = false;
+
+  if (dateRange && dateRange !== 'all') {
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+    if (dateRange === 'thisMonth') {
+      const start = new Date(thisYear, thisMonth, 1);
+      const end = new Date(thisYear, thisMonth + 1, 0, 23, 59, 59, 999);
+      where.date = { gte: start, lte: end };
+    } else if (dateRange === 'lastMonth') {
+      const prevMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+      const prevYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+      const start = new Date(prevYear, prevMonth, 1);
+      const end = new Date(prevYear, prevMonth + 1, 0, 23, 59, 59, 999);
+      where.date = { gte: start, lte: end };
+    } else if (dateRange === 'thisYear') {
+      const start = new Date(thisYear, 0, 1);
+      const end = new Date(thisYear, 11, 31, 23, 59, 59, 999);
+      where.date = { gte: start, lte: end };
+    }
+  }
+
+  if (search) {
+    where.OR = [
+      { description: { contains: search, mode: 'insensitive' } },
+      { customer: { name: { contains: search, mode: 'insensitive' } } },
+    ];
+  }
+
+  const [incomes, total] = await Promise.all([
+    prisma.income.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      include: { invoice: true, customer: true },
+      skip,
+      take: pageSize,
+    }),
+    prisma.income.count({ where }),
+  ]);
+
+  const items = incomes.map(income => ({
     ...income,
     invoiceStatus: income.invoice ? income.invoice.status : undefined,
     customerName: income.customer ? income.customer.name : undefined,
-    invoice: undefined, // Entferne das vollständige Invoice-Objekt, um die Antwort schlank zu halten
-    customer: undefined, // Entferne das vollständige Customer-Objekt
+    invoice: undefined,
+    customer: undefined,
   }));
 
-  return NextResponse.json(incomesWithDetails);
+  return NextResponse.json({ items, total, page, pageSize });
 }
 
 // Neue Methode zum Aktualisieren einer Einnahme
