@@ -13,6 +13,7 @@ import {
   LogIn, 
   UserPlus, 
   LogOut,
+  Calculator,
   FileText,
   BarChart3,
   PieChart,
@@ -59,6 +60,12 @@ export function NavLinks() {
       href: "/dashboard", 
       label: "Dashboard", 
       icon: LayoutDashboard,
+      auth: "authenticated"
+    },
+    { 
+      href: "/steuer-simulation", 
+      label: "Steuer-Simulation", 
+      icon: Calculator,
       auth: "authenticated"
     },
     { 

@@ -6,7 +6,7 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
   
   // Protected routes - require authentication
-  const protectedPaths = ['/dashboard'];
+  const protectedPaths = ['/dashboard', '/steuer-simulation'];
   
   // Extract the path from the request URL
   const path = request.nextUrl.pathname;
@@ -34,5 +34,5 @@ export async function middleware(request: NextRequest) {
 
 // Match specific paths for the middleware to run on
 export const config = {
-  matcher: ['/', '/login', '/register', '/dashboard/:path*'],
+  matcher: ['/', '/login', '/register', '/dashboard/:path*', '/steuer-simulation/:path*'],
 };
