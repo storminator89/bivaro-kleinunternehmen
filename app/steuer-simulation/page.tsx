@@ -7,15 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowRightLeft,
   Calculator,
   CircleHelp,
   Factory,
+  AlertTriangle,
+  Lightbulb,
   Loader2,
   PiggyBank,
   RefreshCw,
   ShieldCheck,
+  ThumbsUp,
   TrendingUp,
 } from "lucide-react";
 import { subMonths } from "date-fns";
@@ -57,6 +61,12 @@ type ParameterLabelProps = {
   htmlFor: string;
   label: string;
   tooltip: string;
+};
+
+type Recommendation = {
+  tone: "info" | "warning" | "positive";
+  title: string;
+  description: string;
 };
 
 function ParameterLabel({ htmlFor, label, tooltip }: ParameterLabelProps) {
@@ -162,6 +172,16 @@ export default function SteuerSimulationPage() {
     [expenses, selectedTimeRange]
   );
 
+  const filteredIncomesAll = useMemo(
+    () => incomes.filter((income) => shouldInclude(income.date)),
+    [incomes, selectedTimeRange]
+  );
+
+  const filteredExpensesAll = useMemo(
+    () => expenses.filter((expense) => shouldInclude(expense.date)),
+    [expenses, selectedTimeRange]
+  );
+
   const totalIncome = useMemo(
     () => filteredIncomes.reduce((sum, income) => sum + income.amount, 0),
     [filteredIncomes]
@@ -176,6 +196,41 @@ export default function SteuerSimulationPage() {
     [filteredExpenses]
   );
 
+  const partialDeductionShortfall = useMemo(
+    () =>
+      filteredExpensesAll.reduce((sum, expense) => {
+        if (!expense.taxRelevant) {
+          return sum;
+        }
+        const percentage = expense.taxDeductiblePercentage ?? 100;
+        if (percentage >= 100) {
+          return sum;
+        }
+        return sum + expense.amount * (1 - percentage / 100);
+      }, 0),
+    [filteredExpensesAll]
+  );
+
+  const nonTaxRelevantExpenses = useMemo(
+    () => filteredExpensesAll.filter((expense) => !expense.taxRelevant),
+    [filteredExpensesAll]
+  );
+
+  const nonTaxRelevantExpenseAmount = useMemo(
+    () => nonTaxRelevantExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+    [nonTaxRelevantExpenses]
+  );
+
+  const nonTaxRelevantIncomes = useMemo(
+    () => filteredIncomesAll.filter((income) => !income.taxRelevant),
+    [filteredIncomesAll]
+  );
+
+  const nonTaxRelevantIncomeAmount = useMemo(
+    () => nonTaxRelevantIncomes.reduce((sum, income) => sum + income.amount, 0),
+    [nonTaxRelevantIncomes]
+  );
+
   const profit = totalIncome - totalExpenses;
   const profitFloor = Math.max(0, profit);
   const totalDeductions = Math.max(0, allowance) + Math.max(0, additionalDeductions);
@@ -188,9 +243,150 @@ export default function SteuerSimulationPage() {
   const netProfitAfterTax = profit - totalTax;
   const effectiveTaxRate = profit > 0 ? (totalTax / profit) * 100 : 0;
   const deductionsApplied = Math.min(profitFloor, totalDeductions);
+  const expenseCoverage = totalIncome > 0 ? totalExpenses / totalIncome : 0;
+  const unusedAllowance = Math.max(0, totalDeductions - deductionsApplied);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
+
+  const recommendationToneStyles: Record<Recommendation["tone"], string> = {
+    info: "border-primary/30 bg-primary/5",
+    warning: "border-amber-300/60 bg-amber-100/40 dark:bg-amber-500/10",
+    positive: "border-emerald-300/60 bg-emerald-100/30 dark:bg-emerald-500/10",
+  };
+
+  const recommendationIconMap: Record<Recommendation["tone"], LucideIcon> = {
+    info: Lightbulb,
+    warning: AlertTriangle,
+    positive: ThumbsUp,
+  };
+
+  const recommendationIconColor: Record<Recommendation["tone"], string> = {
+    info: "text-primary",
+    warning: "text-amber-600 dark:text-amber-400",
+    positive: "text-emerald-600 dark:text-emerald-400",
+  };
+
+  const recommendations = useMemo<Recommendation[]>(() => {
+    const recs: Recommendation[] = [];
+
+    if (profit < 0) {
+      recs.push({
+        tone: "warning",
+        title: "Verluste strategisch nutzen",
+        description: `Sie verzeichnen aktuell einen Verlust von ${formatCurrency(Math.abs(profit))}. Prüfen Sie Verlustvor- bzw. -rücktrag und passen Sie Vorauszahlungen an.`,
+      });
+
+      if (nonTaxRelevantExpenses.length > 0) {
+        recs.push({
+          tone: "info",
+          title: "Nicht berücksichtigte Ausgaben analysieren",
+          description: `${nonTaxRelevantExpenses.length} Ausgaben (${formatCurrency(nonTaxRelevantExpenseAmount)}) sind als nicht steuerrelevant markiert. Überprüfen Sie, ob sich Belege doch steuerlich ansetzen lassen.`,
+        });
+      }
+
+      return recs;
+    }
+
+    if (profit === 0 && unusedAllowance > 0) {
+      recs.push({
+        tone: "info",
+        title: "Freibeträge vollständig nutzen",
+        description: `Ihr Gewinn wird aktuell vollständig durch Freibeträge gedeckt (${formatCurrency(unusedAllowance)} bleiben unverbraucht). Planen Sie Einnahmeverschiebungen oder Investitionen gezielt, um Steuervorteile optimal zu nutzen.`,
+      });
+    }
+
+    if (taxableProfit > allowance * 1.1) {
+      recs.push({
+        tone: "info",
+        title: "Zusätzliche Abzugsmöglichkeiten prüfen",
+        description: `Der steuerpflichtige Gewinn liegt bei ${formatCurrency(taxableProfit)}. Investitionsabzugsbetrag, Sonderabschreibungen oder Vorsorgeaufwendungen können die Steuerlast weiter verkleinern.`,
+      });
+    }
+
+    if (additionalDeductions < 1 && taxableProfit > allowance) {
+      recs.push({
+        tone: "info",
+        title: "Sonderausgaben einplanen",
+        description: "Setzen Sie zusätzliche abzugsfähige Beträge wie Altersvorsorge- oder Krankenversicherungsbeiträge an, um den steuerpflichtigen Gewinn zu reduzieren.",
+      });
+    }
+
+    if (totalIncome > 0 && expenseCoverage < 0.35) {
+      recs.push({
+        tone: "positive",
+        title: "Zukunftsinvestitionen vorziehen",
+        description: `Nur ${(expenseCoverage * 100).toFixed(0)} % der Einnahmen sind aktuell als abzugsfähige Ausgaben verbucht. Moderne Betriebsinvestitionen oder Wartungsausgaben könnten den Gewinn steuerlich abfedern.`,
+      });
+    }
+
+    if (partialDeductionShortfall > 250) {
+      recs.push({
+        tone: "warning",
+        title: "Teilabzugsfähige Ausgaben optimieren",
+        description: `Bei Ausgaben bleiben ${formatCurrency(partialDeductionShortfall)} ungenutzt, weil nur ein Teil steuerlich ansetzbar ist. Prüfen Sie alternative Gestaltung (z. B. separates Arbeitszimmer, betriebliches Fahrzeug).`,
+      });
+    }
+
+    if (nonTaxRelevantExpenses.length > 0) {
+      recs.push({
+        tone: "info",
+        title: "Nicht steuerrelevante Kosten bewerten",
+        description: `${nonTaxRelevantExpenses.length} Ausgaben (${formatCurrency(nonTaxRelevantExpenseAmount)}) werden steuerlich nicht berücksichtigt. Stellen Sie sicher, dass die Zuordnung korrekt ist oder dokumentieren Sie private Anteile sauber.`,
+      });
+    }
+
+    if (nonTaxRelevantIncomes.length > 0 && nonTaxRelevantIncomeAmount > 0) {
+      recs.push({
+        tone: "warning",
+        title: "Steuerfreie Einnahmen plausibilisieren",
+        description: `${nonTaxRelevantIncomes.length} Einnahmen in Höhe von ${formatCurrency(nonTaxRelevantIncomeAmount)} sind als steuerfrei klassifiziert. Prüfen Sie, ob alle Voraussetzungen (z. B. echte Privatverkäufe) erfüllt sind.`,
+      });
+    }
+
+    if (tradeTaxRate === 0 && taxableProfit > 24000) {
+      recs.push({
+        tone: "warning",
+        title: "Gewerbesteuer im Blick behalten",
+        description: `Der Gewinn liegt über dem Gewerbesteuerfreibetrag von 24.500 EUR. Kalkulieren Sie rechtzeitig, ob eine Gewerbesteuerpflicht entstehen kann und berücksichtigen Sie Hinzurechnungen.`,
+      });
+    }
+
+    if (profit > 0 && effectiveTaxRate > incomeTaxRate + 5) {
+      recs.push({
+        tone: "warning",
+        title: "Steuerquote hinterfragen",
+        description: `Die effektive Steuerbelastung von ${effectiveTaxRate.toFixed(1)} % liegt deutlich über dem angesetzten Einkommensteuersatz. Prüfen Sie, ob Progressionseffekte oder Zuschläge mit längerfristigen Gestaltungen abgefedert werden können.`,
+      });
+    }
+
+    if (recs.length === 0) {
+      recs.push({
+        tone: "positive",
+        title: "Aktuelle Struktur wirkt effizient",
+        description: "Es wurden keine offensichtlichen Optimierungspotenziale erkannt. Dokumentieren Sie die Annahmen für die Steuerberatung und prüfen Sie regelmäßig neue Investitions- oder Vorsorgechancen.",
+      });
+    }
+
+    return recs;
+  }, [
+    additionalDeductions,
+    allowance,
+    effectiveTaxRate,
+    expenseCoverage,
+    formatCurrency,
+    incomeTaxRate,
+    nonTaxRelevantExpenseAmount,
+    nonTaxRelevantExpenses,
+    nonTaxRelevantIncomeAmount,
+    nonTaxRelevantIncomes,
+    partialDeductionShortfall,
+    profit,
+    taxableProfit,
+    totalIncome,
+    tradeTaxRate,
+    unusedAllowance,
+  ]);
 
   const resetDefaults = () => {
     setAllowance(defaultSettings.allowance);
@@ -291,10 +487,10 @@ export default function SteuerSimulationPage() {
               <p className="text-xs text-muted-foreground">
                 Tipp: Vergleichen Sie mehrere Zeiträume, um saisonale Schwankungen zu erkennen.
               </p>
-            </CardContent>
-          </Card>
-        </div>
+        </CardContent>
+      </Card>
 
+        </div>
         {error && (
           <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
@@ -566,9 +762,45 @@ export default function SteuerSimulationPage() {
             <p className="text-sm text-muted-foreground">
               Hinweis: Die Simulation ersetzt keine steuerliche Beratung. Für verbindliche Aussagen wenden Sie sich bitte an Ihre Steuerberatung.
             </p>
-          </CardContent>
-        </Card>
-      </div>
-    </TooltipProvider>
-  );
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/20 shadow-sm">
+        <CardHeader className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="gap-1 border-primary/40 text-primary">
+              Optimierung
+            </Badge>
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+              Handlungsempfehlungen
+            </span>
+          </div>
+          <CardTitle>Empfehlungen zur Steueroptimierung</CardTitle>
+          <CardDescription>
+            Konkrete Ansatzpunkte basierend auf Ihren aktuellen EÜR-Daten und Simulationseinstellungen.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-3">
+            {recommendations.map((rec, index) => {
+              const Icon = recommendationIconMap[rec.tone];
+              return (
+                <li
+                  key={`${rec.title}-${index}`}
+                  className={`flex items-start gap-3 rounded-lg border px-4 py-3 backdrop-blur-sm ${recommendationToneStyles[rec.tone]}`}
+                >
+                  <Icon className={`mt-0.5 h-5 w-5 ${recommendationIconColor[rec.tone]}`} />
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">{rec.title}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{rec.description}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </CardContent>
+      </Card>
+    </div>
+  </TooltipProvider>
+);
 }
