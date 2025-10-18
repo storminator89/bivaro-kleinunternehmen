@@ -1,0 +1,11 @@
+.next
+node_modules
+*.log
+.env
+.env.*
+Dockerfile
+docker-compose.yml
+prisma/dev.db
+npm-debug.log
+.git
+.gitignore

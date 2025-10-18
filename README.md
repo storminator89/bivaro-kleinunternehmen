@@ -46,6 +46,38 @@ Buchhaltung is a web-based accounting application designed to help users manage 
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## Docker
+
+1. **Build the image:**
+   ```bash
+   docker build -t buchhaltung-app .
+   ```
+
+2. **Prepare environment variables:**
+   Create a dedicated `.env.docker` file (or reuse `.env`) with production-safe values. At minimum set:
+   ```
+   DATABASE_URL="file:./prisma/dev.db"
+   NEXTAUTH_SECRET="your-secret-key"
+   NEXTAUTH_URL="http://localhost:3000"
+   ```
+
+3. **Run the container:**
+   ```bash
+   docker run --env-file .env.docker -p 3000:3000 buchhaltung-app
+   ```
+
+   To persist the SQLite database outside the container, mount the file:
+   ```bash
+   docker run --env-file .env.docker \
+     -v $(pwd)/prisma/dev.db:/app/prisma/dev.db \
+     -p 3000:3000 buchhaltung-app
+   ```
+
+4. **Migrations in Docker (optional):**
+   ```bash
+   docker run --rm --env-file .env.docker buchhaltung-app npx prisma migrate deploy
+   ```
+
 ## Environment Variables
 
 Create a `.env` file in the `buchhaltung/` directory with the following variables:
