@@ -455,6 +455,10 @@ function DashboardContent() {
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExportingReceipts, setIsExportingReceipts] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [isExportingIncomeDocuments, setIsExportingIncomeDocuments] = useState(false);
+  const [incomeExportError, setIncomeExportError] = useState<string | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState<'all' | 'last3Months' | 'last6Months' | 'thisYear' | 'lastYear'>('last6Months');
 
   // Filter States
@@ -641,6 +645,7 @@ function DashboardContent() {
 
   // Reload lists when filters change
   useEffect(() => {
+    setExportError(null);
     loadExpenses(1, expensesPageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -652,6 +657,7 @@ function DashboardContent() {
   ]);
 
   useEffect(() => {
+    setIncomeExportError(null);
     loadIncomes(1, incomesPageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -671,6 +677,103 @@ function DashboardContent() {
   ]);
 
   // Handlers
+  const handleExportReceipts = async () => {
+    try {
+      setExportError(null);
+      setIsExportingReceipts(true);
+
+      const query = toQuery({
+        category: filters.expenses.category || undefined,
+        dateRange: filters.expenses.dateRange !== 'all' ? filters.expenses.dateRange : undefined,
+        taxRelevant: filters.expenses.taxRelevant !== 'all' ? filters.expenses.taxRelevant : undefined,
+        hasReceipt: filters.expenses.hasReceipt !== 'all' ? filters.expenses.hasReceipt : undefined,
+        search: filters.expenses.searchTerm || undefined,
+      });
+      const queryString = query ? `?${query}` : '';
+
+      const response = await fetch(`/api/expenses/export${queryString}`);
+
+      if (!response.ok) {
+        let message = 'Der Export der Belege ist fehlgeschlagen.';
+        try {
+          const data = await response.json();
+          if (data?.error) {
+            message = data.error;
+          }
+        } catch {
+          // Ignoriere JSON-Parsing-Fehler bei nicht-JSON-Antworten
+        }
+        setExportError(message);
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="(.+?)"/);
+      link.href = downloadUrl;
+      link.download = match?.[1] ?? 'belege-export.zip';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+    } catch (error) {
+      console.error('Fehler beim Export der Belege:', error);
+      setExportError('Der Export der Belege ist fehlgeschlagen.');
+    } finally {
+      setIsExportingReceipts(false);
+    }
+  };
+
+  const handleExportIncomeDocuments = async () => {
+    try {
+      setIncomeExportError(null);
+      setIsExportingIncomeDocuments(true);
+
+      const query = toQuery({
+        customer: filters.incomes.customer || undefined,
+        dateRange: filters.incomes.dateRange !== 'all' ? filters.incomes.dateRange : undefined,
+        taxRelevant: filters.incomes.taxRelevant !== 'all' ? filters.incomes.taxRelevant : undefined,
+        search: filters.incomes.searchTerm || undefined,
+      });
+      const queryString = query ? `?${query}` : '';
+
+      const response = await fetch(`/api/incomes/export${queryString}`);
+
+      if (!response.ok) {
+        let message = 'Der Export der Rechnungspakete ist fehlgeschlagen.';
+        try {
+          const data = await response.json();
+          if (data?.error) {
+            message = data.error;
+          }
+        } catch {
+          // Ignoriere JSON-Parsing-Fehler bei nicht-JSON-Antworten
+        }
+        setIncomeExportError(message);
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="(.+?)"/);
+      link.href = downloadUrl;
+      link.download = match?.[1] ?? 'einnahmen-export.zip';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+    } catch (error) {
+      console.error('Fehler beim Export der Einnahmen:', error);
+      setIncomeExportError('Der Export der Rechnungspakete ist fehlgeschlagen.');
+    } finally {
+      setIsExportingIncomeDocuments(false);
+    }
+  };
+
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1496,31 +1599,62 @@ function DashboardContent() {
                     </div>
                   </div>
 
-                  <div className="flex mt-4 items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">{filteredExpenses.length}</span> Ausgaben gefunden
+                  <div className="flex flex-col gap-3 mt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">{filteredExpenses.length}</span> Ausgaben gefunden
+                      </div>
+                      {exportError && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {exportError}
+                        </p>
+                      )}
                     </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => setFilters({
-                        ...filters,
-                        expenses: {
-                          category: '',
-                          dateRange: 'all',
-                          taxRelevant: 'all',
-                          hasReceipt: 'all',
-                          searchTerm: '',
-                        }
-                      })}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Filter zurücksetzen
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={handleExportReceipts}
+                        disabled={isExportingReceipts}
+                      >
+                        {isExportingReceipts ? (
+                          <>
+                            <svg className="animate-spin h-3.5 w-3.5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            </svg>
+                            Export läuft...
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M7 10l5 5m0 0l5-5m-5 5V4" />
+                            </svg>
+                            Belege exportieren
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => setFilters({
+                          ...filters,
+                          expenses: {
+                            category: '',
+                            dateRange: 'all',
+                            taxRelevant: 'all',
+                            hasReceipt: 'all',
+                            searchTerm: '',
+                          }
+                        })}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Filter zurücksetzen
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1942,30 +2076,62 @@ function DashboardContent() {
                     </div>
                   </div>
 
-                  <div className="flex mt-4 items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">{filteredIncomes.length}</span> Einnahmen gefunden
+                  <div className="flex flex-col gap-3 mt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">{filteredIncomes.length}</span> Einnahmen gefunden
+                      </div>
+                      {incomeExportError && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {incomeExportError}
+                        </p>
+                      )}
                     </div>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => setFilters({
-                        ...filters,
-                        incomes: {
-                          customer: '',
-                          dateRange: 'all',
-                          taxRelevant: 'all',
-                          searchTerm: '',
-                        }
-                      })}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Filter zurücksetzen
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={handleExportIncomeDocuments}
+                        disabled={isExportingIncomeDocuments}
+                      >
+                        {isExportingIncomeDocuments ? (
+                          <>
+                            <svg className="animate-spin h-3.5 w-3.5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            </svg>
+                            Export läuft...
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M7 10l5 5m0 0l5-5m-5 5V4" />
+                            </svg>
+                            Rechnungen exportieren
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => setFilters({
+                          ...filters,
+                          incomes: {
+                            customer: '',
+                            dateRange: 'all',
+                            taxRelevant: 'all',
+                            searchTerm: '',
+                          }
+                        })}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Filter zurücksetzen
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
