@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       const category = formData.get('category') as string;
       const taxRelevant = formData.get('taxRelevant') === 'true';
       const receipt = formData.get('receipt') as File | null;
+      const dateStr = formData.get('date') as string;
       
       if (!description || !amount) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
@@ -78,18 +79,20 @@ export async function POST(request: NextRequest) {
         data: {
           description,
           amount: parseFloat(amount),
+          date: dateStr ? new Date(dateStr) : new Date(),
           category: category || null,
           taxRelevant,
           taxDeductiblePercentage: formData.get('taxDeductiblePercentage') ? parseInt(formData.get('taxDeductiblePercentage') as string) : 100,
           receiptFileName,
           storedReceiptFileName,
+          depreciationYears: formData.get('depreciationYears') ? parseInt(formData.get('depreciationYears') as string) : null,
         },
       });
       
       return NextResponse.json(expense);
     } else {
       // Verarbeite regulären JSON-Request ohne Datei
-      const { description, amount, category, taxRelevant, taxDeductiblePercentage } = await request.json();
+      const { description, amount, category, taxRelevant, taxDeductiblePercentage, depreciationYears, date } = await request.json();
       
       if (!description || !amount) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
@@ -99,9 +102,11 @@ export async function POST(request: NextRequest) {
         data: {
           description,
           amount: parseFloat(amount.toString()),
+          date: date ? new Date(date) : new Date(),
           category: category || null,
           taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
           taxDeductiblePercentage: taxDeductiblePercentage || 100,
+          depreciationYears: depreciationYears || null,
         },
       });
       
@@ -184,7 +189,7 @@ export async function GET(request: NextRequest) {
 
 // Neue Methode zum Aktualisieren einer Ausgabe
 export async function PUT(request: Request) {
-  const { id, description, amount, category, taxRelevant, taxDeductiblePercentage, receiptUrl } = await request.json();
+  const { id, description, amount, category, taxRelevant, taxDeductiblePercentage, receiptUrl, depreciationYears, date } = await request.json();
 
   if (!id || !description || !amount) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -196,10 +201,12 @@ export async function PUT(request: Request) {
       data: {
         description,
         amount: parseFloat(amount.toString()),
+        date: date ? new Date(date) : undefined,
         category: category || null,
         taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
         taxDeductiblePercentage: taxDeductiblePercentage || 100,
         receiptUrl: receiptUrl || null,
+        depreciationYears: depreciationYears || null,
       },
     });
     return NextResponse.json(updatedExpense);

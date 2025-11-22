@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   ThumbsUp,
   TrendingUp,
+  Briefcase,
 } from "lucide-react";
 import { subMonths } from "date-fns";
 
@@ -46,13 +47,20 @@ type Income = {
 
 type TimeRange = "all" | "last3Months" | "last6Months" | "thisYear" | "lastYear";
 
+import {
+  calculateIncomeTax,
+  calculateSolidaritySurcharge,
+  calculateTradeTax,
+  calculateChurchTax,
+} from "@/lib/tax-calculator";
+
 const defaultSettings = {
-  allowance: 10908, // Grundfreibetrag 2023/24
-  additionalDeductions: 0,
-  incomeTaxRate: 30,
-  solidarityRate: 5.5,
+  healthInsurance: 4000,
+  pensionInsurance: 0,
+  careInsurance: 1000,
+  otherDeductions: 0,
+  tradeTaxHebesatz: 400,
   churchTaxRate: 8,
-  tradeTaxRate: 0,
   includeSolidarity: true,
   includeChurchTax: false,
 };
@@ -98,14 +106,40 @@ export default function SteuerSimulationPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>("thisYear");
 
-  const [allowance, setAllowance] = useState<number>(defaultSettings.allowance);
-  const [additionalDeductions, setAdditionalDeductions] = useState<number>(defaultSettings.additionalDeductions);
-  const [incomeTaxRate, setIncomeTaxRate] = useState<number>(defaultSettings.incomeTaxRate);
-  const [solidarityRate, setSolidarityRate] = useState<number>(defaultSettings.solidarityRate);
+  const [healthInsurance, setHealthInsurance] = useState<number>(defaultSettings.healthInsurance);
+  const [pensionInsurance, setPensionInsurance] = useState<number>(defaultSettings.pensionInsurance);
+  const [careInsurance, setCareInsurance] = useState<number>(defaultSettings.careInsurance);
+  const [otherDeductions, setOtherDeductions] = useState<number>(defaultSettings.otherDeductions);
+  const [tradeTaxHebesatz, setTradeTaxHebesatz] = useState<number>(defaultSettings.tradeTaxHebesatz);
   const [churchTaxRate, setChurchTaxRate] = useState<number>(defaultSettings.churchTaxRate);
-  const [tradeTaxRate, setTradeTaxRate] = useState<number>(defaultSettings.tradeTaxRate);
   const [includeSolidarity, setIncludeSolidarity] = useState<boolean>(defaultSettings.includeSolidarity);
   const [includeChurchTax, setIncludeChurchTax] = useState<boolean>(defaultSettings.includeChurchTax);
+
+  // Neue States für Angestelltenverhältnis
+  const [employmentType, setEmploymentType] = useState<"self-employed" | "side-business">("self-employed");
+  const [grossSalary, setGrossSalary] = useState<number>(50000);
+  const [employeeExpenses, setEmployeeExpenses] = useState<number>(1230); // Werbungskostenpauschale 2024
+  const [autoCalcSocial, setAutoCalcSocial] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (employmentType === "side-business" && autoCalcSocial) {
+      // Beitragsbemessungsgrenzen 2024 (West)
+      const bbG_KV = 62100;
+      const bbG_RV = 90600;
+
+      const salaryForKV = Math.min(grossSalary, bbG_KV);
+      const salaryForRV = Math.min(grossSalary, bbG_RV);
+
+      // Arbeitnehmeranteile (ca. Werte 2024)
+      // KV: 7.3% + 0.85% (halber Zusatzbeitrag 1.7%) = 8.15%
+      // RV: 9.3%
+      // PV: 2.3% (inkl. Kinderlosenzuschlag Anteil)
+      
+      setHealthInsurance(Math.round(salaryForKV * 0.0815));
+      setPensionInsurance(Math.round(salaryForRV * 0.093));
+      setCareInsurance(Math.round(salaryForKV * 0.023));
+    }
+  }, [grossSalary, employmentType, autoCalcSocial]);
 
   const fetchData = async () => {
     try {
@@ -233,18 +267,65 @@ export default function SteuerSimulationPage() {
 
   const profit = totalIncome - totalExpenses;
   const profitFloor = Math.max(0, profit);
-  const totalDeductions = Math.max(0, allowance) + Math.max(0, additionalDeductions);
-  const taxableProfit = Math.max(0, profitFloor - totalDeductions);
-  const incomeTax = taxableProfit * (Math.max(0, incomeTaxRate) / 100);
-  const solidaritySurcharge = includeSolidarity ? incomeTax * (Math.max(0, solidarityRate) / 100) : 0;
-  const churchTax = includeChurchTax ? incomeTax * (Math.max(0, churchTaxRate) / 100) : 0;
-  const tradeTax = taxableProfit * (Math.max(0, tradeTaxRate) / 100);
-  const totalTax = incomeTax + solidaritySurcharge + churchTax + tradeTax;
-  const netProfitAfterTax = profit - totalTax;
-  const effectiveTaxRate = profit > 0 ? (totalTax / profit) * 100 : 0;
-  const deductionsApplied = Math.min(profitFloor, totalDeductions);
+
+  // 1. Gewerbesteuer
+  const tradeTax = calculateTradeTax(profitFloor, tradeTaxHebesatz);
+
+  // 2. Zu versteuerndes Einkommen (zvE)
+  const totalDeductions = healthInsurance + pensionInsurance + careInsurance + otherDeductions;
+  
+  let incomeFromEmployment = 0;
+  if (employmentType === "side-business") {
+    incomeFromEmployment = Math.max(0, grossSalary - employeeExpenses);
+  }
+
+  const taxableIncome = Math.max(0, profitFloor + incomeFromEmployment - totalDeductions);
+
+  // 3. Tarifliche Einkommensteuer
+  const baseIncomeTax = calculateIncomeTax(taxableIncome);
+
+  // 4. Gewerbesteueranrechnung (3,8-facher Messbetrag, max. die tatsächliche GewSt)
+  // Messbetrag = (Gewinn - 24500) * 3.5%
+  const tradeTaxBaseAmount = Math.max(0, profitFloor - 24500) * 0.035;
+  const tradeTaxCredit = Math.min(tradeTax, tradeTaxBaseAmount * 3.8);
+  
+  const finalIncomeTax = Math.max(0, baseIncomeTax - tradeTaxCredit);
+
+  // 5. Zuschläge
+  const solidaritySurcharge = includeSolidarity ? calculateSolidaritySurcharge(finalIncomeTax) : 0;
+  const churchTax = includeChurchTax ? calculateChurchTax(finalIncomeTax, churchTaxRate) : 0;
+
+  const totalTax = finalIncomeTax + solidaritySurcharge + churchTax + tradeTax;
+
+  // Berechnung der Grenzsteuerbelastung für Nebengewerbe
+  let marginalTax = totalTax;
+  let taxWithoutBusiness = 0;
+
+  if (employmentType === "side-business") {
+    // Steuerlast ohne Gewerbe berechnen (nur Job)
+    const taxableIncomeBase = Math.max(0, incomeFromEmployment - totalDeductions);
+    const baseIncomeTaxOnly = calculateIncomeTax(taxableIncomeBase);
+    const baseSoli = includeSolidarity ? calculateSolidaritySurcharge(baseIncomeTaxOnly) : 0;
+    const baseChurch = includeChurchTax ? calculateChurchTax(baseIncomeTaxOnly, churchTaxRate) : 0;
+    
+    taxWithoutBusiness = baseIncomeTaxOnly + baseSoli + baseChurch;
+    marginalTax = totalTax - taxWithoutBusiness;
+  }
+
+  const netProfitAfterTax = employmentType === "side-business" 
+    ? profit - marginalTax 
+    : profit - totalTax;
+    
+  const effectiveTaxRate = profit > 0 
+    ? (marginalTax / profit) * 100 
+    : 0;
+  
+  const totalNetIncome = (profit + incomeFromEmployment) - totalTax;
+  
+  // Für UI-Anzeige
+  const deductionsApplied = totalDeductions;
   const expenseCoverage = totalIncome > 0 ? totalExpenses / totalIncome : 0;
-  const unusedAllowance = Math.max(0, totalDeductions - deductionsApplied);
+  const unusedAllowance = 0; // Nicht mehr relevant in neuer Logik
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
@@ -296,19 +377,19 @@ export default function SteuerSimulationPage() {
       });
     }
 
-    if (taxableProfit > allowance * 1.1) {
+    if (taxableIncome > 11604 * 1.1) {
       recs.push({
         tone: "info",
         title: "Zusätzliche Abzugsmöglichkeiten prüfen",
-        description: `Der steuerpflichtige Gewinn liegt bei ${formatCurrency(taxableProfit)}. Investitionsabzugsbetrag, Sonderabschreibungen oder Vorsorgeaufwendungen können die Steuerlast weiter verkleinern.`,
+        description: `Das zu versteuernde Einkommen liegt bei ${formatCurrency(taxableIncome)}. Investitionsabzugsbetrag, Sonderabschreibungen oder Vorsorgeaufwendungen können die Steuerlast weiter verkleinern.`,
       });
     }
 
-    if (additionalDeductions < 1 && taxableProfit > allowance) {
+    if (totalDeductions < 5000 && profit > 20000) {
       recs.push({
         tone: "info",
-        title: "Sonderausgaben einplanen",
-        description: "Setzen Sie zusätzliche abzugsfähige Beträge wie Altersvorsorge- oder Krankenversicherungsbeiträge an, um den steuerpflichtigen Gewinn zu reduzieren.",
+        title: "Vorsorgeaufwendungen prüfen",
+        description: "Ihre angesetzten Vorsorgeaufwendungen erscheinen niedrig. Prüfen Sie, ob Kranken-, Pflege- und Rentenversicherungsbeiträge vollständig erfasst sind.",
       });
     }
 
@@ -344,19 +425,27 @@ export default function SteuerSimulationPage() {
       });
     }
 
-    if (tradeTaxRate === 0 && taxableProfit > 24000) {
+    if (tradeTaxHebesatz < 200 && profit > 24500) {
       recs.push({
         tone: "warning",
-        title: "Gewerbesteuer im Blick behalten",
-        description: `Der Gewinn liegt über dem Gewerbesteuerfreibetrag von 24.500 EUR. Kalkulieren Sie rechtzeitig, ob eine Gewerbesteuerpflicht entstehen kann und berücksichtigen Sie Hinzurechnungen.`,
+        title: "Gewerbesteuer-Hebesatz prüfen",
+        description: `Der eingestellte Hebesatz von ${tradeTaxHebesatz}% erscheint niedrig. Der Mindesthebesatz liegt in der Regel bei 200%. Prüfen Sie den Hebesatz Ihrer Gemeinde.`,
       });
     }
 
-    if (profit > 0 && effectiveTaxRate > incomeTaxRate + 5) {
+    if (profit > 0 && effectiveTaxRate > 45) {
+      recs.push({
+        tone: "info",
+        title: "Hohe Grenzsteuerbelastung",
+        description: `Die effektive Belastung von ${effectiveTaxRate.toFixed(1)} % resultiert aus der Progression. Da Ihr Hauptgehalt den Grundfreibetrag bereits ausschöpft, unterliegt der Gewerbegewinn direkt dem Spitzensteuersatz (zzgl. evtl. Soli/Kirchensteuer).`,
+      });
+    }
+
+    if (employmentType === "side-business" && taxableIncome > 66760) {
       recs.push({
         tone: "warning",
-        title: "Steuerquote hinterfragen",
-        description: `Die effektive Steuerbelastung von ${effectiveTaxRate.toFixed(1)} % liegt deutlich über dem angesetzten Einkommensteuersatz. Prüfen Sie, ob Progressionseffekte oder Zuschläge mit längerfristigen Gestaltungen abgefedert werden können.`,
+        title: "Progressionseffekt beachten",
+        description: `Durch Ihr Gehalt und den Gewinn rutschen Sie in einen höheren Steuersatz. Jeder zusätzliche Euro Gewinn wird mit dem Grenzsteuersatz (ca. 42%) belastet.`,
       });
     }
 
@@ -370,33 +459,38 @@ export default function SteuerSimulationPage() {
 
     return recs;
   }, [
-    additionalDeductions,
-    allowance,
     effectiveTaxRate,
     expenseCoverage,
     formatCurrency,
-    incomeTaxRate,
     nonTaxRelevantExpenseAmount,
     nonTaxRelevantExpenses,
     nonTaxRelevantIncomeAmount,
     nonTaxRelevantIncomes,
     partialDeductionShortfall,
     profit,
-    taxableProfit,
+    taxableIncome,
+    totalDeductions,
     totalIncome,
-    tradeTaxRate,
+    tradeTaxHebesatz,
     unusedAllowance,
+    employmentType,
+    grossSalary,
+    employeeExpenses,
   ]);
 
   const resetDefaults = () => {
-    setAllowance(defaultSettings.allowance);
-    setAdditionalDeductions(defaultSettings.additionalDeductions);
-    setIncomeTaxRate(defaultSettings.incomeTaxRate);
-    setSolidarityRate(defaultSettings.solidarityRate);
+    setHealthInsurance(defaultSettings.healthInsurance);
+    setPensionInsurance(defaultSettings.pensionInsurance);
+    setCareInsurance(defaultSettings.careInsurance);
+    setOtherDeductions(defaultSettings.otherDeductions);
+    setTradeTaxHebesatz(defaultSettings.tradeTaxHebesatz);
     setChurchTaxRate(defaultSettings.churchTaxRate);
-    setTradeTaxRate(defaultSettings.tradeTaxRate);
     setIncludeSolidarity(defaultSettings.includeSolidarity);
     setIncludeChurchTax(defaultSettings.includeChurchTax);
+    setEmploymentType("self-employed");
+    setGrossSalary(50000);
+    setEmployeeExpenses(1230);
+    setAutoCalcSocial(true);
   };
 
   return (
@@ -553,19 +647,166 @@ export default function SteuerSimulationPage() {
             <CardDescription>Legen Sie Freibeträge, Steuersätze und Zuschläge fest.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <Label className="text-base font-semibold">Beschäftigungsverhältnis</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Führen Sie das Gewerbe haupt- oder nebenberuflich?
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 rounded-lg border bg-background p-1">
+                  <Button
+                    variant={employmentType === "self-employed" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setEmploymentType("self-employed")}
+                    className="gap-2"
+                  >
+                    <Factory className="h-4 w-4" />
+                    Hauptberuflich
+                  </Button>
+                  <Button
+                    variant={employmentType === "side-business" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setEmploymentType("side-business")}
+                    className="gap-2"
+                  >
+                    <Briefcase className="h-4 w-4" />
+                    Nebenberuflich
+                  </Button>
+                </div>
+              </div>
+
+              {employmentType === "side-business" && (
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <ParameterLabel
+                      htmlFor="grossSalary"
+                      label="Bruttojahresgehalt (EUR)"
+                      tooltip="Ihr Bruttoarbeitslohn aus der nichtselbstständigen Hauptbeschäftigung."
+                    />
+                    <Input
+                      id="grossSalary"
+                      type="number"
+                      inputMode="decimal"
+                      value={grossSalary}
+                      onChange={(event) => setGrossSalary(Number(event.target.value) || 0)}
+                      min={0}
+                      step={1000}
+                      className="mt-1 bg-background"
+                    />
+                  </div>
+                  <div>
+                    <ParameterLabel
+                      htmlFor="employeeExpenses"
+                      label="Werbungskosten (EUR)"
+                      tooltip="Werbungskosten aus nichtselbstständiger Arbeit (Pauschbetrag 2024: 1.230 €)."
+                    />
+                    <Input
+                      id="employeeExpenses"
+                      type="number"
+                      inputMode="decimal"
+                      value={employeeExpenses}
+                      onChange={(event) => setEmployeeExpenses(Number(event.target.value) || 0)}
+                      min={0}
+                      step={10}
+                      className="mt-1 bg-background"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {employmentType === "side-business" && (
+                <div className="mt-4 flex items-center gap-2 rounded-md bg-muted/50 p-3 text-sm">
+                  <input
+                    id="autoCalcSocial"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border border-input"
+                    checked={autoCalcSocial}
+                    onChange={(event) => setAutoCalcSocial(event.target.checked)}
+                  />
+                  <Label htmlFor="autoCalcSocial" className="font-normal">
+                    Sozialversicherungsbeiträge automatisch aus Bruttogehalt berechnen
+                  </Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <CircleHelp className="h-4 w-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      Berechnet die abzugsfähigen Vorsorgeaufwendungen (KV, RV, PV) basierend auf Ihrem Bruttogehalt automatisch. Diese mindern Ihre Steuerlast.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div>
                 <ParameterLabel
-                  htmlFor="allowance"
-                  label="Grundfreibetrag (EUR)"
-                  tooltip="Jährlicher steuerfreier Betrag, der vom Gewinn abgezogen wird, bevor die Einkommensteuer berechnet wird."
+                  htmlFor="healthInsurance"
+                  label="Krankenversicherung (EUR)"
+                  tooltip="Jährliche Beiträge zur Krankenversicherung (Basisabsicherung)."
                 />
                 <Input
-                  id="allowance"
+                  id="healthInsurance"
                   type="number"
                   inputMode="decimal"
-                  value={allowance}
-                  onChange={(event) => setAllowance(Number(event.target.value) || 0)}
+                  value={healthInsurance}
+                  onChange={(event) => setHealthInsurance(Number(event.target.value) || 0)}
+                  min={0}
+                  step={100}
+                  className="mt-1"
+                  disabled={employmentType === "side-business" && autoCalcSocial}
+                />
+              </div>
+              <div>
+                <ParameterLabel
+                  htmlFor="pensionInsurance"
+                  label="Rentenversicherung (EUR)"
+                  tooltip="Jährliche Beiträge zur gesetzlichen oder privaten Rentenversicherung (Rürup)."
+                />
+                <Input
+                  id="pensionInsurance"
+                  type="number"
+                  inputMode="decimal"
+                  value={pensionInsurance}
+                  onChange={(event) => setPensionInsurance(Number(event.target.value) || 0)}
+                  min={0}
+                  step={100}
+                  className="mt-1"
+                  disabled={employmentType === "side-business" && autoCalcSocial}
+                />
+              </div>
+              <div>
+                <ParameterLabel
+                  htmlFor="careInsurance"
+                  label="Pflegeversicherung (EUR)"
+                  tooltip="Jährliche Beiträge zur Pflegeversicherung."
+                />
+                <Input
+                  id="careInsurance"
+                  type="number"
+                  inputMode="decimal"
+                  value={careInsurance}
+                  onChange={(event) => setCareInsurance(Number(event.target.value) || 0)}
+                  min={0}
+                  step={50}
+                  className="mt-1"
+                  disabled={employmentType === "side-business" && autoCalcSocial}
+                />
+              </div>
+              <div>
+                <ParameterLabel
+                  htmlFor="otherDeductions"
+                  label="Sonstige Sonderausgaben (EUR)"
+                  tooltip="Weitere abzugsfähige Beträge (z. B. Spenden, Kirchensteuer-Vorauszahlung)."
+                />
+                <Input
+                  id="otherDeductions"
+                  type="number"
+                  inputMode="decimal"
+                  value={otherDeductions}
+                  onChange={(event) => setOtherDeductions(Number(event.target.value) || 0)}
                   min={0}
                   step={100}
                   className="mt-1"
@@ -573,75 +814,27 @@ export default function SteuerSimulationPage() {
               </div>
               <div>
                 <ParameterLabel
-                  htmlFor="additionalDeductions"
-                  label="Weitere abzugsfähige Beträge (EUR)"
-                  tooltip="Zusätzliche Sonderausgaben oder Freibeträge (z. B. Krankenversicherung), die Sie vom Gewinn abziehen möchten."
+                  htmlFor="tradeTaxHebesatz"
+                  label="Gewerbesteuer-Hebesatz (%)"
+                  tooltip="Kommunaler Hebesatz für die Gewerbesteuer (mind. 200%)."
                 />
                 <Input
-                  id="additionalDeductions"
+                  id="tradeTaxHebesatz"
                   type="number"
                   inputMode="decimal"
-                  value={additionalDeductions}
-                  onChange={(event) => setAdditionalDeductions(Number(event.target.value) || 0)}
+                  value={tradeTaxHebesatz}
+                  onChange={(event) => setTradeTaxHebesatz(Number(event.target.value) || 0)}
                   min={0}
-                  step={100}
+                  max={1000}
+                  step={10}
                   className="mt-1"
                 />
-              </div>
-              <div>
-                <ParameterLabel
-                  htmlFor="incomeTaxRate"
-                  label="Einkommensteuersatz (%)"
-                  tooltip="Pauschaler Steuersatz für die Einkommensteuer. Für progressive Tarife können Sie einen Durchschnittswert eintragen."
-                />
-                <Input
-                  id="incomeTaxRate"
-                  type="number"
-                  inputMode="decimal"
-                  value={incomeTaxRate}
-                  onChange={(event) => setIncomeTaxRate(Number(event.target.value) || 0)}
-                  min={0}
-                  max={99}
-                  step={0.1}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <ParameterLabel
-                  htmlFor="solidarityRate"
-                  label="Solidaritätszuschlag (%)"
-                  tooltip="Prozentsatz des Solidaritätszuschlags auf die festgesetzte Einkommensteuer. Kann deaktiviert werden, falls Sie unter der Freigrenze liegen."
-                />
-                <Input
-                  id="solidarityRate"
-                  type="number"
-                  inputMode="decimal"
-                  value={solidarityRate}
-                  onChange={(event) => setSolidarityRate(Number(event.target.value) || 0)}
-                  min={0}
-                  max={20}
-                  step={0.1}
-                  className="mt-1"
-                  disabled={!includeSolidarity}
-                />
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    id="includeSolidarity"
-                    type="checkbox"
-                    className="h-4 w-4 rounded border border-input"
-                    checked={includeSolidarity}
-                    onChange={(event) => setIncludeSolidarity(event.target.checked)}
-                  />
-                  <Label htmlFor="includeSolidarity" className="text-sm text-muted-foreground">
-                    Zuschlag berücksichtigen
-                  </Label>
-                </div>
               </div>
               <div>
                 <ParameterLabel
                   htmlFor="churchTaxRate"
                   label="Kirchensteuer (%)"
-                  tooltip="Prozentsatz der Kirchensteuer auf die Einkommensteuer, typischerweise 8% oder 9% abhängig vom Bundesland."
+                  tooltip="Prozentsatz der Kirchensteuer auf die Einkommensteuer (8% oder 9%)."
                 />
                 <Input
                   id="churchTaxRate"
@@ -650,41 +843,37 @@ export default function SteuerSimulationPage() {
                   value={churchTaxRate}
                   onChange={(event) => setChurchTaxRate(Number(event.target.value) || 0)}
                   min={0}
-                  max={15}
-                  step={0.5}
+                  max={9}
+                  step={1}
                   className="mt-1"
                   disabled={!includeChurchTax}
                 />
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    id="includeChurchTax"
-                    type="checkbox"
-                    className="h-4 w-4 rounded border border-input"
-                    checked={includeChurchTax}
-                    onChange={(event) => setIncludeChurchTax(event.target.checked)}
-                  />
-                  <Label htmlFor="includeChurchTax" className="text-sm text-muted-foreground">
-                    Kirchensteuer berechnen
-                  </Label>
+                <div className="mt-2 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="includeChurchTax"
+                      type="checkbox"
+                      className="h-4 w-4 rounded border border-input"
+                      checked={includeChurchTax}
+                      onChange={(event) => setIncludeChurchTax(event.target.checked)}
+                    />
+                    <Label htmlFor="includeChurchTax" className="text-sm text-muted-foreground">
+                      Kirchensteuer berechnen
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="includeSolidarity"
+                      type="checkbox"
+                      className="h-4 w-4 rounded border border-input"
+                      checked={includeSolidarity}
+                      onChange={(event) => setIncludeSolidarity(event.target.checked)}
+                    />
+                    <Label htmlFor="includeSolidarity" className="text-sm text-muted-foreground">
+                      Soli berechnen
+                    </Label>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <ParameterLabel
-                  htmlFor="tradeTaxRate"
-                  label="Gewerbesteuersatz (%)"
-                  tooltip="Kommunaler Hebesatz für die Gewerbesteuer. Für Freiberufler oder nicht gewerbesteuerpflichtige Betriebe auf 0 setzen."
-                />
-                <Input
-                  id="tradeTaxRate"
-                  type="number"
-                  inputMode="decimal"
-                  value={tradeTaxRate}
-                  onChange={(event) => setTradeTaxRate(Number(event.target.value) || 0)}
-                  min={0}
-                  max={20}
-                  step={0.1}
-                  className="mt-1"
-                />
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-4 py-3">
@@ -692,7 +881,7 @@ export default function SteuerSimulationPage() {
                 Standardwerte wiederherstellen
               </Button>
               <p className="text-sm text-muted-foreground">
-                Passen Sie die Werte an individuelle Situationen wie Krankenversicherung, Sonderausgaben oder kommunale Hebesätze an.
+                Die Berechnung basiert auf dem Einkommensteuertarif 2024 (Grundfreibetrag 11.604 € berücksichtigt).
               </p>
             </div>
           </CardContent>
@@ -706,40 +895,63 @@ export default function SteuerSimulationPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border border-border bg-muted/40 p-4 backdrop-blur-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">EÜR-Gewinn</span>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Einkünfte aus Gewerbe</span>
                   <span className="text-base font-medium">{formatCurrency(profit)}</span>
                 </div>
+                {employmentType === "side-business" && (
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Einkünfte aus Anstellung</span>
+                    <span className="text-base font-medium">+ {formatCurrency(incomeFromEmployment)}</span>
+                  </div>
+                )}
                 <div className="mt-3 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Abzugsfähige Beträge</span>
+                  <span className="text-sm text-muted-foreground">Sonderausgaben (Vorsorge etc.)</span>
                   <span className="text-base font-medium">- {formatCurrency(deductionsApplied)}</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Steuerpflichtiger Gewinn</span>
-                  <span className="text-base font-semibold">{formatCurrency(taxableProfit)}</span>
+                  <span className="text-sm text-muted-foreground">Zu versteuerndes Einkommen</span>
+                  <span className="text-base font-semibold">{formatCurrency(taxableIncome)}</span>
                 </div>
               </div>
               <div className="rounded-lg border border-border bg-muted/40 p-4 backdrop-blur-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Gesamte Steuerlast</span>
-                  <span className="text-base font-semibold">{formatCurrency(totalTax)}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {employmentType === "side-business" ? "Steuer auf Gewerbe" : "Gesamte Steuerlast"}
+                  </span>
+                  <span className="text-base font-semibold">{formatCurrency(marginalTax)}</span>
                 </div>
+                {employmentType === "side-business" && (
+                  <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>(Gesamtsteuer inkl. Job: {formatCurrency(totalTax)})</span>
+                  </div>
+                )}
                 <div className="mt-3 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Effektiver Steuersatz</span>
+                  <span className="text-sm text-muted-foreground">
+                    {employmentType === "side-business" ? "Belastung Gewerbe" : "Effektiver Steuersatz"}
+                  </span>
                   <span className="text-base font-medium">
                     {profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : "-"}
                   </span>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Netto nach Steuern</span>
+                  <span className="text-sm text-muted-foreground">
+                    {employmentType === "side-business" ? "Netto vom Gewerbe" : "Netto nach Steuern"}
+                  </span>
                   <span className="text-base font-semibold">{formatCurrency(netProfitAfterTax)}</span>
                 </div>
+                {employmentType === "side-business" && (
+                   <div className="mt-3 border-t pt-2 flex items-center justify-between">
+                    <span className="text-sm font-medium">Gesamtes Netto</span>
+                    <span className="text-base font-bold text-primary">{formatCurrency(totalNetIncome)}</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-md border border-border bg-background/80 px-3 py-4 shadow-sm">
                 <p className="text-xs uppercase text-muted-foreground">Einkommensteuer</p>
-                <p className="mt-1 text-lg font-semibold">{formatCurrency(incomeTax)}</p>
+                <p className="mt-1 text-lg font-semibold">{formatCurrency(finalIncomeTax)}</p>
               </div>
               <div className="rounded-md border border-border bg-background/80 px-3 py-4 shadow-sm">
                 <p className="text-xs uppercase text-muted-foreground">Solidaritätszuschlag</p>

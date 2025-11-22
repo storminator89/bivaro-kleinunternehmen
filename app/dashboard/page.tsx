@@ -37,6 +37,7 @@ type Expense = {
   taxDeductiblePercentage?: number; // Steuerlich ansetzbarer Anteil
   receiptFileName?: string;  // Name der hochgeladenen Belegdatei
   storedReceiptFileName?: string;  // Gespeicherter Dateiname des Belegs
+  depreciationYears?: number; // Nutzungsdauer in Jahren (AfA)
 };
 
 type Income = {
@@ -158,6 +159,18 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="edit-date" className="text-sm font-medium">Datum</Label>
+            <Input
+              id="edit-date"
+              type="date"
+              value={formData.date ? new Date(formData.date).toISOString().split('T')[0] : ''}
+              onChange={(e) => setFormData({ ...formData, date: new Date(e.target.value).toISOString() })}
+              required
+              className="dark:bg-background dark:border-input"
+            />
+          </div>
+
           {type === 'expense' && (
             <div className="space-y-2">
               <Label htmlFor="edit-category" className="text-sm font-medium">Kategorie</Label>
@@ -201,19 +214,37 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
           </div>
 
           {type === 'expense' && (
-            <div className="space-y-2">
-              <Label htmlFor="edit-taxDeductiblePercentage" className="text-sm font-medium">Steuerlich ansetzbarer Anteil (%)</Label>
-              <Input
-                id="edit-taxDeductiblePercentage"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={formData.taxDeductiblePercentage || 100}
-                onChange={(e) => setFormData({ ...formData, taxDeductiblePercentage: parseInt(e.target.value) || 100 })}
-                placeholder="100"
-                className="dark:bg-background dark:border-input"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-taxDeductiblePercentage" className="text-sm font-medium">Steuerlich ansetzbar (%)</Label>
+                <Input
+                  id="edit-taxDeductiblePercentage"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.taxDeductiblePercentage || 100}
+                  onChange={(e) => setFormData({ ...formData, taxDeductiblePercentage: parseInt(e.target.value) || 100 })}
+                  placeholder="100"
+                  className="dark:bg-background dark:border-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-depreciationYears" className="text-sm font-medium">Abschreibung (Jahre)</Label>
+                <Input
+                  id="edit-depreciationYears"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.depreciationYears || ''}
+                  onChange={(e) => setFormData({ ...formData, depreciationYears: e.target.value ? parseInt(e.target.value) : null })}
+                  placeholder="Optional (z.B. 3)"
+                  className="dark:bg-background dark:border-input"
+                />
+                <p className="text-xs text-muted-foreground">
+                  &gt; 800€ Netto: AfA Pflicht (z.B. 3 Jahre). &lt; 800€: Leer lassen.
+                </p>
+              </div>
             </div>
           )}
           <DialogFooter className="border-t pt-4">
@@ -427,6 +458,54 @@ const ReceiptModal = ({ isOpen, onClose, receiptUrl }: { isOpen: boolean; onClos
   );
 };
 
+// Modal-Komponente für Löschbestätigung
+type DeleteConfirmationModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  description: string;
+  isDeleting: boolean;
+};
+
+const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, title, description, isDeleting }: DeleteConfirmationModalProps) => {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md bg-card border rounded-xl shadow-lg">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold text-red-600 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            {title}
+          </DialogTitle>
+          <DialogDescription className="pt-2 text-foreground/80">
+            {description}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex gap-2 sm:justify-end mt-4">
+          <Button type="button" variant="outline" onClick={onClose} disabled={isDeleting}>
+            Abbrechen
+          </Button>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={isDeleting}>
+            {isDeleting ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Wird gelöscht...
+              </>
+            ) : (
+              'Löschen'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
   const searchParams = useSearchParams();
@@ -459,7 +538,11 @@ function DashboardContent() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExportingIncomeDocuments, setIsExportingIncomeDocuments] = useState(false);
   const [incomeExportError, setIncomeExportError] = useState<string | null>(null);
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'all' | 'last3Months' | 'last6Months' | 'thisYear' | 'lastYear'>('last6Months');
+  const [selectedTimeRange, setSelectedTimeRange] = useState<'all' | 'last3Months' | 'last6Months' | 'thisYear' | 'lastYear'>('thisYear');
+
+  // Delete Modal State
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ id: number; type: 'expense' | 'income' | 'invoice' } | null>(null);
 
   // Filter States
   const [filters, setFilters] = useState<FilterState>({
@@ -500,9 +583,11 @@ function DashboardContent() {
   const [newExpense, setNewExpense] = useState({
     description: '',
     amount: '',
+    date: new Date().toISOString().split('T')[0],
     category: 'Sonstiges',
     taxRelevant: true,
-    taxDeductiblePercentage: 100
+    taxDeductiblePercentage: 100,
+    depreciationYears: ''
   });
 
   const [newIncome, setNewIncome] = useState({
@@ -781,9 +866,13 @@ function DashboardContent() {
       const formData = new FormData();
       formData.append('description', newExpense.description);
       formData.append('amount', newExpense.amount);
+      formData.append('date', new Date(newExpense.date).toISOString());
       formData.append('category', newExpense.category);
       formData.append('taxRelevant', newExpense.taxRelevant.toString());
       formData.append('taxDeductiblePercentage', newExpense.taxDeductiblePercentage.toString());
+      if (newExpense.depreciationYears) {
+        formData.append('depreciationYears', newExpense.depreciationYears.toString());
+      }
       if (expenseReceipt) {
         formData.append('receipt', expenseReceipt);
       }
@@ -804,9 +893,11 @@ function DashboardContent() {
         setNewExpense({
           description: '',
           amount: '',
+          date: new Date().toISOString().split('T')[0],
           category: 'Sonstiges',
           taxRelevant: true,
-          taxDeductiblePercentage: 100
+          taxDeductiblePercentage: 100,
+          depreciationYears: ''
         });
         setExpenseReceipt(null);
       }
@@ -890,6 +981,9 @@ function DashboardContent() {
         }
       }
       dataToSend.amount = parseFloat(dataToSend.amount); // Betrag als Zahl senden
+      if (dataToSend.date) {
+        dataToSend.date = new Date(dataToSend.date).toISOString();
+      }
 
       const response = await fetch(endpoint, {
         method,
@@ -928,24 +1022,44 @@ function DashboardContent() {
     }
   };
 
-  const handleDelete = async (id: number, type: 'expense' | 'income') => {
-    if (!confirm(`Sind Sie sicher, dass Sie diese ${type === 'expense' ? 'Ausgabe' : 'Einnahme'} löschen möchten?`)) {
-      return;
-    }
+  const handleDelete = (id: number, type: 'expense' | 'income') => {
+    setItemToDelete({ id, type });
+    setDeleteModalOpen(true);
+  };
 
+  const performDelete = async () => {
+    if (!itemToDelete) return;
+    
+    const { id, type } = itemToDelete;
     setIsDeleting(true);
 
     try {
-      const endpoint = type === 'expense' ? `/api/expenses?id=${id}` : `/api/incomes?id=${id}`;
-      const response = await fetch(endpoint, {
-        method: 'DELETE',
-      });
+      if (type === 'invoice') {
+        const response = await fetch(`/api/invoices?id=${id}`, {
+          method: 'DELETE',
+        });
 
-      if (response.ok) {
-        if (type === 'expense') {
-          setExpenses(expenses.filter(item => item.id !== id));
-        } else {
-          setIncomes(incomes.filter(item => item.id !== id));
+        if (response.ok) {
+          await loadInvoices(invoicesPage, invoicesPageSize);
+          setDeleteModalOpen(false);
+          setItemToDelete(null);
+        }
+      } else {
+        const endpoint = type === 'expense' ? `/api/expenses?id=${id}` : `/api/incomes?id=${id}`;
+        const response = await fetch(endpoint, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          if (type === 'expense') {
+            setExpenses(expenses.filter(item => item.id !== id));
+            setExpensesAll(expensesAll.filter(item => item.id !== id)); // Update EÜR data
+          } else {
+            setIncomes(incomes.filter(item => item.id !== id));
+            setIncomesAll(incomesAll.filter(item => item.id !== id)); // Update EÜR data
+          }
+          setDeleteModalOpen(false);
+          setItemToDelete(null);
         }
       }
     } catch (error) {
@@ -994,26 +1108,9 @@ function DashboardContent() {
     }
   };
 
-  const handleInvoiceDelete = async (id: number) => {
-    if (!confirm('Sind Sie sicher, dass Sie diese Rechnung löschen möchten?')) {
-      return;
-    }
-
-    setIsDeleting(true);
-
-    try {
-      const response = await fetch(`/api/invoices?id=${id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        await loadInvoices(invoicesPage, invoicesPageSize);
-      }
-    } catch (error) {
-      console.error('Error deleting invoice:', error);
-    } finally {
-      setIsDeleting(false);
-    }
+  const handleInvoiceDelete = (id: number) => {
+    setItemToDelete({ id, type: 'invoice' });
+    setDeleteModalOpen(true);
   };
 
   const openInvoiceDetails = (invoice: Invoice) => {
@@ -1048,52 +1145,124 @@ function DashboardContent() {
     }
   };
 
+  // Formatierungsfunktion
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('de-DE', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount);
+  };
+
   // Berechnungen für EÜR
-  const totalIncome = incomesAll.reduce((sum, income) => {
-    const incomeDate = new Date(income.date);
+  const { totalIncome, totalExpense, profit, depreciationDetails } = React.useMemo(() => {
     const today = new Date();
+    
+    // Einnahmen berechnen
+    const incSum = incomesAll.reduce((sum, income) => {
+      const incomeDate = new Date(income.date);
+      let includeIncome = false;
+      if (selectedTimeRange === 'all') {
+        includeIncome = true;
+      } else if (selectedTimeRange === 'last3Months') {
+        includeIncome = incomeDate >= subMonths(today, 3);
+      } else if (selectedTimeRange === 'last6Months') {
+        includeIncome = incomeDate >= subMonths(today, 6);
+      } else if (selectedTimeRange === 'thisYear') {
+        includeIncome = incomeDate.getFullYear() === today.getFullYear();
+      } else if (selectedTimeRange === 'lastYear') {
+        includeIncome = incomeDate.getFullYear() === today.getFullYear() - 1;
+      }
+      return income.taxRelevant && includeIncome ? sum + income.amount : sum;
+    }, 0);
 
-    let includeIncome = false;
-    if (selectedTimeRange === 'all') {
-      includeIncome = true;
-    } else if (selectedTimeRange === 'last3Months') {
-      const threeMonthsAgo = subMonths(today, 3);
-      includeIncome = incomeDate >= threeMonthsAgo;
-    } else if (selectedTimeRange === 'last6Months') {
-      const sixMonthsAgo = subMonths(today, 6);
-      includeIncome = incomeDate >= sixMonthsAgo;
-    } else if (selectedTimeRange === 'thisYear') {
-      includeIncome = incomeDate.getFullYear() === today.getFullYear();
-    } else if (selectedTimeRange === 'lastYear') {
-      includeIncome = incomeDate.getFullYear() === today.getFullYear() - 1 && incomeDate.getFullYear() === today.getFullYear() - 1;
-    }
+    // Ausgaben und Abschreibungen berechnen
+    const depDetails: Array<{
+      id: number;
+      description: string;
+      date: string;
+      totalAmount: number;
+      years: number;
+      currentYearAmount: number;
+      remainingAmount: number;
+      calculationExplanation: string;
+    }> = [];
 
-    return income.taxRelevant && includeIncome ? sum + income.amount : sum;
-  }, 0);
+    const expSum = expensesAll.reduce((sum, expense) => {
+      const expenseDate = new Date(expense.date);
+      
+      // Wenn ein Jahreszeitraum gewählt ist, AfA berücksichtigen
+      if (selectedTimeRange === 'thisYear' || selectedTimeRange === 'lastYear') {
+        if (!expense.taxRelevant) return sum;
 
-  const totalExpense = expensesAll.reduce((sum, expense) => {
-    const expenseDate = new Date(expense.date);
-    const today = new Date();
+        let targetYear = today.getFullYear();
+        if (selectedTimeRange === 'lastYear') {
+          targetYear = today.getFullYear() - 1;
+        }
 
-    let includeExpense = false;
-    if (selectedTimeRange === 'all') {
-      includeExpense = true;
-    } else if (selectedTimeRange === 'last3Months') {
-      const threeMonthsAgo = subMonths(today, 3);
-      includeExpense = expenseDate >= threeMonthsAgo;
-    } else if (selectedTimeRange === 'last6Months') {
-      const sixMonthsAgo = subMonths(today, 6);
-      includeExpense = expenseDate >= sixMonthsAgo;
-    } else if (selectedTimeRange === 'thisYear') {
-      includeExpense = expenseDate.getFullYear() === today.getFullYear();
-    } else if (selectedTimeRange === 'lastYear') {
-      includeExpense = expenseDate.getFullYear() === today.getFullYear() - 1 && expenseDate.getFullYear() === today.getFullYear() - 1;
-    }
+        let deductibleAmount = 0;
 
-    return expense.taxRelevant && includeExpense ? sum + (expense.amount * (expense.taxDeductiblePercentage || 100) / 100) : sum;
-  }, 0);
+        if (expense.depreciationYears && expense.depreciationYears > 0) {
+          const expenseYear = expenseDate.getFullYear();
+          const endYear = expenseYear + expense.depreciationYears;
 
-  const profit = totalIncome - totalExpense;
+          // Prüfen, ob das Asset im Zieljahr abgeschrieben wird
+          if (targetYear >= expenseYear && targetYear < endYear) {
+            const yearlyDepreciation = expense.amount / expense.depreciationYears;
+            let calculationExplanation = "";
+
+            if (targetYear === expenseYear) {
+              // Erstes Jahr: Pro rata temporis
+              const monthsLeft = 12 - expenseDate.getMonth();
+              deductibleAmount = (yearlyDepreciation / 12) * monthsLeft;
+              calculationExplanation = `${formatCurrency(yearlyDepreciation)} / 12 * ${monthsLeft} Mon.`;
+            } else {
+              // Folgejahre
+              deductibleAmount = yearlyDepreciation;
+              calculationExplanation = `${formatCurrency(expense.amount)} / ${expense.depreciationYears} Jahre`;
+            }
+            
+            // Details speichern
+            depDetails.push({
+              id: expense.id,
+              description: expense.description,
+              date: expense.date,
+              totalAmount: expense.amount,
+              years: expense.depreciationYears,
+              currentYearAmount: deductibleAmount,
+              remainingAmount: Math.max(0, expense.amount - (yearlyDepreciation * (targetYear - expenseYear + 1))), // Grobe Schätzung Restwert
+              calculationExplanation
+            });
+          }
+        } else {
+          // Sofortabschreibung
+          if (expenseDate.getFullYear() === targetYear) {
+            deductibleAmount = expense.amount;
+          }
+        }
+
+        return sum + (deductibleAmount * (expense.taxDeductiblePercentage || 100) / 100);
+      }
+
+      // Fallback für andere Zeiträume
+      let includeExpense = false;
+      if (selectedTimeRange === 'all') {
+        includeExpense = true;
+      } else if (selectedTimeRange === 'last3Months') {
+        includeExpense = expenseDate >= subMonths(today, 3);
+      } else if (selectedTimeRange === 'last6Months') {
+        includeExpense = expenseDate >= subMonths(today, 6);
+      }
+
+      return expense.taxRelevant && includeExpense ? sum + (expense.amount * (expense.taxDeductiblePercentage || 100) / 100) : sum;
+    }, 0);
+
+    return {
+      totalIncome: incSum,
+      totalExpense: expSum,
+      profit: incSum - expSum,
+      depreciationDetails: depDetails
+    };
+  }, [incomesAll, expensesAll, selectedTimeRange]);
 
   // Daten für das Monatsdiagramm vorbereiten
   const [chartData, setChartData] = useState<ChartData[]>([]);
@@ -1175,12 +1344,12 @@ function DashboardContent() {
   }, [expenses, incomes, selectedTimeRange]);
 
   // Formatierungsfunktion
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR'
-    }).format(amount);
-  };
+  // const formatCurrency = (amount: number) => {
+  //   return new Intl.NumberFormat('de-DE', {
+  //     style: 'currency',
+  //     currency: 'EUR'
+  //   }).format(amount);
+  // };
 
   // Typdefinition für ChartData
   type ChartData = {
@@ -1364,6 +1533,16 @@ function DashboardContent() {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="date" className="text-sm font-medium">Datum</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={newExpense.date}
+                        onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="category" className="text-sm font-medium">Kategorie</Label>
                       <Input
                         id="category"
@@ -1413,21 +1592,40 @@ function DashboardContent() {
                         <Label htmlFor="taxRelevant" className="ml-2 text-sm font-medium">Steuerlich relevant</Label>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="taxDeductiblePercentage" className="text-sm font-medium">Steuerlich ansetzbarer Anteil (%)</Label>
-                      <Input
-                        id="taxDeductiblePercentage"
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={newExpense.taxDeductiblePercentage}
-                        onChange={(e) => setNewExpense({ ...newExpense, taxDeductiblePercentage: parseInt(e.target.value) || 100 })}
-                        placeholder="100"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Bei gemischter privater/geschäftlicher Nutzung: Prozentsatz des geschäftlich nutzbaren Anteils
-                      </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="taxDeductiblePercentage" className="text-sm font-medium">Steuerlich ansetzbar (%)</Label>
+                        <Input
+                          id="taxDeductiblePercentage"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={newExpense.taxDeductiblePercentage}
+                          onChange={(e) => setNewExpense({ ...newExpense, taxDeductiblePercentage: parseInt(e.target.value) || 0 })}
+                          placeholder="100"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Geschäftlicher Anteil
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="depreciationYears" className="text-sm font-medium">Abschreibung (Jahre)</Label>
+                        <Input
+                          id="depreciationYears"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={newExpense.depreciationYears}
+                          onChange={(e) => setNewExpense({ ...newExpense, depreciationYears: e.target.value })}
+                          placeholder="Optional (z.B. 3)"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Für Wirtschaftsgüter über 800€ (netto). <br/>
+                          Beispiele: PC/Laptop (3 Jahre), Büromöbel (13 Jahre). <br/>
+                          Unter 800€: Sofortabschreibung (Feld leer lassen).
+                        </p>
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -2730,11 +2928,49 @@ function DashboardContent() {
                         <TableBody>
                           {/* Gruppiere Ausgaben nach Kategorie */}
                           {Array.from(
-                            expenses.reduce((acc, expense) => {
+                            expensesAll.reduce((acc, expense) => {
                               if (!expense.taxRelevant) return acc;
-                              const category = expense.category || 'Sonstiges';
-                              const deductibleAmount = expense.amount * (expense.taxDeductiblePercentage || 100) / 100;
-                              acc.set(category, (acc.get(category) || 0) + deductibleAmount);
+                              
+                              // Prüfen, ob diese Ausgabe im aktuellen Zeitraum relevant ist (für die Kategorie-Summe)
+                              // Wir nutzen hier die gleiche Logik wie bei totalExpense, aber gruppiert
+                              const expenseDate = new Date(expense.date);
+                              const today = new Date();
+                              let deductibleAmount = 0;
+                              
+                              if (selectedTimeRange === 'thisYear' || selectedTimeRange === 'lastYear') {
+                                let targetYear = today.getFullYear();
+                                if (selectedTimeRange === 'lastYear') targetYear = today.getFullYear() - 1;
+                                
+                                if (expense.depreciationYears && expense.depreciationYears > 0) {
+                                  const expenseYear = expenseDate.getFullYear();
+                                  const endYear = expenseYear + expense.depreciationYears;
+                                  if (targetYear >= expenseYear && targetYear < endYear) {
+                                    const yearlyDepreciation = expense.amount / expense.depreciationYears;
+                                    if (targetYear === expenseYear) {
+                                      const monthsLeft = 12 - expenseDate.getMonth();
+                                      deductibleAmount = (yearlyDepreciation / 12) * monthsLeft;
+                                    } else {
+                                      deductibleAmount = yearlyDepreciation;
+                                    }
+                                  }
+                                } else {
+                                  if (expenseDate.getFullYear() === targetYear) deductibleAmount = expense.amount;
+                                }
+                              } else {
+                                // Fallback logic for other ranges
+                                let include = false;
+                                if (selectedTimeRange === 'all') include = true;
+                                else if (selectedTimeRange === 'last3Months') include = expenseDate >= subMonths(today, 3);
+                                else if (selectedTimeRange === 'last6Months') include = expenseDate >= subMonths(today, 6);
+                                
+                                if (include) deductibleAmount = expense.amount;
+                              }
+
+                              if (deductibleAmount > 0) {
+                                const category = expense.category || 'Sonstiges';
+                                const finalAmount = deductibleAmount * (expense.taxDeductiblePercentage || 100) / 100;
+                                acc.set(category, (acc.get(category) || 0) + finalAmount);
+                              }
                               return acc;
                             }, new Map<string, number>())
                           ).map(([category, amount]) => (
@@ -2752,6 +2988,62 @@ function DashboardContent() {
                       </Table>
                     </div>
                   </div>
+
+                  {/* Abschreibungsdetails anzeigen, wenn vorhanden */}
+                  {depreciationDetails.length > 0 ? (
+                    <div className="bg-muted rounded-lg p-6 border border-blue-100 dark:border-blue-800/20">
+                      <h3 className="text-base sm:text-lg font-semibold text-blue-700 flex items-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Details zu Abschreibungen (AfA)
+                      </h3>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/70 border-border">
+                              <TableHead className="font-medium">Anschaffung</TableHead>
+                              <TableHead className="font-medium">Datum</TableHead>
+                              <TableHead className="text-right font-medium">Kosten</TableHead>
+                              <TableHead className="text-center font-medium">Dauer</TableHead>
+                              <TableHead className="text-right font-medium">Rechenweg</TableHead>
+                              <TableHead className="text-right font-medium">Abzug {selectedTimeRange === 'lastYear' ? 'Vorjahr' : 'aktuell'}</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {depreciationDetails.map((item) => (
+                              <TableRow key={item.id} className="border-border">
+                                <TableCell className="text-foreground font-medium">{item.description}</TableCell>
+                                <TableCell className="text-muted-foreground">{new Date(item.date).toLocaleDateString('de-DE')}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(item.totalAmount)}</TableCell>
+                                <TableCell className="text-center">{item.years} Jahre</TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground font-mono">{item.calculationExplanation}</TableCell>
+                                <TableCell className="text-right font-bold text-blue-600">{formatCurrency(item.currentYearAmount)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-4">
+                        Hinweis: Im Anschaffungsjahr erfolgt die Abschreibung zeitanteilig (pro rata temporis).
+                      </p>
+                    </div>
+                  ) : (
+                    (selectedTimeRange !== 'thisYear' && selectedTimeRange !== 'lastYear') && (
+                      <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-lg p-4 border border-blue-100 dark:border-blue-800/20 text-sm text-blue-800 dark:text-blue-300 flex items-start gap-3">
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="font-medium">AfA-Berechnung nicht verfügbar</p>
+                          <p className="mt-1 opacity-90">
+                            Detaillierte Abschreibungen werden nur in der Jahresansicht ("Aktuelles Jahr" oder "Vorjahr") berechnet und angezeigt. 
+                            In anderen Zeiträumen werden Ausgaben nach dem Abflussprinzip (voller Betrag) dargestellt.
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  )}
 
                   <div className="bg-muted rounded-lg p-6 border">
                     <div className="overflow-x-auto">
@@ -2804,6 +3096,22 @@ function DashboardContent() {
             customers={uniqueCustomers}
           />
         )}
+
+        {/* Lösch-Bestätigungs-Modal */}
+        <DeleteConfirmationModal
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
+          onConfirm={performDelete}
+          title={itemToDelete?.type === 'invoice' ? 'Rechnung löschen' : itemToDelete?.type === 'income' ? 'Einnahme löschen' : 'Ausgabe löschen'}
+          description={
+            itemToDelete?.type === 'invoice' 
+              ? 'Sind Sie sicher, dass Sie diese Rechnung löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.' 
+              : itemToDelete?.type === 'income'
+                ? 'Sind Sie sicher, dass Sie diese Einnahme löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.'
+                : 'Sind Sie sicher, dass Sie diese Ausgabe löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.'
+          }
+          isDeleting={isDeleting}
+        />
       </div>
     </div>
   );

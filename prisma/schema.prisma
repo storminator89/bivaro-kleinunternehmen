@@ -26,6 +26,7 @@ model Expense {
   taxDeductiblePercentage Float?  // Adding back the dropped field
   receiptFileName       String?  // Originalname der hochgeladenen Belegdatei
   storedReceiptFileName String?  // Eindeutiger gespeicherter Dateiname des Belegs
+  depreciationYears     Int?     // Nutzungsdauer in Jahren (AfA)
 }
 
 model Income {
