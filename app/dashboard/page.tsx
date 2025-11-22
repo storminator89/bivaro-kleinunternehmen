@@ -560,7 +560,7 @@ function DashboardContent() {
       hasReceipt: filters.expenses.hasReceipt !== 'all' ? filters.expenses.hasReceipt : undefined,
       search: filters.expenses.searchTerm || undefined,
     });
-    const res = await fetch(`/api/expenses?${q}`);
+    const res = await fetch(`/api/expenses?${q}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       setExpenses(data.items);
@@ -579,7 +579,7 @@ function DashboardContent() {
       taxRelevant: filters.incomes.taxRelevant !== 'all' ? filters.incomes.taxRelevant : undefined,
       search: filters.incomes.searchTerm || undefined,
     });
-    const res = await fetch(`/api/incomes?${q}`);
+    const res = await fetch(`/api/incomes?${q}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       setIncomes(data.items);
@@ -597,7 +597,7 @@ function DashboardContent() {
       dateRange: filters.invoices.dateRange !== 'all' ? filters.invoices.dateRange : undefined,
       search: filters.invoices.searchTerm || undefined,
     });
-    const res = await fetch(`/api/invoices?${q}`);
+    const res = await fetch(`/api/invoices?${q}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       setInvoices(data.items);
@@ -619,8 +619,8 @@ function DashboardContent() {
 
         // Load full datasets for EÜR/Charts (simple approach: large pageSize)
         const [allExpRes, allIncRes] = await Promise.all([
-          fetch('/api/expenses?page=1&pageSize=10000'),
-          fetch('/api/incomes?page=1&pageSize=10000'),
+          fetch('/api/expenses?page=1&pageSize=10000', { cache: 'no-store' }),
+          fetch('/api/incomes?page=1&pageSize=10000', { cache: 'no-store' }),
         ]);
         if (allExpRes.ok) {
           const d = await allExpRes.json();
@@ -631,7 +631,7 @@ function DashboardContent() {
           setIncomesAll(d.items);
         }
 
-        const customersResponse = await fetch('/api/customers');
+        const customersResponse = await fetch('/api/customers', { cache: 'no-store' });
         if (customersResponse.ok) {
           setCustomers(await customersResponse.json());
         }
@@ -796,7 +796,7 @@ function DashboardContent() {
       if (response.ok) {
         // Reload first page and full dataset for calculations
         await loadExpenses(1, expensesPageSize);
-        const allExpRes = await fetch('/api/expenses?page=1&pageSize=10000');
+        const allExpRes = await fetch('/api/expenses?page=1&pageSize=10000', { cache: 'no-store' });
         if (allExpRes.ok) {
           const d = await allExpRes.json();
           setExpensesAll(d.items);
@@ -834,7 +834,7 @@ function DashboardContent() {
 
       if (response.ok) {
         await loadIncomes(1, incomesPageSize);
-        const allIncRes = await fetch('/api/incomes?page=1&pageSize=10000');
+        const allIncRes = await fetch('/api/incomes?page=1&pageSize=10000', { cache: 'no-store' });
         if (allIncRes.ok) {
           const d = await allIncRes.json();
           setIncomesAll(d.items);
@@ -981,7 +981,7 @@ function DashboardContent() {
         setSelectedFile(null);
         // Reload incomes datasets (upload may create an income)
         await loadIncomes(incomesPage, incomesPageSize);
-        const allIncRes = await fetch('/api/incomes?page=1&pageSize=10000');
+        const allIncRes = await fetch('/api/incomes?page=1&pageSize=10000', { cache: 'no-store' });
         if (allIncRes.ok) {
           const d = await allIncRes.json();
           setIncomesAll(d.items);
@@ -1041,6 +1041,7 @@ function DashboardContent() {
 
       if (response.ok) {
         await loadInvoices(invoicesPage, invoicesPageSize);
+        await loadIncomes(incomesPage, incomesPageSize);
       }
     } catch (error) {
       console.error('Error updating invoice status:', error);
