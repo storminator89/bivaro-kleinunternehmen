@@ -48,7 +48,7 @@ model Invoice {
   uploadedAt    DateTime  @default(now())
   invoiceDate   DateTime?
   dueDate       DateTime?
-  invoiceNumber String?
+  invoiceNumber String? @unique
   parsedData    Json
   totalAmount   Float?
   status        String    @default("DRAFT") // DRAFT, SENT, PAID

@@ -13,6 +13,7 @@ import { generateZugferdXml } from "@/lib/zugferd-generator";
 interface CreateInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onInvoiceCreated?: () => void;
 }
 
 interface InvoiceItem {
@@ -21,7 +22,7 @@ interface InvoiceItem {
   unitPrice: number;
 }
 
-export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps) {
+export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: CreateInvoiceModalProps) {
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -34,6 +35,8 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [includeQRCode, setIncludeQRCode] = useState(false);
+  const [invoiceNumberError, setInvoiceNumberError] = useState<string | null>(null);
+  const [isCheckingNumber, setIsCheckingNumber] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -53,8 +56,47 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
         .then(res => res.json())
         .then(data => setCustomers(Array.isArray(data) ? data : []))
         .catch(err => console.error("Failed to load customers", err));
+
+      fetch("/api/invoices/next-number")
+        .then(res => res.json())
+        .then(data => {
+          if (data.nextInvoiceNumber) {
+            setInvoiceNumber(data.nextInvoiceNumber);
+          }
+        })
+        .catch(err => console.error("Failed to load next invoice number", err));
     }
   }, [isOpen]);
+
+  // Check for duplicate invoice number
+  useEffect(() => {
+    const checkInvoiceNumber = async () => {
+      if (!invoiceNumber) {
+        setInvoiceNumberError(null);
+        return;
+      }
+
+      setIsCheckingNumber(true);
+      try {
+        const res = await fetch(`/api/invoices/check-number?number=${encodeURIComponent(invoiceNumber)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.exists) {
+            setInvoiceNumberError("Diese Rechnungsnummer existiert bereits.");
+          } else {
+            setInvoiceNumberError(null);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking invoice number:", error);
+      } finally {
+        setIsCheckingNumber(false);
+      }
+    };
+
+    const timeoutId = setTimeout(checkInvoiceNumber, 500); // Debounce
+    return () => clearTimeout(timeoutId);
+  }, [invoiceNumber]);
 
   const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const customerId = e.target.value;
@@ -550,6 +592,36 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+
+      // Automatic Upload
+      const formData = new FormData();
+      const fileName = `Rechnung_${invoiceNumber}.pdf`;
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      formData.append('file', file);
+
+      let uploadSuccess = false;
+
+      try {
+          const uploadRes = await fetch('/api/invoices/upload', {
+              method: 'POST',
+              body: formData
+          });
+
+          if (!uploadRes.ok) {
+              const err = await uploadRes.json();
+              console.error("Auto-upload failed:", err);
+              alert("Speichern fehlgeschlagen: " + (err.error || "Unbekannter Fehler"));
+          } else {
+              if (onInvoiceCreated) {
+                  onInvoiceCreated();
+              }
+              uploadSuccess = true;
+          }
+      } catch (e) {
+          console.error("Auto-upload network error:", e);
+          alert("Fehler beim automatischen Speichern der Rechnung.");
+      }
+
       const url = URL.createObjectURL(blob);
       
       // Open/Download
@@ -560,7 +632,9 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
       link.click();
       document.body.removeChild(link);
       
-      onClose();
+      if (uploadSuccess) {
+        onClose();
+      }
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Fehler beim Erstellen der PDF.");
@@ -583,7 +657,16 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="invoice-number">Rechnungsnummer</Label>
-              <Input id="invoice-number" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="RE-2024-001" />
+              <Input 
+                id="invoice-number" 
+                value={invoiceNumber} 
+                onChange={(e) => setInvoiceNumber(e.target.value)} 
+                placeholder="RE-2024-001" 
+                className={invoiceNumberError ? "border-red-500 focus-visible:ring-red-500" : ""}
+              />
+              {invoiceNumberError && (
+                <p className="text-xs text-red-500 font-medium">{invoiceNumberError}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="date">Rechnungsdatum</Label>
@@ -702,7 +785,7 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Abbrechen</Button>
-          <Button onClick={generatePDF} disabled={isGenerating || !customerAddress || !invoiceNumber}>
+          <Button onClick={generatePDF} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
             {isGenerating ? "Erstelle PDF..." : "PDF erstellen"}
           </Button>
         </DialogFooter>

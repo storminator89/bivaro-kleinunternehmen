@@ -227,6 +227,19 @@ export async function POST(request: NextRequest) {
       console.error('Fehler beim Löschen der temporären Datei:', error);
     }
 
+    if (invoiceNumber) {
+      const existingInvoice = await prisma.invoice.findUnique({
+        where: { invoiceNumber },
+      });
+
+      if (existingInvoice) {
+        return NextResponse.json(
+          { error: `Eine Rechnung mit der Nummer ${invoiceNumber} existiert bereits.` },
+          { status: 409 } // Conflict
+        );
+      }
+    }
+
     const invoice = await prisma.invoice.create({
       data: {
         fileName: file.name,

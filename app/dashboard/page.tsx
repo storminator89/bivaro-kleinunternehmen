@@ -3277,6 +3277,15 @@ function DashboardContent() {
         <CreateInvoiceModal 
           isOpen={createInvoiceModalOpen} 
           onClose={() => setCreateInvoiceModalOpen(false)} 
+          onInvoiceCreated={async () => {
+            await loadInvoices(1, invoicesPageSize);
+            await loadIncomes(incomesPage, incomesPageSize);
+            const allIncRes = await fetch('/api/incomes?page=1&pageSize=10000', { cache: 'no-store' });
+            if (allIncRes.ok) {
+              const d = await allIncRes.json();
+              setIncomesAll(d.items);
+            }
+          }}
         />
       </div>
     </div>
