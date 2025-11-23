@@ -72,8 +72,8 @@ export async function GET(request: Request) {
       ...(where.AND || []),
       {
         OR: [
-          { fileName: { contains: search, mode: 'insensitive' } },
-          { invoiceNumber: { contains: search, mode: 'insensitive' } },
+          { fileName: { contains: search } },
+          { invoiceNumber: { contains: search } },
         ],
       },
     ];

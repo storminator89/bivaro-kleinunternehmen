@@ -56,8 +56,8 @@ function parseFilters(url: URL) {
 
   if (search) {
     where.OR = [
-      { description: { contains: search, mode: 'insensitive' } },
-      { category: { contains: search, mode: 'insensitive' } },
+      { description: { contains: search } },
+      { category: { contains: search } },
     ];
   }
 

@@ -520,7 +520,7 @@ function DashboardContent() {
 
   // Tabs-State
   const [activeTab, setActiveTab] = useState(
-    tabParam === 'expenses' || tabParam === 'incomes' || tabParam === 'invoices' || tabParam === 'eur'
+    tabParam === 'expenses' || tabParam === 'incomes' || tabParam === 'invoices' || tabParam === 'eur' || tabParam === 'gwg'
       ? tabParam
       : 'expenses'
   );
@@ -1478,6 +1478,17 @@ function DashboardContent() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                   <span className="font-medium whitespace-nowrap">EÜR</span>
+                </div>
+              </TabsTrigger>
+              <TabsTrigger
+                value="gwg"
+                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <span className="font-medium whitespace-nowrap">GWG</span>
                 </div>
               </TabsTrigger>
             </TabsList>
@@ -3061,6 +3072,95 @@ function DashboardContent() {
                       </Table>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* GWG Verzeichnis Tab */}
+          <TabsContent value="gwg" className="space-y-6">
+            <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
+              <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-amber-50/50 to-amber-50/30 dark:from-amber-900/10 dark:to-amber-900/5">
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-1 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      GWG-Verzeichnis
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Verzeichnis für Geringwertige Wirtschaftsgüter (GWG) über 250 € bis 1.000 € Netto.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                     <div className="text-sm text-muted-foreground">
+                        Anzeige für: <span className="font-medium text-foreground">{selectedTimeRange === 'thisYear' ? 'Aktuelles Jahr' : selectedTimeRange === 'lastYear' ? 'Vorjahr' : 'Alle Jahre'}</span>
+                     </div>
+                  </div>
+                  
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="font-medium">Datum</TableHead>
+                          <TableHead className="font-medium">Beschreibung</TableHead>
+                          <TableHead className="font-medium">Kategorie</TableHead>
+                          <TableHead className="text-right font-medium">Betrag (Netto)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {expensesAll.filter(expense => {
+                          if (!expense.taxRelevant) return false;
+                          if (expense.amount <= 250 || expense.amount > 1000) return false;
+                          
+                          const expenseDate = new Date(expense.date);
+                          const today = new Date();
+                          if (selectedTimeRange === 'thisYear') {
+                            return expenseDate.getFullYear() === today.getFullYear();
+                          } else if (selectedTimeRange === 'lastYear') {
+                            return expenseDate.getFullYear() === today.getFullYear() - 1;
+                          }
+                          return true;
+                        }).length > 0 ? (
+                          expensesAll.filter(expense => {
+                            if (!expense.taxRelevant) return false;
+                            if (expense.amount <= 250 || expense.amount > 1000) return false;
+                            
+                            const expenseDate = new Date(expense.date);
+                            const today = new Date();
+                            if (selectedTimeRange === 'thisYear') {
+                              return expenseDate.getFullYear() === today.getFullYear();
+                            } else if (selectedTimeRange === 'lastYear') {
+                              return expenseDate.getFullYear() === today.getFullYear() - 1;
+                            }
+                            return true;
+                          }).map((expense) => (
+                            <TableRow key={expense.id}>
+                              <TableCell>{new Date(expense.date).toLocaleDateString('de-DE')}</TableCell>
+                              <TableCell>{expense.description}</TableCell>
+                              <TableCell>{expense.category}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(expense.amount)}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                              Keine GWG-Anschaffungen im gewählten Zeitraum gefunden.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Hinweis: Dieses Verzeichnis listet automatisch alle steuerrelevanten Ausgaben zwischen 250 € und 1.000 € auf.
+                    Es dient als Nachweis gemäß § 6 Abs. 2 EStG.
+                  </p>
                 </div>
               </div>
             </div>
