@@ -17,7 +17,8 @@ import {
   FileText,
   BarChart3,
   PieChart,
-  SunMoon
+  SunMoon,
+  Settings
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -72,6 +73,12 @@ export function NavLinks() {
       href: "/customers", 
       label: "Kunden", 
       icon: Users,
+      auth: "authenticated"
+    },
+    { 
+      href: "/settings", 
+      label: "Einstellungen", 
+      icon: Settings,
       auth: "authenticated"
     }
   ];

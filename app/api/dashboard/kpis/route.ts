@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 export async function GET() {
   const today = new Date();
   const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
 
   const revenueThisMonth = await prisma.income.aggregate({
     _sum: {
@@ -15,6 +16,18 @@ export async function GET() {
       date: {
         gte: firstDayOfMonth,
       },
+    },
+  });
+
+  const revenueThisYear = await prisma.income.aggregate({
+    _sum: {
+      amount: true,
+    },
+    where: {
+      date: {
+        gte: firstDayOfYear,
+      },
+      taxRelevant: true, // Only tax relevant income counts for Kleinunternehmer limit
     },
   });
 
@@ -80,6 +93,7 @@ export async function GET() {
 
   return NextResponse.json({
     revenueThisMonth: revenueThisMonth._sum.amount || 0,
+    revenueThisYear: revenueThisYear._sum.amount || 0,
     expensesThisMonth: expensesThisMonth._sum.amount || 0,
     openInvoices: openInvoices._sum.totalAmount || 0,
     totalRevenue: totalRevenue._sum.amount || 0,

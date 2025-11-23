@@ -5,6 +5,7 @@ import { DashboardHeader } from "./dashboard-header";
 
 interface KpiData {
   revenueThisMonth: number;
+  revenueThisYear: number;
   expensesThisMonth: number;
   openInvoices: number;
   totalRevenue: number;

@@ -68,3 +68,13 @@ model Customer {
   invoices  Invoice[]
   incomes   Income[]
 }
+
+model Settings {
+  id             Int     @id @default(autoincrement())
+  companyName    String?
+  companyAddress String?
+  taxNumber      String?
+  bankDetails    String?
+  footerText     String?
+  logoUrl        String?
+}

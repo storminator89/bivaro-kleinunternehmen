@@ -25,6 +25,7 @@ import { format, subMonths, startOfMonth, getMonth, getYear } from 'date-fns';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { CreateInvoiceModal } from "@/components/dashboard/create-invoice-modal";
 
 // Typdefinitionen
 type Expense = {
@@ -543,6 +544,7 @@ function DashboardContent() {
   // Delete Modal State
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: number; type: 'expense' | 'income' | 'invoice' } | null>(null);
+  const [createInvoiceModalOpen, setCreateInvoiceModalOpen] = useState(false);
 
   // Filter States
   const [filters, setFilters] = useState<FilterState>({
@@ -1395,6 +1397,49 @@ function DashboardContent() {
 
     // Gewinn/Verlust hinzufügen
     csvContent += `GEWINN/VERLUST;${profit.toFixed(2).replace('.', ',')}\n`;
+
+    // CSV-Datei erstellen und herunterladen
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // CSV-Export für das GWG-Verzeichnis
+  const handleExportGWG = () => {
+    // Aktuelles Datum für den Dateinamen
+    const date = new Date().toISOString().split('T')[0];
+    const fileName = `gwg-verzeichnis-${date}.csv`;
+
+    // CSV-Header
+    let csvContent = "Datum;Beschreibung;Kategorie;Betrag (Netto)\n";
+
+    // Gefilterte GWG-Ausgaben
+    const gwgExpenses = expensesAll.filter(expense => {
+      if (!expense.taxRelevant) return false;
+      if (expense.amount <= 250 || expense.amount > 1000) return false;
+      
+      const expenseDate = new Date(expense.date);
+      const today = new Date();
+      if (selectedTimeRange === 'thisYear') {
+        return expenseDate.getFullYear() === today.getFullYear();
+      } else if (selectedTimeRange === 'lastYear') {
+        return expenseDate.getFullYear() === today.getFullYear() - 1;
+      }
+      return true;
+    });
+
+    // Zeilen hinzufügen
+    gwgExpenses.forEach(expense => {
+      const dateStr = new Date(expense.date).toLocaleDateString('de-DE');
+      const amountStr = expense.amount.toFixed(2).replace('.', ',');
+      csvContent += `${dateStr};${expense.description};${expense.category || ''};${amountStr}\n`;
+    });
 
     // CSV-Datei erstellen und herunterladen
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -2529,6 +2574,12 @@ function DashboardContent() {
                       Die Daten werden automatisch extrahiert und verarbeitet.
                     </p>
                   </div>
+                  <Button onClick={() => setCreateInvoiceModalOpen(true)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Rechnung erstellen
+                  </Button>
                 </div>
               </div>
               <div className="p-6">
@@ -3093,6 +3144,15 @@ function DashboardContent() {
                       Verzeichnis für Geringwertige Wirtschaftsgüter (GWG) über 250 € bis 1.000 € Netto.
                     </p>
                   </div>
+                  <Button
+                    onClick={handleExportGWG}
+                    className="self-start bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
+                    </svg>
+                    GWG-Verzeichnis exportieren
+                  </Button>
                 </div>
               </div>
               <div className="p-6">
@@ -3211,6 +3271,12 @@ function DashboardContent() {
                 : 'Sind Sie sicher, dass Sie diese Ausgabe löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.'
           }
           isDeleting={isDeleting}
+        />
+
+        {/* Rechnung erstellen Modal */}
+        <CreateInvoiceModal 
+          isOpen={createInvoiceModalOpen} 
+          onClose={() => setCreateInvoiceModalOpen(false)} 
         />
       </div>
     </div>

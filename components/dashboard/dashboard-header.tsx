@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 
 interface KpiData {
   revenueThisMonth: number;
+  revenueThisYear: number;
   expensesThisMonth: number;
   openInvoices: number;
   totalRevenue: number;
@@ -47,6 +48,12 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
   const profit = data.totalRevenue - data.totalExpenses;
   const profitMargin = data.totalRevenue > 0 ? (profit / data.totalRevenue) * 100 : 0;
 
+  // Kleinunternehmer-Limit Logik
+  const limit = 22000;
+  const percentage = Math.min(100, (data.revenueThisYear / limit) * 100);
+  const isClose = percentage > 80;
+  const isOver = data.revenueThisYear > limit;
+
   return (
     <div className="space-y-4">
       {/* Hauptüberschrift mit Ausklappfunktion */}
@@ -63,6 +70,32 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
         
         {isExpanded && (
           <div className="px-4 pb-4 space-y-6">
+            {/* Kleinunternehmer-Status Tracker */}
+            <div className="bg-muted/30 rounded-lg p-4 border">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">Kleinunternehmer-Status (22.000 € Grenze)</span>
+                  <Badge variant={isOver ? "destructive" : isClose ? "secondary" : "outline"} className="text-xs">
+                    {isOver ? "Limit überschritten" : isClose ? "Limit bald erreicht" : "Im Rahmen"}
+                  </Badge>
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {formatCurrency(data.revenueThisYear)} / {formatCurrency(limit)}
+                </span>
+              </div>
+              <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-500 ${isOver ? 'bg-red-500' : isClose ? 'bg-amber-500' : 'bg-green-500'}`} 
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {isOver 
+                  ? "Achtung: Sie haben die 22.000 € Grenze überschritten. Ab dem nächsten Jahr sind Sie voraussichtlich umsatzsteuerpflichtig."
+                  : "Solange Ihr Umsatz im laufenden Jahr unter 22.000 € bleibt (und im Folgejahr voraussichtlich unter 50.000 €), bleiben Sie umsatzsteuerbefreit."}
+              </p>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <CollapsibleKpiCard 
                 title="Umsatz diesen Monat" 
