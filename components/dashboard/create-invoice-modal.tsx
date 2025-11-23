@@ -224,6 +224,13 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     setItems(newItems);
   };
 
+  const duplicateItem = (index: number) => {
+    const itemToDuplicate = items[index];
+    const newItems = [...items];
+    newItems.splice(index + 1, 0, { ...itemToDuplicate });
+    setItems(newItems);
+  };
+
   const formatCurrency = (amount: number) => {
     return amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   };
@@ -236,6 +243,12 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       const { width, height } = page.getSize();
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      
+      // Design Constants
+      const accentColor = rgb(0.2, 0.2, 0.2); // Dark Grey/Black for professional look, or use rgb(0, 0.3, 0.6) for blue
+      const primaryColor = rgb(0, 0, 0);
+      const secondaryColor = rgb(0.4, 0.4, 0.4);
+      const lightBg = rgb(0.96, 0.96, 0.96);
 
       // Helper to draw text aligned right
       const drawTextRight = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
@@ -252,6 +265,16 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       let y = height - 50;
       const margin = 50;
 
+      // --- DECORATIVE ELEMENTS ---
+      // Top Accent Bar
+      page.drawRectangle({
+        x: 0,
+        y: height - 8,
+        width: width,
+        height: 8,
+        color: accentColor,
+      });
+
       // --- HEADER ---
       // Logo (Right)
       if (settings?.logoUrl) {
@@ -267,14 +290,14 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           }
 
           if (logoImage) {
-            const maxWidth = 150;
-            const maxHeight = 60;
+            const maxWidth = 180;
+            const maxHeight = 80;
             const scale = Math.min(maxWidth / logoImage.width, maxHeight / logoImage.height);
             const logoDims = logoImage.scale(scale);
             
             page.drawImage(logoImage, {
               x: width - margin - logoDims.width,
-              y: height - margin - logoDims.height,
+              y: height - margin - logoDims.height + 10, // Slightly higher
               width: logoDims.width,
               height: logoDims.height,
             });
@@ -284,52 +307,94 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
         }
       }
 
-      // Company Info (Left - Small)
+      // --- SENDER LINE (DIN 5008 Style) ---
+      // Position for Form A (approx 45mm from top)
+      const senderLineY = height - 125;
       if (settings?.companyName) {
-        page.drawText(settings.companyName, { x: margin, y, size: 10, font: boldFont, color: rgb(0.4, 0.4, 0.4) });
-        y -= 12;
+        let senderText = settings.companyName;
         if (settings?.companyAddress) {
-            const addressLine = settings.companyAddress.replace(/\n/g, ', ');
-            page.drawText(addressLine, { x: margin, y, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+            const city = settings.companyAddress.split('\n').pop()?.split(' ').slice(1).join(' '); // Try to extract city
+            const street = settings.companyAddress.split('\n')[0];
+            senderText += ` • ${street}`;
+            if (city) senderText += ` • ${city}`;
         }
+        
+        page.drawText(senderText, { x: margin, y: senderLineY, size: 7, font, color: secondaryColor });
+        
+        // Underline
+        const senderWidth = font.widthOfTextAtSize(senderText, 7);
+        page.drawLine({
+            start: { x: margin, y: senderLineY - 2 },
+            end: { x: margin + senderWidth, y: senderLineY - 2 },
+            thickness: 0.5,
+            color: secondaryColor,
+        });
       }
-      
-      y -= 40;
 
       // --- ADDRESS FIELD ---
-      // DIN 5008 Address Field Position (approx)
-      let addressY = height - 160;
+      // Closer to sender line (approx 5mm gap)
+      let addressY = senderLineY - 15;
       const addressLines = customerAddress.split('\n');
       addressLines.forEach(line => {
-        page.drawText(line, { x: margin, y: addressY, size: 11, font });
-        addressY -= 14;
+        page.drawText(line, { x: margin, y: addressY, size: 11, font, color: primaryColor });
+        addressY -= 15;
       });
 
       // --- INVOICE INFO BLOCK (Right side) ---
-      let infoY = height - 160;
-      const infoX = width - margin - 150;
+      // Move down slightly to avoid logo overlap
+      let infoY = senderLineY - 20;
+      const infoX = width - margin - 200;
       
-      page.drawText('RECHNUNG', { x: infoX, y: infoY + 20, size: 16, font: boldFont });
-      
-      const infoGap = 14;
-      page.drawText('Rechnungs-Nr.:', { x: infoX, y: infoY, size: 10, font: boldFont });
-      drawTextRight(invoiceNumber, width - margin, infoY, 10, font);
-      infoY -= infoGap;
+      // Info Box Dimensions
+      const infoBoxHeight = 130;
+      const infoBoxWidth = 210;
+      const infoBoxBottom = infoY - 115; 
 
-      page.drawText('Datum:', { x: infoX, y: infoY, size: 10, font: boldFont });
-      drawTextRight(new Date(date).toLocaleDateString('de-DE'), width - margin, infoY, 10, font);
-      infoY -= infoGap;
+      // Info Block Background (Modern Card Style)
+      page.drawRectangle({
+          x: infoX - 10,
+          y: infoBoxBottom, 
+          width: infoBoxWidth,
+          height: infoBoxHeight,
+          color: rgb(0.98, 0.98, 0.98), // Very subtle grey
+      });
+
+      // Left Accent Stripe
+      page.drawRectangle({
+          x: infoX - 10,
+          y: infoBoxBottom,
+          width: 3,
+          height: infoBoxHeight,
+          color: accentColor,
+      });
+
+      // Header Title
+      page.drawText('RECHNUNG', { x: infoX, y: infoY, size: 16, font: boldFont, color: primaryColor });
+      infoY -= 25;
+      
+      const infoGap = 16;
+
+      const drawInfoRow = (label: string, value: string) => {
+          page.drawText(label, { x: infoX, y: infoY, size: 9, font, color: secondaryColor });
+          drawTextRight(value, width - margin - 10, infoY, 9, boldFont, primaryColor);
+          infoY -= infoGap;
+      };
+
+      drawInfoRow('Rechnungs-Nr.:', invoiceNumber);
+      drawInfoRow('Datum:', new Date(date).toLocaleDateString('de-DE'));
+      
+      if (selectedCustomer?.id) {
+         drawInfoRow('Kundennummer:', selectedCustomer.id.toString());
+      }
+
+      infoY -= 5; // Extra gap
 
       if (deliveryDate) {
-        page.drawText('Leistungsdatum:', { x: infoX, y: infoY, size: 10, font: boldFont });
-        drawTextRight(new Date(deliveryDate).toLocaleDateString('de-DE'), width - margin, infoY, 10, font);
-        infoY -= infoGap;
+        drawInfoRow('Leistungsdatum:', new Date(deliveryDate).toLocaleDateString('de-DE'));
       }
 
       if (dueDate) {
-        page.drawText('Fällig am:', { x: infoX, y: infoY, size: 10, font: boldFont });
-        drawTextRight(new Date(dueDate).toLocaleDateString('de-DE'), width - margin, infoY, 10, font);
-        infoY -= infoGap;
+        drawInfoRow('Fällig am:', new Date(dueDate).toLocaleDateString('de-DE'));
       }
 
       // --- TABLE ---
@@ -352,17 +417,17 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
         y: y - 5,
         width: width - 2 * margin,
         height: 20,
-        color: rgb(0.95, 0.95, 0.95),
+        color: lightBg,
       });
 
       // Header Text
-      page.drawText('Pos.', { x: colX.pos + 5, y, size: 10, font: boldFont });
-      page.drawText('Beschreibung', { x: colX.desc, y, size: 10, font: boldFont });
-      drawTextRight('Menge', colX.qty, y, 10, boldFont);
-      page.drawText('Einh.', { x: colX.unit, y, size: 10, font: boldFont });
-      drawTextRight('Preis', colX.price, y, 10, boldFont);
-      drawTextRight('MwSt', colX.tax, y, 10, boldFont);
-      drawTextRight('Gesamt', colX.total - 5, y, 10, boldFont);
+      page.drawText('Pos.', { x: colX.pos + 5, y, size: 9, font: boldFont, color: accentColor });
+      page.drawText('Beschreibung', { x: colX.desc, y, size: 9, font: boldFont, color: accentColor });
+      drawTextRight('Menge', colX.qty, y, 9, boldFont, accentColor);
+      page.drawText('Einh.', { x: colX.unit, y, size: 9, font: boldFont, color: accentColor });
+      drawTextRight('Preis', colX.price, y, 9, boldFont, accentColor);
+      drawTextRight('MwSt', colX.tax, y, 9, boldFont, accentColor);
+      drawTextRight('Gesamt', colX.total - 5, y, 9, boldFont, accentColor);
 
       y -= 25;
 
@@ -410,40 +475,51 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                 y: y - 5,
                 width: width - 2 * margin,
                 height: 20,
-                color: rgb(0.95, 0.95, 0.95),
+                color: lightBg,
             });
-            page.drawText('Pos.', { x: colX.pos + 5, y, size: 10, font: boldFont });
-            page.drawText('Beschreibung', { x: colX.desc, y, size: 10, font: boldFont });
-            drawTextRight('Menge', colX.qty, y, 10, boldFont);
-            page.drawText('Einh.', { x: colX.unit, y, size: 10, font: boldFont });
-            drawTextRight('Preis', colX.price, y, 10, boldFont);
-            drawTextRight('MwSt', colX.tax, y, 10, boldFont);
-            drawTextRight('Gesamt', colX.total - 5, y, 10, boldFont);
+            page.drawText('Pos.', { x: colX.pos + 5, y, size: 9, font: boldFont, color: accentColor });
+            page.drawText('Beschreibung', { x: colX.desc, y, size: 9, font: boldFont, color: accentColor });
+            drawTextRight('Menge', colX.qty, y, 9, boldFont, accentColor);
+            page.drawText('Einh.', { x: colX.unit, y, size: 9, font: boldFont, color: accentColor });
+            drawTextRight('Preis', colX.price, y, 9, boldFont, accentColor);
+            drawTextRight('MwSt', colX.tax, y, 9, boldFont, accentColor);
+            drawTextRight('Gesamt', colX.total - 5, y, 9, boldFont, accentColor);
             y -= 25;
         }
 
-        page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font });
+        // Zebra Striping
+        if (index % 2 === 0) {
+            page.drawRectangle({
+                x: margin,
+                y: y - itemHeight + 12, // Adjust based on height
+                width: width - 2 * margin,
+                height: itemHeight,
+                color: rgb(0.98, 0.98, 0.98),
+            });
+        }
+
+        page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font, color: secondaryColor });
         
         // Draw description lines
         descLines.forEach((line, i) => {
-            page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font });
+            page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font, color: primaryColor });
         });
 
-        drawTextRight(item.quantity.toString(), colX.qty, y, 10, font);
-        page.drawText(item.unit, { x: colX.unit, y, size: 10, font });
-        drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font);
-        drawTextRight(`${item.taxRate}%`, colX.tax, y, 10, font);
-        drawTextRight(formatCurrency(lineNet), colX.total - 5, y, 10, font);
+        drawTextRight(item.quantity.toString(), colX.qty, y, 10, font, primaryColor);
+        page.drawText(item.unit, { x: colX.unit, y, size: 10, font, color: primaryColor });
+        drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font, primaryColor);
+        drawTextRight(`${item.taxRate}%`, colX.tax, y, 10, font, primaryColor);
+        drawTextRight(formatCurrency(lineNet), colX.total - 5, y, 10, font, primaryColor);
 
         // Calculate Y for separator line (below the last line of description)
         const separatorY = y - ((descLines.length - 1) * lineHeight) - 8;
 
-        // Line separator
+        // Line separator (lighter)
         page.drawLine({
             start: { x: margin, y: separatorY },
             end: { x: width - margin, y: separatorY },
             thickness: 0.5,
-            color: rgb(0.9, 0.9, 0.9),
+            color: rgb(0.92, 0.92, 0.92),
         });
 
         // Update Y for next item
@@ -481,26 +557,30 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       y -= 20;
 
       // Thick line before Total
+      const totalLabel = 'Gesamtbetrag:';
+      const totalLabelWidth = boldFont.widthOfTextAtSize(totalLabel, 12);
+      const totalLineStart = labelX - totalLabelWidth;
+
       page.drawLine({
-        start: { x: labelX - 40, y: y + 12 },
+        start: { x: totalLineStart, y: y + 12 },
         end: { x: totalX, y: y + 12 },
         thickness: 1,
         color: rgb(0, 0, 0),
       });
 
-      drawTextRight('Gesamtbetrag:', labelX, y, 12, boldFont);
+      drawTextRight(totalLabel, labelX, y, 12, boldFont);
       drawTextRight(formatCurrency(grossTotal), totalX, y, 12, boldFont);
       
       // Double underline
       y -= 4;
       page.drawLine({
-        start: { x: labelX - 40, y: y },
+        start: { x: totalLineStart, y: y },
         end: { x: totalX, y: y },
         thickness: 0.5,
         color: rgb(0, 0, 0),
       });
       page.drawLine({
-        start: { x: labelX - 40, y: y - 2 },
+        start: { x: totalLineStart, y: y - 2 },
         end: { x: totalX, y: y - 2 },
         thickness: 0.5,
         color: rgb(0, 0, 0),
@@ -530,7 +610,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       }
 
       // --- FOOTER ---
-      const footerY = 40;
+      const footerY = 60;
       page.drawLine({
         start: { x: margin, y: footerY + 15 },
         end: { x: width - margin, y: footerY + 15 },
@@ -670,7 +750,20 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       });
 
       // Page Numbers
-      // page.drawText(`Seite 1 von 1`, { x: width - margin, y: 20, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+      const pageCount = pdfDoc.getPageCount();
+      const pages = pdfDoc.getPages();
+      pages.forEach((p, i) => {
+          const { width } = p.getSize();
+          const text = `Seite ${i + 1} von ${pageCount}`;
+          const textWidth = font.widthOfTextAtSize(text, 8);
+          p.drawText(text, { 
+              x: (width - textWidth) / 2, 
+              y: 15, 
+              size: 8, 
+              font, 
+              color: secondaryColor 
+          });
+      });
 
       // --- ZUGFeRD XML Integration ---
       try {
@@ -977,17 +1070,17 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           <div className="space-y-2">
             <Label>Positionen</Label>
             <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_70px_90px_100px_70px_auto] gap-2 bg-muted p-2 text-sm font-medium">
-                    <div>Beschreibung</div>
-                    <div className="text-right">Menge</div>
-                    <div>Einheit</div>
-                    <div className="text-right">Einzelpreis</div>
-                    <div className="text-right">Steuer</div>
-                    <div className="w-10"></div>
+                <div className="grid grid-cols-[1fr_70px_90px_100px_70px_90px] gap-2 bg-muted p-2 text-sm font-medium items-center">
+                    <div className="pl-2">Beschreibung</div>
+                    <div className="text-center">Menge</div>
+                    <div className="text-center">Einheit</div>
+                    <div className="text-center">Einzelpreis</div>
+                    <div className="text-center">Steuer</div>
+                    <div></div>
                 </div>
                 <div className="divide-y">
                     {items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-[1fr_70px_90px_100px_70px_auto] gap-2 p-2 items-start">
+                    <div key={index} className="grid grid-cols-[1fr_70px_90px_100px_70px_90px] gap-2 p-2 items-start">
                         <Input 
                         value={item.description} 
                         onChange={(e) => updateItem(index, 'description', e.target.value)} 
@@ -1027,11 +1120,18 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                           />
                           <span className="absolute right-2 top-2.5 text-sm text-muted-foreground">%</span>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} className="text-destructive hover:text-destructive">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => duplicateItem(index)} title="Zeile duplizieren" className="text-muted-foreground hover:text-foreground">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} className="text-destructive hover:text-destructive">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </Button>
+                        </div>
                     </div>
                     ))}
                 </div>
