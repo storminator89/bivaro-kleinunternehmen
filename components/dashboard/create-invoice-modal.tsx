@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
+import QRCode from 'qrcode';
 
 interface CreateInvoiceModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
   const [isGenerating, setIsGenerating] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [includeQRCode, setIncludeQRCode] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -303,12 +305,110 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
         color: rgb(0.7, 0.7, 0.7),
       });
 
+      // --- QR CODE (GiroCode) ---
+      if (includeQRCode) {
+        if (settings?.iban && settings?.companyName) {
+          const iban = settings.iban;
+          const bic = settings.bic;
+          
+          if (iban) {
+            // EPC069-12 Standard (GiroCode)
+            // 1. Service Tag (BCD)
+            // 2. Version (002)
+            // 3. Encoding (1 = UTF-8)
+            // 4. Transfer (SCT)
+            // 5. BIC (optional)
+            // 6. Empfänger (max 70 Zeichen)
+            // 7. IBAN
+            // 8. Betrag (EUR12.50)
+            // 9. Zweckcode (leer)
+            // 10. Referenz (leer, da Verwendungszweck genutzt wird)
+            // 11. Verwendungszweck (max 140 Zeichen)
+            // 12. Hinweis (leer)
+
+            // Sicherstellen, dass keine Zeilenumbrüche in den Werten stecken
+            const cleanName = (settings.companyName || "").replace(/[\r\n]/g, "").trim();
+            // WICHTIG: IBAN darf KEINE Leerzeichen enthalten!
+            const finalIban = (iban || "").replace(/\s/g, "").toUpperCase(); 
+            
+            // SEPA-Zeichensatz erzwingen (Umlaute ersetzen, ungültige Zeichen entfernen)
+            const toSEPA = (str: string) => {
+                const map: { [key: string]: string } = {
+                  'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss'
+                };
+                let cleaned = str.replace(/[äöüÄÖÜß]/g, m => map[m]);
+                // Erlaube nur SEPA-Zeichen: a-z, A-Z, 0-9, / - ? : ( ) . , ' + und Leerzeichen
+                cleaned = cleaned.replace(/[^a-zA-Z0-9\/\-\?:\(\)\.,'\+ ]/g, '');
+                return cleaned.trim();
+            };
+            
+            // Warnung bei ungültiger IBAN-Länge (DE = 22 Stellen)
+            if (finalIban.startsWith('DE') && finalIban.length !== 22) {
+               alert(`Warnung: Die IBAN "${finalIban}" hat ${finalIban.length} Stellen. Eine deutsche IBAN muss 22 Stellen haben. Der QR-Code wird möglicherweise nicht funktionieren.`);
+            }
+
+            // Manuelle Konstruktion des Strings, um sicherzustellen, dass alle Zeilenumbrüche korrekt sind
+            // EPC069-12 Standard - Reduziert auf die wesentlichen Felder (1-8) wie gewünscht
+            let giroCodeData = "BCD\n";                                 // 1. Service Tag
+            giroCodeData += "002\n";                                    // 2. Version
+            giroCodeData += "1\n";                                      // 3. Encoding
+            giroCodeData += "SCT\n";                                    // 4. Transfer
+            giroCodeData += (bic || "").trim() + "\n";                  // 5. BIC
+            giroCodeData += toSEPA(cleanName).substring(0, 70) + "\n";  // 6. Empfänger
+            giroCodeData += finalIban + "\n";                           // 7. IBAN
+            giroCodeData += `EUR${totalAmount.toFixed(2)}\n`;           // 8. Betrag
+            giroCodeData += "\n";                                       // 9. Zweckcode (leer)
+            giroCodeData += "\n";                                       // 10. Referenz (leer)
+            giroCodeData += toSEPA(sanitize(invoiceNumber || "")).substring(0, 140) + "\n"; // 11. Verwendungszweck
+
+            console.log("GiroCode Payload:", JSON.stringify(giroCodeData));
+
+            try {
+              const qrCodeDataUrl = await QRCode.toDataURL(giroCodeData, { 
+                errorCorrectionLevel: 'M',
+                type: 'image/png',
+                margin: 4
+              });
+              const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
+              const qrDim = 80;
+              
+              // Position QR code in the bottom right area, above footer
+              page.drawImage(qrCodeImage, {
+                x: width - margin - qrDim,
+                y: footerY + 30,
+                width: qrDim,
+                height: qrDim,
+              });
+              
+              page.drawText('GiroCode scannen & zahlen', {
+                x: width - margin - qrDim,
+                y: footerY + 25,
+                size: 8,
+                font,
+                color: rgb(0.4, 0.4, 0.4)
+              });
+            } catch (err) {
+              console.error("Error generating QR code:", err);
+              alert("Fehler beim Generieren des QR-Codes.");
+            }
+          } else {
+            console.warn("Keine gültige IBAN gefunden für QR-Code");
+            alert("Hinweis: Es konnte keine gültige IBAN in den Einstellungen gefunden werden. Der QR-Code wurde nicht erstellt.");
+          }
+        } else {
+          console.warn("Fehlende Bankdaten oder Firmenname für QR-Code");
+          alert("Hinweis: Für den QR-Code fehlen Bankverbindung oder Firmenname in den Einstellungen.");
+        }
+      }
+
       let footerTextLeft = "";
       if (settings?.companyName) footerTextLeft += settings.companyName + "\n";
       if (settings?.companyAddress) footerTextLeft += settings.companyAddress;
 
       let footerTextCenter = "";
-      if (settings?.bankDetails) footerTextCenter += settings.bankDetails;
+      if (settings?.bankName) footerTextCenter += settings.bankName + "\n";
+      if (settings?.iban) footerTextCenter += "IBAN: " + settings.iban + "\n";
+      if (settings?.bic) footerTextCenter += "BIC: " + settings.bic;
 
       let footerTextRight = "";
       if (settings?.taxNumber) footerTextRight += "Steuernummer:\n" + settings.taxNumber + "\n";
@@ -425,6 +525,19 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
                 placeholder="Vielen Dank für Ihren Auftrag!"
                 className="min-h-[60px]"
               />
+              
+              <div className="flex items-center space-x-2 mt-4">
+                <input
+                  type="checkbox"
+                  id="includeQRCode"
+                  checked={includeQRCode}
+                  onChange={(e) => setIncludeQRCode(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <Label htmlFor="includeQRCode" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  GiroCode (QR-Code) für Banking-Apps hinzufügen
+                </Label>
+              </div>
             </div>
           </div>
           

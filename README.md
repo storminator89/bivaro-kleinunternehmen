@@ -1,112 +1,70 @@
-# Buchhaltung
+# Bivaro – Buchhaltung für Kleinunternehmer
 
-Buchhaltung is a web-based accounting application designed to help users manage their finances, track expenses and incomes, and handle invoices efficiently. Built with Next.js, TypeScript, and Prisma, it provides a modern and secure platform for personal or small business bookkeeping.
+Bivaro ist eine moderne, webbasierte Buchhaltungsanwendung, die speziell für Kleinunternehmer in Deutschland entwickelt wurde. Sie hilft dabei, Einnahmen und Ausgaben zu verwalten, Rechnungen zu erstellen und den Überblick über die Finanzen zu behalten – alles unter Berücksichtigung der Kleinunternehmerregelung (§ 19 UStG).
 
-## Features
+## 🚀 Features
 
-- User authentication and registration
-- Dashboard overview of financial data
-- Expense and income tracking
-- Invoice management (upload, download, and storage)
-- Tax-deductible percentage tracking for expenses
-- Secure file uploads for receipts and invoices
-- Responsive and modern UI
+### 📊 Dashboard & Übersicht
+*   **Echtzeit-KPIs**: Umsatz (Monat/Jahr), Ausgaben, Offene Forderungen und Gewinnmarge auf einen Blick.
+*   **Kleinunternehmer-Tracker**: Visueller Fortschrittsbalken für die 22.000 € Umsatzgrenze. Warnt rechtzeitig vor Überschreitung.
+*   **Interaktive Charts**: Monatliche Einnahmen vs. Ausgaben im Jahresverlauf.
+*   **Letzte Aktivitäten**: Schneller Zugriff auf die neuesten Buchungen.
 
-## Tech Stack
+### 📝 Rechnungsstellung (Neu!)
+*   **PDF-Rechnungsgenerator**: Erstellen Sie professionelle Rechnungen direkt im Browser.
+*   **Rechtssicher**: Automatische Hinweise auf § 19 UStG (Steuerbefreiung).
+*   **GiroCode (EPC069-12)**: Optionaler QR-Code auf der Rechnung, damit Kunden per Banking-App scannen & zahlen können.
+*   **Kundenverwaltung**: Empfänger aus der Datenbank auswählen oder manuell eingeben.
+*   **Individuelles Design**: Logo, Firmenadresse und Fußzeile werden automatisch aus den Einstellungen geladen.
 
-- Next.js (React)
-- TypeScript
-- Prisma (SQLite)
-- NextAuth.js (Authentication)
-- Tailwind CSS (Styling)
-- PostCSS
+### 💰 Einnahmen & Ausgaben
+*   **Erfassung**: Einfaches Hinzufügen von Belegen mit Kategorien, Datum und Betrag.
+*   **Beleg-Upload**: Speichern von Rechnungsbelegen (PDF/Bild) direkt zur Buchung.
+*   **Filter & Suche**: Finden Sie Buchungen nach Datum, Kategorie oder Text.
+*   **Export**: Datenexport für den Steuerberater oder das Finanzamt (z.B. GWG-Verzeichnis).
 
-## Getting Started
+### ⚙️ Einstellungen
+*   **Firmendaten**: Hinterlegen Sie Name, Adresse, Steuernummer und Bankverbindung zentral.
+*   **Bankverbindung**: Strukturierte Erfassung von IBAN/BIC für fehlerfreie QR-Codes.
+*   **Logo-Upload**: Laden Sie Ihr Firmenlogo hoch, um es auf Rechnungen zu platzieren.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/storminator89/bivaro-kleinunternehmen
-   cd buchhaltung
-   ```
+### ⚖️ Steuer-Simulation
+*   **Einkommensteuer-Rechner**: Schätzen Sie Ihre voraussichtliche Steuerlast basierend auf Ihrem Gewinn.
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+## 🛠️ Technologie-Stack
 
-3. **Set up the database:**
-   ```bash
-   npx prisma migrate dev
-   ```
+*   **Frontend**: Next.js 14 (App Router), React, Tailwind CSS, Shadcn UI
+*   **Backend**: Next.js API Routes
+*   **Datenbank**: SQLite (via Prisma ORM)
+*   **PDF-Generierung**: pdf-lib
+*   **QR-Code**: qrcode
 
-4. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
+## 📦 Installation & Start
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+1.  **Repository klonen:**
+    ```bash
+    git clone <repository-url>
+    cd buchhaltung
+    ```
 
-## Docker
+2.  **Abhängigkeiten installieren:**
+    ```bash
+    npm install
+    ```
 
-1. **Build the image:**
-   ```bash
-   docker build -t buchhaltung-app .
-   ```
+3.  **Datenbank initialisieren:**
+    ```bash
+    npx prisma migrate dev
+    ```
 
-2. **Prepare environment variables:**
-   Create a dedicated `.env.docker` file (or reuse `.env`) with production-safe values. At minimum set:
-   ```
-   DATABASE_URL="file:./prisma/dev.db"
-   NEXTAUTH_SECRET="your-secret-key"
-   NEXTAUTH_URL="http://localhost:3000"
-   ```
+4.  **Entwicklungsserver starten:**
+    ```bash
+    npm run dev
+    ```
+    Die App ist nun unter `http://localhost:3000` erreichbar.
 
-3. **Run the container:**
-   ```bash
-   docker run --env-file .env.docker -p 3000:3000 buchhaltung-app
-   ```
+## 🔒 Datenschutz & Sicherheit
+Alle Daten werden lokal in Ihrer SQLite-Datenbank gespeichert. Es erfolgt keine Übertragung an externe Cloud-Dienste (außer Sie hosten die App selbst in der Cloud).
 
-   To persist the SQLite database outside the container, mount the file:
-   ```bash
-   docker run --env-file .env.docker \
-     -v $(pwd)/prisma/dev.db:/app/prisma/dev.db \
-     -p 3000:3000 buchhaltung-app
-   ```
-
-4. **Migrations in Docker (optional):**
-   ```bash
-   docker run --rm --env-file .env.docker buchhaltung-app npx prisma migrate deploy
-   ```
-
-## Environment Variables
-
-Create a `.env` file in the `buchhaltung/` directory with the following variables:
-
-```
-DATABASE_URL="file:./dev.db"
-# NextAuth configuration
-NEXTAUTH_SECRET="your-secret-key"
-NEXTAUTH_URL="http://localhost:3000"
-```
-
-- `DATABASE_URL`: Path to your SQLite database file (default: `file:./dev.db`).
-- `NEXTAUTH_SECRET`: Secret key for NextAuth session encryption. Change this in production.
-- `NEXTAUTH_URL`: The base URL of your application (e.g., `http://localhost:3000`).
-
-You can use the provided `.env.example` as a template.
-
-## Project Structure
-
-- `app/` - Main application pages and API routes
-- `components/` - Reusable UI and logic components
-- `lib/` - Utility functions and Prisma client
-- `prisma/` - Database schema and migrations
-- `public/` - Static files and uploads
-
-## Screenshots
-
-![Dashboard Screenshot](public/screenshot/dashboard.png)
-
-## License
-
-This project is licensed under the MIT License.
+## 📝 Lizenz
+Dieses Projekt ist für die private oder gewerbliche Nutzung als Kleinunternehmer vorgesehen.

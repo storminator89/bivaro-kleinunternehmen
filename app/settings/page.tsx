@@ -16,7 +16,9 @@ export default function SettingsPage() {
     companyName: "",
     companyAddress: "",
     taxNumber: "",
-    bankDetails: "",
+    bankName: "",
+    iban: "",
+    bic: "",
     footerText: "",
     logoUrl: "",
   });
@@ -31,7 +33,9 @@ export default function SettingsPage() {
             companyName: data.companyName || "",
             companyAddress: data.companyAddress || "",
             taxNumber: data.taxNumber || "",
-            bankDetails: data.bankDetails || "",
+            bankName: data.bankName || "",
+            iban: data.iban || "",
+            bic: data.bic || "",
             footerText: data.footerText || "",
             logoUrl: data.logoUrl || "",
           });
@@ -168,15 +172,44 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="bankDetails">Bankverbindung</Label>
-              <Textarea
-                id="bankDetails"
-                name="bankDetails"
-                value={formData.bankDetails}
-                onChange={handleChange}
-                placeholder="Bankname: Musterbank&#10;IBAN: DE00 0000 0000 0000 0000 00&#10;BIC: XXXXXXXX"
-                rows={3}
-              />
+              <Label>Bankverbindung</Label>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bankName" className="text-xs text-muted-foreground">Bankname</Label>
+                  <Input
+                    id="bankName"
+                    name="bankName"
+                    value={formData.bankName}
+                    onChange={handleChange}
+                    placeholder="Musterbank"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="iban" className="text-xs text-muted-foreground">IBAN</Label>
+                    <Input
+                      id="iban"
+                      name="iban"
+                      value={formData.iban}
+                      onChange={handleChange}
+                      placeholder="DE00 0000 0000 0000 0000 00"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bic" className="text-xs text-muted-foreground">BIC</Label>
+                    <Input
+                      id="bic"
+                      name="bic"
+                      value={formData.bic}
+                      onChange={handleChange}
+                      placeholder="XXXXXXXX"
+                    />
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Diese Daten werden für den QR-Code und die Fußzeile verwendet.
+              </p>
             </div>
 
             <div className="space-y-2">

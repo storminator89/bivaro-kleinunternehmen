@@ -74,7 +74,9 @@ model Settings {
   companyName    String?
   companyAddress String?
   taxNumber      String?
-  bankDetails    String?
+  bankName       String?
+  iban           String?
+  bic            String?
   footerText     String?
   logoUrl        String?
 }
