@@ -26,6 +26,8 @@ export interface ZugferdData {
     quantity: number;
     unitPrice: number;
     total: number;
+    unit?: string;
+    taxRate?: number;
   }[];
   totalAmount: number;
   taxAmount: number; // Usually 0 for small businesses
@@ -87,9 +89,24 @@ export function generateZugferdXml(data: ZugferdData): string {
 
   // WICHTIG für Kleinunternehmer: Der Hinweistext
   // Dies muss exakt der Text sein, der auch auf der PDF steht (oder sinngemäß)
-  const exemptionReason = "Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG.";
+  const isSmallBusiness = data.taxAmount === 0;
+  const exemptionReason = isSmallBusiness ? "Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG." : "";
 
-  const itemsXml = data.items.map((item, index) => `
+  const getUnitCode = (unit: string = 'Stück') => {
+    const map: Record<string, string> = {
+      'Stück': 'C62',
+      'Stunde': 'HUR',
+      'Tag': 'DAY',
+      'Pauschal': 'LS'
+    };
+    return map[unit] || 'C62';
+  };
+
+  const itemsXml = data.items.map((item, index) => {
+    const taxRate = item.taxRate || 0;
+    const taxCategory = taxRate === 0 ? 'E' : 'S';
+    
+    return `
       <ram:IncludedSupplyChainTradeLineItem>
         <ram:AssociatedDocumentLineDocument>
           <ram:LineID>${index + 1}</ram:LineID>
@@ -103,19 +120,20 @@ export function generateZugferdXml(data: ZugferdData): string {
           </ram:NetPriceProductTradePrice>
         </ram:SpecifiedLineTradeAgreement>
         <ram:SpecifiedLineTradeDelivery>
-          <ram:BilledQuantity unitCode="C62">${formatAmt(item.quantity)}</ram:BilledQuantity>
+          <ram:BilledQuantity unitCode="${getUnitCode(item.unit)}">${formatAmt(item.quantity)}</ram:BilledQuantity>
         </ram:SpecifiedLineTradeDelivery>
         <ram:SpecifiedLineTradeSettlement>
           <ram:ApplicableTradeTax>
             <ram:TypeCode>VAT</ram:TypeCode>
-            <ram:CategoryCode>E</ram:CategoryCode>
-            <ram:RateApplicablePercent>0.00</ram:RateApplicablePercent>
+            <ram:CategoryCode>${taxCategory}</ram:CategoryCode>
+            <ram:RateApplicablePercent>${formatAmt(taxRate)}</ram:RateApplicablePercent>
           </ram:ApplicableTradeTax>
           <ram:SpecifiedTradeSettlementLineMonetarySummation>
             <ram:LineTotalAmount>${formatAmt(item.total)}</ram:LineTotalAmount>
           </ram:SpecifiedTradeSettlementLineMonetarySummation>
         </ram:SpecifiedLineTradeSettlement>
-      </ram:IncludedSupplyChainTradeLineItem>`).join('');
+      </ram:IncludedSupplyChainTradeLineItem>`;
+  }).join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
@@ -200,10 +218,10 @@ export function generateZugferdXml(data: ZugferdData): string {
         <ram:CalculatedAmount>${formatAmt(data.taxAmount)}</ram:CalculatedAmount>
         <ram:TypeCode>VAT</ram:TypeCode>
         <!-- HIER FEHLTE DER GRUND: -->
-        <ram:ExemptionReason>${escapeXml(exemptionReason)}</ram:ExemptionReason> 
+        ${isSmallBusiness ? `<ram:ExemptionReason>${escapeXml(exemptionReason)}</ram:ExemptionReason>` : ''}
         <ram:BasisAmount>${formatAmt(data.totalAmount)}</ram:BasisAmount>
-        <ram:CategoryCode>E</ram:CategoryCode>
-        <ram:RateApplicablePercent>0.00</ram:RateApplicablePercent>
+        <ram:CategoryCode>${isSmallBusiness ? 'E' : 'S'}</ram:CategoryCode>
+        <ram:RateApplicablePercent>${isSmallBusiness ? '0.00' : formatAmt((data.taxAmount / data.totalAmount) * 100)}</ram:RateApplicablePercent>
       </ram:ApplicableTradeTax>
 
       <ram:SpecifiedTradePaymentTerms>
@@ -217,8 +235,8 @@ export function generateZugferdXml(data: ZugferdData): string {
         <ram:AllowanceTotalAmount>0.00</ram:AllowanceTotalAmount>
         <ram:TaxBasisTotalAmount>${formatAmt(data.totalAmount)}</ram:TaxBasisTotalAmount>
         <ram:TaxTotalAmount currencyID="${data.currency}">${formatAmt(data.taxAmount)}</ram:TaxTotalAmount>
-        <ram:GrandTotalAmount>${formatAmt(data.totalAmount)}</ram:GrandTotalAmount>
-        <ram:DuePayableAmount>${formatAmt(data.totalAmount)}</ram:DuePayableAmount>
+        <ram:GrandTotalAmount>${formatAmt(data.totalAmount + data.taxAmount)}</ram:GrandTotalAmount>
+        <ram:DuePayableAmount>${formatAmt(data.totalAmount + data.taxAmount)}</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
     </ram:ApplicableHeaderTradeSettlement>
   </rsm:SupplyChainTradeTransaction>

@@ -20,6 +20,8 @@ interface InvoiceItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  unit: string;
+  taxRate: number;
 }
 
 export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: CreateInvoiceModalProps) {
@@ -29,7 +31,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
   const [dueDate, setDueDate] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", quantity: 1, unitPrice: 0 }]);
+  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -124,7 +126,13 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     const template = templates.find(t => t.id.toString() === templateId);
     if (template && template.data) {
       const data = template.data;
-      if (data.items) setItems(data.items);
+      if (data.items) {
+        setItems(data.items.map((item: any) => ({
+          ...item,
+          unit: item.unit || "Stück",
+          taxRate: item.taxRate ?? 0
+        })));
+      }
       if (data.notes !== undefined) setNotes(data.notes);
       if (data.includeQRCode !== undefined) setIncludeQRCode(data.includeQRCode);
       // Add other fields if needed
@@ -191,18 +199,19 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       setSelectedCustomer(customer);
       let addressBlock = customer.name;
       if (customer.address) addressBlock += `\n${customer.address}`;
-      if (customer.zipCode || customer.city) addressBlock += `\n${customer.zipCode || ''} ${customer.city || ''}`.trim();
+      const cityLine = `${customer.zipCode || ''} ${customer.city || ''}`.trim();
+      if (cityLine) addressBlock += `\n${cityLine}`;
       setCustomerAddress(addressBlock);
     }
   };
 
   const addItem = () => {
-    setItems([...items, { description: "", quantity: 1, unitPrice: 0 }]);
+    setItems([...items, { description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
   };
 
   const updateItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
     const newItems = [...items];
-    if (field === 'quantity' || field === 'unitPrice') {
+    if (field === 'quantity' || field === 'unitPrice' || field === 'taxRate') {
       newItems[index] = { ...newItems[index], [field]: Number(value) };
     } else {
       newItems[index] = { ...newItems[index], [field]: value };
@@ -329,9 +338,11 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       // Table Config
       const colX = {
         pos: margin,
-        desc: margin + 40,
-        qty: width - margin - 180,
-        price: width - margin - 100,
+        desc: margin + 30,
+        qty: width - margin - 260,
+        unit: width - margin - 230,
+        price: width - margin - 130,
+        tax: width - margin - 70,
         total: width - margin
       };
 
@@ -348,64 +359,153 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       page.drawText('Pos.', { x: colX.pos + 5, y, size: 10, font: boldFont });
       page.drawText('Beschreibung', { x: colX.desc, y, size: 10, font: boldFont });
       drawTextRight('Menge', colX.qty, y, 10, boldFont);
-      drawTextRight('Einzelpreis', colX.price, y, 10, boldFont);
+      page.drawText('Einh.', { x: colX.unit, y, size: 10, font: boldFont });
+      drawTextRight('Preis', colX.price, y, 10, boldFont);
+      drawTextRight('MwSt', colX.tax, y, 10, boldFont);
       drawTextRight('Gesamt', colX.total - 5, y, 10, boldFont);
 
       y -= 25;
 
       // Items
-      let totalAmount = 0;
+      let netTotal = 0;
+      let taxTotal = 0;
+
       items.forEach((item, index) => {
-        const lineTotal = item.quantity * item.unitPrice;
-        totalAmount += lineTotal;
+        const lineNet = item.quantity * item.unitPrice;
+        const lineTax = lineNet * (item.taxRate / 100);
+        
+        netTotal += lineNet;
+        taxTotal += lineTax;
+
+        // Word Wrap for Description
+        const maxDescWidth = colX.qty - colX.desc - 10;
+        const words = item.description.split(' ');
+        let descLines: string[] = [];
+        let currentLine = words[0];
+
+        for (let i = 1; i < words.length; i++) {
+            const word = words[i];
+            const width = font.widthOfTextAtSize(currentLine + " " + word, 10);
+            if (width < maxDescWidth) {
+                currentLine += " " + word;
+            } else {
+                descLines.push(currentLine);
+                currentLine = word;
+            }
+        }
+        descLines.push(currentLine);
+
+        // Calculate height needed
+        const lineHeight = 12;
+        const itemHeight = Math.max(20, descLines.length * lineHeight + 8);
 
         // Check for page break
-        if (y < 100) {
+        if (y - itemHeight < 50) {
             page.addPage();
             y = height - 50;
+            
+            // Redraw Header on new page
+            page.drawRectangle({
+                x: margin,
+                y: y - 5,
+                width: width - 2 * margin,
+                height: 20,
+                color: rgb(0.95, 0.95, 0.95),
+            });
+            page.drawText('Pos.', { x: colX.pos + 5, y, size: 10, font: boldFont });
+            page.drawText('Beschreibung', { x: colX.desc, y, size: 10, font: boldFont });
+            drawTextRight('Menge', colX.qty, y, 10, boldFont);
+            page.drawText('Einh.', { x: colX.unit, y, size: 10, font: boldFont });
+            drawTextRight('Preis', colX.price, y, 10, boldFont);
+            drawTextRight('MwSt', colX.tax, y, 10, boldFont);
+            drawTextRight('Gesamt', colX.total - 5, y, 10, boldFont);
+            y -= 25;
         }
 
         page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font });
-        page.drawText(item.description, { x: colX.desc, y, size: 10, font });
+        
+        // Draw description lines
+        descLines.forEach((line, i) => {
+            page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font });
+        });
+
         drawTextRight(item.quantity.toString(), colX.qty, y, 10, font);
+        page.drawText(item.unit, { x: colX.unit, y, size: 10, font });
         drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font);
-        drawTextRight(formatCurrency(lineTotal), colX.total - 5, y, 10, font);
+        drawTextRight(`${item.taxRate}%`, colX.tax, y, 10, font);
+        drawTextRight(formatCurrency(lineNet), colX.total - 5, y, 10, font);
+
+        // Calculate Y for separator line (below the last line of description)
+        const separatorY = y - ((descLines.length - 1) * lineHeight) - 8;
 
         // Line separator
         page.drawLine({
-            start: { x: margin, y: y - 8 },
-            end: { x: width - margin, y: y - 8 },
+            start: { x: margin, y: separatorY },
+            end: { x: width - margin, y: separatorY },
             thickness: 0.5,
             color: rgb(0.9, 0.9, 0.9),
         });
 
-        y -= 20;
+        // Update Y for next item
+        y = separatorY - 12;
       });
 
       y -= 10;
 
       // --- TOTALS ---
-      const totalX = width - margin - 5;
-      const labelX = width - margin - 100;
+      const totalX = width - margin;
+      const labelX = totalX - 90;
+      const grossTotal = netTotal + taxTotal;
+
+      // Separator line
+      page.drawLine({
+          start: { x: labelX - 40, y: y + 5 },
+          end: { x: totalX, y: y + 5 },
+          thickness: 0.5,
+          color: rgb(0.8, 0.8, 0.8),
+      });
+
+      y -= 15;
 
       drawTextRight('Netto:', labelX, y, 10, font);
-      drawTextRight(formatCurrency(totalAmount), totalX, y, 10, font);
+      drawTextRight(formatCurrency(netTotal), totalX, y, 10, font);
       y -= 15;
 
-      drawTextRight('USt. 0%:', labelX, y, 10, font);
-      drawTextRight('0,00 €', totalX, y, 10, font);
-      y -= 15;
+      if (taxTotal > 0) {
+        drawTextRight('zzgl. USt.:', labelX, y, 10, font);
+        drawTextRight(formatCurrency(taxTotal), totalX, y, 10, font);
+      } else {
+        drawTextRight('zzgl. USt. 0%:', labelX, y, 10, font);
+        drawTextRight('0,00 €', totalX, y, 10, font);
+      }
+      y -= 20;
 
-      // Bold Total Line
+      // Thick line before Total
       page.drawLine({
-        start: { x: labelX - 50, y: y + 10 },
-        end: { x: totalX, y: y + 10 },
+        start: { x: labelX - 40, y: y + 12 },
+        end: { x: totalX, y: y + 12 },
         thickness: 1,
         color: rgb(0, 0, 0),
       });
 
       drawTextRight('Gesamtbetrag:', labelX, y, 12, boldFont);
-      drawTextRight(formatCurrency(totalAmount), totalX, y, 12, boldFont);
+      drawTextRight(formatCurrency(grossTotal), totalX, y, 12, boldFont);
+      
+      // Double underline
+      y -= 4;
+      page.drawLine({
+        start: { x: labelX - 40, y: y },
+        end: { x: totalX, y: y },
+        thickness: 0.5,
+        color: rgb(0, 0, 0),
+      });
+      page.drawLine({
+        start: { x: labelX - 40, y: y - 2 },
+        end: { x: totalX, y: y - 2 },
+        thickness: 0.5,
+        color: rgb(0, 0, 0),
+      });
+      
       y -= 40;
 
       // --- NOTES & LEGAL ---
@@ -420,8 +520,10 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
         y -= 20;
       }
 
-      page.drawText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: margin, y, size: 10, font });
-      y -= 15;
+      if (taxTotal === 0) {
+        page.drawText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: margin, y, size: 10, font });
+        y -= 15;
+      }
       
       if (dueDate) {
           page.drawText(`Bitte überweisen Sie den Betrag bis zum ${new Date(dueDate).toLocaleDateString('de-DE')}.`, { x: margin, y, size: 10, font });
@@ -487,7 +589,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
             giroCodeData += (bic || "").trim() + "\n";                  // 5. BIC
             giroCodeData += toSEPA(cleanName).substring(0, 70) + "\n";  // 6. Empfänger
             giroCodeData += finalIban + "\n";                           // 7. IBAN
-            giroCodeData += `EUR${totalAmount.toFixed(2)}\n`;           // 8. Betrag
+            giroCodeData += `EUR${grossTotal.toFixed(2)}\n`;           // 8. Betrag
             giroCodeData += "\n";                                       // 9. Zweckcode (leer)
             giroCodeData += "\n";                                       // 10. Referenz (leer)
             giroCodeData += toSEPA(invoiceNumber || "").substring(0, 140) + "\n"; // 11. Verwendungszweck
@@ -598,9 +700,11 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             total: item.quantity * item.unitPrice,
+            unit: item.unit,
+            taxRate: item.taxRate,
           })),
-          totalAmount,
-          taxAmount: 0, // Kleinunternehmerregelung
+          totalAmount: netTotal,
+          taxAmount: taxTotal,
           currency: 'EUR',
         };
 
@@ -873,15 +977,17 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           <div className="space-y-2">
             <Label>Positionen</Label>
             <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_80px_100px_auto] gap-2 bg-muted p-2 text-sm font-medium">
+                <div className="grid grid-cols-[1fr_70px_90px_100px_70px_auto] gap-2 bg-muted p-2 text-sm font-medium">
                     <div>Beschreibung</div>
                     <div className="text-right">Menge</div>
+                    <div>Einheit</div>
                     <div className="text-right">Einzelpreis</div>
+                    <div className="text-right">Steuer</div>
                     <div className="w-10"></div>
                 </div>
                 <div className="divide-y">
                     {items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-[1fr_80px_100px_auto] gap-2 p-2 items-start">
+                    <div key={index} className="grid grid-cols-[1fr_70px_90px_100px_70px_auto] gap-2 p-2 items-start">
                         <Input 
                         value={item.description} 
                         onChange={(e) => updateItem(index, 'description', e.target.value)} 
@@ -894,6 +1000,16 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                         placeholder="1" 
                         className="text-right"
                         />
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={item.unit}
+                          onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                        >
+                          <option value="Stück">Stück</option>
+                          <option value="Stunde">Stunde</option>
+                          <option value="Tag">Tag</option>
+                          <option value="Pauschal">Pauschal</option>
+                        </select>
                         <Input 
                         type="number" 
                         value={item.unitPrice} 
@@ -901,6 +1017,16 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                         placeholder="0.00" 
                         className="text-right"
                         />
+                        <div className="relative">
+                          <Input 
+                          type="number" 
+                          value={item.taxRate} 
+                          onChange={(e) => updateItem(index, 'taxRate', e.target.value)} 
+                          placeholder="0" 
+                          className="text-right pr-6"
+                          />
+                          <span className="absolute right-2 top-2.5 text-sm text-muted-foreground">%</span>
+                        </div>
                         <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} className="text-destructive hover:text-destructive">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
