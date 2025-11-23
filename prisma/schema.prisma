@@ -84,3 +84,11 @@ model Settings {
   footerText     String?
   logoUrl        String?
 }
+
+model InvoiceTemplate {
+  id        Int      @id @default(autoincrement())
+  name      String
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

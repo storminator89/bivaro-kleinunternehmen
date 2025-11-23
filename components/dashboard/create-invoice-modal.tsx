@@ -37,6 +37,10 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
   const [includeQRCode, setIncludeQRCode] = useState(false);
   const [invoiceNumberError, setInvoiceNumberError] = useState<string | null>(null);
   const [isCheckingNumber, setIsCheckingNumber] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -65,8 +69,88 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           }
         })
         .catch(err => console.error("Failed to load next invoice number", err));
+
+      fetchTemplates();
     }
   }, [isOpen]);
+
+  const fetchTemplates = async () => {
+    try {
+      const res = await fetch("/api/invoice-templates");
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data);
+      }
+    } catch (error) {
+      console.error("Failed to load templates", error);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!newTemplateName.trim()) return;
+
+    const templateData = {
+      items,
+      notes,
+      includeQRCode,
+      // We don't save customer specific info or dates usually, but maybe notes and items are the most important
+    };
+
+    try {
+      const res = await fetch("/api/invoice-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTemplateName,
+          data: templateData,
+        }),
+      });
+
+      if (res.ok) {
+        setNewTemplateName("");
+        setIsSaveTemplateOpen(false);
+        fetchTemplates();
+        alert("Vorlage erfolgreich gespeichert.");
+      } else {
+        alert("Fehler beim Speichern der Vorlage.");
+      }
+    } catch (error) {
+      console.error("Error saving template:", error);
+      alert("Fehler beim Speichern der Vorlage.");
+    }
+  };
+
+  const handleLoadTemplate = (templateId: string) => {
+    const template = templates.find(t => t.id.toString() === templateId);
+    if (template && template.data) {
+      const data = template.data;
+      if (data.items) setItems(data.items);
+      if (data.notes !== undefined) setNotes(data.notes);
+      if (data.includeQRCode !== undefined) setIncludeQRCode(data.includeQRCode);
+      // Add other fields if needed
+    }
+    setSelectedTemplateId(templateId);
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!confirm("Möchten Sie diese Vorlage wirklich löschen?")) return;
+
+    try {
+      const res = await fetch(`/api/invoice-templates/${templateId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        fetchTemplates();
+        if (selectedTemplateId === templateId) setSelectedTemplateId("");
+      } else {
+        alert("Fehler beim Löschen der Vorlage.");
+      }
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      alert("Fehler beim Löschen der Vorlage.");
+    }
+  };
 
   // Check for duplicate invoice number
   useEffect(() => {
@@ -653,6 +737,59 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4">
+          {/* Template Section */}
+          <div className="bg-muted/30 p-3 rounded-md border mb-2">
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm font-medium">Vorlage laden / speichern</Label>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 text-xs"
+                onClick={() => setIsSaveTemplateOpen(!isSaveTemplateOpen)}
+              >
+                {isSaveTemplateOpen ? "Abbrechen" : "+ Als Vorlage speichern"}
+              </Button>
+            </div>
+            
+            {isSaveTemplateOpen ? (
+              <div className="flex gap-2 items-center">
+                <Input 
+                  placeholder="Name der Vorlage" 
+                  value={newTemplateName}
+                  onChange={(e) => setNewTemplateName(e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Button size="sm" onClick={handleSaveTemplate} className="h-8">Speichern</Button>
+              </div>
+            ) : (
+              <div className="flex gap-2 items-center">
+                <select 
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={selectedTemplateId}
+                  onChange={(e) => handleLoadTemplate(e.target.value)}
+                >
+                  <option value="">-- Vorlage wählen --</option>
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                {selectedTemplateId && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteTemplate(selectedTemplateId)}
+                    title="Vorlage löschen"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Top Row: Invoice Details */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
