@@ -22,6 +22,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type Customer = {
   id: number;
@@ -32,6 +38,26 @@ type Customer = {
   city?: string;
   taxNumber?: string;
   createdAt: string;
+};
+
+// Helper to generate initials
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+};
+
+// Helper to generate a consistent color based on string
+const stringToColor = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+  return '#' + '00000'.substring(0, 6 - c.length) + c;
 };
 
 type CustomerModalProps = {
@@ -77,27 +103,31 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
         <DialogHeader className="border-b pb-4">
           <DialogTitle className="text-xl font-semibold">{customer ? 'Kunden bearbeiten' : 'Neuen Kunden hinzufügen'}</DialogTitle>
           <DialogDescription>
-            Nehmen Sie Änderungen am Kunden vor oder fügen Sie einen neuen Kunden hinzu. Klicken Sie auf Speichern, wenn Sie fertig sind.
+            {customer ? 'Bearbeiten Sie die Details des Kunden.' : 'Fügen Sie einen neuen Kunden zu Ihrer Datenbank hinzu.'}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+        <form onSubmit={handleSubmit} className="space-y-5 pt-4">
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-sm font-medium">Name</Label>
+            <Label htmlFor="name" className="text-sm font-medium">Firmenname / Name <span className="text-red-500">*</span></Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
+              placeholder="z.B. Musterfirma GmbH"
+              className="h-10"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">E-Mail</Label>
+            <Label htmlFor="email" className="text-sm font-medium">E-Mail Adresse</Label>
             <Input
               id="email"
               type="email"
               value={formData.email || ''}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="kontakt@musterfirma.de"
+              className="h-10"
             />
           </div>
 
@@ -107,6 +137,8 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
               id="address"
               value={formData.address || ''}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="Musterstraße 123"
+              className="h-10"
             />
           </div>
 
@@ -117,6 +149,8 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
                 id="zipCode"
                 value={formData.zipCode || ''}
                 onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+                placeholder="12345"
+                className="h-10"
               />
             </div>
             <div className="space-y-2 col-span-2">
@@ -125,24 +159,30 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
                 id="city"
                 value={formData.city || ''}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                placeholder="Musterstadt"
+                className="h-10"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="taxNumber" className="text-sm font-medium">Steuernummer</Label>
+            <Label htmlFor="taxNumber" className="text-sm font-medium">Steuernummer / USt-IdNr.</Label>
             <Input
               id="taxNumber"
               value={formData.taxNumber || ''}
               onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
+              placeholder="DE123456789"
+              className="h-10"
             />
           </div>
 
-          <DialogFooter className="border-t pt-4">
+          <DialogFooter className="border-t pt-4 mt-6">
             <Button type="button" variant="outline" onClick={onClose}>
               Abbrechen
             </Button>
-            <Button type="submit">Speichern</Button>
+            <Button type="submit">
+              {customer ? 'Änderungen speichern' : 'Kunden anlegen'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -155,6 +195,7 @@ export default function CustomersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchCustomers = async () => {
     try {
@@ -244,117 +285,199 @@ export default function CustomersPage() {
     setIsModalOpen(true);
   };
 
+  const filteredCustomers = customers.filter(customer => 
+    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (customer.city && customer.city.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-10">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight mb-2">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
               Kundenverwaltung
             </h1>
             <p className="text-muted-foreground">
-              Verwalten Sie Ihre Geschäftskunden
+              Verwalten Sie Ihre Geschäftskontakte und Kundenstammdaten
             </p>
           </div>
-          <div className="mt-4 md:mt-0">
+          <div className="mt-4 md:mt-0 flex gap-3">
+             <div className="bg-card border rounded-lg px-4 py-2 shadow-sm hidden md:block">
+               <span className="text-foreground font-medium">
+                 {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}
+               </span>
+             </div>
             <Button onClick={openAddModal}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              Neuen Kunden hinzufügen
+              Neuen Kunden anlegen
             </Button>
           </div>
         </header>
 
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Ihre Kunden</CardTitle>
-            <CardDescription>Eine Liste all Ihrer gespeicherten Kunden.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableCaption>Eine Liste Ihrer Kunden.</TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>E-Mail</TableHead>
-                    <TableHead>Adresse</TableHead>
-                    <TableHead>Steuernummer</TableHead>
-                    <TableHead className="text-right">Aktionen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {customers.length > 0 ? (
-                    customers.map((customer) => (
-                      <TableRow key={customer.id}>
-                        <TableCell className="font-medium">{customer.name}</TableCell>
-                        <TableCell>{customer.email || '-'}</TableCell>
-                        <TableCell>
-                          {customer.address ? (
-                            <>
-                              {customer.address}
-                              {(customer.zipCode || customer.city) && <br />}
-                              {customer.zipCode} {customer.city}
-                            </>
-                          ) : (
-                            <>
-                              {customer.zipCode} {customer.city}
-                              {(!customer.zipCode && !customer.city) && '-'}
-                            </>
-                          )}
-                        </TableCell>
-                        <TableCell>{customer.taxNumber || '-'}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditModal(customer)}>
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
-                              Bearbeiten
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
-                              onClick={() => handleDeleteCustomer(customer.id)}
-                              disabled={isDeleting}
+        <div className="grid gap-6">
+          {/* Search and Filter Bar */}
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-card p-4 rounded-xl border shadow-sm">
+            <div className="relative w-full sm:w-96">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <Input 
+                placeholder="Suchen nach Name, E-Mail oder Stadt..." 
+                className="pl-9 bg-background"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Zeige {filteredCustomers.length} von {customers.length} Einträgen
+            </div>
+          </div>
+
+          <Card className="shadow-sm border-none bg-card/50 backdrop-blur-sm">
+            <CardContent className="p-0">
+              <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead className="w-[50px]"></TableHead>
+                      <TableHead className="font-semibold">Name / Firma</TableHead>
+                      <TableHead className="font-semibold">Kontakt</TableHead>
+                      <TableHead className="font-semibold">Anschrift</TableHead>
+                      <TableHead className="font-semibold">Steuer-Nr.</TableHead>
+                      <TableHead className="text-right font-semibold">Aktionen</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCustomers.length > 0 ? (
+                      filteredCustomers.map((customer) => (
+                        <TableRow key={customer.id} className="hover:bg-muted/50 transition-colors group">
+                          <TableCell>
+                            <div 
+                              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm"
+                              style={{ backgroundColor: stringToColor(customer.name) }}
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              {getInitials(customer.name)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-semibold text-base text-foreground">{customer.name}</div>
+                            <div className="text-xs text-muted-foreground">Kunde seit {new Date(customer.createdAt).getFullYear()}</div>
+                          </TableCell>
+                          <TableCell>
+                            {customer.email ? (
+                              <div className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <a href={`mailto:${customer.email}`}>{customer.email}</a>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground/50 text-sm italic">- keine E-Mail -</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {customer.address ? (
+                                <div className="flex flex-col">
+                                  <span>{customer.address}</span>
+                                  <span className="text-muted-foreground">
+                                    {customer.zipCode} {customer.city}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground/50 italic">- keine Adresse -</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {customer.taxNumber ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border">
+                                {customer.taxNumber}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground/50 text-sm italic">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end space-x-2">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" onClick={() => openEditModal(customer)} className="h-8 w-8">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Bearbeiten</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => handleDeleteCustomer(customer.id)}
+                                      disabled={isDeleting}
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Löschen</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-16 text-muted-foreground">
+                          <div className="flex flex-col items-center justify-center">
+                            <div className="bg-muted/50 p-4 rounded-full mb-4">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h-10a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v12a2 2 0 01-2 2zM12 5v14" />
                               </svg>
-                              Löschen
-                            </Button>
+                            </div>
+                            <h3 className="text-lg font-medium text-foreground mb-1">Keine Kunden gefunden</h3>
+                            <p className="text-sm max-w-sm mx-auto mb-6">
+                              {searchTerm ? 'Es wurden keine Kunden gefunden, die Ihrer Suche entsprechen.' : 'Sie haben noch keine Kunden angelegt. Starten Sie jetzt, indem Sie Ihren ersten Kunden hinzufügen.'}
+                            </p>
+                            {!searchTerm && (
+                              <Button onClick={openAddModal} variant="outline">
+                                Ersten Kunden anlegen
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        <div className="flex flex-col items-center justify-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-muted-foreground/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h-10a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v12a2 2 0 01-2 2zM12 5v14" />
-                          </svg>
-                          <span>Keine Kunden vorhanden. Fügen Sie oben einen neuen Kunden hinzu.</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
 
-        {isModalOpen && (
-          <CustomerModal
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            onSave={handleSaveCustomer}
-            customer={selectedCustomer}
-          />
-        )}
+          {isModalOpen && (
+            <CustomerModal
+              isOpen={isModalOpen}
+              onClose={() => setIsModalOpen(false)}
+              onSave={handleSaveCustomer}
+              customer={selectedCustomer}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
