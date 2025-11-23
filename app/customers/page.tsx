@@ -28,6 +28,8 @@ type Customer = {
   name: string;
   email?: string;
   address?: string;
+  zipCode?: string;
+  city?: string;
   taxNumber?: string;
   createdAt: string;
 };
@@ -44,6 +46,8 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
     name: '',
     email: '',
     address: '',
+    zipCode: '',
+    city: '',
     taxNumber: '',
   });
 
@@ -55,6 +59,8 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
         name: '',
         email: '',
         address: '',
+        zipCode: '',
+        city: '',
         taxNumber: '',
       });
     }
@@ -96,12 +102,31 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="address" className="text-sm font-medium">Adresse</Label>
+            <Label htmlFor="address" className="text-sm font-medium">Straße & Hausnummer</Label>
             <Input
               id="address"
               value={formData.address || ''}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2 col-span-1">
+              <Label htmlFor="zipCode" className="text-sm font-medium">PLZ</Label>
+              <Input
+                id="zipCode"
+                value={formData.zipCode || ''}
+                onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="city" className="text-sm font-medium">Stadt</Label>
+              <Input
+                id="city"
+                value={formData.city || ''}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -265,7 +290,20 @@ export default function CustomersPage() {
                       <TableRow key={customer.id}>
                         <TableCell className="font-medium">{customer.name}</TableCell>
                         <TableCell>{customer.email || '-'}</TableCell>
-                        <TableCell>{customer.address || '-'}</TableCell>
+                        <TableCell>
+                          {customer.address ? (
+                            <>
+                              {customer.address}
+                              {(customer.zipCode || customer.city) && <br />}
+                              {customer.zipCode} {customer.city}
+                            </>
+                          ) : (
+                            <>
+                              {customer.zipCode} {customer.city}
+                              {(!customer.zipCode && !customer.city) && '-'}
+                            </>
+                          )}
+                        </TableCell>
                         <TableCell>{customer.taxNumber || '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end space-x-2">

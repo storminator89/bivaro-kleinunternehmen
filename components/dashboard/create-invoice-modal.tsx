@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, PDFFont, PDFName } from 'pdf-lib';
 import QRCode from 'qrcode';
+import { generateZugferdXml } from "@/lib/zugferd-generator";
 
 interface CreateInvoiceModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
   const [isGenerating, setIsGenerating] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [includeQRCode, setIncludeQRCode] = useState(false);
 
   useEffect(() => {
@@ -60,7 +62,10 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
     
     const customer = customers.find(c => c.id.toString() === customerId);
     if (customer) {
-      const addressBlock = `${customer.name}\n${customer.address || ''}`;
+      setSelectedCustomer(customer);
+      let addressBlock = customer.name;
+      if (customer.address) addressBlock += `\n${customer.address}`;
+      if (customer.zipCode || customer.city) addressBlock += `\n${customer.zipCode || ''} ${customer.city || ''}`.trim();
       setCustomerAddress(addressBlock);
     }
   };
@@ -359,7 +364,7 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
             giroCodeData += `EUR${totalAmount.toFixed(2)}\n`;           // 8. Betrag
             giroCodeData += "\n";                                       // 9. Zweckcode (leer)
             giroCodeData += "\n";                                       // 10. Referenz (leer)
-            giroCodeData += toSEPA(sanitize(invoiceNumber || "")).substring(0, 140) + "\n"; // 11. Verwendungszweck
+            giroCodeData += toSEPA(invoiceNumber || "").substring(0, 140) + "\n"; // 11. Verwendungszweck
 
             console.log("GiroCode Payload:", JSON.stringify(giroCodeData));
 
@@ -439,6 +444,109 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
       // Page Numbers
       // page.drawText(`Seite 1 von 1`, { x: width - margin, y: 20, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
 
+      // --- ZUGFeRD XML Integration ---
+      try {
+        const zugferdData = {
+          invoiceNumber,
+          date: new Date(date),
+          dueDate: dueDate ? new Date(dueDate) : undefined,
+          deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
+          seller: {
+            name: settings?.companyName || '',
+            address: settings?.companyAddress || '',
+            email: settings?.email,
+            telephone: settings?.telephone,
+            taxNumber: settings?.taxNumber,
+            iban: settings?.iban,
+            bic: settings?.bic,
+          },
+          buyer: {
+            name: customerAddress.split('\n')[0] || 'Unbekannt',
+            address: customerAddress,
+            email: selectedCustomer?.email,
+            zipCode: selectedCustomer?.zipCode,
+            city: selectedCustomer?.city,
+          },
+          items: items.map(item => ({
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.quantity * item.unitPrice,
+          })),
+          totalAmount,
+          taxAmount: 0, // Kleinunternehmerregelung
+          currency: 'EUR',
+        };
+
+        const xmlContent = generateZugferdXml(zugferdData);
+        const xmlBytes = new TextEncoder().encode(xmlContent);
+
+        await pdfDoc.attach(xmlBytes, 'factur-x.xml', {
+          mimeType: 'text/xml',
+          description: 'ZUGFeRD Invoice Data',
+          creationDate: new Date(),
+          modificationDate: new Date(),
+          afRelationship: 'Alternative',
+        });
+
+        // Add XMP Metadata for PDF/A-3 compliance (ZUGFeRD requirement)
+        const xmpMetadata = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#" xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">
+      <fx:DocumentType>INVOICE</fx:DocumentType>
+      <fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>
+      <fx:Version>1.0</fx:Version>
+      <fx:ConformanceLevel>EN 16931</fx:ConformanceLevel>
+      <pdfaExtension:schemas>
+        <rdf:Bag>
+          <rdf:li rdf:parseType="Resource">
+            <pdfaSchema:schema>Factur-X PDFA Extension Schema</pdfaSchema:schema>
+            <pdfaSchema:namespaceURI>urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#</pdfaSchema:namespaceURI>
+            <pdfaSchema:prefix>fx</pdfaSchema:prefix>
+            <pdfaSchema:property>
+              <rdf:Seq>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>DocumentFileName</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>name of the embedded XML invoice file</pdfaProperty:description>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>DocumentType</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>INVOICE</pdfaProperty:description>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>Version</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>The actual version of the ZUGFeRD data</pdfaProperty:description>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <pdfaProperty:name>ConformanceLevel</pdfaProperty:name>
+                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                  <pdfaProperty:category>external</pdfaProperty:category>
+                  <pdfaProperty:description>The conformance level of the embedded ZUGFeRD data</pdfaProperty:description>
+                </rdf:li>
+              </rdf:Seq>
+            </pdfaSchema:property>
+          </rdf:li>
+        </rdf:Bag>
+      </pdfaExtension:schemas>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
+
+        const metadataStream = pdfDoc.context.flateStream(xmpMetadata);
+        const metadataStreamRef = pdfDoc.context.register(metadataStream);
+        pdfDoc.catalog.set(PDFName.of('Metadata'), metadataStreamRef);
+
+      } catch (e) {
+        console.error("Error attaching ZUGFeRD XML:", e);
+      }
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });

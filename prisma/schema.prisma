@@ -63,6 +63,8 @@ model Customer {
   name      String
   email     String?
   address   String?
+  zipCode   String?
+  city      String?
   taxNumber String?
   createdAt DateTime  @default(now())
   invoices  Invoice[]
@@ -73,6 +75,8 @@ model Settings {
   id             Int     @id @default(autoincrement())
   companyName    String?
   companyAddress String?
+  email          String?
+  telephone      String?
   taxNumber      String?
   bankName       String?
   iban           String?

@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { name, email, address, taxNumber } = await request.json();
+    const { name, email, address, zipCode, city, taxNumber } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: 'Customer name is required' }, { status: 400 });
@@ -33,6 +33,8 @@ export async function POST(request: Request) {
         name,
         email: email || null,
         address: address || null,
+        zipCode: zipCode || null,
+        city: city || null,
         taxNumber: taxNumber || null,
       },
     });
@@ -48,7 +50,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { id, name, email, address, taxNumber } = await request.json();
+    const { id, name, email, address, zipCode, city, taxNumber } = await request.json();
 
     if (!id || !name) {
       return NextResponse.json({ error: 'Customer ID and name are required' }, { status: 400 });
@@ -60,6 +62,8 @@ export async function PUT(request: Request) {
         name,
         email: email || null,
         address: address || null,
+        zipCode: zipCode || null,
+        city: city || null,
         taxNumber: taxNumber || null,
       },
     });

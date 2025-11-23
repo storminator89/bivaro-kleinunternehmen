@@ -15,7 +15,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { companyName, companyAddress, taxNumber, bankName, iban, bic, footerText, logoUrl } = body;
+    const { companyName, companyAddress, email, telephone, taxNumber, bankName, iban, bic, footerText, logoUrl } = body;
 
     // Check if settings exist
     const existingSettings = await prisma.settings.findFirst();
@@ -27,6 +27,8 @@ export async function POST(request: Request) {
         data: {
           companyName,
           companyAddress,
+          email,
+          telephone,
           taxNumber,
           bankName,
           iban,
@@ -40,6 +42,8 @@ export async function POST(request: Request) {
         data: {
           companyName,
           companyAddress,
+          email,
+          telephone,
           taxNumber,
           bankName,
           iban,

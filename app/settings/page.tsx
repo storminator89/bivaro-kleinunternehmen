@@ -15,6 +15,8 @@ export default function SettingsPage() {
   const [formData, setFormData] = useState({
     companyName: "",
     companyAddress: "",
+    email: "",
+    telephone: "",
     taxNumber: "",
     bankName: "",
     iban: "",
@@ -32,6 +34,8 @@ export default function SettingsPage() {
           setFormData({
             companyName: data.companyName || "",
             companyAddress: data.companyAddress || "",
+            email: data.email || "",
+            telephone: data.telephone || "",
             taxNumber: data.taxNumber || "",
             bankName: data.bankName || "",
             iban: data.iban || "",
@@ -168,6 +172,30 @@ export default function SettingsPage() {
                 onChange={handleChange}
                 placeholder="Musterstraße 1&#10;12345 Musterstadt"
                 rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">E-Mail Adresse</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="info@musterfirma.de"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="telephone">Telefonnummer</Label>
+              <Input
+                id="telephone"
+                name="telephone"
+                type="tel"
+                value={formData.telephone}
+                onChange={handleChange}
+                placeholder="+49 30 12345678"
               />
             </div>
 
