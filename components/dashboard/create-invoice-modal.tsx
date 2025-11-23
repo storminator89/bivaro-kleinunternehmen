@@ -5,43 +5,85 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { Textarea } from "@/components/ui/textarea";
+import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
 
 interface CreateInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+interface InvoiceItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps) {
-  const [customerName, setCustomerName] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [items, setItems] = useState([{ description: "", amount: "" }]);
+  const [dueDate, setDueDate] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", quantity: 1, unitPrice: 0 }]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [settings, setSettings] = useState<any>(null);
+  const [customers, setCustomers] = useState<any[]>([]);
 
   useEffect(() => {
     if (isOpen) {
+      // Set default due date to 14 days from now
+      const today = new Date();
+      const in14Days = new Date(today);
+      in14Days.setDate(today.getDate() + 14);
+      setDueDate(in14Days.toISOString().split('T')[0]);
+      setDeliveryDate(today.toISOString().split('T')[0]);
+
       fetch("/api/settings")
         .then(res => res.json())
         .then(data => setSettings(data))
         .catch(err => console.error("Failed to load settings", err));
+
+      fetch("/api/customers")
+        .then(res => res.json())
+        .then(data => setCustomers(Array.isArray(data) ? data : []))
+        .catch(err => console.error("Failed to load customers", err));
     }
   }, [isOpen]);
 
-  const addItem = () => {
-    setItems([...items, { description: "", amount: "" }]);
+  const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const customerId = e.target.value;
+    if (!customerId) return;
+    
+    const customer = customers.find(c => c.id.toString() === customerId);
+    if (customer) {
+      const addressBlock = `${customer.name}\n${customer.address || ''}`;
+      setCustomerAddress(addressBlock);
+    }
   };
 
-  const updateItem = (index: number, field: 'description' | 'amount', value: string) => {
+  const addItem = () => {
+    setItems([...items, { description: "", quantity: 1, unitPrice: 0 }]);
+  };
+
+  const updateItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+    if (field === 'quantity' || field === 'unitPrice') {
+      newItems[index] = { ...newItems[index], [field]: Number(value) };
+    } else {
+      newItems[index] = { ...newItems[index], [field]: value };
+    }
     setItems(newItems);
   };
 
   const removeItem = (index: number) => {
     const newItems = items.filter((_, i) => i !== index);
     setItems(newItems);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   };
 
   const generatePDF = async () => {
@@ -53,10 +95,23 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-      const fontSize = 12;
-      let y = height - 50;
+      // Helper to draw text aligned right
+      const drawTextRight = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
+        const textWidth = fontToUse.widthOfTextAtSize(text, size);
+        page.drawText(text, { x: x - textWidth, y, size, font: fontToUse, color });
+      };
 
-      // Logo embedding
+      // Helper to draw text centered
+      const drawTextCenter = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
+        const textWidth = fontToUse.widthOfTextAtSize(text, size);
+        page.drawText(text, { x: x - textWidth / 2, y, size, font: fontToUse, color });
+      };
+
+      let y = height - 50;
+      const margin = 50;
+
+      // --- HEADER ---
+      // Logo (Right)
       if (settings?.logoUrl) {
         try {
           const logoBytes = await fetch(settings.logoUrl).then(res => res.arrayBuffer());
@@ -70,103 +125,220 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
           }
 
           if (logoImage) {
-            const logoDims = logoImage.scale(0.25); // Scale down the logo
-            // Position logo at top right
+            const maxWidth = 150;
+            const maxHeight = 60;
+            const scale = Math.min(maxWidth / logoImage.width, maxHeight / logoImage.height);
+            const logoDims = logoImage.scale(scale);
+            
             page.drawImage(logoImage, {
-              x: width - 50 - logoDims.width,
-              y: height - 50 - logoDims.height,
+              x: width - margin - logoDims.width,
+              y: height - margin - logoDims.height,
               width: logoDims.width,
               height: logoDims.height,
             });
-            // Adjust y if logo is tall, though usually header text is on the left so it might not overlap
           }
         } catch (error) {
           console.error("Failed to embed logo:", error);
         }
       }
 
-      // Company Header (from Settings)
+      // Company Info (Left - Small)
       if (settings?.companyName) {
-        page.drawText(settings.companyName, { x: 50, y, size: 18, font: boldFont });
-        y -= 20;
+        page.drawText(settings.companyName, { x: margin, y, size: 10, font: boldFont, color: rgb(0.4, 0.4, 0.4) });
+        y -= 12;
+        if (settings?.companyAddress) {
+            const addressLine = settings.companyAddress.replace(/\n/g, ', ');
+            page.drawText(addressLine, { x: margin, y, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+        }
       }
-      if (settings?.companyAddress) {
-        const lines = settings.companyAddress.split('\n');
-        lines.forEach((line: string) => {
-          page.drawText(line, { x: 50, y, size: 10, font });
-          y -= 12;
-        });
-        y -= 20;
-      } else {
-        // Fallback spacing if no address
-        y -= 40;
-      }
-
-      // Invoice Title
-      page.drawText('RECHNUNG', { x: 50, y, size: 24, font: boldFont });
+      
       y -= 40;
 
-      // Invoice Details
-      page.drawText(`Rechnungsnummer: ${invoiceNumber}`, { x: 50, y, size: fontSize, font });
-      y -= 20;
-      page.drawText(`Datum: ${new Date(date).toLocaleDateString('de-DE')}`, { x: 50, y, size: fontSize, font });
-      y -= 40;
+      // --- ADDRESS FIELD ---
+      // DIN 5008 Address Field Position (approx)
+      let addressY = height - 160;
+      const addressLines = customerAddress.split('\n');
+      addressLines.forEach(line => {
+        page.drawText(line, { x: margin, y: addressY, size: 11, font });
+        addressY -= 14;
+      });
 
-      // Customer
-      page.drawText('Empfänger:', { x: 50, y, size: fontSize, font: boldFont });
-      y -= 20;
-      page.drawText(customerName, { x: 50, y, size: fontSize, font });
-      y -= 50;
+      // --- INVOICE INFO BLOCK (Right side) ---
+      let infoY = height - 160;
+      const infoX = width - margin - 150;
+      
+      page.drawText('RECHNUNG', { x: infoX, y: infoY + 20, size: 16, font: boldFont });
+      
+      const infoGap = 14;
+      page.drawText('Rechnungs-Nr.:', { x: infoX, y: infoY, size: 10, font: boldFont });
+      drawTextRight(invoiceNumber, width - margin, infoY, 10, font);
+      infoY -= infoGap;
 
-      // Table Header
-      page.drawText('Beschreibung', { x: 50, y, size: fontSize, font: boldFont });
-      page.drawText('Betrag', { x: 400, y, size: fontSize, font: boldFont });
-      y -= 10;
-      page.drawLine({ start: { x: 50, y }, end: { x: 500, y }, thickness: 1, color: rgb(0, 0, 0) });
-      y -= 20;
+      page.drawText('Datum:', { x: infoX, y: infoY, size: 10, font: boldFont });
+      drawTextRight(new Date(date).toLocaleDateString('de-DE'), width - margin, infoY, 10, font);
+      infoY -= infoGap;
+
+      if (deliveryDate) {
+        page.drawText('Leistungsdatum:', { x: infoX, y: infoY, size: 10, font: boldFont });
+        drawTextRight(new Date(deliveryDate).toLocaleDateString('de-DE'), width - margin, infoY, 10, font);
+        infoY -= infoGap;
+      }
+
+      if (dueDate) {
+        page.drawText('Fällig am:', { x: infoX, y: infoY, size: 10, font: boldFont });
+        drawTextRight(new Date(dueDate).toLocaleDateString('de-DE'), width - margin, infoY, 10, font);
+        infoY -= infoGap;
+      }
+
+      // --- TABLE ---
+      y = height - 300;
+      
+      // Table Config
+      const colX = {
+        pos: margin,
+        desc: margin + 40,
+        qty: width - margin - 180,
+        price: width - margin - 100,
+        total: width - margin
+      };
+
+      // Header Background
+      page.drawRectangle({
+        x: margin,
+        y: y - 5,
+        width: width - 2 * margin,
+        height: 20,
+        color: rgb(0.95, 0.95, 0.95),
+      });
+
+      // Header Text
+      page.drawText('Pos.', { x: colX.pos + 5, y, size: 10, font: boldFont });
+      page.drawText('Beschreibung', { x: colX.desc, y, size: 10, font: boldFont });
+      drawTextRight('Menge', colX.qty, y, 10, boldFont);
+      drawTextRight('Einzelpreis', colX.price, y, 10, boldFont);
+      drawTextRight('Gesamt', colX.total - 5, y, 10, boldFont);
+
+      y -= 25;
 
       // Items
-      let total = 0;
-      items.forEach(item => {
-        const amount = parseFloat(item.amount.replace(',', '.')) || 0;
-        total += amount;
-        
-        page.drawText(item.description, { x: 50, y, size: fontSize, font });
-        page.drawText(`${amount.toFixed(2).replace('.', ',')} €`, { x: 400, y, size: fontSize, font });
+      let totalAmount = 0;
+      items.forEach((item, index) => {
+        const lineTotal = item.quantity * item.unitPrice;
+        totalAmount += lineTotal;
+
+        // Check for page break
+        if (y < 100) {
+            page.addPage();
+            y = height - 50;
+        }
+
+        page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font });
+        page.drawText(item.description, { x: colX.desc, y, size: 10, font });
+        drawTextRight(item.quantity.toString(), colX.qty, y, 10, font);
+        drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font);
+        drawTextRight(formatCurrency(lineTotal), colX.total - 5, y, 10, font);
+
+        // Line separator
+        page.drawLine({
+            start: { x: margin, y: y - 8 },
+            end: { x: width - margin, y: y - 8 },
+            thickness: 0.5,
+            color: rgb(0.9, 0.9, 0.9),
+        });
+
         y -= 20;
       });
 
       y -= 10;
-      page.drawLine({ start: { x: 50, y }, end: { x: 500, y }, thickness: 1, color: rgb(0, 0, 0) });
-      y -= 30;
 
-      // Total
-      page.drawText('Gesamtbetrag:', { x: 300, y, size: fontSize, font: boldFont });
-      page.drawText(`${total.toFixed(2).replace('.', ',')} €`, { x: 400, y, size: fontSize, font: boldFont });
-      y -= 50;
+      // --- TOTALS ---
+      const totalX = width - margin - 5;
+      const labelX = width - margin - 100;
 
-      // Footer Note (Kleinunternehmer)
-      page.drawText('Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: 50, y, size: 10, font });
-      y -= 20;
+      drawTextRight('Netto:', labelX, y, 10, font);
+      drawTextRight(formatCurrency(totalAmount), totalX, y, 10, font);
+      y -= 15;
 
-      // Footer (Bank details, etc.)
-      if (settings?.footerText || settings?.bankDetails || settings?.taxNumber) {
-        y = 50; // Fixed position at bottom
-        const footerFontSize = 9;
-        
-        if (settings.footerText) {
-          page.drawText(settings.footerText, { x: 50, y, size: footerFontSize, font });
-          y -= 12;
-        }
-        
-        let bankText = "";
-        if (settings.bankDetails) bankText += settings.bankDetails.replace(/\n/g, ' | ');
-        if (settings.taxNumber) bankText += ` | St-Nr: ${settings.taxNumber}`;
-        
-        if (bankText) {
-           page.drawText(bankText, { x: 50, y, size: footerFontSize, font });
-        }
+      drawTextRight('USt. 0%:', labelX, y, 10, font);
+      drawTextRight('0,00 €', totalX, y, 10, font);
+      y -= 15;
+
+      // Bold Total Line
+      page.drawLine({
+        start: { x: labelX - 50, y: y + 10 },
+        end: { x: totalX, y: y + 10 },
+        thickness: 1,
+        color: rgb(0, 0, 0),
+      });
+
+      drawTextRight('Gesamtbetrag:', labelX, y, 12, boldFont);
+      drawTextRight(formatCurrency(totalAmount), totalX, y, 12, boldFont);
+      y -= 40;
+
+      // --- NOTES & LEGAL ---
+      if (notes) {
+        page.drawText('Anmerkungen:', { x: margin, y, size: 10, font: boldFont });
+        y -= 15;
+        const noteLines = notes.split('\n');
+        noteLines.forEach(line => {
+            page.drawText(line, { x: margin, y, size: 10, font });
+            y -= 12;
+        });
+        y -= 20;
       }
+
+      page.drawText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: margin, y, size: 10, font });
+      y -= 15;
+      
+      if (dueDate) {
+          page.drawText(`Bitte überweisen Sie den Betrag bis zum ${new Date(dueDate).toLocaleDateString('de-DE')}.`, { x: margin, y, size: 10, font });
+      }
+
+      // --- FOOTER ---
+      const footerY = 40;
+      page.drawLine({
+        start: { x: margin, y: footerY + 15 },
+        end: { x: width - margin, y: footerY + 15 },
+        thickness: 0.5,
+        color: rgb(0.7, 0.7, 0.7),
+      });
+
+      let footerTextLeft = "";
+      if (settings?.companyName) footerTextLeft += settings.companyName + "\n";
+      if (settings?.companyAddress) footerTextLeft += settings.companyAddress;
+
+      let footerTextCenter = "";
+      if (settings?.bankDetails) footerTextCenter += settings.bankDetails;
+
+      let footerTextRight = "";
+      if (settings?.taxNumber) footerTextRight += "Steuernummer:\n" + settings.taxNumber + "\n";
+      if (settings?.footerText) footerTextRight += "\n" + settings.footerText;
+
+      const footerFontSize = 8;
+      const footerLineHeight = 10;
+
+      // Draw Footer Columns
+      let fy = footerY;
+      footerTextLeft.split('\n').forEach(line => {
+          page.drawText(line, { x: margin, y: fy, size: footerFontSize, font, color: rgb(0.4, 0.4, 0.4) });
+          fy -= footerLineHeight;
+      });
+
+      fy = footerY;
+      footerTextCenter.split('\n').forEach(line => {
+          drawTextCenter(line, width / 2, fy, footerFontSize, font, rgb(0.4, 0.4, 0.4));
+          fy -= footerLineHeight;
+      });
+
+      fy = footerY;
+      footerTextRight.split('\n').forEach(line => {
+          drawTextRight(line, width - margin, fy, footerFontSize, font, rgb(0.4, 0.4, 0.4));
+          fy -= footerLineHeight;
+      });
+
+      // Page Numbers
+      // page.drawText(`Seite 1 von 1`, { x: width - margin, y: 20, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -191,61 +363,125 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Rechnung erstellen</DialogTitle>
           <DialogDescription>
-            Erstellen Sie eine einfache PDF-Rechnung für Ihre Kunden.
+            Erstellen Sie eine professionelle PDF-Rechnung.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-6 py-4">
+          {/* Top Row: Invoice Details */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="invoice-number">Rechnungsnummer</Label>
               <Input id="invoice-number" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="RE-2024-001" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="date">Datum</Label>
+              <Label htmlFor="date">Rechnungsdatum</Label>
               <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="delivery-date">Leistungsdatum</Label>
+              <Input id="delivery-date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="customer">Kunde / Empfänger</Label>
-            <Input id="customer" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Musterfirma GmbH, Musterstraße 1, 12345 Musterstadt" />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             {/* Left: Customer */}
+            <div className="space-y-2">
+              <Label htmlFor="customer">Empfänger (Name & Anschrift)</Label>
+              
+              {/* Customer Selection Dropdown */}
+              <select 
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                onChange={handleCustomerSelect}
+                defaultValue=""
+              >
+                <option value="" disabled>Kunden auswählen...</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+
+              <Textarea 
+                id="customer" 
+                value={customerAddress} 
+                onChange={(e) => setCustomerAddress(e.target.value)} 
+                placeholder="Musterfirma GmbH&#10;Musterstraße 1&#10;12345 Musterstadt"
+                className="min-h-[100px]"
+              />
+            </div>
+            
+            {/* Right: Payment Terms */}
+            <div className="space-y-2">
+              <Label htmlFor="due-date">Fälligkeitsdatum</Label>
+              <Input id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <Label htmlFor="notes" className="mt-2 block">Anmerkungen (Optional)</Label>
+              <Textarea 
+                id="notes" 
+                value={notes} 
+                onChange={(e) => setNotes(e.target.value)} 
+                placeholder="Vielen Dank für Ihren Auftrag!"
+                className="min-h-[60px]"
+              />
+            </div>
           </div>
           
+          {/* Items Table */}
           <div className="space-y-2">
             <Label>Positionen</Label>
-            {items.map((item, index) => (
-              <div key={index} className="flex gap-2 items-start">
-                <Input 
-                  className="flex-1" 
-                  value={item.description} 
-                  onChange={(e) => updateItem(index, 'description', e.target.value)} 
-                  placeholder="Beschreibung" 
-                />
-                <Input 
-                  className="w-24" 
-                  type="number" 
-                  value={item.amount} 
-                  onChange={(e) => updateItem(index, 'amount', e.target.value)} 
-                  placeholder="Betrag" 
-                />
-                <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+            <div className="border rounded-md overflow-hidden">
+                <div className="grid grid-cols-[1fr_80px_100px_auto] gap-2 bg-muted p-2 text-sm font-medium">
+                    <div>Beschreibung</div>
+                    <div className="text-right">Menge</div>
+                    <div className="text-right">Einzelpreis</div>
+                    <div className="w-10"></div>
+                </div>
+                <div className="divide-y">
+                    {items.map((item, index) => (
+                    <div key={index} className="grid grid-cols-[1fr_80px_100px_auto] gap-2 p-2 items-start">
+                        <Input 
+                        value={item.description} 
+                        onChange={(e) => updateItem(index, 'description', e.target.value)} 
+                        placeholder="Leistung / Produkt" 
+                        />
+                        <Input 
+                        type="number" 
+                        value={item.quantity} 
+                        onChange={(e) => updateItem(index, 'quantity', e.target.value)} 
+                        placeholder="1" 
+                        className="text-right"
+                        />
+                        <Input 
+                        type="number" 
+                        value={item.unitPrice} 
+                        onChange={(e) => updateItem(index, 'unitPrice', e.target.value)} 
+                        placeholder="0.00" 
+                        className="text-right"
+                        />
+                        <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} className="text-destructive hover:text-destructive">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        </Button>
+                    </div>
+                    ))}
+                </div>
+            </div>
+            <div className="flex justify-between items-center mt-2">
+                <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                + Position hinzufügen
                 </Button>
-              </div>
-            ))}
-            <Button type="button" variant="outline" size="sm" onClick={addItem} className="mt-2">
-              + Position hinzufügen
-            </Button>
+                <div className="text-right font-bold">
+                    Gesamt: {items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </div>
+            </div>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Abbrechen</Button>
-          <Button onClick={generatePDF} disabled={isGenerating || !customerName || !invoiceNumber}>
+          <Button onClick={generatePDF} disabled={isGenerating || !customerAddress || !invoiceNumber}>
             {isGenerating ? "Erstelle PDF..." : "PDF erstellen"}
           </Button>
         </DialogFooter>
