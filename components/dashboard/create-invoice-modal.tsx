@@ -56,6 +56,35 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
       const fontSize = 12;
       let y = height - 50;
 
+      // Logo embedding
+      if (settings?.logoUrl) {
+        try {
+          const logoBytes = await fetch(settings.logoUrl).then(res => res.arrayBuffer());
+          const logoExt = settings.logoUrl.split('.').pop()?.toLowerCase();
+          let logoImage;
+          
+          if (logoExt === 'png') {
+            logoImage = await pdfDoc.embedPng(logoBytes);
+          } else if (logoExt === 'jpg' || logoExt === 'jpeg') {
+            logoImage = await pdfDoc.embedJpg(logoBytes);
+          }
+
+          if (logoImage) {
+            const logoDims = logoImage.scale(0.25); // Scale down the logo
+            // Position logo at top right
+            page.drawImage(logoImage, {
+              x: width - 50 - logoDims.width,
+              y: height - 50 - logoDims.height,
+              width: logoDims.width,
+              height: logoDims.height,
+            });
+            // Adjust y if logo is tall, though usually header text is on the left so it might not overlap
+          }
+        } catch (error) {
+          console.error("Failed to embed logo:", error);
+        }
+      }
+
       // Company Header (from Settings)
       if (settings?.companyName) {
         page.drawText(settings.companyName, { x: 50, y, size: 18, font: boldFont });

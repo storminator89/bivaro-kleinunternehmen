@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Upload, X } from "lucide-react";
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState({
     companyName: "",
     companyAddress: "",
@@ -70,6 +71,39 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploading(true);
+      
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/settings/upload-logo', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setFormData((prev) => ({ ...prev, logoUrl: data.url }));
+        } else {
+          alert("Fehler beim Hochladen des Logos.");
+        }
+      } catch (error) {
+        console.error("Error uploading logo:", error);
+        alert("Fehler beim Hochladen des Logos.");
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
+  const removeLogo = () => {
+    setFormData((prev) => ({ ...prev, logoUrl: "" }));
   };
 
   if (loading) {
@@ -156,17 +190,56 @@ export default function SettingsPage() {
               />
             </div>
             
-            {/* Logo Upload could be added here later, for now just a text input for URL if hosted elsewhere or we implement upload logic */}
-             {/* <div className="space-y-2">
-              <Label htmlFor="logoUrl">Logo URL (Optional)</Label>
-              <Input
-                id="logoUrl"
-                name="logoUrl"
-                value={formData.logoUrl}
-                onChange={handleChange}
-                placeholder="https://example.com/logo.png"
-              />
-            </div> */}
+            <div className="space-y-2">
+              <Label>Firmenlogo (Optional)</Label>
+              <div className="flex items-start gap-4">
+                {formData.logoUrl ? (
+                  <div className="relative border rounded-md p-2 bg-muted/10">
+                    <img 
+                      src={formData.logoUrl} 
+                      alt="Firmenlogo" 
+                      className="h-24 w-auto object-contain" 
+                    />
+                    <button
+                      type="button"
+                      onClick={removeLogo}
+                      className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center w-full max-w-xs h-24 border-2 border-dashed rounded-md border-muted-foreground/25 bg-muted/5">
+                    <span className="text-xs text-muted-foreground">Kein Logo ausgewählt</span>
+                  </div>
+                )}
+                
+                <div className="flex flex-col gap-2">
+                  <Input
+                    id="logo-upload"
+                    type="file"
+                    accept="image/png, image/jpeg"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                  <Label
+                    htmlFor="logo-upload"
+                    className={`flex items-center justify-center px-4 py-2 border rounded-md cursor-pointer hover:bg-muted transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {uploading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="mr-2 h-4 w-4" />
+                    )}
+                    {uploading ? "Wird hochgeladen..." : "Logo hochladen"}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Empfohlen: PNG oder JPG, max. 2MB.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div className="pt-4">
               <Button type="submit" disabled={saving}>
