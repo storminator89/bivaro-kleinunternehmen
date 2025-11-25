@@ -6,11 +6,13 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await requireUserId();
     // Prüfen, ob es sich um einen multipart/form-data-Request handelt
     const contentType = request.headers.get('content-type') || '';
     
@@ -86,6 +88,7 @@ export async function POST(request: NextRequest) {
           receiptFileName,
           storedReceiptFileName,
           depreciationYears: formData.get('depreciationYears') ? parseInt(formData.get('depreciationYears') as string) : null,
+          userId,
         },
       });
       
@@ -107,12 +110,16 @@ export async function POST(request: NextRequest) {
           taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
           taxDeductiblePercentage: taxDeductiblePercentage || 100,
           depreciationYears: depreciationYears || null,
+          userId,
         },
       });
       
       return NextResponse.json(expense);
     }
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Fehler beim Erstellen der Ausgabe:', error);
     return NextResponse.json(
       { error: 'Fehler beim Erstellen der Ausgabe: ' + (error instanceof Error ? error.message : String(error)) },
@@ -122,82 +129,91 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
-  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
-  const skip = (page - 1) * pageSize;
+  try {
+    const userId = await requireUserId();
+    const url = new URL(request.url);
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+    const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
+    const skip = (page - 1) * pageSize;
 
-  // Filters
-  const search = url.searchParams.get('search') || '';
-  const category = url.searchParams.get('category') || '';
-  const taxRelevant = url.searchParams.get('taxRelevant'); // 'yes' | 'no' | null
-  const hasReceipt = url.searchParams.get('hasReceipt'); // 'yes' | 'no' | null
-  const dateRange = url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
+    // Filters
+    const search = url.searchParams.get('search') || '';
+    const category = url.searchParams.get('category') || '';
+    const taxRelevant = url.searchParams.get('taxRelevant'); // 'yes' | 'no' | null
+    const hasReceipt = url.searchParams.get('hasReceipt'); // 'yes' | 'no' | null
+    const dateRange = url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
-  const where: any = {};
+    const where: any = { userId };
 
-  if (category) {
-    where.category = category;
-  }
-
-  if (taxRelevant === 'yes') where.taxRelevant = true;
-  if (taxRelevant === 'no') where.taxRelevant = false;
-
-  if (hasReceipt === 'yes') where.storedReceiptFileName = { not: null };
-  if (hasReceipt === 'no') where.storedReceiptFileName = null;
-
-  if (dateRange && dateRange !== 'all') {
-    const now = new Date();
-    const thisMonth = now.getMonth();
-    const thisYear = now.getFullYear();
-    if (dateRange === 'thisMonth') {
-      const start = new Date(thisYear, thisMonth, 1);
-      const end = new Date(thisYear, thisMonth + 1, 0, 23, 59, 59, 999);
-      where.date = { gte: start, lte: end };
-    } else if (dateRange === 'lastMonth') {
-      const prevMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-      const prevYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-      const start = new Date(prevYear, prevMonth, 1);
-      const end = new Date(prevYear, prevMonth + 1, 0, 23, 59, 59, 999);
-      where.date = { gte: start, lte: end };
-    } else if (dateRange === 'thisYear') {
-      const start = new Date(thisYear, 0, 1);
-      const end = new Date(thisYear, 11, 31, 23, 59, 59, 999);
-      where.date = { gte: start, lte: end };
+    if (category) {
+      where.category = category;
     }
+
+    if (taxRelevant === 'yes') where.taxRelevant = true;
+    if (taxRelevant === 'no') where.taxRelevant = false;
+
+    if (hasReceipt === 'yes') where.storedReceiptFileName = { not: null };
+    if (hasReceipt === 'no') where.storedReceiptFileName = null;
+
+    if (dateRange && dateRange !== 'all') {
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+      if (dateRange === 'thisMonth') {
+        const start = new Date(thisYear, thisMonth, 1);
+        const end = new Date(thisYear, thisMonth + 1, 0, 23, 59, 59, 999);
+        where.date = { gte: start, lte: end };
+      } else if (dateRange === 'lastMonth') {
+        const prevMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+        const prevYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+        const start = new Date(prevYear, prevMonth, 1);
+        const end = new Date(prevYear, prevMonth + 1, 0, 23, 59, 59, 999);
+        where.date = { gte: start, lte: end };
+      } else if (dateRange === 'thisYear') {
+        const start = new Date(thisYear, 0, 1);
+        const end = new Date(thisYear, 11, 31, 23, 59, 59, 999);
+        where.date = { gte: start, lte: end };
+      }
+    }
+
+    if (search) {
+      where.OR = [
+        { description: { contains: search } },
+        { category: { contains: search } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      prisma.expense.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      prisma.expense.count({ where }),
+    ]);
+
+    return NextResponse.json({ items, total, page, pageSize });
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
+    throw error;
   }
-
-  if (search) {
-    where.OR = [
-      { description: { contains: search } },
-      { category: { contains: search } },
-    ];
-  }
-
-  const [items, total] = await Promise.all([
-    prisma.expense.findMany({
-      where,
-      orderBy: { date: 'desc' },
-      skip,
-      take: pageSize,
-    }),
-    prisma.expense.count({ where }),
-  ]);
-
-  return NextResponse.json({ items, total, page, pageSize });
 }
 
 // Neue Methode zum Aktualisieren einer Ausgabe
 export async function PUT(request: Request) {
-  const { id, description, amount, category, taxRelevant, taxDeductiblePercentage, receiptUrl, depreciationYears, date } = await request.json();
-
-  if (!id || !description || !amount) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-  }
-
   try {
+    const userId = await requireUserId();
+    const { id, description, amount, category, taxRelevant, taxDeductiblePercentage, receiptUrl, depreciationYears, date } = await request.json();
+
+    if (!id || !description || !amount) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
     const updatedExpense = await prisma.expense.update({
-      where: { id: Number(id) },
+      where: { id: Number(id), userId },
       data: {
         description,
         amount: parseFloat(amount.toString()),
@@ -211,25 +227,32 @@ export async function PUT(request: Request) {
     });
     return NextResponse.json(updatedExpense);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
   }
 }
 
 // Neue Methode zum Löschen einer Ausgabe
 export async function DELETE(request: Request) {
-  const url = new URL(request.url);
-  const id = url.searchParams.get('id');
-
-  if (!id) {
-    return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
-  }
-
   try {
+    const userId = await requireUserId();
+    const url = new URL(request.url);
+    const id = url.searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
+    }
+
     await prisma.expense.delete({
-      where: { id: Number(id) },
+      where: { id: Number(id), userId },
     });
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
   }
 }

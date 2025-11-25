@@ -28,6 +28,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { CreateInvoiceModal } from "@/components/dashboard/create-invoice-modal";
+import { AfaTableDialog } from "@/components/afa-table-dialog";
 
 // Typdefinitionen
 type Expense = {
@@ -93,6 +94,8 @@ type FilterState = {
     paidStatus: 'all' | 'paid' | 'unpaid';
     dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
     searchTerm: string;
+    sortBy: 'date' | 'invoiceNumber' | 'amount';
+    sortOrder: 'asc' | 'desc';
   };
 };
 
@@ -233,7 +236,10 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-depreciationYears" className="text-sm font-medium">Abschreibung (Jahre)</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="edit-depreciationYears" className="text-sm font-medium">Abschreibung (Jahre)</Label>
+                  <AfaTableDialog onSelect={(years) => setFormData({ ...formData, depreciationYears: years })} />
+                </div>
                 <Input
                   id="edit-depreciationYears"
                   type="number"
@@ -245,7 +251,7 @@ const EditModal = ({ isOpen, onClose, onSave, data, type, customers = [] }: Edit
                   className="dark:bg-background dark:border-input"
                 />
                 <p className="text-xs text-muted-foreground">
-                  &gt; 800€ Netto: AfA Pflicht (z.B. 3 Jahre). &lt; 800€: Leer lassen.
+                  &gt; 800€ Netto: AfA Pflicht. &lt; 800€: Leer lassen.
                 </p>
               </div>
             </div>
@@ -521,12 +527,22 @@ function DashboardContent() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
 
-  // Tabs-State
-  const [activeTab, setActiveTab] = useState(
-    tabParam === 'expenses' || tabParam === 'incomes' || tabParam === 'invoices' || tabParam === 'eur' || tabParam === 'gwg'
-      ? tabParam
-      : 'expenses'
-  );
+  // Tabs-State - Tab-Namen normalisieren (income -> incomes)
+  const normalizeTab = (tab: string | null) => {
+    if (tab === 'income') return 'incomes';
+    if (tab === 'expenses' || tab === 'incomes' || tab === 'invoices' || tab === 'eur' || tab === 'gwg') return tab;
+    return 'expenses';
+  };
+  
+  const [activeTab, setActiveTab] = useState(normalizeTab(tabParam));
+  
+  // URL-Änderungen verfolgen und Tab aktualisieren
+  useEffect(() => {
+    const newTab = normalizeTab(tabParam);
+    if (newTab !== activeTab) {
+      setActiveTab(newTab);
+    }
+  }, [tabParam]);
 
   // Modal States
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -567,13 +583,35 @@ function DashboardContent() {
       paidStatus: 'all',
       dateRange: 'all',
       searchTerm: '',
+      sortBy: 'date',
+      sortOrder: 'desc',
     }
   });
 
   // Daten werden serverseitig gefiltert, hier nur Alias für Anzeige
   const filteredExpenses = expenses;
   const filteredIncomes = incomes;
-  const filteredInvoices = invoices;
+  
+  // Rechnungen sortieren
+  const sortedInvoices = [...invoices].sort((a, b) => {
+    const { sortBy, sortOrder } = filters.invoices;
+    let comparison = 0;
+    
+    if (sortBy === 'date') {
+      const dateA = a.invoiceDate ? new Date(a.invoiceDate).getTime() : new Date(a.uploadedAt).getTime();
+      const dateB = b.invoiceDate ? new Date(b.invoiceDate).getTime() : new Date(b.uploadedAt).getTime();
+      comparison = dateA - dateB;
+    } else if (sortBy === 'invoiceNumber') {
+      const numA = a.invoiceNumber || '';
+      const numB = b.invoiceNumber || '';
+      comparison = numA.localeCompare(numB, 'de', { numeric: true });
+    } else if (sortBy === 'amount') {
+      comparison = (a.totalAmount || 0) - (b.totalAmount || 0);
+    }
+    
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
+  const filteredInvoices = sortedInvoices;
 
   // Einzigartige Kategorien und Kunden für Filter
 
@@ -1649,7 +1687,10 @@ function DashboardContent() {
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="depreciationYears" className="text-sm font-medium">Abschreibung (Jahre)</Label>
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="depreciationYears" className="text-sm font-medium">Abschreibung (Jahre)</Label>
+                          <AfaTableDialog onSelect={(years) => setNewExpense({ ...newExpense, depreciationYears: years.toString() })} />
+                        </div>
                         <Input
                           id="depreciationYears"
                           type="number"
@@ -1660,9 +1701,7 @@ function DashboardContent() {
                           placeholder="Optional (z.B. 3)"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Für Wirtschaftsgüter über 800€ (netto). <br/>
-                          Beispiele: PC/Laptop (3 Jahre), Büromöbel (13 Jahre). <br/>
-                          Unter 800€: Sofortabschreibung (Feld leer lassen).
+                          Für Wirtschaftsgüter über 800€ (netto). Unter 800€: Feld leer lassen.
                         </p>
                       </div>
                     </div>
@@ -2712,10 +2751,64 @@ function DashboardContent() {
                     <TableCaption>Alle hochgeladenen Rechnungen</TableCaption>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
-                        <TableHead className="font-medium">Datum</TableHead>
-                        <TableHead className="font-medium">Rechnungsnummer</TableHead>
+                        <TableHead 
+                          className="font-medium cursor-pointer hover:bg-muted select-none"
+                          onClick={() => {
+                            const newOrder = filters.invoices.sortBy === 'date' && filters.invoices.sortOrder === 'desc' ? 'asc' : 'desc';
+                            setFilters({
+                              ...filters,
+                              invoices: { ...filters.invoices, sortBy: 'date', sortOrder: newOrder }
+                            });
+                          }}
+                        >
+                          <span className="flex items-center gap-1">
+                            Datum
+                            {filters.invoices.sortBy === 'date' && (
+                              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${filters.invoices.sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </span>
+                        </TableHead>
+                        <TableHead 
+                          className="font-medium cursor-pointer hover:bg-muted select-none"
+                          onClick={() => {
+                            const newOrder = filters.invoices.sortBy === 'invoiceNumber' && filters.invoices.sortOrder === 'desc' ? 'asc' : 'desc';
+                            setFilters({
+                              ...filters,
+                              invoices: { ...filters.invoices, sortBy: 'invoiceNumber', sortOrder: newOrder }
+                            });
+                          }}
+                        >
+                          <span className="flex items-center gap-1">
+                            Rechnungsnummer
+                            {filters.invoices.sortBy === 'invoiceNumber' && (
+                              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${filters.invoices.sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </span>
+                        </TableHead>
                         <TableHead className="font-medium">Dateiname</TableHead>
-                        <TableHead className="text-right font-medium">Betrag</TableHead>
+                        <TableHead 
+                          className="text-right font-medium cursor-pointer hover:bg-muted select-none"
+                          onClick={() => {
+                            const newOrder = filters.invoices.sortBy === 'amount' && filters.invoices.sortOrder === 'desc' ? 'asc' : 'desc';
+                            setFilters({
+                              ...filters,
+                              invoices: { ...filters.invoices, sortBy: 'amount', sortOrder: newOrder }
+                            });
+                          }}
+                        >
+                          <span className="flex items-center justify-end gap-1">
+                            Betrag
+                            {filters.invoices.sortBy === 'amount' && (
+                              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${filters.invoices.sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </span>
+                        </TableHead>
                         <TableHead className="text-center font-medium">Status</TableHead>
                         <TableHead className="text-right font-medium">Aktionen</TableHead>
                       </TableRow>

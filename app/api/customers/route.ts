@@ -1,17 +1,23 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
 
 export async function GET() {
   try {
+    const userId = await requireUserId();
     const customers = await prisma.customer.findMany({
+      where: { userId },
       orderBy: {
         createdAt: 'desc',
       },
     });
     return NextResponse.json(customers);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Error fetching customers:', error);
     return NextResponse.json(
       { error: 'Failed to fetch customers' },
@@ -22,6 +28,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const userId = await requireUserId();
     const { name, email, address, zipCode, city, taxNumber } = await request.json();
 
     if (!name) {
@@ -36,10 +43,14 @@ export async function POST(request: Request) {
         zipCode: zipCode || null,
         city: city || null,
         taxNumber: taxNumber || null,
+        userId,
       },
     });
     return NextResponse.json(newCustomer);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Error creating customer:', error);
     return NextResponse.json(
       { error: 'Failed to create customer' },
@@ -50,6 +61,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const userId = await requireUserId();
     const { id, name, email, address, zipCode, city, taxNumber } = await request.json();
 
     if (!id || !name) {
@@ -57,7 +69,7 @@ export async function PUT(request: Request) {
     }
 
     const updatedCustomer = await prisma.customer.update({
-      where: { id: Number(id) },
+      where: { id: Number(id), userId },
       data: {
         name,
         email: email || null,
@@ -69,6 +81,9 @@ export async function PUT(request: Request) {
     });
     return NextResponse.json(updatedCustomer);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Error updating customer:', error);
     return NextResponse.json(
       { error: 'Customer not found or failed to update' },
@@ -79,6 +94,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const userId = await requireUserId();
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
 
@@ -87,10 +103,13 @@ export async function DELETE(request: Request) {
     }
 
     await prisma.customer.delete({
-      where: { id: Number(id) },
+      where: { id: Number(id), userId },
     });
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Error deleting customer:', error);
     return NextResponse.json(
       { error: 'Customer not found or failed to delete' },

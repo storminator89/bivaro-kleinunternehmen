@@ -7,12 +7,26 @@ datasource db {
   url      = "file:./dev.db"
 }
 
+model AppSettings {
+  id                    Int      @id @default(autoincrement())
+  allowRegistration     Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String
   name      String?
+  role      String   @default("USER") // USER, ADMIN
   createdAt DateTime @default(now())
+  expenses  Expense[]
+  incomes   Income[]
+  invoices  Invoice[]
+  customers Customer[]
+  settings  Settings?
+  templates InvoiceTemplate[]
 }
 
 model Expense {
@@ -27,6 +41,8 @@ model Expense {
   receiptFileName       String?  // Originalname der hochgeladenen Belegdatei
   storedReceiptFileName String?  // Eindeutiger gespeicherter Dateiname des Belegs
   depreciationYears     Int?     // Nutzungsdauer in Jahren (AfA)
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id])
 }
 
 model Income {
@@ -39,6 +55,8 @@ model Income {
   invoiceId   Int?     @unique
   taxRelevant Boolean  @default(true)
   invoice     Invoice? @relation(fields: [invoiceId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
 }
 
 model Invoice {
@@ -56,6 +74,8 @@ model Invoice {
   customerId    Int?
   income        Income?
   customer      Customer? @relation(fields: [customerId], references: [id])
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
 }
 
 model Customer {
@@ -69,6 +89,8 @@ model Customer {
   createdAt DateTime  @default(now())
   invoices  Invoice[]
   incomes   Income[]
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
 }
 
 model Settings {
@@ -83,6 +105,8 @@ model Settings {
   bic            String?
   footerText     String?
   logoUrl        String?
+  userId         String  @unique
+  user           User    @relation(fields: [userId], references: [id])
 }
 
 model InvoiceTemplate {
@@ -91,4 +115,6 @@ model InvoiceTemplate {
   data      Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
 }

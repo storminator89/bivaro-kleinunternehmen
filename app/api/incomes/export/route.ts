@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import JSZip from 'jszip';
 import { promises as fs } from 'fs';
 import { join, extname, basename } from 'path';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
 
@@ -84,8 +85,10 @@ function formatCurrency(value: number) {
 
 export async function GET(request: NextRequest) {
   try {
+    const userId = await requireUserId();
     const url = new URL(request.url);
     const where = parseFilters(url);
+    where.userId = userId;
 
     const incomes = await prisma.income.findMany({
       where,
@@ -168,6 +171,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Fehler beim Export der Einnahmen:', error);
     return NextResponse.json(
       { error: 'Fehler beim Export der Einnahmen: ' + (error instanceof Error ? error.message : String(error)) },

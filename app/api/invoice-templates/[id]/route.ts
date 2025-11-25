@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
 
@@ -8,6 +9,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireUserId();
     const { id } = await params;
     const templateId = parseInt(id, 10);
 
@@ -16,11 +18,14 @@ export async function DELETE(
     }
 
     await prisma.invoiceTemplate.delete({
-      where: { id: templateId },
+      where: { id: templateId, userId },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Error deleting invoice template:', error);
     return NextResponse.json({ error: 'Failed to delete template' }, { status: 500 });
   }

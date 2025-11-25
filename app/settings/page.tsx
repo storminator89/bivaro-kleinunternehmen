@@ -1,17 +1,35 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save, Upload, X } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle } from "lucide-react";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [savingAppSettings, setSavingAppSettings] = useState(false);
+  const [allowRegistration, setAllowRegistration] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [fullBackupLoading, setFullBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const fullFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     companyName: "",
     companyAddress: "",
@@ -52,6 +70,22 @@ export default function SettingsPage() {
     }
     fetchSettings();
   }, []);
+
+  useEffect(() => {
+    async function fetchAppSettings() {
+      if (!isAdmin) return;
+      try {
+        const res = await fetch("/api/app-settings");
+        if (res.ok) {
+          const data = await res.json();
+          setAllowRegistration(data.allowRegistration ?? false);
+        }
+      } catch (error) {
+        console.error("Failed to fetch app settings", error);
+      }
+    }
+    fetchAppSettings();
+  }, [isAdmin]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -112,6 +146,158 @@ export default function SettingsPage() {
 
   const removeLogo = () => {
     setFormData((prev) => ({ ...prev, logoUrl: "" }));
+  };
+
+  const handleAllowRegistrationChange = async (checked: boolean) => {
+    setSavingAppSettings(true);
+    try {
+      const res = await fetch("/api/app-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allowRegistration: checked }),
+      });
+      if (res.ok) {
+        setAllowRegistration(checked);
+      } else {
+        alert("Fehler beim Speichern der Einstellung.");
+      }
+    } catch (error) {
+      console.error("Failed to save app settings", error);
+      alert("Fehler beim Speichern der Einstellung.");
+    } finally {
+      setSavingAppSettings(false);
+    }
+  };
+
+  const handleBackupDownload = async () => {
+    setBackupLoading(true);
+    setBackupMessage(null);
+    try {
+      const res = await fetch("/api/backup");
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bivaro-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setBackupMessage({ type: 'success', text: 'Backup erfolgreich heruntergeladen!' });
+      } else {
+        setBackupMessage({ type: 'error', text: 'Backup fehlgeschlagen.' });
+      }
+    } catch (error) {
+      console.error("Backup error:", error);
+      setBackupMessage({ type: 'error', text: 'Backup fehlgeschlagen.' });
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleFullBackupDownload = async () => {
+    setFullBackupLoading(true);
+    setBackupMessage(null);
+    try {
+      const res = await fetch("/api/backup/full");
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bivaro-full-backup-${new Date().toISOString().split('T')[0]}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setBackupMessage({ type: 'success', text: 'Vollständiges Backup (inkl. Dateien) erfolgreich heruntergeladen!' });
+      } else {
+        setBackupMessage({ type: 'error', text: 'Vollständiges Backup fehlgeschlagen.' });
+      }
+    } catch (error) {
+      console.error("Full backup error:", error);
+      setBackupMessage({ type: 'error', text: 'Vollständiges Backup fehlgeschlagen.' });
+    } finally {
+      setFullBackupLoading(false);
+    }
+  };
+
+  const handleRestoreUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setRestoreLoading(true);
+    setBackupMessage(null);
+
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+
+      const res = await fetch("/api/backup/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(backup),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        const { results } = data;
+        setBackupMessage({
+          type: 'success',
+          text: `Wiederherstellung erfolgreich! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen.`
+        });
+      } else {
+        setBackupMessage({ type: 'error', text: data.error || 'Wiederherstellung fehlgeschlagen.' });
+      }
+    } catch (error) {
+      console.error("Restore error:", error);
+      setBackupMessage({ type: 'error', text: 'Ungültige Backup-Datei.' });
+    } finally {
+      setRestoreLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleFullRestoreUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setRestoreLoading(true);
+    setBackupMessage(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch("/api/backup/full/restore", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        const { results } = data;
+        setBackupMessage({
+          type: 'success',
+          text: `Vollständige Wiederherstellung erfolgreich! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen, ${results.files.imported} Dateien.`
+        });
+      } else {
+        setBackupMessage({ type: 'error', text: data.error || 'Wiederherstellung fehlgeschlagen.' });
+      }
+    } catch (error) {
+      console.error("Full restore error:", error);
+      setBackupMessage({ type: 'error', text: 'Ungültige Backup-Datei.' });
+    } finally {
+      setRestoreLoading(false);
+      if (fullFileInputRef.current) {
+        fullFileInputRef.current.value = '';
+      }
+    }
   };
 
   if (loading) {
@@ -320,6 +506,184 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </form>
+
+      {isAdmin && (
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              <CardTitle>Admin-Einstellungen</CardTitle>
+            </div>
+            <CardDescription>
+              Diese Einstellungen sind nur für Administratoren sichtbar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="allow-registration">Benutzerregistrierung erlauben</Label>
+                <p className="text-sm text-muted-foreground">
+                  Wenn aktiviert, können sich neue Benutzer registrieren.
+                </p>
+              </div>
+              <Switch
+                id="allow-registration"
+                checked={allowRegistration}
+                onCheckedChange={handleAllowRegistrationChange}
+                disabled={savingAppSettings}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Backup & Restore */}
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            <CardTitle>Datensicherung</CardTitle>
+          </div>
+          <CardDescription>
+            Sichern Sie Ihre Daten oder stellen Sie ein Backup wieder her.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {backupMessage && (
+            <Alert variant={backupMessage.type === 'error' ? 'destructive' : 'default'}>
+              {backupMessage.type === 'error' ? (
+                <AlertTriangle className="h-4 w-4" />
+              ) : (
+                <Database className="h-4 w-4" />
+              )}
+              <AlertTitle>{backupMessage.type === 'error' ? 'Fehler' : 'Erfolg'}</AlertTitle>
+              <AlertDescription>{backupMessage.text}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Backup erstellen */}
+            <div className="space-y-3">
+              <h4 className="font-medium">Backup erstellen</h4>
+              <p className="text-sm text-muted-foreground">
+                Laden Sie alle Ihre Daten als JSON-Datei herunter. Enthält Ausgaben, Einnahmen, Rechnungen, Kunden und Einstellungen.
+              </p>
+              <Button
+                onClick={handleBackupDownload}
+                disabled={backupLoading}
+                className="w-full"
+              >
+                {backupLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Backup wird erstellt...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Backup herunterladen
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Backup wiederherstellen */}
+            <div className="space-y-3">
+              <h4 className="font-medium">Backup wiederherstellen</h4>
+              <p className="text-sm text-muted-foreground">
+                Importieren Sie Daten aus einer Backup-Datei. Bereits vorhandene Einträge werden übersprungen.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleRestoreUpload}
+                className="hidden"
+                id="restore-file"
+              />
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={restoreLoading}
+                variant="outline"
+                className="w-full"
+              >
+                {restoreLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Wird wiederhergestellt...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                    Backup-Datei auswählen
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Vollständiges Backup mit Dateien */}
+          <div className="border-t pt-6">
+            <h4 className="font-medium mb-2">Vollständiges Backup (inkl. Dateien)</h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              Erstellen Sie ein komplettes Backup als ZIP-Datei, das auch alle hochgeladenen Rechnungs-PDFs, Belege und Ihr Logo enthält.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                onClick={handleFullBackupDownload}
+                disabled={fullBackupLoading}
+                className="w-full"
+              >
+                {fullBackupLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ZIP wird erstellt...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Vollständiges Backup (ZIP)
+                  </>
+                )}
+              </Button>
+              
+              <input
+                ref={fullFileInputRef}
+                type="file"
+                accept=".zip"
+                onChange={handleFullRestoreUpload}
+                className="hidden"
+                id="full-restore-file"
+              />
+              <Button
+                onClick={() => fullFileInputRef.current?.click()}
+                disabled={restoreLoading}
+                variant="outline"
+                className="w-full"
+              >
+                {restoreLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Wird wiederhergestellt...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                    ZIP-Backup wiederherstellen
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <p className="text-xs text-muted-foreground">
+              <strong>Hinweis:</strong> Bei der Wiederherstellung werden bestehende Daten nicht überschrieben. 
+              Das vollständige Backup kann bei vielen Dateien größer werden.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

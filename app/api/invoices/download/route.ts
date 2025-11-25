@@ -3,11 +3,13 @@ import { PrismaClient } from '@prisma/client';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import * as fs from 'fs';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
   try {
+    const userId = await requireUserId();
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     const download = url.searchParams.get('download') === 'true';
@@ -21,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     // Rechnung mit dem angegebenen ID abrufen
     const invoice = await prisma.invoice.findUnique({
-      where: { id: Number(id) },
+      where: { id: Number(id), userId },
     });
 
     if (!invoice) {
@@ -68,6 +70,9 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Fehler beim Herunterladen der Rechnung:', error);
     return NextResponse.json(
       { error: 'Fehler beim Herunterladen der Rechnung: ' + (error instanceof Error ? error.message : String(error)) },

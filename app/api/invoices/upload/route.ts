@@ -9,6 +9,7 @@ import path from 'path';
 import { PDFDocument, PDFName, PDFDict, PDFArray, PDFHexString, PDFString, PDFStream } from 'pdf-lib';
 import { parseStringPromise } from 'xml2js';
 import zlib from 'zlib';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
 
@@ -92,6 +93,7 @@ async function extractZugferdXml(pdfBuffer: Buffer): Promise<string | null> {
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await requireUserId();
     const tempDir = os.tmpdir();
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -228,8 +230,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (invoiceNumber) {
-      const existingInvoice = await prisma.invoice.findUnique({
-        where: { invoiceNumber },
+      const existingInvoice = await prisma.invoice.findFirst({
+        where: { invoiceNumber, userId },
       });
 
       if (existingInvoice) {
@@ -259,7 +261,7 @@ export async function POST(request: NextRequest) {
           sellerInfo,
           rawXml: zugferdXmlContent
         },
-        
+        userId,
       },
     });
 
@@ -269,12 +271,12 @@ export async function POST(request: NextRequest) {
       let customerRecord = null;
       if (customerName) {
         customerRecord = await prisma.customer.findFirst({
-          where: { name: customerName },
+          where: { name: customerName, userId },
         });
 
         if (!customerRecord) {
           customerRecord = await prisma.customer.create({
-            data: { name: customerName },
+            data: { name: customerName, userId },
           });
         }
       }
@@ -283,9 +285,10 @@ export async function POST(request: NextRequest) {
         data: {
           description: description.substring(0, 255),
           amount: totalAmount,
-          customer: customerRecord ? { connect: { id: customerRecord.id } } : undefined,
-          invoice: { connect: { id: invoice.id } },
+          customerId: customerRecord ? customerRecord.id : null,
+          invoiceId: invoice.id,
           taxRelevant: true,
+          userId,
         },
       });
       await prisma.invoice.update({
@@ -298,6 +301,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(invoice);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Fehler beim Hochladen der Rechnung:', error);
     return NextResponse.json(
       { error: 'Fehler beim Verarbeiten der Rechnung: ' + (error instanceof Error ? error.message : String(error)) },

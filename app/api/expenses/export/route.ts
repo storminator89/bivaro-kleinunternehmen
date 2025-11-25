@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import JSZip from 'jszip';
 import { promises as fs } from 'fs';
 import { join, extname, basename } from 'path';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
 
@@ -91,8 +92,10 @@ function sanitizeCsvField(value: string) {
 
 export async function GET(request: NextRequest) {
   try {
+    const userId = await requireUserId();
     const url = new URL(request.url);
     const where = parseFilters(url);
+    where.userId = userId;
 
     // Sicherstellen, dass nur Einträge mit Belegen exportiert werden
     if (!Object.prototype.hasOwnProperty.call(where, 'storedReceiptFileName')) {
@@ -175,6 +178,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Fehler beim Export der Belege:', error);
     return NextResponse.json(
       { error: 'Fehler beim Export der Belege: ' + (error instanceof Error ? error.message : String(error)) },

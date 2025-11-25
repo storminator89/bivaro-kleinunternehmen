@@ -4,11 +4,13 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import * as fs from 'fs';
 import path from 'path';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
   try {
+    const userId = await requireUserId();
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     const download = url.searchParams.get('download') === 'true';
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     // Ausgabe mit dem angegebenen ID abrufen
     const expense = await prisma.expense.findUnique({
-      where: { id: Number(id) },
+      where: { id: Number(id), userId },
     });
 
     if (!expense) {
@@ -88,6 +90,9 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return unauthorizedResponse();
+    }
     console.error('Fehler beim Laden des Belegs:', error);
     return NextResponse.json(
       { error: 'Fehler beim Laden des Belegs: ' + (error instanceof Error ? error.message : String(error)) },

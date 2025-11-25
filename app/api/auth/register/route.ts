@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
-// Initialize a new PrismaClient instance for this route handler
 const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
@@ -24,6 +23,21 @@ export async function POST(request: Request) {
       );
     }
 
+    // Prüfen ob überhaupt User existieren
+    const userCount = await prisma.user.count();
+    const isFirstUser = userCount === 0;
+
+    // Wenn nicht der erste User, prüfe ob Registrierung erlaubt ist
+    if (!isFirstUser) {
+      const appSettings = await prisma.appSettings.findFirst();
+      if (appSettings && !appSettings.allowRegistration) {
+        return NextResponse.json(
+          { message: "Registrierung ist deaktiviert" },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -39,21 +53,33 @@ export async function POST(request: Request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user - erster User wird automatisch ADMIN
     const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
+        role: isFirstUser ? "ADMIN" : "USER",
       },
     });
+
+    // Wenn erster User, erstelle AppSettings mit deaktivierter Registrierung
+    if (isFirstUser) {
+      await prisma.appSettings.create({
+        data: {
+          allowRegistration: false,
+        },
+      });
+    }
 
     // Return the user without password
     const { password: _, ...userWithoutPassword } = user;
     
     return NextResponse.json(
       { 
-        message: "Registrierung erfolgreich", 
+        message: isFirstUser 
+          ? "Admin-Konto erfolgreich erstellt" 
+          : "Registrierung erfolgreich", 
         user: userWithoutPassword 
       },
       { status: 201 }

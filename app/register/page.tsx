@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Shield, Loader2 } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -16,6 +17,27 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+  const [isFirstUser, setIsFirstUser] = useState(false);
+  const [registrationAllowed, setRegistrationAllowed] = useState(true);
+
+  useEffect(() => {
+    async function checkRegistrationStatus() {
+      try {
+        const res = await fetch("/api/auth/registration-status");
+        if (res.ok) {
+          const data = await res.json();
+          setIsFirstUser(data.isFirstUser);
+          setRegistrationAllowed(data.allowRegistration);
+        }
+      } catch (error) {
+        console.error("Failed to check registration status", error);
+      } finally {
+        setCheckingStatus(false);
+      }
+    }
+    checkRegistrationStatus();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,13 +81,51 @@ export default function RegisterPage() {
     }
   };
 
+  if (checkingStatus) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!registrationAllowed && !isFirstUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl">Registrierung deaktiviert</CardTitle>
+            <CardDescription>
+              Die Registrierung neuer Benutzer ist derzeit nicht möglich.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Bitte wenden Sie sich an den Administrator, wenn Sie Zugang benötigen.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Link href="/login" className="text-blue-600 hover:underline text-sm">
+              Zurück zur Anmeldung
+            </Link>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl">Registrieren</CardTitle>
+          <CardTitle className="text-2xl flex items-center gap-2">
+            {isFirstUser && <Shield className="h-6 w-6 text-primary" />}
+            {isFirstUser ? "Admin-Konto erstellen" : "Registrieren"}
+          </CardTitle>
           <CardDescription>
-            Erstellen Sie ein neues Konto
+            {isFirstUser 
+              ? "Erstellen Sie das erste Administrator-Konto für diese Instanz"
+              : "Erstellen Sie ein neues Konto"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -73,6 +133,11 @@ export default function RegisterPage() {
             {error && (
               <div className="p-3 rounded-md bg-red-50 text-red-500 text-sm">
                 {error}
+              </div>
+            )}
+            {isFirstUser && (
+              <div className="p-3 rounded-md bg-blue-50 text-blue-700 text-sm">
+                Dieses Konto wird automatisch Administrator-Rechte erhalten.
               </div>
             )}
             <div className="space-y-2">
@@ -121,7 +186,7 @@ export default function RegisterPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Wird verarbeitet..." : "Registrieren"}
+              {loading ? "Wird verarbeitet..." : (isFirstUser ? "Admin-Konto erstellen" : "Registrieren")}
             </Button>
           </form>
         </CardContent>
