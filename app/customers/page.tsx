@@ -32,7 +32,9 @@ import {
 type Customer = {
   id: number;
   name: string;
+  contactPerson?: string;
   email?: string;
+  phone?: string;
   address?: string;
   zipCode?: string;
   city?: string;
@@ -70,7 +72,9 @@ type CustomerModalProps = {
 const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps) => {
   const [formData, setFormData] = useState<Omit<Customer, 'id' | 'createdAt'> & { id?: number }>(customer || {
     name: '',
+    contactPerson: '',
     email: '',
+    phone: '',
     address: '',
     zipCode: '',
     city: '',
@@ -83,7 +87,9 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
     } else {
       setFormData({
         name: '',
+        contactPerson: '',
         email: '',
+        phone: '',
         address: '',
         zipCode: '',
         city: '',
@@ -120,15 +126,39 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">E-Mail Adresse</Label>
+            <Label htmlFor="contactPerson" className="text-sm font-medium">Ansprechpartner</Label>
             <Input
-              id="email"
-              type="email"
-              value={formData.email || ''}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="kontakt@musterfirma.de"
+              id="contactPerson"
+              value={formData.contactPerson || ''}
+              onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+              placeholder="z.B. Max Mustermann"
               className="h-10"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">E-Mail Adresse</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email || ''}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="kontakt@musterfirma.de"
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-sm font-medium">Telefon</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={formData.phone || ''}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+49 123 456789"
+                className="h-10"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -287,7 +317,9 @@ export default function CustomersPage() {
 
   const filteredCustomers = customers.filter(customer => 
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (customer.contactPerson && customer.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (customer.phone && customer.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (customer.city && customer.city.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
@@ -328,7 +360,7 @@ export default function CustomersPage() {
                 </svg>
               </div>
               <Input 
-                placeholder="Suchen nach Name, E-Mail oder Stadt..." 
+                placeholder="Suchen nach Name, Ansprechpartner, E-Mail, Telefon oder Stadt..." 
                 className="pl-9 bg-background"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -347,6 +379,7 @@ export default function CustomersPage() {
                     <TableRow>
                       <TableHead className="w-[50px]"></TableHead>
                       <TableHead className="font-semibold">Name / Firma</TableHead>
+                      <TableHead className="font-semibold">Ansprechpartner</TableHead>
                       <TableHead className="font-semibold">Kontakt</TableHead>
                       <TableHead className="font-semibold">Anschrift</TableHead>
                       <TableHead className="font-semibold">Steuer-Nr.</TableHead>
@@ -370,16 +403,39 @@ export default function CustomersPage() {
                             <div className="text-xs text-muted-foreground">Kunde seit {new Date(customer.createdAt).getFullYear()}</div>
                           </TableCell>
                           <TableCell>
-                            {customer.email ? (
-                              <div className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            {customer.contactPerson ? (
+                              <div className="flex items-center text-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
-                                <a href={`mailto:${customer.email}`}>{customer.email}</a>
+                                <span>{customer.contactPerson}</span>
                               </div>
                             ) : (
-                              <span className="text-muted-foreground/50 text-sm italic">- keine E-Mail -</span>
+                              <span className="text-muted-foreground/50 text-sm italic">-</span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {customer.email ? (
+                                <div className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                  <a href={`mailto:${customer.email}`}>{customer.email}</a>
+                                </div>
+                              ) : null}
+                              {customer.phone ? (
+                                <div className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                  </svg>
+                                  <a href={`tel:${customer.phone}`}>{customer.phone}</a>
+                                </div>
+                              ) : null}
+                              {!customer.email && !customer.phone && (
+                                <span className="text-muted-foreground/50 text-sm italic">- keine Kontaktdaten -</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
@@ -443,7 +499,7 @@ export default function CustomersPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-16 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-16 text-muted-foreground">
                           <div className="flex flex-col items-center justify-center">
                             <div className="bg-muted/50 p-4 rounded-full mb-4">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">

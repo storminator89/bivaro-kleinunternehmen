@@ -18,7 +18,8 @@ import {
   TrendingUp,
   TrendingDown,
   FileText,
-  Receipt
+  Receipt,
+  AlertCircle
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -63,6 +64,11 @@ export function NavLinks() {
   const isActive = (href: string) => {
     const [path, query] = href.split('?');
     
+    // Exakter Pfad-Match (für Unterseiten wie /dashboard/reminders)
+    if (pathname === path && !query) {
+      return !searchParams.get('tab');
+    }
+    
     // Pfad muss übereinstimmen
     if (pathname !== path) return false;
     
@@ -95,6 +101,7 @@ export function NavLinks() {
         { href: "/dashboard?tab=incomes", label: "Einnahmen", icon: TrendingUp, auth: "authenticated" },
         { href: "/dashboard?tab=expenses", label: "Ausgaben", icon: TrendingDown, auth: "authenticated" },
         { href: "/dashboard?tab=invoices", label: "Rechnungen", icon: FileText, auth: "authenticated" },
+        { href: "/dashboard/reminders", label: "Mahnwesen", icon: AlertCircle, auth: "authenticated" },
       ]
     },
     {

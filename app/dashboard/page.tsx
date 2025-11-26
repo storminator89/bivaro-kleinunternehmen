@@ -35,7 +35,7 @@ import {
   EditModal, 
   InvoiceDetailsModal, 
   ReceiptModal, 
-  DeleteConfirmationModal 
+  DeleteConfirmationModal
 } from "@/components/dashboard/modals";
 import { RecurringExpensesModal } from "@/components/dashboard/modals/recurring-expenses-modal";
 import { 

@@ -28,6 +28,7 @@ model User {
   settings  Settings?
   templates InvoiceTemplate[]
   recurringExpenses RecurringExpense[]
+  reminders Reminder[]
 }
 
 model Expense {
@@ -74,24 +75,27 @@ model Invoice {
   paidAt        DateTime?
   customerId    Int?
   income        Income?
+  reminders     Reminder[]
   customer      Customer? @relation(fields: [customerId], references: [id])
   userId        String
   user          User      @relation(fields: [userId], references: [id])
 }
 
 model Customer {
-  id        Int       @id @default(autoincrement())
-  name      String
-  email     String?
-  address   String?
-  zipCode   String?
-  city      String?
-  taxNumber String?
-  createdAt DateTime  @default(now())
-  invoices  Invoice[]
-  incomes   Income[]
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
+  id              Int       @id @default(autoincrement())
+  name            String
+  contactPerson   String?   // Ansprechpartner
+  email           String?
+  phone           String?   // Telefonnummer
+  address         String?
+  zipCode         String?
+  city            String?
+  taxNumber       String?
+  createdAt       DateTime  @default(now())
+  invoices        Invoice[]
+  incomes         Income[]
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
 }
 
 model Settings {
@@ -138,4 +142,18 @@ model RecurringExpense {
   updatedAt             DateTime @updatedAt
   userId                String
   user                  User     @relation(fields: [userId], references: [id])
+}
+
+model Reminder {
+  id            Int       @id @default(autoincrement())
+  invoiceId     Int
+  invoice       Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  reminderLevel Int       @default(1) // 1 = Zahlungserinnerung, 2 = 1. Mahnung, 3 = 2. Mahnung, 4 = Letzte Mahnung
+  sentAt        DateTime  @default(now())
+  dueDate       DateTime  // Fälligkeitsdatum der Mahnung
+  fee           Float     @default(0) // Mahngebühren
+  notes         String?   // Notizen/Kommentar
+  createdAt     DateTime  @default(now())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
 }
