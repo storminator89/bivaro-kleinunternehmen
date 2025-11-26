@@ -2,6 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { DashboardHeader } from "./dashboard-header";
+import { YearComparison } from "./year-comparison";
+
+interface MonthlyData {
+  month: number;
+  monthName: string;
+  revenue: number;
+  expenses: number;
+  profit: number;
+}
+
+interface YearComparisonData {
+  currentYear: number;
+  lastYear: number;
+  revenueThisYearTotal: number;
+  revenueLastYearTotal: number;
+  expensesThisYearTotal: number;
+  expensesLastYearTotal: number;
+  revenueThisYearToDate: number;
+  revenueLastYearToDate: number;
+  expensesThisYearToDate: number;
+  expensesLastYearToDate: number;
+  monthlyDataThisYear: MonthlyData[];
+  monthlyDataLastYear: MonthlyData[];
+}
 
 interface KpiData {
   revenueThisMonth: number;
@@ -11,6 +35,7 @@ interface KpiData {
   totalRevenue: number;
   totalExpenses: number;
   recentActivities: any[];
+  yearComparison?: YearComparisonData;
 }
 
 export function DashboardClient() {
@@ -41,6 +66,11 @@ export function DashboardClient() {
   }
 
   return (
-    <DashboardHeader data={data} />
+    <div className="space-y-6">
+      <DashboardHeader data={data} />
+      {data.yearComparison && (
+        <YearComparison data={data.yearComparison} />
+      )}
+    </div>
   );
 }
