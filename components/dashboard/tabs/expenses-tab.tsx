@@ -69,6 +69,9 @@ type ExpensesTabProps = {
   onDelete: (id: number) => void;
   onViewReceipt: (url: string) => void;
   isDeleting: boolean;
+  
+  // Recurring expenses
+  onOpenRecurringExpenses?: () => void;
 };
 
 export function ExpensesTab({
@@ -96,6 +99,7 @@ export function ExpensesTab({
   onDelete,
   onViewReceipt,
   isDeleting,
+  onOpenRecurringExpenses,
 }: ExpensesTabProps) {
   return (
     <div className="space-y-6">
@@ -114,11 +118,27 @@ export function ExpensesTab({
                 Erfassen Sie hier Ihre geschäftlichen Ausgaben
               </p>
             </div>
-            <div className="flex items-center text-xs text-muted-foreground bg-muted rounded-lg px-3 py-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Steuerlich relevante Ausgaben werden in der EÜR berücksichtigt
+            <div className="flex items-center gap-2">
+              {onOpenRecurringExpenses && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onOpenRecurringExpenses}
+                  className="flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Wiederkehrende Ausgaben
+                </Button>
+              )}
+              <div className="flex items-center text-xs text-muted-foreground bg-muted rounded-lg px-3 py-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Steuerlich relevante Ausgaben werden in der EÜR berücksichtigt
+              </div>
             </div>
           </div>
         </div>

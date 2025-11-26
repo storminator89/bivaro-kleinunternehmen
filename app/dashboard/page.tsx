@@ -37,6 +37,7 @@ import {
   ReceiptModal, 
   DeleteConfirmationModal 
 } from "@/components/dashboard/modals";
+import { RecurringExpensesModal } from "@/components/dashboard/modals/recurring-expenses-modal";
 import { 
   Expense, 
   Income, 
@@ -91,6 +92,7 @@ function DashboardContent() {
   const [isExportingIncomeDocuments, setIsExportingIncomeDocuments] = useState(false);
   const [incomeExportError, setIncomeExportError] = useState<string | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState<'all' | 'last3Months' | 'last6Months' | 'thisYear' | 'lastYear'>('thisYear');
+  const [recurringExpensesModalOpen, setRecurringExpensesModalOpen] = useState(false);
 
   // Delete Modal State
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -1103,6 +1105,7 @@ function DashboardContent() {
               onDelete={(id) => handleDelete(id, 'expense')}
               onViewReceipt={openReceiptModal}
               isDeleting={isDeleting}
+              onOpenRecurringExpenses={() => setRecurringExpensesModalOpen(true)}
             />
           </TabsContent>
 
@@ -1243,6 +1246,20 @@ function DashboardContent() {
             if (allIncRes.ok) {
               const d = await allIncRes.json();
               setIncomesAll(d.items);
+            }
+          }}
+        />
+
+        {/* Wiederkehrende Ausgaben Modal */}
+        <RecurringExpensesModal
+          isOpen={recurringExpensesModalOpen}
+          onClose={() => setRecurringExpensesModalOpen(false)}
+          onExpensesCreated={async () => {
+            await loadExpenses(expensesPage, expensesPageSize);
+            const allExpRes = await fetch('/api/expenses?page=1&pageSize=10000', { cache: 'no-store' });
+            if (allExpRes.ok) {
+              const d = await allExpRes.json();
+              setExpensesAll(d.items);
             }
           }}
         />

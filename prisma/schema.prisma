@@ -27,6 +27,7 @@ model User {
   customers Customer[]
   settings  Settings?
   templates InvoiceTemplate[]
+  recurringExpenses RecurringExpense[]
 }
 
 model Expense {
@@ -117,4 +118,24 @@ model InvoiceTemplate {
   updatedAt DateTime @updatedAt
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model RecurringExpense {
+  id                    Int      @id @default(autoincrement())
+  description           String
+  amount                Float
+  category              String?
+  taxRelevant           Boolean  @default(true)
+  taxDeductiblePercentage Float? @default(100)
+  interval              String   // MONTHLY, QUARTERLY, YEARLY
+  dayOfMonth            Int      @default(1) // Tag des Monats für die Ausführung
+  startDate             DateTime @default(now())
+  endDate               DateTime? // Optional: Enddatum
+  lastExecuted          DateTime? // Wann wurde zuletzt eine Ausgabe erstellt
+  nextExecution         DateTime // Nächste geplante Ausführung
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id])
 }
