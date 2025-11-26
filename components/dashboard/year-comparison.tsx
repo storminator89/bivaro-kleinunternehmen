@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
 
 interface MonthlyData {
   month: number;
@@ -99,6 +101,8 @@ function ChartBar({ month, lastYearMonth, thisYearHeight, lastYearHeight, isFutu
 }
 
 export function YearComparison({ data }: YearComparisonProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
   };
@@ -124,19 +128,27 @@ export function YearComparison({ data }: YearComparisonProps) {
   const currentMonth = new Date().getMonth();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          Jahresvergleich
-        </CardTitle>
-        <CardDescription>
-          Vergleich {data.currentYear} vs. {data.lastYear} (bis zum heutigen Tag)
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <Card className="bg-card border rounded-xl shadow-sm overflow-hidden">
+      <div 
+        className="flex items-center justify-between cursor-pointer p-4"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          <div>
+            <h2 className="text-lg font-semibold">Jahresvergleich</h2>
+            <p className="text-sm text-muted-foreground">
+              {data.currentYear} vs. {data.lastYear} • Einnahmen: {formatCurrency(data.revenueThisYearToDate)} ({revenueChangeToDate >= 0 ? '+' : ''}{revenueChangeToDate.toFixed(1)}%)
+            </p>
+          </div>
+        </div>
+        <Button variant="ghost" size="icon">
+          {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+        </Button>
+      </div>
+      
+      {isExpanded && (
+      <CardContent className="pt-0">
         <Tabs defaultValue="overview" className="space-y-4">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview">Übersicht</TabsTrigger>
@@ -245,6 +257,7 @@ export function YearComparison({ data }: YearComparisonProps) {
           </TabsContent>
         </Tabs>
       </CardContent>
+      )}
     </Card>
   );
 }

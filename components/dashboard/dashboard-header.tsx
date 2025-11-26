@@ -48,11 +48,20 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
   const profit = data.totalRevenue - data.totalExpenses;
   const profitMargin = data.totalRevenue > 0 ? (profit / data.totalRevenue) * 100 : 0;
 
-  // Kleinunternehmer-Limit Logik
-  const limit = 22000;
-  const percentage = Math.min(100, (data.revenueThisYear / limit) * 100);
-  const isClose = percentage > 80;
-  const isOver = data.revenueThisYear > limit;
+  // Kleinunternehmer-Limit Logik (Neue Regelung ab 01.01.2025)
+  // Vorjahresgrenze: 25.000 € (war 22.000 €)
+  // Laufendes Jahr: 100.000 € harte Grenze (war 50.000 € Prognose)
+  // Bei Überschreitung der 100.000 € im laufenden Jahr: SOFORTIGE Steuerpflicht!
+  const previousYearLimit = 25000; // Grenze für Vorjahresumsatz
+  const currentYearLimit = 100000; // Harte Grenze für laufendes Jahr
+  
+  // Wir zeigen primär die Vorjahresgrenze, da diese für den Status relevant ist
+  const percentage = Math.min(100, (data.revenueThisYear / previousYearLimit) * 100);
+  const percentageHardLimit = Math.min(100, (data.revenueThisYear / currentYearLimit) * 100);
+  
+  const isCloseToYearlyLimit = percentage > 80;
+  const isOverPreviousYearLimit = data.revenueThisYear > previousYearLimit;
+  const isOverHardLimit = data.revenueThisYear > currentYearLimit; // Sofortige Steuerpflicht!
 
   return (
     <div className="space-y-4">
@@ -70,30 +79,74 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
         
         {isExpanded && (
           <div className="px-4 pb-4 space-y-6">
-            {/* Kleinunternehmer-Status Tracker */}
+            {/* Kleinunternehmer-Status Tracker (Neue Regelung ab 2025) */}
             <div className="bg-muted/30 rounded-lg p-4 border">
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">Kleinunternehmer-Status (22.000 € Grenze)</span>
-                  <Badge variant={isOver ? "destructive" : isClose ? "secondary" : "outline"} className="text-xs">
-                    {isOver ? "Limit überschritten" : isClose ? "Limit bald erreicht" : "Im Rahmen"}
+                  <span className="font-medium text-sm">Kleinunternehmer-Status 2025</span>
+                  <Badge 
+                    variant={isOverHardLimit ? "destructive" : isOverPreviousYearLimit ? "destructive" : isCloseToYearlyLimit ? "secondary" : "outline"} 
+                    className="text-xs"
+                  >
+                    {isOverHardLimit 
+                      ? "Sofort steuerpflichtig!" 
+                      : isOverPreviousYearLimit 
+                        ? "Nächstes Jahr steuerpflichtig" 
+                        : isCloseToYearlyLimit 
+                          ? "Grenze nähert sich" 
+                          : "Im Rahmen"}
                   </Badge>
                 </div>
-                <span className="text-sm text-muted-foreground">
-                  {formatCurrency(data.revenueThisYear)} / {formatCurrency(limit)}
-                </span>
               </div>
-              <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-500 ${isOver ? 'bg-red-500' : isClose ? 'bg-amber-500' : 'bg-green-500'}`} 
-                  style={{ width: `${percentage}%` }}
-                />
+              
+              {/* Vorjahresgrenze (25.000 €) */}
+              <div className="space-y-1 mb-3">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Vorjahresgrenze (für Folgejahr-Status)</span>
+                  <span>{formatCurrency(data.revenueThisYear)} / {formatCurrency(previousYearLimit)}</span>
+                </div>
+                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-500 ${isOverPreviousYearLimit ? 'bg-red-500' : isCloseToYearlyLimit ? 'bg-amber-500' : 'bg-green-500'}`} 
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {isOver 
-                  ? "Achtung: Sie haben die 22.000 € Grenze überschritten. Ab dem nächsten Jahr sind Sie voraussichtlich umsatzsteuerpflichtig."
-                  : "Solange Ihr Umsatz im laufenden Jahr unter 22.000 € bleibt (und im Folgejahr voraussichtlich unter 50.000 €), bleiben Sie umsatzsteuerbefreit."}
-              </p>
+              
+              {/* Harte Grenze laufendes Jahr (100.000 €) */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Harte Grenze lfd. Jahr (sofortige Steuerpflicht)</span>
+                  <span>{formatCurrency(data.revenueThisYear)} / {formatCurrency(currentYearLimit)}</span>
+                </div>
+                <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-500 ${isOverHardLimit ? 'bg-red-500' : 'bg-blue-500'}`} 
+                    style={{ width: `${percentageHardLimit}%` }}
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-3 p-2 bg-background/50 rounded text-xs text-muted-foreground space-y-1">
+                {isOverHardLimit ? (
+                  <p className="text-red-500 font-medium">
+                    ⚠️ ACHTUNG: Sie haben die 100.000 € Grenze überschritten! Sie sind ab dem Umsatz, 
+                    mit dem die Grenze überschritten wurde, SOFORT umsatzsteuerpflichtig.
+                  </p>
+                ) : isOverPreviousYearLimit ? (
+                  <p className="text-amber-600 font-medium">
+                    ⚠️ Hinweis: Sie haben die 25.000 € Vorjahresgrenze überschritten. 
+                    Ab dem nächsten Jahr sind Sie umsatzsteuerpflichtig (Regelbesteuerung).
+                  </p>
+                ) : (
+                  <>
+                    <p><strong>Neue Regelung seit 01.01.2025:</strong></p>
+                    <p>• <strong>25.000 €</strong> Vorjahresgrenze – Überschreitung führt zur Steuerpflicht im Folgejahr</p>
+                    <p>• <strong>100.000 €</strong> harte Grenze – Überschreitung führt zur <em>sofortigen</em> Steuerpflicht</p>
+                    <p className="text-muted-foreground/70">Die Grenzen beziehen sich auf den Nettoumsatz.</p>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

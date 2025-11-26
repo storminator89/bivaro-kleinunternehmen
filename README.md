@@ -6,7 +6,7 @@ Bivaro ist eine moderne, webbasierte Buchhaltungsanwendung, die speziell für Kl
 
 ### 📊 Dashboard & Übersicht
 *   **Echtzeit-KPIs**: Umsatz (Monat/Jahr), Ausgaben, Offene Forderungen und Gewinnmarge auf einen Blick.
-*   **Kleinunternehmer-Tracker**: Visueller Fortschrittsbalken für die 22.000 € Umsatzgrenze. Warnt rechtzeitig vor Überschreitung.
+*   **Kleinunternehmer-Tracker**: Visueller Fortschrittsbalken für die neuen Grenzen ab 2025 (25.000 € Vorjahresgrenze, 100.000 € harte Grenze). Warnt bei Annäherung und zeigt sofortige Steuerpflicht bei Überschreitung der 100.000 €-Grenze an.
 *   **Interaktive Charts**: Monatliche Einnahmen vs. Ausgaben im Jahresverlauf.
 *   **Letzte Aktivitäten**: Schneller Zugriff auf die neuesten Buchungen.
 
