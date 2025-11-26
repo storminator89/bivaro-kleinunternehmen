@@ -114,7 +114,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const userId = await requireUserId();
-    const { id, description, amount, customerId, taxRelevant } = await request.json();
+    const { id, description, amount, customerId, taxRelevant, date } = await request.json();
 
     if (!id || !description || !amount) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -127,6 +127,7 @@ export async function PUT(request: Request) {
         amount: parseFloat(amount.toString()),
         customer: customerId ? { connect: { id: customerId } } : { disconnect: true },
         taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
+        ...(date && { date: new Date(date) }),
       },
     });
     return NextResponse.json(updatedIncome);
