@@ -76,6 +76,8 @@ export async function GET(request: NextRequest) {
     // Response mit Datei und korrekten Headers
     const headers: HeadersInit = {
       'Content-Type': contentType,
+      // Allow iframe embedding for preview (SAMEORIGIN instead of DENY)
+      'X-Frame-Options': 'SAMEORIGIN',
     };
     
     // Wenn download=true übergeben wurde, setze den Content-Disposition Header für Download

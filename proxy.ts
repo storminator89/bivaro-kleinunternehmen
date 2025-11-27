@@ -14,6 +14,15 @@ const securityHeaders = {
 // Protected routes that require authentication
 const protectedPaths = ['/dashboard', '/steuer-simulation', '/users', '/customers', '/settings'];
 
+// Routes that should allow iframe embedding (SAMEORIGIN instead of DENY)
+// These are typically file download/preview routes
+const iframeAllowedPaths = [
+  '/api/invoices/download',
+  '/api/expenses/download',
+  '/api/files/',
+  '/api/receipts/download',
+];
+
 // Check if a path matches any protected route
 function isProtectedRoute(path: string): boolean {
   return protectedPaths.some(protectedPath => 
@@ -21,10 +30,22 @@ function isProtectedRoute(path: string): boolean {
   );
 }
 
+// Check if a path should allow iframe embedding (for previews)
+function shouldAllowIframe(path: string): boolean {
+  return iframeAllowedPaths.some(allowedPath => 
+    path.startsWith(allowedPath)
+  );
+}
+
 // Add security headers to response
-function addSecurityHeaders(response: NextResponse): NextResponse {
+function addSecurityHeaders(response: NextResponse, path: string): NextResponse {
   Object.entries(securityHeaders).forEach(([key, value]) => {
-    response.headers.set(key, value);
+    // Use SAMEORIGIN for routes that need iframe embedding (previews)
+    if (key === 'X-Frame-Options' && shouldAllowIframe(path)) {
+      response.headers.set(key, 'SAMEORIGIN');
+    } else {
+      response.headers.set(key, value);
+    }
   });
   return response;
 }
@@ -48,7 +69,7 @@ export async function proxy(request: NextRequest) {
   
   // Create response with security headers
   const response = NextResponse.next();
-  return addSecurityHeaders(response);
+  return addSecurityHeaders(response, path);
 }
 
 // Routes to match
