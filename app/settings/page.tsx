@@ -8,12 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle } from "lucide-react";
+import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle, Key, ChevronRight } from "lucide-react";
 import {
   Alert,
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import Link from "next/link";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
@@ -681,6 +682,37 @@ export default function SettingsPage() {
               <strong>Hinweis:</strong> Bei der Wiederherstellung werden bestehende Daten nicht überschrieben. 
               Das vollständige Backup kann bei vielen Dateien größer werden.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* API Keys */}
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Key className="h-5 w-5" />
+            <CardTitle>API-Zugang</CardTitle>
+          </div>
+          <CardDescription>
+            Verwalten Sie API-Schlüssel für den Zugriff externer Systeme auf Ihre Daten.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm">
+                Erstellen Sie API-Keys, um die REST-API von externen Anwendungen aus zu nutzen.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Endpoints: /api/v1/customers, /api/v1/expenses, /api/v1/incomes, /api/v1/invoices
+              </p>
+            </div>
+            <Link href="/settings/api-keys">
+              <Button variant="outline">
+                API-Keys verwalten
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
           </div>
         </CardContent>
       </Card>

@@ -29,6 +29,8 @@ model User {
   templates InvoiceTemplate[]
   recurringExpenses RecurringExpense[]
   reminders Reminder[]
+  apiKeys   ApiKey[]
+  apiLogs   ApiLog[]
 }
 
 model Expense {
@@ -156,4 +158,38 @@ model Reminder {
   createdAt     DateTime  @default(now())
   userId        String
   user          User      @relation(fields: [userId], references: [id])
+}
+
+// API Key for external REST API access
+model ApiKey {
+  id          Int       @id @default(autoincrement())
+  name        String    // User-friendly name for the key
+  keyHash     String    @unique // SHA-256 hash of the actual key
+  keyPrefix   String    // First few characters for identification (e.g., "biv_sk_abc...")
+  scopes      String?   // JSON array of scopes: ["read", "write", "delete"]
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime? // Optional expiration date
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs        ApiLog[]
+}
+
+// API Access Logs for audit trail
+model ApiLog {
+  id           Int      @id @default(autoincrement())
+  apiKeyId     Int
+  apiKey       ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method       String   // GET, POST, PUT, DELETE
+  endpoint     String   // /api/v1/customers
+  statusCode   Int      // 200, 401, 500, etc.
+  ipAddress    String?
+  userAgent    String?
+  requestBody  String?  // Truncated request body for debugging
+  responseTime Int?     // Response time in ms
+  createdAt    DateTime @default(now())
 }
