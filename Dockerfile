@@ -20,7 +20,7 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # -----------------------------------------------------------------------------
-# Stage 2: Dependencies - Install production dependencies
+# Stage 2: Dependencies - Install ALL dependencies for build
 # -----------------------------------------------------------------------------
 FROM base AS deps
 
@@ -28,8 +28,8 @@ FROM base AS deps
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 
-# Install dependencies with clean install for reproducibility
-RUN npm ci --omit=dev && \
+# Install ALL dependencies (including devDependencies for build)
+RUN npm ci && \
     npx prisma generate && \
     npm cache clean --force
 
@@ -40,16 +40,19 @@ FROM base AS builder
 
 WORKDIR /app
 
-# Copy dependencies from deps stage
+# Copy all dependencies from deps stage (including devDependencies)
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/prisma ./prisma
 
 # Copy source code
 COPY . .
 
-# Generate Prisma client and build
-RUN npx prisma generate && \
-    npm run build
+# Build the application
+RUN npm run build
+
+# Prune devDependencies after build for smaller final image
+RUN npm prune --omit=dev && \
+    npx prisma generate
 
 # -----------------------------------------------------------------------------
 # Stage 4: Runner - Production runtime
