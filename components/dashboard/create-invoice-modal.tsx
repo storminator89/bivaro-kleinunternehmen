@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFName } from 'pdf-lib';
 import QRCode from 'qrcode';
 import { generateZugferdXml } from "@/lib/zugferd-generator";
+import { Eye, EyeOff, FileText, Loader2, RefreshCw } from "lucide-react";
 
 interface CreateInvoiceModalProps {
   isOpen: boolean;
@@ -43,6 +44,12 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
+  
+  // Preview states
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -235,535 +242,551 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     return amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   };
 
+  // Core PDF generation function (returns PDF bytes, used by both preview and final generation)
+  const generatePDFBytes = useCallback(async (forPreview: boolean = false): Promise<Uint8Array> => {
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage();
+    const { width, height } = page.getSize();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    // Design Constants
+    const accentColor = rgb(0.2, 0.2, 0.2);
+    const primaryColor = rgb(0, 0, 0);
+    const secondaryColor = rgb(0.4, 0.4, 0.4);
+    const lightBg = rgb(0.96, 0.96, 0.96);
+
+    // Helper to draw text aligned right
+    const drawTextRight = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
+      const textWidth = fontToUse.widthOfTextAtSize(text, size);
+      page.drawText(text, { x: x - textWidth, y, size, font: fontToUse, color });
+    };
+
+    // Helper to draw text centered
+    const drawTextCenter = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
+      const textWidth = fontToUse.widthOfTextAtSize(text, size);
+      page.drawText(text, { x: x - textWidth / 2, y, size, font: fontToUse, color });
+    };
+
+    let y = height - 50;
+    const margin = 50;
+
+    // --- DECORATIVE ELEMENTS ---
+    // Top Accent Bar
+    page.drawRectangle({
+      x: 0,
+      y: height - 8,
+      width: width,
+      height: 8,
+      color: accentColor,
+    });
+
+    // --- HEADER ---
+    // Logo (Right)
+    if (settings?.logoUrl) {
+      try {
+        const logoBytes = await fetch(settings.logoUrl).then(res => res.arrayBuffer());
+        const logoExt = settings.logoUrl.split('.').pop()?.toLowerCase();
+        let logoImage;
+        
+        if (logoExt === 'png') {
+          logoImage = await pdfDoc.embedPng(logoBytes);
+        } else if (logoExt === 'jpg' || logoExt === 'jpeg') {
+          logoImage = await pdfDoc.embedJpg(logoBytes);
+        }
+
+        if (logoImage) {
+          const maxWidth = 180;
+          const maxHeight = 80;
+          const scale = Math.min(maxWidth / logoImage.width, maxHeight / logoImage.height);
+          const logoDims = logoImage.scale(scale);
+          
+          page.drawImage(logoImage, {
+            x: width - margin - logoDims.width,
+            y: height - margin - logoDims.height + 10,
+            width: logoDims.width,
+            height: logoDims.height,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to embed logo:", error);
+      }
+    }
+
+    // --- SENDER LINE (DIN 5008 Style) ---
+    const senderLineY = height - 125;
+    if (settings?.companyName) {
+      let senderText = settings.companyName;
+      if (settings?.companyAddress) {
+        const city = settings.companyAddress.split('\n').pop()?.split(' ').slice(1).join(' ');
+        const street = settings.companyAddress.split('\n')[0];
+        senderText += ` • ${street}`;
+        if (city) senderText += ` • ${city}`;
+      }
+      
+      page.drawText(senderText, { x: margin, y: senderLineY, size: 7, font, color: secondaryColor });
+      
+      const senderWidth = font.widthOfTextAtSize(senderText, 7);
+      page.drawLine({
+        start: { x: margin, y: senderLineY - 2 },
+        end: { x: margin + senderWidth, y: senderLineY - 2 },
+        thickness: 0.5,
+        color: secondaryColor,
+      });
+    }
+
+    // --- ADDRESS FIELD ---
+    let addressY = senderLineY - 15;
+    const addressLines = customerAddress.split('\n');
+    addressLines.forEach(line => {
+      page.drawText(line, { x: margin, y: addressY, size: 11, font, color: primaryColor });
+      addressY -= 15;
+    });
+
+    // --- INVOICE INFO BLOCK (Right side) ---
+    let infoY = senderLineY - 20;
+    const infoX = width - margin - 200;
+    
+    const infoBoxHeight = 130;
+    const infoBoxWidth = 210;
+    const infoBoxBottom = infoY - 115; 
+
+    page.drawRectangle({
+      x: infoX - 10,
+      y: infoBoxBottom, 
+      width: infoBoxWidth,
+      height: infoBoxHeight,
+      color: rgb(0.98, 0.98, 0.98),
+    });
+
+    page.drawRectangle({
+      x: infoX - 10,
+      y: infoBoxBottom,
+      width: 3,
+      height: infoBoxHeight,
+      color: accentColor,
+    });
+
+    page.drawText('RECHNUNG', { x: infoX, y: infoY, size: 16, font: boldFont, color: primaryColor });
+    infoY -= 25;
+    
+    const infoGap = 16;
+
+    const drawInfoRow = (label: string, value: string) => {
+      page.drawText(label, { x: infoX, y: infoY, size: 9, font, color: secondaryColor });
+      drawTextRight(value, width - margin - 10, infoY, 9, boldFont, primaryColor);
+      infoY -= infoGap;
+    };
+
+    drawInfoRow('Rechnungs-Nr.:', invoiceNumber || 'RE-XXXX');
+    drawInfoRow('Datum:', date ? new Date(date).toLocaleDateString('de-DE') : '-');
+    
+    if (selectedCustomer?.id) {
+      drawInfoRow('Kundennummer:', selectedCustomer.id.toString());
+    }
+
+    infoY -= 5;
+
+    if (deliveryDate) {
+      drawInfoRow('Leistungsdatum:', new Date(deliveryDate).toLocaleDateString('de-DE'));
+    }
+
+    if (dueDate) {
+      drawInfoRow('Fällig am:', new Date(dueDate).toLocaleDateString('de-DE'));
+    }
+
+    // --- TABLE ---
+    y = height - 300;
+    
+    const colX = {
+      pos: margin,
+      desc: margin + 30,
+      qty: width - margin - 260,
+      unit: width - margin - 230,
+      price: width - margin - 130,
+      tax: width - margin - 70,
+      total: width - margin
+    };
+
+    page.drawRectangle({
+      x: margin,
+      y: y - 5,
+      width: width - 2 * margin,
+      height: 20,
+      color: lightBg,
+    });
+
+    page.drawText('Pos.', { x: colX.pos + 5, y, size: 9, font: boldFont, color: accentColor });
+    page.drawText('Beschreibung', { x: colX.desc, y, size: 9, font: boldFont, color: accentColor });
+    drawTextRight('Menge', colX.qty, y, 9, boldFont, accentColor);
+    page.drawText('Einh.', { x: colX.unit, y, size: 9, font: boldFont, color: accentColor });
+    drawTextRight('Preis', colX.price, y, 9, boldFont, accentColor);
+    drawTextRight('MwSt', colX.tax, y, 9, boldFont, accentColor);
+    drawTextRight('Gesamt', colX.total - 5, y, 9, boldFont, accentColor);
+
+    y -= 25;
+
+    let netTotal = 0;
+    let taxTotal = 0;
+
+    items.forEach((item, index) => {
+      const lineNet = item.quantity * item.unitPrice;
+      const lineTax = lineNet * (item.taxRate / 100);
+      
+      netTotal += lineNet;
+      taxTotal += lineTax;
+
+      const maxDescWidth = colX.qty - colX.desc - 10;
+      const words = (item.description || 'Position').split(' ');
+      let descLines: string[] = [];
+      let currentLine = words[0] || '';
+
+      for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const textWidth = font.widthOfTextAtSize(currentLine + " " + word, 10);
+        if (textWidth < maxDescWidth) {
+          currentLine += " " + word;
+        } else {
+          descLines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      descLines.push(currentLine);
+
+      const lineHeight = 12;
+      const itemHeight = Math.max(20, descLines.length * lineHeight + 8);
+
+      if (index % 2 === 0) {
+        page.drawRectangle({
+          x: margin,
+          y: y - itemHeight + 12,
+          width: width - 2 * margin,
+          height: itemHeight,
+          color: rgb(0.98, 0.98, 0.98),
+        });
+      }
+
+      page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font, color: secondaryColor });
+      
+      descLines.forEach((line, i) => {
+        page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font, color: primaryColor });
+      });
+
+      drawTextRight(item.quantity.toString(), colX.qty, y, 10, font, primaryColor);
+      page.drawText(item.unit, { x: colX.unit, y, size: 10, font, color: primaryColor });
+      drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font, primaryColor);
+      drawTextRight(`${item.taxRate}%`, colX.tax, y, 10, font, primaryColor);
+      drawTextRight(formatCurrency(lineNet), colX.total - 5, y, 10, font, primaryColor);
+
+      const separatorY = y - ((descLines.length - 1) * lineHeight) - 8;
+
+      page.drawLine({
+        start: { x: margin, y: separatorY },
+        end: { x: width - margin, y: separatorY },
+        thickness: 0.5,
+        color: rgb(0.92, 0.92, 0.92),
+      });
+
+      y = separatorY - 12;
+    });
+
+    y -= 10;
+
+    // --- TOTALS ---
+    const totalX = width - margin;
+    const labelX = totalX - 90;
+    const grossTotal = netTotal + taxTotal;
+
+    page.drawLine({
+      start: { x: labelX - 40, y: y + 5 },
+      end: { x: totalX, y: y + 5 },
+      thickness: 0.5,
+      color: rgb(0.8, 0.8, 0.8),
+    });
+
+    y -= 15;
+
+    drawTextRight('Netto:', labelX, y, 10, font);
+    drawTextRight(formatCurrency(netTotal), totalX, y, 10, font);
+    y -= 15;
+
+    if (taxTotal > 0) {
+      drawTextRight('zzgl. USt.:', labelX, y, 10, font);
+      drawTextRight(formatCurrency(taxTotal), totalX, y, 10, font);
+    } else {
+      drawTextRight('zzgl. USt. 0%:', labelX, y, 10, font);
+      drawTextRight('0,00 €', totalX, y, 10, font);
+    }
+    y -= 20;
+
+    const totalLabel = 'Gesamtbetrag:';
+    const totalLabelWidth = boldFont.widthOfTextAtSize(totalLabel, 12);
+    const totalLineStart = labelX - totalLabelWidth;
+
+    page.drawLine({
+      start: { x: totalLineStart, y: y + 12 },
+      end: { x: totalX, y: y + 12 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+
+    drawTextRight(totalLabel, labelX, y, 12, boldFont);
+    drawTextRight(formatCurrency(grossTotal), totalX, y, 12, boldFont);
+    
+    y -= 4;
+    page.drawLine({
+      start: { x: totalLineStart, y: y },
+      end: { x: totalX, y: y },
+      thickness: 0.5,
+      color: rgb(0, 0, 0),
+    });
+    page.drawLine({
+      start: { x: totalLineStart, y: y - 2 },
+      end: { x: totalX, y: y - 2 },
+      thickness: 0.5,
+      color: rgb(0, 0, 0),
+    });
+    
+    y -= 40;
+
+    // --- NOTES & LEGAL ---
+    if (notes) {
+      page.drawText('Anmerkungen:', { x: margin, y, size: 10, font: boldFont });
+      y -= 15;
+      const noteLines = notes.split('\n');
+      noteLines.forEach(line => {
+        page.drawText(line, { x: margin, y, size: 10, font });
+        y -= 12;
+      });
+      y -= 20;
+    }
+
+    if (taxTotal === 0) {
+      page.drawText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: margin, y, size: 10, font });
+      y -= 15;
+    }
+    
+    if (dueDate) {
+      page.drawText(`Bitte überweisen Sie den Betrag bis zum ${new Date(dueDate).toLocaleDateString('de-DE')}.`, { x: margin, y, size: 10, font });
+    }
+
+    // --- FOOTER ---
+    const footerY = 60;
+    page.drawLine({
+      start: { x: margin, y: footerY + 15 },
+      end: { x: width - margin, y: footerY + 15 },
+      thickness: 0.5,
+      color: rgb(0.7, 0.7, 0.7),
+    });
+
+    // --- QR CODE (GiroCode) - Skip for preview to improve performance ---
+    if (includeQRCode && !forPreview) {
+      if (settings?.iban && settings?.companyName) {
+        const iban = settings.iban;
+        const bic = settings.bic;
+        
+        if (iban) {
+          const cleanName = (settings.companyName || "").replace(/[\r\n]/g, "").trim();
+          const finalIban = (iban || "").replace(/\s/g, "").toUpperCase(); 
+          
+          const toSEPA = (str: string) => {
+            const map: { [key: string]: string } = {
+              'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss'
+            };
+            let cleaned = str.replace(/[äöüÄÖÜß]/g, m => map[m]);
+            cleaned = cleaned.replace(/[^a-zA-Z0-9\/\-\?:\(\)\.,'\+ ]/g, '');
+            return cleaned.trim();
+          };
+
+          let giroCodeData = "BCD\n";
+          giroCodeData += "002\n";
+          giroCodeData += "1\n";
+          giroCodeData += "SCT\n";
+          giroCodeData += (bic || "").trim() + "\n";
+          giroCodeData += toSEPA(cleanName).substring(0, 70) + "\n";
+          giroCodeData += finalIban + "\n";
+          giroCodeData += `EUR${grossTotal.toFixed(2)}\n`;
+          giroCodeData += "\n";
+          giroCodeData += "\n";
+          giroCodeData += toSEPA(invoiceNumber || "").substring(0, 140) + "\n";
+
+          try {
+            const qrCodeDataUrl = await QRCode.toDataURL(giroCodeData, { 
+              errorCorrectionLevel: 'M',
+              type: 'image/png',
+              margin: 4
+            });
+            const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
+            const qrDim = 80;
+            
+            page.drawImage(qrCodeImage, {
+              x: width - margin - qrDim,
+              y: footerY + 30,
+              width: qrDim,
+              height: qrDim,
+            });
+            
+            page.drawText('GiroCode scannen & zahlen', {
+              x: width - margin - qrDim,
+              y: footerY + 25,
+              size: 8,
+              font,
+              color: rgb(0.4, 0.4, 0.4)
+            });
+          } catch (err) {
+            console.error("Error generating QR code:", err);
+          }
+        }
+      }
+    } else if (includeQRCode && forPreview) {
+      // Show placeholder for QR code in preview
+      page.drawRectangle({
+        x: width - margin - 80,
+        y: footerY + 30,
+        width: 80,
+        height: 80,
+        color: rgb(0.95, 0.95, 0.95),
+        borderColor: rgb(0.8, 0.8, 0.8),
+        borderWidth: 1,
+      });
+      page.drawText('QR-Code', {
+        x: width - margin - 60,
+        y: footerY + 70,
+        size: 8,
+        font,
+        color: rgb(0.6, 0.6, 0.6)
+      });
+    }
+
+    let footerTextLeft = "";
+    if (settings?.companyName) footerTextLeft += settings.companyName + "\n";
+    if (settings?.companyAddress) footerTextLeft += settings.companyAddress;
+
+    let footerTextCenter = "";
+    if (settings?.bankName) footerTextCenter += settings.bankName + "\n";
+    if (settings?.iban) footerTextCenter += "IBAN: " + settings.iban + "\n";
+    if (settings?.bic) footerTextCenter += "BIC: " + settings.bic;
+
+    let footerTextRight = "";
+    if (settings?.taxNumber) footerTextRight += "Steuernummer:\n" + settings.taxNumber + "\n";
+    if (settings?.footerText) footerTextRight += "\n" + settings.footerText;
+
+    const footerFontSize = 8;
+    const footerLineHeight = 10;
+
+    let fy = footerY;
+    footerTextLeft.split('\n').forEach(line => {
+      page.drawText(line, { x: margin, y: fy, size: footerFontSize, font, color: rgb(0.4, 0.4, 0.4) });
+      fy -= footerLineHeight;
+    });
+
+    fy = footerY;
+    footerTextCenter.split('\n').forEach(line => {
+      drawTextCenter(line, width / 2, fy, footerFontSize, font, rgb(0.4, 0.4, 0.4));
+      fy -= footerLineHeight;
+    });
+
+    fy = footerY;
+    footerTextRight.split('\n').forEach(line => {
+      drawTextRight(line, width - margin, fy, footerFontSize, font, rgb(0.4, 0.4, 0.4));
+      fy -= footerLineHeight;
+    });
+
+    // Page Numbers
+    const pageCount = pdfDoc.getPageCount();
+    const pages = pdfDoc.getPages();
+    pages.forEach((p, i) => {
+      const { width: pageWidth } = p.getSize();
+      const text = `Seite ${i + 1} von ${pageCount}`;
+      const textWidth = font.widthOfTextAtSize(text, 8);
+      p.drawText(text, { 
+        x: (pageWidth - textWidth) / 2, 
+        y: 15, 
+        size: 8, 
+        font, 
+        color: secondaryColor 
+      });
+    });
+
+    return await pdfDoc.save();
+  }, [customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode, formatCurrency]);
+
+  // Generate preview with debouncing
+  const generatePreview = useCallback(async () => {
+    if (!showPreview) return;
+    
+    setIsGeneratingPreview(true);
+    try {
+      const pdfBytes = await generatePDFBytes(true);
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      
+      // Revoke old URL to prevent memory leaks
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+    } catch (error) {
+      console.error("Error generating preview:", error);
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  }, [showPreview, generatePDFBytes, previewUrl]);
+
+  // Debounced preview update
+  useEffect(() => {
+    if (!showPreview) return;
+    
+    if (previewTimeoutRef.current) {
+      clearTimeout(previewTimeoutRef.current);
+    }
+    
+    previewTimeoutRef.current = setTimeout(() => {
+      generatePreview();
+    }, 500); // 500ms debounce
+    
+    return () => {
+      if (previewTimeoutRef.current) {
+        clearTimeout(previewTimeoutRef.current);
+      }
+    };
+  }, [showPreview, customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode]);
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, []);
+
+  // Initial preview generation when preview is enabled
+  useEffect(() => {
+    if (showPreview && !previewUrl) {
+      generatePreview();
+    }
+  }, [showPreview]);
+
   const generatePDF = async () => {
     setIsGenerating(true);
     try {
-      const pdfDoc = await PDFDocument.create();
-      const page = pdfDoc.addPage();
-      const { width, height } = page.getSize();
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      
-      // Design Constants
-      const accentColor = rgb(0.2, 0.2, 0.2); // Dark Grey/Black for professional look, or use rgb(0, 0.3, 0.6) for blue
-      const primaryColor = rgb(0, 0, 0);
-      const secondaryColor = rgb(0.4, 0.4, 0.4);
-      const lightBg = rgb(0.96, 0.96, 0.96);
-
-      // Helper to draw text aligned right
-      const drawTextRight = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
-        const textWidth = fontToUse.widthOfTextAtSize(text, size);
-        page.drawText(text, { x: x - textWidth, y, size, font: fontToUse, color });
-      };
-
-      // Helper to draw text centered
-      const drawTextCenter = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
-        const textWidth = fontToUse.widthOfTextAtSize(text, size);
-        page.drawText(text, { x: x - textWidth / 2, y, size, font: fontToUse, color });
-      };
-
-      let y = height - 50;
-      const margin = 50;
-
-      // --- DECORATIVE ELEMENTS ---
-      // Top Accent Bar
-      page.drawRectangle({
-        x: 0,
-        y: height - 8,
-        width: width,
-        height: 8,
-        color: accentColor,
-      });
-
-      // --- HEADER ---
-      // Logo (Right)
-      if (settings?.logoUrl) {
-        try {
-          const logoBytes = await fetch(settings.logoUrl).then(res => res.arrayBuffer());
-          const logoExt = settings.logoUrl.split('.').pop()?.toLowerCase();
-          let logoImage;
-          
-          if (logoExt === 'png') {
-            logoImage = await pdfDoc.embedPng(logoBytes);
-          } else if (logoExt === 'jpg' || logoExt === 'jpeg') {
-            logoImage = await pdfDoc.embedJpg(logoBytes);
-          }
-
-          if (logoImage) {
-            const maxWidth = 180;
-            const maxHeight = 80;
-            const scale = Math.min(maxWidth / logoImage.width, maxHeight / logoImage.height);
-            const logoDims = logoImage.scale(scale);
-            
-            page.drawImage(logoImage, {
-              x: width - margin - logoDims.width,
-              y: height - margin - logoDims.height + 10, // Slightly higher
-              width: logoDims.width,
-              height: logoDims.height,
-            });
-          }
-        } catch (error) {
-          console.error("Failed to embed logo:", error);
-        }
-      }
-
-      // --- SENDER LINE (DIN 5008 Style) ---
-      // Position for Form A (approx 45mm from top)
-      const senderLineY = height - 125;
-      if (settings?.companyName) {
-        let senderText = settings.companyName;
-        if (settings?.companyAddress) {
-            const city = settings.companyAddress.split('\n').pop()?.split(' ').slice(1).join(' '); // Try to extract city
-            const street = settings.companyAddress.split('\n')[0];
-            senderText += ` • ${street}`;
-            if (city) senderText += ` • ${city}`;
-        }
-        
-        page.drawText(senderText, { x: margin, y: senderLineY, size: 7, font, color: secondaryColor });
-        
-        // Underline
-        const senderWidth = font.widthOfTextAtSize(senderText, 7);
-        page.drawLine({
-            start: { x: margin, y: senderLineY - 2 },
-            end: { x: margin + senderWidth, y: senderLineY - 2 },
-            thickness: 0.5,
-            color: secondaryColor,
-        });
-      }
-
-      // --- ADDRESS FIELD ---
-      // Closer to sender line (approx 5mm gap)
-      let addressY = senderLineY - 15;
-      const addressLines = customerAddress.split('\n');
-      addressLines.forEach(line => {
-        page.drawText(line, { x: margin, y: addressY, size: 11, font, color: primaryColor });
-        addressY -= 15;
-      });
-
-      // --- INVOICE INFO BLOCK (Right side) ---
-      // Move down slightly to avoid logo overlap
-      let infoY = senderLineY - 20;
-      const infoX = width - margin - 200;
-      
-      // Info Box Dimensions
-      const infoBoxHeight = 130;
-      const infoBoxWidth = 210;
-      const infoBoxBottom = infoY - 115; 
-
-      // Info Block Background (Modern Card Style)
-      page.drawRectangle({
-          x: infoX - 10,
-          y: infoBoxBottom, 
-          width: infoBoxWidth,
-          height: infoBoxHeight,
-          color: rgb(0.98, 0.98, 0.98), // Very subtle grey
-      });
-
-      // Left Accent Stripe
-      page.drawRectangle({
-          x: infoX - 10,
-          y: infoBoxBottom,
-          width: 3,
-          height: infoBoxHeight,
-          color: accentColor,
-      });
-
-      // Header Title
-      page.drawText('RECHNUNG', { x: infoX, y: infoY, size: 16, font: boldFont, color: primaryColor });
-      infoY -= 25;
-      
-      const infoGap = 16;
-
-      const drawInfoRow = (label: string, value: string) => {
-          page.drawText(label, { x: infoX, y: infoY, size: 9, font, color: secondaryColor });
-          drawTextRight(value, width - margin - 10, infoY, 9, boldFont, primaryColor);
-          infoY -= infoGap;
-      };
-
-      drawInfoRow('Rechnungs-Nr.:', invoiceNumber);
-      drawInfoRow('Datum:', new Date(date).toLocaleDateString('de-DE'));
-      
-      if (selectedCustomer?.id) {
-         drawInfoRow('Kundennummer:', selectedCustomer.id.toString());
-      }
-
-      infoY -= 5; // Extra gap
-
-      if (deliveryDate) {
-        drawInfoRow('Leistungsdatum:', new Date(deliveryDate).toLocaleDateString('de-DE'));
-      }
-
-      if (dueDate) {
-        drawInfoRow('Fällig am:', new Date(dueDate).toLocaleDateString('de-DE'));
-      }
-
-      // --- TABLE ---
-      y = height - 300;
-      
-      // Table Config
-      const colX = {
-        pos: margin,
-        desc: margin + 30,
-        qty: width - margin - 260,
-        unit: width - margin - 230,
-        price: width - margin - 130,
-        tax: width - margin - 70,
-        total: width - margin
-      };
-
-      // Header Background
-      page.drawRectangle({
-        x: margin,
-        y: y - 5,
-        width: width - 2 * margin,
-        height: 20,
-        color: lightBg,
-      });
-
-      // Header Text
-      page.drawText('Pos.', { x: colX.pos + 5, y, size: 9, font: boldFont, color: accentColor });
-      page.drawText('Beschreibung', { x: colX.desc, y, size: 9, font: boldFont, color: accentColor });
-      drawTextRight('Menge', colX.qty, y, 9, boldFont, accentColor);
-      page.drawText('Einh.', { x: colX.unit, y, size: 9, font: boldFont, color: accentColor });
-      drawTextRight('Preis', colX.price, y, 9, boldFont, accentColor);
-      drawTextRight('MwSt', colX.tax, y, 9, boldFont, accentColor);
-      drawTextRight('Gesamt', colX.total - 5, y, 9, boldFont, accentColor);
-
-      y -= 25;
-
-      // Items
+      // Calculate totals for ZUGFeRD
       let netTotal = 0;
       let taxTotal = 0;
-
-      items.forEach((item, index) => {
+      items.forEach((item) => {
         const lineNet = item.quantity * item.unitPrice;
         const lineTax = lineNet * (item.taxRate / 100);
-        
         netTotal += lineNet;
         taxTotal += lineTax;
-
-        // Word Wrap for Description
-        const maxDescWidth = colX.qty - colX.desc - 10;
-        const words = item.description.split(' ');
-        let descLines: string[] = [];
-        let currentLine = words[0];
-
-        for (let i = 1; i < words.length; i++) {
-            const word = words[i];
-            const width = font.widthOfTextAtSize(currentLine + " " + word, 10);
-            if (width < maxDescWidth) {
-                currentLine += " " + word;
-            } else {
-                descLines.push(currentLine);
-                currentLine = word;
-            }
-        }
-        descLines.push(currentLine);
-
-        // Calculate height needed
-        const lineHeight = 12;
-        const itemHeight = Math.max(20, descLines.length * lineHeight + 8);
-
-        // Check for page break
-        if (y - itemHeight < 50) {
-            page.addPage();
-            y = height - 50;
-            
-            // Redraw Header on new page
-            page.drawRectangle({
-                x: margin,
-                y: y - 5,
-                width: width - 2 * margin,
-                height: 20,
-                color: lightBg,
-            });
-            page.drawText('Pos.', { x: colX.pos + 5, y, size: 9, font: boldFont, color: accentColor });
-            page.drawText('Beschreibung', { x: colX.desc, y, size: 9, font: boldFont, color: accentColor });
-            drawTextRight('Menge', colX.qty, y, 9, boldFont, accentColor);
-            page.drawText('Einh.', { x: colX.unit, y, size: 9, font: boldFont, color: accentColor });
-            drawTextRight('Preis', colX.price, y, 9, boldFont, accentColor);
-            drawTextRight('MwSt', colX.tax, y, 9, boldFont, accentColor);
-            drawTextRight('Gesamt', colX.total - 5, y, 9, boldFont, accentColor);
-            y -= 25;
-        }
-
-        // Zebra Striping
-        if (index % 2 === 0) {
-            page.drawRectangle({
-                x: margin,
-                y: y - itemHeight + 12, // Adjust based on height
-                width: width - 2 * margin,
-                height: itemHeight,
-                color: rgb(0.98, 0.98, 0.98),
-            });
-        }
-
-        page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font, color: secondaryColor });
-        
-        // Draw description lines
-        descLines.forEach((line, i) => {
-            page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font, color: primaryColor });
-        });
-
-        drawTextRight(item.quantity.toString(), colX.qty, y, 10, font, primaryColor);
-        page.drawText(item.unit, { x: colX.unit, y, size: 10, font, color: primaryColor });
-        drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font, primaryColor);
-        drawTextRight(`${item.taxRate}%`, colX.tax, y, 10, font, primaryColor);
-        drawTextRight(formatCurrency(lineNet), colX.total - 5, y, 10, font, primaryColor);
-
-        // Calculate Y for separator line (below the last line of description)
-        const separatorY = y - ((descLines.length - 1) * lineHeight) - 8;
-
-        // Line separator (lighter)
-        page.drawLine({
-            start: { x: margin, y: separatorY },
-            end: { x: width - margin, y: separatorY },
-            thickness: 0.5,
-            color: rgb(0.92, 0.92, 0.92),
-        });
-
-        // Update Y for next item
-        y = separatorY - 12;
       });
 
-      y -= 10;
-
-      // --- TOTALS ---
-      const totalX = width - margin;
-      const labelX = totalX - 90;
-      const grossTotal = netTotal + taxTotal;
-
-      // Separator line
-      page.drawLine({
-          start: { x: labelX - 40, y: y + 5 },
-          end: { x: totalX, y: y + 5 },
-          thickness: 0.5,
-          color: rgb(0.8, 0.8, 0.8),
-      });
-
-      y -= 15;
-
-      drawTextRight('Netto:', labelX, y, 10, font);
-      drawTextRight(formatCurrency(netTotal), totalX, y, 10, font);
-      y -= 15;
-
-      if (taxTotal > 0) {
-        drawTextRight('zzgl. USt.:', labelX, y, 10, font);
-        drawTextRight(formatCurrency(taxTotal), totalX, y, 10, font);
-      } else {
-        drawTextRight('zzgl. USt. 0%:', labelX, y, 10, font);
-        drawTextRight('0,00 €', totalX, y, 10, font);
-      }
-      y -= 20;
-
-      // Thick line before Total
-      const totalLabel = 'Gesamtbetrag:';
-      const totalLabelWidth = boldFont.widthOfTextAtSize(totalLabel, 12);
-      const totalLineStart = labelX - totalLabelWidth;
-
-      page.drawLine({
-        start: { x: totalLineStart, y: y + 12 },
-        end: { x: totalX, y: y + 12 },
-        thickness: 1,
-        color: rgb(0, 0, 0),
-      });
-
-      drawTextRight(totalLabel, labelX, y, 12, boldFont);
-      drawTextRight(formatCurrency(grossTotal), totalX, y, 12, boldFont);
+      // Generate base PDF bytes (without ZUGFeRD - we need to add it separately for now)
+      const pdfBytes = await generatePDFBytes(false);
       
-      // Double underline
-      y -= 4;
-      page.drawLine({
-        start: { x: totalLineStart, y: y },
-        end: { x: totalX, y: y },
-        thickness: 0.5,
-        color: rgb(0, 0, 0),
-      });
-      page.drawLine({
-        start: { x: totalLineStart, y: y - 2 },
-        end: { x: totalX, y: y - 2 },
-        thickness: 0.5,
-        color: rgb(0, 0, 0),
-      });
-      
-      y -= 40;
-
-      // --- NOTES & LEGAL ---
-      if (notes) {
-        page.drawText('Anmerkungen:', { x: margin, y, size: 10, font: boldFont });
-        y -= 15;
-        const noteLines = notes.split('\n');
-        noteLines.forEach(line => {
-            page.drawText(line, { x: margin, y, size: 10, font });
-            y -= 12;
-        });
-        y -= 20;
-      }
-
-      if (taxTotal === 0) {
-        page.drawText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: margin, y, size: 10, font });
-        y -= 15;
-      }
-      
-      if (dueDate) {
-          page.drawText(`Bitte überweisen Sie den Betrag bis zum ${new Date(dueDate).toLocaleDateString('de-DE')}.`, { x: margin, y, size: 10, font });
-      }
-
-      // --- FOOTER ---
-      const footerY = 60;
-      page.drawLine({
-        start: { x: margin, y: footerY + 15 },
-        end: { x: width - margin, y: footerY + 15 },
-        thickness: 0.5,
-        color: rgb(0.7, 0.7, 0.7),
-      });
-
-      // --- QR CODE (GiroCode) ---
-      if (includeQRCode) {
-        if (settings?.iban && settings?.companyName) {
-          const iban = settings.iban;
-          const bic = settings.bic;
-          
-          if (iban) {
-            // EPC069-12 Standard (GiroCode)
-            // 1. Service Tag (BCD)
-            // 2. Version (002)
-            // 3. Encoding (1 = UTF-8)
-            // 4. Transfer (SCT)
-            // 5. BIC (optional)
-            // 6. Empfänger (max 70 Zeichen)
-            // 7. IBAN
-            // 8. Betrag (EUR12.50)
-            // 9. Zweckcode (leer)
-            // 10. Referenz (leer, da Verwendungszweck genutzt wird)
-            // 11. Verwendungszweck (max 140 Zeichen)
-            // 12. Hinweis (leer)
-
-            // Sicherstellen, dass keine Zeilenumbrüche in den Werten stecken
-            const cleanName = (settings.companyName || "").replace(/[\r\n]/g, "").trim();
-            // WICHTIG: IBAN darf KEINE Leerzeichen enthalten!
-            const finalIban = (iban || "").replace(/\s/g, "").toUpperCase(); 
-            
-            // SEPA-Zeichensatz erzwingen (Umlaute ersetzen, ungültige Zeichen entfernen)
-            const toSEPA = (str: string) => {
-                const map: { [key: string]: string } = {
-                  'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss'
-                };
-                let cleaned = str.replace(/[äöüÄÖÜß]/g, m => map[m]);
-                // Erlaube nur SEPA-Zeichen: a-z, A-Z, 0-9, / - ? : ( ) . , ' + und Leerzeichen
-                cleaned = cleaned.replace(/[^a-zA-Z0-9\/\-\?:\(\)\.,'\+ ]/g, '');
-                return cleaned.trim();
-            };
-            
-            // Warnung bei ungültiger IBAN-Länge (DE = 22 Stellen)
-            if (finalIban.startsWith('DE') && finalIban.length !== 22) {
-               alert(`Warnung: Die IBAN "${finalIban}" hat ${finalIban.length} Stellen. Eine deutsche IBAN muss 22 Stellen haben. Der QR-Code wird möglicherweise nicht funktionieren.`);
-            }
-
-            // Manuelle Konstruktion des Strings, um sicherzustellen, dass alle Zeilenumbrüche korrekt sind
-            // EPC069-12 Standard - Reduziert auf die wesentlichen Felder (1-8) wie gewünscht
-            let giroCodeData = "BCD\n";                                 // 1. Service Tag
-            giroCodeData += "002\n";                                    // 2. Version
-            giroCodeData += "1\n";                                      // 3. Encoding
-            giroCodeData += "SCT\n";                                    // 4. Transfer
-            giroCodeData += (bic || "").trim() + "\n";                  // 5. BIC
-            giroCodeData += toSEPA(cleanName).substring(0, 70) + "\n";  // 6. Empfänger
-            giroCodeData += finalIban + "\n";                           // 7. IBAN
-            giroCodeData += `EUR${grossTotal.toFixed(2)}\n`;           // 8. Betrag
-            giroCodeData += "\n";                                       // 9. Zweckcode (leer)
-            giroCodeData += "\n";                                       // 10. Referenz (leer)
-            giroCodeData += toSEPA(invoiceNumber || "").substring(0, 140) + "\n"; // 11. Verwendungszweck
-
-            console.log("GiroCode Payload:", JSON.stringify(giroCodeData));
-
-            try {
-              const qrCodeDataUrl = await QRCode.toDataURL(giroCodeData, { 
-                errorCorrectionLevel: 'M',
-                type: 'image/png',
-                margin: 4
-              });
-              const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
-              const qrDim = 80;
-              
-              // Position QR code in the bottom right area, above footer
-              page.drawImage(qrCodeImage, {
-                x: width - margin - qrDim,
-                y: footerY + 30,
-                width: qrDim,
-                height: qrDim,
-              });
-              
-              page.drawText('GiroCode scannen & zahlen', {
-                x: width - margin - qrDim,
-                y: footerY + 25,
-                size: 8,
-                font,
-                color: rgb(0.4, 0.4, 0.4)
-              });
-            } catch (err) {
-              console.error("Error generating QR code:", err);
-              alert("Fehler beim Generieren des QR-Codes.");
-            }
-          } else {
-            console.warn("Keine gültige IBAN gefunden für QR-Code");
-            alert("Hinweis: Es konnte keine gültige IBAN in den Einstellungen gefunden werden. Der QR-Code wurde nicht erstellt.");
-          }
-        } else {
-          console.warn("Fehlende Bankdaten oder Firmenname für QR-Code");
-          alert("Hinweis: Für den QR-Code fehlen Bankverbindung oder Firmenname in den Einstellungen.");
-        }
-      }
-
-      let footerTextLeft = "";
-      if (settings?.companyName) footerTextLeft += settings.companyName + "\n";
-      if (settings?.companyAddress) footerTextLeft += settings.companyAddress;
-
-      let footerTextCenter = "";
-      if (settings?.bankName) footerTextCenter += settings.bankName + "\n";
-      if (settings?.iban) footerTextCenter += "IBAN: " + settings.iban + "\n";
-      if (settings?.bic) footerTextCenter += "BIC: " + settings.bic;
-
-      let footerTextRight = "";
-      if (settings?.taxNumber) footerTextRight += "Steuernummer:\n" + settings.taxNumber + "\n";
-      if (settings?.footerText) footerTextRight += "\n" + settings.footerText;
-
-      const footerFontSize = 8;
-      const footerLineHeight = 10;
-
-      // Draw Footer Columns
-      let fy = footerY;
-      footerTextLeft.split('\n').forEach(line => {
-          page.drawText(line, { x: margin, y: fy, size: footerFontSize, font, color: rgb(0.4, 0.4, 0.4) });
-          fy -= footerLineHeight;
-      });
-
-      fy = footerY;
-      footerTextCenter.split('\n').forEach(line => {
-          drawTextCenter(line, width / 2, fy, footerFontSize, font, rgb(0.4, 0.4, 0.4));
-          fy -= footerLineHeight;
-      });
-
-      fy = footerY;
-      footerTextRight.split('\n').forEach(line => {
-          drawTextRight(line, width - margin, fy, footerFontSize, font, rgb(0.4, 0.4, 0.4));
-          fy -= footerLineHeight;
-      });
-
-      // Page Numbers
-      const pageCount = pdfDoc.getPageCount();
-      const pages = pdfDoc.getPages();
-      pages.forEach((p, i) => {
-          const { width } = p.getSize();
-          const text = `Seite ${i + 1} von ${pageCount}`;
-          const textWidth = font.widthOfTextAtSize(text, 8);
-          p.drawText(text, { 
-              x: (width - textWidth) / 2, 
-              y: 15, 
-              size: 8, 
-              font, 
-              color: secondaryColor 
-          });
-      });
+      // For ZUGFeRD, we need to create a new PDFDocument and attach the XML
+      const pdfDoc = await PDFDocument.load(pdfBytes);
 
       // --- ZUGFeRD XML Integration ---
       try {
@@ -871,8 +894,8 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
         console.error("Error attaching ZUGFeRD XML:", e);
       }
 
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const finalPdfBytes = await pdfDoc.save();
+      const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
 
       // Automatic Upload
       const formData = new FormData();
@@ -883,24 +906,24 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       let uploadSuccess = false;
 
       try {
-          const uploadRes = await fetch('/api/invoices/upload', {
-              method: 'POST',
-              body: formData
-          });
+        const uploadRes = await fetch('/api/invoices/upload', {
+          method: 'POST',
+          body: formData
+        });
 
-          if (!uploadRes.ok) {
-              const err = await uploadRes.json();
-              console.error("Auto-upload failed:", err);
-              alert("Speichern fehlgeschlagen: " + (err.error || "Unbekannter Fehler"));
-          } else {
-              if (onInvoiceCreated) {
-                  onInvoiceCreated();
-              }
-              uploadSuccess = true;
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json();
+          console.error("Auto-upload failed:", err);
+          alert("Speichern fehlgeschlagen: " + (err.error || "Unbekannter Fehler"));
+        } else {
+          if (onInvoiceCreated) {
+            onInvoiceCreated();
           }
+          uploadSuccess = true;
+        }
       } catch (e) {
-          console.error("Auto-upload network error:", e);
-          alert("Fehler beim automatischen Speichern der Rechnung.");
+        console.error("Auto-upload network error:", e);
+        alert("Fehler beim automatischen Speichern der Rechnung.");
       }
 
       const url = URL.createObjectURL(blob);
@@ -926,25 +949,50 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Rechnung erstellen</DialogTitle>
-          <DialogDescription>
-            Erstellen Sie eine professionelle PDF-Rechnung.
-          </DialogDescription>
+      <DialogContent className={`max-h-[90vh] overflow-hidden ${showPreview ? 'sm:max-w-[1400px]' : 'sm:max-w-[800px]'}`}>
+        <DialogHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle>Rechnung erstellen</DialogTitle>
+              <DialogDescription>
+                Erstellen Sie eine professionelle PDF-Rechnung.
+              </DialogDescription>
+            </div>
+            <Button
+              variant={showPreview ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowPreview(!showPreview)}
+              className="gap-2"
+            >
+              {showPreview ? (
+                <>
+                  <EyeOff className="h-4 w-4" />
+                  Vorschau ausblenden
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4" />
+                  Live-Vorschau
+                </>
+              )}
+            </Button>
+          </div>
         </DialogHeader>
-        <div className="grid gap-6 py-4">
-          {/* Template Section */}
-          <div className="bg-muted/30 p-3 rounded-md border mb-2">
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-sm font-medium">Vorlage laden / speichern</Label>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-6 text-xs"
-                onClick={() => setIsSaveTemplateOpen(!isSaveTemplateOpen)}
-              >
-                {isSaveTemplateOpen ? "Abbrechen" : "+ Als Vorlage speichern"}
+        
+        <div className={`grid gap-6 ${showPreview ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {/* Form Section */}
+          <div className="overflow-y-auto max-h-[calc(90vh-180px)] pr-2 space-y-6 py-4">
+            {/* Template Section */}
+            <div className="bg-muted/30 p-3 rounded-md border mb-2">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-medium">Vorlage laden / speichern</Label>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 text-xs"
+                  onClick={() => setIsSaveTemplateOpen(!isSaveTemplateOpen)}
+                >
+                  {isSaveTemplateOpen ? "Abbrechen" : "+ Als Vorlage speichern"}
               </Button>
             </div>
             
@@ -1145,7 +1193,73 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                 </div>
             </div>
           </div>
+          </div>
+          
+          {/* Preview Section */}
+          {showPreview && (
+            <div className="border-l pl-4 flex flex-col h-[calc(90vh-180px)]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">PDF-Vorschau</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={generatePreview}
+                  disabled={isGeneratingPreview}
+                  className="h-7 text-xs gap-1"
+                >
+                  {isGeneratingPreview ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  Aktualisieren
+                </Button>
+              </div>
+              
+              <div className="flex-1 rounded-lg border bg-muted/30 overflow-hidden relative">
+                {isGeneratingPreview && !previewUrl && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <span className="text-sm text-muted-foreground">Vorschau wird generiert...</span>
+                    </div>
+                  </div>
+                )}
+                
+                {previewUrl ? (
+                  <iframe
+                    src={previewUrl}
+                    className="w-full h-full border-0"
+                    title="Rechnungsvorschau"
+                  />
+                ) : !isGeneratingPreview && (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center text-muted-foreground">
+                      <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Füllen Sie das Formular aus,</p>
+                      <p className="text-sm">um die Vorschau zu sehen.</p>
+                    </div>
+                  </div>
+                )}
+                
+                {isGeneratingPreview && previewUrl && (
+                  <div className="absolute top-2 right-2 bg-background/90 rounded-md px-2 py-1 text-xs text-muted-foreground flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Aktualisiere...
+                  </div>
+                )}
+              </div>
+              
+              <p className="text-xs text-muted-foreground mt-2">
+                Die Vorschau aktualisiert sich automatisch bei Änderungen. Der QR-Code wird erst in der finalen PDF angezeigt.
+              </p>
+            </div>
+          )}
         </div>
+        
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Abbrechen</Button>
           <Button onClick={generatePDF} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
