@@ -26,6 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Combobox } from "@/components/ui/combobox";
 
 type RecurringExpense = {
   id: number;
@@ -48,6 +49,7 @@ type RecurringExpensesModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onExpensesCreated?: () => void;
+  uniqueCategories?: string[];
 };
 
 const INTERVAL_LABELS: Record<string, string> = {
@@ -56,13 +58,14 @@ const INTERVAL_LABELS: Record<string, string> = {
   YEARLY: 'Jährlich',
 };
 
-export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated }: RecurringExpensesModalProps) {
+export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uniqueCategories = [] }: RecurringExpensesModalProps) {
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [dueCount, setDueCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [availableCategories, setAvailableCategories] = useState<string[]>(uniqueCategories);
   
   // Bestätigungsdialog State
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -87,6 +90,11 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated }: R
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
   });
+
+  // Update available categories when props change
+  useEffect(() => {
+    setAvailableCategories(uniqueCategories);
+  }, [uniqueCategories]);
 
   const loadRecurringExpenses = async () => {
     setIsLoading(true);
@@ -385,11 +393,13 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated }: R
               
               <div className="space-y-2">
                 <Label htmlFor="category">Kategorie</Label>
-                <Input
+                <Combobox
                   id="category"
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, category: value })}
+                  options={availableCategories}
                   placeholder="z.B. Miete, Software, Versicherung"
+                  allowCustom={true}
                 />
               </div>
               

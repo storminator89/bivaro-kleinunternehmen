@@ -19,6 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Combobox } from "@/components/ui/combobox";
 import { AfaTableDialog } from "@/components/afa-table-dialog";
 import { Expense, FilterState } from "@/types/dashboard";
 import { formatCurrency } from "@/lib/dashboard-utils";
@@ -179,11 +180,13 @@ export function ExpensesTab({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category" className="text-sm font-medium">Kategorie</Label>
-                <Input
+                <Combobox
                   id="category"
                   value={newExpense.category}
-                  onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
+                  onChange={(value) => setNewExpense({ ...newExpense, category: value })}
+                  options={uniqueCategories}
                   placeholder="z.B. Bürobedarf"
+                  allowCustom={true}
                 />
               </div>
               <div className="space-y-2">

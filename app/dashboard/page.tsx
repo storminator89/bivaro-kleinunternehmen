@@ -161,7 +161,7 @@ function DashboardContent() {
     description: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
-    category: 'Sonstiges',
+    category: '',
     taxRelevant: true,
     taxDeductiblePercentage: 100,
     depreciationYears: ''
@@ -462,7 +462,7 @@ function DashboardContent() {
           description: '',
           amount: '',
           date: new Date().toISOString().split('T')[0],
-          category: 'Sonstiges',
+          category: '',
           taxRelevant: true,
           taxDeductiblePercentage: 100,
           depreciationYears: ''
@@ -1216,6 +1216,7 @@ function DashboardContent() {
             data={itemToEdit}
             type={editType}
             customers={customers}
+            uniqueCategories={uniqueCategories}
           />
         )}
 
@@ -1254,6 +1255,7 @@ function DashboardContent() {
         <RecurringExpensesModal
           isOpen={recurringExpensesModalOpen}
           onClose={() => setRecurringExpensesModalOpen(false)}
+          uniqueCategories={uniqueCategories}
           onExpensesCreated={async () => {
             await loadExpenses(expensesPage, expensesPageSize);
             const allExpRes = await fetch('/api/expenses?page=1&pageSize=10000', { cache: 'no-store' });

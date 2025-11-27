@@ -12,6 +12,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Combobox } from "@/components/ui/combobox";
 import { AfaTableDialog } from "@/components/afa-table-dialog";
 import { Customer } from "@/types/dashboard";
 
@@ -22,9 +23,10 @@ type EditModalProps = {
   data: any;
   type: 'expense' | 'income';
   customers: Customer[];
+  uniqueCategories?: string[];
 };
 
-export function EditModal({ isOpen, onClose, onSave, data, type, customers = [] }: EditModalProps) {
+export function EditModal({ isOpen, onClose, onSave, data, type, customers = [], uniqueCategories = [] }: EditModalProps) {
   const [formData, setFormData] = useState(data);
 
   useEffect(() => {
@@ -87,11 +89,13 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [] 
           {type === 'expense' && (
             <div className="space-y-2">
               <Label htmlFor="edit-category" className="text-sm font-medium">Kategorie</Label>
-              <Input
+              <Combobox
                 id="edit-category"
                 value={formData.category || ''}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="dark:bg-background dark:border-input"
+                onChange={(value) => setFormData({ ...formData, category: value })}
+                options={uniqueCategories}
+                placeholder="z.B. Bürobedarf"
+                allowCustom={true}
               />
             </div>
           )}
