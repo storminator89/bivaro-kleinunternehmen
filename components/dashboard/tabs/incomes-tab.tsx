@@ -33,7 +33,7 @@ type NewIncome = {
 type IncomesTabProps = {
   // Form state
   newIncome: NewIncome;
-  setNewIncome: (income: NewIncome) => void;
+  setNewIncome: React.Dispatch<React.SetStateAction<NewIncome>>;
   onSubmit: (e: React.FormEvent) => void;
   customers: Customer[];
   

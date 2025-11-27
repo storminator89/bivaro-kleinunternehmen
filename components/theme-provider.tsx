@@ -11,7 +11,6 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
       enableSystem
       disableTransitionOnChange
       enableColorScheme
-      suppressHydrationWarning
       {...props}
     >
       {children}

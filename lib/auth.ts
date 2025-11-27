@@ -82,7 +82,7 @@ export const authOptions: NextAuthOptions = {
                             entityType: 'User',
                             entityId: user.id,
                             entityName: user.email,
-                            metadata: JSON.stringify({ reason: 'Invalid password', remainingAttempts: rateLimit.remainingAttempts }),
+                            metadata: { reason: 'Invalid password', remainingAttempts: rateLimit.remainingAttempts },
                         });
                     } catch (e) {
                         console.error('Failed to log login attempt:', e);

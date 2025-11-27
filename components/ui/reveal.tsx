@@ -7,7 +7,7 @@ type RevealProps = {
   className?: string;
   delay?: number; // ms
   y?: number; // px translate on enter
-  as?: keyof JSX.IntrinsicElements;
+  as?: React.ElementType;
 };
 
 export function Reveal({ children, className = "", delay = 0, y = 12, as: Tag = "div" }: RevealProps) {
@@ -40,7 +40,7 @@ export function Reveal({ children, className = "", delay = 0, y = 12, as: Tag = 
   };
 
   return (
-    // @ts-expect-error dynamic tag
+    // Dynamic tag element
     <Tag ref={ref} className={className} style={style}>
       {children}
     </Tag>

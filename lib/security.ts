@@ -93,12 +93,12 @@ export function validateFileType(
   file: { type: string; name: string },
   category: keyof typeof ALLOWED_MIME_TYPES
 ): boolean {
-  const allowedMimeTypes = ALLOWED_MIME_TYPES[category] || [];
-  const allowedExtensions = ALLOWED_EXTENSIONS[category] || [];
+  const allowedMimeTypes: readonly string[] = ALLOWED_MIME_TYPES[category] || [];
+  const allowedExtensions: readonly string[] = ALLOWED_EXTENSIONS[category] || [];
   
-  const mimeValid = allowedMimeTypes.includes(file.type as any);
+  const mimeValid = allowedMimeTypes.includes(file.type);
   const extension = path.extname(file.name).toLowerCase();
-  const extValid = allowedExtensions.includes(extension as any);
+  const extValid = allowedExtensions.includes(extension);
   
   return mimeValid && extValid;
 }

@@ -205,7 +205,7 @@ export async function GET() {
   }
 }
 
-async function getMonthlyData(userId: number, year: number) {
+async function getMonthlyData(userId: string, year: number) {
   const months = [];
   
   for (let month = 0; month < 12; month++) {

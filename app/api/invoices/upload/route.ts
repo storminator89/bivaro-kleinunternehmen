@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (totalAmount > 0) {
+    if (totalAmount !== null && totalAmount > 0) {
       const description = `Rechnung ${invoiceNumber || 'ohne Nummer'}`;
 
       let customerRecord = null;

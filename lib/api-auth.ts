@@ -233,11 +233,11 @@ export async function withApiAuth(
     userId: string;
     apiKeyId: number;
     scopes: string[];
-  }) => Promise<NextResponse>,
+  }) => Promise<NextResponse | Response>,
   options?: {
     requiredScopes?: string[];
   }
-): Promise<NextResponse> {
+): Promise<NextResponse | Response> {
   const startTime = Date.now();
   const apiKey = extractApiKey(request);
 
@@ -272,7 +272,7 @@ export async function withApiAuth(
   }
 
   // Execute handler
-  let response: NextResponse;
+  let response: NextResponse | Response;
   try {
     response = await handler({
       userId: validation.userId,

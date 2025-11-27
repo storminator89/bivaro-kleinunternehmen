@@ -6,9 +6,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
-interface StatusBadgeProps {
+export interface StatusBadgeProps {
   status: string;
-  onStatusChange: (newStatus: string) => void;
+  onStatusChange?: (newStatus: string) => void;
 }
 
 const statusConfig: {
@@ -21,6 +21,16 @@ const statusConfig: {
 
 export function StatusBadge({ status, onStatusChange }: StatusBadgeProps) {
   const { label, color } = statusConfig[status] || { label: "Unbekannt", color: "bg-gray-300" };
+
+  // If no onStatusChange provided, render a non-interactive badge
+  if (!onStatusChange) {
+    return (
+      <Badge variant="outline">
+        <span className={`w-2 h-2 rounded-full mr-2 ${color}`}></span>
+        {label}
+      </Badge>
+    );
+  }
 
   return (
     <DropdownMenu>

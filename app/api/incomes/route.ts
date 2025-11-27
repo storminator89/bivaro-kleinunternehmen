@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       data: {
         description,
         amount: parseFloat(amount.toString()),
-        customer: customerId ? { connect: { id: customerId } } : undefined,
+        customerId: customerId || null,
         taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
         userId,
       },

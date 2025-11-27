@@ -167,10 +167,15 @@ function DashboardContent() {
     depreciationYears: ''
   });
 
-  const [newIncome, setNewIncome] = useState({
+  const [newIncome, setNewIncome] = useState<{
+    description: string;
+    amount: string;
+    customerId?: number;
+    taxRelevant: boolean;
+  }>({
     description: '',
     amount: '',
-    customerId: undefined, // customerId statt customer
+    customerId: undefined,
     taxRelevant: true
   });
 
@@ -501,7 +506,7 @@ function DashboardContent() {
         setNewIncome({
           description: '',
           amount: '',
-          customer: '',
+          customerId: undefined,
           taxRelevant: true
         });
       }
@@ -691,7 +696,8 @@ function DashboardContent() {
     setReceiptModalOpen(true);
   };
 
-  const handleInvoiceStatusChange = async (id: number, newStatus: string) => {
+  const handleInvoiceStatusChange = async (id: number | undefined, newStatus: string) => {
+    if (id === undefined) return;
     try {
       const response = await fetch('/api/invoices', {
         method: 'PUT',

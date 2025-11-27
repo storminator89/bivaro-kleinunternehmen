@@ -832,6 +832,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           description: 'ZUGFeRD Invoice Data',
           creationDate: new Date(),
           modificationDate: new Date(),
+          // @ts-expect-error pdf-lib types may not include AFRelationship
           afRelationship: 'Alternative',
         });
 
