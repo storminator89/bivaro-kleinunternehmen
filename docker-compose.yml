@@ -48,7 +48,7 @@ services:
       start_period: 40s
     security_opt:
       - no-new-privileges:true
-    read_only: true
+    # Note: read_only removed to allow Prisma migrations and SQLite writes
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
     cap_drop:
