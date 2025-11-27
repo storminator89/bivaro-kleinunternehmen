@@ -24,6 +24,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # -----------------------------------------------------------------------------
 FROM base AS deps
 
+# Set DATABASE_URL for Prisma generate (will be overridden at runtime)
+ENV DATABASE_URL="file:/app/data/prod.db"
+
 # Copy package files
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
@@ -39,6 +42,9 @@ RUN npm ci && \
 FROM base AS builder
 
 WORKDIR /app
+
+# Set DATABASE_URL for Prisma (will be overridden at runtime)
+ENV DATABASE_URL="file:/app/data/prod.db"
 
 # Copy all dependencies from deps stage (including devDependencies)
 COPY --from=deps /app/node_modules ./node_modules
