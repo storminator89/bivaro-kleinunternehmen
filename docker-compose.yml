@@ -40,12 +40,14 @@ services:
       - buchhaltung-data:/app/data
       # Persist uploaded files
       - buchhaltung-uploads:/app/public/uploads
+    # Run init container to fix permissions on first run
+    user: "1001:1001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     security_opt:
       - no-new-privileges:true
     # Note: read_only removed to allow Prisma migrations and SQLite writes

@@ -78,7 +78,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 # Create necessary directories with correct permissions
 RUN mkdir -p /app/data /app/public/uploads /app/prisma && \
-    chown -R nextjs:nodejs /app
+    chown -R nextjs:nodejs /app && \
+    chmod 755 /app/data /app/public/uploads
 
 # Copy built application from builder
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
