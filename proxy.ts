@@ -11,22 +11,30 @@ const securityHeaders = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
 
-export async function middleware(request: NextRequest) {
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-  
-  // Protected routes - require authentication
-  const protectedPaths = ['/dashboard', '/steuer-simulation', '/users', '/customers', '/settings'];
-  
-  // Extract the path from the request URL
-  const path = request.nextUrl.pathname;
+// Protected routes that require authentication
+const protectedPaths = ['/dashboard', '/steuer-simulation', '/users', '/customers', '/settings'];
 
-  // Check if the current path is a protected route
-  const isProtectedPath = protectedPaths.some(protectedPath => 
+// Check if a path matches any protected route
+function isProtectedRoute(path: string): boolean {
+  return protectedPaths.some(protectedPath => 
     path === protectedPath || path.startsWith(`${protectedPath}/`)
   );
+}
+
+// Add security headers to response
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  Object.entries(securityHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+  return response;
+}
+
+export async function proxy(request: NextRequest) {
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  const path = request.nextUrl.pathname;
 
   // If it's a protected route and user is not authenticated, redirect to login
-  if (isProtectedPath && !token) {
+  if (isProtectedRoute(path) && !token) {
     const url = new URL('/login', request.url);
     url.searchParams.set('callbackUrl', encodeURI(request.url));
     return NextResponse.redirect(url);
@@ -40,16 +48,17 @@ export async function middleware(request: NextRequest) {
   
   // Create response with security headers
   const response = NextResponse.next();
-  
-  // Add security headers to all responses
-  Object.entries(securityHeaders).forEach(([key, value]) => {
-    response.headers.set(key, value);
-  });
-  
-  return response;
+  return addSecurityHeaders(response);
 }
 
-// Match specific paths for the middleware to run on
-export const config = {
-  matcher: ['/', '/login', '/register', '/dashboard/:path*', '/steuer-simulation/:path*', '/users/:path*', '/customers/:path*', '/settings/:path*'],
-};
+// Routes to match
+export const routes = [
+  '/',
+  '/login',
+  '/register',
+  '/dashboard/:path*',
+  '/steuer-simulation/:path*',
+  '/users/:path*',
+  '/customers/:path*',
+  '/settings/:path*',
+];

@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { validatePassword, isValidEmail, sanitizeString } from "@/lib/security";
 
 const prisma = new PrismaClient();

@@ -1,28 +1,100 @@
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine AS base
+# =============================================================================
+# BUCHHALTUNG - Production Docker Image
+# State-of-the-art Multi-Stage Build with Security Best Practices
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Base - Common configuration
+# -----------------------------------------------------------------------------
+FROM node:22-alpine AS base
+
+# Install security updates and required packages
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache libc6-compat openssl dumb-init
+
 WORKDIR /app
+
+# Disable telemetry
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install dependencies
-COPY package*.json ./
-RUN npm ci
+# -----------------------------------------------------------------------------
+# Stage 2: Dependencies - Install production dependencies
+# -----------------------------------------------------------------------------
+FROM base AS deps
 
+# Copy package files
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma/
+
+# Install dependencies with clean install for reproducibility
+RUN npm ci --omit=dev && \
+    npx prisma generate && \
+    npm cache clean --force
+
+# -----------------------------------------------------------------------------
+# Stage 3: Builder - Build the application
+# -----------------------------------------------------------------------------
 FROM base AS builder
-COPY . .
-RUN npx prisma generate
-RUN npm run build
 
-FROM node:20-alpine AS runner
 WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/prisma ./prisma
+
+# Copy source code
+COPY . .
+
+# Generate Prisma client and build
+RUN npx prisma generate && \
+    npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 4: Runner - Production runtime
+# -----------------------------------------------------------------------------
+FROM node:22-alpine AS runner
+
+# Install security updates and dumb-init for proper signal handling
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache libc6-compat openssl dumb-init curl && \
+    rm -rf /var/cache/apk/*
+
+WORKDIR /app
+
+# Environment configuration
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000
+    PORT=3000 \
+    HOSTNAME="0.0.0.0"
 
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/.next/standalone ./
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
 
+# Create necessary directories with correct permissions
+RUN mkdir -p /app/data /app/public/uploads /app/prisma && \
+    chown -R nextjs:nodejs /app
+
+# Copy built application from builder
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
 EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Use dumb-init to handle signals properly (PID 1 problem)
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
 CMD ["node", "server.js"]

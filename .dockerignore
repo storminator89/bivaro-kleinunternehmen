@@ -1,11 +1,75 @@
-.next
+# =============================================================================
+# Docker Ignore - Exclude files from Docker build context
+# =============================================================================
+
+# Dependencies
 node_modules
+.pnp
+.pnp.js
+
+# Build outputs
+.next
+out
+build
+dist
+
+# Database
+prisma/dev.db
+prisma/*.db
+prisma/*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files (NEVER include in image)
 .env
 .env.*
-Dockerfile
-docker-compose.yml
-prisma/dev.db
-npm-debug.log
+.env.local
+.env.development
+.env.production
+!.env.example
+
+# Docker files (not needed in build context)
+Dockerfile*
+docker-compose*.yml
+.docker
+
+# Version control
 .git
 .gitignore
+.gitattributes
+
+# IDE & Editor
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+coverage
+.nyc_output
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__
+tests
+
+# Documentation
+*.md
+!README.md
+docs
+AGENTS.md
+
+# Misc
+.turbo
+.vercel
+.cache
+tmp
+temp
