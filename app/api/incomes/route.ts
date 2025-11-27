@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
         userId,
       },
     });
+
+    // Audit log
+    await auditCreate(userId, 'Income', income, income.description);
 
     return NextResponse.json(income);
   } catch (error) {
@@ -120,6 +124,11 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Get old values for audit
+    const oldIncome = await prisma.income.findUnique({
+      where: { id: Number(id) },
+    });
+
     const updatedIncome = await prisma.income.update({
       where: { id: Number(id), userId },
       data: {
@@ -130,6 +139,12 @@ export async function PUT(request: Request) {
         ...(date && { date: new Date(date) }),
       },
     });
+
+    // Audit log
+    if (oldIncome) {
+      await auditUpdate(userId, 'Income', id, oldIncome, updatedIncome, updatedIncome.description);
+    }
+
     return NextResponse.json(updatedIncome);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -168,6 +183,11 @@ export async function DELETE(request: Request) {
     await prisma.income.delete({
       where: { id: Number(id), userId },
     });
+
+    // Audit log
+    if (income) {
+      await auditDelete(userId, 'Income', income, income.description);
+    }
     
     return NextResponse.json({ success: true });
   } catch (error) {

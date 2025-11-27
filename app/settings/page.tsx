@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle, Key, ChevronRight } from "lucide-react";
+import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle, Key, ChevronRight, History } from "lucide-react";
 import {
   Alert,
   AlertDescription,
@@ -710,6 +710,37 @@ export default function SettingsPage() {
             <Link href="/settings/api-keys">
               <Button variant="outline">
                 API-Keys verwalten
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Audit Log */}
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <History className="h-5 w-5" />
+            <CardTitle>Audit-Log</CardTitle>
+          </div>
+          <CardDescription>
+            Protokoll aller Änderungen und Aktivitäten für Compliance und Sicherheit.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm">
+                Sehen Sie wer was wann geändert hat – vollständige Nachverfolgbarkeit aller Aktionen.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Kunden, Rechnungen, Ausgaben, Einnahmen, Einstellungen und mehr
+              </p>
+            </div>
+            <Link href="/settings/audit-logs">
+              <Button variant="outline">
+                Audit-Log anzeigen
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

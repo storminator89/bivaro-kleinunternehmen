@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { auditBackup, auditExport } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -22,6 +23,14 @@ export async function GET() {
       prisma.settings.findUnique({ where: { userId } }),
       prisma.invoiceTemplate.findMany({ where: { userId } }),
     ]);
+
+    // Audit log
+    await auditBackup(userId, 'BACKUP', {
+      expensesCount: expenses.length,
+      incomesCount: incomes.length,
+      invoicesCount: invoices.length,
+      customersCount: customers.length,
+    });
 
     const backup = {
       version: "1.0",

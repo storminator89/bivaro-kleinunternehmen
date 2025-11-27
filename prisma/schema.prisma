@@ -31,6 +31,7 @@ model User {
   reminders Reminder[]
   apiKeys   ApiKey[]
   apiLogs   ApiLog[]
+  auditLogs AuditLog[]
 }
 
 model Expense {
@@ -192,4 +193,28 @@ model ApiLog {
   requestBody  String?  // Truncated request body for debugging
   responseTime Int?     // Response time in ms
   createdAt    DateTime @default(now())
+}
+
+// Audit Log for tracking all data changes
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action        String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, EXPORT, etc.
+  entityType    String   // Customer, Invoice, Expense, Income, Settings, etc.
+  entityId      String?  // ID of the affected entity
+  entityName    String?  // Human-readable name (e.g., customer name, invoice number)
+  oldValues     String?  // JSON of old values (for updates)
+  newValues     String?  // JSON of new values (for creates/updates)
+  changedFields String?  // JSON array of field names that changed
+  ipAddress     String?
+  userAgent     String?
+  sessionId     String?  // For tracking user sessions
+  metadata      String?  // Additional context as JSON
+  createdAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
 }

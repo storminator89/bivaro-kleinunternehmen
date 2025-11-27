@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { generateApiKey } from '@/lib/api-auth';
+import { createAuditLog } from '@/lib/audit-log';
 
 // GET - List all API keys for the current user
 export async function GET(request: NextRequest) {
@@ -107,6 +108,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Audit log
+    await createAuditLog({
+      userId,
+      action: 'API_KEY_CREATED',
+      entityType: 'ApiKey',
+      entityId: apiKey.id,
+      entityName: apiKey.name,
+      newValues: {
+        name: apiKey.name,
+        keyPrefix: apiKey.keyPrefix,
+        scopes: requestedScopes,
+        expiresAt: apiKey.expiresAt,
+      },
+    });
+
     // Return the full key ONLY on creation (never shown again)
     return NextResponse.json({
       id: apiKey.id,
@@ -150,6 +166,19 @@ export async function DELETE(request: NextRequest) {
     // Delete the API key (cascades to logs)
     await prisma.apiKey.delete({
       where: { id: parseInt(id) },
+    });
+
+    // Audit log
+    await createAuditLog({
+      userId,
+      action: 'API_KEY_REVOKED',
+      entityType: 'ApiKey',
+      entityId: existing.id,
+      entityName: existing.name,
+      oldValues: {
+        name: existing.name,
+        keyPrefix: existing.keyPrefix,
+      },
     });
 
     return NextResponse.json({ success: true, message: 'API key revoked' });

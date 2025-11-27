@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { auditCreate, auditUpdate, auditDelete, createAuditLog } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
         userId,
       },
     });
+
+    // Audit log
+    await auditCreate(userId, 'Invoice', invoice, invoice.invoiceNumber || invoice.fileName);
 
     return NextResponse.json(invoice);
   } catch (error) {
@@ -135,6 +139,11 @@ export async function DELETE(request: Request) {
     await prisma.invoice.delete({
       where: { id: Number(id), userId },
     });
+
+    // Audit log
+    if (invoice) {
+      await auditDelete(userId, 'Invoice', invoice, invoice.invoiceNumber || invoice.fileName);
+    }
     
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -154,6 +163,11 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'ID und Status sind erforderlich' }, { status: 400 });
     }
 
+    // Get old values for audit
+    const oldInvoice = await prisma.invoice.findUnique({
+      where: { id: Number(id) },
+    });
+
     const updatedInvoice = await prisma.invoice.update({
       where: { id: Number(id), userId },
       data: { 
@@ -163,6 +177,19 @@ export async function PUT(request: Request) {
         income: true,
       }
     });
+
+    // Audit log for status change
+    if (oldInvoice) {
+      await createAuditLog({
+        userId,
+        action: 'STATUS_CHANGED',
+        entityType: 'Invoice',
+        entityId: id,
+        entityName: updatedInvoice.invoiceNumber || updatedInvoice.fileName,
+        oldValues: { status: oldInvoice.status },
+        newValues: { status: updatedInvoice.status },
+      });
+    }
     
     return NextResponse.json(updatedInvoice);
   } catch (error) {

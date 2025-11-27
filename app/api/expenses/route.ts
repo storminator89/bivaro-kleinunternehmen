@@ -7,6 +7,7 @@ import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -92,6 +93,9 @@ export async function POST(request: NextRequest) {
         },
       });
       
+      // Audit log
+      await auditCreate(userId, 'Expense', expense, expense.description);
+      
       return NextResponse.json(expense);
     } else {
       // Verarbeite regulären JSON-Request ohne Datei
@@ -113,6 +117,9 @@ export async function POST(request: NextRequest) {
           userId,
         },
       });
+      
+      // Audit log
+      await auditCreate(userId, 'Expense', expense, expense.description);
       
       return NextResponse.json(expense);
     }
@@ -212,6 +219,11 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Get old values for audit
+    const oldExpense = await prisma.expense.findUnique({
+      where: { id: Number(id) },
+    });
+
     const updatedExpense = await prisma.expense.update({
       where: { id: Number(id), userId },
       data: {
@@ -225,6 +237,12 @@ export async function PUT(request: Request) {
         depreciationYears: depreciationYears || null,
       },
     });
+
+    // Audit log
+    if (oldExpense) {
+      await auditUpdate(userId, 'Expense', id, oldExpense, updatedExpense, updatedExpense.description);
+    }
+
     return NextResponse.json(updatedExpense);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -245,9 +263,20 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
     }
 
+    // Get expense for audit before deletion
+    const expense = await prisma.expense.findUnique({
+      where: { id: Number(id) },
+    });
+
     await prisma.expense.delete({
       where: { id: Number(id), userId },
     });
+
+    // Audit log
+    if (expense) {
+      await auditDelete(userId, 'Expense', expense, expense.description);
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
