@@ -6,6 +6,7 @@ import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
 
 // Maximum file size: 10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -47,31 +48,16 @@ export async function POST(request: NextRequest) {
     
     // Generiere einen eindeutigen Dateinamen für die dauerhafte Speicherung
     const uniqueFileName = `logo_${uuidv4()}${safeExtension}`;
-    const uploadDir = path.join(process.cwd(), 'public/uploads');
-    const permanentFilePath = path.join(uploadDir, uniqueFileName);
-    
-    // Verify the final path is within uploads directory (prevent path traversal)
-    const resolvedPath = path.resolve(permanentFilePath);
-    const resolvedUploadDir = path.resolve(uploadDir);
-    if (!resolvedPath.startsWith(resolvedUploadDir)) {
-      return NextResponse.json(
-        { error: 'Ungültiger Dateipfad' },
-        { status: 400 }
-      );
-    }
-
-    // Stelle sicher, dass das Verzeichnis existiert
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
+    ensureUploadDirExists();
+    const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
 
     // Write file directly to permanent location
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     await writeFile(permanentFilePath, buffer);
 
-    // Rückgabe der URL
-    const logoUrl = `/uploads/${uniqueFileName}`;
+    // Return API URL for serving logo (not direct file path)
+    const logoUrl = `/api/files/logo?file=${uniqueFileName}`;
     return NextResponse.json({ url: logoUrl });
 
   } catch (error) {

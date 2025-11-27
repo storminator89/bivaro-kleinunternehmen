@@ -40,8 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Upload directory
+# Upload directory (legacy - public folder)
 /public/uploads
+
+# Upload directory (secure - private folder)
+/data/uploads
 
 # Database
 /prisma/dev.db

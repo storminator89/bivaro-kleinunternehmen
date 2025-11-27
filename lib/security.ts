@@ -39,7 +39,7 @@ export const ALLOWED_EXTENSIONS = {
 /**
  * Validate and sanitize a file path to prevent path traversal attacks
  * 
- * @param baseDir - The base directory (e.g., 'public/uploads')
+ * @param baseDir - The base directory (e.g., 'data/uploads')
  * @param fileName - The filename to validate
  * @returns The sanitized full path or null if invalid
  */

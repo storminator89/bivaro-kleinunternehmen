@@ -10,6 +10,7 @@ import { PDFDocument, PDFName, PDFDict, PDFArray, PDFHexString, PDFString, PDFSt
 import { parseStringPromise } from 'xml2js';
 import zlib from 'zlib';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
 
 const prisma = new PrismaClient();
 
@@ -112,12 +113,8 @@ export async function POST(request: NextRequest) {
     await writeFile(filePath, buffer);
 
     const uniqueFileName = `${uuidv4()}_${file.name.replace(/\s+/g, '_')}`;
-    const uploadDir = path.join(process.cwd(), 'public/uploads');
-    const permanentFilePath = path.join(uploadDir, uniqueFileName);
-
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
+    ensureUploadDirExists();
+    const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
 
     fs.copyFileSync(filePath, permanentFilePath);
 

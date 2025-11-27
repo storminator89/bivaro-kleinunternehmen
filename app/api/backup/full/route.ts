@@ -4,6 +4,7 @@ import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/ge
 import * as fs from 'fs';
 import * as path from 'path';
 import JSZip from 'jszip';
+import { findUploadedFile } from '@/lib/upload-path';
 
 const prisma = new PrismaClient();
 
@@ -77,42 +78,36 @@ export async function GET() {
     // Add JSON backup
     zip.file('backup.json', JSON.stringify(backup, null, 2));
 
-    // Paths to check for files - PDFs are in public/uploads
-    const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    const receiptsDir = path.join(uploadsDir, 'receipts');
-    const logosDir = path.join(uploadsDir, 'logos');
-
-    // Add invoice PDFs (stored in public/uploads)
+    // Add invoice PDFs (uses findUploadedFile to check both new and legacy locations)
     for (const invoice of invoices) {
       if (invoice.storedFileName) {
-        const filePath = path.join(publicUploadsDir, invoice.storedFileName);
-        if (fs.existsSync(filePath)) {
+        const filePath = findUploadedFile(invoice.storedFileName);
+        if (filePath && fs.existsSync(filePath)) {
           const fileContent = fs.readFileSync(filePath);
           zip.file(`invoices/${invoice.storedFileName}`, fileContent);
         }
       }
     }
 
-    // Add expense receipts (also stored in public/uploads)
+    // Add expense receipts
     for (const expense of expenses) {
       if (expense.storedReceiptFileName) {
-        const filePath = path.join(publicUploadsDir, expense.storedReceiptFileName);
-        if (fs.existsSync(filePath)) {
+        const filePath = findUploadedFile(expense.storedReceiptFileName);
+        if (filePath && fs.existsSync(filePath)) {
           const fileContent = fs.readFileSync(filePath);
           zip.file(`receipts/${expense.storedReceiptFileName}`, fileContent);
         }
       }
     }
 
-    // Add logo if exists (also stored in public/uploads)
+    // Add logo if exists
     if (settings?.logoUrl) {
-      // URL format is /uploads/logo_xxx.png
-      const logoMatch = settings.logoUrl.match(/\/uploads\/(.+)$/);
+      // URL format is /api/files/logo?file=xxx or legacy /uploads/xxx
+      const logoMatch = settings.logoUrl.match(/(?:file=|\/uploads\/)(.+?)(?:$|&)/);
       if (logoMatch) {
         const logoFileName = logoMatch[1];
-        const logoPath = path.join(publicUploadsDir, logoFileName);
-        if (fs.existsSync(logoPath)) {
+        const logoPath = findUploadedFile(logoFileName);
+        if (logoPath && fs.existsSync(logoPath)) {
           const fileContent = fs.readFileSync(logoPath);
           zip.file(`logos/${logoFileName}`, fileContent);
         }

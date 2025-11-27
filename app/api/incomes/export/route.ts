@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 import { promises as fs } from 'fs';
 import { join, extname, basename } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { findUploadedFile } from '@/lib/upload-path';
 
 const prisma = new PrismaClient();
 
@@ -117,7 +118,12 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const filePath = join(process.cwd(), 'public/uploads', income.invoice.storedFileName);
+      const filePath = findUploadedFile(income.invoice.storedFileName);
+
+      if (!filePath) {
+        missingFiles.push(`${income.id}: ${income.invoice.storedFileName}`);
+        continue;
+      }
 
       try {
         const buffer = await fs.readFile(filePath);

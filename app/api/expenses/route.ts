@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
+import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
 
 const prisma = new PrismaClient();
 
@@ -54,13 +55,8 @@ export async function POST(request: NextRequest) {
         
         // Generiere einen eindeutigen Dateinamen für die dauerhafte Speicherung
         const uniqueFileName = `${uuidv4()}_${receipt.name.replace(/\s+/g, '_')}`;
-        const uploadDir = path.join(process.cwd(), 'public/uploads');
-        const permanentFilePath = path.join(uploadDir, uniqueFileName);
-        
-        // Stelle sicher, dass das Verzeichnis existiert
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
-        }
+        ensureUploadDirExists();
+        const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
         
         // Kopiere die Datei in das dauerhafte Verzeichnis
         fs.copyFileSync(filePath, permanentFilePath);

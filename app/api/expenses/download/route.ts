@@ -5,6 +5,7 @@ import { join } from 'path';
 import * as fs from 'fs';
 import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { findUploadedFile } from '@/lib/upload-path';
 
 const prisma = new PrismaClient();
 
@@ -44,22 +45,10 @@ export async function GET(request: NextRequest) {
     // Sanitize filename - prevent path traversal
     const sanitizedFileName = path.basename(expense.storedReceiptFileName);
     
-    // Pfad zur gespeicherten Datei
-    const uploadDir = join(process.cwd(), 'public/uploads');
-    const filePath = join(uploadDir, sanitizedFileName);
+    // Find file in new or legacy location
+    const filePath = findUploadedFile(sanitizedFileName);
     
-    // Verify the final path is within uploads directory (prevent path traversal)
-    const resolvedPath = path.resolve(filePath);
-    const resolvedUploadDir = path.resolve(uploadDir);
-    if (!resolvedPath.startsWith(resolvedUploadDir)) {
-      return NextResponse.json(
-        { error: 'Ungültiger Dateipfad' },
-        { status: 400 }
-      );
-    }
-
-    // Prüfen, ob die Datei existiert
-    if (!fs.existsSync(filePath)) {
+    if (!filePath) {
       return NextResponse.json(
         { error: 'Datei nicht gefunden' },
         { status: 404 }

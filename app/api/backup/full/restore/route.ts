@@ -4,6 +4,7 @@ import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/ge
 import * as fs from 'fs';
 import * as path from 'path';
 import JSZip from 'jszip';
+import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
 
 const prisma = new PrismaClient();
 
@@ -41,12 +42,8 @@ export async function POST(request: NextRequest) {
 
     const { expenses, incomes, invoices, customers, settings, templates } = backup.data;
 
-    // Ensure upload directory exists - all files go to public/uploads
-    const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads');
-
-    if (!fs.existsSync(publicUploadsDir)) {
-      fs.mkdirSync(publicUploadsDir, { recursive: true });
-    }
+    // Ensure upload directory exists - all files go to data/uploads (private)
+    ensureUploadDirExists();
 
     // Track import results
     const results = {
@@ -118,7 +115,7 @@ export async function POST(request: NextRequest) {
             const invoiceFile = zip.file(`invoices/${invoice.storedFileName}`);
             if (invoiceFile) {
               const fileBuffer = await invoiceFile.async('nodebuffer');
-              const filePath = path.join(publicUploadsDir, invoice.storedFileName);
+              const filePath = path.join(UPLOAD_BASE_DIR, invoice.storedFileName);
               if (!fs.existsSync(filePath)) {
                 fs.writeFileSync(filePath, fileBuffer);
                 results.files.imported++;
@@ -161,7 +158,7 @@ export async function POST(request: NextRequest) {
             const receiptFile = zip.file(`receipts/${expense.storedReceiptFileName}`);
             if (receiptFile) {
               const fileBuffer = await receiptFile.async('nodebuffer');
-              const filePath = path.join(publicUploadsDir, expense.storedReceiptFileName);
+              const filePath = path.join(UPLOAD_BASE_DIR, expense.storedReceiptFileName);
               if (!fs.existsSync(filePath)) {
                 fs.writeFileSync(filePath, fileBuffer);
                 results.files.imported++;
@@ -248,19 +245,22 @@ export async function POST(request: NextRequest) {
     if (settings) {
       try {
         // Extract logo if exists
+        let newLogoUrl = settings.logoUrl;
         if (settings.logoUrl) {
-          // URL format is /uploads/logo_xxx.png
-          const logoMatch = settings.logoUrl.match(/\/uploads\/(.+)$/);
+          // URL format is /api/files/logo?file=xxx or legacy /uploads/xxx
+          const logoMatch = settings.logoUrl.match(/(?:file=|\/uploads\/)(.+?)(?:$|&)/);
           if (logoMatch) {
             const logoFileName = logoMatch[1];
             const logoFile = zip.file(`logos/${logoFileName}`);
             if (logoFile) {
               const fileBuffer = await logoFile.async('nodebuffer');
-              const filePath = path.join(publicUploadsDir, logoFileName);
+              const filePath = path.join(UPLOAD_BASE_DIR, logoFileName);
               if (!fs.existsSync(filePath)) {
                 fs.writeFileSync(filePath, fileBuffer);
                 results.files.imported++;
               }
+              // Update logo URL to new API format
+              newLogoUrl = `/api/files/logo?file=${logoFileName}`;
             }
           }
         }
@@ -277,7 +277,7 @@ export async function POST(request: NextRequest) {
             iban: settings.iban,
             bic: settings.bic,
             footerText: settings.footerText,
-            logoUrl: settings.logoUrl,
+            logoUrl: newLogoUrl,
           },
           create: {
             userId,
@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
             iban: settings.iban,
             bic: settings.bic,
             footerText: settings.footerText,
-            logoUrl: settings.logoUrl,
+            logoUrl: newLogoUrl,
           }
         });
         results.settings.imported = true;
