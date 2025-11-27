@@ -41,8 +41,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Sanitize filename - prevent path traversal
+    const sanitizedFileName = path.basename(expense.storedReceiptFileName);
+    
     // Pfad zur gespeicherten Datei
-    const filePath = join(process.cwd(), 'public/uploads', expense.storedReceiptFileName);
+    const uploadDir = join(process.cwd(), 'public/uploads');
+    const filePath = join(uploadDir, sanitizedFileName);
+    
+    // Verify the final path is within uploads directory (prevent path traversal)
+    const resolvedPath = path.resolve(filePath);
+    const resolvedUploadDir = path.resolve(uploadDir);
+    if (!resolvedPath.startsWith(resolvedUploadDir)) {
+      return NextResponse.json(
+        { error: 'Ungültiger Dateipfad' },
+        { status: 400 }
+      );
+    }
 
     // Prüfen, ob die Datei existiert
     if (!fs.existsSync(filePath)) {

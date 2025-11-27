@@ -163,10 +163,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'ID und Status sind erforderlich' }, { status: 400 });
     }
 
-    // Get old values for audit
-    const oldInvoice = await prisma.invoice.findUnique({
-      where: { id: Number(id) },
+    // Get old values for audit - verify ownership first
+    const oldInvoice = await prisma.invoice.findFirst({
+      where: { id: Number(id), userId },
     });
+    
+    if (!oldInvoice) {
+      return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
+    }
 
     const updatedInvoice = await prisma.invoice.update({
       where: { id: Number(id), userId },

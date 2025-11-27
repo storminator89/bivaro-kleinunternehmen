@@ -113,6 +113,8 @@ model Settings {
   bic            String?
   footerText     String?
   logoUrl        String?
+  // API CORS-Konfiguration
+  allowedOrigins String? // JSON-Array von erlaubten Origins, z.B. ["https://example.com", "https://app.example.com"]
   userId         String  @unique
   user           User    @relation(fields: [userId], references: [id])
 }

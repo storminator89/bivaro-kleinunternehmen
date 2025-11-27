@@ -25,7 +25,8 @@ import {
   Upload,
   RefreshCw,
   Bell,
-  Settings
+  Settings,
+  Globe
 } from "lucide-react";
 import Link from "next/link";
 
@@ -487,6 +488,92 @@ X-RateLimit-Remaining: 95
 X-RateLimit-Reset: 1732738800`}
                   id="ratelimit"
                 />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CORS Configuration */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              CORS (Cross-Origin Resource Sharing)
+            </CardTitle>
+            <CardDescription>
+              Konfiguration für browserbasierte API-Zugriffe
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Wenn Sie die API von einer Browser-Anwendung (z.B. React, Vue, JavaScript) aufrufen möchten, 
+              müssen Sie die Domain Ihrer Anwendung als erlaubte Origin konfigurieren.
+            </p>
+            
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex gap-3">
+                <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-blue-800 dark:text-blue-200">Origins konfigurieren</p>
+                  <p className="text-blue-700 dark:text-blue-300 mt-1">
+                    Fügen Sie Ihre erlaubten Origins unter{" "}
+                    <Link href="/settings/api-keys" className="underline hover:no-underline">
+                      Einstellungen → API-Keys → CORS-Einstellungen
+                    </Link>
+                    {" "}hinzu.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">Standard-Origins (immer erlaubt)</h4>
+              <div className="flex flex-wrap gap-2">
+                <code className="bg-muted px-2 py-1 rounded text-sm">http://localhost:3000</code>
+                <code className="bg-muted px-2 py-1 rounded text-sm">https://localhost:3000</code>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">Beispiel: JavaScript Fetch</h4>
+              <CodeBlock 
+                code={`// CORS funktioniert automatisch, wenn die Origin konfiguriert ist
+const response = await fetch('https://ihre-domain.de/api/v1/customers', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer biv_sk_IhrApiKey',
+    'Content-Type': 'application/json'
+  },
+  credentials: 'include' // Optional: für Cookies
+});
+
+const data = await response.json();`}
+                id="cors-fetch"
+              />
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">CORS Response Headers</h4>
+              <CodeBlock 
+                code={`Access-Control-Allow-Origin: https://ihre-app.de
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key
+Access-Control-Allow-Credentials: true
+Access-Control-Max-Age: 86400`}
+                id="cors-headers"
+              />
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mt-4">
+              <div className="flex gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-800 dark:text-amber-200">Server-zu-Server Aufrufe</p>
+                  <p className="text-amber-700 dark:text-amber-300 mt-1">
+                    Bei Server-zu-Server Aufrufen (z.B. von Node.js, Python, PHP) ist CORS nicht relevant.
+                    CORS gilt nur für Anfragen aus dem Browser.
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>

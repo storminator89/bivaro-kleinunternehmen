@@ -124,10 +124,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Get old values for audit
-    const oldIncome = await prisma.income.findUnique({
-      where: { id: Number(id) },
+    // Get old values for audit - verify ownership first
+    const oldIncome = await prisma.income.findFirst({
+      where: { id: Number(id), userId },
     });
+    
+    if (!oldIncome) {
+      return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
+    }
 
     const updatedIncome = await prisma.income.update({
       where: { id: Number(id), userId },

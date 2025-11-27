@@ -289,6 +289,12 @@ export async function withApiAuth(
   response.headers.set('X-RateLimit-Remaining', rateLimit.remaining.toString());
   response.headers.set('X-RateLimit-Reset', Math.ceil(rateLimit.resetTime / 1000).toString());
 
+  // Add user-specific CORS headers
+  const userCorsHeaders = await corsHeadersForUser(request, validation.userId);
+  Object.entries(userCorsHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+
   // Log API access
   const responseTime = Date.now() - startTime;
   await logApiAccess({
@@ -306,14 +312,116 @@ export async function withApiAuth(
 }
 
 /**
- * CORS headers for API responses
+ * Default allowed origins (always allowed)
  */
-export function corsHeaders(): HeadersInit {
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'https://localhost:3000',
+];
+
+/**
+ * Cache for user-specific CORS origins (to avoid DB lookups on every request)
+ * Key: userId, Value: { origins: string[], expiresAt: number }
+ */
+const corsOriginsCache = new Map<string, { origins: string[]; expiresAt: number }>();
+const CORS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get allowed CORS origins for a user from database (with caching)
+ */
+export async function getAllowedOriginsForUser(userId: string): Promise<string[]> {
+  // Check cache first
+  const cached = corsOriginsCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return [...DEFAULT_ALLOWED_ORIGINS, ...cached.origins];
+  }
+
+  try {
+    const settings = await prisma.settings.findUnique({
+      where: { userId },
+      select: { allowedOrigins: true },
+    });
+
+    let userOrigins: string[] = [];
+    if (settings?.allowedOrigins) {
+      try {
+        userOrigins = JSON.parse(settings.allowedOrigins);
+        if (!Array.isArray(userOrigins)) {
+          userOrigins = [];
+        }
+      } catch {
+        userOrigins = [];
+      }
+    }
+
+    // Update cache
+    corsOriginsCache.set(userId, {
+      origins: userOrigins,
+      expiresAt: Date.now() + CORS_CACHE_TTL_MS,
+    });
+
+    return [...DEFAULT_ALLOWED_ORIGINS, ...userOrigins];
+  } catch (error) {
+    console.error('Error fetching allowed origins:', error);
+    return DEFAULT_ALLOWED_ORIGINS;
+  }
+}
+
+/**
+ * Clear CORS cache for a user (call when origins are updated)
+ */
+export function clearCorsCache(userId: string): void {
+  corsOriginsCache.delete(userId);
+}
+
+/**
+ * CORS headers for API responses (synchronous, for unauthenticated requests)
+ * For authenticated requests, use corsHeadersForUser
+ */
+export function corsHeaders(request?: NextRequest): HeadersInit {
+  let origin = '';
+  if (request) {
+    const requestOrigin = request.headers.get('origin');
+    if (requestOrigin && DEFAULT_ALLOWED_ORIGINS.includes(requestOrigin)) {
+      origin = requestOrigin;
+    } else if (process.env.NODE_ENV !== 'production') {
+      // In development, be more permissive for unauthenticated CORS preflight
+      origin = requestOrigin || '*';
+    }
+  }
+  
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': origin || (process.env.NODE_ENV === 'production' ? '' : '*'),
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
     'Access-Control-Max-Age': '86400',
+    'Access-Control-Allow-Credentials': 'true',
+  };
+}
+
+/**
+ * CORS headers for authenticated API responses (async, checks user-specific origins)
+ */
+export async function corsHeadersForUser(request: NextRequest, userId: string): Promise<HeadersInit> {
+  const requestOrigin = request.headers.get('origin');
+  let allowedOrigin = '';
+
+  if (requestOrigin) {
+    const allowedOrigins = await getAllowedOriginsForUser(userId);
+    if (allowedOrigins.includes(requestOrigin)) {
+      allowedOrigin = requestOrigin;
+    } else if (process.env.NODE_ENV !== 'production') {
+      // In development, allow all origins
+      allowedOrigin = requestOrigin;
+    }
+  }
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin || '',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
+    'Access-Control-Max-Age': '86400',
+    'Access-Control-Allow-Credentials': 'true',
   };
 }
 

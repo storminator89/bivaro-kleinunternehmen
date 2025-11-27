@@ -40,7 +40,10 @@ import {
   Clock,
   Activity,
   ArrowLeft,
-  BookOpen
+  BookOpen,
+  Globe,
+  X,
+  Info
 } from "lucide-react";
 import Link from "next/link";
 
@@ -80,6 +83,14 @@ export default function ApiKeysPage() {
   const [expiresInDays, setExpiresInDays] = useState<string>("");
   const [isCreating, setIsCreating] = useState(false);
 
+  // CORS states
+  const [corsOrigins, setCorsOrigins] = useState<string[]>([]);
+  const [defaultOrigins, setDefaultOrigins] = useState<string[]>([]);
+  const [newOrigin, setNewOrigin] = useState("");
+  const [corsLoading, setCorsLoading] = useState(true);
+  const [corsError, setCorsError] = useState<string | null>(null);
+  const [addingOrigin, setAddingOrigin] = useState(false);
+
   const fetchApiKeys = async () => {
     setIsLoading(true);
     try {
@@ -95,8 +106,27 @@ export default function ApiKeysPage() {
     }
   };
 
+  const fetchCorsSettings = async () => {
+    setCorsLoading(true);
+    setCorsError(null);
+    try {
+      const res = await fetch("/api/cors-settings");
+      if (res.ok) {
+        const data = await res.json();
+        setCorsOrigins(data.origins || []);
+        setDefaultOrigins(data.defaultOrigins || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch CORS settings:", error);
+      setCorsError("Fehler beim Laden der CORS-Einstellungen");
+    } finally {
+      setCorsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchApiKeys();
+    fetchCorsSettings();
   }, []);
 
   const handleCreateKey = async () => {
@@ -198,6 +228,53 @@ export default function ApiKeysPage() {
   const isExpired = (expiresAt: string | null) => {
     if (!expiresAt) return false;
     return new Date(expiresAt) < new Date();
+  };
+
+  // CORS Handlers
+  const handleAddOrigin = async () => {
+    if (!newOrigin.trim()) return;
+    
+    setAddingOrigin(true);
+    setCorsError(null);
+    try {
+      const res = await fetch("/api/cors-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ origin: newOrigin.trim() }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setCorsOrigins(data.origins);
+        setNewOrigin("");
+      } else {
+        setCorsError(data.error || "Fehler beim Hinzufügen");
+      }
+    } catch (error) {
+      console.error("Error adding origin:", error);
+      setCorsError("Fehler beim Hinzufügen der Origin");
+    } finally {
+      setAddingOrigin(false);
+    }
+  };
+
+  const handleRemoveOrigin = async (origin: string) => {
+    setCorsError(null);
+    try {
+      const res = await fetch(`/api/cors-settings?origin=${encodeURIComponent(origin)}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setCorsOrigins(data.origins);
+      } else {
+        setCorsError(data.error || "Fehler beim Entfernen");
+      }
+    } catch (error) {
+      console.error("Error removing origin:", error);
+      setCorsError("Fehler beim Entfernen der Origin");
+    }
   };
 
   return (
@@ -395,6 +472,127 @@ export default function ApiKeysPage() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* CORS Settings Card */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              CORS-Einstellungen
+            </CardTitle>
+            <CardDescription>
+              Konfigurieren Sie, von welchen Domains aus auf Ihre API zugegriffen werden darf.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Info Box */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
+              <div className="flex gap-3">
+                <Info className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">
+                    Was ist CORS?
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-300">
+                    Cross-Origin Resource Sharing (CORS) kontrolliert, welche Websites Ihre API aufrufen dürfen. 
+                    Fügen Sie hier die Domains hinzu, von denen aus Ihre externen Anwendungen auf die API zugreifen sollen.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {corsLoading ? (
+              <div className="text-center py-4 text-muted-foreground">Laden...</div>
+            ) : (
+              <div className="space-y-4">
+                {/* Default Origins */}
+                <div>
+                  <Label className="text-sm text-muted-foreground mb-2 block">
+                    Standard-Origins (immer erlaubt)
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {defaultOrigins.map((origin) => (
+                      <span
+                        key={origin}
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-muted text-muted-foreground text-sm rounded-full"
+                      >
+                        <Globe className="h-3 w-3" />
+                        {origin}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* User Origins */}
+                <div>
+                  <Label className="text-sm mb-2 block">
+                    Ihre erlaubten Origins ({corsOrigins.length}/20)
+                  </Label>
+                  
+                  {corsOrigins.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">
+                      Keine zusätzlichen Origins konfiguriert.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {corsOrigins.map((origin) => (
+                        <span
+                          key={origin}
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary text-sm rounded-full group"
+                        >
+                          <Globe className="h-3 w-3" />
+                          {origin}
+                          <button
+                            onClick={() => handleRemoveOrigin(origin)}
+                            className="ml-1 p-0.5 hover:bg-primary/20 rounded-full transition-colors"
+                            title="Entfernen"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add Origin Form */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://ihre-app.example.com"
+                    value={newOrigin}
+                    onChange={(e) => setNewOrigin(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddOrigin()}
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={handleAddOrigin} 
+                    disabled={addingOrigin || !newOrigin.trim()}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {addingOrigin ? "Füge hinzu..." : "Hinzufügen"}
+                  </Button>
+                </div>
+
+                {/* Error Message */}
+                {corsError && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm px-4 py-2 rounded-lg">
+                    {corsError}
+                  </div>
+                )}
+
+                {/* Examples */}
+                <div className="text-xs text-muted-foreground space-y-1 pt-2">
+                  <p className="font-medium">Beispiele für gültige Origins:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li><code className="bg-muted px-1 rounded">https://meine-app.de</code></li>
+                    <li><code className="bg-muted px-1 rounded">https://app.firma.com</code></li>
+                    <li><code className="bg-muted px-1 rounded">http://localhost:8080</code> (für Entwicklung)</li>
+                  </ul>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

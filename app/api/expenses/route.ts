@@ -219,10 +219,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Get old values for audit
-    const oldExpense = await prisma.expense.findUnique({
-      where: { id: Number(id) },
+    // Get old values for audit - verify ownership first
+    const oldExpense = await prisma.expense.findFirst({
+      where: { id: Number(id), userId },
     });
+    
+    if (!oldExpense) {
+      return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
+    }
 
     const updatedExpense = await prisma.expense.update({
       where: { id: Number(id), userId },
@@ -263,10 +267,14 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
     }
 
-    // Get expense for audit before deletion
-    const expense = await prisma.expense.findUnique({
-      where: { id: Number(id) },
+    // Get expense for audit before deletion - verify ownership
+    const expense = await prisma.expense.findFirst({
+      where: { id: Number(id), userId },
     });
+    
+    if (!expense) {
+      return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
+    }
 
     await prisma.expense.delete({
       where: { id: Number(id), userId },

@@ -74,10 +74,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Customer ID and name are required' }, { status: 400 });
     }
 
-    // Get old values for audit
-    const oldCustomer = await prisma.customer.findUnique({
-      where: { id: Number(id) },
+    // Get old values for audit - verify ownership first
+    const oldCustomer = await prisma.customer.findFirst({
+      where: { id: Number(id), userId },
     });
+    
+    if (!oldCustomer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
 
     const updatedCustomer = await prisma.customer.update({
       where: { id: Number(id), userId },
@@ -120,10 +124,14 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     }
 
-    // Get customer for audit before deletion
-    const customer = await prisma.customer.findUnique({
-      where: { id: Number(id) },
+    // Get customer for audit before deletion - verify ownership
+    const customer = await prisma.customer.findFirst({
+      where: { id: Number(id), userId },
     });
+    
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
 
     await prisma.customer.delete({
       where: { id: Number(id), userId },

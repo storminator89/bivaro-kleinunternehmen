@@ -1,11 +1,49 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { validatePassword, isValidEmail, sanitizeString } from "@/lib/security";
 
 const prisma = new PrismaClient();
 
-export async function POST(request: Request) {
+// Rate limiting for registration
+const registrationAttempts = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_REGISTRATION_ATTEMPTS = 5;
+
+function getClientIP(request: NextRequest): string {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+         request.headers.get('x-real-ip') || 
+         'unknown';
+}
+
+function checkRegistrationRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = registrationAttempts.get(ip);
+  
+  if (!record || now > record.resetTime) {
+    registrationAttempts.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  
+  if (record.count >= MAX_REGISTRATION_ATTEMPTS) {
+    return false;
+  }
+  
+  record.count++;
+  return true;
+}
+
+export async function POST(request: NextRequest) {
   try {
+    // Rate limiting
+    const clientIP = getClientIP(request);
+    if (!checkRegistrationRateLimit(clientIP)) {
+      return NextResponse.json(
+        { message: "Zu viele Registrierungsversuche. Bitte versuchen Sie es später erneut." },
+        { status: 429 }
+      );
+    }
+
     const { name, email, password } = await request.json();
 
     // Validation
@@ -16,12 +54,25 @@ export async function POST(request: Request) {
       );
     }
 
-    if (password.length < 6) {
+    // Email validation
+    if (!isValidEmail(email)) {
       return NextResponse.json(
-        { message: "Passwort muss mindestens 6 Zeichen lang sein" },
+        { message: "Ungültige E-Mail-Adresse" },
         { status: 400 }
       );
     }
+
+    // Password strength validation
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return NextResponse.json(
+        { message: passwordValidation.message },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize name
+    const sanitizedName = sanitizeString(name || '', 100);
 
     // Prüfen ob überhaupt User existieren
     const userCount = await prisma.user.count();
@@ -40,7 +91,7 @@ export async function POST(request: Request) {
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: email.toLowerCase().trim() },
     });
 
     if (existingUser) {
@@ -50,14 +101,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password with higher cost factor
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user - erster User wird automatisch ADMIN
     const user = await prisma.user.create({
       data: {
-        name,
-        email,
+        name: sanitizedName || null,
+        email: email.toLowerCase().trim(),
         password: hashedPassword,
         role: isFirstUser ? "ADMIN" : "USER",
       },
