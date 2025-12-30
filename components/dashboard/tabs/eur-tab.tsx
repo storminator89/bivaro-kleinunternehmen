@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +15,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { subMonths } from 'date-fns';
 import { Expense, TimeRange, DepreciationDetail } from "@/types/dashboard";
 import { formatCurrency } from "@/lib/dashboard-utils";
+import { EURElsterExportDialog } from "@/components/dashboard/eur-elster-export-dialog";
+import { FileText, Download } from "lucide-react";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
 
@@ -53,6 +55,8 @@ export function EURTab({
   selectedTimeRange,
   onExport,
 }: EURTabProps) {
+  const [showElsterDialog, setShowElsterDialog] = useState(false);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
@@ -62,13 +66,21 @@ export function EURTab({
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={onExport}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
-            </svg>
-            Exportieren
+            <Download className="h-4 w-4 mr-2" />
+            CSV Export
+          </Button>
+          <Button onClick={() => setShowElsterDialog(true)}>
+            <FileText className="h-4 w-4 mr-2" />
+            Elster Export
           </Button>
         </div>
       </div>
+
+      {/* Elster Export Dialog */}
+      <EURElsterExportDialog
+        isOpen={showElsterDialog}
+        onClose={() => setShowElsterDialog(false)}
+      />
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -124,7 +136,7 @@ export function EURTab({
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}€`} />
-                  <RechartsTooltip 
+                  <RechartsTooltip
                     formatter={(value: number) => formatCurrency(value)}
                     labelFormatter={(label) => {
                       const item = monthlyChartData.find(d => d.name === label);
@@ -226,15 +238,15 @@ export function EURTab({
                 {Array.from(
                   expensesAll.reduce((acc, expense) => {
                     if (!expense.taxRelevant) return acc;
-                    
+
                     const expenseDate = new Date(expense.date);
                     const today = new Date();
                     let deductibleAmount = 0;
-                    
+
                     if (selectedTimeRange === 'thisYear' || selectedTimeRange === 'lastYear') {
                       let targetYear = today.getFullYear();
                       if (selectedTimeRange === 'lastYear') targetYear = today.getFullYear() - 1;
-                      
+
                       if (expense.depreciationYears && expense.depreciationYears > 0) {
                         const expenseYear = expenseDate.getFullYear();
                         const endYear = expenseYear + expense.depreciationYears;
@@ -255,7 +267,7 @@ export function EURTab({
                       if (selectedTimeRange === 'all') include = true;
                       else if (selectedTimeRange === 'last3Months') include = expenseDate >= subMonths(today, 3);
                       else if (selectedTimeRange === 'last6Months') include = expenseDate >= subMonths(today, 6);
-                      
+
                       if (include) deductibleAmount = expense.amount;
                     }
 
@@ -324,7 +336,7 @@ export function EURTab({
           </CardContent>
         </Card>
       )}
-      
+
       {/* AfA Info Box if not yearly view */}
       {(selectedTimeRange !== 'thisYear' && selectedTimeRange !== 'lastYear') && (
         <div className="bg-muted/50 rounded-lg p-4 border text-sm text-muted-foreground flex items-start gap-3">
@@ -334,7 +346,7 @@ export function EURTab({
           <div>
             <p className="font-medium text-foreground">AfA-Berechnung nicht verfügbar</p>
             <p className="mt-1 opacity-90">
-              Detaillierte Abschreibungen werden nur in der Jahresansicht ("Aktuelles Jahr" oder "Vorjahr") berechnet und angezeigt. 
+              Detaillierte Abschreibungen werden nur in der Jahresansicht ("Aktuelles Jahr" oder "Vorjahr") berechnet und angezeigt.
               In anderen Zeiträumen werden Ausgaben nach dem Abflussprinzip (voller Betrag) dargestellt.
             </p>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { AfaTableDialog } from "@/components/afa-table-dialog";
 import { Customer } from "@/types/dashboard";
+import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
 
 type EditModalProps = {
   isOpen: boolean;
@@ -28,6 +29,38 @@ type EditModalProps = {
 
 export function EditModal({ isOpen, onClose, onSave, data, type, customers = [], uniqueCategories = [] }: EditModalProps) {
   const [formData, setFormData] = useState(data);
+
+  // Combine user's existing categories with EÜR-recommended categories
+  // Filter out user categories that are synonyms (already mapped to EÜR lines)
+  const allCategories = useMemo(() => {
+    const eurCategories = getRecommendedExpenseCategories();
+    const eurCategorySet = new Set(eurCategories.map(c => c.toLowerCase()));
+
+    // Only add user categories that are NOT already in the EÜR list
+    const customUserCategories = uniqueCategories.filter(userCat => {
+      const lowerCat = userCat.toLowerCase();
+      if (eurCategorySet.has(lowerCat)) return false;
+      // Skip common synonyms
+      const synonymsToSkip = [
+        'telefon', 'internet', 'mobilfunk', 'handy', 'telekommunikation',
+        'miete', 'raumkosten', 'büromiete', 'nebenkosten',
+        'werbung', 'marketing', 'werbekosten',
+        'versicherung', 'versicherungen', 'beiträge', 'gebühren', 'ihk',
+        'porto', 'versand', 'paket',
+        'steuerberater', 'beratung', 'rechtsanwalt', 'beratungskosten',
+        'abschreibung', 'abschreibungen', 'afa',
+        'waren', 'material', 'materialkosten', 'rohstoffe', 'einkauf',
+        'fremdleistung', 'subunternehmer',
+        'personal', 'löhne', 'gehälter', 'lohn', 'minijob',
+        'kfz', 'fahrzeugkosten', 'benzin', 'tankkosten',
+        'sonstiges', 'sonstige kosten', 'verschiedenes'
+      ];
+      return !synonymsToSkip.includes(lowerCat);
+    });
+
+    const combined = new Set([...eurCategories, ...customUserCategories]);
+    return Array.from(combined).sort((a, b) => a.localeCompare(b, 'de'));
+  }, [uniqueCategories]);
 
   useEffect(() => {
     setFormData(data);
@@ -88,15 +121,18 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
 
           {type === 'expense' && (
             <div className="space-y-2">
-              <Label htmlFor="edit-category" className="text-sm font-medium">Kategorie</Label>
+              <Label htmlFor="edit-category" className="text-sm font-medium">Kategorie (EÜR-optimiert)</Label>
               <Combobox
                 id="edit-category"
                 value={formData.category || ''}
                 onChange={(value) => setFormData({ ...formData, category: value })}
-                options={uniqueCategories}
-                placeholder="z.B. Bürobedarf"
+                options={allCategories}
+                placeholder="z.B. Bürobedarf, Telefon, Werbung..."
                 allowCustom={true}
               />
+              <p className="text-xs text-muted-foreground">
+                Wählen Sie eine Kategorie für die automatische EÜR-Zuordnung
+              </p>
             </div>
           )}
 

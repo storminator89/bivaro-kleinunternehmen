@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { AfaTableDialog } from "@/components/afa-table-dialog";
 import { Expense, FilterState } from "@/types/dashboard";
 import { formatCurrency } from "@/lib/dashboard-utils";
+import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
 
 type NewExpense = {
   description: string;
@@ -41,15 +42,15 @@ type ExpensesTabProps = {
   expenseReceipt: File | null;
   setExpenseReceipt: (file: File | null) => void;
   onSubmit: (e: React.FormEvent) => void;
-  
+
   // Filter state
   filters: FilterState['expenses'];
   setFilters: (filters: FilterState['expenses']) => void;
   uniqueCategories: string[];
-  
+
   // Data
   expenses: Expense[];
-  
+
   // Pagination
   page: number;
   pageSize: number;
@@ -58,19 +59,19 @@ type ExpensesTabProps = {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   loadExpenses: (page: number, pageSize: number) => Promise<void>;
-  
+
   // Export
   isExportingReceipts: boolean;
   exportError: string | null;
   onExportReceipts: () => void;
-  
+
   // Actions
   onEdit: (expense: Expense) => void;
   onDuplicate: (expense: Expense) => void;
   onDelete: (id: number) => void;
   onViewReceipt: (url: string) => void;
   isDeleting: boolean;
-  
+
   // Recurring expenses
   onOpenRecurringExpenses?: () => void;
 };
@@ -102,6 +103,40 @@ export function ExpensesTab({
   isDeleting,
   onOpenRecurringExpenses,
 }: ExpensesTabProps) {
+  // Combine user's existing categories with EÜR-recommended categories
+  // Filter out user categories that are synonyms (already mapped to EÜR lines)
+  const allCategories = useMemo(() => {
+    const eurCategories = getRecommendedExpenseCategories();
+    const eurCategorySet = new Set(eurCategories.map(c => c.toLowerCase()));
+
+    // Only add user categories that are NOT already in the EÜR list
+    // and are truly custom (not synonyms that would map to the same line)
+    const customUserCategories = uniqueCategories.filter(userCat => {
+      const lowerCat = userCat.toLowerCase();
+      // Skip if it's already an EÜR primary category
+      if (eurCategorySet.has(lowerCat)) return false;
+      // Skip common synonyms that users might have used before
+      const synonymsToSkip = [
+        'telefon', 'internet', 'mobilfunk', 'handy', 'telekommunikation',
+        'miete', 'raumkosten', 'büromiete', 'nebenkosten',
+        'werbung', 'marketing', 'werbekosten',
+        'versicherung', 'versicherungen', 'beiträge', 'gebühren', 'ihk',
+        'porto', 'versand', 'paket',
+        'steuerberater', 'beratung', 'rechtsanwalt', 'beratungskosten',
+        'abschreibung', 'abschreibungen', 'afa',
+        'waren', 'material', 'materialkosten', 'rohstoffe', 'einkauf',
+        'fremdleistung', 'subunternehmer',
+        'personal', 'löhne', 'gehälter', 'lohn', 'minijob',
+        'kfz', 'fahrzeugkosten', 'benzin', 'tankkosten',
+        'sonstiges', 'sonstige kosten', 'verschiedenes'
+      ];
+      return !synonymsToSkip.includes(lowerCat);
+    });
+
+    const combined = new Set([...eurCategories, ...customUserCategories]);
+    return Array.from(combined).sort((a, b) => a.localeCompare(b, 'de'));
+  }, [uniqueCategories]);
+
   return (
     <div className="space-y-6">
       {/* New Expense Form */}
@@ -179,15 +214,18 @@ export function ExpensesTab({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category" className="text-sm font-medium">Kategorie</Label>
+                <Label htmlFor="category" className="text-sm font-medium">Kategorie (EÜR-optimiert)</Label>
                 <Combobox
                   id="category"
                   value={newExpense.category}
                   onChange={(value) => setNewExpense({ ...newExpense, category: value })}
-                  options={uniqueCategories}
-                  placeholder="z.B. Bürobedarf"
+                  options={allCategories}
+                  placeholder="z.B. Bürobedarf, Telefon, Werbung..."
                   allowCustom={true}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Wählen Sie eine Kategorie für die automatische EÜR-Zuordnung
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="receipt" className="text-sm font-medium">Beleg hochladen (optional)</Label>
