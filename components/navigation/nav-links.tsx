@@ -4,12 +4,12 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/theme-switch";
-import { 
-  Home, 
-  LayoutDashboard, 
-  Users, 
-  LogIn, 
-  UserPlus, 
+import {
+  Home,
+  LayoutDashboard,
+  Users,
+  LogIn,
+  UserPlus,
   LogOut,
   Calculator,
   SunMoon,
@@ -19,7 +19,8 @@ import {
   TrendingDown,
   FileText,
   Receipt,
-  AlertCircle
+  AlertCircle,
+  Wallet
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -40,48 +41,48 @@ export function NavLinks() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  
+
   // Load collapsed state from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed');
     if (saved) {
       setIsCollapsed(JSON.parse(saved));
     }
-    
+
     // Listen for sidebar toggle events
     const handleToggle = (e: CustomEvent) => {
       setIsCollapsed(e.detail);
     };
-    
+
     window.addEventListener('sidebar-toggle', handleToggle as EventListener);
-    
+
     return () => {
       window.removeEventListener('sidebar-toggle', handleToggle as EventListener);
     };
   }, []);
-  
+
   // Prüft ob ein Link aktiv ist (berücksichtigt auch Query-Parameter)
   const isActive = (href: string) => {
     const [path, query] = href.split('?');
-    
+
     // Exakter Pfad-Match (für Unterseiten wie /dashboard/reminders)
     if (pathname === path && !query) {
       return !searchParams.get('tab');
     }
-    
+
     // Pfad muss übereinstimmen
     if (pathname !== path) return false;
-    
+
     // Wenn kein Query-Parameter im href, ist es aktiv wenn auch die URL keinen tab hat
     if (!query) {
       return !searchParams.get('tab');
     }
-    
+
     // Query-Parameter prüfen
     const hrefParams = new URLSearchParams(query);
     const hrefTab = hrefParams.get('tab');
     const currentTab = searchParams.get('tab');
-    
+
     return hrefTab === currentTab;
   };
 
@@ -101,6 +102,7 @@ export function NavLinks() {
         { href: "/dashboard?tab=incomes", label: "Einnahmen", icon: TrendingUp, auth: "authenticated" },
         { href: "/dashboard?tab=expenses", label: "Ausgaben", icon: TrendingDown, auth: "authenticated" },
         { href: "/dashboard?tab=invoices", label: "Rechnungen", icon: FileText, auth: "authenticated" },
+        { href: "/cashbook", label: "Kassenbuch", icon: Wallet, auth: "authenticated" },
         { href: "/dashboard/reminders", label: "Mahnwesen", icon: AlertCircle, auth: "authenticated" },
       ]
     },
@@ -138,19 +140,18 @@ export function NavLinks() {
           {navSections.map((section) => (
             section.items.map((item) => {
               if (item.auth === "authenticated" && status !== "authenticated") return null;
-              
+
               const Icon = item.icon;
               const active = isActive(item.href);
-              
+
               return (
                 <li key={item.href}>
-                  <Link 
-                    href={item.href} 
-                    className={`flex items-center justify-center p-3 rounded-lg transition-all duration-200 ${
-                      active 
-                        ? 'bg-primary text-primary-foreground shadow-sm' 
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    }`}
+                  <Link
+                    href={item.href}
+                    className={`flex items-center justify-center p-3 rounded-lg transition-all duration-200 ${active
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
                     title={item.label}
                   >
                     <Icon className="h-5 w-5" />
@@ -159,21 +160,20 @@ export function NavLinks() {
               );
             })
           ))}
-          
+
           {/* Auth items when collapsed */}
           {status === "unauthenticated" && authNavItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
-            
+
             return (
               <li key={item.href}>
-                <Link 
-                  href={item.href} 
-                  className={`flex items-center justify-center p-3 rounded-lg transition-all duration-200 ${
-                    active 
-                      ? 'bg-primary text-primary-foreground shadow-sm' 
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
+                <Link
+                  href={item.href}
+                  className={`flex items-center justify-center p-3 rounded-lg transition-all duration-200 ${active
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
                   title={item.label}
                 >
                   <Icon className="h-5 w-5" />
@@ -182,16 +182,16 @@ export function NavLinks() {
             );
           })}
         </ul>
-        
+
         {/* Bottom section when collapsed */}
         <div className="pt-4 border-t border-border mt-auto space-y-1">
           <div className="flex items-center justify-center p-3 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200">
             <ThemeToggle />
           </div>
-          
+
           {status === "authenticated" && (
-            <button 
-              onClick={() => signOut({ callbackUrl: '/' })} 
+            <button
+              onClick={() => signOut({ callbackUrl: '/' })}
               className="flex items-center justify-center w-full p-3 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors duration-200"
               title="Abmelden"
             >
@@ -208,12 +208,12 @@ export function NavLinks() {
     <nav className="flex flex-col h-full">
       <div className="space-y-6 flex-1 overflow-y-auto">
         {navSections.map((section) => {
-          const visibleItems = section.items.filter(item => 
+          const visibleItems = section.items.filter(item =>
             item.auth !== "authenticated" || status === "authenticated"
           );
-          
+
           if (visibleItems.length === 0) return null;
-          
+
           return (
             <div key={section.title}>
               <h3 className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -223,16 +223,15 @@ export function NavLinks() {
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
                   const active = isActive(item.href);
-                  
+
                   return (
                     <li key={item.href}>
-                      <Link 
-                        href={item.href} 
-                        className={`flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${
-                          active 
-                            ? 'bg-primary text-primary-foreground shadow-sm' 
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        }`}
+                      <Link
+                        href={item.href}
+                        className={`flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${active
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          }`}
                       >
                         <Icon className="h-4 w-4 mr-3" />
                         <span className="text-sm font-medium">{item.label}</span>
@@ -244,7 +243,7 @@ export function NavLinks() {
             </div>
           );
         })}
-        
+
         {/* Auth items when expanded */}
         {status === "unauthenticated" && (
           <div>
@@ -255,16 +254,15 @@ export function NavLinks() {
               {authNavItems.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
-                
+
                 return (
                   <li key={item.href}>
-                    <Link 
-                      href={item.href} 
-                      className={`flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${
-                        active 
-                          ? 'bg-primary text-primary-foreground shadow-sm' 
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      }`}
+                    <Link
+                      href={item.href}
+                      className={`flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${active
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        }`}
                     >
                       <Icon className="h-4 w-4 mr-3" />
                       <span className="text-sm font-medium">{item.label}</span>
@@ -276,7 +274,7 @@ export function NavLinks() {
           </div>
         )}
       </div>
-      
+
       {/* Bottom section when expanded */}
       <div className="pt-4 border-t border-border mt-auto space-y-1">
         <div className="flex items-center justify-between px-3 py-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200">
@@ -286,10 +284,10 @@ export function NavLinks() {
           </div>
           <ThemeToggle />
         </div>
-        
+
         {status === "authenticated" && (
-          <button 
-            onClick={() => signOut({ callbackUrl: '/' })} 
+          <button
+            onClick={() => signOut({ callbackUrl: '/' })}
             className="flex items-center w-full px-3 py-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors duration-200"
           >
             <LogOut className="h-4 w-4 mr-3" />

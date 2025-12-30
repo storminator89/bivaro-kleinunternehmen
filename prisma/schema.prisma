@@ -32,6 +32,8 @@ model User {
   apiKeys   ApiKey[]
   apiLogs   ApiLog[]
   auditLogs AuditLog[]
+  cashBooks CashBook[]
+  cashTransactions CashTransaction[]
 }
 
 model Expense {
@@ -48,6 +50,7 @@ model Expense {
   depreciationYears     Int?     // Nutzungsdauer in Jahren (AfA)
   userId                String
   user                  User     @relation(fields: [userId], references: [id])
+  cashTransaction       CashTransaction?
 }
 
 model Income {
@@ -62,6 +65,7 @@ model Income {
   invoice     Invoice? @relation(fields: [invoiceId], references: [id])
   userId      String
   user        User     @relation(fields: [userId], references: [id])
+  cashTransaction CashTransaction?
 }
 
 model Invoice {
@@ -219,4 +223,56 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([action])
   @@index([createdAt])
+}
+
+// Kassenbuch (Cash Book) for cash transaction tracking per § 146 AO
+model CashBook {
+  id             Int      @id @default(autoincrement())
+  name           String   @default("Hauptkasse")
+  description    String?
+  initialBalance Float    @default(0)
+  currency       String   @default("EUR")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions   CashTransaction[]
+  
+  @@index([userId])
+}
+
+// Kassenbuch-Transaktionen (Cash Book Transactions)
+model CashTransaction {
+  id              Int      @id @default(autoincrement())
+  date            DateTime @default(now())
+  type            String   // EINNAHME, AUSGABE
+  description     String
+  amount          Float    // Immer positiv, Typ bestimmt Richtung
+  runningBalance  Float    // Laufender Kassenbestand nach dieser Transaktion
+  category        String?
+  receiptNumber   String?  // Belegnummer
+  taxRelevant     Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Beziehung zum Kassenbuch
+  cashBookId      Int
+  cashBook        CashBook @relation(fields: [cashBookId], references: [id], onDelete: Cascade)
+  
+  // Beziehung zum Benutzer
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Optionale Verknüpfung mit bestehenden Ausgaben/Einnahmen
+  expenseId       Int?     @unique
+  expense         Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  incomeId        Int?     @unique
+  income          Income?  @relation(fields: [incomeId], references: [id], onDelete: SetNull)
+  
+  @@index([cashBookId])
+  @@index([userId])
+  @@index([date])
+  @@index([type])
 }
