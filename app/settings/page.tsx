@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle, Key, ChevronRight, History } from "lucide-react";
+import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle, Key, ChevronRight, History, FileText } from "lucide-react";
 import {
   Alert,
   AlertDescription,
@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -120,7 +120,7 @@ export default function SettingsPage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setUploading(true);
-      
+
       const formData = new FormData();
       formData.append('file', file);
 
@@ -437,16 +437,16 @@ export default function SettingsPage() {
                 placeholder="Geschäftsführer: Max Mustermann | Amtsgericht Musterstadt HRB 12345"
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label>Firmenlogo (Optional)</Label>
               <div className="flex items-start gap-4">
                 {formData.logoUrl ? (
                   <div className="relative border rounded-md p-2 bg-muted/10">
-                    <img 
-                      src={formData.logoUrl} 
-                      alt="Firmenlogo" 
-                      className="h-24 w-auto object-contain" 
+                    <img
+                      src={formData.logoUrl}
+                      alt="Firmenlogo"
+                      className="h-24 w-auto object-contain"
                     />
                     <button
                       type="button"
@@ -461,7 +461,7 @@ export default function SettingsPage() {
                     <span className="text-xs text-muted-foreground">Kein Logo ausgewählt</span>
                   </div>
                 )}
-                
+
                 <div className="flex flex-col gap-2">
                   <Input
                     id="logo-upload"
@@ -647,7 +647,7 @@ export default function SettingsPage() {
                   </>
                 )}
               </Button>
-              
+
               <input
                 ref={fullFileInputRef}
                 type="file"
@@ -679,7 +679,7 @@ export default function SettingsPage() {
 
           <div className="border-t pt-4">
             <p className="text-xs text-muted-foreground">
-              <strong>Hinweis:</strong> Bei der Wiederherstellung werden bestehende Daten nicht überschrieben. 
+              <strong>Hinweis:</strong> Bei der Wiederherstellung werden bestehende Daten nicht überschrieben.
               Das vollständige Backup kann bei vielen Dateien größer werden.
             </p>
           </div>
@@ -741,6 +741,37 @@ export default function SettingsPage() {
             <Link href="/settings/audit-logs">
               <Button variant="outline">
                 Audit-Log anzeigen
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* GoBD Verfahrensdokumentation */}
+      <Card className="mt-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            <CardTitle>GoBD Verfahrensdokumentation</CardTitle>
+          </div>
+          <CardDescription>
+            Dokumentation des Buchführungsverfahrens gemäß GoBD-Anforderungen.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm">
+                Erstellen und verwalten Sie Ihre Verfahrensdokumentation mit automatisch generierter Systembeschreibung.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Inkl. PDF-Export und Versionsverlauf
+              </p>
+            </div>
+            <Link href="/settings/documentation">
+              <Button variant="outline">
+                Dokumentation öffnen
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

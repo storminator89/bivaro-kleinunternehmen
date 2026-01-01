@@ -34,6 +34,7 @@ model User {
   auditLogs AuditLog[]
   cashBooks CashBook[]
   cashTransactions CashTransaction[]
+  documentations Documentation[]
 }
 
 model Expense {
@@ -275,4 +276,18 @@ model CashTransaction {
   @@index([userId])
   @@index([date])
   @@index([type])
+}
+
+// GoBD Verfahrensdokumentation
+model Documentation {
+  id              Int      @id @default(autoincrement())
+  version         String   // Software-Version bei der die Doku erstellt/aktualisiert wurde
+  title           String   @default("Verfahrensdokumentation")
+  content         String   // JSON mit allen Dokumentations-Sektionen
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
 }
