@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -31,23 +32,24 @@ import { CreateInvoiceModal } from "@/components/dashboard/create-invoice-modal"
 import { AfaTableDialog } from "@/components/afa-table-dialog";
 
 // Importiere extrahierte Komponenten und Typen
-import { 
-  EditModal, 
-  InvoiceDetailsModal, 
-  ReceiptModal, 
+import {
+  EditModal,
+  InvoiceDetailsModal,
+  ReceiptModal,
   DeleteConfirmationModal
 } from "@/components/dashboard/modals";
 import { RecurringExpensesModal } from "@/components/dashboard/modals/recurring-expenses-modal";
-import { 
-  Expense, 
-  Income, 
-  Customer, 
-  Invoice, 
+import {
+  Expense,
+  Income,
+  Customer,
+  Invoice,
   FilterState,
-  TimeRange 
+  TimeRange
 } from "@/types/dashboard";
 import { formatCurrency, toQuery } from "@/lib/dashboard-utils";
 import { EURTab, GWGTab, ExpensesTab, IncomesTab, InvoicesTab } from "@/components/dashboard/tabs";
+import { isPrivateWithdrawal, isPrivateDeposit } from "@/lib/private-categories";
 
 function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
@@ -67,9 +69,9 @@ function DashboardContent() {
     if (tab === 'expenses' || tab === 'incomes' || tab === 'invoices' || tab === 'eur' || tab === 'gwg') return tab;
     return 'expenses';
   };
-  
+
   const [activeTab, setActiveTab] = useState(normalizeTab(tabParam));
-  
+
   // URL-Änderungen verfolgen und Tab aktualisieren
   useEffect(() => {
     const newTab = normalizeTab(tabParam);
@@ -126,12 +128,12 @@ function DashboardContent() {
   // Daten werden serverseitig gefiltert, hier nur Alias für Anzeige
   const filteredExpenses = expenses;
   const filteredIncomes = incomes;
-  
+
   // Rechnungen sortieren
   const sortedInvoices = [...invoices].sort((a, b) => {
     const { sortBy, sortOrder } = filters.invoices;
     let comparison = 0;
-    
+
     if (sortBy === 'date') {
       const dateA = a.invoiceDate ? new Date(a.invoiceDate).getTime() : new Date(a.uploadedAt).getTime();
       const dateB = b.invoiceDate ? new Date(b.invoiceDate).getTime() : new Date(b.uploadedAt).getTime();
@@ -143,7 +145,7 @@ function DashboardContent() {
     } else if (sortBy === 'amount') {
       comparison = (a.totalAmount || 0) - (b.totalAmount || 0);
     }
-    
+
     return sortOrder === 'asc' ? comparison : -comparison;
   });
   const filteredInvoices = sortedInvoices;
@@ -602,7 +604,7 @@ function DashboardContent() {
 
   const performDelete = async () => {
     if (!itemToDelete) return;
-    
+
     const { id, type } = itemToDelete;
     setIsDeleting(true);
 
@@ -722,7 +724,7 @@ function DashboardContent() {
   // Berechnungen für EÜR
   const { totalIncome, totalExpense, profit, depreciationDetails } = React.useMemo(() => {
     const today = new Date();
-    
+
     // Einnahmen berechnen
     const incSum = incomesAll.reduce((sum, income) => {
       const incomeDate = new Date(income.date);
@@ -755,7 +757,7 @@ function DashboardContent() {
 
     const expSum = expensesAll.reduce((sum, expense) => {
       const expenseDate = new Date(expense.date);
-      
+
       // Wenn ein Jahreszeitraum gewählt ist, AfA berücksichtigen
       if (selectedTimeRange === 'thisYear' || selectedTimeRange === 'lastYear') {
         if (!expense.taxRelevant) return sum;
@@ -786,7 +788,7 @@ function DashboardContent() {
               deductibleAmount = yearlyDepreciation;
               calculationExplanation = `${formatCurrency(expense.amount)} / ${expense.depreciationYears} Jahre`;
             }
-            
+
             // Details speichern
             depDetails.push({
               id: expense.id,
@@ -830,6 +832,51 @@ function DashboardContent() {
     };
   }, [incomesAll, expensesAll, selectedTimeRange]);
 
+  // Private transactions calculation (Privatentnahmen / Privateinlagen)
+  const privateTransactions = React.useMemo(() => {
+    const today = new Date();
+
+    // Calculate Privatentnahmen (withdrawals from business to private)
+    const withdrawals = expensesAll.reduce((sum, expense) => {
+      if (!isPrivateWithdrawal(expense.category)) return sum;
+
+      const expenseDate = new Date(expense.date);
+      let include = false;
+      if (selectedTimeRange === 'all') include = true;
+      else if (selectedTimeRange === 'thisYear') include = expenseDate.getFullYear() === today.getFullYear();
+      else if (selectedTimeRange === 'lastYear') include = expenseDate.getFullYear() === today.getFullYear() - 1;
+      else if (selectedTimeRange === 'last3Months') include = expenseDate >= subMonths(today, 3);
+      else if (selectedTimeRange === 'last6Months') include = expenseDate >= subMonths(today, 6);
+
+      return include ? sum + expense.amount : sum;
+    }, 0);
+
+    // Calculate Privateinlagen (deposits from private to business)
+    const deposits = incomesAll.reduce((sum, income) => {
+      // Note: Income doesn't have category field in the same way
+      // We'll check the description for "Privateinlage" or non-tax-relevant status
+      const isPrivateDeposit_ = income.description?.toLowerCase().includes('privateinlage') ||
+        (!income.taxRelevant && income.description?.toLowerCase().includes('privat'));
+      if (!isPrivateDeposit_) return sum;
+
+      const incomeDate = new Date(income.date);
+      let include = false;
+      if (selectedTimeRange === 'all') include = true;
+      else if (selectedTimeRange === 'thisYear') include = incomeDate.getFullYear() === today.getFullYear();
+      else if (selectedTimeRange === 'lastYear') include = incomeDate.getFullYear() === today.getFullYear() - 1;
+      else if (selectedTimeRange === 'last3Months') include = incomeDate >= subMonths(today, 3);
+      else if (selectedTimeRange === 'last6Months') include = incomeDate >= subMonths(today, 6);
+
+      return include ? sum + income.amount : sum;
+    }, 0);
+
+    return {
+      privateWithdrawals: withdrawals,
+      privateDeposits: deposits,
+      privateBalance: deposits - withdrawals
+    };
+  }, [expensesAll, incomesAll, selectedTimeRange]);
+
   // Chart Data Preparation
   const { monthlyChartData, categoryChartData } = React.useMemo(() => {
     const today = new Date();
@@ -851,12 +898,12 @@ function DashboardContent() {
     }
 
     const months = eachMonthOfInterval({ start, end });
-    
+
     const monthlyData = months.map(month => {
       const monthIncomes = incomesAll
         .filter(i => i.taxRelevant && isSameMonth(new Date(i.date), month))
         .reduce((sum, i) => sum + i.amount, 0);
-      
+
       const monthExpenses = expensesAll
         .filter(e => e.taxRelevant && isSameMonth(new Date(e.date), month))
         .reduce((sum, e) => sum + e.amount, 0);
@@ -874,7 +921,7 @@ function DashboardContent() {
     expensesAll.forEach(expense => {
       if (!expense.taxRelevant) return;
       const expenseDate = new Date(expense.date);
-      
+
       // Simple filter for the selected range
       let include = false;
       if (selectedTimeRange === 'all') include = true;
@@ -968,7 +1015,7 @@ function DashboardContent() {
     const gwgExpenses = expensesAll.filter(expense => {
       if (!expense.taxRelevant) return false;
       if (expense.amount <= 250 || expense.amount > 1000) return false;
-      
+
       const expenseDate = new Date(expense.date);
       const today = new Date();
       if (selectedTimeRange === 'thisYear') {
@@ -1011,7 +1058,53 @@ function DashboardContent() {
               Verwalten Sie Ihre Finanzen einfach und effizient
             </p>
           </div>
-          <div className="mt-4 md:mt-0">
+          <div className="mt-4 md:mt-0 flex items-center gap-3">
+            {/* Year Selector */}
+            <div className="flex items-center gap-1 bg-card border rounded-lg shadow-sm">
+              <button
+                onClick={() => {
+                  if (selectedTimeRange === 'thisYear') {
+                    setSelectedTimeRange('lastYear');
+                  }
+                }}
+                className="px-2 py-2 hover:bg-muted rounded-l-lg transition-colors"
+                title="Vorheriges Jahr"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <Select
+                value={selectedTimeRange}
+                onValueChange={(value) => setSelectedTimeRange(value as typeof selectedTimeRange)}
+              >
+                <SelectTrigger className="border-0 shadow-none bg-transparent min-w-[140px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="thisYear">{new Date().getFullYear()} (aktuell)</SelectItem>
+                  <SelectItem value="lastYear">{new Date().getFullYear() - 1}</SelectItem>
+                  <SelectItem value="last3Months">Letzte 3 Monate</SelectItem>
+                  <SelectItem value="last6Months">Letzte 6 Monate</SelectItem>
+                  <SelectItem value="all">Alle Daten</SelectItem>
+                </SelectContent>
+              </Select>
+              <button
+                onClick={() => {
+                  if (selectedTimeRange === 'lastYear') {
+                    setSelectedTimeRange('thisYear');
+                  }
+                }}
+                className="px-2 py-2 hover:bg-muted rounded-r-lg transition-colors disabled:opacity-50"
+                title="Nächstes Jahr"
+                disabled={selectedTimeRange === 'thisYear' || selectedTimeRange === 'all'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+            {/* Current Date Display */}
             <div className="bg-card border rounded-lg px-4 py-2 shadow-sm">
               <span className="text-foreground font-medium">
                 {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
@@ -1182,6 +1275,8 @@ function DashboardContent() {
               depreciationDetails={depreciationDetails}
               selectedTimeRange={selectedTimeRange}
               onExport={handleExportEUR}
+              privateWithdrawals={privateTransactions.privateWithdrawals}
+              privateDeposits={privateTransactions.privateDeposits}
             />
           </TabsContent>
 
@@ -1233,8 +1328,8 @@ function DashboardContent() {
           onConfirm={performDelete}
           title={itemToDelete?.type === 'invoice' ? 'Rechnung löschen' : itemToDelete?.type === 'income' ? 'Einnahme löschen' : 'Ausgabe löschen'}
           description={
-            itemToDelete?.type === 'invoice' 
-              ? 'Sind Sie sicher, dass Sie diese Rechnung löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.' 
+            itemToDelete?.type === 'invoice'
+              ? 'Sind Sie sicher, dass Sie diese Rechnung löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.'
               : itemToDelete?.type === 'income'
                 ? 'Sind Sie sicher, dass Sie diese Einnahme löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.'
                 : 'Sind Sie sicher, dass Sie diese Ausgabe löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.'
@@ -1243,9 +1338,9 @@ function DashboardContent() {
         />
 
         {/* Rechnung erstellen Modal */}
-        <CreateInvoiceModal 
-          isOpen={createInvoiceModalOpen} 
-          onClose={() => setCreateInvoiceModalOpen(false)} 
+        <CreateInvoiceModal
+          isOpen={createInvoiceModalOpen}
+          onClose={() => setCreateInvoiceModalOpen(false)}
           onInvoiceCreated={async () => {
             await loadInvoices(1, invoicesPageSize);
             await loadIncomes(incomesPage, incomesPageSize);

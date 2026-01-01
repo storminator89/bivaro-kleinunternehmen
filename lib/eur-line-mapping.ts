@@ -313,6 +313,7 @@ export function getRecommendedExpenseCategories(): string[] {
     // Primary categories - one clear name per EÜR line
     // The mapping still recognizes all synonyms, but the dropdown shows only these
     const primaryCategories = [
+        'Privatentnahme',         // Nicht steuerrelevant - Entnahme ins Privatvermögen
         'Wareneinkauf',           // Zeile 23
         'Fremdleistungen',        // Zeile 24
         'Personalkosten',         // Zeile 27
@@ -340,6 +341,23 @@ export function getRecommendedExpenseCategories(): string[] {
 }
 
 /**
+ * Get recommended income categories for the dropdown
+ */
+export function getRecommendedIncomeCategories(): string[] {
+    const incomeCategories = [
+        'Privateinlage',          // Nicht steuerrelevant - Einlage aus Privatvermögen
+        'Dienstleistung',
+        'Honorar',
+        'Provision',
+        'Verkauf',
+        'Umsatzerlöse',
+        'Sonstige Einnahmen',
+    ];
+
+    return incomeCategories.sort((a, b) => a.localeCompare(b, 'de'));
+}
+
+/**
  * Get a category with its EÜR line info for display
  */
 export function getCategoryWithEURInfo(category: string): { category: string; eurLine: number | null; eurLineName: string | null } {
@@ -352,4 +370,5 @@ export function getCategoryWithEURInfo(category: string): { category: string; eu
         eurLineName: lineDef?.name || null
     };
 }
+
 

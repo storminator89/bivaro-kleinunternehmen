@@ -16,7 +16,7 @@ import { subMonths } from 'date-fns';
 import { Expense, TimeRange, DepreciationDetail } from "@/types/dashboard";
 import { formatCurrency } from "@/lib/dashboard-utils";
 import { EURElsterExportDialog } from "@/components/dashboard/eur-elster-export-dialog";
-import { FileText, Download } from "lucide-react";
+import { FileText, Download, Lock, Info } from "lucide-react";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
 
@@ -42,6 +42,8 @@ type EURTabProps = {
   depreciationDetails: DepreciationDetail[];
   selectedTimeRange: TimeRange;
   onExport: () => void;
+  privateWithdrawals?: number;
+  privateDeposits?: number;
 };
 
 export function EURTab({
@@ -54,8 +56,11 @@ export function EURTab({
   depreciationDetails,
   selectedTimeRange,
   onExport,
+  privateWithdrawals = 0,
+  privateDeposits = 0,
 }: EURTabProps) {
   const [showElsterDialog, setShowElsterDialog] = useState(false);
+  const privateBalance = privateDeposits - privateWithdrawals;
 
   return (
     <div className="space-y-6">
@@ -293,6 +298,43 @@ export function EURTab({
           </CardContent>
         </Card>
       </div>
+
+      {/* Privatentnahmen / Privateinlagen Info Box */}
+      {(privateWithdrawals > 0 || privateDeposits > 0) && (
+        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-500">
+              <Lock className="h-5 w-5" />
+              Privatentnahmen / Privateinlagen
+            </CardTitle>
+            <CardDescription>Nicht steuerrelevante Bewegungen zwischen Privat- und Betriebsvermögen</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableBody>
+                <TableRow>
+                  <TableCell>Privatentnahmen (Abgang)</TableCell>
+                  <TableCell className="text-right font-medium text-amber-600">-{formatCurrency(privateWithdrawals)}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Privateinlagen (Zugang)</TableCell>
+                  <TableCell className="text-right font-medium text-blue-600">+{formatCurrency(privateDeposits)}</TableCell>
+                </TableRow>
+                <TableRow className="font-bold bg-muted/50">
+                  <TableCell>Saldo</TableCell>
+                  <TableCell className={`text-right ${privateBalance >= 0 ? 'text-blue-600' : 'text-amber-600'}`}>
+                    {privateBalance >= 0 ? '+' : ''}{formatCurrency(privateBalance)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+            <div className="flex items-start gap-2 mt-4 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>Diese Beträge sind nicht steuerrelevant und werden nicht in der EÜR berücksichtigt. Sie dienen nur der Dokumentation der Kapitalflüsse zwischen Privat- und Betriebsvermögen.</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* AfA Details */}
       {depreciationDetails.length > 0 && (

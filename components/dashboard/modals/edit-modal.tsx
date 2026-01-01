@@ -16,6 +16,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { AfaTableDialog } from "@/components/afa-table-dialog";
 import { Customer } from "@/types/dashboard";
 import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
+import { isPrivateCategory } from "@/lib/private-categories";
 
 type EditModalProps = {
   isOpen: boolean;
@@ -65,6 +66,14 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
   useEffect(() => {
     setFormData(data);
   }, [data]);
+
+  // Auto-set taxRelevant to false when private category is selected
+  useEffect(() => {
+    if (isPrivateCategory(formData.category) && formData.taxRelevant !== false) {
+      setFormData((prev: any) => ({ ...prev, taxRelevant: false }));
+    }
+  }, [formData.category]);
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,10 +139,18 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
                 placeholder="z.B. Bürobedarf, Telefon, Werbung..."
                 allowCustom={true}
               />
-              <p className="text-xs text-muted-foreground">
-                Wählen Sie eine Kategorie für die automatische EÜR-Zuordnung
-              </p>
+              {isPrivateCategory(formData.category) ? (
+                <p className="text-xs text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                  <span>⚠️</span>
+                  Privatentnahmen sind nicht steuerrelevant und werden in der EÜR nicht berücksichtigt.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Wählen Sie eine Kategorie für die automatische EÜR-Zuordnung
+                </p>
+              )}
             </div>
+
           )}
 
           {type === 'income' && (
