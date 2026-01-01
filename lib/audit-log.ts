@@ -9,14 +9,14 @@ import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 
 // Action types for audit logging
-export type AuditAction = 
-  | 'CREATE' 
-  | 'UPDATE' 
-  | 'DELETE' 
-  | 'LOGIN' 
-  | 'LOGOUT' 
+export type AuditAction =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'LOGIN'
+  | 'LOGOUT'
   | 'LOGIN_FAILED'
-  | 'EXPORT' 
+  | 'EXPORT'
   | 'IMPORT'
   | 'BACKUP'
   | 'RESTORE'
@@ -28,7 +28,8 @@ export type AuditAction =
   | 'PAYMENT_RECEIVED'
   | 'REMINDER_SENT'
   | 'VIEW'
-  | 'DOWNLOAD';
+  | 'DOWNLOAD'
+  | 'CANCELLED';
 
 // Entity types that can be audited
 export type AuditEntityType =
@@ -43,7 +44,8 @@ export type AuditEntityType =
   | 'Reminder'
   | 'InvoiceTemplate'
   | 'Backup'
-  | 'Session';
+  | 'Session'
+  | 'CreditNote';
 
 export interface AuditLogEntry {
   userId: string;
@@ -77,16 +79,16 @@ const MASKED_FIELDS = [
  */
 function sanitizeValues(values: Record<string, any> | undefined): string | null {
   if (!values) return null;
-  
+
   const sanitized: Record<string, any> = {};
-  
+
   for (const [key, value] of Object.entries(values)) {
     // Skip sensitive fields entirely
     if (SENSITIVE_FIELDS.includes(key)) {
       sanitized[key] = '[REDACTED]';
       continue;
     }
-    
+
     // Mask certain fields
     if (MASKED_FIELDS.includes(key) && typeof value === 'string') {
       if (key === 'email' && value.includes('@')) {
@@ -99,22 +101,22 @@ function sanitizeValues(values: Record<string, any> | undefined): string | null 
       }
       continue;
     }
-    
+
     // Handle nested objects
     if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
       sanitized[key] = JSON.parse(sanitizeValues(value) || '{}');
       continue;
     }
-    
+
     // Handle dates
     if (value instanceof Date) {
       sanitized[key] = value.toISOString();
       continue;
     }
-    
+
     sanitized[key] = value;
   }
-  
+
   return JSON.stringify(sanitized);
 }
 
@@ -122,26 +124,26 @@ function sanitizeValues(values: Record<string, any> | undefined): string | null 
  * Calculate which fields changed between old and new values
  */
 function getChangedFields(
-  oldValues: Record<string, any> | undefined, 
+  oldValues: Record<string, any> | undefined,
   newValues: Record<string, any> | undefined
 ): string[] {
   if (!oldValues || !newValues) return [];
-  
+
   const changedFields: string[] = [];
   const allKeys = new Set([...Object.keys(oldValues), ...Object.keys(newValues)]);
-  
+
   for (const key of allKeys) {
     // Skip internal/timestamp fields
     if (['updatedAt', 'createdAt', 'id'].includes(key)) continue;
-    
+
     const oldVal = JSON.stringify(oldValues[key]);
     const newVal = JSON.stringify(newValues[key]);
-    
+
     if (oldVal !== newVal) {
       changedFields.push(key);
     }
   }
-  
+
   return changedFields;
 }
 
@@ -154,9 +156,9 @@ async function getClientInfo(): Promise<{ ipAddress: string | null; userAgent: s
     const forwardedFor = headersList.get('x-forwarded-for');
     const realIp = headersList.get('x-real-ip');
     const userAgent = headersList.get('user-agent');
-    
+
     let ipAddress = forwardedFor?.split(',')[0]?.trim() || realIp || null;
-    
+
     // Anonymize IP (remove last octet for privacy)
     if (ipAddress && ipAddress.includes('.')) {
       const parts = ipAddress.split('.');
@@ -164,7 +166,7 @@ async function getClientInfo(): Promise<{ ipAddress: string | null; userAgent: s
         ipAddress = `${parts[0]}.${parts[1]}.${parts[2]}.xxx`;
       }
     }
-    
+
     return { ipAddress, userAgent };
   } catch {
     return { ipAddress: null, userAgent: null };
@@ -178,7 +180,7 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
   try {
     const { ipAddress, userAgent } = await getClientInfo();
     const changedFields = getChangedFields(entry.oldValues, entry.newValues);
-    
+
     await prisma.auditLog.create({
       data: {
         userId: entry.userId,
@@ -206,7 +208,7 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
 export async function auditCreate(
   userId: string,
   entityType: AuditEntityType,
-  entity: { id: number | string; [key: string]: any },
+  entity: { id: number | string;[key: string]: any },
   entityName?: string
 ): Promise<void> {
   await createAuditLog({
@@ -247,7 +249,7 @@ export async function auditUpdate(
 export async function auditDelete(
   userId: string,
   entityType: AuditEntityType,
-  entity: { id: number | string; [key: string]: any },
+  entity: { id: number | string;[key: string]: any },
   entityName?: string
 ): Promise<void> {
   await createAuditLog({
@@ -338,7 +340,7 @@ export async function getAuditLogs(options: {
   if (entityType) where.entityType = entityType;
   if (entityId) where.entityId = entityId;
   if (action) where.action = action;
-  
+
   if (startDate || endDate) {
     where.createdAt = {};
     if (startDate) where.createdAt.gte = startDate;

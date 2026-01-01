@@ -71,6 +71,7 @@ model Income {
 
 model Invoice {
   id            Int       @id @default(autoincrement())
+  type          String    @default("INVOICE")  // INVOICE oder CREDIT_NOTE
   fileName      String
   storedFileName String   // Hinzugefügtes Feld für den gespeicherten Dateinamen
   uploadedAt    DateTime  @default(now())
@@ -79,8 +80,12 @@ model Invoice {
   invoiceNumber String? @unique
   parsedData    Json
   totalAmount   Float?
-  status        String    @default("DRAFT") // DRAFT, SENT, PAID
+  status        String    @default("DRAFT") // DRAFT, SENT, PAID, CANCELLED
   paidAt        DateTime?
+  originalInvoiceId Int?  // Referenz zur Originalrechnung (bei Gutschriften)
+  originalInvoice   Invoice? @relation("CreditNotes", fields: [originalInvoiceId], references: [id])
+  creditNotes       Invoice[] @relation("CreditNotes")
+  cancellationReason String? // Grund für Stornierung
   customerId    Int?
   income        Income?
   reminders     Reminder[]

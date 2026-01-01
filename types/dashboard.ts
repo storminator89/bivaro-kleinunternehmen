@@ -39,6 +39,7 @@ export type Customer = {
 
 export type Invoice = {
   id: number;
+  type?: 'INVOICE' | 'CREDIT_NOTE';
   fileName: string;
   uploadedAt: string;
   invoiceNumber?: string;
@@ -46,6 +47,8 @@ export type Invoice = {
   status: string;
   invoiceDate?: string;
   dueDate?: string;
+  originalInvoiceId?: number;
+  cancellationReason?: string;
 };
 
 export type FilterState = {

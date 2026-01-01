@@ -36,7 +36,8 @@ import {
   EditModal,
   InvoiceDetailsModal,
   ReceiptModal,
-  DeleteConfirmationModal
+  DeleteConfirmationModal,
+  CreditNoteModal
 } from "@/components/dashboard/modals";
 import { RecurringExpensesModal } from "@/components/dashboard/modals/recurring-expenses-modal";
 import {
@@ -100,6 +101,10 @@ function DashboardContent() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: number; type: 'expense' | 'income' | 'invoice' } | null>(null);
   const [createInvoiceModalOpen, setCreateInvoiceModalOpen] = useState(false);
+
+  // Credit Note Modal State
+  const [creditNoteModalOpen, setCreditNoteModalOpen] = useState(false);
+  const [invoiceToCancel, setInvoiceToCancel] = useState<Invoice | null>(null);
 
   // Filter States
   const [filters, setFilters] = useState<FilterState>({
@@ -721,12 +726,30 @@ function DashboardContent() {
     }
   };
 
+  // Handler für Rechnungsstornierung
+  const handleInvoiceCancel = (invoice: Invoice) => {
+    setInvoiceToCancel(invoice);
+    setCreditNoteModalOpen(true);
+  };
+
+  const handleCreditNoteSuccess = async () => {
+    // Reload invoices after successful cancellation
+    await loadInvoices(invoicesPage, invoicesPageSize);
+    // Also reload incomes as cancellation may affect them
+    await loadIncomes(incomesPage, incomesPageSize);
+  };
+
   // Berechnungen für EÜR
   const { totalIncome, totalExpense, profit, depreciationDetails } = React.useMemo(() => {
     const today = new Date();
 
-    // Einnahmen berechnen
+    // Einnahmen berechnen (stornierte Rechnungen ausschließen)
     const incSum = incomesAll.reduce((sum, income) => {
+      // Stornierte Rechnungen nicht in EÜR berücksichtigen
+      if (income.invoiceStatus === 'CANCELLED') {
+        return sum;
+      }
+
       const incomeDate = new Date(income.date);
       let includeIncome = false;
       if (selectedTimeRange === 'all') {
@@ -901,7 +924,7 @@ function DashboardContent() {
 
     const monthlyData = months.map(month => {
       const monthIncomes = incomesAll
-        .filter(i => i.taxRelevant && isSameMonth(new Date(i.date), month))
+        .filter(i => i.taxRelevant && i.invoiceStatus !== 'CANCELLED' && isSameMonth(new Date(i.date), month))
         .reduce((sum, i) => sum + i.amount, 0);
 
       const monthExpenses = expensesAll
@@ -1258,6 +1281,7 @@ function DashboardContent() {
               onViewReceipt={openReceiptModal}
               onOpenDetails={openInvoiceDetails}
               onStatusChange={handleInvoiceStatusChange}
+              onCancel={handleInvoiceCancel}
               onDelete={handleInvoiceDelete}
               isDeleting={isDeleting}
             />
@@ -1365,6 +1389,17 @@ function DashboardContent() {
               setExpensesAll(d.items);
             }
           }}
+        />
+
+        {/* Gutschrift-Modal (Stornierung) */}
+        <CreditNoteModal
+          isOpen={creditNoteModalOpen}
+          onClose={() => {
+            setCreditNoteModalOpen(false);
+            setInvoiceToCancel(null);
+          }}
+          invoice={invoiceToCancel}
+          onSuccess={handleCreditNoteSuccess}
         />
       </div>
     </div>

@@ -4,6 +4,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FileX } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -30,14 +31,14 @@ type InvoicesTabProps = {
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onFileUpload: () => void;
   onOpenCreateModal: () => void;
-  
+
   // Filter state
   filters: FilterState['invoices'];
   setFilters: (filters: FilterState['invoices']) => void;
-  
+
   // Data
   invoices: Invoice[];
-  
+
   // Pagination
   page: number;
   pageSize: number;
@@ -46,11 +47,12 @@ type InvoicesTabProps = {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   loadInvoices: (page: number, pageSize: number) => Promise<void>;
-  
+
   // Actions
   onViewReceipt: (url: string) => void;
   onOpenDetails: (invoice: Invoice) => void;
   onStatusChange: (invoiceId: number, newStatus: string) => void;
+  onCancel: (invoice: Invoice) => void;
   onDelete: (id: number) => void;
   isDeleting: boolean;
 };
@@ -74,6 +76,7 @@ export function InvoicesTab({
   onViewReceipt,
   onOpenDetails,
   onStatusChange,
+  onCancel,
   onDelete,
   isDeleting,
 }: InvoicesTabProps) {
@@ -234,7 +237,7 @@ export function InvoicesTab({
               <TableCaption>Alle hochgeladenen Rechnungen</TableCaption>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead 
+                  <TableHead
                     className="font-medium cursor-pointer hover:bg-muted select-none"
                     onClick={() => {
                       const newOrder = filters.sortBy === 'date' && filters.sortOrder === 'desc' ? 'asc' : 'desc';
@@ -250,7 +253,7 @@ export function InvoicesTab({
                       )}
                     </span>
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="font-medium cursor-pointer hover:bg-muted select-none"
                     onClick={() => {
                       const newOrder = filters.sortBy === 'invoiceNumber' && filters.sortOrder === 'desc' ? 'asc' : 'desc';
@@ -267,7 +270,7 @@ export function InvoicesTab({
                     </span>
                   </TableHead>
                   <TableHead className="font-medium">Dateiname</TableHead>
-                  <TableHead 
+                  <TableHead
                     className="text-right font-medium cursor-pointer hover:bg-muted select-none"
                     onClick={() => {
                       const newOrder = filters.sortBy === 'amount' && filters.sortOrder === 'desc' ? 'asc' : 'desc';
@@ -374,6 +377,23 @@ export function InvoicesTab({
                                 <p>Rechnungsdetails anzeigen</p>
                               </TooltipContent>
                             </Tooltip>
+                            {invoice.status !== 'CANCELLED' && invoice.type !== 'CREDIT_NOTE' && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-900/50 dark:hover:bg-orange-900/20"
+                                    onClick={() => onCancel(invoice)}
+                                  >
+                                    <FileX className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Rechnung stornieren</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
