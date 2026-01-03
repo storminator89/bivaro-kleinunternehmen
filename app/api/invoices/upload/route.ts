@@ -15,32 +15,32 @@ import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
 const prisma = new PrismaClient();
 
 async function extractAttachments(pdfDoc: PDFDocument) {
-    const rawAttachments = (() => {
-        if (!pdfDoc.catalog.has(PDFName.of('Names'))) return [];
-        const Names = pdfDoc.catalog.lookup(PDFName.of('Names'), PDFDict);
+  const rawAttachments = (() => {
+    if (!pdfDoc.catalog.has(PDFName.of('Names'))) return [];
+    const Names = pdfDoc.catalog.lookup(PDFName.of('Names'), PDFDict);
 
-        if (!Names.has(PDFName.of('EmbeddedFiles'))) return [];
-        const EmbeddedFiles = Names.lookup(PDFName.of('EmbeddedFiles'), PDFDict);
+    if (!Names.has(PDFName.of('EmbeddedFiles'))) return [];
+    const EmbeddedFiles = Names.lookup(PDFName.of('EmbeddedFiles'), PDFDict);
 
-        if (!EmbeddedFiles.has(PDFName.of('Names'))) return [];
-        const EFNames = EmbeddedFiles.lookup(PDFName.of('Names'), PDFArray);
+    if (!EmbeddedFiles.has(PDFName.of('Names'))) return [];
+    const EFNames = EmbeddedFiles.lookup(PDFName.of('Names'), PDFArray);
 
-        const attachments = [];
-        for (let idx = 0, len = EFNames.size(); idx < len; idx += 2) {
-            const fileName = EFNames.lookup(idx) as PDFHexString | PDFString;
-            const fileSpec = EFNames.lookup(idx + 1, PDFDict);
-            attachments.push({ fileName, fileSpec });
-        }
-        return attachments;
-    })();
+    const attachments = [];
+    for (let idx = 0, len = EFNames.size(); idx < len; idx += 2) {
+      const fileName = EFNames.lookup(idx) as PDFHexString | PDFString;
+      const fileSpec = EFNames.lookup(idx + 1, PDFDict);
+      attachments.push({ fileName, fileSpec });
+    }
+    return attachments;
+  })();
 
-    return rawAttachments.map(({ fileName, fileSpec }) => {
-        const stream = fileSpec.lookup(PDFName.of('EF'), PDFDict).lookup(PDFName.of('F'), PDFStream);
-        return {
-            name: fileName.decodeText(),
-            data: stream.getContents(),
-        };
-    });
+  return rawAttachments.map(({ fileName, fileSpec }) => {
+    const stream = fileSpec.lookup(PDFName.of('EF'), PDFDict).lookup(PDFName.of('F'), PDFStream);
+    return {
+      name: fileName.decodeText(),
+      data: stream.getContents(),
+    };
+  });
 }
 
 
@@ -74,22 +74,22 @@ function tryGunzip(data: Uint8Array): string | null {
 }
 
 async function extractZugferdXml(pdfBuffer: Buffer): Promise<string | null> {
-    const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
-    const attachments = await extractAttachments(pdfDoc);
-    const candidates = attachments.filter(att => {
-      const n = att.name.toLowerCase();
-      return n.includes('zugferd') || n.includes('factur') || n.includes('xrechnung') || n.endsWith('.xml');
-    });
-    for (const attachment of candidates) {
-      // Some embedded files can be Flate/gzip compressed. Try multiple decoders.
-      const asUtf8 = tryDecodeUtf8(attachment.data);
-      if (asUtf8 && asUtf8.trim().startsWith('<')) return asUtf8;
-      const inflated = tryInflate(attachment.data);
-      if (inflated && inflated.trim().startsWith('<')) return inflated;
-      const gunzipped = tryGunzip(attachment.data);
-      if (gunzipped && gunzipped.trim().startsWith('<')) return gunzipped;
-    }
-    return null;
+  const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+  const attachments = await extractAttachments(pdfDoc);
+  const candidates = attachments.filter(att => {
+    const n = att.name.toLowerCase();
+    return n.includes('zugferd') || n.includes('factur') || n.includes('xrechnung') || n.endsWith('.xml');
+  });
+  for (const attachment of candidates) {
+    // Some embedded files can be Flate/gzip compressed. Try multiple decoders.
+    const asUtf8 = tryDecodeUtf8(attachment.data);
+    if (asUtf8 && asUtf8.trim().startsWith('<')) return asUtf8;
+    const inflated = tryInflate(attachment.data);
+    if (inflated && inflated.trim().startsWith('<')) return inflated;
+    const gunzipped = tryGunzip(attachment.data);
+    if (gunzipped && gunzipped.trim().startsWith('<')) return gunzipped;
+  }
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -124,14 +124,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Keine ZUGFeRD-XML in der PDF-Datei gefunden' }, { status: 400 });
     }
 
-    let parsedXml: any;
+    let parsedXml: unknown;
     try {
       parsedXml = await parseStringPromise(zugferdXmlContent, { explicitArray: false });
-    } catch (e) {
+    } catch {
       return NextResponse.json({ error: 'Ungültige oder komprimierte ZUGFeRD-XML konnte nicht gelesen werden' }, { status: 400 });
     }
 
-    const get = (obj: any, path: string) => path.split('.').reduce((acc, k) => (acc ? acc[k] : undefined), obj);
+    const get = (obj: unknown, path: string): unknown => path.split('.').reduce((acc, k) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[k] : undefined), obj);
     const asDate = (yyyymmdd?: string | null) => {
       if (!yyyymmdd) return null;
       const s = String(yyyymmdd);
@@ -139,12 +139,12 @@ export async function POST(request: NextRequest) {
       if (!match) return null;
       return new Date(`${match[1]}-${match[2]}-${match[3]}`);
     };
-    const asNumber = (val: any) => {
+    const asNumber = (val: unknown) => {
       const n = parseFloat(String(val));
       return isNaN(n) ? null : n;
     };
 
-    const root = parsedXml['rsm:CrossIndustryInvoice'] || parsedXml['CrossIndustryInvoice'] || parsedXml['Invoice'];
+    const root = (parsedXml as Record<string, unknown>)['rsm:CrossIndustryInvoice'] as Record<string, unknown> || (parsedXml as Record<string, unknown>)['CrossIndustryInvoice'] as Record<string, unknown> || (parsedXml as Record<string, unknown>)['Invoice'] as Record<string, unknown>;
     if (!root) {
       return NextResponse.json({ error: 'Unbekannte ZUGFeRD/Factur-X Struktur' }, { status: 400 });
     }
@@ -152,12 +152,12 @@ export async function POST(request: NextRequest) {
     const exchangedDoc = root['rsm:ExchangedDocument'] || root['ExchangedDocument'];
     const tradeTransaction = root['rsm:SupplyChainTradeTransaction'] || root['SupplyChainTradeTransaction'];
 
-    const invoiceNumber = get(exchangedDoc, 'ram:ID') || get(exchangedDoc, 'ID') || null;
-    const invoiceDateStr = get(exchangedDoc, 'ram:IssueDateTime.udt:DateTimeString._') || get(exchangedDoc, 'IssueDateTime.DateTimeString._') || null;
+    const invoiceNumber = get(exchangedDoc, 'ram:ID') as string || get(exchangedDoc, 'ID') as string || null;
+    const invoiceDateStr = get(exchangedDoc, 'ram:IssueDateTime.udt:DateTimeString._') as string || get(exchangedDoc, 'IssueDateTime.DateTimeString._') as string || null;
     const invoiceDate = asDate(invoiceDateStr) || new Date();
 
-    const dueDateStr = get(tradeTransaction, 'ram:ApplicableHeaderTradeSettlement.ram:SpecifiedTradePaymentTerms.ram:DueDateDateTime.udt:DateTimeString._')
-      || get(tradeTransaction, 'ApplicableHeaderTradeSettlement.SpecifiedTradePaymentTerms.DueDateDateTime.DateTimeString._');
+    const dueDateStr = get(tradeTransaction, 'ram:ApplicableHeaderTradeSettlement.ram:SpecifiedTradePaymentTerms.ram:DueDateDateTime.udt:DateTimeString._') as string
+      || get(tradeTransaction, 'ApplicableHeaderTradeSettlement.SpecifiedTradePaymentTerms.DueDateDateTime.DateTimeString._') as string;
     const dueDate = asDate(dueDateStr);
 
     const totalAmount = asNumber(
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
 
     const lineItemsData = get(tradeTransaction, 'ram:IncludedSupplyChainTradeLineItem') || get(tradeTransaction, 'IncludedSupplyChainTradeLineItem') || [];
     const itemsArr = Array.isArray(lineItemsData) ? lineItemsData : [lineItemsData].filter(Boolean);
-    const lineItems = itemsArr.map((item: any) => ({
+    const lineItems = itemsArr.map((item: unknown) => ({
       positionNumber: get(item, 'ram:AssociatedDocumentLineDocument.ram:LineID') || get(item, 'AssociatedDocumentLineDocument.LineID') || undefined,
       description: get(item, 'ram:SpecifiedTradeProduct.ram:Name') || get(item, 'SpecifiedTradeProduct.Name') || undefined,
       date: get(item, 'ram:SpecifiedLineTradeDelivery.ram:BilledQuantity._') || get(item, 'SpecifiedLineTradeDelivery.BilledQuantity._') || undefined,
@@ -183,40 +183,40 @@ export async function POST(request: NextRequest) {
 
     const buyerTradeParty = get(tradeTransaction, 'ram:ApplicableHeaderTradeAgreement.ram:BuyerTradeParty') || get(tradeTransaction, 'ApplicableHeaderTradeAgreement.BuyerTradeParty') || {};
     const buyerInfo = {
-      email: get(buyerTradeParty, 'ram:DefinedTradeContact.ram:EmailURIUniversalCommunication.ram:URIID')
-        || get(buyerTradeParty, 'DefinedTradeContact.EmailURIUniversalCommunication.URIID')
+      email: get(buyerTradeParty, 'ram:DefinedTradeContact.ram:EmailURIUniversalCommunication.ram:URIID') as string
+        || get(buyerTradeParty, 'DefinedTradeContact.EmailURIUniversalCommunication.URIID') as string
         || undefined,
-      zipCode: get(buyerTradeParty, 'ram:PostalTradeAddress.ram:PostcodeCode')
-        || get(buyerTradeParty, 'PostalTradeAddress.PostcodeCode')
+      zipCode: get(buyerTradeParty, 'ram:PostalTradeAddress.ram:PostcodeCode') as string
+        || get(buyerTradeParty, 'PostalTradeAddress.PostcodeCode') as string
         || undefined,
-      address: get(buyerTradeParty, 'ram:PostalTradeAddress.ram:LineOne')
-        || get(buyerTradeParty, 'PostalTradeAddress.LineOne')
+      address: get(buyerTradeParty, 'ram:PostalTradeAddress.ram:LineOne') as string
+        || get(buyerTradeParty, 'PostalTradeAddress.LineOne') as string
         || undefined,
-      city: get(buyerTradeParty, 'ram:PostalTradeAddress.ram:CityName')
-        || get(buyerTradeParty, 'PostalTradeAddress.CityName')
+      city: get(buyerTradeParty, 'ram:PostalTradeAddress.ram:CityName') as string
+        || get(buyerTradeParty, 'PostalTradeAddress.CityName') as string
         || undefined,
-      country: get(buyerTradeParty, 'ram:PostalTradeAddress.ram:CountryID')
-        || get(buyerTradeParty, 'PostalTradeAddress.CountryID')
+      country: get(buyerTradeParty, 'ram:PostalTradeAddress.ram:CountryID') as string
+        || get(buyerTradeParty, 'PostalTradeAddress.CountryID') as string
         || undefined,
     };
 
     const sellerTradeParty = get(tradeTransaction, 'ram:ApplicableHeaderTradeAgreement.ram:SellerTradeParty') || get(tradeTransaction, 'ApplicableHeaderTradeAgreement.SellerTradeParty') || {};
     const sellerInfo = {
-      name: get(sellerTradeParty, 'ram:Name') || get(sellerTradeParty, 'Name') || undefined,
-      email: get(sellerTradeParty, 'ram:DefinedTradeContact.ram:EmailURIUniversalCommunication.ram:URIID')
-        || get(sellerTradeParty, 'DefinedTradeContact.EmailURIUniversalCommunication.URIID')
+      name: get(sellerTradeParty, 'ram:Name') as string || get(sellerTradeParty, 'Name') as string || undefined,
+      email: get(sellerTradeParty, 'ram:DefinedTradeContact.ram:EmailURIUniversalCommunication.ram:URIID') as string
+        || get(sellerTradeParty, 'DefinedTradeContact.EmailURIUniversalCommunication.URIID') as string
         || undefined,
-      zipCode: get(sellerTradeParty, 'ram:PostalTradeAddress.ram:PostcodeCode')
-        || get(sellerTradeParty, 'PostalTradeAddress.PostcodeCode')
+      zipCode: get(sellerTradeParty, 'ram:PostalTradeAddress.ram:PostcodeCode') as string
+        || get(sellerTradeParty, 'PostalTradeAddress.PostcodeCode') as string
         || undefined,
-      address: get(sellerTradeParty, 'ram:PostalTradeAddress.ram:LineOne')
-        || get(sellerTradeParty, 'PostalTradeAddress.LineOne')
+      address: get(sellerTradeParty, 'ram:PostalTradeAddress.ram:LineOne') as string
+        || get(sellerTradeParty, 'PostalTradeAddress.LineOne') as string
         || undefined,
-      city: get(sellerTradeParty, 'ram:PostalTradeAddress.ram:CityName')
-        || get(sellerTradeParty, 'PostalTradeAddress.CityName')
+      city: get(sellerTradeParty, 'ram:PostalTradeAddress.ram:CityName') as string
+        || get(sellerTradeParty, 'PostalTradeAddress.CityName') as string
         || undefined,
-      country: get(sellerTradeParty, 'ram:PostalTradeAddress.ram:CountryID')
-        || get(sellerTradeParty, 'PostalTradeAddress.CountryID')
+      country: get(sellerTradeParty, 'ram:PostalTradeAddress.ram:CountryID') as string
+        || get(sellerTradeParty, 'PostalTradeAddress.CountryID') as string
         || undefined,
     };
 
@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
 
         if (!customerRecord) {
           customerRecord = await prisma.customer.create({
-            data: { name: customerName, userId },
+            data: { name: customerName as string, userId },
           });
         }
       }
@@ -290,8 +290,8 @@ export async function POST(request: NextRequest) {
       });
       await prisma.invoice.update({
         where: { id: invoice.id },
-        data: { 
-          income: { connect: { id: income.id } } 
+        data: {
+          income: { connect: { id: income.id } }
         },
       });
     }

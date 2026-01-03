@@ -1,8 +1,16 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+interface Activity {
+  id: number;
+  type: 'expense' | 'income';
+  description: string;
+  date: string;
+  amount: number;
+}
+
 interface RecentActivityProps {
-  activities: any[];
+  activities: Activity[];
 }
 
 function formatCurrency(amount: number) {

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import * as fs from 'fs';
-import * as path from 'path';
+import fs from 'fs';
 import JSZip from 'jszip';
 import { findUploadedFile } from '@/lib/upload-path';
 
@@ -104,7 +103,6 @@ export async function GET() {
         })),
         apiKeys: apiKeys.map(ak => ({
           ...ak,
-          // Note: keyHash is excluded for security - API keys need to be recreated after restore
         })),
       },
       stats: {
@@ -128,7 +126,7 @@ export async function GET() {
     // Add JSON backup
     zip.file('backup.json', JSON.stringify(backup, null, 2));
 
-    // Add invoice PDFs (uses findUploadedFile to check both new and legacy locations)
+    // Add invoice PDFs
     for (const invoice of invoices) {
       if (invoice.storedFileName) {
         const filePath = findUploadedFile(invoice.storedFileName);
@@ -152,7 +150,6 @@ export async function GET() {
 
     // Add logo if exists
     if (settings?.logoUrl) {
-      // URL format is /api/files/logo?file=xxx or legacy /uploads/xxx
       const logoMatch = settings.logoUrl.match(/(?:file=|\/uploads\/)(.+?)(?:$|&)/);
       if (logoMatch) {
         const logoFileName = logoMatch[1];
@@ -173,7 +170,7 @@ export async function GET() {
 
     const filename = `bivaro-full-backup-${new Date().toISOString().split('T')[0]}.zip`;
 
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(new Uint8Array(zipBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',

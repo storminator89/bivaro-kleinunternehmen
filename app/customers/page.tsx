@@ -1,27 +1,26 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
 } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -315,7 +314,7 @@ export default function CustomersPage() {
     setIsModalOpen(true);
   };
 
-  const filteredCustomers = customers.filter(customer => 
+  const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (customer.contactPerson && customer.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -336,11 +335,11 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="mt-4 md:mt-0 flex gap-3">
-             <div className="bg-card border rounded-lg px-4 py-2 shadow-sm hidden md:block">
-               <span className="text-foreground font-medium">
-                 {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}
-               </span>
-             </div>
+            <div className="bg-card border rounded-lg px-4 py-2 shadow-sm hidden md:block">
+              <span className="text-foreground font-medium">
+                {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}
+              </span>
+            </div>
             <Button onClick={openAddModal}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -359,8 +358,8 @@ export default function CustomersPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <Input 
-                placeholder="Suchen nach Name, Ansprechpartner, E-Mail, Telefon oder Stadt..." 
+              <Input
+                placeholder="Suchen nach Name, Ansprechpartner, E-Mail, Telefon oder Stadt..."
                 className="pl-9 bg-background"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -391,7 +390,7 @@ export default function CustomersPage() {
                       filteredCustomers.map((customer) => (
                         <TableRow key={customer.id} className="hover:bg-muted/50 transition-colors group">
                           <TableCell>
-                            <div 
+                            <div
                               className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm"
                               style={{ backgroundColor: stringToColor(customer.name) }}
                             >
@@ -474,7 +473,7 @@ export default function CustomersPage() {
                                   <TooltipContent>Bearbeiten</TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
-                              
+
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>

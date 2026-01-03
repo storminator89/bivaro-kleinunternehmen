@@ -25,6 +25,38 @@ interface InvoiceItem {
   taxRate: number;
 }
 
+interface Settings {
+  companyName?: string;
+  companyAddress?: string;
+  taxNumber?: string;
+  iban?: string;
+  bic?: string;
+  bankName?: string;
+  footerText?: string;
+  logoUrl?: string;
+  email?: string;
+  telephone?: string;
+}
+
+interface Customer {
+  id: number | string;
+  name: string;
+  address?: string;
+  zipCode?: string;
+  city?: string;
+  email?: string;
+}
+
+interface Template {
+  id: string | number;
+  name: string;
+  data: {
+    items?: InvoiceItem[];
+    notes?: string;
+    includeQRCode?: boolean;
+  };
+}
+
 export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: CreateInvoiceModalProps) {
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -34,17 +66,17 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [settings, setSettings] = useState<any>(null);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [includeQRCode, setIncludeQRCode] = useState(false);
   const [invoiceNumberError, setInvoiceNumberError] = useState<string | null>(null);
   const [isCheckingNumber, setIsCheckingNumber] = useState(false);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
-  
+
   // Preview states
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -134,7 +166,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     if (template && template.data) {
       const data = template.data;
       if (data.items) {
-        setItems(data.items.map((item: any) => ({
+        setItems(data.items.map((item: InvoiceItem) => ({
           ...item,
           unit: item.unit || "Stück",
           taxRate: item.taxRate ?? 0
@@ -151,7 +183,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     if (!confirm("Möchten Sie diese Vorlage wirklich löschen?")) return;
 
     try {
-      const res = await fetch(`/api/invoice-templates/${templateId}`, {
+      const res = await fetch(`/ api / invoice - templates / ${templateId} `, {
         method: "DELETE",
       });
 
@@ -177,7 +209,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
 
       setIsCheckingNumber(true);
       try {
-        const res = await fetch(`/api/invoices/check-number?number=${encodeURIComponent(invoiceNumber)}`);
+        const res = await fetch(`/ api / invoices / check - number ? number = ${encodeURIComponent(invoiceNumber)} `);
         if (res.ok) {
           const data = await res.json();
           if (data.exists) {
@@ -200,14 +232,14 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
   const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const customerId = e.target.value;
     if (!customerId) return;
-    
+
     const customer = customers.find(c => c.id.toString() === customerId);
     if (customer) {
       setSelectedCustomer(customer);
       let addressBlock = customer.name;
-      if (customer.address) addressBlock += `\n${customer.address}`;
-      const cityLine = `${customer.zipCode || ''} ${customer.city || ''}`.trim();
-      if (cityLine) addressBlock += `\n${cityLine}`;
+      if (customer.address) addressBlock += `\n${customer.address} `;
+      const cityLine = `${customer.zipCode || ''} ${customer.city || ''} `.trim();
+      if (cityLine) addressBlock += `\n${cityLine} `;
       setCustomerAddress(addressBlock);
     }
   };
@@ -238,9 +270,9 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     setItems(newItems);
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = useCallback((amount: number) => {
     return amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-  };
+  }, []);
 
   // Core PDF generation function (returns PDF bytes, used by both preview and final generation)
   const generatePDFBytes = useCallback(async (forPreview: boolean = false): Promise<Uint8Array> => {
@@ -249,7 +281,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     const { width, height } = page.getSize();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
+
     // Design Constants
     const accentColor = rgb(0.2, 0.2, 0.2);
     const primaryColor = rgb(0, 0, 0);
@@ -288,7 +320,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
         const logoBytes = await fetch(settings.logoUrl).then(res => res.arrayBuffer());
         const logoExt = settings.logoUrl.split('.').pop()?.toLowerCase();
         let logoImage;
-        
+
         if (logoExt === 'png') {
           logoImage = await pdfDoc.embedPng(logoBytes);
         } else if (logoExt === 'jpg' || logoExt === 'jpeg') {
@@ -300,7 +332,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           const maxHeight = 80;
           const scale = Math.min(maxWidth / logoImage.width, maxHeight / logoImage.height);
           const logoDims = logoImage.scale(scale);
-          
+
           page.drawImage(logoImage, {
             x: width - margin - logoDims.width,
             y: height - margin - logoDims.height + 10,
@@ -320,12 +352,12 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       if (settings?.companyAddress) {
         const city = settings.companyAddress.split('\n').pop()?.split(' ').slice(1).join(' ');
         const street = settings.companyAddress.split('\n')[0];
-        senderText += ` • ${street}`;
-        if (city) senderText += ` • ${city}`;
+        senderText += ` • ${street} `;
+        if (city) senderText += ` • ${city} `;
       }
-      
+
       page.drawText(senderText, { x: margin, y: senderLineY, size: 7, font, color: secondaryColor });
-      
+
       const senderWidth = font.widthOfTextAtSize(senderText, 7);
       page.drawLine({
         start: { x: margin, y: senderLineY - 2 },
@@ -346,14 +378,14 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     // --- INVOICE INFO BLOCK (Right side) ---
     let infoY = senderLineY - 20;
     const infoX = width - margin - 200;
-    
+
     const infoBoxHeight = 130;
     const infoBoxWidth = 210;
-    const infoBoxBottom = infoY - 115; 
+    const infoBoxBottom = infoY - 115;
 
     page.drawRectangle({
       x: infoX - 10,
-      y: infoBoxBottom, 
+      y: infoBoxBottom,
       width: infoBoxWidth,
       height: infoBoxHeight,
       color: rgb(0.98, 0.98, 0.98),
@@ -369,7 +401,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
 
     page.drawText('RECHNUNG', { x: infoX, y: infoY, size: 16, font: boldFont, color: primaryColor });
     infoY -= 25;
-    
+
     const infoGap = 16;
 
     const drawInfoRow = (label: string, value: string) => {
@@ -380,7 +412,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
 
     drawInfoRow('Rechnungs-Nr.:', invoiceNumber || 'RE-XXXX');
     drawInfoRow('Datum:', date ? new Date(date).toLocaleDateString('de-DE') : '-');
-    
+
     if (selectedCustomer?.id) {
       drawInfoRow('Kundennummer:', selectedCustomer.id.toString());
     }
@@ -397,7 +429,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
 
     // --- TABLE ---
     y = height - 300;
-    
+
     const colX = {
       pos: margin,
       desc: margin + 30,
@@ -432,7 +464,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     items.forEach((item, index) => {
       const lineNet = item.quantity * item.unitPrice;
       const lineTax = lineNet * (item.taxRate / 100);
-      
+
       netTotal += lineNet;
       taxTotal += lineTax;
 
@@ -467,7 +499,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       }
 
       page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font, color: secondaryColor });
-      
+
       descLines.forEach((line, i) => {
         page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font, color: primaryColor });
       });
@@ -475,7 +507,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       drawTextRight(item.quantity.toString(), colX.qty, y, 10, font, primaryColor);
       page.drawText(item.unit, { x: colX.unit, y, size: 10, font, color: primaryColor });
       drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font, primaryColor);
-      drawTextRight(`${item.taxRate}%`, colX.tax, y, 10, font, primaryColor);
+      drawTextRight(`${item.taxRate}% `, colX.tax, y, 10, font, primaryColor);
       drawTextRight(formatCurrency(lineNet), colX.total - 5, y, 10, font, primaryColor);
 
       const separatorY = y - ((descLines.length - 1) * lineHeight) - 8;
@@ -532,7 +564,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
 
     drawTextRight(totalLabel, labelX, y, 12, boldFont);
     drawTextRight(formatCurrency(grossTotal), totalX, y, 12, boldFont);
-    
+
     y -= 4;
     page.drawLine({
       start: { x: totalLineStart, y: y },
@@ -546,7 +578,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       thickness: 0.5,
       color: rgb(0, 0, 0),
     });
-    
+
     y -= 40;
 
     // --- NOTES & LEGAL ---
@@ -565,7 +597,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       page.drawText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: margin, y, size: 10, font });
       y -= 15;
     }
-    
+
     if (dueDate) {
       page.drawText(`Bitte überweisen Sie den Betrag bis zum ${new Date(dueDate).toLocaleDateString('de-DE')}.`, { x: margin, y, size: 10, font });
     }
@@ -584,11 +616,11 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       if (settings?.iban && settings?.companyName) {
         const iban = settings.iban;
         const bic = settings.bic;
-        
+
         if (iban) {
           const cleanName = (settings.companyName || "").replace(/[\r\n]/g, "").trim();
-          const finalIban = (iban || "").replace(/\s/g, "").toUpperCase(); 
-          
+          const finalIban = (iban || "").replace(/\s/g, "").toUpperCase();
+
           const toSEPA = (str: string) => {
             const map: { [key: string]: string } = {
               'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss'
@@ -605,27 +637,27 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           giroCodeData += (bic || "").trim() + "\n";
           giroCodeData += toSEPA(cleanName).substring(0, 70) + "\n";
           giroCodeData += finalIban + "\n";
-          giroCodeData += `EUR${grossTotal.toFixed(2)}\n`;
+          giroCodeData += `EUR${grossTotal.toFixed(2)} \n`;
           giroCodeData += "\n";
           giroCodeData += "\n";
           giroCodeData += toSEPA(invoiceNumber || "").substring(0, 140) + "\n";
 
           try {
-            const qrCodeDataUrl = await QRCode.toDataURL(giroCodeData, { 
+            const qrCodeDataUrl = await QRCode.toDataURL(giroCodeData, {
               errorCorrectionLevel: 'M',
               type: 'image/png',
               margin: 4
             });
             const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
             const qrDim = 80;
-            
+
             page.drawImage(qrCodeImage, {
               x: width - margin - qrDim,
               y: footerY + 30,
               width: qrDim,
               height: qrDim,
             });
-            
+
             page.drawText('GiroCode scannen & zahlen', {
               x: width - margin - qrDim,
               y: footerY + 25,
@@ -697,14 +729,14 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
     const pages = pdfDoc.getPages();
     pages.forEach((p, i) => {
       const { width: pageWidth } = p.getSize();
-      const text = `Seite ${i + 1} von ${pageCount}`;
+      const text = `Seite ${i + 1} von ${pageCount} `;
       const textWidth = font.widthOfTextAtSize(text, 8);
-      p.drawText(text, { 
-        x: (pageWidth - textWidth) / 2, 
-        y: 15, 
-        size: 8, 
-        font, 
-        color: secondaryColor 
+      p.drawText(text, {
+        x: (pageWidth - textWidth) / 2,
+        y: 15,
+        size: 8,
+        font,
+        color: secondaryColor
       });
     });
 
@@ -714,17 +746,17 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
   // Generate preview with debouncing
   const generatePreview = useCallback(async () => {
     if (!showPreview) return;
-    
+
     setIsGeneratingPreview(true);
     try {
       const pdfBytes = await generatePDFBytes(true);
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      
+      const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
+
       // Revoke old URL to prevent memory leaks
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
       }
-      
+
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
     } catch (error) {
@@ -737,21 +769,21 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
   // Debounced preview update
   useEffect(() => {
     if (!showPreview) return;
-    
+
     if (previewTimeoutRef.current) {
       clearTimeout(previewTimeoutRef.current);
     }
-    
+
     previewTimeoutRef.current = setTimeout(() => {
       generatePreview();
     }, 500); // 500ms debounce
-    
+
     return () => {
       if (previewTimeoutRef.current) {
         clearTimeout(previewTimeoutRef.current);
       }
     };
-  }, [showPreview, customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode]);
+  }, [showPreview, customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode, generatePreview]);
 
   // Cleanup preview URL on unmount
   useEffect(() => {
@@ -760,14 +792,14 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
         URL.revokeObjectURL(previewUrl);
       }
     };
-  }, []);
+  }, [previewUrl]);
 
   // Initial preview generation when preview is enabled
   useEffect(() => {
     if (showPreview && !previewUrl) {
       generatePreview();
     }
-  }, [showPreview]);
+  }, [showPreview, previewUrl, generatePreview]);
 
   const generatePDF = async () => {
     setIsGenerating(true);
@@ -784,7 +816,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
 
       // Generate base PDF bytes (without ZUGFeRD - we need to add it separately for now)
       const pdfBytes = await generatePDFBytes(false);
-      
+
       // For ZUGFeRD, we need to create a new PDFDocument and attach the XML
       const pdfDoc = await PDFDocument.load(pdfBytes);
 
@@ -837,7 +869,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
         });
 
         // Add XMP Metadata for PDF/A-3 compliance (ZUGFeRD requirement)
-        const xmpMetadata = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
+        const xmpMetadata = `<? xpacket begin = "\uFEFF" id = "W5M0MpCehiHzreSzNTczkc9d" ?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
     <rdf:Description rdf:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#" xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">
@@ -896,7 +928,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       }
 
       const finalPdfBytes = await pdfDoc.save();
-      const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+      const blob = new Blob([finalPdfBytes as BlobPart], { type: 'application/pdf' });
 
       // Automatic Upload
       const formData = new FormData();
@@ -928,7 +960,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       }
 
       const url = URL.createObjectURL(blob);
-      
+
       // Open/Download
       const link = document.createElement('a');
       link.href = url;
@@ -936,7 +968,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       if (uploadSuccess) {
         onClose();
       }
@@ -979,7 +1011,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
             </Button>
           </div>
         </DialogHeader>
-        
+
         <div className={`grid gap-6 ${showPreview ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {/* Form Section */}
           <div className="overflow-y-auto max-h-[calc(90vh-180px)] pr-2 space-y-6 py-4">
@@ -987,215 +1019,215 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
             <div className="bg-muted/30 p-3 rounded-md border mb-2">
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-sm font-medium">Vorlage laden / speichern</Label>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className="h-6 text-xs"
                   onClick={() => setIsSaveTemplateOpen(!isSaveTemplateOpen)}
                 >
                   {isSaveTemplateOpen ? "Abbrechen" : "+ Als Vorlage speichern"}
-              </Button>
-            </div>
-            
-            {isSaveTemplateOpen ? (
-              <div className="flex gap-2 items-center">
-                <Input 
-                  placeholder="Name der Vorlage" 
-                  value={newTemplateName}
-                  onChange={(e) => setNewTemplateName(e.target.value)}
-                  className="h-8 text-sm"
-                />
-                <Button size="sm" onClick={handleSaveTemplate} className="h-8">Speichern</Button>
+                </Button>
               </div>
-            ) : (
-              <div className="flex gap-2 items-center">
-                <select 
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={selectedTemplateId}
-                  onChange={(e) => handleLoadTemplate(e.target.value)}
-                >
-                  <option value="">-- Vorlage wählen --</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-                {selectedTemplateId && (
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => handleDeleteTemplate(selectedTemplateId)}
-                    title="Vorlage löschen"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
 
-          {/* Top Row: Invoice Details */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="invoice-number">Rechnungsnummer</Label>
-              <Input 
-                id="invoice-number" 
-                value={invoiceNumber} 
-                onChange={(e) => setInvoiceNumber(e.target.value)} 
-                placeholder="RE-2024-001" 
-                className={invoiceNumberError ? "border-red-500 focus-visible:ring-red-500" : ""}
-              />
-              {invoiceNumberError && (
-                <p className="text-xs text-red-500 font-medium">{invoiceNumberError}</p>
+              {isSaveTemplateOpen ? (
+                <div className="flex gap-2 items-center">
+                  <Input
+                    placeholder="Name der Vorlage"
+                    value={newTemplateName}
+                    onChange={(e) => setNewTemplateName(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                  <Button size="sm" onClick={handleSaveTemplate} className="h-8">Speichern</Button>
+                </div>
+              ) : (
+                <div className="flex gap-2 items-center">
+                  <select
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    value={selectedTemplateId}
+                    onChange={(e) => handleLoadTemplate(e.target.value)}
+                  >
+                    <option value="">-- Vorlage wählen --</option>
+                    {templates.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  {selectedTemplateId && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteTemplate(selectedTemplateId)}
+                      title="Vorlage löschen"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="date">Rechnungsdatum</Label>
-              <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="delivery-date">Leistungsdatum</Label>
-              <Input id="delivery-date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             {/* Left: Customer */}
-            <div className="space-y-2">
-              <Label htmlFor="customer">Empfänger (Name & Anschrift)</Label>
-              
-              {/* Customer Selection Dropdown */}
-              <select 
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                onChange={handleCustomerSelect}
-                defaultValue=""
-              >
-                <option value="" disabled>Kunden auswählen...</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-
-              <Textarea 
-                id="customer" 
-                value={customerAddress} 
-                onChange={(e) => setCustomerAddress(e.target.value)} 
-                placeholder="Musterfirma GmbH&#10;Musterstraße 1&#10;12345 Musterstadt"
-                className="min-h-[100px]"
-              />
-            </div>
-            
-            {/* Right: Payment Terms */}
-            <div className="space-y-2">
-              <Label htmlFor="due-date">Fälligkeitsdatum</Label>
-              <Input id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              <Label htmlFor="notes" className="mt-2 block">Anmerkungen (Optional)</Label>
-              <Textarea 
-                id="notes" 
-                value={notes} 
-                onChange={(e) => setNotes(e.target.value)} 
-                placeholder="Vielen Dank für Ihren Auftrag!"
-                className="min-h-[60px]"
-              />
-              
-              <div className="flex items-center space-x-2 mt-4">
-                <input
-                  type="checkbox"
-                  id="includeQRCode"
-                  checked={includeQRCode}
-                  onChange={(e) => setIncludeQRCode(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            {/* Top Row: Invoice Details */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="invoice-number">Rechnungsnummer</Label>
+                <Input
+                  id="invoice-number"
+                  value={invoiceNumber}
+                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                  placeholder="RE-2024-001"
+                  className={invoiceNumberError ? "border-red-500 focus-visible:ring-red-500" : ""}
                 />
-                <Label htmlFor="includeQRCode" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  GiroCode (QR-Code) für Banking-Apps hinzufügen
-                </Label>
+                {invoiceNumberError && (
+                  <p className="text-xs text-red-500 font-medium">{invoiceNumberError}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="date">Rechnungsdatum</Label>
+                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="delivery-date">Leistungsdatum</Label>
+                <Input id="delivery-date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left: Customer */}
+              <div className="space-y-2">
+                <Label htmlFor="customer">Empfänger (Name & Anschrift)</Label>
+
+                {/* Customer Selection Dropdown */}
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  onChange={handleCustomerSelect}
+                  defaultValue=""
+                >
+                  <option value="" disabled>Kunden auswählen...</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+
+                <Textarea
+                  id="customer"
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  placeholder="Musterfirma GmbH&#10;Musterstraße 1&#10;12345 Musterstadt"
+                  className="min-h-[100px]"
+                />
+              </div>
+
+              {/* Right: Payment Terms */}
+              <div className="space-y-2">
+                <Label htmlFor="due-date">Fälligkeitsdatum</Label>
+                <Input id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                <Label htmlFor="notes" className="mt-2 block">Anmerkungen (Optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Vielen Dank für Ihren Auftrag!"
+                  className="min-h-[60px]"
+                />
+
+                <div className="flex items-center space-x-2 mt-4">
+                  <input
+                    type="checkbox"
+                    id="includeQRCode"
+                    checked={includeQRCode}
+                    onChange={(e) => setIncludeQRCode(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="includeQRCode" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    GiroCode (QR-Code) für Banking-Apps hinzufügen
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div className="space-y-2">
+              <Label>Positionen</Label>
+              <div className="border rounded-md overflow-hidden">
+                <div className="grid grid-cols-[1fr_70px_90px_100px_70px_90px] gap-2 bg-muted p-2 text-sm font-medium items-center">
+                  <div className="pl-2">Beschreibung</div>
+                  <div className="text-center">Menge</div>
+                  <div className="text-center">Einheit</div>
+                  <div className="text-center">Einzelpreis</div>
+                  <div className="text-center">Steuer</div>
+                  <div></div>
+                </div>
+                <div className="divide-y">
+                  {items.map((item, index) => (
+                    <div key={index} className="grid grid-cols-[1fr_70px_90px_100px_70px_90px] gap-2 p-2 items-start">
+                      <Input
+                        value={item.description}
+                        onChange={(e) => updateItem(index, 'description', e.target.value)}
+                        placeholder="Leistung / Produkt"
+                      />
+                      <Input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                        placeholder="1"
+                        className="text-right"
+                      />
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        value={item.unit}
+                        onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                      >
+                        <option value="Stück">Stück</option>
+                        <option value="Stunde">Stunde</option>
+                        <option value="Tag">Tag</option>
+                        <option value="Pauschal">Pauschal</option>
+                      </select>
+                      <Input
+                        type="number"
+                        value={item.unitPrice}
+                        onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
+                        placeholder="0.00"
+                        className="text-right"
+                      />
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={item.taxRate}
+                          onChange={(e) => updateItem(index, 'taxRate', e.target.value)}
+                          placeholder="0"
+                          className="text-right pr-6"
+                        />
+                        <span className="absolute right-2 top-2.5 text-sm text-muted-foreground">%</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => duplicateItem(index)} title="Zeile duplizieren" className="text-muted-foreground hover:text-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} className="text-destructive hover:text-destructive">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                  + Position hinzufügen
+                </Button>
+                <div className="text-right font-bold">
+                  Gesamt: {items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </div>
               </div>
             </div>
           </div>
-          
-          {/* Items Table */}
-          <div className="space-y-2">
-            <Label>Positionen</Label>
-            <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_70px_90px_100px_70px_90px] gap-2 bg-muted p-2 text-sm font-medium items-center">
-                    <div className="pl-2">Beschreibung</div>
-                    <div className="text-center">Menge</div>
-                    <div className="text-center">Einheit</div>
-                    <div className="text-center">Einzelpreis</div>
-                    <div className="text-center">Steuer</div>
-                    <div></div>
-                </div>
-                <div className="divide-y">
-                    {items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-[1fr_70px_90px_100px_70px_90px] gap-2 p-2 items-start">
-                        <Input 
-                        value={item.description} 
-                        onChange={(e) => updateItem(index, 'description', e.target.value)} 
-                        placeholder="Leistung / Produkt" 
-                        />
-                        <Input 
-                        type="number" 
-                        value={item.quantity} 
-                        onChange={(e) => updateItem(index, 'quantity', e.target.value)} 
-                        placeholder="1" 
-                        className="text-right"
-                        />
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          value={item.unit}
-                          onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                        >
-                          <option value="Stück">Stück</option>
-                          <option value="Stunde">Stunde</option>
-                          <option value="Tag">Tag</option>
-                          <option value="Pauschal">Pauschal</option>
-                        </select>
-                        <Input 
-                        type="number" 
-                        value={item.unitPrice} 
-                        onChange={(e) => updateItem(index, 'unitPrice', e.target.value)} 
-                        placeholder="0.00" 
-                        className="text-right"
-                        />
-                        <div className="relative">
-                          <Input 
-                          type="number" 
-                          value={item.taxRate} 
-                          onChange={(e) => updateItem(index, 'taxRate', e.target.value)} 
-                          placeholder="0" 
-                          className="text-right pr-6"
-                          />
-                          <span className="absolute right-2 top-2.5 text-sm text-muted-foreground">%</span>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => duplicateItem(index)} title="Zeile duplizieren" className="text-muted-foreground hover:text-foreground">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} className="text-destructive hover:text-destructive">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </Button>
-                        </div>
-                    </div>
-                    ))}
-                </div>
-            </div>
-            <div className="flex justify-between items-center mt-2">
-                <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                + Position hinzufügen
-                </Button>
-                <div className="text-right font-bold">
-                    Gesamt: {items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                </div>
-            </div>
-          </div>
-          </div>
-          
+
           {/* Preview Section */}
           {showPreview && (
             <div className="border-l pl-4 flex flex-col h-[calc(90vh-180px)]">
@@ -1219,7 +1251,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                   Aktualisieren
                 </Button>
               </div>
-              
+
               <div className="flex-1 rounded-lg border bg-muted/30 overflow-hidden relative">
                 {isGeneratingPreview && !previewUrl && (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
@@ -1229,7 +1261,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                     </div>
                   </div>
                 )}
-                
+
                 {previewUrl ? (
                   <iframe
                     src={previewUrl}
@@ -1245,7 +1277,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                     </div>
                   </div>
                 )}
-                
+
                 {isGeneratingPreview && previewUrl && (
                   <div className="absolute top-2 right-2 bg-background/90 rounded-md px-2 py-1 text-xs text-muted-foreground flex items-center gap-1">
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -1253,14 +1285,14 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
                   </div>
                 )}
               </div>
-              
+
               <p className="text-xs text-muted-foreground mt-2">
                 Die Vorschau aktualisiert sich automatisch bei Änderungen. Der QR-Code wird erst in der finalen PDF angezeigt.
               </p>
             </div>
           )}
         </div>
-        
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Abbrechen</Button>
           <Button onClick={generatePDF} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>

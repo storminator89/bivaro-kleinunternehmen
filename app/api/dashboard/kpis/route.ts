@@ -10,11 +10,11 @@ export async function GET() {
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth();
-    
+
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
     const firstDayOfYear = new Date(currentYear, 0, 1);
-    const lastDayOfYear = new Date(currentYear, 11, 31, 23, 59, 59);
-    
+    const _lastDayOfYear = new Date(currentYear, 11, 31, 23, 59, 59);
+
     // Vorjahr
     const firstDayOfLastYear = new Date(currentYear - 1, 0, 1);
     const lastDayOfLastYear = new Date(currentYear - 1, 11, 31, 23, 59, 59);
@@ -207,11 +207,11 @@ export async function GET() {
 
 async function getMonthlyData(userId: string, year: number) {
   const months = [];
-  
+
   for (let month = 0; month < 12; month++) {
     const startOfMonth = new Date(year, month, 1);
     const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
-    
+
     const [revenue, expenses] = await Promise.all([
       prisma.income.aggregate({
         _sum: { amount: true },
@@ -229,7 +229,7 @@ async function getMonthlyData(userId: string, year: number) {
         },
       }),
     ]);
-    
+
     months.push({
       month: month + 1,
       monthName: new Date(year, month, 1).toLocaleString('de-DE', { month: 'short' }),
@@ -238,6 +238,6 @@ async function getMonthlyData(userId: string, year: number) {
       profit: (revenue._sum.amount || 0) - (expenses._sum.amount || 0),
     });
   }
-  
+
   return months;
 }

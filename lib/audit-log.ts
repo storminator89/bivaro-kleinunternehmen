@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { headers } from 'next/headers';
 
 // Action types for audit logging
@@ -45,7 +46,10 @@ export type AuditEntityType =
   | 'InvoiceTemplate'
   | 'Backup'
   | 'Session'
-  | 'CreditNote';
+  | 'CreditNote'
+  | 'CashBook'
+  | 'CashTransaction'
+  | 'EURExport';
 
 export interface AuditLogEntry {
   userId: string;
@@ -53,15 +57,15 @@ export interface AuditLogEntry {
   entityType: AuditEntityType;
   entityId?: string | number;
   entityName?: string;
-  oldValues?: Record<string, any>;
-  newValues?: Record<string, any>;
-  metadata?: Record<string, any>;
+  oldValues?: Record<string, unknown>;
+  newValues?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 // Fields to exclude from audit logs (sensitive data)
 const SENSITIVE_FIELDS = [
   'password',
-  'keyHash',
+  '_RefreshCw',
   'iban',
   'bic',
   'bankName',
@@ -77,10 +81,10 @@ const MASKED_FIELDS = [
  * Sanitize values for audit log storage
  * Removes sensitive fields and masks partial data
  */
-function sanitizeValues(values: Record<string, any> | undefined): string | null {
+function sanitizeValues(values: Record<string, unknown> | undefined): string | null {
   if (!values) return null;
 
-  const sanitized: Record<string, any> = {};
+  const sanitized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(values)) {
     // Skip sensitive fields entirely
@@ -104,7 +108,7 @@ function sanitizeValues(values: Record<string, any> | undefined): string | null 
 
     // Handle nested objects
     if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-      sanitized[key] = JSON.parse(sanitizeValues(value) || '{}');
+      sanitized[key] = JSON.parse(sanitizeValues(value as Record<string, unknown>) || '{}');
       continue;
     }
 
@@ -124,8 +128,8 @@ function sanitizeValues(values: Record<string, any> | undefined): string | null 
  * Calculate which fields changed between old and new values
  */
 function getChangedFields(
-  oldValues: Record<string, any> | undefined,
-  newValues: Record<string, any> | undefined
+  oldValues: Record<string, unknown> | undefined,
+  newValues: Record<string, unknown> | undefined
 ): string[] {
   if (!oldValues || !newValues) return [];
 
@@ -196,9 +200,9 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
         metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
       },
     });
-  } catch (error) {
+  } catch (_error) {
     // Log error but don't throw - audit logging should not break main functionality
-    console.error('Failed to create audit log:', error);
+    console.error('Failed to create audit log:', _error);
   }
 }
 
@@ -208,16 +212,17 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
 export async function auditCreate(
   userId: string,
   entityType: AuditEntityType,
-  entity: { id: number | string;[key: string]: any },
+  entity: { id: number | string;[key: string]: unknown },
   entityName?: string
 ): Promise<void> {
+  const e = entity as Record<string, unknown>;
   await createAuditLog({
     userId,
     action: 'CREATE',
     entityType,
     entityId: entity.id,
-    entityName: entityName || entity.name || entity.description || entity.invoiceNumber,
-    newValues: entity,
+    entityName: entityName || (e.name as string) || (e.description as string) || (e.invoiceNumber as string),
+    newValues: e,
   });
 }
 
@@ -228,8 +233,8 @@ export async function auditUpdate(
   userId: string,
   entityType: AuditEntityType,
   entityId: number | string,
-  oldValues: Record<string, any>,
-  newValues: Record<string, any>,
+  oldValues: Record<string, unknown>,
+  newValues: Record<string, unknown>,
   entityName?: string
 ): Promise<void> {
   await createAuditLog({
@@ -249,16 +254,17 @@ export async function auditUpdate(
 export async function auditDelete(
   userId: string,
   entityType: AuditEntityType,
-  entity: { id: number | string;[key: string]: any },
+  entity: { id: number | string;[key: string]: unknown },
   entityName?: string
 ): Promise<void> {
+  const e = entity as Record<string, unknown>;
   await createAuditLog({
     userId,
     action: 'DELETE',
     entityType,
     entityId: entity.id,
-    entityName: entityName || entity.name || entity.description || entity.invoiceNumber,
-    oldValues: entity,
+    entityName: entityName || (e.name as string) || (e.description as string) || (e.invoiceNumber as string),
+    oldValues: e,
   });
 }
 
@@ -268,7 +274,7 @@ export async function auditDelete(
 export async function auditLogin(
   userId: string,
   success: boolean,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): Promise<void> {
   await createAuditLog({
     userId,
@@ -284,7 +290,7 @@ export async function auditLogin(
 export async function auditExport(
   userId: string,
   entityType: AuditEntityType,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): Promise<void> {
   await createAuditLog({
     userId,
@@ -300,7 +306,7 @@ export async function auditExport(
 export async function auditBackup(
   userId: string,
   action: 'BACKUP' | 'RESTORE',
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): Promise<void> {
   await createAuditLog({
     userId,
@@ -334,7 +340,7 @@ export async function getAuditLogs(options: {
     pageSize = 50,
   } = options;
 
-  const where: any = {};
+  const where: Prisma.AuditLogWhereInput = {};
 
   if (userId) where.userId = userId;
   if (entityType) where.entityType = entityType;
@@ -411,6 +417,7 @@ export async function getEntityAuditHistory(
  * Default: Keep logs for 2 years
  */
 export async function cleanupOldAuditLogs(retentionDays: number = 730): Promise<number> {
+  const _today = new Date();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 

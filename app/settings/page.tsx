@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -507,10 +508,13 @@ export default function SettingsPage() {
               <div className="flex items-start gap-4">
                 {formData.logoUrl ? (
                   <div className="relative border rounded-md p-2 bg-muted/10">
-                    <img
+                    <Image
                       src={formData.logoUrl}
-                      alt="Firmenlogo"
-                      className="h-24 w-auto object-contain"
+                      alt="Logo"
+                      width={128}
+                      height={128}
+                      className="max-h-32 w-auto object-contain rounded border"
+                      unoptimized // Logo URL is local API, might need unoptimized or proper loader
                     />
                     <button
                       type="button"

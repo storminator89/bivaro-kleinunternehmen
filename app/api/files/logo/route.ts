@@ -10,10 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import * as fs from 'fs';
 import path from 'path';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { findUploadedFile } from '@/lib/upload-path';
-import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +18,7 @@ export async function GET(request: NextRequest) {
     // But we still validate the request
     const url = new URL(request.url);
     const filename = url.searchParams.get('file');
-    
+
     if (!filename) {
       return NextResponse.json(
         { error: 'Filename parameter required' },
@@ -40,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     // Find the file (checks both new and legacy locations)
     const filePath = findUploadedFile(sanitizedFilename);
-    
+
     if (!filePath || !fs.existsSync(filePath)) {
       return NextResponse.json(
         { error: 'File not found' },
@@ -50,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     // Read and serve the file
     const fileBuffer = await readFile(filePath);
-    
+
     // Determine content type
     const ext = path.extname(sanitizedFilename).toLowerCase();
     let contentType = 'application/octet-stream';
@@ -59,7 +56,7 @@ export async function GET(request: NextRequest) {
     else if (ext === '.gif') contentType = 'image/gif';
     else if (ext === '.webp') contentType = 'image/webp';
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         'Content-Type': contentType,

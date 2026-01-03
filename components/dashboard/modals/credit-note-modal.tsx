@@ -54,7 +54,7 @@ export function CreditNoteModal({ isOpen, onClose, invoice, onSuccess }: CreditN
             setCancellationReason("");
             onClose();
             onSuccess?.();
-        } catch (err) {
+        } catch {
             setError("Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.");
         } finally {
             setIsSubmitting(false);

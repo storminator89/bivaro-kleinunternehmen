@@ -7,6 +7,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   withApiAuth,
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     today.setHours(0, 0, 0, 0);
 
     // Build query
-    const whereClause: any = {
+    const whereClause: Prisma.InvoiceWhereInput = {
       userId,
       status: { not: 'PAID' },
     };
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
       const latestReminder = invoice.reminders[0];
       const currentLevel = latestReminder ? latestReminder.reminderLevel : 0;
       const nextLevel = Math.min(currentLevel + 1, 4);
-      
+
       // Calculate days overdue
       let daysOverdue = 0;
       if (invoice.dueDate) {
@@ -163,11 +164,11 @@ export async function POST(request: NextRequest) {
     // Check if invoice exists and belongs to user
     const invoice = await prisma.invoice.findFirst({
       where: { id: parseInt(invoiceId), userId },
-      include: { 
-        reminders: { 
-          orderBy: { sentAt: 'desc' }, 
-          take: 1 
-        } 
+      include: {
+        reminders: {
+          orderBy: { sentAt: 'desc' },
+          take: 1
+        }
       },
     });
 

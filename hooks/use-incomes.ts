@@ -56,7 +56,7 @@ export function useIncomes(filters: IncomesFilter): UseIncomesReturn {
       } else {
         setError('Fehler beim Laden der Einnahmen');
       }
-    } catch (e) {
+    } catch {
       setError('Fehler beim Laden der Einnahmen');
     } finally {
       setIsLoading(false);
@@ -75,16 +75,16 @@ export function useIncomes(filters: IncomesFilter): UseIncomesReturn {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     loadIncomes(1, pageSize);
     reloadAll();
-  }, []);
+  }, [loadIncomes, pageSize, reloadAll]);
 
-  // Reload when filters change
   useEffect(() => {
     loadIncomes(1, pageSize);
   }, [
+    loadIncomes,
+    pageSize,
     filters.customer,
     filters.dateRange,
     filters.taxRelevant,

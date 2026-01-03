@@ -9,6 +9,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   withApiAuth,
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * pageSize;
     const search = url.searchParams.get('search') || '';
 
-    const where: any = { userId };
+    const where: Prisma.CustomerWhereInput = { userId };
 
     if (search) {
       where.OR = [

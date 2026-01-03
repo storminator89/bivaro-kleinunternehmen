@@ -5,8 +5,7 @@
  * customer data, and original invoice reference.
  */
 
-import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
-import { prisma } from '@/lib/prisma';
+import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
 import path from 'path';
 import fs from 'fs/promises';
 

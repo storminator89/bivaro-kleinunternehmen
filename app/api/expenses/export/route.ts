@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import JSZip from 'jszip';
 import { promises as fs } from 'fs';
-import { join, extname, basename } from 'path';
+import { extname, basename } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { findUploadedFile } from '@/lib/upload-path';
 
@@ -17,7 +17,7 @@ function parseFilters(url: URL) {
   const hasReceipt = url.searchParams.get('hasReceipt');
   const dateRange = url.searchParams.get('dateRange') as DateRangeParam;
 
-  const where: any = {};
+  const where: Prisma.ExpenseWhereInput = {};
 
   if (category) {
     where.category = category;
@@ -151,8 +151,8 @@ export async function GET(request: NextRequest) {
           formatCurrency(expense.amount),
           `"${filename}"`,
         ].join(';'));
-      } catch (error) {
-        console.error(`Fehler beim Lesen der Datei ${filePath}:`, error);
+      } catch (_error) {
+        console.error(`Fehler beim Lesen der Datei ${filePath}:`, _error);
         missingFiles.push(`${expense.id}: ${expense.storedReceiptFileName}`);
       }
     }
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
     const dateStamp = new Date().toISOString().split('T')[0];
     const fileName = `belege-${dateStamp}.zip`;
 
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(new Uint8Array(zipBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',

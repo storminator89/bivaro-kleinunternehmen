@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 function calculateNextExecution(interval: string, dayOfMonth: number, fromDate: Date = new Date()): Date {
   const next = new Date(fromDate);
   next.setHours(0, 0, 0, 0);
-  
+
   switch (interval) {
     case 'MONTHLY':
       next.setMonth(next.getMonth() + 1);
@@ -25,7 +25,7 @@ function calculateNextExecution(interval: string, dayOfMonth: number, fromDate: 
     default:
       next.setMonth(next.getMonth() + 1);
   }
-  
+
   return next;
 }
 
@@ -35,29 +35,29 @@ export async function POST(request: Request) {
     const userId = await requireUserId();
     const body = await request.json();
     const { id } = body; // Optional: Nur eine bestimmte wiederkehrende Ausgabe ausführen
-    
+
     const now = new Date();
     now.setHours(23, 59, 59, 999); // Ende des heutigen Tages
-    
+
     // Fällige wiederkehrende Ausgaben finden
-    const whereClause: any = {
+    const whereClause: Prisma.RecurringExpenseWhereInput = {
       userId,
       isActive: true,
       nextExecution: { lte: now },
     };
-    
+
     // Wenn eine ID übergeben wurde, nur diese ausführen
     if (id) {
       whereClause.id = Number(id);
     }
-    
+
     const dueRecurring = await prisma.recurringExpense.findMany({
       where: whereClause,
     });
-    
+
     const createdExpenses = [];
     const updatedRecurring = [];
-    
+
     for (const recurring of dueRecurring) {
       // Prüfen ob Enddatum überschritten ist
       if (recurring.endDate && recurring.endDate < now) {
@@ -68,17 +68,17 @@ export async function POST(request: Request) {
         });
         continue;
       }
-      
+
       // ALLE verpassten Ausführungen nachholen (nicht nur eine)
       let currentExecution = new Date(recurring.nextExecution);
       let lastExecutedDate = recurring.lastExecuted ? new Date(recurring.lastExecuted) : null;
-      
+
       while (currentExecution <= now) {
         // Prüfen ob Enddatum erreicht
         if (recurring.endDate && currentExecution > recurring.endDate) {
           break;
         }
-        
+
         // Neue Ausgabe erstellen für diesen Zeitpunkt
         const expense = await prisma.expense.create({
           data: {
@@ -91,10 +91,10 @@ export async function POST(request: Request) {
             userId,
           },
         });
-        
+
         createdExpenses.push(expense);
         lastExecutedDate = new Date(currentExecution);
-        
+
         // Nächste Ausführung berechnen
         currentExecution = calculateNextExecution(
           recurring.interval,
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
           currentExecution
         );
       }
-      
+
       // Wiederkehrende Ausgabe aktualisieren mit der nächsten zukünftigen Ausführung
       const updated = await prisma.recurringExpense.update({
         where: { id: recurring.id },
@@ -113,10 +113,10 @@ export async function POST(request: Request) {
           isActive: recurring.endDate ? currentExecution <= recurring.endDate : true,
         },
       });
-      
+
       updatedRecurring.push(updated);
     }
-    
+
     return NextResponse.json({
       success: true,
       created: createdExpenses.length,
@@ -136,10 +136,10 @@ export async function POST(request: Request) {
 export async function GET() {
   try {
     const userId = await requireUserId();
-    
+
     const now = new Date();
     now.setHours(23, 59, 59, 999);
-    
+
     const dueRecurring = await prisma.recurringExpense.findMany({
       where: {
         userId,
@@ -148,13 +148,13 @@ export async function GET() {
       },
       orderBy: { nextExecution: 'asc' },
     });
-    
+
     // Berechne wie viele Ausgaben tatsächlich erstellt werden würden
     let totalDueExpenses = 0;
     const itemsWithCount = dueRecurring.map(recurring => {
       let count = 0;
       let currentExecution = new Date(recurring.nextExecution);
-      
+
       while (currentExecution <= now) {
         if (recurring.endDate && currentExecution > recurring.endDate) {
           break;
@@ -166,11 +166,11 @@ export async function GET() {
           currentExecution
         );
       }
-      
+
       totalDueExpenses += count;
       return { ...recurring, dueCount: count };
     });
-    
+
     return NextResponse.json({
       count: totalDueExpenses,
       recurringCount: dueRecurring.length,

@@ -4,7 +4,7 @@
  * Based on Anlage EÜR 2024 structure
  */
 
-import { EURLineDefinition, EURLineType, CategoryEURMapping } from '@/types/eur-export';
+import { EURLineDefinition } from '@/types/eur-export';
 
 // Official EÜR line definitions (Anlage EÜR 2024)
 export const EUR_LINES: EURLineDefinition[] = [

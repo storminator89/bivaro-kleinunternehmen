@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
-import * as fs from 'fs';
 import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { findUploadedFile } from '@/lib/upload-path';
@@ -44,10 +42,10 @@ export async function GET(request: NextRequest) {
 
     // Sanitize filename - prevent path traversal
     const sanitizedFileName = path.basename(expense.storedReceiptFileName);
-    
+
     // Find file in new or legacy location
     const filePath = findUploadedFile(sanitizedFileName);
-    
+
     if (!filePath) {
       return NextResponse.json(
         { error: 'Datei nicht gefunden' },
@@ -57,11 +55,11 @@ export async function GET(request: NextRequest) {
 
     // Datei einlesen
     const fileBuffer = await readFile(filePath);
-    
+
     // Content-Type bestimmen basierend auf der Dateierweiterung
     const fileExtension = path.extname(expense.storedReceiptFileName).toLowerCase();
     let contentType = 'application/octet-stream'; // Standard
-    
+
     if (fileExtension === '.pdf') {
       contentType = 'application/pdf';
     } else if (fileExtension === '.jpg' || fileExtension === '.jpeg') {
@@ -79,7 +77,7 @@ export async function GET(request: NextRequest) {
       // Allow iframe embedding for preview (SAMEORIGIN instead of DENY)
       'X-Frame-Options': 'SAMEORIGIN',
     };
-    
+
     // Wenn download=true übergeben wurde, setze den Content-Disposition Header für Download
     if (download) {
       headers['Content-Disposition'] = `attachment; filename="${downloadFilename}"`;
@@ -88,7 +86,7 @@ export async function GET(request: NextRequest) {
       headers['Content-Disposition'] = `inline; filename="${downloadFilename}"`;
     }
 
-    const response = new NextResponse(fileBuffer, {
+    const response = new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: headers,
     });

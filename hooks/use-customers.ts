@@ -25,7 +25,7 @@ export function useCustomers(): UseCustomersReturn {
       } else {
         setError('Fehler beim Laden der Kunden');
       }
-    } catch (e) {
+    } catch {
       setError('Fehler beim Laden der Kunden');
     } finally {
       setIsLoading(false);

@@ -13,7 +13,7 @@ import { generateApiKey } from '@/lib/api-auth';
 import { createAuditLog } from '@/lib/audit-log';
 
 // GET - List all API keys for the current user
-export async function GET(request: NextRequest) {
+export async function GET(_request: Request) {
   try {
     const userId = await requireUserId();
 
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     // Validate scopes
     const validScopes = ['read', 'write', 'delete', '*'];
     const requestedScopes = scopes || ['read', 'write'];
-    
+
     if (!Array.isArray(requestedScopes)) {
       return NextResponse.json({ error: 'Scopes must be an array' }, { status: 400 });
     }

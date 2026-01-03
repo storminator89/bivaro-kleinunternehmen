@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import JSZip from 'jszip';
 import { promises as fs } from 'fs';
-import { join, extname, basename } from 'path';
+import { extname, basename } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { findUploadedFile } from '@/lib/upload-path';
 
@@ -10,13 +10,14 @@ const prisma = new PrismaClient();
 
 type DateRangeParam = 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
-function parseFilters(url: URL) {
+async function parseFilters(url: URL): Promise<Prisma.IncomeWhereInput> {
   const search = url.searchParams.get('search') || '';
   const customer = url.searchParams.get('customer') || '';
   const taxRelevant = url.searchParams.get('taxRelevant');
   const dateRange = url.searchParams.get('dateRange') as DateRangeParam;
 
-  const where: any = {};
+  const userId = await requireUserId();
+  const where: Prisma.IncomeWhereInput = { userId };
 
   if (customer) {
     where.customer = { name: customer };
@@ -83,13 +84,11 @@ function sanitizeCsvField(value: string) {
 function formatCurrency(value: number) {
   return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 export async function GET(request: NextRequest) {
   try {
-    const userId = await requireUserId();
+    await requireUserId(); // Ensure user is authenticated
     const url = new URL(request.url);
-    const where = parseFilters(url);
-    where.userId = userId;
+    const where: Prisma.IncomeWhereInput = await parseFilters(url);
 
     const incomes = await prisma.income.findMany({
       where,
@@ -100,7 +99,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    if (!incomes.length) {
+    const items = incomes as (Prisma.IncomeGetPayload<{
+      include: { invoice: true, customer: true }
+    }>)[];
+
+    if (!items.length) {
       return NextResponse.json(
         { error: 'Keine passenden Einnahmen gefunden.' },
         { status: 404 }
@@ -113,7 +116,7 @@ export async function GET(request: NextRequest) {
     const missingFiles: string[] = [];
     let filesAdded = 0;
 
-    for (const income of incomes) {
+    for (const income of items) {
       if (!income.invoice || !income.invoice.storedFileName) {
         continue;
       }
@@ -169,7 +172,7 @@ export async function GET(request: NextRequest) {
     const dateStamp = new Date().toISOString().split('T')[0];
     const filename = `einnahmen-${dateStamp}.zip`;
 
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(new Uint8Array(zipBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,7 +134,7 @@ export default function SteuerSimulationPage() {
       // KV: 7.3% + 0.85% (halber Zusatzbeitrag 1.7%) = 8.15%
       // RV: 9.3%
       // PV: 2.3% (inkl. Kinderlosenzuschlag Anteil)
-      
+
       setHealthInsurance(Math.round(salaryForKV * 0.0815));
       setPensionInsurance(Math.round(salaryForRV * 0.093));
       setCareInsurance(Math.round(salaryForKV * 0.023));
@@ -169,7 +169,7 @@ export default function SteuerSimulationPage() {
     fetchData();
   }, []);
 
-  const shouldInclude = (isoDate: string) => {
+  const shouldInclude = useCallback((isoDate: string) => {
     const date = new Date(isoDate);
     if (Number.isNaN(date.getTime())) {
       return false;
@@ -193,27 +193,27 @@ export default function SteuerSimulationPage() {
       return date.getFullYear() === today.getFullYear() - 1;
     }
     return true;
-  };
+  }, [selectedTimeRange]);
 
   const filteredIncomes = useMemo(
     () => incomes.filter((income) => income.taxRelevant && shouldInclude(income.date)),
-    [incomes, selectedTimeRange]
+    [incomes, shouldInclude]
   );
 
   const filteredExpenses = useMemo(
     () =>
       expenses.filter((expense) => expense.taxRelevant && shouldInclude(expense.date)),
-    [expenses, selectedTimeRange]
+    [expenses, shouldInclude]
   );
 
   const filteredIncomesAll = useMemo(
     () => incomes.filter((income) => shouldInclude(income.date)),
-    [incomes, selectedTimeRange]
+    [incomes, shouldInclude]
   );
 
   const filteredExpensesAll = useMemo(
     () => expenses.filter((expense) => shouldInclude(expense.date)),
-    [expenses, selectedTimeRange]
+    [expenses, shouldInclude]
   );
 
   const totalIncome = useMemo(
@@ -273,7 +273,7 @@ export default function SteuerSimulationPage() {
 
   // 2. Zu versteuerndes Einkommen (zvE)
   const totalDeductions = healthInsurance + pensionInsurance + careInsurance + otherDeductions;
-  
+
   let incomeFromEmployment = 0;
   if (employmentType === "side-business") {
     incomeFromEmployment = Math.max(0, grossSalary - employeeExpenses);
@@ -288,7 +288,7 @@ export default function SteuerSimulationPage() {
   // Messbetrag = (Gewinn - 24500) * 3.5%
   const tradeTaxBaseAmount = Math.max(0, profitFloor - 24500) * 0.035;
   const tradeTaxCredit = Math.min(tradeTax, tradeTaxBaseAmount * 3.8);
-  
+
   const finalIncomeTax = Math.max(0, baseIncomeTax - tradeTaxCredit);
 
   // 5. Zuschläge
@@ -307,28 +307,28 @@ export default function SteuerSimulationPage() {
     const baseIncomeTaxOnly = calculateIncomeTax(taxableIncomeBase);
     const baseSoli = includeSolidarity ? calculateSolidaritySurcharge(baseIncomeTaxOnly) : 0;
     const baseChurch = includeChurchTax ? calculateChurchTax(baseIncomeTaxOnly, churchTaxRate) : 0;
-    
+
     taxWithoutBusiness = baseIncomeTaxOnly + baseSoli + baseChurch;
     marginalTax = totalTax - taxWithoutBusiness;
   }
 
-  const netProfitAfterTax = employmentType === "side-business" 
-    ? profit - marginalTax 
+  const netProfitAfterTax = employmentType === "side-business"
+    ? profit - marginalTax
     : profit - totalTax;
-    
-  const effectiveTaxRate = profit > 0 
-    ? (marginalTax / profit) * 100 
+
+  const effectiveTaxRate = profit > 0
+    ? (marginalTax / profit) * 100
     : 0;
-  
+
   const totalNetIncome = (profit + incomeFromEmployment) - totalTax;
-  
+
   // Für UI-Anzeige
   const deductionsApplied = totalDeductions;
   const expenseCoverage = totalIncome > 0 ? totalExpenses / totalIncome : 0;
   const unusedAllowance = 0; // Nicht mehr relevant in neuer Logik
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
+  const formatCurrency = useCallback((value: number) =>
+    new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value), []);
 
   const recommendationToneStyles: Record<Recommendation["tone"], string> = {
     info: "border-primary/30 bg-primary/5",
@@ -474,8 +474,6 @@ export default function SteuerSimulationPage() {
     tradeTaxHebesatz,
     unusedAllowance,
     employmentType,
-    grossSalary,
-    employeeExpenses,
   ]);
 
   const resetDefaults = () => {
@@ -581,8 +579,8 @@ export default function SteuerSimulationPage() {
               <p className="text-xs text-muted-foreground">
                 Tipp: Vergleichen Sie mehrere Zeiträume, um saisonale Schwankungen zu erkennen.
               </p>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
         </div>
         {error && (
@@ -715,7 +713,7 @@ export default function SteuerSimulationPage() {
                   </div>
                 </div>
               )}
-              
+
               {employmentType === "side-business" && (
                 <div className="mt-4 flex items-center gap-2 rounded-md bg-muted/50 p-3 text-sm">
                   <input
@@ -941,7 +939,7 @@ export default function SteuerSimulationPage() {
                   <span className="text-base font-semibold">{formatCurrency(netProfitAfterTax)}</span>
                 </div>
                 {employmentType === "side-business" && (
-                   <div className="mt-3 border-t pt-2 flex items-center justify-between">
+                  <div className="mt-3 border-t pt-2 flex items-center justify-between">
                     <span className="text-sm font-medium">Gesamtes Netto</span>
                     <span className="text-base font-bold text-primary">{formatCurrency(totalNetIncome)}</span>
                   </div>
@@ -974,45 +972,45 @@ export default function SteuerSimulationPage() {
             <p className="text-sm text-muted-foreground">
               Hinweis: Die Simulation ersetzt keine steuerliche Beratung. Für verbindliche Aussagen wenden Sie sich bitte an Ihre Steuerberatung.
             </p>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      <Card className="border-primary/20 shadow-sm">
-        <CardHeader className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="gap-1 border-primary/40 text-primary">
-              Optimierung
-            </Badge>
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">
-              Handlungsempfehlungen
-            </span>
-          </div>
-          <CardTitle>Empfehlungen zur Steueroptimierung</CardTitle>
-          <CardDescription>
-            Konkrete Ansatzpunkte basierend auf Ihren aktuellen EÜR-Daten und Simulationseinstellungen.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-3">
-            {recommendations.map((rec, index) => {
-              const Icon = recommendationIconMap[rec.tone];
-              return (
-                <li
-                  key={`${rec.title}-${index}`}
-                  className={`flex items-start gap-3 rounded-lg border px-4 py-3 backdrop-blur-sm ${recommendationToneStyles[rec.tone]}`}
-                >
-                  <Icon className={`mt-0.5 h-5 w-5 ${recommendationIconColor[rec.tone]}`} />
-                  <div className="space-y-1">
-                    <p className="font-medium text-foreground">{rec.title}</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{rec.description}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </CardContent>
-      </Card>
-    </div>
-  </TooltipProvider>
-);
+        <Card className="border-primary/20 shadow-sm">
+          <CardHeader className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="gap-1 border-primary/40 text-primary">
+                Optimierung
+              </Badge>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                Handlungsempfehlungen
+              </span>
+            </div>
+            <CardTitle>Empfehlungen zur Steueroptimierung</CardTitle>
+            <CardDescription>
+              Konkrete Ansatzpunkte basierend auf Ihren aktuellen EÜR-Daten und Simulationseinstellungen.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3">
+              {recommendations.map((rec, index) => {
+                const Icon = recommendationIconMap[rec.tone];
+                return (
+                  <li
+                    key={`${rec.title}-${index}`}
+                    className={`flex items-start gap-3 rounded-lg border px-4 py-3 backdrop-blur-sm ${recommendationToneStyles[rec.tone]}`}
+                  >
+                    <Icon className={`mt-0.5 h-5 w-5 ${recommendationIconColor[rec.tone]}`} />
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">{rec.title}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{rec.description}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+    </TooltipProvider>
+  );
 }

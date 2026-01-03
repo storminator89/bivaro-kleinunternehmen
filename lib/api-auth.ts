@@ -33,7 +33,7 @@ export function generateApiKey(): { key: string; keyHash: string; keyPrefix: str
   const key = `biv_sk_${randomBytes}`;
   const keyHash = hashApiKey(key);
   const keyPrefix = key.substring(0, 12) + '...';
-  
+
   return { key, keyHash, keyPrefix };
 }
 
@@ -192,7 +192,7 @@ export function apiSuccess<T>(
     hasMore?: boolean;
   }
 ): NextResponse {
-  const response: any = {
+  const response: Record<string, unknown> = {
     success: true,
     data,
     timestamp: new Date().toISOString(),
@@ -389,7 +389,7 @@ export function corsHeaders(request?: NextRequest): HeadersInit {
       origin = requestOrigin || '*';
     }
   }
-  
+
   return {
     'Access-Control-Allow-Origin': origin || (process.env.NODE_ENV === 'production' ? '' : '*'),
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',

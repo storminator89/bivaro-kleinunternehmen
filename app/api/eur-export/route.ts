@@ -6,9 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserId } from '@/lib/get-user-id';
-import { auditExport } from '@/lib/audit-log';
+import { auditExport, AuditEntityType } from '@/lib/audit-log';
 import {
-    EUR_LINES,
     getEURLineForCategory,
     getDefaultIncomeLineForKleinunternehmer,
     getDefaultExpenseLine,
@@ -192,7 +191,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Audit log
-        await auditExport(userId, 'EURExport' as any, {
+        await auditExport(userId, 'EURExport' as AuditEntityType, {
             year,
             format,
             totalIncome,

@@ -8,6 +8,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
     withApiAuth,
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
         });
 
         // Build transaction filter
-        const transactionWhere: any = { userId };
+        const transactionWhere: Prisma.CashTransactionWhereInput = { userId };
 
         if (cashBookId) {
             transactionWhere.cashBookId = parseInt(cashBookId);

@@ -74,8 +74,8 @@ export default function RegisterPage() {
 
       // Redirect to login page on successful registration
       router.push("/login?registered=true");
-    } catch (error: any) {
-      setError(error.message || "Ein Fehler ist aufgetreten");
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Ein Fehler ist aufgetreten");
     } finally {
       setLoading(false);
     }
@@ -123,7 +123,7 @@ export default function RegisterPage() {
             {isFirstUser ? "Admin-Konto erstellen" : "Registrieren"}
           </CardTitle>
           <CardDescription>
-            {isFirstUser 
+            {isFirstUser
               ? "Erstellen Sie das erste Administrator-Konto für diese Instanz"
               : "Erstellen Sie ein neues Konto"}
           </CardDescription>

@@ -27,6 +27,15 @@ interface YearComparisonData {
   monthlyDataLastYear: MonthlyData[];
 }
 
+interface Activity {
+  id: number | string;
+  type: 'income' | 'expense';
+  description: string;
+  date: string;
+  amount: number;
+}
+
+
 interface KpiData {
   revenueThisMonth: number;
   revenueThisYear: number;
@@ -34,7 +43,7 @@ interface KpiData {
   openInvoices: number;
   totalRevenue: number;
   totalExpenses: number;
-  recentActivities: any[];
+  recentActivities: Activity[];
   yearComparison?: YearComparisonData;
 }
 
@@ -46,6 +55,10 @@ export function DashboardClient() {
     async function fetchData() {
       try {
         const res = await fetch("/api/dashboard/kpis");
+        // The instruction included a Blob creation line, but it was syntactically incorrect
+        // and out of context for this fetchData function which retrieves KPI data.
+        // If Blob creation is needed elsewhere, it should be in its own context.
+        // const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
         const kpiData = await res.json();
         setData(kpiData);
       } catch (error) {

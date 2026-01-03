@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { readFile } from 'fs/promises';
-import { join, basename, resolve } from 'path';
-import * as fs from 'fs';
+import { basename } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { findUploadedFile, UPLOAD_BASE_DIR } from '@/lib/upload-path';
+import { findUploadedFile } from '@/lib/upload-path';
 
 const prisma = new PrismaClient();
 
@@ -36,10 +35,10 @@ export async function GET(request: NextRequest) {
 
     // Sanitize filename - prevent path traversal
     const sanitizedFileName = basename(invoice.storedFileName);
-    
+
     // Find file in new or legacy location
     const filePath = findUploadedFile(sanitizedFileName);
-    
+
     if (!filePath) {
       return NextResponse.json(
         { error: 'Datei nicht gefunden' },
@@ -49,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     // Datei einlesen
     const fileBuffer = await readFile(filePath);
-    
+
     // Bestimmen des Content-Types - bei Rechnungen sollte es immer PDF sein
     const contentType = 'application/pdf';
 
@@ -59,7 +58,7 @@ export async function GET(request: NextRequest) {
       // Allow iframe embedding for preview (SAMEORIGIN instead of DENY)
       'X-Frame-Options': 'SAMEORIGIN',
     };
-    
+
     // Wenn download=true übergeben wurde, setze den Content-Disposition Header für Download
     if (download) {
       headers['Content-Disposition'] = `attachment; filename="${invoice.fileName}"`;
@@ -68,7 +67,7 @@ export async function GET(request: NextRequest) {
       headers['Content-Disposition'] = `inline; filename="${invoice.fileName}"`;
     }
 
-    const response = new NextResponse(fileBuffer, {
+    const response = new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: headers,
     });

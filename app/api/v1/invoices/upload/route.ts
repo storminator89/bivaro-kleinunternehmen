@@ -107,7 +107,7 @@ async function extractZugferdXml(pdfBuffer: Buffer): Promise<string | null> {
 export async function POST(request: NextRequest) {
   return withApiAuth(request, async ({ userId }) => {
     const contentType = request.headers.get('content-type') || '';
-    
+
     if (!contentType.includes('multipart/form-data')) {
       return apiError('Content-Type must be multipart/form-data', 400, 'INVALID_CONTENT_TYPE');
     }
@@ -146,22 +146,22 @@ export async function POST(request: NextRequest) {
 
     if (!zugferdXmlContent) {
       // Clean up
-      try { fs.unlinkSync(filePath); } catch {}
-      try { fs.unlinkSync(permanentFilePath); } catch {}
+      try { fs.unlinkSync(filePath); } catch { }
+      try { fs.unlinkSync(permanentFilePath); } catch { }
       return apiError('No ZUGFeRD/Factur-X XML found in PDF', 400, 'NO_ZUGFERD_XML');
     }
 
-    let parsedXml: any;
+    let parsedXml: unknown;
     try {
       parsedXml = await parseStringPromise(zugferdXmlContent, { explicitArray: false });
     } catch {
-      try { fs.unlinkSync(filePath); } catch {}
-      try { fs.unlinkSync(permanentFilePath); } catch {}
+      try { fs.unlinkSync(filePath); } catch { }
+      try { fs.unlinkSync(permanentFilePath); } catch { }
       return apiError('Invalid or corrupted ZUGFeRD XML', 400, 'INVALID_XML');
     }
 
     // Helper functions
-    const get = (obj: any, path: string) => path.split('.').reduce((acc, k) => (acc ? acc[k] : undefined), obj);
+    const get = (obj: unknown, path: string): unknown => path.split('.').reduce((acc, k) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[k] : undefined), obj);
     const asDate = (yyyymmdd?: string | null) => {
       if (!yyyymmdd) return null;
       const s = String(yyyymmdd);
@@ -169,40 +169,40 @@ export async function POST(request: NextRequest) {
       if (!match) return null;
       return new Date(`${match[1]}-${match[2]}-${match[3]}`);
     };
-    const asNumber = (val: any) => {
+    const asNumber = (val: unknown) => {
       const n = parseFloat(String(val));
       return isNaN(n) ? null : n;
     };
 
-    const root = parsedXml['rsm:CrossIndustryInvoice'] || parsedXml['CrossIndustryInvoice'] || parsedXml['Invoice'];
+    const root = (parsedXml as Record<string, unknown>)['rsm:CrossIndustryInvoice'] as Record<string, unknown> || (parsedXml as Record<string, unknown>)['CrossIndustryInvoice'] as Record<string, unknown> || (parsedXml as Record<string, unknown>)['Invoice'] as Record<string, unknown>;
     if (!root) {
-      try { fs.unlinkSync(filePath); } catch {}
-      try { fs.unlinkSync(permanentFilePath); } catch {}
+      try { fs.unlinkSync(filePath); } catch { }
+      try { fs.unlinkSync(permanentFilePath); } catch { }
       return apiError('Unknown ZUGFeRD/Factur-X structure', 400, 'UNKNOWN_STRUCTURE');
     }
 
     const exchangedDoc = root['rsm:ExchangedDocument'] || root['ExchangedDocument'];
     const tradeTransaction = root['rsm:SupplyChainTradeTransaction'] || root['SupplyChainTradeTransaction'];
 
-    const invoiceNumber = get(exchangedDoc, 'ram:ID') || get(exchangedDoc, 'ID') || null;
-    const invoiceDateStr = get(exchangedDoc, 'ram:IssueDateTime.udt:DateTimeString._') || get(exchangedDoc, 'IssueDateTime.DateTimeString._') || null;
+    const invoiceNumber = get(exchangedDoc, 'ram:ID') as string || get(exchangedDoc, 'ID') as string || null;
+    const invoiceDateStr = get(exchangedDoc, 'ram:IssueDateTime.udt:DateTimeString._') as string || get(exchangedDoc, 'IssueDateTime.DateTimeString._') as string || null;
     const invoiceDate = asDate(invoiceDateStr) || new Date();
 
-    const dueDateStr = get(tradeTransaction, 'ram:ApplicableHeaderTradeSettlement.ram:SpecifiedTradePaymentTerms.ram:DueDateDateTime.udt:DateTimeString._')
-      || get(tradeTransaction, 'ApplicableHeaderTradeSettlement.SpecifiedTradePaymentTerms.DueDateDateTime.DateTimeString._');
+    const dueDateStr = get(tradeTransaction, 'ram:ApplicableHeaderTradeSettlement.ram:SpecifiedTradePaymentTerms.ram:DueDateDateTime.udt:DateTimeString._') as string
+      || get(tradeTransaction, 'ApplicableHeaderTradeSettlement.SpecifiedTradePaymentTerms.DueDateDateTime.DateTimeString._') as string;
     const dueDate = asDate(dueDateStr);
 
     const totalAmount = asNumber(
       get(tradeTransaction, 'ram:ApplicableHeaderTradeSettlement.ram:SpecifiedTradeSettlementHeaderMonetarySummation.ram:GrandTotalAmount')
       || get(tradeTransaction, 'ApplicableHeaderTradeSettlement.SpecifiedTradeSettlementHeaderMonetarySummation.GrandTotalAmount')
     );
-    
-    const customerName = get(tradeTransaction, 'ram:ApplicableHeaderTradeAgreement.ram:BuyerTradeParty.ram:Name')
-      || get(tradeTransaction, 'ApplicableHeaderTradeAgreement.BuyerTradeParty.Name')
+
+    const customerName = get(tradeTransaction, 'ram:ApplicableHeaderTradeAgreement.ram:BuyerTradeParty.ram:Name') as string
+      || get(tradeTransaction, 'ApplicableHeaderTradeAgreement.BuyerTradeParty.Name') as string
       || undefined;
 
     // Clean up temp file
-    try { fs.unlinkSync(filePath); } catch {}
+    try { fs.unlinkSync(filePath); } catch { }
 
     // Check for duplicate invoice number
     if (invoiceNumber) {
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingInvoice) {
-        try { fs.unlinkSync(permanentFilePath); } catch {}
+        try { fs.unlinkSync(permanentFilePath); } catch { }
         return apiError(`Invoice with number ${invoiceNumber} already exists`, 409, 'DUPLICATE_INVOICE');
       }
     }
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const income = await prisma.income.create({
+      await prisma.income.create({
         data: {
           description: description.substring(0, 255),
           amount: totalAmount,
@@ -266,7 +266,7 @@ export async function POST(request: NextRequest) {
 
       await prisma.invoice.update({
         where: { id: invoice.id },
-        data: { 
+        data: {
           customerId: customerRecord?.id,
         },
       });

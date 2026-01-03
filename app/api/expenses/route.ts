@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import * as fs from 'fs';
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const userId = await requireUserId();
     // Prüfen, ob es sich um einen multipart/form-data-Request handelt
     const contentType = request.headers.get('content-type') || '';
-    
+
     if (contentType.includes('multipart/form-data')) {
       // Formular mit Datei verarbeiten
       const formData = await request.formData();
@@ -27,14 +27,14 @@ export async function POST(request: NextRequest) {
       const taxRelevant = formData.get('taxRelevant') === 'true';
       const receipt = formData.get('receipt') as File | null;
       const dateStr = formData.get('date') as string;
-      
+
       if (!description || !amount) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
       }
-      
+
       let receiptFileName = null;
       let storedReceiptFileName = null;
-      
+
       // Wenn eine Datei hochgeladen wurde, speichern wir sie
       if (receipt) {
         // Dateityp prüfen
@@ -45,26 +45,26 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        
+
         // Datei in temporäres Verzeichnis speichern
         const tempDir = os.tmpdir();
         const bytes = await receipt.arrayBuffer();
         const buffer = Buffer.from(bytes);
         const filePath = join(tempDir, receipt.name);
         await writeFile(filePath, buffer);
-        
+
         // Generiere einen eindeutigen Dateinamen für die dauerhafte Speicherung
         const uniqueFileName = `${uuidv4()}_${receipt.name.replace(/\s+/g, '_')}`;
         ensureUploadDirExists();
         const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
-        
+
         // Kopiere die Datei in das dauerhafte Verzeichnis
         fs.copyFileSync(filePath, permanentFilePath);
-        
+
         // Originalname und gespeicherten Namen speichern
         receiptFileName = receipt.name;
         storedReceiptFileName = uniqueFileName;
-        
+
         // Bereinigen (temporäre Datei löschen)
         try {
           fs.unlinkSync(filePath);
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
           console.error('Fehler beim Löschen der temporären Datei:', error);
         }
       }
-      
+
       // Ausgabe in der Datenbank speichern
       const expense = await prisma.expense.create({
         data: {
@@ -88,19 +88,19 @@ export async function POST(request: NextRequest) {
           userId,
         },
       });
-      
+
       // Audit log
       await auditCreate(userId, 'Expense', expense, expense.description);
-      
+
       return NextResponse.json(expense);
     } else {
       // Verarbeite regulären JSON-Request ohne Datei
       const { description, amount, category, taxRelevant, taxDeductiblePercentage, depreciationYears, date } = await request.json();
-      
+
       if (!description || !amount) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
       }
-      
+
       const expense = await prisma.expense.create({
         data: {
           description,
@@ -113,19 +113,20 @@ export async function POST(request: NextRequest) {
           userId,
         },
       });
-      
+
       // Audit log
       await auditCreate(userId, 'Expense', expense, expense.description);
-      
+
       return NextResponse.json(expense);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
     console.error('Fehler beim Erstellen der Ausgabe:', error);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Fehler beim Erstellen der Ausgabe: ' + (error instanceof Error ? error.message : String(error)) },
+      { error: 'Fehler beim Erstellen der Ausgabe: ' + message },
       { status: 500 }
     );
   }
@@ -146,7 +147,7 @@ export async function GET(request: NextRequest) {
     const hasReceipt = url.searchParams.get('hasReceipt'); // 'yes' | 'no' | null
     const dateRange = url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
-    const where: any = { userId };
+    const where: Prisma.ExpenseWhereInput = { userId };
 
     if (category) {
       where.category = category;
@@ -197,11 +198,11 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({ items, total, page, pageSize });
-  } catch (error) {
-    if (error instanceof UnauthorizedError) {
+  } catch (_error: unknown) {
+    if (_error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
-    throw error;
+    throw _error;
   }
 }
 
@@ -219,7 +220,7 @@ export async function PUT(request: Request) {
     const oldExpense = await prisma.expense.findFirst({
       where: { id: Number(id), userId },
     });
-    
+
     if (!oldExpense) {
       return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
     }
@@ -267,7 +268,7 @@ export async function DELETE(request: Request) {
     const expense = await prisma.expense.findFirst({
       where: { id: Number(id), userId },
     });
-    
+
     if (!expense) {
       return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
     }
@@ -282,7 +283,7 @@ export async function DELETE(request: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }

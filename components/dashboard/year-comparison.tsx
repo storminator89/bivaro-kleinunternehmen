@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
@@ -46,13 +46,13 @@ interface ChartBarProps {
 
 function ChartBar({ month, lastYearMonth, thisYearHeight, lastYearHeight, isFuture, currentYear, lastYear, formatCurrency }: ChartBarProps) {
   const [showTooltip, setShowTooltip] = useState(false);
-  const change = lastYearMonth.revenue > 0 
+  const change = lastYearMonth.revenue > 0
     ? ((month.revenue - lastYearMonth.revenue) / lastYearMonth.revenue * 100)
     : (month.revenue > 0 ? 100 : 0);
   const isPositive = change >= 0;
 
   return (
-    <div 
+    <div
       className="flex-1 flex flex-col items-center gap-1 relative"
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
@@ -102,7 +102,7 @@ function ChartBar({ month, lastYearMonth, thisYearHeight, lastYearHeight, isFutu
 
 export function YearComparison({ data }: YearComparisonProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
   };
@@ -129,7 +129,7 @@ export function YearComparison({ data }: YearComparisonProps) {
 
   return (
     <Card className="bg-card border rounded-xl shadow-sm overflow-hidden">
-      <div 
+      <div
         className="flex items-center justify-between cursor-pointer p-4"
         onClick={() => setIsExpanded(!isExpanded)}
       >
@@ -146,117 +146,117 @@ export function YearComparison({ data }: YearComparisonProps) {
           {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
         </Button>
       </div>
-      
-      {isExpanded && (
-      <CardContent className="pt-0">
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="overview">Übersicht</TabsTrigger>
-            <TabsTrigger value="revenue">Einnahmen</TabsTrigger>
-            <TabsTrigger value="expenses">Ausgaben</TabsTrigger>
-          </TabsList>
 
-          <TabsContent value="overview" className="space-y-4">
-            {/* KPI Karten */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <ComparisonCard
+      {isExpanded && (
+        <CardContent className="pt-0">
+          <Tabs defaultValue="overview" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="overview">Übersicht</TabsTrigger>
+              <TabsTrigger value="revenue">Einnahmen</TabsTrigger>
+              <TabsTrigger value="expenses">Ausgaben</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-4">
+              {/* KPI Karten */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <ComparisonCard
+                  title="Einnahmen"
+                  currentValue={data.revenueThisYearToDate}
+                  previousValue={data.revenueLastYearToDate}
+                  change={revenueChangeToDate}
+                  currentYear={data.currentYear}
+                  lastYear={data.lastYear}
+                  formatCurrency={formatCurrency}
+                  positiveIsGood={true}
+                />
+                <ComparisonCard
+                  title="Ausgaben"
+                  currentValue={data.expensesThisYearToDate}
+                  previousValue={data.expensesLastYearToDate}
+                  change={expensesChangeToDate}
+                  currentYear={data.currentYear}
+                  lastYear={data.lastYear}
+                  formatCurrency={formatCurrency}
+                  positiveIsGood={false}
+                />
+                <ComparisonCard
+                  title="Gewinn"
+                  currentValue={profitThisYear}
+                  previousValue={profitLastYear}
+                  change={profitChange}
+                  currentYear={data.currentYear}
+                  lastYear={data.lastYear}
+                  formatCurrency={formatCurrency}
+                  positiveIsGood={true}
+                />
+              </div>
+
+              {/* Mini-Chart Übersicht */}
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-muted-foreground mb-3">Monatlicher Verlauf</h4>
+                <div className="flex items-end gap-1 h-32">
+                  {data.monthlyDataThisYear.map((month, idx) => {
+                    const lastYearMonth = data.monthlyDataLastYear[idx];
+                    const thisYearHeight = (month.revenue / maxRevenue) * 100;
+                    const lastYearHeight = (lastYearMonth.revenue / maxRevenue) * 100;
+                    const isFuture = idx > currentMonth;
+
+                    return (
+                      <ChartBar
+                        key={idx}
+                        month={month}
+                        lastYearMonth={lastYearMonth}
+                        thisYearHeight={thisYearHeight}
+                        lastYearHeight={lastYearHeight}
+                        isFuture={isFuture}
+                        currentYear={data.currentYear}
+                        lastYear={data.lastYear}
+                        formatCurrency={formatCurrency}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="flex justify-center gap-6 mt-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-muted rounded" />
+                    <span>{data.lastYear}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-primary rounded" />
+                    <span>{data.currentYear}</span>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="revenue" className="space-y-4">
+              <MonthlyComparisonTable
                 title="Einnahmen"
-                currentValue={data.revenueThisYearToDate}
-                previousValue={data.revenueLastYearToDate}
-                change={revenueChangeToDate}
+                monthlyDataThisYear={data.monthlyDataThisYear}
+                monthlyDataLastYear={data.monthlyDataLastYear}
                 currentYear={data.currentYear}
                 lastYear={data.lastYear}
+                dataKey="revenue"
                 formatCurrency={formatCurrency}
-                positiveIsGood={true}
+                currentMonth={currentMonth}
               />
-              <ComparisonCard
+            </TabsContent>
+
+            <TabsContent value="expenses" className="space-y-4">
+              <MonthlyComparisonTable
                 title="Ausgaben"
-                currentValue={data.expensesThisYearToDate}
-                previousValue={data.expensesLastYearToDate}
-                change={expensesChangeToDate}
+                monthlyDataThisYear={data.monthlyDataThisYear}
+                monthlyDataLastYear={data.monthlyDataLastYear}
                 currentYear={data.currentYear}
                 lastYear={data.lastYear}
+                dataKey="expenses"
                 formatCurrency={formatCurrency}
+                currentMonth={currentMonth}
                 positiveIsGood={false}
               />
-              <ComparisonCard
-                title="Gewinn"
-                currentValue={profitThisYear}
-                previousValue={profitLastYear}
-                change={profitChange}
-                currentYear={data.currentYear}
-                lastYear={data.lastYear}
-                formatCurrency={formatCurrency}
-                positiveIsGood={true}
-              />
-            </div>
-
-            {/* Mini-Chart Übersicht */}
-            <div className="mt-6">
-              <h4 className="text-sm font-medium text-muted-foreground mb-3">Monatlicher Verlauf</h4>
-              <div className="flex items-end gap-1 h-32">
-                {data.monthlyDataThisYear.map((month, idx) => {
-                  const lastYearMonth = data.monthlyDataLastYear[idx];
-                  const thisYearHeight = (month.revenue / maxRevenue) * 100;
-                  const lastYearHeight = (lastYearMonth.revenue / maxRevenue) * 100;
-                  const isFuture = idx > currentMonth;
-
-                  return (
-                    <ChartBar
-                      key={idx}
-                      month={month}
-                      lastYearMonth={lastYearMonth}
-                      thisYearHeight={thisYearHeight}
-                      lastYearHeight={lastYearHeight}
-                      isFuture={isFuture}
-                      currentYear={data.currentYear}
-                      lastYear={data.lastYear}
-                      formatCurrency={formatCurrency}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex justify-center gap-6 mt-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-muted rounded" />
-                  <span>{data.lastYear}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-primary rounded" />
-                  <span>{data.currentYear}</span>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="revenue" className="space-y-4">
-            <MonthlyComparisonTable
-              title="Einnahmen"
-              monthlyDataThisYear={data.monthlyDataThisYear}
-              monthlyDataLastYear={data.monthlyDataLastYear}
-              currentYear={data.currentYear}
-              lastYear={data.lastYear}
-              dataKey="revenue"
-              formatCurrency={formatCurrency}
-              currentMonth={currentMonth}
-            />
-          </TabsContent>
-
-          <TabsContent value="expenses" className="space-y-4">
-            <MonthlyComparisonTable
-              title="Ausgaben"
-              monthlyDataThisYear={data.monthlyDataThisYear}
-              monthlyDataLastYear={data.monthlyDataLastYear}
-              currentYear={data.currentYear}
-              lastYear={data.lastYear}
-              dataKey="expenses"
-              formatCurrency={formatCurrency}
-              currentMonth={currentMonth}
-              positiveIsGood={false}
-            />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
       )}
     </Card>
   );
@@ -273,7 +273,7 @@ interface ComparisonCardProps {
   positiveIsGood?: boolean;
 }
 
-function ComparisonCard({ title, currentValue, previousValue, change, currentYear, lastYear, formatCurrency, positiveIsGood = true }: ComparisonCardProps) {
+function ComparisonCard({ title, currentValue, previousValue, change, currentYear: _currentYear, lastYear, formatCurrency, positiveIsGood = true }: ComparisonCardProps) {
   const isPositive = change >= 0;
   const isGood = positiveIsGood ? isPositive : !isPositive;
 
@@ -314,15 +314,15 @@ interface MonthlyComparisonTableProps {
   positiveIsGood?: boolean;
 }
 
-function MonthlyComparisonTable({ 
-  monthlyDataThisYear, 
-  monthlyDataLastYear, 
-  currentYear, 
-  lastYear, 
-  dataKey, 
-  formatCurrency, 
+function MonthlyComparisonTable({
+  monthlyDataThisYear,
+  monthlyDataLastYear,
+  currentYear,
+  lastYear,
+  dataKey,
+  formatCurrency,
   currentMonth,
-  positiveIsGood = true 
+  positiveIsGood = true
 }: MonthlyComparisonTableProps) {
   const calculateChange = (current: number, previous: number) => {
     if (previous === 0) return current > 0 ? 100 : 0;

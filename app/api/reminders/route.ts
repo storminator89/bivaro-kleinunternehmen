@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 const prisma = new PrismaClient();
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     today.setHours(0, 0, 0, 0);
 
     // Offene Rechnungen laden (nicht bezahlt)
-    const whereClause: any = {
+    const whereClause: Prisma.InvoiceWhereInput = {
       userId,
       status: { not: 'PAID' },
     };
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       const latestReminder = invoice.reminders[0];
       const currentLevel = latestReminder ? latestReminder.reminderLevel : 0;
       const nextLevel = Math.min(currentLevel + 1, 4);
-      
+
       // Tage überfällig berechnen
       let daysOverdue = 0;
       if (invoice.dueDate) {

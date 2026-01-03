@@ -8,6 +8,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   withApiAuth,
@@ -28,14 +29,14 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50')));
     const skip = (page - 1) * pageSize;
-    
+
     // Filters
     const search = url.searchParams.get('search') || '';
     const customerId = url.searchParams.get('customerId');
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
 
-    const where: any = { userId };
+    const where: Prisma.IncomeWhereInput = { userId };
 
     if (customerId) {
       where.customerId = parseInt(customerId);

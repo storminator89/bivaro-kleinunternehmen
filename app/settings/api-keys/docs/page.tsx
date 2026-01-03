@@ -31,6 +31,8 @@ import {
 import Link from "next/link";
 
 export default function ApiDocsPage() {
+  const [_language] = useState<"de" | "en">("de");
+
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const copyCode = (code: string, id: string) => {
@@ -39,7 +41,7 @@ export default function ApiDocsPage() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const CodeBlock = ({ code, language = "bash", id }: { code: string; language?: string; id: string }) => (
+  const CodeBlock = ({ code, id }: { code: string; id: string }) => (
     <div className="relative group">
       <pre className="bg-zinc-950 text-zinc-100 p-4 rounded-lg overflow-x-auto text-sm font-mono">
         <code>{code}</code>
@@ -674,7 +676,6 @@ Access-Control-Max-Age: 86400`}
   "data": { ... },
   "timestamp": "2025-11-27T20:00:00.000Z"
 }`}
-                  language="json"
                   id="success"
                 />
               </TabsContent>
@@ -688,7 +689,6 @@ Access-Control-Max-Age: 86400`}
     "timestamp": "2025-11-27T20:00:00.000Z"
   }
 }`}
-                  language="json"
                   id="error"
                 />
               </TabsContent>
@@ -706,7 +706,6 @@ Access-Control-Max-Age: 86400`}
   },
   "timestamp": "2025-11-27T20:00:00.000Z"
 }`}
-                  language="json"
                   id="pagination"
                 />
               </TabsContent>

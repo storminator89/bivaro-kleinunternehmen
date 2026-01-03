@@ -70,9 +70,9 @@ interface AuditLog {
   entityId: string | null;
   entityName: string | null;
   changedFields: string[] | null;
-  oldValues: Record<string, any> | null;
-  newValues: Record<string, any> | null;
-  metadata: Record<string, any> | null;
+  oldValues: Record<string, unknown> | null;
+  newValues: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
   ipAddress: string | null;
   createdAt: string;
   user: {
@@ -147,11 +147,11 @@ export default function AuditLogsPage() {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
-  
+
   // Filters
   const [entityType, setEntityType] = useState<string>('all');
   const [action, setAction] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [_searchQuery, _setSearchQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
@@ -162,12 +162,12 @@ export default function AuditLogsPage() {
       const params = new URLSearchParams();
       params.set('page', page.toString());
       params.set('limit', '25');
-      
+
       if (entityType && entityType !== 'all') params.set('entityType', entityType);
       if (action && action !== 'all') params.set('action', action);
       if (startDate) params.set('startDate', new Date(startDate).toISOString());
       if (endDate) params.set('endDate', new Date(endDate + 'T23:59:59').toISOString());
-      
+
       const response = await fetch(`/api/audit-logs?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
@@ -192,7 +192,7 @@ export default function AuditLogsPage() {
   const handleReset = () => {
     setEntityType('all');
     setAction('all');
-    setSearchQuery('');
+    _setSearchQuery('');
     setStartDate('');
     setEndDate('');
     setPage(1);
@@ -210,7 +210,7 @@ export default function AuditLogsPage() {
 
   const renderChangedFields = (log: AuditLog) => {
     if (!log.changedFields || log.changedFields.length === 0) return null;
-    
+
     return (
       <div className="flex flex-wrap gap-1 mt-1">
         {log.changedFields.map((field, index) => (
@@ -226,8 +226,8 @@ export default function AuditLogsPage() {
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Back Link */}
-        <Link 
-          href="/settings" 
+        <Link
+          href="/settings"
           className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -368,12 +368,12 @@ export default function AuditLogsPage() {
                   </TableHeader>
                   <TableBody>
                     {logs.map((log) => {
-                      const actionInfo = ACTION_LABELS[log.action] || { 
-                        label: log.action, 
+                      const actionInfo = ACTION_LABELS[log.action] || {
+                        label: log.action,
                         color: 'bg-gray-100 text-gray-700',
                         icon: <Clock className="h-3 w-3" />
                       };
-                      
+
                       return (
                         <TableRow key={log.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedLog(log)}>
                           <TableCell>
@@ -486,7 +486,7 @@ export default function AuditLogsPage() {
                 {selectedLog && formatDate(selectedLog.createdAt)}
               </DialogDescription>
             </DialogHeader>
-            
+
             {selectedLog && (
               <div className="space-y-4">
                 {/* Basic Info */}

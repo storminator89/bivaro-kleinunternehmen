@@ -35,7 +35,7 @@ export default function LoginPage() {
       }
 
       router.replace("/dashboard");
-    } catch (error) {
+    } catch {
       setError("Ein Fehler ist aufgetreten");
       setLoading(false);
     }

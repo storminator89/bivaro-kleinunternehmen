@@ -11,31 +11,31 @@ const MAX_LOGIN_ATTEMPTS = 5;
 const BLOCK_DURATION_MS = 30 * 60 * 1000; // 30 minutes block after max attempts
 
 function checkLoginRateLimit(email: string): { allowed: boolean; remainingAttempts: number } {
-  const now = Date.now();
-  const key = email.toLowerCase();
-  const record = loginAttempts.get(key);
-  
-  if (!record || now > record.resetTime) {
-    loginAttempts.set(key, { count: 1, resetTime: now + LOGIN_RATE_LIMIT_WINDOW_MS, blocked: false });
-    return { allowed: true, remainingAttempts: MAX_LOGIN_ATTEMPTS - 1 };
-  }
-  
-  if (record.blocked && now < record.resetTime) {
-    return { allowed: false, remainingAttempts: 0 };
-  }
-  
-  if (record.count >= MAX_LOGIN_ATTEMPTS) {
-    record.blocked = true;
-    record.resetTime = now + BLOCK_DURATION_MS;
-    return { allowed: false, remainingAttempts: 0 };
-  }
-  
-  record.count++;
-  return { allowed: true, remainingAttempts: MAX_LOGIN_ATTEMPTS - record.count };
+    const now = Date.now();
+    const key = email.toLowerCase();
+    const record = loginAttempts.get(key);
+
+    if (!record || now > record.resetTime) {
+        loginAttempts.set(key, { count: 1, resetTime: now + LOGIN_RATE_LIMIT_WINDOW_MS, blocked: false });
+        return { allowed: true, remainingAttempts: MAX_LOGIN_ATTEMPTS - 1 };
+    }
+
+    if (record.blocked && now < record.resetTime) {
+        return { allowed: false, remainingAttempts: 0 };
+    }
+
+    if (record.count >= MAX_LOGIN_ATTEMPTS) {
+        record.blocked = true;
+        record.resetTime = now + BLOCK_DURATION_MS;
+        return { allowed: false, remainingAttempts: 0 };
+    }
+
+    record.count++;
+    return { allowed: true, remainingAttempts: MAX_LOGIN_ATTEMPTS - record.count };
 }
 
 function resetLoginAttempts(email: string): void {
-  loginAttempts.delete(email.toLowerCase());
+    loginAttempts.delete(email.toLowerCase());
 }
 
 export const authOptions: NextAuthOptions = {
@@ -119,7 +119,7 @@ export const authOptions: NextAuthOptions = {
         async jwt({ token, user }) {
             if (user) {
                 token.id = user.id;
-                token.role = (user as any).role;
+                token.role = (user as { role?: string }).role as string;
             }
             return token;
         },

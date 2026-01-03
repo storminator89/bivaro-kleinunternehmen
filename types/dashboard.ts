@@ -26,6 +26,10 @@ export type Income = {
   invoiceId?: number;
 };
 
+export type DashboardEditData = Omit<Partial<Expense & Income>, 'amount'> & {
+  amount: string;
+};
+
 export type Customer = {
   id: number;
   name: string;

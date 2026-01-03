@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { auditBackup, auditExport } from '@/lib/audit-log';
+import { auditBackup } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 

@@ -57,7 +57,7 @@ export function useExpenses(filters: ExpensesFilter): UseExpensesReturn {
       } else {
         setError('Fehler beim Laden der Ausgaben');
       }
-    } catch (e) {
+    } catch {
       setError('Fehler beim Laden der Ausgaben');
     } finally {
       setIsLoading(false);
@@ -76,16 +76,16 @@ export function useExpenses(filters: ExpensesFilter): UseExpensesReturn {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     loadExpenses(1, pageSize);
     reloadAll();
-  }, []);
+  }, [loadExpenses, pageSize, reloadAll]);
 
-  // Reload when filters change
   useEffect(() => {
     loadExpenses(1, pageSize);
   }, [
+    loadExpenses,
+    pageSize,
     filters.category,
     filters.dateRange,
     filters.taxRelevant,

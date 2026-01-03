@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import bcrypt from "bcrypt";
@@ -9,7 +10,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session || session.user.role !== "ADMIN") {
     return new NextResponse("Unauthorized", { status: 401 });
   }
@@ -28,7 +29,7 @@ export async function PATCH(
       return new NextResponse("User not found", { status: 404 });
     }
 
-    const updateData: any = { name };
+    const updateData: Prisma.UserUpdateInput = { name };
 
     if (role) {
       updateData.role = role;
@@ -75,14 +76,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session || session.user.role !== "ADMIN") {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
   try {
     const { id } = await params;
-    
+
     // Prevent deleting yourself
     if (session.user.id === id) {
       return new NextResponse("Cannot delete your own account", { status: 400 });

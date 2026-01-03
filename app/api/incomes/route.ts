@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     const taxRelevant = url.searchParams.get('taxRelevant'); // 'yes' | 'no' | null
     const dateRange = url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
-    const where: any = { userId };
+    const where: Prisma.IncomeWhereInput = { userId };
 
     if (customer) {
       where.customer = { name: customer };
@@ -128,7 +128,7 @@ export async function PUT(request: Request) {
     const oldIncome = await prisma.income.findFirst({
       where: { id: Number(id), userId },
     });
-    
+
     if (!oldIncome) {
       return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
     }
@@ -150,8 +150,8 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json(updatedIncome);
-  } catch (error) {
-    if (error instanceof UnauthorizedError) {
+  } catch (_error: unknown) {
+    if (_error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
     return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
@@ -192,10 +192,10 @@ export async function DELETE(request: Request) {
     if (income) {
       await auditDelete(userId, 'Income', income, income.description);
     }
-    
+
     return NextResponse.json({ success: true });
-  } catch (error) {
-    if (error instanceof UnauthorizedError) {
+  } catch (_error: unknown) {
+    if (_error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
     return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });

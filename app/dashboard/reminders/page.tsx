@@ -100,9 +100,9 @@ const REMINDER_LEVEL_VARIANTS: { [key: number]: "secondary" | "default" | "destr
 
 // Email Templates Generator
 const generateEmailTemplate = (
-  level: number, 
-  invoice: Invoice, 
-  fee: number, 
+  level: number,
+  invoice: Invoice,
+  fee: number,
   dueDays: number,
   companyName: string = '[Ihr Firmenname]'
 ): { subject: string; body: string } => {
@@ -115,7 +115,7 @@ const generateEmailTemplate = (
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + dueDays);
   const newDueDate = dueDate.toLocaleDateString('de-DE');
-  const today = new Date().toLocaleDateString('de-DE');
+  const _today = new Date().toLocaleDateString('de-DE');
 
   switch (level) {
     case 1: // Zahlungserinnerung
@@ -236,7 +236,7 @@ export default function RemindersPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<number | null>(null);
   const [filterLevel, setFilterLevel] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('overdue');
+  const [_filterStatus, _setFilterStatus] = useState<string>('overdue');
   const [overdueOpen, setOverdueOpen] = useState(true);
   const [copiedField, setCopiedField] = useState<'subject' | 'body' | null>(null);
   const [upcomingOpen, setUpcomingOpen] = useState(false);
@@ -249,13 +249,13 @@ export default function RemindersPage() {
         fetch('/api/reminders?includeAll=true'),
         fetch('/api/settings')
       ]);
-      
+
       if (remindersRes.ok) {
         const data = await remindersRes.json();
         setInvoices(data.invoices);
         setStats(data.stats);
       }
-      
+
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         setSettings(settingsData);
@@ -273,7 +273,7 @@ export default function RemindersPage() {
 
   const handleCreateReminder = async () => {
     if (!selectedInvoice) return;
-    
+
     setIsCreating(true);
     try {
       const res = await fetch('/api/reminders', {
@@ -372,7 +372,7 @@ export default function RemindersPage() {
         ) : (
           invoiceList.map((invoice) => (
             <React.Fragment key={invoice.id}>
-              <TableRow 
+              <TableRow
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() => setExpandedInvoiceId(expandedInvoiceId === invoice.id ? null : invoice.id)}
               >
@@ -475,8 +475,8 @@ export default function RemindersPage() {
                       </div>
                       <div className="space-y-2">
                         {invoice.reminders.map((reminder) => (
-                          <div 
-                            key={reminder.id} 
+                          <div
+                            key={reminder.id}
                             className="flex items-center justify-between p-3 bg-background rounded-lg border"
                           >
                             <div className="flex items-center gap-3">
@@ -614,7 +614,7 @@ export default function RemindersPage() {
                           Bei Geschäftskunden (B2B) tritt Verzug automatisch 30 Tage nach Fälligkeit und Zugang der Rechnung ein (§ 286 Abs. 3 BGB).
                         </AlertDescription>
                       </Alert>
-                      
+
                       <div className="p-3 bg-muted/50 rounded-lg space-y-2">
                         <p className="font-medium">Mahngebühren</p>
                         <ul className="text-xs text-muted-foreground space-y-1">
@@ -814,7 +814,7 @@ export default function RemindersPage() {
                 <TabsTrigger value="settings">Einstellungen</TabsTrigger>
                 <TabsTrigger value="email">E-Mail Vorlage</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="settings" className="space-y-5 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="reminder-fee">Mahngebühr (€)</Label>

@@ -2,34 +2,12 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval, isSameMonth } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { StatusBadge } from "@/components/dashboard/status-badge";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { CreateInvoiceModal } from "@/components/dashboard/create-invoice-modal";
-import { AfaTableDialog } from "@/components/afa-table-dialog";
 
 // Importiere extrahierte Komponenten und Typen
 import {
@@ -46,11 +24,11 @@ import {
   Customer,
   Invoice,
   FilterState,
-  TimeRange
+  DashboardEditData
 } from "@/types/dashboard";
 import { formatCurrency, toQuery } from "@/lib/dashboard-utils";
 import { EURTab, GWGTab, ExpensesTab, IncomesTab, InvoicesTab } from "@/components/dashboard/tabs";
-import { isPrivateWithdrawal, isPrivateDeposit } from "@/lib/private-categories";
+import { isPrivateWithdrawal } from "@/lib/private-categories";
 
 function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
@@ -79,16 +57,18 @@ function DashboardContent() {
     if (newTab !== activeTab) {
       setActiveTab(newTab);
     }
-  }, [tabParam]);
+  }, [tabParam, activeTab]);
 
   // Modal States
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editType, setEditType] = useState<'expense' | 'income'>('expense');
-  const [itemToEdit, setItemToEdit] = useState<any>(null);
+  const [itemToEdit, setItemToEdit] = useState<DashboardEditData | null>(null);
   const [invoiceDetailsModalOpen, setInvoiceDetailsModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
+  const [_error, _setError] = useState<string | null>(null);
+  const [_showCashCountModal, _setShowCashCountModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExportingReceipts, setIsExportingReceipts] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -523,35 +503,37 @@ function DashboardContent() {
   };
 
   // Bearbeitungs- und Löschfunktionen
-  const openEditModal = (item: any, type: 'expense' | 'income', isDuplicate: boolean = false) => {
+  const openEditModal = (item: Expense | Income, type: 'expense' | 'income', isDuplicate: boolean = false) => {
+    const editData: DashboardEditData = {
+      ...item,
+      amount: item.amount.toString()
+    };
+
     if (isDuplicate) {
-      const duplicatedItem = {
-        ...item,
-        id: undefined, // Backend sollte neue ID generieren
-        date: new Date().toISOString(),
-        receiptFileName: undefined, // Beleg nicht duplizieren
-        storedReceiptFileName: undefined, // Beleg nicht duplizieren
-        customerId: item.customerId, // customerId beibehalten
-      };
-      setItemToEdit({ ...duplicatedItem, amount: duplicatedItem.amount.toString() });
-    } else {
-      setItemToEdit({ ...item, amount: item.amount.toString() });
+      editData.id = undefined;
+      editData.date = new Date().toISOString();
+      if (type === 'expense') {
+        editData.receiptFileName = undefined;
+        editData.storedReceiptFileName = undefined;
+      }
     }
+
+    setItemToEdit(editData);
     setEditType(type);
     setEditModalOpen(true);
   };
 
-  const handleDuplicate = (item: any, type: 'expense' | 'income') => {
+  const handleDuplicate = (item: Expense | Income, type: 'expense' | 'income') => {
     openEditModal(item, type, true);
   };
 
-  const handleEditSave = async (formData: any) => {
+  const handleEditSave = async (formData: DashboardEditData) => {
     try {
       const isNewItem = formData.id === undefined;
       const method = isNewItem ? 'POST' : 'PUT';
       const endpoint = editType === 'expense' ? '/api/expenses' : '/api/incomes';
 
-      const dataToSend = { ...formData };
+      const dataToSend: Record<string, unknown> = { ...formData };
       if (isNewItem) {
         delete dataToSend.id; // ID entfernen, da sie vom Backend generiert wird
         // Für duplizierte Ausgaben, die keinen Beleg haben sollen
@@ -560,8 +542,8 @@ function DashboardContent() {
           delete dataToSend.storedReceiptFileName;
         }
       }
-      dataToSend.amount = parseFloat(dataToSend.amount); // Betrag als Zahl senden
-      if (dataToSend.date) {
+      dataToSend.amount = parseFloat(formData.amount); // Betrag als Zahl senden
+      if (typeof dataToSend.date === 'string') {
         dataToSend.date = new Date(dataToSend.date).toISOString();
       }
 
@@ -966,7 +948,7 @@ function DashboardContent() {
     return { monthlyChartData: monthlyData, categoryChartData: categoryData };
   }, [incomesAll, expensesAll, selectedTimeRange]);
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
+  const _COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
 
 
 

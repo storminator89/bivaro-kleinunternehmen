@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { auditCreate, auditUpdate, auditDelete, createAuditLog } from '@/lib/audit-log';
+import { auditCreate, auditDelete, createAuditLog } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     const paidStatus = url.searchParams.get('paidStatus'); // 'paid' | 'unpaid' | null
     const dateRange = url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
-    const where: any = { userId };
+    const where: Prisma.InvoiceWhereInput = { userId };
 
     if (paidStatus === 'paid') where.status = 'PAID';
     if (paidStatus === 'unpaid') where.status = { not: 'PAID' };
@@ -84,8 +84,9 @@ export async function GET(request: Request) {
     }
 
     if (search) {
+      const existingAnd = Array.isArray(where.AND) ? where.AND : (where.AND ? [where.AND] : []);
       where.AND = [
-        ...(where.AND || []),
+        ...existingAnd,
         {
           OR: [
             { fileName: { contains: search } },
@@ -144,7 +145,7 @@ export async function DELETE(request: Request) {
     if (invoice) {
       await auditDelete(userId, 'Invoice', invoice, invoice.invoiceNumber || invoice.fileName);
     }
-    
+
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -167,15 +168,15 @@ export async function PUT(request: Request) {
     const oldInvoice = await prisma.invoice.findFirst({
       where: { id: Number(id), userId },
     });
-    
+
     if (!oldInvoice) {
       return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
     }
 
     const updatedInvoice = await prisma.invoice.update({
       where: { id: Number(id), userId },
-      data: { 
-        status: status 
+      data: {
+        status: status
       },
       include: {
         income: true,
@@ -194,7 +195,7 @@ export async function PUT(request: Request) {
         newValues: { status: updatedInvoice.status },
       });
     }
-    
+
     return NextResponse.json(updatedInvoice);
   } catch (error) {
     if (error instanceof UnauthorizedError) {

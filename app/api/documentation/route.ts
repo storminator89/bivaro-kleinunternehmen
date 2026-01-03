@@ -9,7 +9,7 @@ import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/ge
 import { createEmptyDocumentation, getAppVersion, getSystemInfo } from '@/lib/gobd-template';
 
 // GET: Load current documentation or create default
-export async function GET(request: NextRequest) {
+export async function GET(_request: Request) {
     try {
         const userId = await requireUserId();
 
@@ -50,10 +50,10 @@ export async function GET(request: NextRequest) {
 }
 
 // POST: Save documentation
-export async function POST(request: NextRequest) {
+export async function POST(_request: Request) {
     try {
         const userId = await requireUserId();
-        const body = await request.json();
+        const body = await _request.json();
 
         const { title, content } = body;
 
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 }
 
 // GET /api/documentation/history - Get version history
-export async function PUT(request: NextRequest) {
+export async function PUT(_request: NextRequest) {
     try {
         const userId = await requireUserId();
 

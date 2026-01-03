@@ -8,6 +8,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   withApiAuth,
@@ -25,7 +26,7 @@ export async function OPTIONS() {
 function calculateNextExecution(interval: string, dayOfMonth: number, fromDate: Date = new Date()): Date {
   const next = new Date(fromDate);
   next.setHours(0, 0, 0, 0);
-  
+
   switch (interval) {
     case 'MONTHLY':
       next.setMonth(next.getMonth() + 1);
@@ -42,7 +43,7 @@ function calculateNextExecution(interval: string, dayOfMonth: number, fromDate: 
     default:
       next.setMonth(next.getMonth() + 1);
   }
-  
+
   return next;
 }
 
@@ -53,13 +54,13 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50')));
     const skip = (page - 1) * pageSize;
-    
+
     // Filters
     const isActive = url.searchParams.get('isActive');
     const interval = url.searchParams.get('interval');
     const category = url.searchParams.get('category');
 
-    const where: any = { userId };
+    const where: Prisma.RecurringExpenseWhereInput = { userId };
 
     if (isActive === 'true') where.isActive = true;
     if (isActive === 'false') where.isActive = false;
@@ -248,8 +249,8 @@ export async function PUT(request: NextRequest) {
 
     // Recalculate next execution if interval or day changed
     let nextExecution = existing.nextExecution;
-    if ((interval && interval.toUpperCase() !== existing.interval) || 
-        (dayOfMonth !== undefined && dayOfMonth !== existing.dayOfMonth)) {
+    if ((interval && interval.toUpperCase() !== existing.interval) ||
+      (dayOfMonth !== undefined && dayOfMonth !== existing.dayOfMonth)) {
       nextExecution = calculateNextExecution(
         interval?.toUpperCase() || existing.interval,
         dayOfMonth !== undefined ? parseInt(dayOfMonth) : existing.dayOfMonth,

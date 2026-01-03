@@ -51,7 +51,7 @@ export function useInvoices(filters: InvoicesFilter): UseInvoicesReturn {
       } else {
         setError('Fehler beim Laden der Rechnungen');
       }
-    } catch (e) {
+    } catch {
       setError('Fehler beim Laden der Rechnungen');
     } finally {
       setIsLoading(false);
@@ -61,12 +61,14 @@ export function useInvoices(filters: InvoicesFilter): UseInvoicesReturn {
   // Initial load
   useEffect(() => {
     loadInvoices(1, pageSize);
-  }, []);
+  }, [loadInvoices, pageSize]);
 
   // Reload when filters change
   useEffect(() => {
     loadInvoices(1, pageSize);
   }, [
+    loadInvoices,
+    pageSize,
     filters.paidStatus,
     filters.dateRange,
     filters.searchTerm,

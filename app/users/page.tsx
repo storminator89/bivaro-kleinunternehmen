@@ -3,24 +3,24 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +36,7 @@ interface User {
 
 export default function UsersPage() {
   const { data: session } = useSession();
-  const router = useRouter();
+  const _router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -46,7 +46,7 @@ export default function UsersPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (session?.user && (session.user as any).role !== "ADMIN") {
+    if (session?.user && (session.user as { role?: string }).role !== "ADMIN") {
       // Redirect or show access denied
       // For now we just let the API handle it, but UI should reflect it
     }
@@ -62,7 +62,7 @@ export default function UsersPage() {
       } else {
         // Handle unauthorized
         if (response.status === 401) {
-           // Maybe redirect
+          // Maybe redirect
         }
       }
     } catch (error) {
@@ -170,7 +170,7 @@ export default function UsersPage() {
     );
   }
 
-  if (session?.user && (session.user as any).role !== "ADMIN") {
+  if (session?.user && (session.user as { role?: string }).role !== "ADMIN") {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
         <ShieldAlert className="h-16 w-16 text-destructive" />
@@ -348,11 +348,10 @@ export default function UsersPage() {
                   <TableCell className="font-medium">{user.name || "-"}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      user.role === 'ADMIN' 
-                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
-                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                    }`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${user.role === 'ADMIN'
+                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                      : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                      }`}>
                       {user.role === 'ADMIN' ? 'Administrator' : 'Benutzer'}
                     </span>
                   </TableCell>

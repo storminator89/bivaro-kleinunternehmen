@@ -7,6 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+interface Activity {
+  id: number | string;
+  type: 'income' | 'expense';
+  description: string;
+  date: string;
+  amount: number;
+}
+
 interface KpiData {
   revenueThisMonth: number;
   revenueThisYear: number;
@@ -14,7 +22,7 @@ interface KpiData {
   openInvoices: number;
   totalRevenue: number;
   totalExpenses: number;
-  recentActivities: any[];
+  recentActivities: Activity[];
 }
 
 interface DashboardHeaderProps {
@@ -32,7 +40,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
   useEffect(() => {
     // Initialisiere den Zustand beim ersten Laden
     const savedExpandedState = localStorage.getItem('dashboardExpanded');
-    
+
     // Setze die Zustände basierend auf dem gespeicherten Wert oder Standardwert
     setIsExpanded(savedExpandedState !== null ? savedExpandedState === 'true' : true);
   }, []);
@@ -54,11 +62,11 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
   // Bei Überschreitung der 100.000 € im laufenden Jahr: SOFORTIGE Steuerpflicht!
   const previousYearLimit = 25000; // Grenze für Vorjahresumsatz
   const currentYearLimit = 100000; // Harte Grenze für laufendes Jahr
-  
+
   // Wir zeigen primär die Vorjahresgrenze, da diese für den Status relevant ist
   const percentage = Math.min(100, (data.revenueThisYear / previousYearLimit) * 100);
   const percentageHardLimit = Math.min(100, (data.revenueThisYear / currentYearLimit) * 100);
-  
+
   const isCloseToYearlyLimit = percentage > 80;
   const isOverPreviousYearLimit = data.revenueThisYear > previousYearLimit;
   const isOverHardLimit = data.revenueThisYear > currentYearLimit; // Sofortige Steuerpflicht!
@@ -67,7 +75,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
     <div className="space-y-4">
       {/* Hauptüberschrift mit Ausklappfunktion */}
       <Card className="bg-card border rounded-xl shadow-sm overflow-hidden">
-        <div 
+        <div
           className="flex items-center justify-between cursor-pointer p-4"
           onClick={() => setIsExpanded(!isExpanded)}
         >
@@ -76,7 +84,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
             {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </Button>
         </div>
-        
+
         {isExpanded && (
           <div className="px-4 pb-4 space-y-6">
             {/* Kleinunternehmer-Status Tracker (Neue Regelung ab 2025) */}
@@ -84,21 +92,21 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">Kleinunternehmer-Status 2025</span>
-                  <Badge 
-                    variant={isOverHardLimit ? "destructive" : isOverPreviousYearLimit ? "destructive" : isCloseToYearlyLimit ? "secondary" : "outline"} 
+                  <Badge
+                    variant={isOverHardLimit ? "destructive" : isOverPreviousYearLimit ? "destructive" : isCloseToYearlyLimit ? "secondary" : "outline"}
                     className="text-xs"
                   >
-                    {isOverHardLimit 
-                      ? "Sofort steuerpflichtig!" 
-                      : isOverPreviousYearLimit 
-                        ? "Nächstes Jahr steuerpflichtig" 
-                        : isCloseToYearlyLimit 
-                          ? "Grenze nähert sich" 
+                    {isOverHardLimit
+                      ? "Sofort steuerpflichtig!"
+                      : isOverPreviousYearLimit
+                        ? "Nächstes Jahr steuerpflichtig"
+                        : isCloseToYearlyLimit
+                          ? "Grenze nähert sich"
                           : "Im Rahmen"}
                   </Badge>
                 </div>
               </div>
-              
+
               {/* Vorjahresgrenze (25.000 €) */}
               <div className="space-y-1 mb-3">
                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -106,13 +114,13 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                   <span>{formatCurrency(data.revenueThisYear)} / {formatCurrency(previousYearLimit)}</span>
                 </div>
                 <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-500 ${isOverPreviousYearLimit ? 'bg-red-500' : isCloseToYearlyLimit ? 'bg-amber-500' : 'bg-green-500'}`} 
+                  <div
+                    className={`h-full transition-all duration-500 ${isOverPreviousYearLimit ? 'bg-red-500' : isCloseToYearlyLimit ? 'bg-amber-500' : 'bg-green-500'}`}
                     style={{ width: `${percentage}%` }}
                   />
                 </div>
               </div>
-              
+
               {/* Harte Grenze laufendes Jahr (100.000 €) */}
               <div className="space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -120,22 +128,22 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                   <span>{formatCurrency(data.revenueThisYear)} / {formatCurrency(currentYearLimit)}</span>
                 </div>
                 <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-500 ${isOverHardLimit ? 'bg-red-500' : 'bg-blue-500'}`} 
+                  <div
+                    className={`h-full transition-all duration-500 ${isOverHardLimit ? 'bg-red-500' : 'bg-blue-500'}`}
                     style={{ width: `${percentageHardLimit}%` }}
                   />
                 </div>
               </div>
-              
+
               <div className="mt-3 p-2 bg-background/50 rounded text-xs text-muted-foreground space-y-1">
                 {isOverHardLimit ? (
                   <p className="text-red-500 font-medium">
-                    ⚠️ ACHTUNG: Sie haben die 100.000 € Grenze überschritten! Sie sind ab dem Umsatz, 
+                    ⚠️ ACHTUNG: Sie haben die 100.000 € Grenze überschritten! Sie sind ab dem Umsatz,
                     mit dem die Grenze überschritten wurde, SOFORT umsatzsteuerpflichtig.
                   </p>
                 ) : isOverPreviousYearLimit ? (
                   <p className="text-amber-600 font-medium">
-                    ⚠️ Hinweis: Sie haben die 25.000 € Vorjahresgrenze überschritten. 
+                    ⚠️ Hinweis: Sie haben die 25.000 € Vorjahresgrenze überschritten.
                     Ab dem nächsten Jahr sind Sie umsatzsteuerpflichtig (Regelbesteuerung).
                   </p>
                 ) : (
@@ -150,9 +158,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <CollapsibleKpiCard 
-                title="Umsatz diesen Monat" 
-                value={formatCurrency(data.revenueThisMonth)} 
+              <CollapsibleKpiCard
+                title="Umsatz diesen Monat"
+                value={formatCurrency(data.revenueThisMonth)}
                 icon={<DollarSign className="h-5 w-5 text-green-500" />}
               >
                 <div className="mt-3 space-y-2">
@@ -167,9 +175,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                 </div>
               </CollapsibleKpiCard>
 
-              <CollapsibleKpiCard 
-                title="Ausgaben diesen Monat" 
-                value={formatCurrency(data.expensesThisMonth)} 
+              <CollapsibleKpiCard
+                title="Ausgaben diesen Monat"
+                value={formatCurrency(data.expensesThisMonth)}
                 icon={<CreditCard className="h-5 w-5 text-red-500" />}
               >
                 <div className="mt-3 space-y-2">
@@ -184,9 +192,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                 </div>
               </CollapsibleKpiCard>
 
-              <CollapsibleKpiCard 
-                title="Offene Forderungen" 
-                value={formatCurrency(data.openInvoices)} 
+              <CollapsibleKpiCard
+                title="Offene Forderungen"
+                value={formatCurrency(data.openInvoices)}
                 icon={<Banknote className="h-5 w-5 text-blue-500" />}
               >
                 <div className="mt-3 space-y-2">
@@ -201,9 +209,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                 </div>
               </CollapsibleKpiCard>
 
-              <CollapsibleKpiCard 
-                title="Gesamtumsatz" 
-                value={formatCurrency(data.totalRevenue)} 
+              <CollapsibleKpiCard
+                title="Gesamtumsatz"
+                value={formatCurrency(data.totalRevenue)}
                 icon={<TrendingUp className="h-5 w-5 text-green-500" />}
               >
                 <div className="mt-3 space-y-2">
@@ -218,9 +226,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                 </div>
               </CollapsibleKpiCard>
 
-              <CollapsibleKpiCard 
-                title="Gesamtausgaben" 
-                value={formatCurrency(data.totalExpenses)} 
+              <CollapsibleKpiCard
+                title="Gesamtausgaben"
+                value={formatCurrency(data.totalExpenses)}
                 icon={<TrendingDown className="h-5 w-5 text-red-500" />}
               >
                 <div className="mt-3 space-y-2">
@@ -235,9 +243,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                 </div>
               </CollapsibleKpiCard>
 
-              <CollapsibleKpiCard 
-                title="Gewinn" 
-                value={formatCurrency(profit)} 
+              <CollapsibleKpiCard
+                title="Gewinn"
+                value={formatCurrency(profit)}
                 icon={<PieChart className="h-5 w-5 text-purple-500" />}
               >
                 <div className="mt-3 space-y-2">

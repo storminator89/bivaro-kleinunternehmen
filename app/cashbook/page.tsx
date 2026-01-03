@@ -42,7 +42,7 @@ import {
     Trash2,
     Calculator,
     Calendar,
-    RefreshCw,
+    RefreshCw as _RefreshCw,
     AlertTriangle,
     CheckCircle,
     Loader2,
@@ -89,6 +89,17 @@ interface DailyBalance {
     currentSystemBalance: number;
 }
 
+interface CashCountResult {
+    status: 'OK' | 'ÜBERSCHUSS' | 'FEHLBETRAG' | string;
+    difference: number;
+    systemBalance: number;
+    countedAmount: number;
+    adjustmentTransaction?: {
+        suggestedDescription: string;
+        amount: number;
+    };
+}
+
 // Categories for cash transactions
 const CASH_CATEGORIES = [
     'Barverkauf',
@@ -111,12 +122,12 @@ export default function CashBookPage() {
     const [transactions, setTransactions] = useState<CashTransaction[]>([]);
     const [dailyBalance, setDailyBalance] = useState<DailyBalance | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [_error, setError] = useState<string | null>(null);
 
     // Modal States
     const [showNewCashBookModal, setShowNewCashBookModal] = useState(false);
     const [showNewTransactionModal, setShowNewTransactionModal] = useState(false);
-    const [showCashCountModal, setShowCashCountModal] = useState(false);
+    const [_showCashCountModal, _setShowCashCountModal] = useState(false);
     const [showEditTransactionModal, setShowEditTransactionModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -135,7 +146,7 @@ export default function CashBookPage() {
     const [editTransaction, setEditTransaction] = useState<CashTransaction | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<{ type: 'cashbook' | 'transaction', id: number } | null>(null);
     const [cashCount, setCashCount] = useState({ countedAmount: '', notes: '' });
-    const [cashCountResult, setCashCountResult] = useState<any>(null);
+    const [cashCountResult, setCashCountResult] = useState<CashCountResult | null>(null);
 
     // Pagination
     const [page, setPage] = useState(1);
@@ -919,8 +930,8 @@ export default function CashBookPage() {
                                     {/* Result */}
                                     {cashCountResult && (
                                         <div className={`p-6 rounded-lg border-2 ${cashCountResult.status === 'OK'
-                                                ? 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'
-                                                : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800'
+                                            ? 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'
+                                            : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800'
                                             }`}>
                                             <div className="flex items-center gap-3 mb-4">
                                                 {cashCountResult.status === 'OK' ? (
@@ -962,10 +973,10 @@ export default function CashBookPage() {
                                                 <div className="flex justify-between border-t pt-2 mt-2">
                                                     <span className="font-semibold">Differenz:</span>
                                                     <span className={`font-bold ${cashCountResult.difference > 0
-                                                            ? 'text-green-600'
-                                                            : cashCountResult.difference < 0
-                                                                ? 'text-red-600'
-                                                                : ''
+                                                        ? 'text-green-600'
+                                                        : cashCountResult.difference < 0
+                                                            ? 'text-red-600'
+                                                            : ''
                                                         }`}>
                                                         {cashCountResult.difference >= 0 ? '+' : ''}{formatCurrency(cashCountResult.difference)}
                                                     </span>

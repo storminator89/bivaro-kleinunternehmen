@@ -4,11 +4,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserId } from '@/lib/get-user-id';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { auditExport } from '@/lib/audit-log';
+import { auditExport, AuditEntityType } from '@/lib/audit-log';
 
 export async function GET(request: NextRequest) {
     try {
@@ -43,18 +44,20 @@ export async function GET(request: NextRequest) {
         }
 
         // Build where clause
-        const where: any = {
+        const where: Prisma.CashTransactionWhereInput = {
             cashBookId: parseInt(cashBookId),
             userId
         };
 
-        if (startDate) {
-            where.date = { ...where.date, gte: new Date(startDate) };
-        }
-        if (endDate) {
-            const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
-            where.date = { ...where.date, lte: end };
+        if (startDate || endDate) {
+            const dateFilter: Prisma.DateTimeFilter = {};
+            if (startDate) dateFilter.gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                dateFilter.lte = end;
+            }
+            where.date = dateFilter;
         }
 
         // Get all transactions
@@ -126,7 +129,7 @@ export async function GET(request: NextRequest) {
         const filename = `Kassenbuch_${cashBook.name.replace(/[^a-zA-Z0-9]/g, '_')}${dateRange}.csv`;
 
         // Audit log
-        await auditExport(userId, 'CashBook' as any, {
+        await auditExport(userId, 'CashBook' as AuditEntityType, {
             cashBookId: parseInt(cashBookId),
             cashBookName: cashBook.name,
             transactionCount: transactions.length,

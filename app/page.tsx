@@ -9,7 +9,7 @@ import { ArrowRight, PieChart, FileText, BarChart3, CheckCircle, Shield, Zap, St
 import { Reveal } from "@/components/ui/reveal";
 
 export default function Home() {
-  const { data: session, status } = useSession();
+  const { data: _session, status } = useSession();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -86,11 +86,11 @@ export default function Home() {
           <div className="lg:w-1/2">
             <Reveal delay={120}>
               <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-2">
-                <Image 
-                  src="/screenshot/dashboard.png" 
-                  width={600} 
-                  height={400} 
-                  alt="Dashboard Vorschau" 
+                <Image
+                  src="/screenshot/dashboard.png"
+                  width={600}
+                  height={400}
+                  alt="Dashboard Vorschau"
                   className="rounded-lg border"
                 />
               </div>
@@ -119,132 +119,132 @@ export default function Home() {
             Unsere Lösung bietet alles, was Kleinunternehmer für eine einfache und gesetzeskonforme Buchhaltung benötigen.
           </p>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           <Reveal as="div">
-          <Card>
-            <CardHeader>
-              <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ ['--accent' as any]: 'var(--chart-1)' }}>
-                <BarChart3 className="h-6 w-6" />
-              </div>
-              <CardTitle>Einfache Erfassung</CardTitle>
-              <CardDescription>
-                Schnelle und unkomplizierte Erfassung aller Geschäftsvorgänge
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Mit unserer benutzerfreundlichen Oberfläche können Sie alle geschäftlichen 
-                Transaktionen mit wenigen Klicks erfassen und nach Kategorien organisieren.
-              </p>
-              <ul className="mt-4 space-y-2">
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Intelligente Kategorisierung von Ausgaben</span>
-                </li>
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Automatische Steuerrelevanz-Erkennung</span>
-                </li>
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Drag & Drop Belege hochladen und verknüpfen</span>
-                </li>
-              </ul>
-            </CardContent>
-            <CardFooter>
-              <Link href="/dashboard?tab=expenses" className="w-full">
-                <Button className="w-full transition-all duration-300 hover:scale-[1.02]">
-                  <span>Ausgaben erfassen</span>
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                </Button>
-              </Link>
-            </CardFooter>
-          </Card>
+            <Card>
+              <CardHeader>
+                <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ '--accent': 'var(--chart-1)' } as React.CSSProperties}>
+                  <BarChart3 className="h-6 w-6" />
+                </div>
+                <CardTitle>Einfache Erfassung</CardTitle>
+                <CardDescription>
+                  Schnelle und unkomplizierte Erfassung aller Geschäftsvorgänge
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Mit unserer benutzerfreundlichen Oberfläche können Sie alle geschäftlichen
+                  Transaktionen mit wenigen Klicks erfassen und nach Kategorien organisieren.
+                </p>
+                <ul className="mt-4 space-y-2">
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>Intelligente Kategorisierung von Ausgaben</span>
+                  </li>
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>Automatische Steuerrelevanz-Erkennung</span>
+                  </li>
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>Drag & Drop Belege hochladen und verknüpfen</span>
+                  </li>
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Link href="/dashboard?tab=expenses" className="w-full">
+                  <Button className="w-full transition-all duration-300 hover:scale-[1.02]">
+                    <span>Ausgaben erfassen</span>
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  </Button>
+                </Link>
+              </CardFooter>
+            </Card>
           </Reveal>
 
           <Reveal as="div" delay={80}>
-          <Card>
-            <CardHeader>
-              <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ ['--accent' as any]: 'var(--chart-2)' }}>
-                <FileText className="h-6 w-6" />
-              </div>
-              <CardTitle>ZUGFeRD-Integration</CardTitle>
-              <CardDescription>
-                Automatische Rechnungsverarbeitung mit KI-Technologie
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Laden Sie Ihre ZUGFeRD-kompatiblen Rechnungen hoch und lassen Sie die
-                Daten automatisch extrahieren und in Ihre Buchhaltung integrieren.
-              </p>
-              <ul className="mt-4 space-y-2">
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>KI-gestützte Datenextraktion aus PDF-Rechnungen</span>
-                </li>
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Automatische Kategorisierung und MwSt-Berechnung</span>
-                </li>
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Digitale Archivierung und schneller Zugriff</span>
-                </li>
-              </ul>
-            </CardContent>
-            <CardFooter>
-              <Link href="/dashboard?tab=invoices" className="w-full">
-                <Button variant="outline" className="w-full transition-all duration-300 hover:scale-[1.02]">
-                  <span>Rechnungen verwalten</span>
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                </Button>
-              </Link>
-            </CardFooter>
-          </Card>
+            <Card>
+              <CardHeader>
+                <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ '--accent': 'var(--chart-2)' } as React.CSSProperties}>
+                  <FileText className="h-6 w-6" />
+                </div>
+                <CardTitle>ZUGFeRD-Integration</CardTitle>
+                <CardDescription>
+                  Automatische Rechnungsverarbeitung mit KI-Technologie
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Laden Sie Ihre ZUGFeRD-kompatiblen Rechnungen hoch und lassen Sie die
+                  Daten automatisch extrahieren und in Ihre Buchhaltung integrieren.
+                </p>
+                <ul className="mt-4 space-y-2">
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>KI-gestützte Datenextraktion aus PDF-Rechnungen</span>
+                  </li>
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>Automatische Kategorisierung und MwSt-Berechnung</span>
+                  </li>
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>Digitale Archivierung und schneller Zugriff</span>
+                  </li>
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Link href="/dashboard?tab=invoices" className="w-full">
+                  <Button variant="outline" className="w-full transition-all duration-300 hover:scale-[1.02]">
+                    <span>Rechnungen verwalten</span>
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  </Button>
+                </Link>
+              </CardFooter>
+            </Card>
           </Reveal>
 
           <Reveal as="div" delay={140}>
-          <Card>
-            <CardHeader>
-              <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ ['--accent' as any]: 'var(--chart-3)' }}>
-                <PieChart className="h-6 w-6" />
-              </div>
-              <CardTitle>EÜR-Übersicht</CardTitle>
-              <CardDescription>
-                Live-Übersicht für all Ihre steuerlichen Pflichten
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Mit unserem EÜR-Assistenten können Sie jederzeit eine Übersicht Ihrer
-                steuerlich relevanten Einnahmen und Ausgaben generieren und exportieren.
-              </p>
-              <ul className="mt-4 space-y-2">
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Live EÜR-Vorschau mit Fortschrittsanzeige</span>
-                </li>
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Export als PDF, CSV oder direkt für ELSTER</span>
-                </li>
-                <li className="flex items-start text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Steuerberaterfreundliche Aufbereitung mit Belegen</span>
-                </li>
-              </ul>
-            </CardContent>
-            <CardFooter>
-              <Link href="/dashboard?tab=eur" className="w-full">
-                <Button variant="outline" className="w-full transition-all duration-300 hover:scale-[1.02]">
-                  <span>Zur EÜR-Übersicht</span>
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                </Button>
-              </Link>
-            </CardFooter>
-          </Card>
+            <Card>
+              <CardHeader>
+                <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ '--accent': 'var(--chart-3)' } as React.CSSProperties}>
+                  <PieChart className="h-6 w-6" />
+                </div>
+                <CardTitle>EÜR-Übersicht</CardTitle>
+                <CardDescription>
+                  Live-Übersicht für all Ihre steuerlichen Pflichten
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Mit unserem EÜR-Assistenten können Sie jederzeit eine Übersicht Ihrer
+                  steuerlich relevanten Einnahmen und Ausgaben generieren und exportieren.
+                </p>
+                <ul className="mt-4 space-y-2">
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>Live EÜR-Vorschau mit Fortschrittsanzeige</span>
+                  </li>
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>Export als PDF, CSV oder direkt für ELSTER</span>
+                  </li>
+                  <li className="flex items-start text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
+                    <span>Steuerberaterfreundliche Aufbereitung mit Belegen</span>
+                  </li>
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Link href="/dashboard?tab=eur" className="w-full">
+                  <Button variant="outline" className="w-full transition-all duration-300 hover:scale-[1.02]">
+                    <span>Zur EÜR-Übersicht</span>
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  </Button>
+                </Link>
+              </CardFooter>
+            </Card>
           </Reveal>
         </div>
       </div>
@@ -263,84 +263,84 @@ export default function Home() {
             Kleinunternehmer vertrauen auf unsere Lösung für ihre Buchhaltung
           </p>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           <Reveal as="div">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center mb-4">
-                <div className="text-yellow-500 flex">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-current" />
-                  ))}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center mb-4">
+                  <div className="text-yellow-500 flex">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-4 w-4 fill-current" />
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <p className="text-muted-foreground mb-6">
-                "Als Freelancer habe ich endlich eine unkomplizierte Lösung für meine Buchhaltung gefunden. Die automatische Verarbeitung von Rechnungen spart mir <span className="font-medium text-primary">Stunden an Arbeit</span> jeden Monat!"
-              </p>
-              <div className="flex items-center">
-                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                  MK
+                <p className="text-muted-foreground mb-6">
+                  "Als Freelancer habe ich endlich eine unkomplizierte Lösung für meine Buchhaltung gefunden. Die automatische Verarbeitung von Rechnungen spart mir <span className="font-medium text-primary">Stunden an Arbeit</span> jeden Monat!"
+                </p>
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+                    MK
+                  </div>
+                  <div className="ml-3">
+                    <p className="font-semibold">Michael K.</p>
+                    <p className="text-sm text-muted-foreground">Web-Designer, Hamburg</p>
+                  </div>
                 </div>
-                <div className="ml-3">
-                  <p className="font-semibold">Michael K.</p>
-                  <p className="text-sm text-muted-foreground">Web-Designer, Hamburg</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           </Reveal>
 
           <Reveal as="div" delay={80}>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center mb-4">
-                <div className="text-yellow-500 flex">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-current" />
-                  ))}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center mb-4">
+                  <div className="text-yellow-500 flex">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-4 w-4 fill-current" />
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <p className="text-muted-foreground mb-6">
-                "Die EÜR-Funktion ist ein Lebensretter! Mein Steuerberater war <span className="font-medium text-primary">beeindruckt von der übersichtlichen Aufbereitung</span> meiner Unterlagen."
-              </p>
-              <div className="flex items-center">
-                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                  SB
+                <p className="text-muted-foreground mb-6">
+                  "Die EÜR-Funktion ist ein Lebensretter! Mein Steuerberater war <span className="font-medium text-primary">beeindruckt von der übersichtlichen Aufbereitung</span> meiner Unterlagen."
+                </p>
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+                    SB
+                  </div>
+                  <div className="ml-3">
+                    <p className="font-semibold">Sarah B.</p>
+                    <p className="text-sm text-muted-foreground">Online-Shop Betreiberin, München</p>
+                  </div>
                 </div>
-                <div className="ml-3">
-                  <p className="font-semibold">Sarah B.</p>
-                  <p className="text-sm text-muted-foreground">Online-Shop Betreiberin, München</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           </Reveal>
 
           <Reveal as="div" delay={140}>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center mb-4">
-                <div className="text-yellow-500 flex">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-current" />
-                  ))}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center mb-4">
+                  <div className="text-yellow-500 flex">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-4 w-4 fill-current" />
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <p className="text-muted-foreground mb-6">
-                "Dieses Tool hat meine Buchhaltung revolutioniert. Die <span className="font-medium text-primary">ZUGFeRD-Integration spart enorm viel Zeit</span> und funktioniert perfekt!"
-              </p>
-              <div className="flex items-center">
-                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                  TM
+                <p className="text-muted-foreground mb-6">
+                  "Dieses Tool hat meine Buchhaltung revolutioniert. Die <span className="font-medium text-primary">ZUGFeRD-Integration spart enorm viel Zeit</span> und funktioniert perfekt!"
+                </p>
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+                    TM
+                  </div>
+                  <div className="ml-3">
+                    <p className="font-semibold">Thomas M.</p>
+                    <p className="text-sm text-muted-foreground">IT-Berater, Berlin</p>
+                  </div>
                 </div>
-                <div className="ml-3">
-                  <p className="font-semibold">Thomas M.</p>
-                  <p className="text-sm text-muted-foreground">IT-Berater, Berlin</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           </Reveal>
         </div>
       </div>
@@ -350,43 +350,43 @@ export default function Home() {
         <div className="accent-orb accent-orb--sm" style={{ top: -60, left: 24 }} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
           <Reveal as="div">
-          <Card>
-            <CardContent className="flex flex-col items-center text-center p-6">
-              <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ ['--accent' as any]: 'var(--chart-4)' }}>
-                <Shield className="h-6 w-6" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground mb-2">Sicher</h3>
-              <p className="text-muted-foreground">
-                Lokale Datenspeicherung für höchste Datensicherheit und Kontrolle
-              </p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardContent className="flex flex-col items-center text-center p-6">
+                <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ '--accent': 'var(--chart-4)' } as React.CSSProperties}>
+                  <Shield className="h-6 w-6" />
+                </div>
+                <h3 className="text-2xl font-bold text-foreground mb-2">Sicher</h3>
+                <p className="text-muted-foreground">
+                  Lokale Datenspeicherung für höchste Datensicherheit und Kontrolle
+                </p>
+              </CardContent>
+            </Card>
           </Reveal>
           <Reveal as="div" delay={80}>
-          <Card>
-            <CardContent className="flex flex-col items-center text-center p-6">
-              <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ ['--accent' as any]: 'var(--chart-5)' }}>
-                <Zap className="h-6 w-6" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground mb-2">Schnell</h3>
-              <p className="text-muted-foreground">
-                Automatisierte Prozesse sparen wertvolle Zeit in Ihrem Geschäftsalltag
-              </p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardContent className="flex flex-col items-center text-center p-6">
+                <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ '--accent': 'var(--chart-5)' } as React.CSSProperties}>
+                  <Zap className="h-6 w-6" />
+                </div>
+                <h3 className="text-2xl font-bold text-foreground mb-2">Schnell</h3>
+                <p className="text-muted-foreground">
+                  Automatisierte Prozesse sparen wertvolle Zeit in Ihrem Geschäftsalltag
+                </p>
+              </CardContent>
+            </Card>
           </Reveal>
           <Reveal as="div" delay={140}>
-          <Card>
-            <CardContent className="flex flex-col items-center text-center p-6">
-              <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ ['--accent' as any]: 'var(--chart-2)' }}>
-                <CheckCircle className="h-6 w-6" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground mb-2">Konform</h3>
-              <p className="text-muted-foreground">
-                Entspricht allen gesetzlichen Anforderungen für Ihre Steuerberichte
-              </p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardContent className="flex flex-col items-center text-center p-6">
+                <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ '--accent': 'var(--chart-2)' } as React.CSSProperties}>
+                  <CheckCircle className="h-6 w-6" />
+                </div>
+                <h3 className="text-2xl font-bold text-foreground mb-2">Konform</h3>
+                <p className="text-muted-foreground">
+                  Entspricht allen gesetzlichen Anforderungen für Ihre Steuerberichte
+                </p>
+              </CardContent>
+            </Card>
           </Reveal>
         </div>
       </div>

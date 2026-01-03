@@ -75,20 +75,19 @@ export async function POST(request: Request) {
         // Extract items from original invoice
         // Handle different structures (legacy uploaded vs manual vs fixed uploaded)
         const items = parsedData?.items || parsedData?.lineItems || [];
-        const formattedItems = items.map((item: any) => {
+        const formattedItems = items.map((item: Record<string, unknown>) => {
             // 1. Determine Quantity
             // In some uploaded invoices (due to bug), quantity is stored in 'date' field
-            let quantity = item.quantity;
-            if (!quantity && item.date && !isNaN(parseFloat(item.date))) {
-                quantity = parseFloat(item.date);
+            let quantity = (item.quantity as number) || 1;
+            if (!item.quantity && item.date && !isNaN(parseFloat(String(item.date)))) {
+                quantity = parseFloat(String(item.date));
             }
-            quantity = quantity || 1;
 
             // 2. Determine Unit Price
             // In some uploaded invoices, unitPrice is missing but amount (line total) exists
-            let unitPrice = item.unitPrice || item.price;
+            let unitPrice = (item.unitPrice as number) || (item.price as number) || 0;
             if (!unitPrice && item.amount) {
-                unitPrice = item.amount / quantity;
+                unitPrice = (item.amount as number) / quantity;
             }
             unitPrice = unitPrice || 0;
 

@@ -5,7 +5,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/theme-switch";
 import {
-  Home,
   LayoutDashboard,
   Users,
   LogIn,
@@ -18,7 +17,6 @@ import {
   TrendingUp,
   TrendingDown,
   FileText,
-  Receipt,
   AlertCircle,
   Wallet
 } from "lucide-react";
@@ -50,8 +48,8 @@ export function NavLinks() {
     }
 
     // Listen for sidebar toggle events
-    const handleToggle = (e: CustomEvent) => {
-      setIsCollapsed(e.detail);
+    const handleToggle = (_e: CustomEvent) => {
+      setIsCollapsed(_e.detail);
     };
 
     window.addEventListener('sidebar-toggle', handleToggle as EventListener);

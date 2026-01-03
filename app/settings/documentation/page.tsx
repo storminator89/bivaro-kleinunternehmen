@@ -21,7 +21,6 @@ import {
     ChevronRight,
     Shield,
     Building2,
-    User,
     RefreshCw,
     CheckCircle2,
     AlertCircle,

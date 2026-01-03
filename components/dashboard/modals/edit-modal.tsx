@@ -14,15 +14,15 @@ import {
 } from "@/components/ui/dialog";
 import { Combobox } from "@/components/ui/combobox";
 import { AfaTableDialog } from "@/components/afa-table-dialog";
-import { Customer } from "@/types/dashboard";
+import { Customer, DashboardEditData } from "@/types/dashboard";
 import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
 import { isPrivateCategory } from "@/lib/private-categories";
 
 type EditModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: any) => void;
-  data: any;
+  onSave: (data: DashboardEditData) => void;
+  data: DashboardEditData;
   type: 'expense' | 'income';
   customers: Customer[];
   uniqueCategories?: string[];
@@ -70,9 +70,9 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
   // Auto-set taxRelevant to false when private category is selected
   useEffect(() => {
     if (isPrivateCategory(formData.category) && formData.taxRelevant !== false) {
-      setFormData((prev: any) => ({ ...prev, taxRelevant: false }));
+      setFormData((prev: DashboardEditData) => ({ ...prev, taxRelevant: false }));
     }
-  }, [formData.category]);
+  }, [formData.category, formData.taxRelevant]);
 
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -210,7 +210,7 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
                   min="0"
                   step="1"
                   value={formData.depreciationYears || ''}
-                  onChange={(e) => setFormData({ ...formData, depreciationYears: e.target.value ? parseInt(e.target.value) : null })}
+                  onChange={(e) => setFormData({ ...formData, depreciationYears: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Optional (z.B. 3)"
                   className="dark:bg-background dark:border-input"
                 />

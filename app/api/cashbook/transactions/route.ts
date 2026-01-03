@@ -4,12 +4,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserId } from '@/lib/get-user-id';
-import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
+import { auditCreate, auditUpdate, auditDelete, AuditEntityType } from '@/lib/audit-log';
 
 // Helper: Recalculate running balances for all transactions after a given date
-async function recalculateRunningBalances(cashBookId: number, afterDate?: Date) {
+async function recalculateRunningBalances(cashBookId: number, _afterDate?: Date) {
     const cashBook = await prisma.cashBook.findUnique({
         where: { id: cashBookId }
     });
@@ -42,7 +43,7 @@ async function recalculateRunningBalances(cashBookId: number, afterDate?: Date) 
 }
 
 // GET: Transaktionen abrufen (mit Pagination und Filterung)
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
     try {
         const userId = await getUserId();
         if (!userId) {
@@ -79,18 +80,20 @@ export async function GET(request: NextRequest) {
         }
 
         // Build where clause
-        const where: any = {
+        const where: Prisma.CashTransactionWhereInput = {
             cashBookId: parseInt(cashBookId),
             userId
         };
 
-        if (startDate) {
-            where.date = { ...where.date, gte: new Date(startDate) };
-        }
-        if (endDate) {
-            const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
-            where.date = { ...where.date, lte: end };
+        if (startDate || endDate) {
+            const dateFilter: Prisma.DateTimeFilter = {};
+            if (startDate) dateFilter.gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                dateFilter.lte = end;
+            }
+            where.date = dateFilter;
         }
         if (type && (type === 'EINNAHME' || type === 'AUSGABE')) {
             where.type = type;
@@ -224,7 +227,7 @@ export async function POST(request: NextRequest) {
         // Recalculate running balances for transactions after this one
         await recalculateRunningBalances(parseInt(String(cashBookId)));
 
-        await auditCreate(userId, 'CashTransaction' as any, transaction, description);
+        await auditCreate(userId, 'CashTransaction' as AuditEntityType, transaction, description);
 
         // Fetch the updated transaction
         const updatedTransaction = await prisma.cashTransaction.findUnique({
@@ -265,7 +268,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'Buchung nicht gefunden' }, { status: 404 });
         }
 
-        const updateData: any = {};
+        const updateData: Prisma.CashTransactionUpdateInput = {};
         if (date !== undefined) updateData.date = new Date(date);
         if (type !== undefined) updateData.type = type;
         if (description !== undefined) updateData.description = description.trim();
@@ -288,7 +291,7 @@ export async function PUT(request: NextRequest) {
         });
 
         if (updated) {
-            await auditUpdate(userId, 'CashTransaction' as any, id, existing, updated, description);
+            await auditUpdate(userId, 'CashTransaction' as AuditEntityType, id, existing, updated, description);
         }
 
         return NextResponse.json(updated);
@@ -334,7 +337,7 @@ export async function DELETE(request: NextRequest) {
         // Recalculate running balances
         await recalculateRunningBalances(cashBookId);
 
-        await auditDelete(userId, 'CashTransaction' as any, existing, existing.description);
+        await auditDelete(userId, 'CashTransaction' as AuditEntityType, existing, existing.description);
 
         return NextResponse.json({ success: true });
     } catch (error) {

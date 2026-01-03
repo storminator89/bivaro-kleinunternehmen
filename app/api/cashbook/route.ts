@@ -4,12 +4,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserId } from '@/lib/get-user-id';
-import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
+import { auditCreate, auditUpdate, auditDelete, AuditEntityType } from '@/lib/audit-log';
 
 // GET: Liste aller Kassenbücher des Benutzers
-export async function GET(request: NextRequest) {
+export async function GET(_request: Request) {
     try {
         const userId = await getUserId();
         if (!userId) {
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        await auditCreate(userId, 'CashBook' as any, cashBook, cashBook.name);
+        await auditCreate(userId, 'CashBook' as AuditEntityType, cashBook, cashBook.name);
 
         return NextResponse.json(cashBook, { status: 201 });
     } catch (error) {
@@ -122,7 +123,7 @@ export async function PUT(request: NextRequest) {
             );
         }
 
-        const updateData: any = {};
+        const updateData: Prisma.CashBookUpdateInput = {};
         if (name !== undefined) updateData.name = name.trim();
         if (description !== undefined) updateData.description = description?.trim() || null;
         if (initialBalance !== undefined) updateData.initialBalance = parseFloat(String(initialBalance));
@@ -134,7 +135,7 @@ export async function PUT(request: NextRequest) {
             data: updateData
         });
 
-        await auditUpdate(userId, 'CashBook' as any, id, existing, cashBook, cashBook.name);
+        await auditUpdate(userId, 'CashBook' as AuditEntityType, id, existing, cashBook, cashBook.name);
 
         return NextResponse.json(cashBook);
     } catch (error) {
@@ -191,7 +192,7 @@ export async function DELETE(request: NextRequest) {
             where: { id: parseInt(id) }
         });
 
-        await auditDelete(userId, 'CashBook' as any, existing, existing.name);
+        await auditDelete(userId, 'CashBook' as AuditEntityType, existing, existing.name);
 
         return NextResponse.json({ success: true });
     } catch (error) {
