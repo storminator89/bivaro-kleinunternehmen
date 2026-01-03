@@ -10,8 +10,22 @@ export async function GET() {
   try {
     const userId = await requireUserId();
 
-    // Fetch all user data
-    const [user, expenses, incomes, invoices, customers, settings, templates] = await Promise.all([
+    // Fetch all user data including new models
+    const [
+      user,
+      expenses,
+      incomes,
+      invoices,
+      customers,
+      settings,
+      templates,
+      recurringExpenses,
+      reminders,
+      cashBooks,
+      cashTransactions,
+      documentations,
+      apiKeys
+    ] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, email: true, name: true, role: true, createdAt: true }
@@ -22,6 +36,12 @@ export async function GET() {
       prisma.customer.findMany({ where: { userId } }),
       prisma.settings.findUnique({ where: { userId } }),
       prisma.invoiceTemplate.findMany({ where: { userId } }),
+      prisma.recurringExpense.findMany({ where: { userId } }),
+      prisma.reminder.findMany({ where: { userId } }),
+      prisma.cashBook.findMany({ where: { userId } }),
+      prisma.cashTransaction.findMany({ where: { userId } }),
+      prisma.documentation.findMany({ where: { userId } }),
+      prisma.apiKey.findMany({ where: { userId }, select: { id: true, name: true, keyPrefix: true, scopes: true, isActive: true, expiresAt: true, createdAt: true } }),
     ]);
 
     // Audit log
@@ -30,10 +50,15 @@ export async function GET() {
       incomesCount: incomes.length,
       invoicesCount: invoices.length,
       customersCount: customers.length,
+      recurringExpensesCount: recurringExpenses.length,
+      remindersCount: reminders.length,
+      cashBooksCount: cashBooks.length,
+      cashTransactionsCount: cashTransactions.length,
+      documentationsCount: documentations.length,
     });
 
     const backup = {
-      version: "1.0",
+      version: "2.0",
       exportedAt: new Date().toISOString(),
       user: {
         email: user?.email,
@@ -65,6 +90,30 @@ export async function GET() {
           ...t,
           userId: undefined,
         })),
+        recurringExpenses: recurringExpenses.map(r => ({
+          ...r,
+          userId: undefined,
+        })),
+        reminders: reminders.map(r => ({
+          ...r,
+          userId: undefined,
+        })),
+        cashBooks: cashBooks.map(cb => ({
+          ...cb,
+          userId: undefined,
+        })),
+        cashTransactions: cashTransactions.map(ct => ({
+          ...ct,
+          userId: undefined,
+        })),
+        documentations: documentations.map(d => ({
+          ...d,
+          userId: undefined,
+        })),
+        apiKeys: apiKeys.map(ak => ({
+          ...ak,
+          // Note: keyHash is excluded for security - API keys need to be recreated after restore
+        })),
       },
       stats: {
         expenses: expenses.length,
@@ -72,6 +121,12 @@ export async function GET() {
         invoices: invoices.length,
         customers: customers.length,
         templates: templates.length,
+        recurringExpenses: recurringExpenses.length,
+        reminders: reminders.length,
+        cashBooks: cashBooks.length,
+        cashTransactions: cashTransactions.length,
+        documentations: documentations.length,
+        apiKeys: apiKeys.length,
       }
     };
 

@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [fullBackupLoading, setFullBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [overwriteMode, setOverwriteMode] = useState(false);
   const fullFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     companyName: "",
@@ -228,12 +229,40 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Bestätigung bei Überschreib-Modus
+    if (overwriteMode) {
+      const confirmed = window.confirm(
+        '⚠️ WARNUNG: Alle bestehenden Daten werden GELÖSCHT und durch das Backup ersetzt!\n\n' +
+        'Dies betrifft:\n' +
+        '• Alle Ausgaben\n' +
+        '• Alle Einnahmen\n' +
+        '• Alle Rechnungen\n' +
+        '• Alle Kunden\n' +
+        '• Alle Kassenbuch-Einträge\n' +
+        '• Alle wiederkehrenden Ausgaben\n' +
+        '• Alle Mahnungen\n' +
+        '• Alle Einstellungen\n\n' +
+        'Sind Sie SICHER, dass Sie fortfahren möchten?'
+      );
+      if (!confirmed) {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+    }
+
     setRestoreLoading(true);
     setBackupMessage(null);
 
     try {
       const text = await file.text();
       const backup = JSON.parse(text);
+
+      // Add confirmOverwrite flag if overwrite mode is enabled
+      if (overwriteMode) {
+        backup.confirmOverwrite = true;
+      }
 
       const res = await fetch("/api/backup/restore", {
         method: "POST",
@@ -245,10 +274,13 @@ export default function SettingsPage() {
 
       if (res.ok) {
         const { results } = data;
+        const modeText = results.overwriteMode ? ' (Daten wurden überschrieben)' : '';
         setBackupMessage({
           type: 'success',
-          text: `Wiederherstellung erfolgreich! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen.`
+          text: `Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen.`
         });
+        // Reset overwrite mode after successful restore
+        setOverwriteMode(false);
       } else {
         setBackupMessage({ type: 'error', text: data.error || 'Wiederherstellung fehlgeschlagen.' });
       }
@@ -267,6 +299,30 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Bestätigung bei Überschreib-Modus
+    if (overwriteMode) {
+      const confirmed = window.confirm(
+        '⚠️ WARNUNG: Alle bestehenden Daten werden GELÖSCHT und durch das Backup ersetzt!\n\n' +
+        'Dies betrifft:\n' +
+        '• Alle Ausgaben\n' +
+        '• Alle Einnahmen\n' +
+        '• Alle Rechnungen\n' +
+        '• Alle Kunden\n' +
+        '• Alle Kassenbuch-Einträge\n' +
+        '• Alle wiederkehrenden Ausgaben\n' +
+        '• Alle Mahnungen\n' +
+        '• Alle Einstellungen\n' +
+        '• Alle hochgeladenen Dateien\n\n' +
+        'Sind Sie SICHER, dass Sie fortfahren möchten?'
+      );
+      if (!confirmed) {
+        if (fullFileInputRef.current) {
+          fullFileInputRef.current.value = '';
+        }
+        return;
+      }
+    }
+
     setRestoreLoading(true);
     setBackupMessage(null);
 
@@ -274,7 +330,12 @@ export default function SettingsPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch("/api/backup/full/restore", {
+      // Add overwrite mode as query parameter
+      const url = overwriteMode
+        ? "/api/backup/full/restore?confirmOverwrite=true"
+        : "/api/backup/full/restore";
+
+      const res = await fetch(url, {
         method: "POST",
         body: formData,
       });
@@ -283,10 +344,13 @@ export default function SettingsPage() {
 
       if (res.ok) {
         const { results } = data;
+        const modeText = results.overwriteMode ? ' (Daten wurden überschrieben)' : '';
         setBackupMessage({
           type: 'success',
-          text: `Vollständige Wiederherstellung erfolgreich! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen, ${results.files.imported} Dateien.`
+          text: `Vollständige Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen, ${results.files.imported} Dateien.`
         });
+        // Reset overwrite mode after successful restore
+        setOverwriteMode(false);
       } else {
         setBackupMessage({ type: 'error', text: data.error || 'Wiederherstellung fehlgeschlagen.' });
       }
@@ -565,9 +629,9 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Backup erstellen */}
             <div className="space-y-3">
-              <h4 className="font-medium">Backup erstellen</h4>
+              <h4 className="font-medium">Backup erstellen (JSON)</h4>
               <p className="text-sm text-muted-foreground">
-                Laden Sie alle Ihre Daten als JSON-Datei herunter. Enthält Ausgaben, Einnahmen, Rechnungen, Kunden und Einstellungen.
+                Laden Sie alle Ihre Daten als JSON-Datei herunter.
               </p>
               <Button
                 onClick={handleBackupDownload}
@@ -588,48 +652,12 @@ export default function SettingsPage() {
               </Button>
             </div>
 
-            {/* Backup wiederherstellen */}
+            {/* Vollständiges Backup */}
             <div className="space-y-3">
-              <h4 className="font-medium">Backup wiederherstellen</h4>
+              <h4 className="font-medium">Vollständiges Backup (ZIP)</h4>
               <p className="text-sm text-muted-foreground">
-                Importieren Sie Daten aus einer Backup-Datei. Bereits vorhandene Einträge werden übersprungen.
+                Inkl. Rechnungs-PDFs, Belege und Logo.
               </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={handleRestoreUpload}
-                className="hidden"
-                id="restore-file"
-              />
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={restoreLoading}
-                variant="outline"
-                className="w-full"
-              >
-                {restoreLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Wird wiederhergestellt...
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud className="mr-2 h-4 w-4" />
-                    Backup-Datei auswählen
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Vollständiges Backup mit Dateien */}
-          <div className="border-t pt-6">
-            <h4 className="font-medium mb-2">Vollständiges Backup (inkl. Dateien)</h4>
-            <p className="text-sm text-muted-foreground mb-4">
-              Erstellen Sie ein komplettes Backup als ZIP-Datei, das auch alle hochgeladenen Rechnungs-PDFs, Belege und Ihr Logo enthält.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Button
                 onClick={handleFullBackupDownload}
                 disabled={fullBackupLoading}
@@ -647,39 +675,104 @@ export default function SettingsPage() {
                   </>
                 )}
               </Button>
+            </div>
+          </div>
 
-              <input
-                ref={fullFileInputRef}
-                type="file"
-                accept=".zip"
-                onChange={handleFullRestoreUpload}
-                className="hidden"
-                id="full-restore-file"
-              />
-              <Button
-                onClick={() => fullFileInputRef.current?.click()}
-                disabled={restoreLoading}
-                variant="outline"
-                className="w-full"
-              >
-                {restoreLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Wird wiederhergestellt...
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud className="mr-2 h-4 w-4" />
-                    ZIP-Backup wiederherstellen
-                  </>
-                )}
-              </Button>
+          {/* Wiederherstellungs-Bereich */}
+          <div className="border-t pt-6 mt-6">
+            <h4 className="font-medium mb-4">Backup wiederherstellen</h4>
+
+            {/* Überschreib-Modus Option - gilt für alle Restore-Optionen */}
+            <div className={`mb-4 p-4 rounded-lg border-2 ${overwriteMode ? 'bg-destructive/10 border-destructive' : 'bg-muted/30 border-muted'}`}>
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="overwrite-mode"
+                  checked={overwriteMode}
+                  onChange={(e) => setOverwriteMode(e.target.checked)}
+                  className="h-5 w-5 mt-0.5 rounded border-gray-300 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <label htmlFor="overwrite-mode" className="font-medium cursor-pointer select-none flex items-center gap-2">
+                    Bestehende Daten überschreiben
+                    {overwriteMode && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                  </label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {overwriteMode
+                      ? '⚠️ Alle bestehenden Daten werden vor dem Import gelöscht!'
+                      : 'Standardmäßig werden bereits vorhandene Einträge übersprungen (Merge-Modus).'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Restore Buttons */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleRestoreUpload}
+                  className="hidden"
+                  id="restore-file"
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={restoreLoading}
+                  variant={overwriteMode ? "destructive" : "outline"}
+                  className="w-full"
+                >
+                  {restoreLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Wird wiederhergestellt...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="mr-2 h-4 w-4" />
+                      JSON-Backup {overwriteMode ? 'überschreiben' : 'importieren'}
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1 text-center">.json Datei</p>
+              </div>
+
+              <div>
+                <input
+                  ref={fullFileInputRef}
+                  type="file"
+                  accept=".zip"
+                  onChange={handleFullRestoreUpload}
+                  className="hidden"
+                  id="full-restore-file"
+                />
+                <Button
+                  onClick={() => fullFileInputRef.current?.click()}
+                  disabled={restoreLoading}
+                  variant={overwriteMode ? "destructive" : "outline"}
+                  className="w-full"
+                >
+                  {restoreLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Wird wiederhergestellt...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="mr-2 h-4 w-4" />
+                      ZIP-Backup {overwriteMode ? 'überschreiben' : 'importieren'}
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1 text-center">.zip Datei (inkl. Dateien)</p>
+              </div>
             </div>
           </div>
 
           <div className="border-t pt-4">
             <p className="text-xs text-muted-foreground">
-              <strong>Hinweis:</strong> Bei der Wiederherstellung werden bestehende Daten nicht überschrieben.
+              <strong>Hinweis:</strong> Aktivieren Sie "Bestehende Daten überschreiben" für ein komplettes Restore.
               Das vollständige Backup kann bei vielen Dateien größer werden.
             </p>
           </div>
