@@ -5,13 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { 
-  ArrowLeft, 
-  Copy, 
-  Check, 
-  Key, 
-  Shield, 
-  Zap, 
+import {
+  ArrowLeft,
+  Copy,
+  Check,
+  Key,
+  Shield,
+  Zap,
   Code2,
   FileJson,
   Users,
@@ -283,6 +283,75 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
       }
     },
     {
+      name: "Kassenbuch",
+      icon: Receipt,
+      path: "/api/v1/cashbook",
+      methods: ["GET", "POST", "PUT", "DELETE"],
+      description: "Kassenbücher und Kassenbuch-Transaktionen verwalten",
+      examples: {
+        get: `curl -X GET "https://ihre-domain.de/api/v1/cashbook?cashBookId=1&startDate=2025-01-01" \\
+  -H "Authorization: Bearer biv_sk_IhrApiKey"`,
+        post: `curl -X POST "https://ihre-domain.de/api/v1/cashbook" \\
+  -H "Authorization: Bearer biv_sk_IhrApiKey" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "cashBookId": 1,
+    "type": "EINNAHME",
+    "description": "Barverkauf",
+    "amount": 150.00,
+    "category": "Verkauf"
+  }'`,
+        response: `{
+  "success": true,
+  "data": {
+    "cashBooks": [{ "id": 1, "name": "Hauptkasse", "initialBalance": 0 }],
+    "transactions": [
+      {
+        "id": 1,
+        "date": "2025-11-27T14:00:00.000Z",
+        "type": "EINNAHME",
+        "description": "Barverkauf",
+        "amount": 150.00,
+        "runningBalance": 150.00
+      }
+    ]
+  },
+  "meta": { "page": 1, "total": 1 },
+  "timestamp": "2025-11-27T20:00:00.000Z"
+}`
+      }
+    },
+    {
+      name: "GoBD-Dokumentation",
+      icon: FileJson,
+      path: "/api/v1/documentation",
+      methods: ["GET", "POST", "PUT", "DELETE"],
+      description: "GoBD-Verfahrensdokumentationen verwalten",
+      examples: {
+        get: `curl -X GET "https://ihre-domain.de/api/v1/documentation" \\
+  -H "Authorization: Bearer biv_sk_IhrApiKey"`,
+        post: `curl -X POST "https://ihre-domain.de/api/v1/documentation" \\
+  -H "Authorization: Bearer biv_sk_IhrApiKey" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "version": "1.0",
+    "title": "Verfahrensdokumentation",
+    "content": "{\"sections\": [...]}"
+  }'`,
+        response: `{
+  "success": true,
+  "data": {
+    "id": 1,
+    "version": "1.0",
+    "title": "Verfahrensdokumentation",
+    "createdAt": "2025-11-27T20:00:00.000Z",
+    "updatedAt": "2025-11-27T20:00:00.000Z"
+  },
+  "timestamp": "2025-11-27T20:00:00.000Z"
+}`
+      }
+    },
+    {
       name: "Einstellungen",
       icon: Settings,
       path: "/api/v1/settings",
@@ -316,8 +385,8 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Back Link */}
-        <Link 
-          href="/settings/api-keys" 
+        <Link
+          href="/settings/api-keys"
           className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -421,21 +490,21 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
             <p className="text-sm text-muted-foreground">
               Sie können den API-Key auf zwei Arten übermitteln:
             </p>
-            
+
             <div className="space-y-4">
               <div>
                 <h4 className="font-medium mb-2">Option 1: Authorization Header (empfohlen)</h4>
-                <CodeBlock 
-                  code='Authorization: Bearer biv_sk_IhrApiKey...' 
-                  id="auth1" 
+                <CodeBlock
+                  code='Authorization: Bearer biv_sk_IhrApiKey...'
+                  id="auth1"
                 />
               </div>
-              
+
               <div>
                 <h4 className="font-medium mb-2">Option 2: X-API-Key Header</h4>
-                <CodeBlock 
-                  code='X-API-Key: biv_sk_IhrApiKey...' 
-                  id="auth2" 
+                <CodeBlock
+                  code='X-API-Key: biv_sk_IhrApiKey...'
+                  id="auth2"
                 />
               </div>
             </div>
@@ -482,7 +551,7 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
               </div>
               <div>
                 <h4 className="font-medium mb-2">Response Headers</h4>
-                <CodeBlock 
+                <CodeBlock
                   code={`X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 95
 X-RateLimit-Reset: 1732738800`}
@@ -506,10 +575,10 @@ X-RateLimit-Reset: 1732738800`}
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Wenn Sie die API von einer Browser-Anwendung (z.B. React, Vue, JavaScript) aufrufen möchten, 
+              Wenn Sie die API von einer Browser-Anwendung (z.B. React, Vue, JavaScript) aufrufen möchten,
               müssen Sie die Domain Ihrer Anwendung als erlaubte Origin konfigurieren.
             </p>
-            
+
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <div className="flex gap-3">
                 <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
@@ -536,7 +605,7 @@ X-RateLimit-Reset: 1732738800`}
 
             <div>
               <h4 className="font-medium mb-2">Beispiel: JavaScript Fetch</h4>
-              <CodeBlock 
+              <CodeBlock
                 code={`// CORS funktioniert automatisch, wenn die Origin konfiguriert ist
 const response = await fetch('https://ihre-domain.de/api/v1/customers', {
   method: 'GET',
@@ -554,7 +623,7 @@ const data = await response.json();`}
 
             <div>
               <h4 className="font-medium mb-2">CORS Response Headers</h4>
-              <CodeBlock 
+              <CodeBlock
                 code={`Access-Control-Allow-Origin: https://ihre-app.de
 Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key
@@ -597,9 +666,9 @@ Access-Control-Max-Age: 86400`}
                 <TabsTrigger value="error">Fehler</TabsTrigger>
                 <TabsTrigger value="pagination">Pagination</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="success" className="mt-4">
-                <CodeBlock 
+                <CodeBlock
                   code={`{
   "success": true,
   "data": { ... },
@@ -609,9 +678,9 @@ Access-Control-Max-Age: 86400`}
                   id="success"
                 />
               </TabsContent>
-              
+
               <TabsContent value="error" className="mt-4">
-                <CodeBlock 
+                <CodeBlock
                   code={`{
   "error": {
     "message": "Customer not found",
@@ -623,9 +692,9 @@ Access-Control-Max-Age: 86400`}
                   id="error"
                 />
               </TabsContent>
-              
+
               <TabsContent value="pagination" className="mt-4">
-                <CodeBlock 
+                <CodeBlock
                   code={`{
   "success": true,
   "data": [ ... ],
@@ -686,7 +755,7 @@ Access-Control-Max-Age: 86400`}
 
         {/* Endpoints */}
         <h2 className="text-2xl font-bold mb-4">Endpunkte</h2>
-        
+
         <div className="space-y-6">
           {endpoints.map((endpoint) => (
             <Card key={endpoint.path} id={endpoint.name.toLowerCase()}>
@@ -704,14 +773,14 @@ Access-Control-Max-Age: 86400`}
               <CardContent>
                 <div className="flex gap-2 mb-4">
                   {endpoint.methods.map((method) => (
-                    <Badge 
-                      key={method} 
+                    <Badge
+                      key={method}
                       variant="outline"
                       className={
                         method === "GET" ? "border-green-500 text-green-600" :
-                        method === "POST" ? "border-blue-500 text-blue-600" :
-                        method === "PUT" ? "border-yellow-500 text-yellow-600" :
-                        "border-red-500 text-red-600"
+                          method === "POST" ? "border-blue-500 text-blue-600" :
+                            method === "PUT" ? "border-yellow-500 text-yellow-600" :
+                              "border-red-500 text-red-600"
                       }
                     >
                       {method}
@@ -725,19 +794,19 @@ Access-Control-Max-Age: 86400`}
                     <TabsTrigger value="create">Erstellen</TabsTrigger>
                     <TabsTrigger value="response">Antwort</TabsTrigger>
                   </TabsList>
-                  
+
                   <TabsContent value="request" className="mt-4">
                     <p className="text-sm text-muted-foreground mb-2">GET-Anfrage mit Filtern:</p>
                     <CodeBlock code={endpoint.examples.get} id={`${endpoint.name}-get`} />
                   </TabsContent>
-                  
+
                   <TabsContent value="create" className="mt-4">
                     <p className="text-sm text-muted-foreground mb-2">
                       {endpoint.methods.includes("POST") ? "POST" : "PUT"}-Anfrage:
                     </p>
                     <CodeBlock code={endpoint.examples.post} id={`${endpoint.name}-post`} />
                   </TabsContent>
-                  
+
                   <TabsContent value="response" className="mt-4">
                     <p className="text-sm text-muted-foreground mb-2">Beispiel-Antwort:</p>
                     <CodeBlock code={endpoint.examples.response} id={`${endpoint.name}-response`} />
