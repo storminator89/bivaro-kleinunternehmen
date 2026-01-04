@@ -8,11 +8,12 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Base - Common configuration
 # -----------------------------------------------------------------------------
-FROM node:22-alpine AS base
+FROM node:22-slim AS base
 
 # Install security updates and required packages
-RUN apk update && apk upgrade --no-cache && \
-    apk add --no-cache libc6-compat openssl dumb-init
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends openssl dumb-init ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -63,12 +64,12 @@ RUN npm prune --omit=dev && \
 # -----------------------------------------------------------------------------
 # Stage 4: Runner - Production runtime
 # -----------------------------------------------------------------------------
-FROM node:22-alpine AS runner
+FROM node:22-slim AS runner
 
 # Install security updates and dumb-init for proper signal handling
-RUN apk update && apk upgrade --no-cache && \
-    apk add --no-cache libc6-compat openssl dumb-init curl && \
-    rm -rf /var/cache/apk/*
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
