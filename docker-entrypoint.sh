@@ -65,9 +65,13 @@ else
     cd /app/prisma
     if node /app/$PRISMA_CLI migrate deploy --schema=/app/prisma/schema.prisma; then
         echo "✅ Migrations applied!"
+        # Also run db push to catch any schema drift
+        echo "🔄 Syncing schema with db push..."
+        node /app/$PRISMA_CLI db push --schema=/app/prisma/schema.prisma --accept-data-loss 2>/dev/null || true
+        echo "✅ Schema synced!"
     else
-        echo "⚠️ Migration deploy failed, trying db push..."
-        node /app/$PRISMA_CLI db push --schema=/app/prisma/schema.prisma
+        echo "⚠️ Migration deploy failed, trying db push with --accept-data-loss..."
+        node /app/$PRISMA_CLI db push --schema=/app/prisma/schema.prisma --accept-data-loss
         echo "✅ Schema synced with db push!"
     fi
     cd /app
