@@ -25,14 +25,14 @@ const iframeAllowedPaths = [
 
 // Check if a path matches any protected route
 function isProtectedRoute(path: string): boolean {
-  return protectedPaths.some(protectedPath => 
+  return protectedPaths.some(protectedPath =>
     path === protectedPath || path.startsWith(`${protectedPath}/`)
   );
 }
 
 // Check if a path should allow iframe embedding (for previews)
 function shouldAllowIframe(path: string): boolean {
-  return iframeAllowedPaths.some(allowedPath => 
+  return iframeAllowedPaths.some(allowedPath =>
     path.startsWith(allowedPath)
   );
 }
@@ -51,7 +51,13 @@ function addSecurityHeaders(response: NextResponse, path: string): NextResponse 
 }
 
 export async function proxy(request: NextRequest) {
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  let token = null;
+  try {
+    token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  } catch (error) {
+    console.error("JWT decryption failed in proxy:", error);
+    // If decryption fails, we treat the user as unauthenticated
+  }
   const path = request.nextUrl.pathname;
 
   // If it's a protected route and user is not authenticated, redirect to login
@@ -60,13 +66,13 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set('callbackUrl', encodeURI(request.url));
     return NextResponse.redirect(url);
   }
-  
+
   // If user is already authenticated and trying to access login/register, redirect to dashboard
   if ((path === '/login' || path === '/register') && token) {
     const url = new URL('/dashboard', request.url);
     return NextResponse.redirect(url);
   }
-  
+
   // Create response with security headers
   const response = NextResponse.next();
   return addSecurityHeaders(response, path);
