@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Base - Common configuration
 # -----------------------------------------------------------------------------
-FROM node:22-slim AS base
+FROM node:25-slim AS base
 
 # Install security updates and required packages
 RUN apt-get update && apt-get upgrade -y && \
@@ -64,7 +64,7 @@ RUN npm prune --omit=dev && \
 # -----------------------------------------------------------------------------
 # Stage 4: Runner - Production runtime
 # -----------------------------------------------------------------------------
-FROM node:22-slim AS runner
+FROM node:25-slim AS runner
 
 # Install security updates and dumb-init for proper signal handling
 RUN apt-get update && apt-get upgrade -y && \
