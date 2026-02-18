@@ -637,7 +637,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           giroCodeData += (bic || "").trim() + "\n";
           giroCodeData += toSEPA(cleanName).substring(0, 70) + "\n";
           giroCodeData += finalIban + "\n";
-          giroCodeData += `EUR${grossTotal.toFixed(2)} \n`;
+          giroCodeData += `EUR${grossTotal.toFixed(2)}\n`;
           giroCodeData += "\n";
           giroCodeData += "\n";
           giroCodeData += toSEPA(invoiceNumber || "").substring(0, 140) + "\n";
@@ -851,7 +851,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
             unit: item.unit,
             taxRate: item.taxRate,
           })),
-          totalAmount: netTotal,
+          netAmount: netTotal,
           taxAmount: taxTotal,
           currency: 'EUR',
         };
@@ -864,15 +864,56 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           description: 'ZUGFeRD Invoice Data',
           creationDate: new Date(),
           modificationDate: new Date(),
-          // @ts-expect-error pdf-lib types may not include AFRelationship
-          afRelationship: 'Alternative',
         });
 
+        // Set AFRelationship on the file specification dictionary
+        try {
+          const namesDict = pdfDoc.catalog.lookup(PDFName.of('Names'));
+          if (namesDict && 'lookup' in (namesDict as unknown as object)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const efTree = (namesDict as any).lookup(PDFName.of('EmbeddedFiles'));
+            if (efTree && 'lookup' in (efTree as unknown as object)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const namesArr = (efTree as any).lookup(PDFName.of('Names'));
+              if (namesArr && 'asArray' in (namesArr as unknown as object)) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const arr = (namesArr as any).asArray();
+                for (let i = 1; i < arr.length; i += 2) {
+                  const fileSpec = pdfDoc.context.lookup(arr[i]);
+                  if (fileSpec && 'set' in (fileSpec as unknown as object)) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (fileSpec as any).set(PDFName.of('AFRelationship'), PDFName.of('Alternative'));
+                  }
+                }
+              }
+            }
+          }
+        } catch (afErr) {
+          console.warn('Could not set AFRelationship:', afErr);
+        }
+
         // Add XMP Metadata for PDF/A-3 compliance (ZUGFeRD requirement)
-        const xmpMetadata = `<? xpacket begin = "\uFEFF" id = "W5M0MpCehiHzreSzNTczkc9d" ?>
+        const xmpMetadata = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-    <rdf:Description rdf:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#" xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">
+    <rdf:Description rdf:about=""
+      xmlns:dc="http://purl.org/dc/elements/1.1/"
+      xmlns:pdf="http://ns.adobe.com/pdf/1.3/"
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"
+      xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/"
+      xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"
+      xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#"
+      xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">
+      <pdfaid:part>3</pdfaid:part>
+      <pdfaid:conformance>B</pdfaid:conformance>
+      <xmp:CreatorTool>pdf-lib (https://github.com/Hopding/pdf-lib)</xmp:CreatorTool>
+      <pdf:Producer>pdf-lib (https://github.com/Hopding/pdf-lib)</pdf:Producer>
+      <dc:title>
+        <rdf:Alt>
+          <rdf:li xml:lang="x-default">Rechnung ${invoiceNumber}</rdf:li>
+        </rdf:Alt>
+      </dc:title>
       <fx:DocumentType>INVOICE</fx:DocumentType>
       <fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>
       <fx:Version>1.0</fx:Version>
@@ -919,7 +960,8 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
 </x:xmpmeta>
 <?xpacket end="w"?>`;
 
-        const metadataStream = pdfDoc.context.flateStream(xmpMetadata);
+        const metadataXmlBytes = new TextEncoder().encode(xmpMetadata);
+        const metadataStream = pdfDoc.context.stream(metadataXmlBytes, { Type: 'Metadata', Subtype: 'XML', Length: metadataXmlBytes.length });
         const metadataStreamRef = pdfDoc.context.register(metadataStream);
         pdfDoc.catalog.set(PDFName.of('Metadata'), metadataStreamRef);
 

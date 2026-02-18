@@ -1,37 +1,37 @@
 
 /**
- * Berechnet die Einkommensteuer nach dem deutschen Einkommensteuertarif 2024.
- * Formeln basieren auf § 32a EStG.
+ * Berechnet die Einkommensteuer nach dem deutschen Einkommensteuertarif 2026.
+ * Formeln basieren auf § 32a EStG (Steuerfortentwicklungsgesetz).
  */
 export function calculateIncomeTax(taxableIncome: number): number {
   // Abrunden auf vollen Euro
   const zvE = Math.floor(taxableIncome);
 
-  if (zvE <= 11604) {
+  if (zvE <= 12348) {
     return 0;
-  } else if (zvE <= 17005) {
-    const y = (zvE - 11604) / 10000;
-    return (922.98 * y + 1400) * y;
-  } else if (zvE <= 66760) {
-    const z = (zvE - 17005) / 10000;
-    return (181.19 * z + 2397) * z + 1025.38;
+  } else if (zvE <= 17799) {
+    const y = (zvE - 12348) / 10000;
+    return (914.51 * y + 1400) * y;
+  } else if (zvE <= 69878) {
+    const z = (zvE - 17799) / 10000;
+    return (173.10 * z + 2397) * z + 1034.87;
   } else if (zvE <= 277825) {
-    return 0.42 * zvE - 9960.28;
+    return 0.42 * zvE - 11135.63;
   } else {
-    return 0.45 * zvE - 18295.03;
+    return 0.45 * zvE - 19470.38;
   }
 }
 
 /**
- * Berechnet den Solidaritätszuschlag 2024.
- * Freigrenze: 18.130 € Einkommensteuer (Einzelveranlagung).
+ * Berechnet den Solidaritätszuschlag 2026.
+ * Freigrenze: 20.350 € Einkommensteuer (Einzelveranlagung).
  */
 export function calculateSolidaritySurcharge(incomeTax: number): number {
-  if (incomeTax <= 18130) {
+  if (incomeTax <= 20350) {
     return 0;
-  } else if (incomeTax <= 33912) {
+  } else if (incomeTax <= 37843) {
     // Milderungszone: Differenz zur Freigrenze * 11,9%
-    return (incomeTax - 18130) * 0.119;
+    return (incomeTax - 20350) * 0.119;
   } else {
     return incomeTax * 0.055;
   }

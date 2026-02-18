@@ -7,62 +7,62 @@ import {
 } from '../tax-calculator'
 
 describe('calculateIncomeTax', () => {
-    describe('Grundfreibetrag (Zone 1: 0 - 11.604€)', () => {
+    describe('Grundfreibetrag (Zone 1: 0 - 12.348€)', () => {
         it('should return 0 for income of 0€', () => {
             expect(calculateIncomeTax(0)).toBe(0)
         })
 
-        it('should return 0 for income at Grundfreibetrag (11.604€)', () => {
-            expect(calculateIncomeTax(11604)).toBe(0)
+        it('should return 0 for income at Grundfreibetrag (12.348€)', () => {
+            expect(calculateIncomeTax(12348)).toBe(0)
         })
 
         it('should return 0 for income just below Grundfreibetrag', () => {
-            expect(calculateIncomeTax(11000)).toBe(0)
+            expect(calculateIncomeTax(12000)).toBe(0)
         })
     })
 
-    describe('Zone 2 (11.605€ - 17.005€)', () => {
+    describe('Zone 2 (12.349€ - 17.799€)', () => {
         it('should calculate tax for income at start of Zone 2', () => {
-            const tax = calculateIncomeTax(11605)
+            const tax = calculateIncomeTax(12349)
             expect(tax).toBeGreaterThan(0)
             expect(tax).toBeLessThan(100)
         })
 
         it('should calculate tax for income at end of Zone 2', () => {
-            const tax = calculateIncomeTax(17005)
-            expect(tax).toBeCloseTo(1025.38, 0)
+            const tax = calculateIncomeTax(17799)
+            expect(tax).toBeCloseTo(1034.87, 0)
         })
     })
 
-    describe('Zone 3 (17.006€ - 66.760€)', () => {
+    describe('Zone 3 (17.800€ - 69.878€)', () => {
         it('should calculate tax for 30.000€ income', () => {
             const tax = calculateIncomeTax(30000)
-            // Expected: ~4.500€ (typical for this income level)
-            expect(tax).toBeGreaterThan(4000)
-            expect(tax).toBeLessThan(5500)
+            // Expected: ~4.100€ (slightly lower than 2024 due to higher Grundfreibetrag)
+            expect(tax).toBeGreaterThan(3800)
+            expect(tax).toBeLessThan(5000)
         })
 
         it('should calculate tax at end of Zone 3', () => {
-            const tax = calculateIncomeTax(66760)
+            const tax = calculateIncomeTax(69878)
             // Before Zone 4 starts
-            expect(tax).toBeGreaterThan(15000)
+            expect(tax).toBeGreaterThan(17000)
             expect(tax).toBeLessThan(20000)
         })
     })
 
-    describe('Zone 4 (66.761€ - 277.825€)', () => {
+    describe('Zone 4 (69.879€ - 277.825€)', () => {
         it('should apply 42% marginal rate for 100.000€ income', () => {
             const tax = calculateIncomeTax(100000)
-            // 0.42 * 100000 - 9960.28 = 32,039.72
-            expect(tax).toBeCloseTo(32039.72, 0)
+            // 0.42 * 100000 - 11135.63 = 30864.37
+            expect(tax).toBeCloseTo(30864.37, 0)
         })
     })
 
     describe('Zone 5 - Reichensteuer (>277.825€)', () => {
         it('should apply 45% marginal rate for 300.000€ income', () => {
             const tax = calculateIncomeTax(300000)
-            // 0.45 * 300000 - 18295.03 = 116,704.97
-            expect(tax).toBeCloseTo(116704.97, 0)
+            // 0.45 * 300000 - 19470.38 = 115529.62
+            expect(tax).toBeCloseTo(115529.62, 0)
         })
     })
 
@@ -76,15 +76,15 @@ describe('calculateIncomeTax', () => {
 })
 
 describe('calculateSolidaritySurcharge', () => {
-    it('should return 0 for income tax at or below 18.130€', () => {
-        expect(calculateSolidaritySurcharge(18130)).toBe(0)
+    it('should return 0 for income tax at or below 20.350€', () => {
+        expect(calculateSolidaritySurcharge(20350)).toBe(0)
         expect(calculateSolidaritySurcharge(10000)).toBe(0)
     })
 
-    it('should apply Milderungszone (18.131€ - 33.912€)', () => {
-        const soli = calculateSolidaritySurcharge(20000)
-        // (20000 - 18130) * 0.119 = 222.51
-        expect(soli).toBeCloseTo(222.51, 1)
+    it('should apply Milderungszone (20.351€ - 37.843€)', () => {
+        const soli = calculateSolidaritySurcharge(25000)
+        // (25000 - 20350) * 0.119 = 553.35
+        expect(soli).toBeCloseTo(553.35, 1)
     })
 
     it('should apply full 5.5% above Milderungszone', () => {

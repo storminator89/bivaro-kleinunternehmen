@@ -33,7 +33,7 @@ function createTestInvoice(overrides: Partial<ZugferdData> = {}): ZugferdData {
                 taxRate: 0,
             },
         ],
-        totalAmount: 1000,
+        netAmount: 1000,
         taxAmount: 0, // Kleinunternehmer
         currency: 'EUR',
         ...overrides,
@@ -47,9 +47,11 @@ describe('generateZugferdXml', () => {
             expect(xml).toMatch(/^\s*<\?xml version="1\.0" encoding="UTF-8"\?>/)
         })
 
-        it('should include XRechnung 3.0 guideline ID', () => {
+        it('should include Factur-X EN 16931 guideline ID', () => {
             const xml = generateZugferdXml(createTestInvoice())
-            expect(xml).toContain('urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_3.0')
+            expect(xml).toContain('urn:cen.eu:en16931:2017')
+            // Should NOT contain the old XRechnung or extended Factur-X URIs
+            expect(xml).not.toContain('xrechnung')
         })
 
         it('should use CrossIndustryInvoice namespace', () => {
@@ -64,14 +66,25 @@ describe('generateZugferdXml', () => {
             expect(xml).toContain('<ram:ID>RE-2024-TEST-123</ram:ID>')
         })
 
+        it('should use invoice number as BuyerReference', () => {
+            const xml = generateZugferdXml(createTestInvoice({ invoiceNumber: 'RE-2024-REF' }))
+            expect(xml).toContain('<ram:BuyerReference>RE-2024-REF</ram:BuyerReference>')
+        })
+
         it('should format date as YYYYMMDD (format 102)', () => {
             const xml = generateZugferdXml(createTestInvoice({ date: new Date('2024-03-15') }))
             expect(xml).toContain('<udt:DateTimeString format="102">20240315</udt:DateTimeString>')
         })
 
-        it('should include due date', () => {
+        it('should include due date when provided', () => {
             const xml = generateZugferdXml(createTestInvoice({ dueDate: new Date('2024-04-30') }))
             expect(xml).toContain('20240430')
+            expect(xml).toContain('SpecifiedTradePaymentTerms')
+        })
+
+        it('should omit payment terms block when dueDate is not set', () => {
+            const xml = generateZugferdXml(createTestInvoice({ dueDate: undefined }))
+            expect(xml).not.toContain('SpecifiedTradePaymentTerms')
         })
     })
 
@@ -90,11 +103,27 @@ describe('generateZugferdXml', () => {
             expect(xml).toContain('<ram:ID schemeID="FC">123/456/78901</ram:ID>')
         })
 
+        it('should not duplicate tax number as party ID', () => {
+            const xml = generateZugferdXml(createTestInvoice({
+                seller: { ...createTestInvoice().seller, taxNumber: '123/456/78901' }
+            }))
+            // taxNumber should appear as ram:ID (seller identifier for BR-CO-26) AND in SpecifiedTaxRegistration
+            expect(xml).toContain('<ram:ID>123/456/78901</ram:ID>')
+            expect(xml).toContain('<ram:ID schemeID="FC">123/456/78901</ram:ID>')
+        })
+
         it('should include IBAN in payment means', () => {
             const xml = generateZugferdXml(createTestInvoice({
                 seller: { ...createTestInvoice().seller, iban: 'DE89370400440532013000' }
             }))
             expect(xml).toContain('<ram:IBANID>DE89370400440532013000</ram:IBANID>')
+        })
+
+        it('should include BIC in payment means', () => {
+            const xml = generateZugferdXml(createTestInvoice({
+                seller: { ...createTestInvoice().seller, bic: 'COBADEFFXXX' }
+            }))
+            expect(xml).toContain('<ram:BICID>COBADEFFXXX</ram:BICID>')
         })
 
         it('should parse address into postcode and city', () => {
@@ -176,6 +205,11 @@ describe('generateZugferdXml', () => {
             expect(xml).toContain('<ram:CategoryCode>E</ram:CategoryCode>')
         })
 
+        it('should NOT include ExemptionReasonCode (§ 19 UStG has no VATEX code)', () => {
+            const xml = generateZugferdXml(createTestInvoice({ taxAmount: 0 }))
+            expect(xml).not.toContain('ExemptionReasonCode')
+        })
+
         it('should set tax rate to 0.00 for Kleinunternehmer', () => {
             const xml = generateZugferdXml(createTestInvoice({ taxAmount: 0 }))
             expect(xml).toContain('<ram:RateApplicablePercent>0.00</ram:RateApplicablePercent>')
@@ -184,7 +218,7 @@ describe('generateZugferdXml', () => {
         it('should NOT include exemption reason when tax applies', () => {
             const xml = generateZugferdXml(createTestInvoice({
                 taxAmount: 190,
-                totalAmount: 1000,
+                netAmount: 1000,
                 items: [{ description: 'Test', quantity: 1, unitPrice: 1000, total: 1000, taxRate: 19 }]
             }))
             expect(xml).not.toContain('§ 19 UStG')
@@ -194,7 +228,7 @@ describe('generateZugferdXml', () => {
 
     describe('Monetary Totals', () => {
         it('should include all required monetary summation fields', () => {
-            const xml = generateZugferdXml(createTestInvoice({ totalAmount: 1500, taxAmount: 0 }))
+            const xml = generateZugferdXml(createTestInvoice({ netAmount: 1500, taxAmount: 0 }))
             expect(xml).toContain('<ram:LineTotalAmount>1500.00</ram:LineTotalAmount>')
             expect(xml).toContain('<ram:TaxBasisTotalAmount>1500.00</ram:TaxBasisTotalAmount>')
             expect(xml).toContain('<ram:GrandTotalAmount>1500.00</ram:GrandTotalAmount>')
@@ -204,6 +238,34 @@ describe('generateZugferdXml', () => {
         it('should include tax total with currency attribute', () => {
             const xml = generateZugferdXml(createTestInvoice({ currency: 'EUR', taxAmount: 0 }))
             expect(xml).toContain('<ram:TaxTotalAmount currencyID="EUR">0.00</ram:TaxTotalAmount>')
+        })
+
+        it('should calculate GrandTotalAmount as netAmount + taxAmount', () => {
+            const xml = generateZugferdXml(createTestInvoice({
+                netAmount: 1000,
+                taxAmount: 190,
+                items: [{ description: 'Test', quantity: 1, unitPrice: 1000, total: 1000, taxRate: 19 }]
+            }))
+            expect(xml).toContain('<ram:GrandTotalAmount>1190.00</ram:GrandTotalAmount>')
+        })
+    })
+
+    describe('Tax Grouping (Header Level)', () => {
+        it('should group taxes by category and rate', () => {
+            const xml = generateZugferdXml(createTestInvoice({
+                netAmount: 900,
+                taxAmount: 133,
+                items: [
+                    { description: 'Item 1', quantity: 1, unitPrice: 500, total: 500, taxRate: 19 },
+                    { description: 'Item 2', quantity: 1, unitPrice: 400, total: 400, taxRate: 7 },
+                ]
+            }))
+            // Should have two separate ApplicableTradeTax blocks
+            const taxBlocks = xml.match(/<ram:ApplicableTradeTax>/g)
+            // Header-level blocks + line-level blocks = at least 4
+            expect(taxBlocks!.length).toBeGreaterThanOrEqual(4)
+            expect(xml).toContain('<ram:RateApplicablePercent>19.00</ram:RateApplicablePercent>')
+            expect(xml).toContain('<ram:RateApplicablePercent>7.00</ram:RateApplicablePercent>')
         })
     })
 
@@ -232,6 +294,16 @@ describe('generateZugferdXml', () => {
         it('should include invoice currency code', () => {
             const xml = generateZugferdXml(createTestInvoice({ currency: 'EUR' }))
             expect(xml).toContain('<ram:InvoiceCurrencyCode>EUR</ram:InvoiceCurrencyCode>')
+        })
+    })
+
+    describe('Payment Means', () => {
+        it('should omit IBAN when not provided', () => {
+            const xml = generateZugferdXml(createTestInvoice({
+                seller: { ...createTestInvoice().seller, iban: undefined, bic: undefined }
+            }))
+            expect(xml).not.toContain('<ram:IBANID>')
+            expect(xml).toContain('<ram:TypeCode>30</ram:TypeCode>')
         })
     })
 })

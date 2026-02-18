@@ -120,26 +120,30 @@ export default function SteuerSimulationPage() {
   const [grossSalary, setGrossSalary] = useState<number>(50000);
   const [employeeExpenses, setEmployeeExpenses] = useState<number>(1230); // Werbungskostenpauschale 2024
   const [autoCalcSocial, setAutoCalcSocial] = useState<boolean>(true);
+  const [numberOfChildren, setNumberOfChildren] = useState<number>(0);
 
   useEffect(() => {
     if (employmentType === "side-business" && autoCalcSocial) {
-      // Beitragsbemessungsgrenzen 2024 (West)
-      const bbG_KV = 62100;
-      const bbG_RV = 90600;
+      // Beitragsbemessungsgrenzen 2025 (West)
+      const bbG_KV = 66150;
+      const bbG_RV = 96600;
 
       const salaryForKV = Math.min(grossSalary, bbG_KV);
       const salaryForRV = Math.min(grossSalary, bbG_RV);
 
-      // Arbeitnehmeranteile (ca. Werte 2024)
+      // Arbeitnehmeranteile (ca. Werte 2025)
       // KV: 7.3% + 0.85% (halber Zusatzbeitrag 1.7%) = 8.15%
       // RV: 9.3%
-      // PV: 2.3% (inkl. Kinderlosenzuschlag Anteil)
+      // PV AN-Anteil 2025: kinderlos 2.40%, 1 Kind 1.80%, 2+ Kinder 1.55%
+      const pvRate = numberOfChildren === 0 ? 0.024
+        : numberOfChildren === 1 ? 0.018
+          : 0.0155;
 
       setHealthInsurance(Math.round(salaryForKV * 0.0815));
       setPensionInsurance(Math.round(salaryForRV * 0.093));
-      setCareInsurance(Math.round(salaryForKV * 0.023));
+      setCareInsurance(Math.round(salaryForKV * pvRate));
     }
-  }, [grossSalary, employmentType, autoCalcSocial]);
+  }, [grossSalary, employmentType, autoCalcSocial, numberOfChildren]);
 
   const fetchData = async () => {
     try {
@@ -287,7 +291,7 @@ export default function SteuerSimulationPage() {
   // 4. Gewerbesteueranrechnung (3,8-facher Messbetrag, max. die tatsächliche GewSt)
   // Messbetrag = (Gewinn - 24500) * 3.5%
   const tradeTaxBaseAmount = Math.max(0, profitFloor - 24500) * 0.035;
-  const tradeTaxCredit = Math.min(tradeTax, tradeTaxBaseAmount * 3.8);
+  const tradeTaxCredit = Math.min(tradeTax, tradeTaxBaseAmount * 3.8, baseIncomeTax);
 
   const finalIncomeTax = Math.max(0, baseIncomeTax - tradeTaxCredit);
 
@@ -320,12 +324,14 @@ export default function SteuerSimulationPage() {
     ? (marginalTax / profit) * 100
     : 0;
 
-  const totalNetIncome = (profit + incomeFromEmployment) - totalTax;
+  const svBeitraege = healthInsurance + pensionInsurance + careInsurance;
+  const totalNetIncome = employmentType === "side-business"
+    ? grossSalary - svBeitraege + profit - totalTax
+    : profit - totalTax;
 
   // Für UI-Anzeige
   const deductionsApplied = totalDeductions;
   const expenseCoverage = totalIncome > 0 ? totalExpenses / totalIncome : 0;
-  const unusedAllowance = 0; // Nicht mehr relevant in neuer Logik
 
   const formatCurrency = useCallback((value: number) =>
     new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value), []);
@@ -369,15 +375,9 @@ export default function SteuerSimulationPage() {
       return recs;
     }
 
-    if (profit === 0 && unusedAllowance > 0) {
-      recs.push({
-        tone: "info",
-        title: "Freibeträge vollständig nutzen",
-        description: `Ihr Gewinn wird aktuell vollständig durch Freibeträge gedeckt (${formatCurrency(unusedAllowance)} bleiben unverbraucht). Planen Sie Einnahmeverschiebungen oder Investitionen gezielt, um Steuervorteile optimal zu nutzen.`,
-      });
-    }
 
-    if (taxableIncome > 11604 * 1.1) {
+
+    if (taxableIncome > 12348 * 1.1) {
       recs.push({
         tone: "info",
         title: "Zusätzliche Abzugsmöglichkeiten prüfen",
@@ -472,7 +472,7 @@ export default function SteuerSimulationPage() {
     totalDeductions,
     totalIncome,
     tradeTaxHebesatz,
-    unusedAllowance,
+
     employmentType,
   ]);
 
@@ -489,6 +489,7 @@ export default function SteuerSimulationPage() {
     setGrossSalary(50000);
     setEmployeeExpenses(1230);
     setAutoCalcSocial(true);
+    setNumberOfChildren(0);
   };
 
   return (
@@ -715,25 +716,46 @@ export default function SteuerSimulationPage() {
               )}
 
               {employmentType === "side-business" && (
-                <div className="mt-4 flex items-center gap-2 rounded-md bg-muted/50 p-3 text-sm">
-                  <input
-                    id="autoCalcSocial"
-                    type="checkbox"
-                    className="h-4 w-4 rounded border border-input"
-                    checked={autoCalcSocial}
-                    onChange={(event) => setAutoCalcSocial(event.target.checked)}
-                  />
-                  <Label htmlFor="autoCalcSocial" className="font-normal">
-                    Sozialversicherungsbeiträge automatisch aus Bruttogehalt berechnen
-                  </Label>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <CircleHelp className="h-4 w-4 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      Berechnet die abzugsfähigen Vorsorgeaufwendungen (KV, RV, PV) basierend auf Ihrem Bruttogehalt automatisch. Diese mindern Ihre Steuerlast.
-                    </TooltipContent>
-                  </Tooltip>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center gap-2 rounded-md bg-muted/50 p-3 text-sm">
+                    <input
+                      id="autoCalcSocial"
+                      type="checkbox"
+                      className="h-4 w-4 rounded border border-input"
+                      checked={autoCalcSocial}
+                      onChange={(event) => setAutoCalcSocial(event.target.checked)}
+                    />
+                    <Label htmlFor="autoCalcSocial" className="font-normal">
+                      Sozialversicherungsbeiträge automatisch aus Bruttogehalt berechnen
+                    </Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <CircleHelp className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        Berechnet die abzugsfähigen Vorsorgeaufwendungen (KV, RV, PV) basierend auf Ihrem Bruttogehalt automatisch. Diese mindern Ihre Steuerlast.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  {autoCalcSocial && (
+                    <div className="rounded-md bg-muted/50 p-3">
+                      <ParameterLabel
+                        htmlFor="numberOfChildren"
+                        label="Anzahl Kinder (für PV-Beitrag)"
+                        tooltip="Beeinflusst den Pflegeversicherungsbeitrag: Kinderlose zahlen 2,40%, mit 1 Kind 1,80%, ab 2 Kindern (unter 25) 1,55% Arbeitnehmeranteil."
+                      />
+                      <select
+                        id="numberOfChildren"
+                        value={numberOfChildren}
+                        onChange={(event) => setNumberOfChildren(Number(event.target.value))}
+                        className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <option value={0}>Keine Kinder (Zuschlag 0,6%)</option>
+                        <option value={1}>1 Kind</option>
+                        <option value={2}>2 oder mehr Kinder (unter 25)</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -879,7 +901,7 @@ export default function SteuerSimulationPage() {
                 Standardwerte wiederherstellen
               </Button>
               <p className="text-sm text-muted-foreground">
-                Die Berechnung basiert auf dem Einkommensteuertarif 2024 (Grundfreibetrag 11.604 € berücksichtigt).
+                Die Berechnung basiert auf dem Einkommensteuertarif 2026 (Grundfreibetrag 12.348 € berücksichtigt).
               </p>
             </div>
           </CardContent>

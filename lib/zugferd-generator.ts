@@ -29,10 +29,13 @@ export interface ZugferdData {
     unit?: string;
     taxRate?: number;
   }[];
-  totalAmount: number;
+  netAmount: number;
   taxAmount: number; // Usually 0 for small businesses
   currency: string;
 }
+
+// Keep backward compatibility
+export type { ZugferdData as ZugferdInvoiceData };
 
 function formatDate(date: Date): string {
   const yyyy = date.getFullYear();
@@ -46,7 +49,7 @@ export function generateZugferdXml(data: ZugferdData): string {
   const dueDate = data.dueDate ? formatDate(data.dueDate) : '';
   const deliveryDate = data.deliveryDate ? formatDate(data.deliveryDate) : issueDate;
 
-  // Hilfsfunktion zum Escapen von Sonderzeichen (für ALLE Textfelder nutzen!)
+  // Hilfsfunktion zum Escapen von Sonderzeichen
   const escapeXml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -56,21 +59,25 @@ export function generateZugferdXml(data: ZugferdData): string {
 
   const formatAmt = (num: number) => num.toFixed(2);
 
-  // Adress-Parsing (wie gehabt, nur mit escapeXml beim Einfügen)
+  // Support both netAmount (new) and totalAmount (legacy/backward compat)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const netAmount = data.netAmount ?? (data as any).totalAmount ?? 0;
+
+  // Adress-Parsing
   const parseAddress = (addrStr?: string) => {
     const lines = (addrStr || '').split('\n').map(l => l.trim()).filter(l => l);
-    const countryCode = 'DE'; 
+    const countryCode = 'DE';
     let cityName = '';
     let postcode = '';
     let lineOne = '';
-    
+
     if (lines.length > 0) {
       const lastLine = lines[lines.length - 1];
       const match = lastLine.match(/^(\d{5})\s+(.+)$/);
       if (match) {
         postcode = match[1];
         cityName = match[2];
-        lines.pop(); 
+        lines.pop();
       }
       lineOne = lines[0] || '';
     }
@@ -78,17 +85,16 @@ export function generateZugferdXml(data: ZugferdData): string {
   };
 
   const sellerAddr = parseAddress(data.seller.address);
-  const buyerAddr = data.buyer.zipCode && data.buyer.city 
-    ? { 
-        lineOne: data.buyer.address?.split('\n')[0] || '', // Fallback if address is just street
-        postcode: data.buyer.zipCode, 
-        cityName: data.buyer.city, 
-        countryCode: 'DE' 
-      }
+  const buyerAddr = data.buyer.zipCode && data.buyer.city
+    ? {
+      lineOne: data.buyer.address?.split('\n')[0] || '',
+      postcode: data.buyer.zipCode,
+      cityName: data.buyer.city,
+      countryCode: 'DE'
+    }
     : parseAddress(data.buyer.address);
 
-  // WICHTIG für Kleinunternehmer: Der Hinweistext
-  // Dies muss exakt der Text sein, der auch auf der PDF steht (oder sinngemäß)
+  // Kleinunternehmer-Erkennung
   const isSmallBusiness = data.taxAmount === 0;
   const exemptionReason = isSmallBusiness ? "Kein Ausweis von Umsatzsteuer, da Kleinunternehmer gemäß § 19 UStG." : "";
 
@@ -102,10 +108,13 @@ export function generateZugferdXml(data: ZugferdData): string {
     return map[unit] || 'C62';
   };
 
+  // Kleinunternehmer: Code "E" (Exempt from tax) — "O" is not allowed because BR-O-05 forbids RateApplicablePercent
+  const taxCategoryForSmallBusiness = 'E';
+
   const itemsXml = data.items.map((item, index) => {
     const taxRate = item.taxRate || 0;
-    const taxCategory = taxRate === 0 ? 'E' : 'S';
-    
+    const taxCategory = taxRate === 0 && isSmallBusiness ? taxCategoryForSmallBusiness : (taxRate === 0 ? 'E' : 'S');
+
     return `
       <ram:IncludedSupplyChainTradeLineItem>
         <ram:AssociatedDocumentLineDocument>
@@ -135,6 +144,68 @@ export function generateZugferdXml(data: ZugferdData): string {
       </ram:IncludedSupplyChainTradeLineItem>`;
   }).join('');
 
+  // Fix 8: Steuersätze gruppiert für Header-Level ApplicableTradeTax
+  const taxGroups = new Map<string, { rate: number; category: string; basisAmount: number; taxAmount: number }>();
+  data.items.forEach(item => {
+    const taxRate = item.taxRate || 0;
+    const category = taxRate === 0 && isSmallBusiness ? taxCategoryForSmallBusiness : (taxRate === 0 ? 'E' : 'S');
+    const key = `${category}_${taxRate}`;
+    const existing = taxGroups.get(key);
+    if (existing) {
+      existing.basisAmount += item.total;
+      existing.taxAmount += item.total * (taxRate / 100);
+    } else {
+      taxGroups.set(key, {
+        rate: taxRate,
+        category,
+        basisAmount: item.total,
+        taxAmount: item.total * (taxRate / 100),
+      });
+    }
+  });
+
+  const taxBlocksXml = Array.from(taxGroups.values()).map(group => {
+    // ExemptionReason only for exempt categories — no ExemptionReasonCode (§ 19 UStG has no VATEX code)
+    const exemptionXml = group.category === taxCategoryForSmallBusiness && isSmallBusiness
+      ? `<ram:ExemptionReason>${escapeXml(exemptionReason)}</ram:ExemptionReason>`
+      : '';
+
+    return `
+      <ram:ApplicableTradeTax>
+        <ram:CalculatedAmount>${formatAmt(group.taxAmount)}</ram:CalculatedAmount>
+        <ram:TypeCode>VAT</ram:TypeCode>
+        ${exemptionXml}
+        <ram:BasisAmount>${formatAmt(group.basisAmount)}</ram:BasisAmount>
+        <ram:CategoryCode>${group.category}</ram:CategoryCode>
+        <ram:RateApplicablePercent>${formatAmt(group.rate)}</ram:RateApplicablePercent>
+      </ram:ApplicableTradeTax>`;
+  }).join('');
+
+  // Fix 4: DueDate-Block nur rendern wenn vorhanden
+  const paymentTermsXml = dueDate ? `
+      <ram:SpecifiedTradePaymentTerms>
+        <ram:DueDateDateTime>
+          <udt:DateTimeString format="102">${dueDate}</udt:DateTimeString>
+        </ram:DueDateDateTime>
+      </ram:SpecifiedTradePaymentTerms>` : '';
+
+  // Fix 5: BIC hinzufügen + Fix 9: Leeren IBAN absichern
+  const paymentMeansXml = data.seller.iban ? `
+      <ram:SpecifiedTradeSettlementPaymentMeans>
+        <ram:TypeCode>30</ram:TypeCode>
+        <ram:PayeePartyCreditorFinancialAccount>
+          <ram:IBANID>${escapeXml(data.seller.iban)}</ram:IBANID>
+        </ram:PayeePartyCreditorFinancialAccount>
+        ${data.seller.bic ? `<ram:PayeeSpecifiedCreditorFinancialInstitution>
+          <ram:BICID>${escapeXml(data.seller.bic)}</ram:BICID>
+        </ram:PayeeSpecifiedCreditorFinancialInstitution>` : ''}
+      </ram:SpecifiedTradeSettlementPaymentMeans>` : `
+      <ram:SpecifiedTradeSettlementPaymentMeans>
+        <ram:TypeCode>30</ram:TypeCode>
+      </ram:SpecifiedTradeSettlementPaymentMeans>`;
+
+  const grandTotal = netAmount + data.taxAmount;
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
   <rsm:ExchangedDocumentContext>
@@ -142,7 +213,7 @@ export function generateZugferdXml(data: ZugferdData): string {
       <ram:ID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</ram:ID>
     </ram:BusinessProcessSpecifiedDocumentContextParameter>
     <ram:GuidelineSpecifiedDocumentContextParameter>
-      <ram:ID>urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_3.0</ram:ID>
+      <ram:ID>urn:cen.eu:en16931:2017</ram:ID>
     </ram:GuidelineSpecifiedDocumentContextParameter>
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>
@@ -155,7 +226,7 @@ export function generateZugferdXml(data: ZugferdData): string {
   <rsm:SupplyChainTradeTransaction>
     ${itemsXml}
     <ram:ApplicableHeaderTradeAgreement>
-      <ram:BuyerReference>Leitweg-ID</ram:BuyerReference>
+      <ram:BuyerReference>${escapeXml(data.invoiceNumber)}</ram:BuyerReference>
       <ram:SellerTradeParty>
         ${data.seller.taxNumber ? `<ram:ID>${escapeXml(data.seller.taxNumber)}</ram:ID>` : ''}
         <ram:Name>${escapeXml(data.seller.name)}</ram:Name>
@@ -206,37 +277,17 @@ export function generateZugferdXml(data: ZugferdData): string {
     </ram:ApplicableHeaderTradeDelivery>
     <ram:ApplicableHeaderTradeSettlement>
       <ram:InvoiceCurrencyCode>${data.currency}</ram:InvoiceCurrencyCode>
-      <ram:SpecifiedTradeSettlementPaymentMeans>
-        <ram:TypeCode>30</ram:TypeCode>
-        <ram:PayeePartyCreditorFinancialAccount>
-          <ram:IBANID>${escapeXml(data.seller.iban || '')}</ram:IBANID>
-        </ram:PayeePartyCreditorFinancialAccount>
-      </ram:SpecifiedTradeSettlementPaymentMeans>
-      
-      <!-- STEUERBLOCK (Header Level) -->
-      <ram:ApplicableTradeTax>
-        <ram:CalculatedAmount>${formatAmt(data.taxAmount)}</ram:CalculatedAmount>
-        <ram:TypeCode>VAT</ram:TypeCode>
-        <!-- HIER FEHLTE DER GRUND: -->
-        ${isSmallBusiness ? `<ram:ExemptionReason>${escapeXml(exemptionReason)}</ram:ExemptionReason>` : ''}
-        <ram:BasisAmount>${formatAmt(data.totalAmount)}</ram:BasisAmount>
-        <ram:CategoryCode>${isSmallBusiness ? 'E' : 'S'}</ram:CategoryCode>
-        <ram:RateApplicablePercent>${isSmallBusiness ? '0.00' : formatAmt((data.taxAmount / data.totalAmount) * 100)}</ram:RateApplicablePercent>
-      </ram:ApplicableTradeTax>
-
-      <ram:SpecifiedTradePaymentTerms>
-        <ram:DueDateDateTime>
-          <udt:DateTimeString format="102">${dueDate}</udt:DateTimeString>
-        </ram:DueDateDateTime>
-      </ram:SpecifiedTradePaymentTerms>
+      ${paymentMeansXml}
+      ${taxBlocksXml}
+      ${paymentTermsXml}
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
-        <ram:LineTotalAmount>${formatAmt(data.totalAmount)}</ram:LineTotalAmount>
+        <ram:LineTotalAmount>${formatAmt(netAmount)}</ram:LineTotalAmount>
         <ram:ChargeTotalAmount>0.00</ram:ChargeTotalAmount>
         <ram:AllowanceTotalAmount>0.00</ram:AllowanceTotalAmount>
-        <ram:TaxBasisTotalAmount>${formatAmt(data.totalAmount)}</ram:TaxBasisTotalAmount>
+        <ram:TaxBasisTotalAmount>${formatAmt(netAmount)}</ram:TaxBasisTotalAmount>
         <ram:TaxTotalAmount currencyID="${data.currency}">${formatAmt(data.taxAmount)}</ram:TaxTotalAmount>
-        <ram:GrandTotalAmount>${formatAmt(data.totalAmount + data.taxAmount)}</ram:GrandTotalAmount>
-        <ram:DuePayableAmount>${formatAmt(data.totalAmount + data.taxAmount)}</ram:DuePayableAmount>
+        <ram:GrandTotalAmount>${formatAmt(grandTotal)}</ram:GrandTotalAmount>
+        <ram:DuePayableAmount>${formatAmt(grandTotal)}</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
     </ram:ApplicableHeaderTradeSettlement>
   </rsm:SupplyChainTradeTransaction>

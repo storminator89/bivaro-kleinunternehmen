@@ -1,0 +1,37 @@
+services:
+  bivaro:
+    image: pmeyhoefer/bivaro-kleinunternehmen:latest
+    container_name: bivaro-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/prod.db
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+    volumes:
+      - bivaro-data:/app/data
+      - bivaro-uploads:/app/public/uploads
+    user: "1001:1001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - bivaro-network
+
+volumes:
+  bivaro-data:
+  bivaro-uploads:
+
+networks:
+  bivaro-network:
