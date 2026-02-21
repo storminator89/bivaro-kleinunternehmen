@@ -241,18 +241,41 @@ export async function generateCreditNotePDF(
         netTotal += lineNet;
         taxTotal += lineTax;
 
+        const maxDescWidth = colX.qty - colX.desc - 10;
+        const words = (item.description || 'Position').split(' ');
+        const descLines: string[] = [];
+        let currentLine = words[0] || '';
+
+        for (let i = 1; i < words.length; i++) {
+            const testLine = currentLine + " " + words[i];
+            if (font.widthOfTextAtSize(testLine, 10) < maxDescWidth) {
+                currentLine = testLine;
+            } else {
+                descLines.push(currentLine);
+                currentLine = words[i];
+            }
+        }
+        descLines.push(currentLine);
+
+        const lineHeight = 12;
+        const itemHeight = Math.max(20, descLines.length * lineHeight + 8);
+
         if (index % 2 === 0) {
             page.drawRectangle({
                 x: margin,
-                y: y - 8,
+                y: y - itemHeight + 12,
                 width: width - 2 * margin,
-                height: 20,
+                height: itemHeight,
                 color: rgb(0.98, 0.98, 0.98),
             });
         }
 
         page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font, color: secondaryColor });
-        page.drawText(item.description || 'Position', { x: colX.desc, y, size: 10, font, color: primaryColor });
+
+        descLines.forEach((line, i) => {
+            page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font, color: primaryColor });
+        });
+
         drawTextRight(item.quantity.toString(), colX.qty, y, 10, font, primaryColor);
         page.drawText(item.unit || 'Stück', { x: colX.unit, y, size: 10, font, color: primaryColor });
         drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font, primaryColor);
@@ -263,7 +286,7 @@ export async function generateCreditNotePDF(
         // Credit amounts shown in red with minus to indicate credit value
         drawTextRight('-' + formatCurrency(lineNet), colX.credit - 5, y, 10, font, creditColor);
 
-        y -= 20;
+        y -= itemHeight;
     });
 
     y -= 10;

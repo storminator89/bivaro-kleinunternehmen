@@ -100,13 +100,29 @@ export async function POST(request: Request) {
             };
         });
 
-        // Build customer address
-        let customerAddress = '';
-        if (originalInvoice.customer) {
+        // --- Extract customer name ---
+        let resolvedName: string | null = originalInvoice.customer?.name ?? null;
+        if (!resolvedName && parsedData?.customerName) resolvedName = String(parsedData.customerName);
+
+        // --- Build combined address block ---
+        // parsedData.customerAddress (from CreateInvoiceModal) already contains name + street + city
+        // buyerInfo is from ZUGFeRD upload; fallback is the linked customer DB record.
+        // We pass everything as customerAddress and customerName=null to avoid double-printing.
+        let fullAddress = '';
+
+        if (parsedData?.customerAddress) {
+            // Already the full block – use as-is
+            fullAddress = String(parsedData.customerAddress).trim();
+        } else if (parsedData?.buyerInfo && typeof parsedData.buyerInfo === 'object') {
+            const bi = parsedData.buyerInfo as Record<string, string | undefined>;
+            const parts = [resolvedName, bi.address, [bi.zipCode, bi.city].filter(Boolean).join(' ')].filter(Boolean);
+            fullAddress = parts.join('\n');
+        } else {
             const c = originalInvoice.customer;
-            if (c.address) customerAddress += c.address;
-            const cityLine = [c.zipCode, c.city].filter(Boolean).join(' ');
-            if (cityLine) customerAddress += (customerAddress ? '\n' : '') + cityLine;
+            if (c) {
+                const parts = [resolvedName, c.address, [c.zipCode, c.city].filter(Boolean).join(' ')].filter(Boolean);
+                fullAddress = parts.join('\n');
+            }
         }
 
         // Generate credit note PDF
@@ -118,8 +134,8 @@ export async function POST(request: Request) {
                 originalInvoiceDate: originalInvoice.invoiceDate,
                 cancellationReason: cancellationReason || 'Stornierung der Originalrechnung',
                 totalAmount: originalInvoice.totalAmount || 0,
-                customerName: originalInvoice.customer?.name || null,
-                customerAddress: customerAddress || null,
+                customerName: null,           // name is already inside fullAddress
+                customerAddress: fullAddress || null,
                 items: formattedItems,
             },
             {

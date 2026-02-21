@@ -15,6 +15,16 @@ interface CreateInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInvoiceCreated?: () => void;
+  fromQuote?: {
+    id: number;
+    parsedData: {
+      items?: Array<{ description: string; quantity: number; unitPrice: number; unit: string; taxRate: number }>;
+      notes?: string;
+      customerAddress?: string;
+    };
+    customerId?: number | null;
+    invoiceNumber?: string | null; // quote number for reference
+  };
 }
 
 interface InvoiceItem {
@@ -57,7 +67,7 @@ interface Template {
   };
 }
 
-export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: CreateInvoiceModalProps) {
+export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuote }: CreateInvoiceModalProps) {
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -114,6 +124,16 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
       fetchTemplates();
     }
   }, [isOpen]);
+
+  // Pre-fill from quote when converting
+  useEffect(() => {
+    if (isOpen && fromQuote) {
+      const pd = fromQuote.parsedData;
+      if (pd.items && pd.items.length > 0) setItems(pd.items);
+      if (pd.notes) setNotes(pd.notes);
+      if (pd.customerAddress) setCustomerAddress(pd.customerAddress);
+    }
+  }, [isOpen, fromQuote]);
 
   const fetchTemplates = async () => {
     try {
@@ -991,6 +1011,18 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated }: Create
           console.error("Auto-upload failed:", err);
           alert("Speichern fehlgeschlagen: " + (err.error || "Unbekannter Fehler"));
         } else {
+          // If we're converting from a quote, mark it as ACCEPTED
+          if (fromQuote) {
+            try {
+              await fetch('/api/quotes', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: fromQuote.id, status: 'ACCEPTED' }),
+              });
+            } catch (e) {
+              console.error('Failed to update quote status:', e);
+            }
+          }
           if (onInvoiceCreated) {
             onInvoiceCreated();
           }

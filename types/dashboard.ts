@@ -43,7 +43,7 @@ export type Customer = {
 
 export type Invoice = {
   id: number;
-  type?: 'INVOICE' | 'CREDIT_NOTE';
+  type?: 'INVOICE' | 'CREDIT_NOTE' | 'QUOTE';
   fileName: string;
   uploadedAt: string;
   invoiceNumber?: string;
@@ -51,8 +51,22 @@ export type Invoice = {
   status: string;
   invoiceDate?: string;
   dueDate?: string;
+  validUntil?: string;
   originalInvoiceId?: number;
   cancellationReason?: string;
+  customer?: { id: number; name: string } | null;
+};
+
+export type Quote = {
+  id: number;
+  fileName: string;
+  uploadedAt: string;
+  invoiceNumber?: string;
+  totalAmount?: number;
+  status: string;
+  invoiceDate?: string;
+  validUntil?: string;
+  customer?: { id: number; name: string } | null;
 };
 
 export type FilterState = {
@@ -75,6 +89,10 @@ export type FilterState = {
     searchTerm: string;
     sortBy: 'date' | 'invoiceNumber' | 'amount';
     sortOrder: 'asc' | 'desc';
+  };
+  quotes: {
+    statusFilter: string;
+    searchTerm: string;
   };
 };
 

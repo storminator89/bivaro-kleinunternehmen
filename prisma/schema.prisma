@@ -71,7 +71,7 @@ model Income {
 
 model Invoice {
   id            Int       @id @default(autoincrement())
-  type          String    @default("INVOICE")  // INVOICE oder CREDIT_NOTE
+  type          String    @default("INVOICE")  // INVOICE, CREDIT_NOTE oder QUOTE
   fileName      String
   storedFileName String   // Hinzugefügtes Feld für den gespeicherten Dateinamen
   uploadedAt    DateTime  @default(now())
@@ -82,6 +82,7 @@ model Invoice {
   totalAmount   Float?
   status        String    @default("DRAFT") // DRAFT, SENT, PAID, CANCELLED
   paidAt        DateTime?
+  validUntil    DateTime? // Gültig bis (nur für Angebote/QUOTE)
   originalInvoiceId Int?  // Referenz zur Originalrechnung (bei Gutschriften)
   originalInvoice   Invoice? @relation("CreditNotes", fields: [originalInvoiceId], references: [id])
   creditNotes       Invoice[] @relation("CreditNotes")

@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     const paidStatus = url.searchParams.get('paidStatus'); // 'paid' | 'unpaid' | null
     const dateRange = url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
-    const where: Prisma.InvoiceWhereInput = { userId };
+    const where: Prisma.InvoiceWhereInput = { userId, type: { not: 'QUOTE' } };
 
     if (paidStatus === 'paid') where.status = 'PAID';
     if (paidStatus === 'unpaid') where.status = { not: 'PAID' };

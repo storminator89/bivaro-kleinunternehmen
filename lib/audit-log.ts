@@ -30,7 +30,8 @@ export type AuditAction =
   | 'REMINDER_SENT'
   | 'VIEW'
   | 'DOWNLOAD'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'CONVERTED';
 
 // Entity types that can be audited
 export type AuditEntityType =
@@ -49,7 +50,8 @@ export type AuditEntityType =
   | 'CreditNote'
   | 'CashBook'
   | 'CashTransaction'
-  | 'EURExport';
+  | 'EURExport'
+  | 'Quote';
 
 export interface AuditLogEntry {
   userId: string;

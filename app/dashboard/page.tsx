@@ -8,6 +8,8 @@ import { de } from 'date-fns/locale';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { CreateInvoiceModal } from "@/components/dashboard/create-invoice-modal";
+import { CreateQuoteModal } from "@/components/dashboard/create-quote-modal";
+import { QuotesTab, Quote } from "@/components/dashboard/tabs/quotes-tab";
 
 // Importiere extrahierte Komponenten und Typen
 import {
@@ -41,11 +43,18 @@ function DashboardContent() {
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [quotesTotal, setQuotesTotal] = useState(0);
+  const [quotesPage, setQuotesPage] = useState(1);
+  const [quotesPageSize, setQuotesPageSize] = useState(20);
+  const [quotesStatusFilter, setQuotesStatusFilter] = useState('all');
+  const [quotesSearchTerm, setQuotesSearchTerm] = useState('');
+  const [createQuoteModalOpen, setCreateQuoteModalOpen] = useState(false);
 
   // Tabs-State - Tab-Namen normalisieren (income -> incomes)
   const normalizeTab = (tab: string | null) => {
     if (tab === 'income') return 'incomes';
-    if (tab === 'expenses' || tab === 'incomes' || tab === 'invoices' || tab === 'eur' || tab === 'gwg') return tab;
+    if (tab === 'expenses' || tab === 'incomes' || tab === 'invoices' || tab === 'quotes' || tab === 'eur' || tab === 'gwg') return tab;
     return 'expenses';
   };
 
@@ -81,6 +90,7 @@ function DashboardContent() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: number; type: 'expense' | 'income' | 'invoice' } | null>(null);
   const [createInvoiceModalOpen, setCreateInvoiceModalOpen] = useState(false);
+  const [fromQuote, setFromQuote] = useState<Quote | null>(null);
 
   // Credit Note Modal State
   const [creditNoteModalOpen, setCreditNoteModalOpen] = useState(false);
@@ -107,7 +117,11 @@ function DashboardContent() {
       searchTerm: '',
       sortBy: 'date',
       sortOrder: 'desc',
-    }
+    },
+    quotes: {
+      statusFilter: 'all',
+      searchTerm: '',
+    },
   });
 
   // Daten werden serverseitig gefiltert, hier nur Alias für Anzeige
@@ -252,6 +266,22 @@ function DashboardContent() {
     }
   }
 
+  async function loadQuotes(page = quotesPage, pageSize = quotesPageSize) {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    if (quotesStatusFilter && quotesStatusFilter !== 'all') params.set('status', quotesStatusFilter);
+    if (quotesSearchTerm) params.set('search', quotesSearchTerm);
+    const res = await fetch(`/api/quotes?${params.toString()}`, { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      setQuotes(data.items);
+      setQuotesTotal(data.total);
+      setQuotesPage(data.page);
+      setQuotesPageSize(data.pageSize);
+    }
+  }
+
   // Initial load: paginated lists + full datasets for calculations
   useEffect(() => {
     async function fetchAll() {
@@ -260,6 +290,7 @@ function DashboardContent() {
           loadExpenses(1, expensesPageSize),
           loadIncomes(1, incomesPageSize),
           loadInvoices(1, invoicesPageSize),
+          loadQuotes(1, quotesPageSize),
         ]);
 
         // Load full datasets for EÜR/Charts (simple approach: large pageSize)
@@ -320,6 +351,11 @@ function DashboardContent() {
     filters.invoices.dateRange,
     filters.invoices.searchTerm,
   ]);
+
+  useEffect(() => {
+    loadQuotes(1, quotesPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotesStatusFilter, quotesSearchTerm]);
 
   // Handlers
   const handleExportReceipts = async () => {
@@ -719,6 +755,34 @@ function DashboardContent() {
     await loadInvoices(invoicesPage, invoicesPageSize);
     // Also reload incomes as cancellation may affect them
     await loadIncomes(incomesPage, incomesPageSize);
+  };
+
+  // --- Quote Handlers ---
+  const handleQuoteStatusChange = async (quoteId: number, newStatus: string) => {
+    try {
+      const res = await fetch('/api/quotes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: quoteId, status: newStatus }),
+      });
+      if (res.ok) await loadQuotes(quotesPage, quotesPageSize);
+    } catch (err) {
+      console.error('Error updating quote status:', err);
+    }
+  };
+
+  const handleConvertToInvoice = (quote: Quote) => {
+    setFromQuote(quote);
+    setCreateInvoiceModalOpen(true);
+  };
+
+  const handleQuoteDelete = async (quoteId: number) => {
+    try {
+      const res = await fetch(`/api/quotes?id=${quoteId}`, { method: 'DELETE' });
+      if (res.ok) await loadQuotes(quotesPage, quotesPageSize);
+    } catch (err) {
+      console.error('Error deleting quote:', err);
+    }
   };
 
   // Berechnungen für EÜR
@@ -1179,6 +1243,17 @@ function DashboardContent() {
                   <span className="font-medium whitespace-nowrap">GWG</span>
                 </div>
               </TabsTrigger>
+              <TabsTrigger
+                value="quotes"
+                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414A1 1 0 0121 8.414V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                  </svg>
+                  <span className="font-medium whitespace-nowrap">Angebote</span>
+                </div>
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -1294,6 +1369,28 @@ function DashboardContent() {
               onExport={handleExportGWG}
             />
           </TabsContent>
+
+          {/* Angebote Tab */}
+          <TabsContent value="quotes" className="space-y-6">
+            <QuotesTab
+              quotes={quotes}
+              total={quotesTotal}
+              page={quotesPage}
+              pageSize={quotesPageSize}
+              totalPages={Math.max(1, Math.ceil(quotesTotal / Math.max(1, quotesPageSize)))}
+              statusFilter={quotesStatusFilter}
+              searchTerm={quotesSearchTerm}
+              onPageChange={setQuotesPage}
+              onPageSizeChange={setQuotesPageSize}
+              onStatusFilterChange={(s) => { setQuotesStatusFilter(s); }}
+              onSearchChange={(t) => { setQuotesSearchTerm(t); }}
+              onOpenCreateModal={() => setCreateQuoteModalOpen(true)}
+              onStatusChange={handleQuoteStatusChange}
+              onConvertToInvoice={handleConvertToInvoice}
+              onDelete={handleQuoteDelete}
+              loadQuotes={loadQuotes}
+            />
+          </TabsContent>
         </Tabs>
 
         {/* Rechnungsdetails-Modal */}
@@ -1346,16 +1443,30 @@ function DashboardContent() {
         {/* Rechnung erstellen Modal */}
         <CreateInvoiceModal
           isOpen={createInvoiceModalOpen}
-          onClose={() => setCreateInvoiceModalOpen(false)}
+          onClose={() => { setCreateInvoiceModalOpen(false); setFromQuote(null); }}
+          fromQuote={fromQuote ? {
+            id: fromQuote.id,
+            parsedData: fromQuote.parsedData ?? {},
+            customerId: fromQuote.customer?.id,
+            invoiceNumber: fromQuote.invoiceNumber,
+          } : undefined}
           onInvoiceCreated={async () => {
             await loadInvoices(1, invoicesPageSize);
             await loadIncomes(incomesPage, incomesPageSize);
+            if (fromQuote) await loadQuotes(quotesPage, quotesPageSize);
             const allIncRes = await fetch('/api/incomes?page=1&pageSize=10000', { cache: 'no-store' });
             if (allIncRes.ok) {
               const d = await allIncRes.json();
               setIncomesAll(d.items);
             }
           }}
+        />
+
+        {/* Angebot erstellen Modal */}
+        <CreateQuoteModal
+          isOpen={createQuoteModalOpen}
+          onClose={() => setCreateQuoteModalOpen(false)}
+          onQuoteCreated={() => loadQuotes(1, quotesPageSize)}
         />
 
         {/* Wiederkehrende Ausgaben Modal */}
