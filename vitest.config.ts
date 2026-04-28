@@ -5,6 +5,7 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['**/__tests__/**/*.test.ts'],
+        exclude: ['node_modules/**', '.next/**'],
         globals: true,
     },
     resolve: {

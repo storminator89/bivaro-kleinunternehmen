@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import JSZip from 'jszip';
 import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
+import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -501,6 +502,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    await auditBackup(userId, 'RESTORE', {
+      overwriteMode: confirmOverwrite,
+      backupType: 'full',
+      results,
+    });
+    await auditSecurityEvent(userId, {
+      event: 'FULL_BACKUP_RESTORE',
+      outcome: 'success',
+      severity: confirmOverwrite ? 'critical' : 'warning',
+      metadata: {
+        backupType: 'full',
+        overwriteMode: confirmOverwrite,
+        importedCustomers: results.customers.imported,
+        importedExpenses: results.expenses.imported,
+        importedIncomes: results.incomes.imported,
+        importedInvoices: results.invoices.imported,
+        importedFiles: results.files.imported,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       message: confirmOverwrite
@@ -519,4 +540,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

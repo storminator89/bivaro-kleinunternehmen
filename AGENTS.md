@@ -1,20 +1,51 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `app/` hosts Next.js routes and API handlers for dashboards and auth flows.
+- `app/` hosts Next.js App Router pages and API handlers.
+  - `app/api/` – all server-side API routes; each sub-folder maps to a URL path.
+  - `app/dashboard/page.tsx` – thin route wrapper; real UI lives in `components/dashboard/`.
 - `components/` stores reusable UI; primitives in `components/ui` mirror shadcn scaffolds.
+  - `components/dashboard/dashboard-content.tsx` – main dashboard UI (~1300 lines).
+  - `components/dashboard/dashboard-query-provider.tsx` – local TanStack QueryClient for the dashboard.
+  - `components/dashboard/tabs/` – individual dashboard tab components.
+- `hooks/use-dashboard-data.ts` – all dashboard data fetching via TanStack Query (query keys, pagination, invalidation helpers).
 - `lib/` holds shared utilities and the Prisma client.
+  - `lib/password.ts` – centralised bcrypt hashing (`PASSWORD_HASH_COST = 12`); all password operations must use this.
+  - `lib/audit-log.ts` – `createAuditLog` helper and `auditSecurityEvent` for structured security events.
+  - `lib/backup-preview.ts` – validates backup shape and returns preview counts/warnings before a restore.
 - `prisma/` keeps `schema.prisma`, migrations, and the dev SQLite database (`dev.db`); never commit production data.
+  - `prisma/e2e.db` is the isolated E2E test database – created fresh by `npm run e2e:prepare`.
+- `e2e/` – Playwright end-to-end tests (`auth-dashboard-invoice.spec.ts`).
 - `public/` serves static assets including `public/screenshot/dashboard.png`.
 - `middleware.ts` guards protected routes; update it when adding secure areas.
 
 ## Build, Test, and Development Commands
 - `npm run dev` starts the hot-reloading server at http://localhost:3000.
 - `npm run build` compiles the production bundle and performs type checks.
-- `npm run start` launches the compiled app.
-- `npm run lint` runs the Next.js ESLint configuration; fix warnings before pushing.
-- `npx prisma migrate dev` applies schema updates and regenerates the Prisma client.
-- `npx prisma studio` opens a browser UI for the local SQLite database.
+- `npm run start` launches the compiled standalone server (requires prior `npm run build`).
+- `npm run lint` runs ESLint with `--max-warnings 0`; zero warnings allowed.
+- `npm run test` runs all Vitest unit tests once.
+- `npm run test:watch` runs Vitest in watch mode.
+- `npm run e2e:prepare` drops and recreates `prisma/e2e.db` with all migrations applied.
+- `npm run test:e2e` runs the full Playwright suite (builds the app and starts an isolated server on port 3100).
+- `npm run db:migrate` applies pending Prisma migrations to the production database.
+- `npm run db:studio` opens Prisma Studio (browser GUI for the local database).
+- `npx prisma migrate dev` creates a new migration from schema changes during development.
+
+## Security Rules
+- All password hashing **must** go through `lib/password.ts` (`hashPassword` / `PASSWORD_HASH_COST`).
+- Every API route that touches user data must call `getServerSession` and check the session role.
+- The `GET /api/users` endpoint requires the `ADMIN` role; do not weaken this.
+- Use `auditSecurityEvent` from `lib/audit-log.ts` for any security-relevant action (auth, backup, restore).
+- Never store secrets in source code; use `.env` (listed in `.gitignore`).
+
+## Testing Guidelines
+- Unit tests live in `lib/__tests__/` named `<module>.test.ts`. Currently 166 tests across 7 files.
+- Playwright E2E tests live in `e2e/`. Currently tests: first-admin registration, login, dashboard render, invoice dialog.
+- Vitest is configured in `vitest.config.ts` with `exclude: ['node_modules/**', '.next/**']` – keep this to prevent build artifacts from being collected.
+- Playwright config uses an absolute path for `DATABASE_URL` (`process.cwd()/prisma/e2e.db`) so the standalone server resolves it correctly from `.next/standalone/`.
+- `reuseExistingServer: false` is intentional – E2E tests always spin up a fresh isolated server on port 3100.
+- Run `npx playwright install chromium` once to install the browser binary.
 
 ## Coding Style & Naming Conventions
 - Write TypeScript React components with functional patterns and two-space indentation.
@@ -22,12 +53,6 @@
 - Prefer the `@/*` path alias in `tsconfig.json` over deep relative imports.
 - Compose layouts with Tailwind utility classes; reuse tokens through shadcn components.
 - Run `npm run lint` to catch style or type issues before opening a PR.
-
-## Testing Guidelines
-- The repository currently has no automated tests; add coverage alongside new features.
-- Store unit tests next to their modules (`<name>.test.tsx`) and place broader workflow checks in a `tests/` folder.
-- Prefer React Testing Library with Jest for UI and hooks, and Playwright for end-to-end auth and dashboard flows.
-- Document manual verification steps in the PR when automation is not feasible.
 
 ## Commit & Pull Request Guidelines
 - Mirror the existing history with concise, sentence-case subjects (e.g. `Enhance sidebar collapse controls`).
@@ -39,3 +64,9 @@
 - Copy `.env.example` when configuring the project; keep secrets out of version control.
 - The default SQLite database lives at `prisma/dev.db`; update `DATABASE_URL` when switching providers.
 - After altering authentication, uploads, or routing, verify related changes in `middleware.ts`, `next.config.ts`, and affected `app/api` handlers.
+- When running the standalone server (`npm run start` or E2E), copy static assets into the standalone directory:
+  ```bash
+  cp -R public .next/standalone/public
+  cp -R .next/static .next/standalone/.next/static
+  ```
+  This is automated in `npm run test:e2e`.

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { auditBackup } from '@/lib/audit-log';
+import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -55,6 +55,18 @@ export async function GET() {
       cashBooksCount: cashBooks.length,
       cashTransactionsCount: cashTransactions.length,
       documentationsCount: documentations.length,
+    });
+    await auditSecurityEvent(userId, {
+      event: 'BACKUP_EXPORT',
+      outcome: 'success',
+      severity: 'info',
+      metadata: {
+        backupType: 'json',
+        expensesCount: expenses.length,
+        incomesCount: incomes.length,
+        invoicesCount: invoices.length,
+        customersCount: customers.length,
+      },
     });
 
     const backup = {

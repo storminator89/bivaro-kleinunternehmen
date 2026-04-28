@@ -17,6 +17,35 @@ import {
 } from "@/components/ui/alert";
 import Link from "next/link";
 
+type RestorePreview = {
+  kind: 'json' | 'full';
+  fileName: string;
+  fileSize: number;
+  backup?: unknown;
+  file?: File;
+  preview: {
+    version: string;
+    type: string;
+    exportedAt?: string;
+    fileCount?: number;
+    totalRecords: number;
+    warnings: string[];
+    counts: {
+      customers: number;
+      expenses: number;
+      incomes: number;
+      invoices: number;
+      templates: number;
+      recurringExpenses: number;
+      reminders: number;
+      cashBooks: number;
+      cashTransactions: number;
+      documentations: number;
+      apiKeys: number;
+    };
+  };
+};
+
 export default function SettingsPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
@@ -32,6 +61,7 @@ export default function SettingsPage() {
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [overwriteMode, setOverwriteMode] = useState(false);
+  const [restorePreview, setRestorePreview] = useState<RestorePreview | null>(null);
   const fullFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     companyName: "",
@@ -230,60 +260,30 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Bestätigung bei Überschreib-Modus
-    if (overwriteMode) {
-      const confirmed = window.confirm(
-        '⚠️ WARNUNG: Alle bestehenden Daten werden GELÖSCHT und durch das Backup ersetzt!\n\n' +
-        'Dies betrifft:\n' +
-        '• Alle Ausgaben\n' +
-        '• Alle Einnahmen\n' +
-        '• Alle Rechnungen\n' +
-        '• Alle Kunden\n' +
-        '• Alle Kassenbuch-Einträge\n' +
-        '• Alle wiederkehrenden Ausgaben\n' +
-        '• Alle Mahnungen\n' +
-        '• Alle Einstellungen\n\n' +
-        'Sind Sie SICHER, dass Sie fortfahren möchten?'
-      );
-      if (!confirmed) {
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-        return;
-      }
-    }
-
     setRestoreLoading(true);
     setBackupMessage(null);
+    setRestorePreview(null);
 
     try {
       const text = await file.text();
       const backup = JSON.parse(text);
-
-      // Add confirmOverwrite flag if overwrite mode is enabled
-      if (overwriteMode) {
-        backup.confirmOverwrite = true;
-      }
-
-      const res = await fetch("/api/backup/restore", {
+      const res = await fetch("/api/backup/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(backup),
       });
 
       const data = await res.json();
-
       if (res.ok) {
-        const { results } = data;
-        const modeText = results.overwriteMode ? ' (Daten wurden überschrieben)' : '';
-        setBackupMessage({
-          type: 'success',
-          text: `Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen.`
+        setRestorePreview({
+          kind: 'json',
+          fileName: file.name,
+          fileSize: file.size,
+          backup,
+          preview: data.preview,
         });
-        // Reset overwrite mode after successful restore
-        setOverwriteMode(false);
       } else {
-        setBackupMessage({ type: 'error', text: data.error || 'Wiederherstellung fehlgeschlagen.' });
+        setBackupMessage({ type: 'error', text: data.error || 'Backup-Vorschau fehlgeschlagen.' });
       }
     } catch (error) {
       console.error("Restore error:", error);
@@ -300,43 +300,15 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Bestätigung bei Überschreib-Modus
-    if (overwriteMode) {
-      const confirmed = window.confirm(
-        '⚠️ WARNUNG: Alle bestehenden Daten werden GELÖSCHT und durch das Backup ersetzt!\n\n' +
-        'Dies betrifft:\n' +
-        '• Alle Ausgaben\n' +
-        '• Alle Einnahmen\n' +
-        '• Alle Rechnungen\n' +
-        '• Alle Kunden\n' +
-        '• Alle Kassenbuch-Einträge\n' +
-        '• Alle wiederkehrenden Ausgaben\n' +
-        '• Alle Mahnungen\n' +
-        '• Alle Einstellungen\n' +
-        '• Alle hochgeladenen Dateien\n\n' +
-        'Sind Sie SICHER, dass Sie fortfahren möchten?'
-      );
-      if (!confirmed) {
-        if (fullFileInputRef.current) {
-          fullFileInputRef.current.value = '';
-        }
-        return;
-      }
-    }
-
     setRestoreLoading(true);
     setBackupMessage(null);
+    setRestorePreview(null);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      // Add overwrite mode as query parameter
-      const url = overwriteMode
-        ? "/api/backup/full/restore?confirmOverwrite=true"
-        : "/api/backup/full/restore";
-
-      const res = await fetch(url, {
+      const res = await fetch("/api/backup/full/preview", {
         method: "POST",
         body: formData,
       });
@@ -344,16 +316,15 @@ export default function SettingsPage() {
       const data = await res.json();
 
       if (res.ok) {
-        const { results } = data;
-        const modeText = results.overwriteMode ? ' (Daten wurden überschrieben)' : '';
-        setBackupMessage({
-          type: 'success',
-          text: `Vollständige Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen, ${results.files.imported} Dateien.`
+        setRestorePreview({
+          kind: 'full',
+          fileName: file.name,
+          fileSize: file.size,
+          file,
+          preview: data.preview,
         });
-        // Reset overwrite mode after successful restore
-        setOverwriteMode(false);
       } else {
-        setBackupMessage({ type: 'error', text: data.error || 'Wiederherstellung fehlgeschlagen.' });
+        setBackupMessage({ type: 'error', text: data.error || 'Backup-Vorschau fehlgeschlagen.' });
       }
     } catch (error) {
       console.error("Full restore error:", error);
@@ -363,6 +334,76 @@ export default function SettingsPage() {
       if (fullFileInputRef.current) {
         fullFileInputRef.current.value = '';
       }
+    }
+  };
+
+  const confirmDestructiveRestore = () => {
+    if (!overwriteMode) return true;
+
+    return window.confirm(
+      '⚠️ WARNUNG: Alle bestehenden Daten werden GELÖSCHT und durch das Backup ersetzt!\n\n' +
+      'Prüfen Sie die Backup-Vorschau sorgfältig, bevor Sie fortfahren.\n\n' +
+      'Sind Sie SICHER, dass Sie fortfahren möchten?'
+    );
+  };
+
+  const executeRestore = async () => {
+    if (!restorePreview) return;
+    if (!confirmDestructiveRestore()) return;
+
+    setRestoreLoading(true);
+    setBackupMessage(null);
+
+    try {
+      if (restorePreview.kind === 'json') {
+        const backup = restorePreview.backup as Record<string, unknown>;
+        const payload = overwriteMode ? { ...backup, confirmOverwrite: true } : backup;
+        const res = await fetch("/api/backup/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setBackupMessage({ type: 'error', text: data.error || 'Wiederherstellung fehlgeschlagen.' });
+          return;
+        }
+        const { results } = data;
+        const modeText = results.overwriteMode ? ' (Daten wurden überschrieben)' : '';
+        setBackupMessage({
+          type: 'success',
+          text: `Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen.`
+        });
+      } else if (restorePreview.file) {
+        const formData = new FormData();
+        formData.append('file', restorePreview.file);
+        const url = overwriteMode
+          ? "/api/backup/full/restore?confirmOverwrite=true"
+          : "/api/backup/full/restore";
+        const res = await fetch(url, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setBackupMessage({ type: 'error', text: data.error || 'Wiederherstellung fehlgeschlagen.' });
+          return;
+        }
+        const { results } = data;
+        const modeText = results.overwriteMode ? ' (Daten wurden überschrieben)' : '';
+        setBackupMessage({
+          type: 'success',
+          text: `Vollständige Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen, ${results.files.imported} Dateien.`
+        });
+      }
+
+      setOverwriteMode(false);
+      setRestorePreview(null);
+    } catch (error) {
+      console.error("Restore execution error:", error);
+      setBackupMessage({ type: 'error', text: 'Wiederherstellung fehlgeschlagen.' });
+    } finally {
+      setRestoreLoading(false);
     }
   };
 
@@ -772,6 +813,72 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground mt-1 text-center">.zip Datei (inkl. Dateien)</p>
               </div>
             </div>
+
+            {restorePreview && (
+              <Alert className="mt-4">
+                <Database className="h-4 w-4" />
+                <AlertTitle>Backup-Vorschau bereit</AlertTitle>
+                <AlertDescription>
+                  <div className="mt-2 space-y-3">
+                    <div className="text-sm">
+                      <div><strong>Datei:</strong> {restorePreview.fileName} ({Math.max(1, Math.round(restorePreview.fileSize / 1024))} KB)</div>
+                      <div><strong>Version:</strong> {restorePreview.preview.version}</div>
+                      {restorePreview.preview.exportedAt && (
+                        <div><strong>Exportiert am:</strong> {new Date(restorePreview.preview.exportedAt).toLocaleString('de-DE')}</div>
+                      )}
+                      <div><strong>Datensätze:</strong> {restorePreview.preview.totalRecords}</div>
+                      {restorePreview.preview.fileCount !== undefined && (
+                        <div><strong>Dateien im ZIP:</strong> {restorePreview.preview.fileCount}</div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <span>Kunden: {restorePreview.preview.counts.customers}</span>
+                      <span>Ausgaben: {restorePreview.preview.counts.expenses}</span>
+                      <span>Einnahmen: {restorePreview.preview.counts.incomes}</span>
+                      <span>Rechnungen: {restorePreview.preview.counts.invoices}</span>
+                      <span>Vorlagen: {restorePreview.preview.counts.templates}</span>
+                      <span>Kassen: {restorePreview.preview.counts.cashBooks}</span>
+                      <span>Kassenbuchungen: {restorePreview.preview.counts.cashTransactions}</span>
+                      <span>Dokumentationen: {restorePreview.preview.counts.documentations}</span>
+                    </div>
+
+                    {restorePreview.preview.warnings.length > 0 && (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+                        {restorePreview.preview.warnings.map((warning) => (
+                          <div key={warning}>• {warning}</div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        onClick={executeRestore}
+                        disabled={restoreLoading}
+                        variant={overwriteMode ? "destructive" : "default"}
+                      >
+                        {restoreLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Import läuft...
+                          </>
+                        ) : (
+                          overwriteMode ? 'Geprüftes Backup überschreiben' : 'Geprüftes Backup importieren'
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setRestorePreview(null)}
+                        disabled={restoreLoading}
+                      >
+                        Auswahl verwerfen
+                      </Button>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
           <div className="border-t pt-4">

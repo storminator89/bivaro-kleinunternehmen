@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import bcrypt from "bcrypt";
 import { authOptions } from "@/lib/auth";
+import { hashPassword } from "@/lib/password";
 
 export async function PATCH(
   req: Request,
@@ -52,7 +52,7 @@ export async function PATCH(
       if (password.length < 6) {
         return new NextResponse("Password must be at least 6 characters", { status: 400 });
       }
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const hashedPassword = await hashPassword(password);
       updateData.password = hashedPassword;
     }
 

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import bcrypt from "bcrypt";
 import { authOptions } from "@/lib/auth";
+import { hashPassword } from "@/lib/password";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
   
-  if (!session) {
+  if (!session || session.user.role !== "ADMIN") {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       return new NextResponse("Email already exists", { status: 409 });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: {

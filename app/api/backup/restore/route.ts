@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -426,6 +427,25 @@ export async function POST(request: NextRequest) {
         }
       }
     }
+
+    await auditBackup(userId, 'RESTORE', {
+      overwriteMode: confirmOverwrite,
+      backupType: 'json',
+      results,
+    });
+    await auditSecurityEvent(userId, {
+      event: 'BACKUP_RESTORE',
+      outcome: 'success',
+      severity: confirmOverwrite ? 'critical' : 'warning',
+      metadata: {
+        backupType: 'json',
+        overwriteMode: confirmOverwrite,
+        importedCustomers: results.customers.imported,
+        importedExpenses: results.expenses.imported,
+        importedIncomes: results.incomes.imported,
+        importedInvoices: results.invoices.imported,
+      },
+    });
 
     return NextResponse.json({
       success: true,

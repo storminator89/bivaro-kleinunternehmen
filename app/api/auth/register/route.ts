@@ -1,7 +1,8 @@
 import { NextResponse, NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcrypt";
 import { validatePassword, isValidEmail, sanitizeString } from "@/lib/security";
+import { hashPassword } from "@/lib/password";
+import { auditSecurityEvent } from "@/lib/audit-log";
 
 const prisma = new PrismaClient();
 
@@ -101,8 +102,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Hash password with higher cost factor
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await hashPassword(password);
 
     // Create user - erster User wird automatisch ADMIN
     const user = await prisma.user.create({
@@ -111,6 +111,15 @@ export async function POST(request: NextRequest) {
         email: email.toLowerCase().trim(),
         password: hashedPassword,
         role: isFirstUser ? "ADMIN" : "USER",
+      },
+    });
+    await auditSecurityEvent(user.id, {
+      event: 'AUTH_REGISTRATION',
+      outcome: 'success',
+      severity: isFirstUser ? 'warning' : 'info',
+      metadata: {
+        firstUser: isFirstUser,
+        role: user.role,
       },
     });
 

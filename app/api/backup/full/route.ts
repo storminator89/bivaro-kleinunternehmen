@@ -4,6 +4,7 @@ import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/ge
 import fs from 'fs';
 import JSZip from 'jszip';
 import { findUploadedFile } from '@/lib/upload-path';
+import { auditSecurityEvent } from '@/lib/audit-log';
 
 const prisma = new PrismaClient();
 
@@ -45,6 +46,19 @@ export async function GET() {
       prisma.documentation.findMany({ where: { userId } }),
       prisma.apiKey.findMany({ where: { userId }, select: { id: true, name: true, keyPrefix: true, scopes: true, isActive: true, expiresAt: true, createdAt: true } }),
     ]);
+
+    await auditSecurityEvent(userId, {
+      event: 'FULL_BACKUP_EXPORT',
+      outcome: 'success',
+      severity: 'info',
+      metadata: {
+        backupType: 'full',
+        expensesCount: expenses.length,
+        incomesCount: incomes.length,
+        invoicesCount: invoices.length,
+        customersCount: customers.length,
+      },
+    });
 
     // Create backup metadata
     const backup = {

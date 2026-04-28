@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server';
 
-const API_DOCUMENTATION = {
+export const API_DOCUMENTATION = {
   openapi: "3.0.3",
   info: {
     title: "Bivaro Buchhaltung API",

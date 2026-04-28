@@ -31,7 +31,8 @@ export type AuditAction =
   | 'VIEW'
   | 'DOWNLOAD'
   | 'CANCELLED'
-  | 'CONVERTED';
+  | 'CONVERTED'
+  | 'SECURITY_EVENT';
 
 // Entity types that can be audited
 export type AuditEntityType =
@@ -51,7 +52,8 @@ export type AuditEntityType =
   | 'CashBook'
   | 'CashTransaction'
   | 'EURExport'
-  | 'Quote';
+  | 'Quote'
+  | 'SecurityEvent';
 
 export interface AuditLogEntry {
   userId: string;
@@ -315,6 +317,41 @@ export async function auditBackup(
     action,
     entityType: 'Backup',
     metadata,
+  });
+}
+
+export type SecurityEventName =
+  | 'BACKUP_EXPORT'
+  | 'BACKUP_RESTORE_PREVIEW'
+  | 'BACKUP_RESTORE'
+  | 'FULL_BACKUP_EXPORT'
+  | 'FULL_BACKUP_RESTORE'
+  | 'AUTH_REGISTRATION'
+  | 'ADMIN_USER_CHANGE';
+
+export type SecurityEventOutcome = 'success' | 'failure' | 'blocked';
+export type SecurityEventSeverity = 'info' | 'warning' | 'critical';
+
+export async function auditSecurityEvent(
+  userId: string,
+  event: {
+    event: SecurityEventName;
+    outcome: SecurityEventOutcome;
+    severity: SecurityEventSeverity;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<void> {
+  await createAuditLog({
+    userId,
+    action: 'SECURITY_EVENT',
+    entityType: 'SecurityEvent',
+    entityName: event.event,
+    metadata: {
+      event: event.event,
+      outcome: event.outcome,
+      severity: event.severity,
+      ...event.metadata,
+    },
   });
 }
 
