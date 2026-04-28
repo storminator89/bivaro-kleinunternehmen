@@ -4,7 +4,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileX } from "lucide-react";
+import { FileX, Mail } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -21,6 +21,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import { EmailPreviewDialog } from "@/components/dashboard/email-preview-dialog";
 import { Invoice, FilterState } from "@/types/dashboard";
 import { formatCurrency } from "@/lib/dashboard-utils";
 
@@ -80,6 +81,8 @@ export function InvoicesTab({
   onDelete,
   isDeleting,
 }: InvoicesTabProps) {
+  const [emailInvoice, setEmailInvoice] = React.useState<Invoice | null>(null);
+
   return (
     <div className="space-y-6">
       {/* Upload Form */}
@@ -347,6 +350,22 @@ export function InvoicesTab({
                                 <Button
                                   variant="outline"
                                   size="icon"
+                                  className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900/50 dark:hover:bg-blue-900/20"
+                                  onClick={() => setEmailInvoice(invoice)}
+                                  disabled={invoice.status === 'CANCELLED'}
+                                >
+                                  <Mail className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Rechnung per E-Mail senden</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
                                   onClick={() => {
                                     window.open(`/api/invoices/download?id=${invoice.id}&download=true`, 'Rechnung Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
                                   }}
@@ -479,6 +498,14 @@ export function InvoicesTab({
           </div>
         </div>
       </div>
+
+      <EmailPreviewDialog
+        open={!!emailInvoice}
+        onOpenChange={(open) => !open && setEmailInvoice(null)}
+        documentType="invoice"
+        documentId={emailInvoice?.id ?? null}
+        onSent={() => loadInvoices(page, pageSize)}
+      />
     </div>
   );
 }

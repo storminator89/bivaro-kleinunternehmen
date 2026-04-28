@@ -220,8 +220,16 @@ Alle Einstellungen erfolgen über die `.env`-Datei (Kopie von `.env.example`):
 | `NEXTAUTH_URL` | Öffentliche URL der App | `http://localhost:3000` |
 | `PORT` | TCP-Port (optional, Standard: 3000) | `3000` |
 | `ALLOWED_ORIGINS` | CORS-Whitelist für externe API-Nutzung | `https://meine-domain.de` |
+| `SMTP_HOST` | SMTP-Server für optionalen E-Mail-Versand | `smtp.example.de` |
+| `SMTP_PORT` | SMTP-Port, meist 587 (STARTTLS) oder 465 (TLS) | `587` |
+| `SMTP_SECURE` | `true` für Port 465, sonst `false` für STARTTLS | `false` |
+| `SMTP_USER` | SMTP-Benutzername (optional nur bei SMTP-Relays ohne Auth) | `rechnung@example.de` |
+| `SMTP_PASSWORD` | SMTP-Passwort/App-Passwort | `...` |
+| `EMAIL_FROM` | Absenderadresse für Rechnungen, Angebote und Mahnungen | `Bivaro <rechnung@example.de>` |
 
 **Wichtig:** Die `.env`-Datei darf **niemals** in Git eingecheckt werden (steht bereits in `.gitignore`).
+
+Der E-Mail-Versand nutzt SMTP als Standardschnittstelle. Vor dem Versand öffnet die App eine Vorschau mit editierbarem Empfänger, Betreff, Text und PDF-Anhang-Viewer; ohne vollständige SMTP-Konfiguration ist nur die Vorschau verfügbar.
 
 ---
 
@@ -342,6 +350,45 @@ Die App ist dann unter `http://localhost:3000` erreichbar (Port über `PORT`-Var
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
+
+### 📧 E-Mail-Versand im Docker-Betrieb
+
+Der E-Mail-Versand ist vollständig optional. Ohne SMTP-Konfiguration bleibt die Vorschau verfügbar, der Versand-Button wird aber in der UI deaktiviert.
+
+Tragen Sie die SMTP-Variablen in Ihre `.env`-Datei ein – Docker Compose liest sie beim Start automatisch aus:
+
+```env
+# .env (neben docker-compose.yml)
+SMTP_HOST=smtp.example.de
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=rechnung@example.de
+SMTP_PASSWORD=IhrPasswort
+EMAIL_FROM=Bivaro <rechnung@example.de>
+```
+
+| Variable | Pflicht | Beschreibung |
+|---|---|---|
+| `SMTP_HOST` | ✅ | Hostname des SMTP-Servers |
+| `SMTP_PORT` | – | Port, Standard `587` (STARTTLS) oder `465` (TLS) |
+| `SMTP_SECURE` | – | `true` für Port 465, `false` für STARTTLS (Standard: `false`) |
+| `SMTP_USER` | – | Benutzername (leer lassen bei anonymen Relay) |
+| `SMTP_PASSWORD` | – | Passwort oder App-Passwort |
+| `EMAIL_FROM` | – | Absenderadresse, z. B. `Bivaro <rechnung@firma.de>` |
+
+**Typische Anbieter:**
+
+| Anbieter | `SMTP_HOST` | `SMTP_PORT` | `SMTP_SECURE` |
+|---|---|---|---|
+| Gmail | `smtp.gmail.com` | `587` | `false` |
+| Outlook / Microsoft 365 | `smtp.office365.com` | `587` | `false` |
+| Strato | `smtp.strato.de` | `465` | `true` |
+| IONOS (1&1) | `smtp.ionos.de` | `587` | `false` |
+| Mailgun (EU) | `smtp.eu.mailgun.org` | `587` | `false` |
+
+> 💡 **Tipp für Gmail:** Aktivieren Sie unter *Google-Konto → Sicherheit* ein **App-Passwort** statt Ihr normales Passwort zu verwenden. 2FA muss dabei aktiv sein.
+
+> 🔒 **Sicherheit:** SMTP-Passwörter gehören **nicht** in die `docker-compose.yml`. Nutzen Sie immer die `.env`-Datei (steht in `.gitignore`) oder Docker Secrets für Produktivumgebungen.
 
 ---
 

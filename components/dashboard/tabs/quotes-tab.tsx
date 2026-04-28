@@ -16,7 +16,8 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Eye, Download, Trash2, ArrowRightCircle, Loader2, FileText } from "lucide-react";
+import { Eye, Download, Trash2, ArrowRightCircle, Loader2, FileText, Mail } from "lucide-react";
+import { EmailPreviewDialog } from "@/components/dashboard/email-preview-dialog";
 import { formatCurrency } from "@/lib/dashboard-utils";
 
 export type Quote = {
@@ -114,6 +115,7 @@ export function QuotesTab({
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [confirmConvert, setConfirmConvert] = useState<Quote | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<Quote | null>(null);
+    const [emailQuote, setEmailQuote] = useState<Quote | null>(null);
 
     const handleConvert = async () => {
         if (!confirmConvert) return;
@@ -257,20 +259,36 @@ export function QuotesTab({
                                             <TooltipProvider>
                                                 <div className="flex justify-end space-x-2">
                                                     {/* View */}
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button variant="outline" size="icon"
-                                                                onClick={() => window.open(`/api/quotes/download?id=${quote.id}`, '_blank')}>
-                                                                <Eye className="h-4 w-4" />
+                                                     <Tooltip>
+                                                         <TooltipTrigger asChild>
+                                                             <Button variant="outline" size="icon"
+                                                                 onClick={() => window.open(`/api/quotes/download?id=${quote.id}`, '_blank')}>
+                                                                 <Eye className="h-4 w-4" />
                                                             </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>Angebot anzeigen</p></TooltipContent>
-                                                    </Tooltip>
+                                                         </TooltipTrigger>
+                                                         <TooltipContent><p>Angebot anzeigen</p></TooltipContent>
+                                                     </Tooltip>
 
-                                                    {/* Download */}
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button variant="outline" size="icon"
+                                                     {/* Send by email */}
+                                                     <Tooltip>
+                                                         <TooltipTrigger asChild>
+                                                             <Button
+                                                                 variant="outline"
+                                                                 size="icon"
+                                                                 className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900/50 dark:hover:bg-blue-900/20"
+                                                                 onClick={() => setEmailQuote(quote)}
+                                                                 disabled={quote.status === 'REJECTED' || quote.status === 'EXPIRED'}
+                                                             >
+                                                                 <Mail className="h-4 w-4" />
+                                                             </Button>
+                                                         </TooltipTrigger>
+                                                         <TooltipContent><p>Angebot per E-Mail senden</p></TooltipContent>
+                                                     </Tooltip>
+
+                                                     {/* Download */}
+                                                     <Tooltip>
+                                                         <TooltipTrigger asChild>
+                                                             <Button variant="outline" size="icon"
                                                                 onClick={() => window.open(`/api/quotes/download?id=${quote.id}&download=true`, '_blank')}>
                                                                 <Download className="h-4 w-4" />
                                                             </Button>
@@ -405,6 +423,14 @@ export function QuotesTab({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <EmailPreviewDialog
+                open={!!emailQuote}
+                onOpenChange={(open) => !open && setEmailQuote(null)}
+                documentType="quote"
+                documentId={emailQuote?.id ?? null}
+                onSent={() => loadQuotes(page, pageSize)}
+            />
         </div>
     );
 }

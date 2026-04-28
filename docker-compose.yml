@@ -30,8 +30,20 @@ services:
       # API CORS Configuration
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       # Optional: Email configuration
+      # All six variables are optional. Without SMTP_HOST only the preview
+      # is available; the send button is disabled in the UI.
+      #
+      # Recommended ports:
+      #   587  – STARTTLS (SMTP_SECURE=false)
+      #   465  – Implicit TLS (SMTP_SECURE=true)
+      #
+      # Examples:
+      #   Gmail:    SMTP_HOST=smtp.gmail.com  SMTP_PORT=587  SMTP_SECURE=false
+      #   Outlook:  SMTP_HOST=smtp.office365.com  SMTP_PORT=587  SMTP_SECURE=false
+      #   Strato:   SMTP_HOST=smtp.strato.de  SMTP_PORT=465  SMTP_SECURE=true
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - EMAIL_FROM=${EMAIL_FROM:-}

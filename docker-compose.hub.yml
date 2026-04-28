@@ -8,11 +8,34 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/app/data/prod.db
+      # -----------------------------------------------------------------------
+      # Pflichtfelder – ohne diese startet die App nicht korrekt
+      # -----------------------------------------------------------------------
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      # -----------------------------------------------------------------------
+      # CORS – kommagetrennte Liste erlaubter Ursprünge für die externe API
+      # Beispiel: ALLOWED_ORIGINS=https://meine-domain.de,https://api.domain.de
+      # -----------------------------------------------------------------------
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      # -----------------------------------------------------------------------
+      # Optionaler E-Mail-Versand (SMTP)
+      # Alle sechs Variablen sind optional. Ohne SMTP_HOST ist nur die
+      # E-Mail-Vorschau verfügbar; der Versand wird in der UI deaktiviert.
+      #
+      # Empfohlene Ports:
+      #   587  – STARTTLS (SMTP_SECURE=false)
+      #   465  – Implizites TLS (SMTP_SECURE=true)
+      #   25   – Nur in vertrauenswürdigen Netzwerken / Relay-Szenarien
+      #
+      # Beispielkonfigurationen:
+      #   Gmail:    SMTP_HOST=smtp.gmail.com  SMTP_PORT=587  SMTP_SECURE=false
+      #   Outlook:  SMTP_HOST=smtp.office365.com  SMTP_PORT=587  SMTP_SECURE=false
+      #   Strato:   SMTP_HOST=smtp.strato.de  SMTP_PORT=465  SMTP_SECURE=true
+      # -----------------------------------------------------------------------
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
@@ -35,3 +58,4 @@ volumes:
 
 networks:
   bivaro-network:
+

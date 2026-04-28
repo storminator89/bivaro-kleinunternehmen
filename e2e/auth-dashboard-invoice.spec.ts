@@ -19,7 +19,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page).toHaveURL(/\/login/);
 
     await page.getByLabel('E-Mail').fill(testUser.email);
-    await page.getByLabel('Passwort').fill(testUser.password);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
     await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
 
     await expect(page).toHaveURL(/\/dashboard/);
@@ -29,7 +29,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
   test('opens the invoice creation flow from the dashboard', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('E-Mail').fill(testUser.email);
-    await page.getByLabel('Passwort').fill(testUser.password);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
     await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
 
     await expect(page).toHaveURL(/\/dashboard/);

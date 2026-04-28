@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/dashboard-utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { EmailPreviewDialog, type EmailPreviewReminderContext } from "@/components/dashboard/email-preview-dialog";
+import { Mail } from "lucide-react";
 
 type Invoice = {
   id: number;
@@ -93,6 +95,10 @@ export function RemindersModal({ isOpen, onClose, onInvoiceStatusChange }: Remin
   const [reminderDueDays, setReminderDueDays] = useState('14');
   const [isCreating, setIsCreating] = useState(false);
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<number | null>(null);
+  const [emailReminder, setEmailReminder] = useState<{
+    invoiceId: number;
+    reminder: EmailPreviewReminderContext;
+  } | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -164,6 +170,28 @@ export function RemindersModal({ isOpen, onClose, onInvoiceStatusChange }: Remin
     } catch (error) {
       console.error('Error marking invoice as paid:', error);
     }
+  };
+
+  const openReminderEmailPreview = () => {
+    if (!selectedInvoice) return;
+
+    setEmailReminder({
+      invoiceId: selectedInvoice.id,
+      reminder: {
+        reminderLevel: selectedInvoice.nextReminderLevel,
+        fee: parseFloat(reminderFee) || 0,
+        dueDays: parseInt(reminderDueDays) || 14,
+        notes: reminderNotes || null,
+      },
+    });
+    setShowCreateReminder(false);
+  };
+
+  const resetReminderForm = () => {
+    setSelectedInvoice(null);
+    setReminderFee('0');
+    setReminderNotes('');
+    setReminderDueDays('14');
   };
 
   const formatDate = (dateString: string | null) => {
@@ -491,6 +519,14 @@ export function RemindersModal({ isOpen, onClose, onInvoiceStatusChange }: Remin
                 Abbrechen
               </Button>
               <Button
+                variant="outline"
+                onClick={openReminderEmailPreview}
+                disabled={isCreating}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                E-Mail prüfen & senden
+              </Button>
+              <Button
                 onClick={handleCreateReminder}
                 disabled={isCreating}
               >
@@ -509,6 +545,19 @@ export function RemindersModal({ isOpen, onClose, onInvoiceStatusChange }: Remin
             </div>
           </DialogContent>
         </Dialog>
+
+        <EmailPreviewDialog
+          open={!!emailReminder}
+          onOpenChange={(open) => !open && setEmailReminder(null)}
+          documentType="reminder"
+          documentId={emailReminder?.invoiceId ?? null}
+          reminder={emailReminder?.reminder}
+          onSent={async () => {
+            await loadData();
+            resetReminderForm();
+            setEmailReminder(null);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

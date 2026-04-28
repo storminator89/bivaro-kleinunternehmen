@@ -28,6 +28,7 @@ export type AuditAction =
   | 'STATUS_CHANGED'
   | 'PAYMENT_RECEIVED'
   | 'REMINDER_SENT'
+  | 'EMAIL_SENT'
   | 'VIEW'
   | 'DOWNLOAD'
   | 'CANCELLED'
