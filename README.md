@@ -22,6 +22,7 @@ Bivaro ist eine moderne, webbasierte Buchhaltungsanwendung, die speziell für Kl
 10. [Sicherheit & Audit-Log](#-sicherheit--audit-log)
 11. [Backup & Restore](#-backup--restore)
 12. [Häufige Fragen](#-häufige-fragen)
+13. [Lizenz](#-lizenz)
 
 ---
 
@@ -35,6 +36,7 @@ Bivaro ist eine moderne, webbasierte Buchhaltungsanwendung, die speziell für Kl
 
 ### 📝 Rechnungen & Angebote
 - **PDF-Rechnungsgenerator**: Professionelle Rechnungen direkt im Browser, mit automatischem Hinweis auf § 19 UStG.
+- **E-Rechnungen**: ZUGFeRD-/Factur-X-PDFs mit PDF/A-3-Normalisierung sowie XRechnung-/UBL-XMLs importieren, strukturierte Daten übernehmen und XML exportieren.
 - **GiroCode (EPC069-12)**: Optionaler QR-Code auf der Rechnung – Kunden scannen und zahlen per Banking-App.
 - **Angebotsverwaltung**: Angebote erstellen und direkt in Rechnungen umwandeln.
 - **Mahnsystem**: Automatische Fälligkeitserinnerungen.
@@ -78,7 +80,7 @@ Bivaro ist eine moderne, webbasierte Buchhaltungsanwendung, die speziell für Kl
 | Datenabruf | [TanStack Query v5](https://tanstack.com/query) |
 | Datenbank | [SQLite](https://www.sqlite.org/) via [Prisma 6](https://www.prisma.io/) ORM |
 | Authentifizierung | [NextAuth.js v4](https://next-auth.js.org/) |
-| PDF-Generierung | [pdf-lib](https://pdf-lib.js.org/) |
+| PDF-Generierung | [pdf-lib](https://pdf-lib.js.org/) + [Ghostscript](https://www.ghostscript.com/) für PDF/A-3-Normalisierung |
 | QR-Code | [qrcode](https://github.com/soldair/node-qrcode) |
 | Unit-Tests | [Vitest](https://vitest.dev/) |
 | E2E-Tests | [Playwright](https://playwright.dev/) |
@@ -118,6 +120,7 @@ bivaro-kleinunternehmen/
 │
 ├── lib/                        # Gemeinsame Hilfsfunktionen
 │   ├── audit-log.ts            # Audit-Log & Security-Events
+│   ├── e-invoice-parser.ts     # ZUGFeRD-/Factur-X- und XRechnung-XML-Import
 │   ├── backup-preview.ts       # Backup-Vorschau und Validierung
 │   ├── password.ts             # Zentrales Passwort-Hashing (bcrypt)
 │   └── prisma.ts               # Prisma-Client-Singleton
@@ -148,6 +151,7 @@ bivaro-kleinunternehmen/
 - [Node.js](https://nodejs.org/) **Version 18 oder neuer** (empfohlen: aktuelles LTS)
 - [npm](https://www.npmjs.com/) (wird mit Node.js mitgeliefert)
 - [Git](https://git-scm.com/)
+- [Ghostscript](https://www.ghostscript.com/) für die PDF/A-3-Normalisierung von ZUGFeRD-/Factur-X-PDFs (im Docker-Image enthalten)
 
 Prüfen Sie Ihre Versionen im Terminal:
 ```bash
@@ -465,4 +469,6 @@ A: Bearbeiten Sie `prisma/schema.prisma` und führen Sie dann `npx prisma migrat
 
 ## 📝 Lizenz
 
-Dieses Projekt ist für die private oder gewerbliche Nutzung als Kleinunternehmer vorgesehen. Alle Daten werden lokal in Ihrer SQLite-Datenbank gespeichert – es erfolgt keine Übertragung an externe Cloud-Dienste, außer Sie hosten die App selbst in der Cloud.
+Dieses Projekt steht unter der **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. Den vollständigen Lizenztext finden Sie in [`LICENSE`](LICENSE).
+
+

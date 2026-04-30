@@ -1,20 +1,14 @@
 /**
  * API v1 - Invoice Upload Endpoint
- * 
- * POST /api/v1/invoices/upload - Upload a ZUGFeRD/Factur-X PDF invoice
+ *
+ * POST /api/v1/invoices/upload - Upload a ZUGFeRD/Factur-X PDF or standalone XML e-invoice
  */
 
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
-import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-import { PDFDocument, PDFName, PDFDict, PDFArray, PDFHexString, PDFString, PDFStream } from 'pdf-lib';
-import { parseStringPromise } from 'xml2js';
-import zlib from 'zlib';
+import { v4 as uuidv4 } from 'uuid';
+import { prisma } from '@/lib/prisma';
 import {
   withApiAuth,
   apiSuccess,
@@ -23,84 +17,86 @@ import {
   corsHeaders,
 } from '@/lib/api-auth';
 import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
+import {
+  extractEmbeddedEInvoiceXml,
+  parseEInvoiceXml,
+  type ParsedEInvoice,
+} from '@/lib/e-invoice-parser';
+
+type SupportedInvoiceFileKind = 'pdf' | 'xml';
+
+const XML_MIME_TYPES = new Set([
+  'application/xml',
+  'text/xml',
+  'application/x-xml',
+  'application/octet-stream',
+]);
 
 export async function OPTIONS() {
   return handleCors();
 }
 
-// Helper functions for ZUGFeRD extraction
-async function extractAttachments(pdfDoc: PDFDocument) {
-  const rawAttachments = (() => {
-    if (!pdfDoc.catalog.has(PDFName.of('Names'))) return [];
-    const Names = pdfDoc.catalog.lookup(PDFName.of('Names'), PDFDict);
+function getSupportedFileKind(file: File): SupportedInvoiceFileKind | null {
+  const lowerName = file.name.toLowerCase();
+  const mimeType = file.type.toLowerCase();
 
-    if (!Names.has(PDFName.of('EmbeddedFiles'))) return [];
-    const EmbeddedFiles = Names.lookup(PDFName.of('EmbeddedFiles'), PDFDict);
-
-    if (!EmbeddedFiles.has(PDFName.of('Names'))) return [];
-    const EFNames = EmbeddedFiles.lookup(PDFName.of('Names'), PDFArray);
-
-    const attachments = [];
-    for (let idx = 0, len = EFNames.size(); idx < len; idx += 2) {
-      const fileName = EFNames.lookup(idx) as PDFHexString | PDFString;
-      const fileSpec = EFNames.lookup(idx + 1, PDFDict);
-      attachments.push({ fileName, fileSpec });
-    }
-    return attachments;
-  })();
-
-  return rawAttachments.map(({ fileName, fileSpec }) => {
-    const stream = fileSpec.lookup(PDFName.of('EF'), PDFDict).lookup(PDFName.of('F'), PDFStream);
-    return {
-      name: fileName.decodeText(),
-      data: stream.getContents(),
-    };
-  });
-}
-
-function tryDecodeUtf8(data: Uint8Array): string | null {
-  try {
-    const txt = new TextDecoder().decode(data);
-    return txt.trim().length > 0 ? txt : null;
-  } catch {
-    return null;
-  }
-}
-
-function tryInflate(data: Uint8Array): string | null {
-  try {
-    const inflated = zlib.inflateSync(Buffer.from(data));
-    return new TextDecoder().decode(inflated);
-  } catch {
-    return null;
-  }
-}
-
-function tryGunzip(data: Uint8Array): string | null {
-  try {
-    const gunzipped = zlib.gunzipSync(Buffer.from(data));
-    return new TextDecoder().decode(gunzipped);
-  } catch {
-    return null;
-  }
-}
-
-async function extractZugferdXml(pdfBuffer: Buffer): Promise<string | null> {
-  const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
-  const attachments = await extractAttachments(pdfDoc);
-  const candidates = attachments.filter(att => {
-    const n = att.name.toLowerCase();
-    return n.includes('zugferd') || n.includes('factur') || n.includes('xrechnung') || n.endsWith('.xml');
-  });
-  for (const attachment of candidates) {
-    const asUtf8 = tryDecodeUtf8(attachment.data);
-    if (asUtf8 && asUtf8.trim().startsWith('<')) return asUtf8;
-    const inflated = tryInflate(attachment.data);
-    if (inflated && inflated.trim().startsWith('<')) return inflated;
-    const gunzipped = tryGunzip(attachment.data);
-    if (gunzipped && gunzipped.trim().startsWith('<')) return gunzipped;
-  }
+  if (mimeType === 'application/pdf' || lowerName.endsWith('.pdf')) return 'pdf';
+  if (XML_MIME_TYPES.has(mimeType) || lowerName.endsWith('.xml')) return 'xml';
   return null;
+}
+
+function sanitizeFileName(fileName: string): string {
+  const sanitized = path.basename(fileName || 'invoice').replace(/\s+/g, '_').replace(/[^A-Za-z0-9._-]/g, '_');
+  return sanitized || 'invoice';
+}
+
+function decodeStandaloneXml(buffer: Buffer): string | null {
+  const xmlContent = new TextDecoder().decode(buffer).replace(/^\uFEFF/, '').trim();
+  return xmlContent.startsWith('<') ? xmlContent : null;
+}
+
+async function getInvoiceXmlContent(fileKind: SupportedInvoiceFileKind, buffer: Buffer): Promise<string | null> {
+  if (fileKind === 'pdf') {
+    return extractEmbeddedEInvoiceXml(buffer);
+  }
+  return decodeStandaloneXml(buffer);
+}
+
+async function findOrCreateCustomer(parsedInvoice: ParsedEInvoice, userId: string) {
+  const customerName = parsedInvoice.customerName;
+  if (!customerName) return null;
+
+  const existingCustomer = await prisma.customer.findFirst({
+    where: { name: customerName, userId },
+  });
+
+  if (existingCustomer) return existingCustomer;
+
+  return prisma.customer.create({
+    data: {
+      name: customerName,
+      email: parsedInvoice.buyerInfo.email ?? undefined,
+      address: parsedInvoice.buyerInfo.address ?? undefined,
+      zipCode: parsedInvoice.buyerInfo.zipCode ?? undefined,
+      city: parsedInvoice.buyerInfo.city ?? undefined,
+      userId,
+    },
+  });
+}
+
+function toStoredParsedData(parsedInvoice: ParsedEInvoice) {
+  return {
+    invoiceNumber: parsedInvoice.invoiceNumber,
+    invoiceDate: parsedInvoice.invoiceDate ? parsedInvoice.invoiceDate.toISOString() : null,
+    dueDate: parsedInvoice.dueDate ? parsedInvoice.dueDate.toISOString() : null,
+    totalAmount: parsedInvoice.totalAmount,
+    customerName: parsedInvoice.customerName,
+    lineItems: parsedInvoice.lineItems,
+    buyerInfo: parsedInvoice.buyerInfo,
+    sellerInfo: parsedInvoice.sellerInfo,
+    rawXml: parsedInvoice.rawXml,
+    eInvoiceFormat: parsedInvoice.format,
+  };
 }
 
 // POST /api/v1/invoices/upload
@@ -125,138 +121,69 @@ export async function POST(request: NextRequest) {
       return apiError('No file uploaded. Use field name "file"', 400, 'MISSING_FILE');
     }
 
-    if (file.type !== 'application/pdf') {
-      return apiError('Only PDF files are supported', 400, 'INVALID_FILE_TYPE');
+    const fileKind = getSupportedFileKind(file);
+    if (!fileKind) {
+      return apiError('Only PDF or XML e-invoices are supported', 400, 'INVALID_FILE_TYPE');
     }
 
-    const tempDir = os.tmpdir();
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const filePath = join(tempDir, file.name);
-    await writeFile(filePath, buffer);
+    const xmlContent = await getInvoiceXmlContent(fileKind, buffer);
 
-    const uniqueFileName = `${uuidv4()}_${file.name.replace(/\s+/g, '_')}`;
-    ensureUploadDirExists();
-    const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
-
-    fs.copyFileSync(filePath, permanentFilePath);
-
-    // Extract ZUGFeRD XML
-    const zugferdXmlContent = await extractZugferdXml(buffer);
-
-    if (!zugferdXmlContent) {
-      // Clean up
-      try { fs.unlinkSync(filePath); } catch { }
-      try { fs.unlinkSync(permanentFilePath); } catch { }
-      return apiError('No ZUGFeRD/Factur-X XML found in PDF', 400, 'NO_ZUGFERD_XML');
+    if (!xmlContent) {
+      const message = fileKind === 'pdf'
+        ? 'No ZUGFeRD/Factur-X XML found in PDF'
+        : 'XML file could not be read as an e-invoice';
+      return apiError(message, 400, fileKind === 'pdf' ? 'NO_ZUGFERD_XML' : 'INVALID_XML');
     }
 
-    let parsedXml: unknown;
+    let parsedInvoice: ParsedEInvoice;
     try {
-      parsedXml = await parseStringPromise(zugferdXmlContent, { explicitArray: false });
-    } catch {
-      try { fs.unlinkSync(filePath); } catch { }
-      try { fs.unlinkSync(permanentFilePath); } catch { }
-      return apiError('Invalid or corrupted ZUGFeRD XML', 400, 'INVALID_XML');
+      parsedInvoice = await parseEInvoiceXml(xmlContent);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid e-invoice XML';
+      return apiError(message, 400, 'INVALID_XML');
     }
 
-    // Helper functions
-    const get = (obj: unknown, path: string): unknown => path.split('.').reduce((acc, k) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[k] : undefined), obj);
-    const asDate = (yyyymmdd?: string | null) => {
-      if (!yyyymmdd) return null;
-      const s = String(yyyymmdd);
-      const match = s.match(/^(\d{4})(\d{2})(\d{2})/);
-      if (!match) return null;
-      return new Date(`${match[1]}-${match[2]}-${match[3]}`);
-    };
-    const asNumber = (val: unknown) => {
-      const n = parseFloat(String(val));
-      return isNaN(n) ? null : n;
-    };
-
-    const root = (parsedXml as Record<string, unknown>)['rsm:CrossIndustryInvoice'] as Record<string, unknown> || (parsedXml as Record<string, unknown>)['CrossIndustryInvoice'] as Record<string, unknown> || (parsedXml as Record<string, unknown>)['Invoice'] as Record<string, unknown>;
-    if (!root) {
-      try { fs.unlinkSync(filePath); } catch { }
-      try { fs.unlinkSync(permanentFilePath); } catch { }
-      return apiError('Unknown ZUGFeRD/Factur-X structure', 400, 'UNKNOWN_STRUCTURE');
-    }
-
-    const exchangedDoc = root['rsm:ExchangedDocument'] || root['ExchangedDocument'];
-    const tradeTransaction = root['rsm:SupplyChainTradeTransaction'] || root['SupplyChainTradeTransaction'];
-
-    const invoiceNumber = get(exchangedDoc, 'ram:ID') as string || get(exchangedDoc, 'ID') as string || null;
-    const invoiceDateStr = get(exchangedDoc, 'ram:IssueDateTime.udt:DateTimeString._') as string || get(exchangedDoc, 'IssueDateTime.DateTimeString._') as string || null;
-    const invoiceDate = asDate(invoiceDateStr) || new Date();
-
-    const dueDateStr = get(tradeTransaction, 'ram:ApplicableHeaderTradeSettlement.ram:SpecifiedTradePaymentTerms.ram:DueDateDateTime.udt:DateTimeString._') as string
-      || get(tradeTransaction, 'ApplicableHeaderTradeSettlement.SpecifiedTradePaymentTerms.DueDateDateTime.DateTimeString._') as string;
-    const dueDate = asDate(dueDateStr);
-
-    const totalAmount = asNumber(
-      get(tradeTransaction, 'ram:ApplicableHeaderTradeSettlement.ram:SpecifiedTradeSettlementHeaderMonetarySummation.ram:GrandTotalAmount')
-      || get(tradeTransaction, 'ApplicableHeaderTradeSettlement.SpecifiedTradeSettlementHeaderMonetarySummation.GrandTotalAmount')
-    );
-
-    const customerName = get(tradeTransaction, 'ram:ApplicableHeaderTradeAgreement.ram:BuyerTradeParty.ram:Name') as string
-      || get(tradeTransaction, 'ApplicableHeaderTradeAgreement.BuyerTradeParty.Name') as string
-      || undefined;
-
-    // Clean up temp file
-    try { fs.unlinkSync(filePath); } catch { }
-
-    // Check for duplicate invoice number
-    if (invoiceNumber) {
+    if (parsedInvoice.invoiceNumber) {
       const existingInvoice = await prisma.invoice.findFirst({
-        where: { invoiceNumber, userId },
+        where: { invoiceNumber: parsedInvoice.invoiceNumber, userId },
       });
 
       if (existingInvoice) {
-        try { fs.unlinkSync(permanentFilePath); } catch { }
-        return apiError(`Invoice with number ${invoiceNumber} already exists`, 409, 'DUPLICATE_INVOICE');
+        return apiError(`Invoice with number ${parsedInvoice.invoiceNumber} already exists`, 409, 'DUPLICATE_INVOICE');
       }
     }
 
-    // Create invoice
+    const safeOriginalFileName = sanitizeFileName(file.name);
+    const uniqueFileName = `${uuidv4()}_${safeOriginalFileName}`;
+    ensureUploadDirExists();
+    const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
+    fs.writeFileSync(permanentFilePath, buffer);
+
+    const customerRecord = await findOrCreateCustomer(parsedInvoice, userId);
+    const invoiceDate = parsedInvoice.invoiceDate || new Date();
+    const invoiceNumber = parsedInvoice.invoiceNumber || `RG-${Date.now()}`;
+
     const invoice = await prisma.invoice.create({
       data: {
         fileName: file.name,
         storedFileName: uniqueFileName,
-        invoiceNumber: invoiceNumber || `RG-${new Date().getTime()}`,
-        invoiceDate: invoiceDate || new Date(),
-        dueDate: dueDate,
-        totalAmount: totalAmount ?? undefined,
-        parsedData: {
-          invoiceNumber,
-          invoiceDate: (invoiceDate || new Date()).toISOString(),
-          dueDate: dueDate ? dueDate.toISOString() : null,
-          totalAmount: totalAmount ?? null,
-          customerName,
-        },
+        invoiceNumber,
+        invoiceDate,
+        dueDate: parsedInvoice.dueDate,
+        totalAmount: parsedInvoice.totalAmount ?? undefined,
+        parsedData: toStoredParsedData(parsedInvoice),
+        customerId: customerRecord?.id,
         userId,
       },
     });
 
-    // Create income if there's a total amount
-    if (totalAmount && totalAmount > 0) {
-      const description = `Rechnung ${invoiceNumber || 'ohne Nummer'}`;
-
-      let customerRecord = null;
-      if (customerName) {
-        customerRecord = await prisma.customer.findFirst({
-          where: { name: customerName, userId },
-        });
-
-        if (!customerRecord) {
-          customerRecord = await prisma.customer.create({
-            data: { name: customerName, userId },
-          });
-        }
-      }
-
-      await prisma.income.create({
+    if (parsedInvoice.totalAmount !== null && parsedInvoice.totalAmount > 0) {
+      const income = await prisma.income.create({
         data: {
-          description: description.substring(0, 255),
-          amount: totalAmount,
+          description: `Rechnung ${invoiceNumber}`.substring(0, 255),
+          amount: parsedInvoice.totalAmount,
           customerId: customerRecord ? customerRecord.id : null,
           invoiceId: invoice.id,
           taxRelevant: true,
@@ -267,7 +194,7 @@ export async function POST(request: NextRequest) {
       await prisma.invoice.update({
         where: { id: invoice.id },
         data: {
-          customerId: customerRecord?.id,
+          income: { connect: { id: income.id } },
         },
       });
     }
@@ -280,7 +207,10 @@ export async function POST(request: NextRequest) {
       dueDate: invoice.dueDate,
       totalAmount: invoice.totalAmount,
       status: invoice.status,
-      customerName,
+      customerName: parsedInvoice.customerName,
+      eInvoiceFormat: parsedInvoice.format,
+      hasEInvoiceXml: true,
+      hasPdfFile: fileKind === 'pdf',
     });
 
     response.headers.set('Location', `/api/v1/invoices?id=${invoice.id}`);

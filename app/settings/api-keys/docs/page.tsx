@@ -192,16 +192,16 @@ export default function ApiDocsPage() {
       icon: Upload,
       path: "/api/v1/invoices/upload",
       methods: ["POST"],
-      description: "ZUGFeRD/Factur-X PDF-Rechnungen hochladen",
+      description: "ZUGFeRD/Factur-X-PDFs oder XRechnung-/UBL-XMLs hochladen",
       examples: {
         get: `# Rechnungs-PDF hochladen
 curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
   -H "Authorization: Bearer biv_sk_IhrApiKey" \\
   -F "file=@rechnung.pdf"`,
-        post: `# Mit curl und Datei
+        post: `# XML-E-Rechnung hochladen
 curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
   -H "Authorization: Bearer biv_sk_IhrApiKey" \\
-  -F "file=@/pfad/zur/rechnung.pdf"`,
+  -F "file=@/pfad/zur/rechnung.xml"`,
         response: `{
   "success": true,
   "data": {
@@ -212,7 +212,10 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
     "dueDate": "2025-12-11T00:00:00.000Z",
     "totalAmount": 1785.00,
     "status": "DRAFT",
-    "customerName": "Musterfirma GmbH"
+    "customerName": "Musterfirma GmbH",
+    "eInvoiceFormat": "CII",
+    "hasEInvoiceXml": true,
+    "hasPdfFile": true
   },
   "timestamp": "2025-11-27T20:00:00.000Z"
 }`

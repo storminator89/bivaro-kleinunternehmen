@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditCreate, auditDelete, createAuditLog } from '@/lib/audit-log';
+import { getRawEInvoiceXml } from '@/lib/e-invoice-parser';
 
-const prisma = new PrismaClient();
+function isPdfFile(fileName: string): boolean {
+  return fileName.toLowerCase().endsWith('.pdf');
+}
 
 export async function POST(request: Request) {
   try {
@@ -107,7 +111,13 @@ export async function GET(request: Request) {
       prisma.invoice.count({ where }),
     ]);
 
-    return NextResponse.json({ items, total, page, pageSize });
+    const itemsWithCapabilities = items.map(invoice => ({
+      ...invoice,
+      hasEInvoiceXml: Boolean(getRawEInvoiceXml(invoice.parsedData)),
+      hasPdfFile: isPdfFile(invoice.fileName) || isPdfFile(invoice.storedFileName),
+    }));
+
+    return NextResponse.json({ items: itemsWithCapabilities, total, page, pageSize });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();

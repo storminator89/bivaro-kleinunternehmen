@@ -4,7 +4,14 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileX, Mail } from "lucide-react";
+import { Download, Eye, FileCode2, FileText, FileX, Mail, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -14,12 +21,6 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { EmailPreviewDialog } from "@/components/dashboard/email-preview-dialog";
 import { Invoice, FilterState } from "@/types/dashboard";
@@ -94,10 +95,10 @@ export function InvoicesTab({
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 9.414V19a2 2 0 01-2 2z" />
                 </svg>
-                ZUGFeRD-Rechnung hochladen
+                E-Rechnung hochladen
               </h2>
               <p className="text-sm text-muted-foreground">
-                Laden Sie Ihre ZUGFeRD-kompatiblen PDF-Rechnungen hoch.
+                Laden Sie ZUGFeRD-/Factur-X-PDFs oder XRechnung-/E-Rechnungs-XMLs hoch.
                 Die Daten werden automatisch extrahiert und verarbeitet.
               </p>
             </div>
@@ -119,7 +120,7 @@ export function InvoicesTab({
                   <Input
                     id="invoiceFile"
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.xml,application/pdf,application/xml,text/xml"
                     onChange={onFileChange}
                     className="hidden"
                   />
@@ -134,7 +135,7 @@ export function InvoicesTab({
                       {selectedFile ? selectedFile.name : 'Klicken Sie hier, um eine Datei auszuwählen'}
                     </span>
                     <span className="text-sm text-muted-foreground mt-1">
-                      Unterstützt wird das PDF-Format
+                      Unterstützt werden PDF- und XML-Formate
                     </span>
                   </Label>
                 </div>
@@ -326,113 +327,90 @@ export function InvoicesTab({
                         />
                       </TableCell>
                       <TableCell className="text-right">
-                        <TooltipProvider>
-                          <div className="flex justify-end space-x-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Rechnung anzeigen</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900/50 dark:hover:bg-blue-900/20"
-                                  onClick={() => setEmailInvoice(invoice)}
-                                  disabled={invoice.status === 'CANCELLED'}
-                                >
-                                  <Mail className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Rechnung per E-Mail senden</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => {
-                                    window.open(`/api/invoices/download?id=${invoice.id}&download=true`, 'Rechnung Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => onOpenDetails(invoice)}
+                          >
+                            <Eye className="h-4 w-4" />
+                            Details
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                aria-label={`Weitere Aktionen fuer Rechnung ${invoice.invoiceNumber || invoice.id}`}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="hidden xl:inline">Mehr</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuItem
+                                disabled={invoice.hasPdfFile === false}
+                                onSelect={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}
+                              >
+                                <FileText className="h-4 w-4" />
+                                PDF anzeigen
+                              </DropdownMenuItem>
+                              {invoice.hasEInvoiceXml && (
+                                <DropdownMenuItem onSelect={() => onViewReceipt(`/api/invoices/viewer?id=${invoice.id}`)}>
+                                  <FileCode2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                                  E-Rechnung ansehen
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                disabled={invoice.status === 'CANCELLED'}
+                                onSelect={() => setEmailInvoice(invoice)}
+                              >
+                                <Mail className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                Per E-Mail senden
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                disabled={invoice.hasPdfFile === false}
+                                onSelect={() => {
+                                  window.open(`/api/invoices/download?id=${invoice.id}&download=true`, 'Rechnung Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
+                                }}
+                              >
+                                <Download className="h-4 w-4" />
+                                PDF herunterladen
+                              </DropdownMenuItem>
+                              {invoice.hasEInvoiceXml && (
+                                <DropdownMenuItem
+                                  onSelect={() => {
+                                    window.open(`/api/invoices/download?id=${invoice.id}&format=xml&download=true`, 'E-Rechnung XML Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
                                   }}
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Rechnung herunterladen</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => onOpenDetails(invoice)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Rechnungsdetails anzeigen</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            {invoice.status !== 'CANCELLED' && invoice.type !== 'CREDIT_NOTE' && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-900/50 dark:hover:bg-orange-900/20"
-                                    onClick={() => onCancel(invoice)}
-                                  >
-                                    <FileX className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Rechnung stornieren</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
-                                  onClick={() => onDelete(invoice.id)}
-                                  disabled={isDeleting}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Rechnung löschen</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TooltipProvider>
+                                  <FileCode2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                  XML herunterladen
+                                </DropdownMenuItem>
+                              )}
+                              {(invoice.status !== 'CANCELLED' && invoice.type !== 'CREDIT_NOTE') && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onSelect={() => onCancel(invoice)}>
+                                    <FileX className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                                    Rechnung stornieren
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                disabled={isDeleting}
+                                onSelect={() => onDelete(invoice.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Rechnung löschen
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

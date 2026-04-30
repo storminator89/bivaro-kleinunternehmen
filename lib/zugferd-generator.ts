@@ -34,8 +34,30 @@ export interface ZugferdData {
   currency: string;
 }
 
+export type ZugferdValidationIssue = {
+  field: string;
+  message: string;
+};
+
+export type ZugferdValidationResult = {
+  isValid: boolean;
+  errors: ZugferdValidationIssue[];
+  warnings: ZugferdValidationIssue[];
+};
+
+export type ZugferdXmlProfile = 'factur-x' | 'xrechnung';
+
+export type ZugferdValidationOptions = {
+  profile?: ZugferdXmlProfile;
+};
+
+export type GenerateZugferdXmlOptions = ZugferdValidationOptions;
+
 // Keep backward compatibility
 export type { ZugferdData as ZugferdInvoiceData };
+
+const FACTUR_X_GUIDELINE_ID = 'urn:cen.eu:en16931:2017';
+const XRECHNUNG_GUIDELINE_ID = 'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0';
 
 function formatDate(date: Date): string {
   const yyyy = date.getFullYear();
@@ -44,55 +66,212 @@ function formatDate(date: Date): string {
   return `${yyyy}${mm}${dd}`;
 }
 
-export function generateZugferdXml(data: ZugferdData): string {
-  const issueDate = formatDate(data.date);
-  const dueDate = data.dueDate ? formatDate(data.dueDate) : '';
-  const deliveryDate = data.deliveryDate ? formatDate(data.deliveryDate) : issueDate;
-
-  // Hilfsfunktion zum Escapen von Sonderzeichen
-  const escapeXml = (str: string) => str
+function escapeXml(str: string): string {
+  return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
 
-  const formatAmt = (num: number) => num.toFixed(2);
+function formatAmt(num: number): string {
+  return num.toFixed(2);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isValidDate(value: unknown): value is Date {
+  return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function countDigits(value: string): number {
+  const digits = value.match(/\d/g);
+  return digits ? digits.length : 0;
+}
+
+function parsePostalAddress(addrStr?: string, partyName?: string) {
+  const lines = (addrStr || '').split('\n').map(l => l.trim()).filter(l => l);
+  const countryCode = 'DE';
+  let cityName = '';
+  let postcode = '';
+  let lineOne = '';
+
+  if (partyName && lines[0]?.toLowerCase() === partyName.trim().toLowerCase()) {
+    lines.shift();
+  }
+
+  if (lines.length > 0) {
+    const lastLine = lines[lines.length - 1];
+    const match = lastLine.match(/^(\d{5})\s+(.+)$/);
+    if (match) {
+      postcode = match[1];
+      cityName = match[2];
+      lines.pop();
+    }
+    lineOne = lines[0] || '';
+  }
+
+  return { lineOne, postcode, cityName, countryCode };
+}
+
+function getBuyerAddress(data: ZugferdData) {
+  const parsed = parsePostalAddress(data.buyer.address, data.buyer.name);
+  return {
+    lineOne: parsed.lineOne,
+    postcode: data.buyer.zipCode || parsed.postcode,
+    cityName: data.buyer.city || parsed.cityName,
+    countryCode: parsed.countryCode,
+  };
+}
+
+export function validateZugferdData(data: ZugferdData, options: ZugferdValidationOptions = {}): ZugferdValidationResult {
+  const errors: ZugferdValidationIssue[] = [];
+  const warnings: ZugferdValidationIssue[] = [];
+  const profile = options.profile || 'factur-x';
+
+  if (!isNonEmptyString(data.invoiceNumber)) {
+    errors.push({ field: 'invoiceNumber', message: 'Rechnungsnummer fehlt.' });
+  }
+  if (!isValidDate(data.date)) {
+    errors.push({ field: 'date', message: 'Rechnungsdatum fehlt oder ist ungültig.' });
+  }
+  if (!isNonEmptyString(data.currency) || !/^[A-Z]{3}$/.test(data.currency)) {
+    errors.push({ field: 'currency', message: 'Währung muss als dreistelliger ISO-Code angegeben werden.' });
+  }
+  if (!isValidDate(data.dueDate)) {
+    warnings.push({ field: 'dueDate', message: 'Fälligkeitsdatum fehlt; Zahlungsziel wird nicht strukturiert übermittelt.' });
+  }
+
+  if (!isNonEmptyString(data.seller.name)) {
+    errors.push({ field: 'seller.name', message: 'Name des Rechnungsausstellers fehlt.' });
+  }
+  const sellerAddr = parsePostalAddress(data.seller.address, data.seller.name);
+  if (!sellerAddr.lineOne || !sellerAddr.postcode || !sellerAddr.cityName) {
+    errors.push({
+      field: 'seller.address',
+      message: 'Anschrift des Rechnungsausstellers muss Straße, PLZ und Ort enthalten.',
+    });
+  }
+  if (!isNonEmptyString(data.seller.taxNumber) && !isNonEmptyString(data.seller.vatId)) {
+    errors.push({
+      field: 'seller.taxNumber',
+      message: 'Steuernummer oder USt-IdNr. des Rechnungsausstellers fehlt.',
+    });
+  }
+  if (!isNonEmptyString(data.seller.iban)) {
+    warnings.push({ field: 'seller.iban', message: 'IBAN fehlt; Bankverbindung wird nicht strukturiert übermittelt.' });
+  }
+  if (profile === 'xrechnung') {
+    if (!isNonEmptyString(data.seller.telephone)) {
+      errors.push({
+        field: 'seller.telephone',
+        message: 'Telefonnummer des Rechnungsausstellers fehlt. Für XRechnung muss sie in den Einstellungen hinterlegt sein.',
+      });
+    } else if (countDigits(data.seller.telephone) < 3) {
+      errors.push({
+        field: 'seller.telephone',
+        message: 'Telefonnummer des Rechnungsausstellers muss mindestens drei Ziffern enthalten.',
+      });
+    }
+  }
+
+  if (!isNonEmptyString(data.buyer.name)) {
+    errors.push({ field: 'buyer.name', message: 'Name des Rechnungsempfängers fehlt.' });
+  }
+  const buyerAddr = getBuyerAddress(data);
+  if (!buyerAddr.lineOne || !buyerAddr.postcode || !buyerAddr.cityName) {
+    errors.push({
+      field: 'buyer.address',
+      message: 'Anschrift des Rechnungsempfängers muss Straße, PLZ und Ort enthalten.',
+    });
+  }
+
+  if (!Array.isArray(data.items) || data.items.length === 0) {
+    errors.push({ field: 'items', message: 'Mindestens eine Rechnungsposition ist erforderlich.' });
+  } else {
+    data.items.forEach((item, index) => {
+      const prefix = `items.${index}`;
+      if (!isNonEmptyString(item.description)) {
+        errors.push({ field: `${prefix}.description`, message: `Beschreibung für Position ${index + 1} fehlt.` });
+      }
+      if (!isFiniteNumber(item.quantity) || item.quantity <= 0) {
+        errors.push({ field: `${prefix}.quantity`, message: `Menge für Position ${index + 1} muss größer als 0 sein.` });
+      }
+      if (!isFiniteNumber(item.unitPrice) || item.unitPrice < 0) {
+        errors.push({ field: `${prefix}.unitPrice`, message: `Einzelpreis für Position ${index + 1} darf nicht negativ sein.` });
+      }
+      if (!isFiniteNumber(item.total) || item.total < 0) {
+        errors.push({ field: `${prefix}.total`, message: `Positionsbetrag für Position ${index + 1} darf nicht negativ sein.` });
+      }
+      if (item.taxRate !== undefined && (!isFiniteNumber(item.taxRate) || item.taxRate < 0)) {
+        errors.push({ field: `${prefix}.taxRate`, message: `Steuersatz für Position ${index + 1} darf nicht negativ sein.` });
+      }
+    });
+  }
+
+  if (!isFiniteNumber(data.netAmount) || data.netAmount < 0) {
+    errors.push({ field: 'netAmount', message: 'Nettobetrag fehlt oder ist ungültig.' });
+  }
+  if (!isFiniteNumber(data.taxAmount) || data.taxAmount < 0) {
+    errors.push({ field: 'taxAmount', message: 'Steuerbetrag fehlt oder ist ungültig.' });
+  }
+
+  const lineTotal = data.items.reduce((sum, item) => sum + (isFiniteNumber(item.total) ? item.total : 0), 0);
+  if (isFiniteNumber(data.netAmount) && Math.abs(lineTotal - data.netAmount) > 0.01) {
+    warnings.push({
+      field: 'netAmount',
+      message: 'Summe der Positionen weicht vom Nettobetrag ab.',
+    });
+  }
+
+  const taxTotal = data.items.reduce((sum, item) => {
+    const rate = isFiniteNumber(item.taxRate) ? item.taxRate : 0;
+    const total = isFiniteNumber(item.total) ? item.total : 0;
+    return sum + total * (rate / 100);
+  }, 0);
+  if (isFiniteNumber(data.taxAmount) && Math.abs(taxTotal - data.taxAmount) > 0.01) {
+    warnings.push({
+      field: 'taxAmount',
+      message: 'Berechnete Steuer aus den Positionen weicht vom Steuerbetrag ab.',
+    });
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+export function assertValidZugferdData(data: ZugferdData, options: ZugferdValidationOptions = {}): void {
+  const validation = validateZugferdData(data, options);
+  if (!validation.isValid) {
+    const message = validation.errors.map(issue => issue.message).join(' ');
+    throw new Error(`Ungültige E-Rechnungsdaten: ${message}`);
+  }
+}
+
+export function generateZugferdXml(data: ZugferdData, options: GenerateZugferdXmlOptions = {}): string {
+  assertValidZugferdData(data, options);
+
+  const issueDate = formatDate(data.date);
+  const dueDate = data.dueDate ? formatDate(data.dueDate) : '';
+  const deliveryDate = data.deliveryDate ? formatDate(data.deliveryDate) : issueDate;
+  const guidelineId = options.profile === 'xrechnung' ? XRECHNUNG_GUIDELINE_ID : FACTUR_X_GUIDELINE_ID;
 
   // Support both netAmount (new) and totalAmount (legacy/backward compat)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const netAmount = data.netAmount ?? (data as any).totalAmount ?? 0;
+  const legacyTotalAmount = 'totalAmount' in data ? (data as { totalAmount?: number }).totalAmount : undefined;
+  const netAmount = data.netAmount ?? legacyTotalAmount ?? 0;
 
-  // Adress-Parsing
-  const parseAddress = (addrStr?: string) => {
-    const lines = (addrStr || '').split('\n').map(l => l.trim()).filter(l => l);
-    const countryCode = 'DE';
-    let cityName = '';
-    let postcode = '';
-    let lineOne = '';
-
-    if (lines.length > 0) {
-      const lastLine = lines[lines.length - 1];
-      const match = lastLine.match(/^(\d{5})\s+(.+)$/);
-      if (match) {
-        postcode = match[1];
-        cityName = match[2];
-        lines.pop();
-      }
-      lineOne = lines[0] || '';
-    }
-    return { lineOne, postcode, cityName, countryCode };
-  };
-
-  const sellerAddr = parseAddress(data.seller.address);
-  const buyerAddr = data.buyer.zipCode && data.buyer.city
-    ? {
-      lineOne: data.buyer.address?.split('\n')[0] || '',
-      postcode: data.buyer.zipCode,
-      cityName: data.buyer.city,
-      countryCode: 'DE'
-    }
-    : parseAddress(data.buyer.address);
+  const sellerAddr = parsePostalAddress(data.seller.address, data.seller.name);
+  const buyerAddr = getBuyerAddress(data);
 
   // Kleinunternehmer-Erkennung
   const isSmallBusiness = data.taxAmount === 0;
@@ -213,7 +392,7 @@ export function generateZugferdXml(data: ZugferdData): string {
       <ram:ID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</ram:ID>
     </ram:BusinessProcessSpecifiedDocumentContextParameter>
     <ram:GuidelineSpecifiedDocumentContextParameter>
-      <ram:ID>urn:cen.eu:en16931:2017</ram:ID>
+      <ram:ID>${guidelineId}</ram:ID>
     </ram:GuidelineSpecifiedDocumentContextParameter>
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>

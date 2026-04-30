@@ -75,6 +75,26 @@ const eslintConfig = [
 
             // General rules
             "no-console": ["warn", { allow: ["warn", "error"] }],
+
+            // Enforce the Prisma client singleton (`@/lib/prisma`).
+            // Instantiating `new PrismaClient()` outside of `lib/prisma.ts`
+            // leaks DB connections under HMR and across serverless invocations.
+            "no-restricted-syntax": [
+                "error",
+                {
+                    selector:
+                        "NewExpression[callee.name='PrismaClient']",
+                    message:
+                        "Do not instantiate PrismaClient directly. Import the singleton: `import { prisma } from '@/lib/prisma'`.",
+                },
+            ],
+        },
+    },
+    {
+        // The singleton itself is the one place where `new PrismaClient()` is allowed.
+        files: ["lib/prisma.ts"],
+        rules: {
+            "no-restricted-syntax": "off",
         },
     },
 ];

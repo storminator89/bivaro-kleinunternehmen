@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
 import { requireUserId, UnauthorizedError } from '@/lib/get-user-id';
 import { findUploadedFile } from '@/lib/upload-path';
-
-const prisma = new PrismaClient();
 
 // Allow this route to be embedded in iframes (same origin only)
 const FRAME_HEADERS = { 'X-Frame-Options': 'SAMEORIGIN' } as const;

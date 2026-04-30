@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { createAuditLog } from '@/lib/audit-log';
 import { generateCreditNotePDF } from '@/lib/credit-note-pdf';
 import path from 'path';
 import fs from 'fs/promises';
-
-const prisma = new PrismaClient();
 
 // POST: Cancel an invoice by creating a credit note
 export async function POST(request: Request) {

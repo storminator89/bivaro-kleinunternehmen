@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { readFile } from 'fs/promises';
-import { basename } from 'path';
+import { basename, extname } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { findUploadedFile } from '@/lib/upload-path';
+import { getRawEInvoiceXml } from '@/lib/e-invoice-parser';
 
-const prisma = new PrismaClient();
+function sanitizeDownloadName(value: string | null | undefined): string {
+  return basename(value || 'rechnung').replace(/\s+/g, '_').replace(/[^A-Za-z0-9._-]/g, '_') || 'rechnung';
+}
+
+function getStoredFileContentType(fileName: string): string {
+  return extname(fileName).toLowerCase() === '.xml' ? 'application/xml; charset=utf-8' : 'application/pdf';
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +20,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     const download = url.searchParams.get('download') === 'true';
+    const format = url.searchParams.get('format');
 
     if (!id) {
       return NextResponse.json(
@@ -21,7 +29,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Rechnung mit dem angegebenen ID abrufen
     const invoice = await prisma.invoice.findUnique({
       where: { id: Number(id), userId },
     });
@@ -33,10 +40,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Sanitize filename - prevent path traversal
-    const sanitizedFileName = basename(invoice.storedFileName);
+    if (format === 'xml') {
+      const rawXml = getRawEInvoiceXml(invoice.parsedData);
+      if (!rawXml) {
+        return NextResponse.json(
+          { error: 'Für diese Rechnung ist keine E-Rechnungs-XML verfügbar' },
+          { status: 404 }
+        );
+      }
 
-    // Find file in new or legacy location
+      const baseName = sanitizeDownloadName(invoice.invoiceNumber || invoice.fileName).replace(/\.[^.]+$/, '');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${baseName}.xml"`,
+      };
+
+      return new NextResponse(rawXml, {
+        status: 200,
+        headers,
+      });
+    }
+
+    const sanitizedFileName = basename(invoice.storedFileName);
     const filePath = findUploadedFile(sanitizedFileName);
 
     if (!filePath) {
@@ -46,33 +71,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Datei einlesen
     const fileBuffer = await readFile(filePath);
+    const contentType = getStoredFileContentType(invoice.fileName || invoice.storedFileName);
 
-    // Bestimmen des Content-Types - bei Rechnungen sollte es immer PDF sein
-    const contentType = 'application/pdf';
-
-    // Header für die Response
     const headers: HeadersInit = {
       'Content-Type': contentType,
-      // Allow iframe embedding for preview (SAMEORIGIN instead of DENY)
       'X-Frame-Options': 'SAMEORIGIN',
     };
 
-    // Wenn download=true übergeben wurde, setze den Content-Disposition Header für Download
     if (download) {
-      headers['Content-Disposition'] = `attachment; filename="${invoice.fileName}"`;
+      headers['Content-Disposition'] = `attachment; filename="${sanitizeDownloadName(invoice.fileName)}"`;
     } else {
-      // Für Vorschau im Browser: inline statt attachment
-      headers['Content-Disposition'] = `inline; filename="${invoice.fileName}"`;
+      headers['Content-Disposition'] = `inline; filename="${sanitizeDownloadName(invoice.fileName)}"`;
     }
 
-    const response = new NextResponse(new Uint8Array(fileBuffer), {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
-      headers: headers,
+      headers,
     });
-
-    return response;
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();

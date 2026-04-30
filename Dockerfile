@@ -68,7 +68,7 @@ FROM node:22-slim AS runner
 
 # Install security updates and dumb-init for proper signal handling
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates && \
+    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates ghostscript && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

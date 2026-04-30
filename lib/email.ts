@@ -1,5 +1,5 @@
 import { readFile } from 'fs/promises';
-import { basename } from 'path';
+import { basename, extname } from 'path';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit-log';
@@ -49,6 +49,7 @@ type LoadedDocument = {
   attachmentPath: string;
   attachmentUrl: string;
   attachmentFileName: string;
+  attachmentContentType: string;
   customer: {
     id: number;
     name: string;
@@ -64,6 +65,10 @@ const REMINDER_LEVEL_LABELS: Record<number, string> = {
 };
 
 const SIMPLE_EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+
+function getAttachmentContentType(fileName: string): string {
+  return extname(fileName).toLowerCase() === '.xml' ? 'application/xml' : 'application/pdf';
+}
 
 export function normalizeEmailDraftRequest(body: unknown): EmailDraftRequest {
   if (!body || typeof body !== 'object') {
@@ -223,7 +228,7 @@ export async function sendDocumentEmail(userId: string, request: SendEmailReques
       {
         filename: loaded.attachmentFileName,
         content: attachment,
-        contentType: 'application/pdf',
+        contentType: loaded.attachmentContentType,
       },
     ],
   };
@@ -312,7 +317,7 @@ async function loadEmailDocument(userId: string, request: EmailDraftRequest): Pr
   const sanitizedFileName = basename(invoice.storedFileName);
   const attachmentPath = findUploadedFile(sanitizedFileName);
   if (!attachmentPath) {
-    throw new Error('PDF-Datei nicht gefunden');
+    throw new Error('Datei nicht gefunden');
   }
 
   const customer = invoice.customer || invoice.income?.customer || null;
@@ -326,6 +331,7 @@ async function loadEmailDocument(userId: string, request: EmailDraftRequest): Pr
     attachmentPath,
     attachmentUrl,
     attachmentFileName: invoice.fileName,
+    attachmentContentType: getAttachmentContentType(invoice.fileName),
     customer,
   };
 }

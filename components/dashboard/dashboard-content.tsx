@@ -541,6 +541,9 @@ export function DashboardContent() {
         await loadInvoices(1, invoicesPageSize);
         setSelectedFile(null);
         await loadIncomes(incomesPage, incomesPageSize);
+      } else {
+        const errorBody = await response.json().catch(() => null);
+        alert(errorBody?.error || 'Die Rechnung konnte nicht hochgeladen werden.');
       }
     } catch (error) {
       console.error('Error uploading invoice:', error);

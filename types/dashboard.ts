@@ -55,6 +55,8 @@ export type Invoice = {
   originalInvoiceId?: number;
   cancellationReason?: string;
   customer?: { id: number; name: string } | null;
+  hasEInvoiceXml?: boolean;
+  hasPdfFile?: boolean;
 };
 
 export type Quote = {

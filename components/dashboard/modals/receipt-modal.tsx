@@ -30,6 +30,8 @@ export function ReceiptModal({ isOpen, onClose, receiptUrl }: ReceiptModalProps)
 
   if (!receiptUrl) return null;
 
+  const isEInvoiceViewer = receiptUrl.includes('/api/invoices/viewer');
+
   const handleLoad = () => {
     setLoading(false);
   };
@@ -41,11 +43,13 @@ export function ReceiptModal({ isOpen, onClose, receiptUrl }: ReceiptModalProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
-        <DialogHeader className="border-b pb-4">
-          <DialogTitle className="text-xl font-semibold">Beleg anzeigen</DialogTitle>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
+          <DialogHeader className="border-b pb-4">
+          <DialogTitle className="text-xl font-semibold">
+            {isEInvoiceViewer ? 'E-Rechnung ansehen' : 'Beleg anzeigen'}
+          </DialogTitle>
           <DialogDescription>
-            Vorschau des Belegs
+            {isEInvoiceViewer ? 'Vereinfachte Darstellung der strukturierten XRechnung' : 'Vorschau des Belegs'}
           </DialogDescription>
         </DialogHeader>
         <div className="mt-4">
@@ -62,7 +66,7 @@ export function ReceiptModal({ isOpen, onClose, receiptUrl }: ReceiptModalProps)
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="mb-2">Vorschau konnte nicht geladen werden</p>
-                <p className="text-sm">Der Beleg kann aufgrund von Sicherheitseinschränkungen nicht direkt angezeigt werden.</p>
+                <p className="text-sm">Die Datei kann aufgrund von Sicherheitseinschränkungen nicht direkt angezeigt werden.</p>
               </div>
               <Button 
                 onClick={() => {
@@ -72,7 +76,7 @@ export function ReceiptModal({ isOpen, onClose, receiptUrl }: ReceiptModalProps)
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
                 </svg>
-                Beleg herunterladen
+                {isEInvoiceViewer ? 'Vorschau öffnen' : 'Beleg herunterladen'}
               </Button>
             </div>
           ) : (
@@ -101,7 +105,7 @@ export function ReceiptModal({ isOpen, onClose, receiptUrl }: ReceiptModalProps)
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
               </svg>
-              Herunterladen
+              {isEInvoiceViewer ? 'Öffnen' : 'Herunterladen'}
             </Button>
           </DialogFooter>
         )}

@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PDFDocument, StandardFonts, rgb, PDFFont, PDFName } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import QRCode from 'qrcode';
-import { generateZugferdXml } from "@/lib/zugferd-generator";
+import { generateZugferdXml, validateZugferdData, type ZugferdData } from "@/lib/zugferd-generator";
 import { Eye, EyeOff, FileText, Loader2, RefreshCw } from "lucide-react";
 
 interface CreateInvoiceModalProps {
@@ -67,6 +67,8 @@ interface Template {
   };
 }
 
+type InvoiceOutputMode = 'zugferd-pdf' | 'xml-only';
+
 export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuote }: CreateInvoiceModalProps) {
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -86,12 +88,15 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
+  const [outputMode, setOutputMode] = useState<InvoiceOutputMode>('zugferd-pdf');
 
   // Preview states
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const previewGenerationRef = useRef(0);
 
   useEffect(() => {
     if (isOpen) {
@@ -134,6 +139,12 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
       if (pd.customerAddress) setCustomerAddress(pd.customerAddress);
     }
   }, [isOpen, fromQuote]);
+
+  useEffect(() => {
+    if (outputMode === 'xml-only') {
+      setIncludeQRCode(false);
+    }
+  }, [outputMode]);
 
   const fetchTemplates = async () => {
     try {
@@ -203,7 +214,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
     if (!confirm("Möchten Sie diese Vorlage wirklich löschen?")) return;
 
     try {
-      const res = await fetch(`/ api / invoice - templates / ${templateId} `, {
+      const res = await fetch(`/api/invoice-templates/${templateId}`, {
         method: "DELETE",
       });
 
@@ -229,7 +240,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
 
       setIsCheckingNumber(true);
       try {
-        const res = await fetch(`/ api / invoices / check - number ? number = ${encodeURIComponent(invoiceNumber)} `);
+        const res = await fetch(`/api/invoices/check-number?number=${encodeURIComponent(invoiceNumber)}`);
         if (res.ok) {
           const data = await res.json();
           if (data.exists) {
@@ -297,467 +308,627 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
   // Core PDF generation function (returns PDF bytes, used by both preview and final generation)
   const generatePDFBytes = useCallback(async (forPreview: boolean = false): Promise<Uint8Array> => {
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage();
+    const pageSize: [number, number] = [595.28, 841.89]; // A4 portrait in PDF points
+    let page = pdfDoc.addPage(pageSize);
     const { width, height } = page.getSize();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Design Constants
-    const accentColor = rgb(0.2, 0.2, 0.2);
-    const primaryColor = rgb(0, 0, 0);
-    const secondaryColor = rgb(0.4, 0.4, 0.4);
-    const lightBg = rgb(0.96, 0.96, 0.96);
+    const margin = 42;
+    const contentWidth = width - 2 * margin;
+    const bottomContentY = 128;
+    const isNonEmptyString = (value: string | null | undefined): value is string => Boolean(value);
+    const companyName = settings?.companyName?.trim() || 'Bivaro';
+    const companyAddressLines = settings?.companyAddress
+      ?.split('\n')
+      .map(line => line.trim())
+      .filter(isNonEmptyString) ?? [];
+    const customerLines = customerAddress
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+    const calculatedItems = items.map(item => {
+      const lineNet = item.quantity * item.unitPrice;
+      const lineTax = lineNet * (item.taxRate / 100);
 
-    // Helper to draw text aligned right
-    const drawTextRight = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
-      const textWidth = fontToUse.widthOfTextAtSize(text, size);
-      page.drawText(text, { x: x - textWidth, y, size, font: fontToUse, color });
-    };
-
-    // Helper to draw text centered
-    const drawTextCenter = (text: string, x: number, y: number, size: number, fontToUse: PDFFont = font, color = rgb(0, 0, 0)) => {
-      const textWidth = fontToUse.widthOfTextAtSize(text, size);
-      page.drawText(text, { x: x - textWidth / 2, y, size, font: fontToUse, color });
-    };
-
-    let y = height - 50;
-    const margin = 50;
-
-    // --- DECORATIVE ELEMENTS ---
-    // Top Accent Bar
-    page.drawRectangle({
-      x: 0,
-      y: height - 8,
-      width: width,
-      height: 8,
-      color: accentColor,
+      return {
+        ...item,
+        lineNet,
+        lineTax,
+      };
     });
+    const netTotal = calculatedItems.reduce((sum, item) => sum + item.lineNet, 0);
+    const taxTotal = calculatedItems.reduce((sum, item) => sum + item.lineTax, 0);
+    const grossTotal = netTotal + taxTotal;
 
-    // --- HEADER ---
-    // Logo (Right)
+    const brandDark = rgb(0.035, 0.078, 0.145);
+    const brandBlue = rgb(0.05, 0.22, 0.58);
+    const brandAccent = rgb(0.0, 0.56, 0.92);
+    const textColor = rgb(0.08, 0.1, 0.16);
+    const mutedColor = rgb(0.36, 0.42, 0.52);
+    const lightText = rgb(0.76, 0.84, 0.94);
+    const white = rgb(1, 1, 1);
+    const surface = rgb(0.965, 0.975, 0.99);
+    const surfaceStrong = rgb(0.93, 0.96, 0.995);
+    const hairline = rgb(0.82, 0.87, 0.94);
+
+    const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('de-DE') : '-';
+    const formatQuantity = (value: number) => value.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+    const formatTaxRate = (value: number) => `${value.toLocaleString('de-DE', { maximumFractionDigits: 2 })}%`;
+
+    const drawTextRight = (
+      text: string,
+      x: number,
+      y: number,
+      size: number,
+      fontToUse: PDFFont = font,
+      color: RGB = textColor,
+      targetPage: PDFPage = page,
+    ) => {
+      const textWidth = fontToUse.widthOfTextAtSize(text, size);
+      targetPage.drawText(text, { x: x - textWidth, y, size, font: fontToUse, color });
+    };
+
+    const drawTextCenter = (
+      text: string,
+      x: number,
+      y: number,
+      size: number,
+      fontToUse: PDFFont = font,
+      color: RGB = textColor,
+      targetPage: PDFPage = page,
+    ) => {
+      const textWidth = fontToUse.widthOfTextAtSize(text, size);
+      targetPage.drawText(text, { x: x - textWidth / 2, y, size, font: fontToUse, color });
+    };
+
+    const truncateText = (text: string, maxWidth: number, size: number, fontToUse: PDFFont = font) => {
+      if (fontToUse.widthOfTextAtSize(text, size) <= maxWidth) return text;
+
+      let trimmed = text;
+      while (trimmed.length > 0 && fontToUse.widthOfTextAtSize(`${trimmed}...`, size) > maxWidth) {
+        trimmed = trimmed.slice(0, -1);
+      }
+
+      return trimmed ? `${trimmed}...` : '';
+    };
+
+    const splitText = (text: string, maxWidth: number, size: number, fontToUse: PDFFont = font): string[] => {
+      const normalized = text.replace(/\s+/g, ' ').trim();
+      if (!normalized) return [''];
+
+      const splitLongWord = (word: string) => {
+        const parts: string[] = [];
+        let part = '';
+
+        Array.from(word).forEach(char => {
+          const candidate = part + char;
+          if (!part || fontToUse.widthOfTextAtSize(candidate, size) <= maxWidth) {
+            part = candidate;
+          } else {
+            parts.push(part);
+            part = char;
+          }
+        });
+
+        if (part) parts.push(part);
+        return parts;
+      };
+
+      const lines: string[] = [];
+      let currentLine = '';
+
+      normalized.split(' ').forEach(word => {
+        const wordParts = fontToUse.widthOfTextAtSize(word, size) > maxWidth ? splitLongWord(word) : [word];
+
+        wordParts.forEach(part => {
+          const candidate = currentLine ? `${currentLine} ${part}` : part;
+          if (fontToUse.widthOfTextAtSize(candidate, size) <= maxWidth) {
+            currentLine = candidate;
+          } else {
+            if (currentLine) lines.push(currentLine);
+            currentLine = part;
+          }
+        });
+      });
+
+      if (currentLine) lines.push(currentLine);
+      return lines.length > 0 ? lines : [''];
+    };
+
+    const drawCard = (
+      x: number,
+      topY: number,
+      cardWidth: number,
+      cardHeight: number,
+      color: RGB,
+      borderColor: RGB = hairline,
+      targetPage: PDFPage = page,
+    ) => {
+      targetPage.drawRectangle({
+        x,
+        y: topY - cardHeight,
+        width: cardWidth,
+        height: cardHeight,
+        color,
+        borderColor,
+        borderWidth: 0.6,
+      });
+    };
+
+    let logoImage: PDFImage | undefined;
     if (settings?.logoUrl) {
       try {
-        const logoBytes = await fetch(settings.logoUrl).then(res => res.arrayBuffer());
-        const logoExt = settings.logoUrl.split('.').pop()?.toLowerCase();
-        let logoImage;
+        const logoResponse = await fetch(settings.logoUrl);
+        if (!logoResponse.ok) {
+          throw new Error('Logo konnte nicht geladen werden.');
+        }
+
+        const logoBytes = await logoResponse.arrayBuffer();
+        const logoExt = settings.logoUrl.split('?')[0]?.split('.').pop()?.toLowerCase();
 
         if (logoExt === 'png') {
           logoImage = await pdfDoc.embedPng(logoBytes);
         } else if (logoExt === 'jpg' || logoExt === 'jpeg') {
           logoImage = await pdfDoc.embedJpg(logoBytes);
         }
-
-        if (logoImage) {
-          const maxWidth = 180;
-          const maxHeight = 80;
-          const scale = Math.min(maxWidth / logoImage.width, maxHeight / logoImage.height);
-          const logoDims = logoImage.scale(scale);
-
-          page.drawImage(logoImage, {
-            x: width - margin - logoDims.width,
-            y: height - margin - logoDims.height + 10,
-            width: logoDims.width,
-            height: logoDims.height,
-          });
-        }
       } catch (error) {
         console.error("Failed to embed logo:", error);
       }
     }
 
-    // --- SENDER LINE (DIN 5008 Style) ---
-    const senderLineY = height - 125;
-    if (settings?.companyName) {
-      let senderText = settings.companyName;
-      if (settings?.companyAddress) {
-        const city = settings.companyAddress.split('\n').pop()?.split(' ').slice(1).join(' ');
-        const street = settings.companyAddress.split('\n')[0];
-        senderText += ` • ${street} `;
-        if (city) senderText += ` • ${city} `;
+    const toSEPA = (value: string) => {
+      const map: Record<string, string> = {
+        'ä': 'ae',
+        'ö': 'oe',
+        'ü': 'ue',
+        'Ä': 'Ae',
+        'Ö': 'Oe',
+        'Ü': 'Ue',
+        'ß': 'ss',
+      };
+
+      return value
+        .replace(/[äöüÄÖÜß]/g, match => map[match] ?? match)
+        .replace(/[^A-Za-z0-9/?:().,'+ -]/g, '')
+        .trim();
+    };
+
+    let qrCodeImage: PDFImage | undefined;
+    const canRenderQRCode = includeQRCode && Boolean(settings?.iban && settings?.companyName);
+    if (canRenderQRCode && !forPreview) {
+      try {
+        const finalIban = settings?.iban?.replace(/\s/g, '').toUpperCase() ?? '';
+        const giroCodeData = [
+          'BCD',
+          '002',
+          '1',
+          'SCT',
+          settings?.bic?.trim() ?? '',
+          toSEPA(settings?.companyName ?? '').substring(0, 70),
+          finalIban,
+          `EUR${grossTotal.toFixed(2)}`,
+          '',
+          '',
+          toSEPA(invoiceNumber || '').substring(0, 140),
+        ].join('\n');
+
+        const qrCodeDataUrl = await QRCode.toDataURL(giroCodeData, {
+          errorCorrectionLevel: 'M',
+          type: 'image/png',
+          margin: 4,
+        });
+        qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
+      } catch (error) {
+        console.error("Error generating QR code:", error);
       }
+    }
 
-      page.drawText(senderText, { x: margin, y: senderLineY, size: 7, font, color: secondaryColor });
+    const drawDocumentHeader = (targetPage: PDFPage) => {
+      const headerHeight = 68;
+      const headerBottom = height - headerHeight;
 
-      const senderWidth = font.widthOfTextAtSize(senderText, 7);
-      page.drawLine({
-        start: { x: margin, y: senderLineY - 2 },
-        end: { x: margin + senderWidth, y: senderLineY - 2 },
-        thickness: 0.5,
-        color: secondaryColor,
+      targetPage.drawRectangle({ x: 0, y: headerBottom, width, height: headerHeight, color: brandDark });
+      targetPage.drawRectangle({ x: 0, y: headerBottom, width, height: 5, color: brandAccent });
+      targetPage.drawRectangle({ x: 0, y: headerBottom, width: 5, height: headerHeight, color: brandAccent });
+
+      targetPage.drawText('RECHNUNG', {
+        x: margin,
+        y: height - 44,
+        size: 22,
+        font: boldFont,
+        color: white,
       });
-    }
 
-    // --- ADDRESS FIELD ---
-    let addressY = senderLineY - 15;
-    const addressLines = customerAddress.split('\n');
-    addressLines.forEach(line => {
-      page.drawText(line, { x: margin, y: addressY, size: 11, font, color: primaryColor });
-      addressY -= 15;
-    });
+      if (logoImage) {
+        const logoCardWidth = 112;
+        const logoCardHeight = 36;
+        const logoCardX = width - margin - logoCardWidth;
+        const logoCardTop = height - 16;
+        drawCard(logoCardX, logoCardTop, logoCardWidth, logoCardHeight, white, rgb(0.78, 0.86, 0.95), targetPage);
 
-    // --- INVOICE INFO BLOCK (Right side) ---
-    let infoY = senderLineY - 20;
-    const infoX = width - margin - 200;
-
-    const infoBoxHeight = 130;
-    const infoBoxWidth = 210;
-    const infoBoxBottom = infoY - 115;
-
-    page.drawRectangle({
-      x: infoX - 10,
-      y: infoBoxBottom,
-      width: infoBoxWidth,
-      height: infoBoxHeight,
-      color: rgb(0.98, 0.98, 0.98),
-    });
-
-    page.drawRectangle({
-      x: infoX - 10,
-      y: infoBoxBottom,
-      width: 3,
-      height: infoBoxHeight,
-      color: accentColor,
-    });
-
-    page.drawText('RECHNUNG', { x: infoX, y: infoY, size: 16, font: boldFont, color: primaryColor });
-    infoY -= 25;
-
-    const infoGap = 16;
-
-    const drawInfoRow = (label: string, value: string) => {
-      page.drawText(label, { x: infoX, y: infoY, size: 9, font, color: secondaryColor });
-      drawTextRight(value, width - margin - 10, infoY, 9, boldFont, primaryColor);
-      infoY -= infoGap;
-    };
-
-    drawInfoRow('Rechnungs-Nr.:', invoiceNumber || 'RE-XXXX');
-    drawInfoRow('Datum:', date ? new Date(date).toLocaleDateString('de-DE') : '-');
-
-    if (selectedCustomer?.id) {
-      drawInfoRow('Kundennummer:', selectedCustomer.id.toString());
-    }
-
-    infoY -= 5;
-
-    if (deliveryDate) {
-      drawInfoRow('Leistungsdatum:', new Date(deliveryDate).toLocaleDateString('de-DE'));
-    }
-
-    if (dueDate) {
-      drawInfoRow('Fällig am:', new Date(dueDate).toLocaleDateString('de-DE'));
-    }
-
-    // --- TABLE ---
-    y = height - 300;
-
-    const colX = {
-      pos: margin,
-      desc: margin + 30,
-      qty: width - margin - 260,
-      unit: width - margin - 230,
-      price: width - margin - 130,
-      tax: width - margin - 70,
-      total: width - margin
-    };
-
-    page.drawRectangle({
-      x: margin,
-      y: y - 5,
-      width: width - 2 * margin,
-      height: 20,
-      color: lightBg,
-    });
-
-    page.drawText('Pos.', { x: colX.pos + 5, y, size: 9, font: boldFont, color: accentColor });
-    page.drawText('Beschreibung', { x: colX.desc, y, size: 9, font: boldFont, color: accentColor });
-    drawTextRight('Menge', colX.qty, y, 9, boldFont, accentColor);
-    page.drawText('Einh.', { x: colX.unit, y, size: 9, font: boldFont, color: accentColor });
-    drawTextRight('Preis', colX.price, y, 9, boldFont, accentColor);
-    drawTextRight('MwSt', colX.tax, y, 9, boldFont, accentColor);
-    drawTextRight('Gesamt', colX.total - 5, y, 9, boldFont, accentColor);
-
-    y -= 25;
-
-    let netTotal = 0;
-    let taxTotal = 0;
-
-    items.forEach((item, index) => {
-      const lineNet = item.quantity * item.unitPrice;
-      const lineTax = lineNet * (item.taxRate / 100);
-
-      netTotal += lineNet;
-      taxTotal += lineTax;
-
-      const maxDescWidth = colX.qty - colX.desc - 10;
-      const words = (item.description || 'Position').split(' ');
-      let descLines: string[] = [];
-      let currentLine = words[0] || '';
-
-      for (let i = 1; i < words.length; i++) {
-        const word = words[i];
-        const textWidth = font.widthOfTextAtSize(currentLine + " " + word, 10);
-        if (textWidth < maxDescWidth) {
-          currentLine += " " + word;
-        } else {
-          descLines.push(currentLine);
-          currentLine = word;
-        }
+        const scale = Math.min((logoCardWidth - 22) / logoImage.width, (logoCardHeight - 16) / logoImage.height);
+        const logoDims = logoImage.scale(scale);
+        targetPage.drawImage(logoImage, {
+          x: logoCardX + (logoCardWidth - logoDims.width) / 2,
+          y: logoCardTop - logoCardHeight + (logoCardHeight - logoDims.height) / 2,
+          width: logoDims.width,
+          height: logoDims.height,
+        });
       }
-      descLines.push(currentLine);
+    };
 
-      const lineHeight = 12;
-      const itemHeight = Math.max(20, descLines.length * lineHeight + 8);
+    const drawContinuationHeader = (targetPage: PDFPage) => {
+      targetPage.drawRectangle({ x: 0, y: height - 58, width, height: 58, color: brandDark });
+      targetPage.drawRectangle({ x: 0, y: height - 58, width, height: 5, color: brandAccent });
+      targetPage.drawText('RECHNUNG', { x: margin, y: height - 36, size: 14, font: boldFont, color: white });
+      targetPage.drawText('Fortsetzung', { x: margin, y: height - 50, size: 8, font, color: lightText });
+      drawTextRight(invoiceNumber || 'RE-XXXX', width - margin, height - 36, 10, boldFont, white, targetPage);
 
-      if (index % 2 === 0) {
-        page.drawRectangle({
+      return height - 88;
+    };
+
+    const drawFooter = (targetPage: PDFPage, pageNumber: number, pageCount: number) => {
+      const footerTop = 92;
+      const footerStartY = 74;
+      const footerFontSize = 7;
+      const footerLineHeight = 9;
+      const columnWidth = (contentWidth - 44) / 3;
+      const contactLine = [settings?.email, settings?.telephone].filter(isNonEmptyString).join(' | ');
+      const footerLeft = [companyName, ...companyAddressLines.slice(0, 2), contactLine].filter(isNonEmptyString);
+      const footerCenter = [
+        settings?.bankName,
+        settings?.iban ? `IBAN: ${settings.iban}` : undefined,
+        settings?.bic ? `BIC: ${settings.bic}` : undefined,
+      ].filter(isNonEmptyString);
+      const footerRight = [
+        settings?.taxNumber ? 'Steuernummer:' : undefined,
+        settings?.taxNumber,
+        ...(
+          settings?.footerText
+            ?.split('\n')
+            .map(line => line.trim()) ?? []
+        ),
+      ].filter(isNonEmptyString);
+
+      targetPage.drawLine({
+        start: { x: margin, y: footerTop },
+        end: { x: width - margin, y: footerTop },
+        thickness: 0.6,
+        color: hairline,
+      });
+      targetPage.drawRectangle({ x: margin, y: footerTop + 3, width: 72, height: 2, color: brandAccent });
+
+      let footerY = footerStartY;
+      footerLeft.slice(0, 4).forEach(line => {
+        targetPage.drawText(truncateText(line, columnWidth, footerFontSize), {
           x: margin,
-          y: y - itemHeight + 12,
-          width: width - 2 * margin,
-          height: itemHeight,
-          color: rgb(0.98, 0.98, 0.98),
+          y: footerY,
+          size: footerFontSize,
+          font,
+          color: mutedColor,
+        });
+        footerY -= footerLineHeight;
+      });
+
+      footerY = footerStartY;
+      footerCenter.slice(0, 4).forEach(line => {
+        drawTextCenter(truncateText(line, columnWidth, footerFontSize), width / 2, footerY, footerFontSize, font, mutedColor, targetPage);
+        footerY -= footerLineHeight;
+      });
+
+      footerY = footerStartY;
+      footerRight.slice(0, 4).forEach(line => {
+        drawTextRight(truncateText(line, columnWidth, footerFontSize), width - margin, footerY, footerFontSize, font, mutedColor, targetPage);
+        footerY -= footerLineHeight;
+      });
+
+      const pageText = `Seite ${pageNumber} von ${pageCount}`;
+      drawTextCenter(pageText, width / 2, 24, 8, font, mutedColor, targetPage);
+    };
+
+    const addContentPage = () => {
+      page = pdfDoc.addPage(pageSize);
+      return drawContinuationHeader(page);
+    };
+
+    const drawTableHeader = (topY: number) => {
+      const colX = {
+        pos: margin + 15,
+        desc: margin + 48,
+        qty: width - margin - 236,
+        unit: width - margin - 204,
+        price: width - margin - 124,
+        tax: width - margin - 70,
+        total: width - margin - 10,
+      };
+
+      page.drawRectangle({
+        x: margin,
+        y: topY - 28,
+        width: contentWidth,
+        height: 28,
+        color: brandDark,
+      });
+      page.drawRectangle({ x: margin, y: topY - 28, width: 5, height: 28, color: brandAccent });
+
+      const labelY = topY - 18;
+      page.drawText('Pos.', { x: colX.pos, y: labelY, size: 8, font: boldFont, color: white });
+      page.drawText('Beschreibung', { x: colX.desc, y: labelY, size: 8, font: boldFont, color: white });
+      drawTextRight('Menge', colX.qty, labelY, 8, boldFont, white);
+      page.drawText('Einh.', { x: colX.unit, y: labelY, size: 8, font: boldFont, color: white });
+      drawTextRight('Preis', colX.price, labelY, 8, boldFont, white);
+      drawTextRight('USt.', colX.tax, labelY, 8, boldFont, white);
+      drawTextRight('Netto', colX.total, labelY, 8, boldFont, white);
+
+      return topY - 42;
+    };
+
+    let y: number;
+
+    const ensureSpace = (requiredHeight: number, withTableHeader: boolean = false) => {
+      if (y - requiredHeight >= bottomContentY) return;
+
+      y = addContentPage();
+      if (withTableHeader) {
+        y = drawTableHeader(y);
+      }
+    };
+
+    const drawFirstPageIntro = () => {
+      drawDocumentHeader(page);
+
+      const senderText = [companyName, companyAddressLines[0], companyAddressLines.at(-1)]
+        .filter(isNonEmptyString)
+        .join(' • ');
+      if (senderText) {
+        const senderY = height - 94;
+        page.drawText(truncateText(senderText, contentWidth, 7, font), { x: margin, y: senderY, size: 7, font, color: mutedColor });
+        page.drawLine({
+          start: { x: margin, y: senderY - 4 },
+          end: { x: margin + Math.min(font.widthOfTextAtSize(senderText, 7), contentWidth), y: senderY - 4 },
+          thickness: 0.4,
+          color: hairline,
         });
       }
 
-      page.drawText((index + 1).toString(), { x: colX.pos + 5, y, size: 10, font, color: secondaryColor });
+      const cardTop = height - 116;
+      const cardHeight = 112;
+      const gap = 18;
+      const detailsWidth = 214;
+      const addressWidth = contentWidth - detailsWidth - gap;
+      const detailsX = margin + addressWidth + gap;
 
-      descLines.forEach((line, i) => {
-        page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font, color: primaryColor });
+      drawCard(margin, cardTop, addressWidth, cardHeight, surface, hairline);
+      page.drawRectangle({ x: margin, y: cardTop - cardHeight, width: 5, height: cardHeight, color: brandAccent });
+      page.drawText('EMPFÄNGER', { x: margin + 17, y: cardTop - 24, size: 7, font: boldFont, color: brandAccent });
+
+      const displayedCustomerLines = (customerLines.length > 0 ? customerLines : ['Empfänger noch nicht angegeben']).slice(0, 6);
+      let addressY = cardTop - 46;
+      displayedCustomerLines.forEach((line, index) => {
+        page.drawText(truncateText(line, addressWidth - 34, index === 0 ? 11 : 10, index === 0 ? boldFont : font), {
+          x: margin + 17,
+          y: addressY,
+          size: index === 0 ? 11 : 10,
+          font: index === 0 ? boldFont : font,
+          color: index === 0 ? textColor : mutedColor,
+        });
+        addressY -= 15;
       });
 
-      drawTextRight(item.quantity.toString(), colX.qty, y, 10, font, primaryColor);
-      page.drawText(item.unit, { x: colX.unit, y, size: 10, font, color: primaryColor });
-      drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font, primaryColor);
-      drawTextRight(`${item.taxRate}% `, colX.tax, y, 10, font, primaryColor);
-      drawTextRight(formatCurrency(lineNet), colX.total - 5, y, 10, font, primaryColor);
+      drawCard(detailsX, cardTop, detailsWidth, cardHeight, white, hairline);
+      page.drawRectangle({ x: detailsX, y: cardTop - 32, width: detailsWidth, height: 32, color: surfaceStrong });
+      page.drawText('Rechnungsdetails', { x: detailsX + 15, y: cardTop - 21, size: 9, font: boldFont, color: textColor });
 
-      const separatorY = y - ((descLines.length - 1) * lineHeight) - 8;
+      const detailRows: Array<[string, string]> = [
+        ['Rechnungs-Nr.', invoiceNumber || 'RE-XXXX'],
+        ['Datum', formatDate(date)],
+      ];
 
-      page.drawLine({
-        start: { x: margin, y: separatorY },
-        end: { x: width - margin, y: separatorY },
-        thickness: 0.5,
-        color: rgb(0.92, 0.92, 0.92),
+      if (selectedCustomer?.id) detailRows.push(['Kundennr.', selectedCustomer.id.toString()]);
+      if (deliveryDate) detailRows.push(['Leistung', formatDate(deliveryDate)]);
+      if (dueDate) detailRows.push(['Fällig', formatDate(dueDate)]);
+
+      let detailY = cardTop - 48;
+      detailRows.slice(0, 5).forEach(([label, value]) => {
+        page.drawText(label, { x: detailsX + 15, y: detailY, size: 8, font, color: mutedColor });
+        drawTextRight(truncateText(value, 92, 8.5, boldFont), detailsX + detailsWidth - 15, detailY, 8.5, boldFont, textColor);
+        detailY -= 15;
       });
 
-      y = separatorY - 12;
+      return cardTop - cardHeight - 28;
+    };
+
+    y = drawFirstPageIntro();
+    page.drawText('Positionen', { x: margin, y, size: 14, font: boldFont, color: textColor });
+    drawTextRight(`${calculatedItems.length} Position${calculatedItems.length === 1 ? '' : 'en'}`, width - margin, y + 2, 9, font, mutedColor);
+    y -= 20;
+    y = drawTableHeader(y);
+
+    const colX = {
+      pos: margin + 15,
+      desc: margin + 48,
+      qty: width - margin - 236,
+      unit: width - margin - 204,
+      price: width - margin - 124,
+      tax: width - margin - 70,
+      total: width - margin - 10,
+    };
+    const descriptionWidth = colX.qty - colX.desc - 18;
+
+    calculatedItems.forEach((item, index) => {
+      const descLines = splitText(item.description || 'Position', descriptionWidth, 9.5, font);
+      const rowHeight = Math.max(38, descLines.length * 12 + 20);
+
+      ensureSpace(rowHeight + 6, true);
+
+      const rowTop = y;
+      const rowBottom = rowTop - rowHeight;
+      const fillColor = index % 2 === 0 ? surface : white;
+      page.drawRectangle({
+        x: margin,
+        y: rowBottom,
+        width: contentWidth,
+        height: rowHeight,
+        color: fillColor,
+        borderColor: rgb(0.9, 0.93, 0.97),
+        borderWidth: 0.35,
+      });
+      page.drawRectangle({ x: margin, y: rowBottom, width: 3, height: rowHeight, color: index % 2 === 0 ? brandAccent : hairline });
+
+      const textY = rowTop - 16;
+      page.drawText((index + 1).toString().padStart(2, '0'), { x: colX.pos, y: textY, size: 8.5, font: boldFont, color: brandAccent });
+
+      descLines.forEach((line, lineIndex) => {
+        page.drawText(line, { x: colX.desc, y: textY - (lineIndex * 12), size: 9.5, font, color: textColor });
+      });
+
+      drawTextRight(formatQuantity(item.quantity), colX.qty, textY, 9, font, textColor);
+      page.drawText(truncateText(item.unit, 45, 8.5, font), { x: colX.unit, y: textY, size: 8.5, font, color: mutedColor });
+      drawTextRight(formatCurrency(item.unitPrice), colX.price, textY, 9, font, textColor);
+      drawTextRight(formatTaxRate(item.taxRate), colX.tax, textY, 9, font, mutedColor);
+      drawTextRight(formatCurrency(item.lineNet), colX.total, textY, 9, boldFont, textColor);
+
+      y = rowBottom - 4;
     });
 
     y -= 10;
+    ensureSpace(150);
 
-    // --- TOTALS ---
-    const totalX = width - margin;
-    const labelX = totalX - 90;
-    const grossTotal = netTotal + taxTotal;
+    const summaryTop = y;
+    const summaryHeight = 126;
+    const summaryGap = 18;
+    const totalCardWidth = 214;
+    const paymentCardWidth = contentWidth - totalCardWidth - summaryGap;
+    const totalCardX = width - margin - totalCardWidth;
 
-    page.drawLine({
-      start: { x: labelX - 40, y: y + 5 },
-      end: { x: totalX, y: y + 5 },
-      thickness: 0.5,
-      color: rgb(0.8, 0.8, 0.8),
+    drawCard(margin, summaryTop, paymentCardWidth, summaryHeight, surfaceStrong, hairline);
+    page.drawText('Zahlung', { x: margin + 16, y: summaryTop - 24, size: 10, font: boldFont, color: textColor });
+    page.drawText(dueDate ? `Zahlbar bis ${formatDate(dueDate)}` : 'Zahlbar nach Erhalt der Rechnung', {
+      x: margin + 16,
+      y: summaryTop - 42,
+      size: 9,
+      font: boldFont,
+      color: brandBlue,
     });
 
-    y -= 15;
-
-    drawTextRight('Netto:', labelX, y, 10, font);
-    drawTextRight(formatCurrency(netTotal), totalX, y, 10, font);
-    y -= 15;
-
-    if (taxTotal > 0) {
-      drawTextRight('zzgl. USt.:', labelX, y, 10, font);
-      drawTextRight(formatCurrency(taxTotal), totalX, y, 10, font);
-    } else {
-      drawTextRight('zzgl. USt. 0%:', labelX, y, 10, font);
-      drawTextRight('0,00 €', totalX, y, 10, font);
-    }
-    y -= 20;
-
-    const totalLabel = 'Gesamtbetrag:';
-    const totalLabelWidth = boldFont.widthOfTextAtSize(totalLabel, 12);
-    const totalLineStart = labelX - totalLabelWidth;
-
-    page.drawLine({
-      start: { x: totalLineStart, y: y + 12 },
-      end: { x: totalX, y: y + 12 },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
-
-    drawTextRight(totalLabel, labelX, y, 12, boldFont);
-    drawTextRight(formatCurrency(grossTotal), totalX, y, 12, boldFont);
-
-    y -= 4;
-    page.drawLine({
-      start: { x: totalLineStart, y: y },
-      end: { x: totalX, y: y },
-      thickness: 0.5,
-      color: rgb(0, 0, 0),
-    });
-    page.drawLine({
-      start: { x: totalLineStart, y: y - 2 },
-      end: { x: totalX, y: y - 2 },
-      thickness: 0.5,
-      color: rgb(0, 0, 0),
-    });
-
-    y -= 40;
-
-    // --- NOTES & LEGAL ---
-    if (notes) {
-      page.drawText('Anmerkungen:', { x: margin, y, size: 10, font: boldFont });
-      y -= 15;
-      const noteLines = notes.split('\n');
-      noteLines.forEach(line => {
-        page.drawText(line, { x: margin, y, size: 10, font });
-        y -= 12;
+    const qrSize = 72;
+    const qrPadding = canRenderQRCode ? 96 : 0;
+    const paymentTextWidth = paymentCardWidth - 32 - qrPadding;
+    const paymentLines = [
+      settings?.bankName ? `Bank: ${settings.bankName}` : undefined,
+      settings?.iban ? `IBAN: ${settings.iban}` : undefined,
+      settings?.bic ? `BIC: ${settings.bic}` : undefined,
+      invoiceNumber ? `Verwendungszweck: ${invoiceNumber}` : undefined,
+    ].filter(isNonEmptyString);
+    let paymentY = summaryTop - 62;
+    paymentLines.slice(0, 4).forEach(line => {
+      page.drawText(truncateText(line, paymentTextWidth, 8, font), {
+        x: margin + 16,
+        y: paymentY,
+        size: 8,
+        font,
+        color: mutedColor,
       });
-      y -= 20;
-    }
-
-    if (taxTotal === 0) {
-      page.drawText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: margin, y, size: 10, font });
-      y -= 15;
-    }
-
-    if (dueDate) {
-      page.drawText(`Bitte überweisen Sie den Betrag bis zum ${new Date(dueDate).toLocaleDateString('de-DE')}.`, { x: margin, y, size: 10, font });
-    }
-
-    // --- FOOTER ---
-    const footerY = 60;
-    page.drawLine({
-      start: { x: margin, y: footerY + 15 },
-      end: { x: width - margin, y: footerY + 15 },
-      thickness: 0.5,
-      color: rgb(0.7, 0.7, 0.7),
+      paymentY -= 12;
     });
 
-    // --- QR CODE (GiroCode) - Skip for preview to improve performance ---
-    if (includeQRCode && !forPreview) {
-      if (settings?.iban && settings?.companyName) {
-        const iban = settings.iban;
-        const bic = settings.bic;
+    if (canRenderQRCode) {
+      const qrX = margin + paymentCardWidth - qrSize - 16;
+      const qrY = summaryTop - summaryHeight + 26;
 
-        if (iban) {
-          const cleanName = (settings.companyName || "").replace(/[\r\n]/g, "").trim();
-          const finalIban = (iban || "").replace(/\s/g, "").toUpperCase();
-
-          const toSEPA = (str: string) => {
-            const map: { [key: string]: string } = {
-              'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss'
-            };
-            let cleaned = str.replace(/[äöüÄÖÜß]/g, m => map[m]);
-            cleaned = cleaned.replace(/[^a-zA-Z0-9\/\-\?:\(\)\.,'\+ ]/g, '');
-            return cleaned.trim();
-          };
-
-          let giroCodeData = "BCD\n";
-          giroCodeData += "002\n";
-          giroCodeData += "1\n";
-          giroCodeData += "SCT\n";
-          giroCodeData += (bic || "").trim() + "\n";
-          giroCodeData += toSEPA(cleanName).substring(0, 70) + "\n";
-          giroCodeData += finalIban + "\n";
-          giroCodeData += `EUR${grossTotal.toFixed(2)}\n`;
-          giroCodeData += "\n";
-          giroCodeData += "\n";
-          giroCodeData += toSEPA(invoiceNumber || "").substring(0, 140) + "\n";
-
-          try {
-            const qrCodeDataUrl = await QRCode.toDataURL(giroCodeData, {
-              errorCorrectionLevel: 'M',
-              type: 'image/png',
-              margin: 4
-            });
-            const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
-            const qrDim = 80;
-
-            page.drawImage(qrCodeImage, {
-              x: width - margin - qrDim,
-              y: footerY + 30,
-              width: qrDim,
-              height: qrDim,
-            });
-
-            page.drawText('GiroCode scannen & zahlen', {
-              x: width - margin - qrDim,
-              y: footerY + 25,
-              size: 8,
-              font,
-              color: rgb(0.4, 0.4, 0.4)
-            });
-          } catch (err) {
-            console.error("Error generating QR code:", err);
-          }
-        }
+      if (qrCodeImage) {
+        page.drawImage(qrCodeImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+      } else if (forPreview) {
+        page.drawRectangle({
+          x: qrX,
+          y: qrY,
+          width: qrSize,
+          height: qrSize,
+          color: white,
+          borderColor: hairline,
+          borderWidth: 1,
+        });
+        drawTextCenter('QR-Code', qrX + qrSize / 2, qrY + 35, 8, boldFont, mutedColor);
       }
-    } else if (includeQRCode && forPreview) {
-      // Show placeholder for QR code in preview
-      page.drawRectangle({
-        x: width - margin - 80,
-        y: footerY + 30,
-        width: 80,
-        height: 80,
-        color: rgb(0.95, 0.95, 0.95),
-        borderColor: rgb(0.8, 0.8, 0.8),
-        borderWidth: 1,
-      });
-      page.drawText('QR-Code', {
-        x: width - margin - 60,
-        y: footerY + 70,
-        size: 8,
-        font,
-        color: rgb(0.6, 0.6, 0.6)
-      });
+
+      drawTextCenter('GiroCode', qrX + qrSize / 2, qrY - 10, 7, font, mutedColor);
     }
 
-    let footerTextLeft = "";
-    if (settings?.companyName) footerTextLeft += settings.companyName + "\n";
-    if (settings?.companyAddress) footerTextLeft += settings.companyAddress;
+    drawCard(totalCardX, summaryTop, totalCardWidth, summaryHeight, brandDark, brandDark);
+    page.drawRectangle({ x: totalCardX, y: summaryTop - summaryHeight, width: totalCardWidth, height: 46, color: brandAccent });
+    page.drawText('Zusammenfassung', { x: totalCardX + 16, y: summaryTop - 24, size: 10, font: boldFont, color: white });
 
-    let footerTextCenter = "";
-    if (settings?.bankName) footerTextCenter += settings.bankName + "\n";
-    if (settings?.iban) footerTextCenter += "IBAN: " + settings.iban + "\n";
-    if (settings?.bic) footerTextCenter += "BIC: " + settings.bic;
+    let totalY = summaryTop - 48;
+    const totalRows: Array<[string, string]> = [
+      ['Netto', formatCurrency(netTotal)],
+      [taxTotal > 0 ? 'zzgl. USt.' : 'zzgl. USt. 0%', taxTotal > 0 ? formatCurrency(taxTotal) : '0,00 €'],
+    ];
 
-    let footerTextRight = "";
-    if (settings?.taxNumber) footerTextRight += "Steuernummer:\n" + settings.taxNumber + "\n";
-    if (settings?.footerText) footerTextRight += "\n" + settings.footerText;
-
-    const footerFontSize = 8;
-    const footerLineHeight = 10;
-
-    let fy = footerY;
-    footerTextLeft.split('\n').forEach(line => {
-      page.drawText(line, { x: margin, y: fy, size: footerFontSize, font, color: rgb(0.4, 0.4, 0.4) });
-      fy -= footerLineHeight;
+    totalRows.forEach(([label, value]) => {
+      page.drawText(label, { x: totalCardX + 16, y: totalY, size: 8.5, font, color: lightText });
+      drawTextRight(value, totalCardX + totalCardWidth - 16, totalY, 8.5, font, white);
+      totalY -= 17;
     });
 
-    fy = footerY;
-    footerTextCenter.split('\n').forEach(line => {
-      drawTextCenter(line, width / 2, fy, footerFontSize, font, rgb(0.4, 0.4, 0.4));
-      fy -= footerLineHeight;
-    });
+    page.drawText('Gesamtbetrag', { x: totalCardX + 16, y: summaryTop - summaryHeight + 27, size: 8.5, font: boldFont, color: white });
+    drawTextRight(formatCurrency(grossTotal), totalCardX + totalCardWidth - 16, summaryTop - summaryHeight + 24, 14, boldFont, white);
 
-    fy = footerY;
-    footerTextRight.split('\n').forEach(line => {
-      drawTextRight(line, width - margin, fy, footerFontSize, font, rgb(0.4, 0.4, 0.4));
-      fy -= footerLineHeight;
-    });
+    y = summaryTop - summaryHeight - 24;
 
-    // Page Numbers
-    const pageCount = pdfDoc.getPageCount();
-    const pages = pdfDoc.getPages();
-    pages.forEach((p, i) => {
-      const { width: pageWidth } = p.getSize();
-      const text = `Seite ${i + 1} von ${pageCount} `;
-      const textWidth = font.widthOfTextAtSize(text, 8);
-      p.drawText(text, {
-        x: (pageWidth - textWidth) / 2,
-        y: 15,
-        size: 8,
-        font,
-        color: secondaryColor
+    const noteLines: string[] = [];
+    if (notes.trim()) {
+      notes.split('\n').forEach(line => {
+        noteLines.push(...splitText(line, contentWidth - 36, 9, font));
       });
+    }
+    if (taxTotal === 0) {
+      if (noteLines.length > 0) noteLines.push('');
+      noteLines.push(...splitText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', contentWidth - 36, 9, font));
+    }
+
+    const drawTextBlockCard = (title: string, lines: string[]) => {
+      let remainingLines = [...lines];
+
+      while (remainingLines.length > 0) {
+        const minimumCardHeight = 56;
+        if (y - bottomContentY < minimumCardHeight) {
+          y = addContentPage();
+        }
+
+        const availableLineCount = Math.max(1, Math.floor((y - bottomContentY - 44) / 12));
+        const pageLines = remainingLines.slice(0, availableLineCount);
+        const cardHeight = 40 + pageLines.length * 12;
+
+        drawCard(margin, y, contentWidth, cardHeight, white, hairline);
+        page.drawRectangle({ x: margin, y: y - 30, width: contentWidth, height: 30, color: surface });
+        page.drawText(title, { x: margin + 16, y: y - 20, size: 9.5, font: boldFont, color: textColor });
+
+        let lineY = y - 45;
+        pageLines.forEach(line => {
+          if (line) {
+            page.drawText(line, { x: margin + 16, y: lineY, size: 9, font, color: mutedColor });
+          }
+          lineY -= 12;
+        });
+
+        y = y - cardHeight - 14;
+        remainingLines = remainingLines.slice(pageLines.length);
+      }
+    };
+
+    if (noteLines.length > 0) {
+      drawTextBlockCard('Hinweise', noteLines);
+    }
+
+    if (y - 30 >= bottomContentY) {
+      page.drawText('Vielen Dank für Ihr Vertrauen.', { x: margin, y, size: 10, font: boldFont, color: brandBlue });
+    }
+
+    const pages = pdfDoc.getPages();
+    const pageCount = pages.length;
+    pages.forEach((pdfPage, index) => {
+      drawFooter(pdfPage, index + 1, pageCount);
     });
 
     return await pdfDoc.save();
@@ -767,24 +938,34 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
   const generatePreview = useCallback(async () => {
     if (!showPreview) return;
 
+    const generationId = previewGenerationRef.current + 1;
+    previewGenerationRef.current = generationId;
     setIsGeneratingPreview(true);
     try {
       const pdfBytes = await generatePDFBytes(true);
       const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
+      const nextUrl = URL.createObjectURL(blob);
 
-      // Revoke old URL to prevent memory leaks
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
+      if (previewGenerationRef.current !== generationId) {
+        URL.revokeObjectURL(nextUrl);
+        return;
       }
 
-      const url = URL.createObjectURL(blob);
-      setPreviewUrl(url);
+      const previousUrl = previewUrlRef.current;
+      previewUrlRef.current = nextUrl;
+      setPreviewUrl(nextUrl);
+
+      if (previousUrl) {
+        window.setTimeout(() => URL.revokeObjectURL(previousUrl), 1000);
+      }
     } catch (error) {
       console.error("Error generating preview:", error);
     } finally {
-      setIsGeneratingPreview(false);
+      if (previewGenerationRef.current === generationId) {
+        setIsGeneratingPreview(false);
+      }
     }
-  }, [showPreview, generatePDFBytes, previewUrl]);
+  }, [showPreview, generatePDFBytes]);
 
   // Debounced preview update
   useEffect(() => {
@@ -803,252 +984,210 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
         clearTimeout(previewTimeoutRef.current);
       }
     };
-  }, [showPreview, customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode, generatePreview]);
+  }, [showPreview, generatePreview]);
 
   // Cleanup preview URL on unmount
   useEffect(() => {
     return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
+      if (previewTimeoutRef.current) {
+        clearTimeout(previewTimeoutRef.current);
+      }
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
       }
     };
-  }, [previewUrl]);
+  }, []);
 
-  // Initial preview generation when preview is enabled
   useEffect(() => {
-    if (showPreview && !previewUrl) {
-      generatePreview();
-    }
-  }, [showPreview, previewUrl, generatePreview]);
+    if (showPreview) return;
 
-  const generatePDF = async () => {
+    previewGenerationRef.current += 1;
+    if (previewTimeoutRef.current) {
+      clearTimeout(previewTimeoutRef.current);
+      previewTimeoutRef.current = null;
+    }
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setPreviewUrl(null);
+    setIsGeneratingPreview(false);
+  }, [showPreview]);
+
+  const buildZugferdData = (): ZugferdData => {
+    let netTotal = 0;
+    let taxTotal = 0;
+    items.forEach((item) => {
+      const lineNet = item.quantity * item.unitPrice;
+      const lineTax = lineNet * (item.taxRate / 100);
+      netTotal += lineNet;
+      taxTotal += lineTax;
+    });
+
+    return {
+      invoiceNumber,
+      date: new Date(date),
+      dueDate: dueDate ? new Date(dueDate) : undefined,
+      deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
+      seller: {
+        name: settings?.companyName || '',
+        address: settings?.companyAddress || '',
+        email: settings?.email,
+        telephone: settings?.telephone,
+        taxNumber: settings?.taxNumber,
+        iban: settings?.iban,
+        bic: settings?.bic,
+      },
+      buyer: {
+        name: customerAddress.split('\n')[0]?.trim() || '',
+        address: customerAddress,
+        email: selectedCustomer?.email,
+        zipCode: selectedCustomer?.zipCode,
+        city: selectedCustomer?.city,
+      },
+      items: items.map(item => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        total: item.quantity * item.unitPrice,
+        unit: item.unit,
+        taxRate: item.taxRate,
+      })),
+      netAmount: netTotal,
+      taxAmount: taxTotal,
+      currency: 'EUR',
+    };
+  };
+
+  const buildInvoiceFileName = (extension: 'pdf' | 'xml') => {
+    const safeNumber = invoiceNumber.replace(/\s+/g, '_').replace(/[^A-Za-z0-9._-]/g, '_');
+    return `Rechnung_${safeNumber}.${extension}`;
+  };
+
+  const uploadGeneratedInvoice = async (file: File): Promise<boolean> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    let uploadRes: Response;
+    try {
+      uploadRes = await fetch('/api/invoices/upload', {
+        method: 'POST',
+        body: formData
+      });
+    } catch (e) {
+      console.error("Auto-upload network error:", e);
+      alert("Fehler beim automatischen Speichern der Rechnung.");
+      return false;
+    }
+
+    if (!uploadRes.ok) {
+      const err = await uploadRes.json().catch(() => null);
+      console.error("Auto-upload failed:", err);
+      alert("Speichern fehlgeschlagen: " + (err?.error || "Unbekannter Fehler"));
+      return false;
+    }
+
+    if (fromQuote) {
+      try {
+        await fetch('/api/quotes', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: fromQuote.id, status: 'ACCEPTED' }),
+        });
+      } catch (e) {
+        console.error('Failed to update quote status:', e);
+      }
+    }
+
+    if (onInvoiceCreated) {
+      onInvoiceCreated();
+    }
+
+    return true;
+  };
+
+  const downloadGeneratedFile = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const convertToPdfA3 = async (basePdfBytes: Uint8Array, xmlContent: string) => {
+    const formData = new FormData();
+    formData.append('pdf', new Blob([basePdfBytes as BlobPart], { type: 'application/pdf' }), 'invoice.pdf');
+    formData.append('xml', new Blob([xmlContent], { type: 'text/xml' }), 'factur-x.xml');
+    formData.append('invoiceNumber', invoiceNumber);
+
+    const response = await fetch('/api/pdfa3', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const message = await response.json()
+        .then((data: { error?: string }) => data.error)
+        .catch(() => null);
+      throw new Error(message ?? 'PDF/A-3-Konvertierung fehlgeschlagen.');
+    }
+
+    return new Uint8Array(await response.arrayBuffer());
+  };
+
+  const createInvoiceFile = async () => {
     setIsGenerating(true);
     try {
-      // Calculate totals for ZUGFeRD
-      let netTotal = 0;
-      let taxTotal = 0;
-      items.forEach((item) => {
-        const lineNet = item.quantity * item.unitPrice;
-        const lineTax = lineNet * (item.taxRate / 100);
-        netTotal += lineNet;
-        taxTotal += lineTax;
-      });
+      const zugferdData = buildZugferdData();
+      const xmlProfile = outputMode === 'xml-only' ? 'xrechnung' : 'factur-x';
+      const validation = validateZugferdData(zugferdData, { profile: xmlProfile });
+      if (!validation.isValid) {
+        alert([
+          'Die E-Rechnung kann noch nicht erstellt werden. Bitte ergänzen Sie:',
+          '',
+          ...validation.errors.map(issue => `- ${issue.message}`),
+        ].join('\n'));
+        return;
+      }
+      if (validation.warnings.length > 0) {
+        console.warn('E-Rechnungshinweise:', validation.warnings);
+      }
 
-      // Generate base PDF bytes (without ZUGFeRD - we need to add it separately for now)
+      const xmlContent = generateZugferdXml(zugferdData, { profile: xmlProfile });
+
+      if (outputMode === 'xml-only') {
+        const fileName = buildInvoiceFileName('xml');
+        const blob = new Blob([xmlContent], { type: 'application/xml' });
+        const file = new File([blob], fileName, { type: 'application/xml' });
+        const uploadSuccess = await uploadGeneratedInvoice(file);
+
+        downloadGeneratedFile(blob, fileName);
+        if (uploadSuccess) {
+          onClose();
+        }
+        return;
+      }
+
+      // Generate base PDF bytes and let the server normalize the final file to PDF/A-3.
       const pdfBytes = await generatePDFBytes(false);
-
-      // For ZUGFeRD, we need to create a new PDFDocument and attach the XML
-      const pdfDoc = await PDFDocument.load(pdfBytes);
-
-      // --- ZUGFeRD XML Integration ---
-      try {
-        const zugferdData = {
-          invoiceNumber,
-          date: new Date(date),
-          dueDate: dueDate ? new Date(dueDate) : undefined,
-          deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
-          seller: {
-            name: settings?.companyName || '',
-            address: settings?.companyAddress || '',
-            email: settings?.email,
-            telephone: settings?.telephone,
-            taxNumber: settings?.taxNumber,
-            iban: settings?.iban,
-            bic: settings?.bic,
-          },
-          buyer: {
-            name: customerAddress.split('\n')[0] || 'Unbekannt',
-            address: customerAddress,
-            email: selectedCustomer?.email,
-            zipCode: selectedCustomer?.zipCode,
-            city: selectedCustomer?.city,
-          },
-          items: items.map(item => ({
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            total: item.quantity * item.unitPrice,
-            unit: item.unit,
-            taxRate: item.taxRate,
-          })),
-          netAmount: netTotal,
-          taxAmount: taxTotal,
-          currency: 'EUR',
-        };
-
-        const xmlContent = generateZugferdXml(zugferdData);
-        const xmlBytes = new TextEncoder().encode(xmlContent);
-
-        await pdfDoc.attach(xmlBytes, 'factur-x.xml', {
-          mimeType: 'text/xml',
-          description: 'ZUGFeRD Invoice Data',
-          creationDate: new Date(),
-          modificationDate: new Date(),
-        });
-
-        // Set AFRelationship on the file specification dictionary
-        try {
-          const namesDict = pdfDoc.catalog.lookup(PDFName.of('Names'));
-          if (namesDict && 'lookup' in (namesDict as unknown as object)) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const efTree = (namesDict as any).lookup(PDFName.of('EmbeddedFiles'));
-            if (efTree && 'lookup' in (efTree as unknown as object)) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const namesArr = (efTree as any).lookup(PDFName.of('Names'));
-              if (namesArr && 'asArray' in (namesArr as unknown as object)) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const arr = (namesArr as any).asArray();
-                for (let i = 1; i < arr.length; i += 2) {
-                  const fileSpec = pdfDoc.context.lookup(arr[i]);
-                  if (fileSpec && 'set' in (fileSpec as unknown as object)) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (fileSpec as any).set(PDFName.of('AFRelationship'), PDFName.of('Alternative'));
-                  }
-                }
-              }
-            }
-          }
-        } catch (afErr) {
-          console.warn('Could not set AFRelationship:', afErr);
-        }
-
-        // Add XMP Metadata for PDF/A-3 compliance (ZUGFeRD requirement)
-        const xmpMetadata = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="adobe:ns:meta/">
-  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-    <rdf:Description rdf:about=""
-      xmlns:dc="http://purl.org/dc/elements/1.1/"
-      xmlns:pdf="http://ns.adobe.com/pdf/1.3/"
-      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
-      xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"
-      xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/"
-      xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"
-      xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#"
-      xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">
-      <pdfaid:part>3</pdfaid:part>
-      <pdfaid:conformance>B</pdfaid:conformance>
-      <xmp:CreatorTool>pdf-lib (https://github.com/Hopding/pdf-lib)</xmp:CreatorTool>
-      <pdf:Producer>pdf-lib (https://github.com/Hopding/pdf-lib)</pdf:Producer>
-      <dc:title>
-        <rdf:Alt>
-          <rdf:li xml:lang="x-default">Rechnung ${invoiceNumber}</rdf:li>
-        </rdf:Alt>
-      </dc:title>
-      <fx:DocumentType>INVOICE</fx:DocumentType>
-      <fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>
-      <fx:Version>1.0</fx:Version>
-      <fx:ConformanceLevel>EN 16931</fx:ConformanceLevel>
-      <pdfaExtension:schemas>
-        <rdf:Bag>
-          <rdf:li rdf:parseType="Resource">
-            <pdfaSchema:schema>Factur-X PDFA Extension Schema</pdfaSchema:schema>
-            <pdfaSchema:namespaceURI>urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#</pdfaSchema:namespaceURI>
-            <pdfaSchema:prefix>fx</pdfaSchema:prefix>
-            <pdfaSchema:property>
-              <rdf:Seq>
-                <rdf:li rdf:parseType="Resource">
-                  <pdfaProperty:name>DocumentFileName</pdfaProperty:name>
-                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
-                  <pdfaProperty:category>external</pdfaProperty:category>
-                  <pdfaProperty:description>name of the embedded XML invoice file</pdfaProperty:description>
-                </rdf:li>
-                <rdf:li rdf:parseType="Resource">
-                  <pdfaProperty:name>DocumentType</pdfaProperty:name>
-                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
-                  <pdfaProperty:category>external</pdfaProperty:category>
-                  <pdfaProperty:description>INVOICE</pdfaProperty:description>
-                </rdf:li>
-                <rdf:li rdf:parseType="Resource">
-                  <pdfaProperty:name>Version</pdfaProperty:name>
-                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
-                  <pdfaProperty:category>external</pdfaProperty:category>
-                  <pdfaProperty:description>The actual version of the ZUGFeRD data</pdfaProperty:description>
-                </rdf:li>
-                <rdf:li rdf:parseType="Resource">
-                  <pdfaProperty:name>ConformanceLevel</pdfaProperty:name>
-                  <pdfaProperty:valueType>Text</pdfaProperty:valueType>
-                  <pdfaProperty:category>external</pdfaProperty:category>
-                  <pdfaProperty:description>The conformance level of the embedded ZUGFeRD data</pdfaProperty:description>
-                </rdf:li>
-              </rdf:Seq>
-            </pdfaSchema:property>
-          </rdf:li>
-        </rdf:Bag>
-      </pdfaExtension:schemas>
-    </rdf:Description>
-  </rdf:RDF>
-</x:xmpmeta>
-<?xpacket end="w"?>`;
-
-        const metadataXmlBytes = new TextEncoder().encode(xmpMetadata);
-        const metadataStream = pdfDoc.context.stream(metadataXmlBytes, { Type: 'Metadata', Subtype: 'XML', Length: metadataXmlBytes.length });
-        const metadataStreamRef = pdfDoc.context.register(metadataStream);
-        pdfDoc.catalog.set(PDFName.of('Metadata'), metadataStreamRef);
-
-      } catch (e) {
-        console.error("Error attaching ZUGFeRD XML:", e);
-      }
-
-      const finalPdfBytes = await pdfDoc.save();
+      const finalPdfBytes = await convertToPdfA3(pdfBytes, xmlContent);
       const blob = new Blob([finalPdfBytes as BlobPart], { type: 'application/pdf' });
-
-      // Automatic Upload
-      const formData = new FormData();
-      const fileName = `Rechnung_${invoiceNumber}.pdf`;
+      const fileName = buildInvoiceFileName('pdf');
       const file = new File([blob], fileName, { type: 'application/pdf' });
-      formData.append('file', file);
+      const uploadSuccess = await uploadGeneratedInvoice(file);
 
-      let uploadSuccess = false;
-
-      try {
-        const uploadRes = await fetch('/api/invoices/upload', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!uploadRes.ok) {
-          const err = await uploadRes.json();
-          console.error("Auto-upload failed:", err);
-          alert("Speichern fehlgeschlagen: " + (err.error || "Unbekannter Fehler"));
-        } else {
-          // If we're converting from a quote, mark it as ACCEPTED
-          if (fromQuote) {
-            try {
-              await fetch('/api/quotes', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: fromQuote.id, status: 'ACCEPTED' }),
-              });
-            } catch (e) {
-              console.error('Failed to update quote status:', e);
-            }
-          }
-          if (onInvoiceCreated) {
-            onInvoiceCreated();
-          }
-          uploadSuccess = true;
-        }
-      } catch (e) {
-        console.error("Auto-upload network error:", e);
-        alert("Fehler beim automatischen Speichern der Rechnung.");
-      }
-
-      const url = URL.createObjectURL(blob);
-
-      // Open/Download
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Rechnung_${invoiceNumber}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
+      downloadGeneratedFile(blob, fileName);
       if (uploadSuccess) {
         onClose();
       }
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Fehler beim Erstellen der PDF.");
+      console.error("Error generating invoice file:", error);
+      const message = error instanceof Error ? error.message : null;
+      alert(outputMode === 'xml-only' ? "Fehler beim Erstellen der XML-Datei." : message ?? "Fehler beim Erstellen der PDF.");
     } finally {
       setIsGenerating(false);
     }
@@ -1062,7 +1201,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
             <div>
               <DialogTitle>Rechnung erstellen</DialogTitle>
               <DialogDescription>
-                Erstellen Sie eine professionelle PDF-Rechnung.
+                Erstellen Sie eine ZUGFeRD-PDF-Rechnung oder eine eigenständige E-Rechnungs-XML.
               </DialogDescription>
             </div>
             <Button
@@ -1142,6 +1281,24 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
               )}
             </div>
 
+            <div className="bg-blue-50/60 dark:bg-blue-950/20 p-3 rounded-md border border-blue-100 dark:border-blue-900/40">
+              <Label htmlFor="invoice-output-mode" className="text-sm font-medium">Ausgabeformat</Label>
+              <select
+                id="invoice-output-mode"
+                className="mt-2 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={outputMode}
+                onChange={(e) => setOutputMode(e.target.value as InvoiceOutputMode)}
+              >
+                <option value="zugferd-pdf">ZUGFeRD-PDF mit eingebetteter XML</option>
+                <option value="xml-only">Nur XRechnung-XML (ohne PDF)</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-2">
+                {outputMode === 'xml-only'
+                  ? 'Erstellt eine eigenständige XRechnung-CII-XML-Datei. Sie wird gespeichert, heruntergeladen und kann danach mit dem E-Rechnungs-Viewer angesehen werden.'
+                  : 'Erstellt eine PDF-Rechnung mit eingebetteter strukturierter XML-Datei für ZUGFeRD/Factur-X.'}
+              </p>
+            </div>
+
             {/* Top Row: Invoice Details */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -1212,10 +1369,11 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
                     id="includeQRCode"
                     checked={includeQRCode}
                     onChange={(e) => setIncludeQRCode(e.target.checked)}
+                    disabled={outputMode === 'xml-only'}
                     className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
                   <Label htmlFor="includeQRCode" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                    GiroCode (QR-Code) für Banking-Apps hinzufügen
+                    GiroCode (QR-Code) für Banking-Apps hinzufügen{outputMode === 'xml-only' ? ' (nur PDF)' : ''}
                   </Label>
                 </div>
               </div>
@@ -1361,7 +1519,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
               </div>
 
               <p className="text-xs text-muted-foreground mt-2">
-                Die Vorschau aktualisiert sich automatisch bei Änderungen. Der QR-Code wird erst in der finalen PDF angezeigt.
+                Die Vorschau aktualisiert sich automatisch bei Änderungen. {outputMode === 'xml-only' ? 'Bei XML-only dient sie nur als Layoutkontrolle; gespeichert wird ausschließlich die XML-Datei.' : 'Der QR-Code wird erst in der finalen PDF angezeigt.'}
               </p>
             </div>
           )}
@@ -1369,8 +1527,10 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Abbrechen</Button>
-          <Button onClick={generatePDF} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
-            {isGenerating ? "Erstelle PDF..." : "PDF erstellen"}
+          <Button onClick={createInvoiceFile} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
+            {isGenerating
+              ? (outputMode === 'xml-only' ? "Erstelle XML..." : "Erstelle PDF...")
+              : (outputMode === 'xml-only' ? "XML erstellen" : "PDF erstellen")}
           </Button>
         </DialogFooter>
       </DialogContent>

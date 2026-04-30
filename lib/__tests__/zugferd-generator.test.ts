@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { generateZugferdXml, ZugferdData } from '../zugferd-generator'
+import {
+    generateZugferdXml,
+    validateZugferdData,
+    type ZugferdData,
+} from '../zugferd-generator'
 
 // Helper to create minimal valid ZUGFeRD data
 function createTestInvoice(overrides: Partial<ZugferdData> = {}): ZugferdData {
@@ -47,11 +51,15 @@ describe('generateZugferdXml', () => {
             expect(xml).toMatch(/^\s*<\?xml version="1\.0" encoding="UTF-8"\?>/)
         })
 
-        it('should include Factur-X EN 16931 guideline ID', () => {
+        it('should include Factur-X EN 16931 guideline ID by default', () => {
             const xml = generateZugferdXml(createTestInvoice())
             expect(xml).toContain('urn:cen.eu:en16931:2017')
-            // Should NOT contain the old XRechnung or extended Factur-X URIs
             expect(xml).not.toContain('xrechnung')
+        })
+
+        it('should include XRechnung CIUS guideline ID for XRechnung XML', () => {
+            const xml = generateZugferdXml(createTestInvoice(), { profile: 'xrechnung' })
+            expect(xml).toContain('urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0')
         })
 
         it('should use CrossIndustryInvoice namespace', () => {
@@ -126,6 +134,14 @@ describe('generateZugferdXml', () => {
             expect(xml).toContain('<ram:BICID>COBADEFFXXX</ram:BICID>')
         })
 
+        it('should include seller telephone in trade contact', () => {
+            const xml = generateZugferdXml(createTestInvoice({
+                seller: { ...createTestInvoice().seller, telephone: '+49 621 123456' }
+            }))
+            expect(xml).toContain('<ram:TelephoneUniversalCommunication>')
+            expect(xml).toContain('<ram:CompleteNumber>+49 621 123456</ram:CompleteNumber>')
+        })
+
         it('should parse address into postcode and city', () => {
             const xml = generateZugferdXml(createTestInvoice({
                 seller: { ...createTestInvoice().seller, address: 'Hauptstr. 10\n80331 München' }
@@ -138,7 +154,7 @@ describe('generateZugferdXml', () => {
     describe('Buyer Information', () => {
         it('should include buyer name', () => {
             const xml = generateZugferdXml(createTestInvoice({
-                buyer: { name: 'Test Käufer AG', zipCode: '12345', city: 'Berlin' }
+                buyer: { name: 'Test Käufer AG', address: 'Teststraße 1', zipCode: '12345', city: 'Berlin' }
             }))
             expect(xml).toContain('<ram:Name>Test Käufer AG</ram:Name>')
         })
@@ -149,6 +165,18 @@ describe('generateZugferdXml', () => {
             }))
             expect(xml).toContain('<ram:PostcodeCode>87654</ram:PostcodeCode>')
             expect(xml).toContain('<ram:CityName>Hamburg</ram:CityName>')
+        })
+
+        it('should skip buyer name when deriving the postal line from a full address block', () => {
+            const xml = generateZugferdXml(createTestInvoice({
+                buyer: {
+                    name: 'Kunde GmbH',
+                    address: 'Kunde GmbH\nKundenweg 99\n54321 Kundenstadt',
+                },
+            }))
+            expect(xml).toContain('<ram:LineOne>Kundenweg 99</ram:LineOne>')
+            expect(xml).toContain('<ram:PostcodeCode>54321</ram:PostcodeCode>')
+            expect(xml).toContain('<ram:CityName>Kundenstadt</ram:CityName>')
         })
     })
 
@@ -304,6 +332,77 @@ describe('generateZugferdXml', () => {
             }))
             expect(xml).not.toContain('<ram:IBANID>')
             expect(xml).toContain('<ram:TypeCode>30</ram:TypeCode>')
+        })
+    })
+
+    describe('Validation', () => {
+        it('should accept complete EN 16931 required invoice data', () => {
+            const result = validateZugferdData(createTestInvoice())
+            expect(result.isValid).toBe(true)
+            expect(result.errors).toHaveLength(0)
+        })
+
+        it('should reject missing invoice number', () => {
+            const result = validateZugferdData(createTestInvoice({ invoiceNumber: '' }))
+            expect(result.isValid).toBe(false)
+            expect(result.errors).toContainEqual(expect.objectContaining({ field: 'invoiceNumber' }))
+        })
+
+        it('should reject missing seller tax identification', () => {
+            const invoice = createTestInvoice({
+                seller: {
+                    ...createTestInvoice().seller,
+                    taxNumber: undefined,
+                    vatId: undefined,
+                },
+            })
+            const result = validateZugferdData(invoice)
+            expect(result.isValid).toBe(false)
+            expect(result.errors).toContainEqual(expect.objectContaining({ field: 'seller.taxNumber' }))
+        })
+
+        it('should reject missing seller telephone for XRechnung', () => {
+            const invoice = createTestInvoice({
+                seller: {
+                    ...createTestInvoice().seller,
+                    telephone: undefined,
+                },
+            })
+            const result = validateZugferdData(invoice, { profile: 'xrechnung' })
+            expect(result.isValid).toBe(false)
+            expect(result.errors).toContainEqual(expect.objectContaining({ field: 'seller.telephone' }))
+        })
+
+        it('should reject seller telephone with fewer than three digits for XRechnung', () => {
+            const invoice = createTestInvoice({
+                seller: {
+                    ...createTestInvoice().seller,
+                    telephone: 'AB-1',
+                },
+            })
+            const result = validateZugferdData(invoice, { profile: 'xrechnung' })
+            expect(result.isValid).toBe(false)
+            expect(result.errors).toContainEqual(expect.objectContaining({ field: 'seller.telephone' }))
+        })
+
+        it('should reject incomplete buyer addresses', () => {
+            const result = validateZugferdData(createTestInvoice({
+                buyer: { name: 'Kunde GmbH', address: 'Kundenweg 99' },
+            }))
+            expect(result.isValid).toBe(false)
+            expect(result.errors).toContainEqual(expect.objectContaining({ field: 'buyer.address' }))
+        })
+
+        it('should throw instead of generating structurally invalid XML', () => {
+            expect(() => generateZugferdXml(createTestInvoice({
+                buyer: { name: '', address: '' },
+            }))).toThrow('Ungültige E-Rechnungsdaten')
+        })
+
+        it('should warn when totals do not match line items', () => {
+            const result = validateZugferdData(createTestInvoice({ netAmount: 1200 }))
+            expect(result.isValid).toBe(true)
+            expect(result.warnings).toContainEqual(expect.objectContaining({ field: 'netAmount' }))
         })
     })
 })

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import JSZip from 'jszip';
 import { promises as fs } from 'fs';
 import { extname, basename } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { findUploadedFile } from '@/lib/upload-path';
-
-const prisma = new PrismaClient();
 
 type DateRangeParam = 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 

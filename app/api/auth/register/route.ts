@@ -1,10 +1,8 @@
 import { NextResponse, NextRequest } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from '@/lib/prisma';
 import { validatePassword, isValidEmail, sanitizeString } from "@/lib/security";
 import { hashPassword } from "@/lib/password";
 import { auditSecurityEvent } from "@/lib/audit-log";
-
-const prisma = new PrismaClient();
 
 // Rate limiting for registration
 const registrationAttempts = new Map<string, { count: number; resetTime: number }>();

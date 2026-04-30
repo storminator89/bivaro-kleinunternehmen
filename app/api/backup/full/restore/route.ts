@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import * as fs from 'fs';
 import * as path from 'path';
 import JSZip from 'jszip';
 import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
 import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
-
-const prisma = new PrismaClient();
 
 // POST: Restore user data from ZIP backup including files
 export async function POST(request: NextRequest) {

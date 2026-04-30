@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-
-const prisma = new PrismaClient();
 
 // Hilfsfunktion: Berechnet das nächste Ausführungsdatum
 function calculateNextExecution(interval: string, dayOfMonth: number, fromDate: Date = new Date()): Date {

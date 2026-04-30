@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import fs from 'fs';
 import JSZip from 'jszip';
 import { findUploadedFile } from '@/lib/upload-path';
 import { auditSecurityEvent } from '@/lib/audit-log';
-
-const prisma = new PrismaClient();
 
 // GET: Export all user data as ZIP including files
 export async function GET() {

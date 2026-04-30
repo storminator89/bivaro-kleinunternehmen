@@ -169,20 +169,20 @@ export default function Home() {
                 <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ '--accent': 'var(--chart-2)' } as React.CSSProperties}>
                   <FileText className="h-6 w-6" />
                 </div>
-                <CardTitle>ZUGFeRD-Integration</CardTitle>
+                <CardTitle>E-Rechnungs-Integration</CardTitle>
                 <CardDescription>
                   Automatische Rechnungsverarbeitung mit KI-Technologie
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Laden Sie Ihre ZUGFeRD-kompatiblen Rechnungen hoch und lassen Sie die
+                  Laden Sie ZUGFeRD-/Factur-X-PDFs oder XRechnung-XMLs hoch und lassen Sie die
                   Daten automatisch extrahieren und in Ihre Buchhaltung integrieren.
                 </p>
                 <ul className="mt-4 space-y-2">
                   <li className="flex items-start text-muted-foreground">
                     <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>KI-gestützte Datenextraktion aus PDF-Rechnungen</span>
+                    <span>Strukturierte Datenextraktion aus PDF- und XML-E-Rechnungen</span>
                   </li>
                   <li className="flex items-start text-muted-foreground">
                     <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />

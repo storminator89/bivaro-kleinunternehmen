@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import * as fs from 'fs';
@@ -9,8 +10,6 @@ import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
