@@ -6,8 +6,8 @@ import {
   PDFDocument,
   PDFHexString,
   PDFName,
-  PDFRawStream,
   PDFRef,
+  PDFStream,
   PDFString,
   StandardFonts,
 } from 'pdf-lib';
@@ -90,9 +90,9 @@ describe('PDF/A-3 Factur-X metadata', () => {
     const outputIntent = loadedDoc.context.lookup(outputIntentRef as PDFRef, PDFDict);
     expect(outputIntent.lookup(PDFName.of('S'), PDFName).toString()).toBe('/GTS_PDFA1');
     expect(decodePdfText(outputIntent.lookup(PDFName.of('OutputConditionIdentifier')))).toBe('sRGB IEC61966-2.1');
-    expect(outputIntent.lookup(PDFName.of('DestOutputProfile'), PDFRawStream).getContentsSize()).toBeGreaterThan(0);
+    expect(outputIntent.lookup(PDFName.of('DestOutputProfile'), PDFStream).getContentsSize()).toBeGreaterThan(0);
 
-    const metadata = loadedDoc.catalog.lookup(PDFName.of('Metadata'), PDFRawStream).getContentsString();
+    const metadata = loadedDoc.catalog.lookup(PDFName.of('Metadata'), PDFStream).getContentsString();
     expect(metadata).toContain('<pdfaid:part>3</pdfaid:part>');
     expect(metadata).toContain('<pdfaid:conformance>B</pdfaid:conformance>');
     expect(metadata).toContain(`<fx:DocumentFileName>${FACTUR_X_XML_FILENAME}</fx:DocumentFileName>`);
