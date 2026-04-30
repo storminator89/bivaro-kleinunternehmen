@@ -17,7 +17,7 @@
   - `prisma/e2e.db` is the isolated E2E test database – created fresh by `npm run e2e:prepare`.
 - `e2e/` – Playwright end-to-end tests (`auth-dashboard-invoice.spec.ts`).
 - `public/` serves static assets including `public/screenshot/dashboard.png`.
-- `middleware.ts` guards protected routes; update it when adding secure areas.
+- `proxy.ts` guards protected routes; update it when adding secure areas.
 
 ## Build, Test, and Development Commands
 - `npm run dev` starts the hot-reloading server at http://localhost:3000.
@@ -63,7 +63,7 @@
 ## Environment & Configuration
 - Copy `.env.example` when configuring the project; keep secrets out of version control.
 - The default SQLite database lives at `prisma/dev.db`; update `DATABASE_URL` when switching providers.
-- After altering authentication, uploads, or routing, verify related changes in `middleware.ts`, `next.config.ts`, and affected `app/api` handlers.
+- After altering authentication, uploads, or routing, verify related changes in `proxy.ts`, `next.config.ts`, and affected `app/api` handlers.
 - When running the standalone server (`npm run start` or E2E), copy static assets into the standalone directory:
   ```bash
   cp -R public .next/standalone/public

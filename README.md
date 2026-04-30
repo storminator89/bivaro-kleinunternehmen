@@ -133,7 +133,7 @@ bivaro-kleinunternehmen/
 ├── e2e/                        # End-to-End-Tests (Playwright)
 │   └── auth-dashboard-invoice.spec.ts
 │
-├── middleware.ts               # Schützt alle nicht-öffentlichen Routen
+├── proxy.ts                    # Schützt alle nicht-öffentlichen Routen
 ├── playwright.config.ts        # Playwright-Konfiguration
 ├── vitest.config.ts            # Vitest-Konfiguration
 ├── .env.example                # Vorlage für Umgebungsvariablen
@@ -409,7 +409,7 @@ Alle Passwörter werden mit **bcrypt** gehasht (Kostenfaktor 12). Die Logik ist 
 | `ADMIN` | Vollzugriff auf alle Daten und Einstellungen; Benutzerverwaltung |
 | `USER` | Zugriff auf eigene Daten; keine Benutzerverwaltung |
 
-API-Routen prüfen die Rolle mit `getServerSession` aus NextAuth. Die `middleware.ts` schützt alle nicht-öffentlichen Seiten.
+API-Routen prüfen die Rolle mit `getServerSession` aus NextAuth. Die `proxy.ts` schützt alle nicht-öffentlichen Seiten.
 
 ### Audit-Log
 
@@ -470,5 +470,4 @@ A: Bearbeiten Sie `prisma/schema.prisma` und führen Sie dann `npx prisma migrat
 ## 📝 Lizenz
 
 Dieses Projekt steht unter der **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. Den vollständigen Lizenztext finden Sie in [`LICENSE`](LICENSE).
-
 

@@ -11,7 +11,7 @@ import { getToken } from "next-auth/jwt";
  */
 const PUBLIC_PATHS = new Set<string>(["/", "/login", "/register"]);
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   let token: unknown = null;
@@ -23,7 +23,7 @@ export async function middleware(request: NextRequest) {
   } catch (error) {
     // A failed JWT decryption (e.g. after rotating NEXTAUTH_SECRET) must not
     // crash the request; treat the user as unauthenticated.
-    console.error("[middleware] JWT decryption failed:", error);
+    console.error("[proxy] JWT decryption failed:", error);
   }
 
   const isAuthenticated = Boolean(token);
