@@ -49,20 +49,19 @@ interface KpiData {
 
 export function DashboardClient() {
   const [data, setData] = useState<KpiData | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
         const res = await fetch("/api/dashboard/kpis");
-        // The instruction included a Blob creation line, but it was syntactically incorrect
-        // and out of context for this fetchData function which retrieves KPI data.
-        // If Blob creation is needed elsewhere, it should be in its own context.
-        // const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const kpiData = await res.json();
         setData(kpiData);
       } catch (error) {
         console.error("Failed to fetch KPI data", error);
+        setError("Die Dashboard-Auswertung konnte nicht geladen werden.");
       } finally {
         setLoading(false);
       }
@@ -74,8 +73,8 @@ export function DashboardClient() {
     return <div>Lade Dashboard-Daten...</div>;
   }
 
-  if (!data) {
-    return <div>Fehler beim Laden der Daten.</div>;
+  if (error || !data) {
+    return <div className="rounded-lg border border-critical/40 bg-critical-surface p-6 text-sm text-critical-foreground" role="alert">{error ?? "Fehler beim Laden der Daten."}</div>;
   }
 
   return (

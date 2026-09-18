@@ -1,3 +1,4 @@
+import { privateLogoUrl } from '@/lib/upload-path';
 /**
  * Credit Note PDF Generator
  * 
@@ -6,7 +7,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
-import path from 'path';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import fs from 'fs/promises';
 
 interface CreditNoteData {
@@ -28,6 +29,7 @@ interface CreditNoteData {
 }
 
 interface Settings {
+    userId?: string;
     companyName?: string | null;
     companyAddress?: string | null;
     email?: string | null;
@@ -87,13 +89,12 @@ export async function generateCreditNotePDF(
     // --- LOGO ---
     if (settings?.logoUrl) {
         try {
-            // Try to load logo from file system
-            const logoPath = settings.logoUrl.startsWith('/')
-                ? path.join(process.cwd(), 'public', settings.logoUrl)
-                : path.join(process.cwd(), 'data', 'uploads', path.basename(settings.logoUrl));
-
+            const logoUrl = new URL(privateLogoUrl(settings.logoUrl) || '/', 'http://localhost');
+            const logoName = logoUrl.pathname === '/api/files/logo' ? logoUrl.searchParams.get('file') : null;
+            const logoPath = settings.userId && logoName ? await findOwnedUploadedFile(settings.userId, logoName) : null;
+            if (!logoPath) throw new Error('Logo nicht gefunden');
             const logoBytes = await fs.readFile(logoPath);
-            const logoExt = settings.logoUrl.split('.').pop()?.toLowerCase();
+            const logoExt = logoName?.split('.').pop()?.toLowerCase();
             let logoImage;
 
             if (logoExt === 'png') {

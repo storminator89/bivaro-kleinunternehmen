@@ -33,6 +33,12 @@ export type AuditAction =
   | 'DOWNLOAD'
   | 'CANCELLED'
   | 'CONVERTED'
+  | 'AUTH_LOGIN'
+  | 'AUTH_LOGIN_FAILED'
+  | 'AUTH_LOGIN_RATE_LIMITED'
+  | 'AUTH_PASSWORD_CHANGED'
+  | 'AUTH_ROLE_CHANGED'
+  | 'AUTH_USER_DELETED'
   | 'SECURITY_EVENT';
 
 // Entity types that can be audited
@@ -54,6 +60,7 @@ export type AuditEntityType =
   | 'CashTransaction'
   | 'EURExport'
   | 'Quote'
+  | 'Documentation'
   | 'SecurityEvent';
 
 export interface AuditLogEntry {
@@ -328,6 +335,13 @@ export type SecurityEventName =
   | 'FULL_BACKUP_EXPORT'
   | 'FULL_BACKUP_RESTORE'
   | 'AUTH_REGISTRATION'
+  | 'AUTH_LOGIN'
+  | 'AUTH_LOGIN_FAILED'
+  | 'AUTH_LOGIN_RATE_LIMITED'
+  | 'AUTH_PASSWORD_CHANGED'
+  | 'AUTH_ROLE_CHANGED'
+  | 'AUTH_USER_DELETED'
+  | 'AUTH_REGISTRATION_SETTINGS_CHANGED'
   | 'ADMIN_USER_CHANGE';
 
 export type SecurityEventOutcome = 'success' | 'failure' | 'blocked';

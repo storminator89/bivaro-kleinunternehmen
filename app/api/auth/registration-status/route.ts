@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from '@/lib/prisma';
+import { APP_SETTINGS_KEY } from '@/lib/auth-registration';
 
 export async function GET() {
   try {
@@ -15,7 +16,9 @@ export async function GET() {
     }
 
     // Ansonsten App-Einstellungen prüfen
-    const appSettings = await prisma.appSettings.findFirst();
+    const appSettings = await prisma.appSettings.findUnique({
+      where: { singletonKey: APP_SETTINGS_KEY },
+    });
     
     return NextResponse.json({
       isFirstUser: false,

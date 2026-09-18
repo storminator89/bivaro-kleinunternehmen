@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRightLeft,
@@ -16,7 +14,6 @@ import {
   AlertTriangle,
   Lightbulb,
   Loader2,
-  PiggyBank,
   RefreshCw,
   ShieldCheck,
   ThumbsUp,
@@ -494,159 +491,121 @@ export default function SteuerSimulationPage() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-8">
-        <div className="grid gap-6 lg:grid-cols-[1.7fr_minmax(0,1fr)]">
-          <Card className="relative overflow-hidden border-muted shadow-sm">
-            <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-primary/10 via-primary/5 to-transparent dark:from-primary/20" />
-            <CardHeader className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="gap-1 border-primary/40 text-primary">
-                  <Calculator className="h-3.5 w-3.5" />
-                  Simulation
-                </Badge>
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                  EÜR basiert
-                </span>
-              </div>
-              <CardTitle className="text-3xl font-semibold tracking-tight">Steuer-Simulation</CardTitle>
-              <CardDescription className="text-base leading-relaxed text-muted-foreground">
-                Loten Sie unterschiedliche Steuer-Szenarien aus, indem Sie Freibeträge, Zuschläge und Hebesätze variieren.
-                Alle Werte basieren auf den steuerrelevanten Einnahmen und Ausgaben Ihrer EÜR.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-4 lg:gap-6">
-              <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-medium text-foreground">Planungssicherheit</p>
-                  <p>Finden Sie den Break-even für Ihre Steuerlast.</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-medium text-foreground">Datengestützt</p>
-                  <p>Berechnungen greifen direkt auf Ihre Buchungen zu.</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-primary/30 bg-primary/5 shadow-sm backdrop-blur">
-            <CardHeader className="space-y-1">
-              <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-                <ArrowRightLeft className="h-5 w-5 text-primary" />
-                Zeitraum wählen
-              </CardTitle>
-              <CardDescription>
-                Steuern Sie die Analyse nach Zeitraum und halten Sie Ihre Daten aktuell.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="timeRange" className="text-sm font-medium text-muted-foreground">
-                  Zeitraum
-                </Label>
-                <select
-                  id="timeRange"
-                  value={selectedTimeRange}
-                  onChange={(event) => setSelectedTimeRange(event.target.value as TimeRange)}
-                  className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="thisYear">Aktuelles Jahr</option>
-                  <option value="lastYear">Vorjahr</option>
-                  <option value="last3Months">Letzte 3 Monate</option>
-                  <option value="last6Months">Letzte 6 Monate</option>
-                  <option value="all">Gesamter Zeitraum</option>
-                </select>
-              </div>
-              <Button
-                variant="outline"
-                onClick={fetchData}
-                disabled={loading}
-                className="flex w-full items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Aktualisiere
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4" />
-                    Neu laden
-                  </>
-                )}
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Tipp: Vergleichen Sie mehrere Zeiträume, um saisonale Schwankungen zu erkennen.
+      <div className="space-y-10">
+        <header className="flex flex-col gap-6 border-b border-border pb-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <Calculator className="h-4 w-4" />
+              <span>Auswertung / Steuer-Simulation</span>
+            </div>
+            <div className="max-w-2xl space-y-2">
+              <h1 className="text-4xl font-semibold tracking-tight text-foreground">Steuer-Simulation</h1>
+              <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
+                Spielen Sie Szenarien mit Ihren steuerrelevanten EÜR-Daten durch und sehen Sie direkt, wie sich Ihre Steuerlast verändert.
               </p>
-            </CardContent>
-          </Card>
-
-        </div>
+            </div>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1 space-y-2 sm:min-w-52">
+              <Label htmlFor="timeRange" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Analysezeitraum
+              </Label>
+              <select
+                id="timeRange"
+                value={selectedTimeRange}
+                onChange={(event) => setSelectedTimeRange(event.target.value as TimeRange)}
+                className="block h-11 w-full rounded-[var(--radius-input)] border border-input bg-background px-3 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="thisYear">Aktuelles Jahr</option>
+                <option value="lastYear">Vorjahr</option>
+                <option value="last3Months">Letzte 3 Monate</option>
+                <option value="last6Months">Letzte 6 Monate</option>
+                <option value="all">Gesamter Zeitraum</option>
+              </select>
+            </div>
+            <Button
+              variant="outline"
+              onClick={fetchData}
+              disabled={loading}
+              aria-label="Finanzdaten neu laden"
+              className="h-11 sm:aspect-square sm:w-11 sm:px-0"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="sm:sr-only">{loading ? "Aktualisiere" : "Neu laden"}</span>
+            </Button>
+          </div>
+        </header>
         {error && (
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="border border-primary/10 bg-gradient-to-br from-primary/10 via-background to-background shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                <PiggyBank className="h-5 w-5 text-primary" />
-                Betriebseinnahmen
-              </CardTitle>
-              <CardDescription>Steuerpflichtige Einnahmen im gewählten Zeitraum</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-semibold">{formatCurrency(totalIncome)}</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                {filteredIncomes.length} Buchungen berücksichtigt
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border border-primary/10 bg-gradient-to-br from-primary/10 via-background to-background shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                <Factory className="h-5 w-5 text-primary" />
-                Betriebsausgaben
-              </CardTitle>
-              <CardDescription>Für die Steuer ansetzbare Ausgaben</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-semibold">{formatCurrency(totalExpenses)}</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                {filteredExpenses.length} Buchungen berücksichtigt
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border border-primary/10 bg-gradient-to-br from-primary/10 via-background to-background shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Gewinn laut EÜR
-              </CardTitle>
-              <CardDescription>Vor Steuern</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className={`text-3xl font-semibold ${profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+        <section aria-labelledby="overview-heading" className="grid gap-0 overflow-hidden rounded-[var(--radius-card)] border border-border bg-card lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]">
+          <div className="space-y-8 border-b border-border p-6 sm:p-8 lg:border-b-0 lg:border-r">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Überblick</p>
+                <h2 id="overview-heading" className="mt-2 text-xl font-semibold">Gewinn laut EÜR</h2>
+              </div>
+              <TrendingUp className="h-5 w-5 text-primary" aria-hidden="true" />
+            </div>
+            <div className="flex flex-wrap items-end justify-between gap-5">
+              <p className={`text-5xl font-semibold tracking-tight tabular-nums ${profit >= 0 ? "text-primary" : "text-destructive"}`}>
                 {formatCurrency(profit)}
               </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Enthält nur steuerrelevante Einnahmen und Ausgaben
+              <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+                Vor Steuern · nur steuerrelevante Einnahmen und Ausgaben
               </p>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+            <div className="space-y-2" aria-label="Verhältnis von Einnahmen und Ausgaben">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Einnahmen zu Ausgaben</span>
+                <span className="tabular-nums">{totalIncome > 0 ? `${(expenseCoverage * 100).toFixed(0)} % Ausgabenanteil` : "Keine Einnahmen"}</span>
+              </div>
+              <div className="flex h-2 overflow-hidden rounded-full bg-secondary">
+                <div className="bg-primary transition-[width] duration-300" style={{ width: `${Math.min(100, Math.max(0, expenseCoverage * 100))}%` }} />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-6 bg-muted/25 p-6 sm:p-8">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <ArrowRightLeft className="h-4 w-4 text-primary" aria-hidden="true" />
+              Datenbasis
+            </div>
+            <dl className="divide-y divide-border">
+              <div className="flex items-center justify-between gap-4 py-3 first:pt-0">
+                <dt className="text-sm text-muted-foreground">Betriebseinnahmen</dt>
+                <dd className="text-right text-sm font-medium tabular-nums">{formatCurrency(totalIncome)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-3">
+                <dt className="text-sm text-muted-foreground">Betriebsausgaben</dt>
+                <dd className="text-right text-sm font-medium tabular-nums">{formatCurrency(totalExpenses)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
+                <dt className="text-sm text-muted-foreground">Buchungen</dt>
+                <dd className="text-right text-sm font-medium tabular-nums">{filteredIncomes.length + filteredExpenses.length}</dd>
+              </div>
+            </dl>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Zeitraum: {selectedTimeRange === "thisYear" ? "Aktuelles Jahr" : selectedTimeRange === "lastYear" ? "Vorjahr" : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}
+            </p>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Parameter für die Simulation</CardTitle>
-            <CardDescription>Legen Sie Freibeträge, Steuersätze und Zuschläge fest.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <section aria-labelledby="parameters-heading" className="rounded-[var(--radius-card)] border border-border bg-card">
+          <div className="flex flex-col gap-4 border-b border-border p-6 sm:flex-row sm:items-start sm:justify-between sm:p-8">
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Annahmen</p>
+              <h2 id="parameters-heading" className="text-2xl font-semibold tracking-tight">Parameter für die Simulation</h2>
+              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Passen Sie Vorsorge, Beschäftigungsverhältnis und Steuersätze an. Das Ergebnis aktualisiert sich sofort.</p>
+            </div>
+            <Button variant="ghost" onClick={resetDefaults} className="self-start text-muted-foreground">
+              Standardwerte
+            </Button>
+          </div>
+          <div className="space-y-8 p-6 sm:p-8">
+            <div className="rounded-[var(--radius-input)] border border-border bg-muted/25 p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <Label className="text-base font-semibold">Beschäftigungsverhältnis</Label>
@@ -654,11 +613,12 @@ export default function SteuerSimulationPage() {
                     Führen Sie das Gewerbe haupt- oder nebenberuflich?
                   </p>
                 </div>
-                <div className="flex items-center gap-2 rounded-lg border bg-background p-1">
+                <div className="grid grid-cols-2 gap-1 rounded-[var(--radius-input)] border border-border bg-background p-1">
                   <Button
                     variant={employmentType === "self-employed" ? "secondary" : "ghost"}
                     size="sm"
                     onClick={() => setEmploymentType("self-employed")}
+                    aria-pressed={employmentType === "self-employed"}
                     className="gap-2"
                   >
                     <Factory className="h-4 w-4" />
@@ -668,6 +628,7 @@ export default function SteuerSimulationPage() {
                     variant={employmentType === "side-business" ? "secondary" : "ghost"}
                     size="sm"
                     onClick={() => setEmploymentType("side-business")}
+                    aria-pressed={employmentType === "side-business"}
                     className="gap-2"
                   >
                     <Briefcase className="h-4 w-4" />
@@ -677,7 +638,7 @@ export default function SteuerSimulationPage() {
               </div>
 
               {employmentType === "side-business" && (
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="mt-6 grid gap-4 border-t border-border pt-6 md:grid-cols-2">
                   <div>
                     <ParameterLabel
                       htmlFor="grossSalary"
@@ -692,7 +653,7 @@ export default function SteuerSimulationPage() {
                       onChange={(event) => setGrossSalary(Number(event.target.value) || 0)}
                       min={0}
                       step={1000}
-                      className="mt-1 bg-background"
+                      className="mt-2 bg-background"
                     />
                   </div>
                   <div>
@@ -709,15 +670,15 @@ export default function SteuerSimulationPage() {
                       onChange={(event) => setEmployeeExpenses(Number(event.target.value) || 0)}
                       min={0}
                       step={10}
-                      className="mt-1 bg-background"
+                      className="mt-2 bg-background"
                     />
                   </div>
                 </div>
               )}
 
               {employmentType === "side-business" && (
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center gap-2 rounded-md bg-muted/50 p-3 text-sm">
+                <div className="mt-5 space-y-3">
+                  <div className="flex items-start gap-2 rounded-[var(--radius-input)] border border-border bg-background p-3 text-sm">
                     <input
                       id="autoCalcSocial"
                       type="checkbox"
@@ -738,7 +699,7 @@ export default function SteuerSimulationPage() {
                     </Tooltip>
                   </div>
                   {autoCalcSocial && (
-                    <div className="rounded-md bg-muted/50 p-3">
+                    <div className="rounded-[var(--radius-input)] border border-border bg-background p-4">
                       <ParameterLabel
                         htmlFor="numberOfChildren"
                         label="Anzahl Kinder (für PV-Beitrag)"
@@ -760,7 +721,12 @@ export default function SteuerSimulationPage() {
               )}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
+                <h3 className="font-semibold">Vorsorge und Abzüge</h3>
+              </div>
+              <div className="grid gap-5 border-t border-border pt-5 md:grid-cols-2 lg:grid-cols-3">
               <div>
                 <ParameterLabel
                   htmlFor="healthInsurance"
@@ -775,7 +741,7 @@ export default function SteuerSimulationPage() {
                   onChange={(event) => setHealthInsurance(Number(event.target.value) || 0)}
                   min={0}
                   step={100}
-                  className="mt-1"
+                  className="mt-2"
                   disabled={employmentType === "side-business" && autoCalcSocial}
                 />
               </div>
@@ -793,7 +759,7 @@ export default function SteuerSimulationPage() {
                   onChange={(event) => setPensionInsurance(Number(event.target.value) || 0)}
                   min={0}
                   step={100}
-                  className="mt-1"
+                  className="mt-2"
                   disabled={employmentType === "side-business" && autoCalcSocial}
                 />
               </div>
@@ -811,7 +777,7 @@ export default function SteuerSimulationPage() {
                   onChange={(event) => setCareInsurance(Number(event.target.value) || 0)}
                   min={0}
                   step={50}
-                  className="mt-1"
+                  className="mt-2"
                   disabled={employmentType === "side-business" && autoCalcSocial}
                 />
               </div>
@@ -829,7 +795,7 @@ export default function SteuerSimulationPage() {
                   onChange={(event) => setOtherDeductions(Number(event.target.value) || 0)}
                   min={0}
                   step={100}
-                  className="mt-1"
+                  className="mt-2"
                 />
               </div>
               <div>
@@ -847,7 +813,7 @@ export default function SteuerSimulationPage() {
                   min={0}
                   max={1000}
                   step={10}
-                  className="mt-1"
+                  className="mt-2"
                 />
               </div>
               <div>
@@ -865,7 +831,7 @@ export default function SteuerSimulationPage() {
                   min={0}
                   max={9}
                   step={1}
-                  className="mt-1"
+                  className="mt-2"
                   disabled={!includeChurchTax}
                 />
                 <div className="mt-2 flex flex-col gap-2">
@@ -895,133 +861,129 @@ export default function SteuerSimulationPage() {
                   </div>
                 </div>
               </div>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-4 py-3">
-              <Button variant="secondary" onClick={resetDefaults}>
-                Standardwerte wiederherstellen
-              </Button>
+            <div className="flex flex-col gap-3 rounded-[var(--radius-input)] border border-dashed border-border px-4 py-3 sm:flex-row sm:items-center">
               <p className="text-sm text-muted-foreground">
-                Die Berechnung basiert auf dem Einkommensteuertarif 2026 (Grundfreibetrag 12.348 € berücksichtigt).
+                Einkommensteuertarif 2026 · Grundfreibetrag 12.348 € berücksichtigt.
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Ergebnis der Simulation</CardTitle>
-            <CardDescription>Vergleichen Sie vor- und nachsteuerliche Ergebnisse.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border border-border bg-muted/40 p-4 backdrop-blur-sm">
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Einkünfte aus Gewerbe</span>
-                  <span className="text-base font-medium">{formatCurrency(profit)}</span>
+        <section aria-labelledby="result-heading" className="rounded-[var(--radius-card)] border border-border bg-card">
+          <div className="border-b border-border p-6 sm:p-8">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prognose</p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 id="result-heading" className="text-2xl font-semibold tracking-tight">Ergebnis der Simulation</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Vor- und nachsteuerliche Werte auf Basis Ihrer aktuellen Annahmen.</p>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}</p>
+                <p className="mt-1 text-3xl font-semibold tabular-nums text-primary">{formatCurrency(netProfitAfterTax)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-6 p-6 sm:p-8">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div>
+                <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
+                  <h3 className="font-semibold">Einkommen</h3>
+                  <span className="text-xs text-muted-foreground">Berechnungsgrundlage</span>
                 </div>
+                <dl className="divide-y divide-border">
+                  <div className="flex items-center justify-between gap-4 py-3">
+                  <span className="text-sm text-muted-foreground">Einkünfte aus Gewerbe</span>
+                  <span className="text-sm font-medium tabular-nums">{formatCurrency(profit)}</span>
+                  </div>
                 {employmentType === "side-business" && (
-                  <div className="mt-3 flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-4 py-3">
                     <span className="text-sm text-muted-foreground">Einkünfte aus Anstellung</span>
-                    <span className="text-base font-medium">+ {formatCurrency(incomeFromEmployment)}</span>
+                    <span className="text-sm font-medium tabular-nums">+ {formatCurrency(incomeFromEmployment)}</span>
                   </div>
                 )}
-                <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">Sonderausgaben (Vorsorge etc.)</span>
-                  <span className="text-base font-medium">- {formatCurrency(deductionsApplied)}</span>
+                  <span className="text-sm font-medium tabular-nums">- {formatCurrency(deductionsApplied)}</span>
                 </div>
-                <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">Zu versteuerndes Einkommen</span>
-                  <span className="text-base font-semibold">{formatCurrency(taxableIncome)}</span>
+                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(taxableIncome)}</span>
                 </div>
+                </dl>
               </div>
-              <div className="rounded-lg border border-border bg-muted/40 p-4 backdrop-blur-sm">
-                <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
+                  <h3 className="font-semibold">Steuerlast</h3>
+                  <span className="text-xs text-muted-foreground">Effektiv</span>
+                </div>
+                <dl className="divide-y divide-border">
+                <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">
                     {employmentType === "side-business" ? "Steuer auf Gewerbe" : "Gesamte Steuerlast"}
                   </span>
-                  <span className="text-base font-semibold">{formatCurrency(marginalTax)}</span>
+                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(marginalTax)}</span>
                 </div>
                 {employmentType === "side-business" && (
-                  <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>(Gesamtsteuer inkl. Job: {formatCurrency(totalTax)})</span>
+                  <div className="flex items-center justify-between gap-4 py-3 text-sm">
+                    <span className="text-muted-foreground">Gesamtsteuer inkl. Job</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(totalTax)}</span>
                   </div>
                 )}
-                <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">
                     {employmentType === "side-business" ? "Belastung Gewerbe" : "Effektiver Steuersatz"}
                   </span>
-                  <span className="text-base font-medium">
+                  <span className="text-sm font-medium tabular-nums">
                     {profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : "-"}
                   </span>
                 </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    {employmentType === "side-business" ? "Netto vom Gewerbe" : "Netto nach Steuern"}
-                  </span>
-                  <span className="text-base font-semibold">{formatCurrency(netProfitAfterTax)}</span>
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <span className="text-sm text-muted-foreground">{employmentType === "side-business" ? "Netto vom Gewerbe" : "Netto nach Steuern"}</span>
+                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(netProfitAfterTax)}</span>
                 </div>
-                {employmentType === "side-business" && (
-                  <div className="mt-3 border-t pt-2 flex items-center justify-between">
-                    <span className="text-sm font-medium">Gesamtes Netto</span>
-                    <span className="text-base font-bold text-primary">{formatCurrency(totalNetIncome)}</span>
-                  </div>
-                )}
+                {employmentType === "side-business" && <div className="flex items-center justify-between gap-4 border-t border-border py-3"><span className="text-sm font-medium">Gesamtes Netto</span><span className="text-sm font-bold tabular-nums text-primary">{formatCurrency(totalNetIncome)}</span></div>}
+                </dl>
               </div>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-md border border-border bg-background/80 px-3 py-4 shadow-sm">
-                <p className="text-xs uppercase text-muted-foreground">Einkommensteuer</p>
-                <p className="mt-1 text-lg font-semibold">{formatCurrency(finalIncomeTax)}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background/80 px-3 py-4 shadow-sm">
-                <p className="text-xs uppercase text-muted-foreground">Solidaritätszuschlag</p>
-                <p className="mt-1 text-lg font-semibold">{formatCurrency(solidaritySurcharge)}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background/80 px-3 py-4 shadow-sm">
-                <p className="text-xs uppercase text-muted-foreground">Kirchensteuer</p>
-                <p className="mt-1 text-lg font-semibold">{formatCurrency(churchTax)}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background/80 px-3 py-4 shadow-sm">
-                <p className="text-xs uppercase text-muted-foreground">Gewerbesteuer</p>
-                <p className="mt-1 text-lg font-semibold">{formatCurrency(tradeTax)}</p>
-              </div>
+            <div className="grid gap-px overflow-hidden rounded-[var(--radius-input)] border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+              {[['Einkommensteuer', finalIncomeTax], ['Solidaritätszuschlag', solidaritySurcharge], ['Kirchensteuer', churchTax], ['Gewerbesteuer', tradeTax]].map(([label, value]) => (
+                <div key={label} className="bg-background px-4 py-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">{formatCurrency(value as number)}</p>
+                </div>
+              ))}
             </div>
             {profit < 0 && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
+              <div className="rounded-[var(--radius-input)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
                 Sie weisen aktuell einen Verlust aus. Nutzen Sie die Simulation, um zu prüfen, ab welchem Gewinn eine Steuerlast entsteht.
               </div>
             )}
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               Hinweis: Die Simulation ersetzt keine steuerliche Beratung. Für verbindliche Aussagen wenden Sie sich bitte an Ihre Steuerberatung.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card className="border-primary/20 shadow-sm">
-          <CardHeader className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="gap-1 border-primary/40 text-primary">
-                Optimierung
-              </Badge>
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                Handlungsempfehlungen
-              </span>
-            </div>
-            <CardTitle>Empfehlungen zur Steueroptimierung</CardTitle>
-            <CardDescription>
-              Konkrete Ansatzpunkte basierend auf Ihren aktuellen EÜR-Daten und Simulationseinstellungen.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-3">
+        <section aria-labelledby="recommendations-heading" className="rounded-[var(--radius-card)] border border-border bg-card">
+          <div className="border-b border-border p-6 sm:p-8">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nächste Schritte</p>
+            <h2 id="recommendations-heading" className="mt-2 text-2xl font-semibold tracking-tight">Empfehlungen zur Steueroptimierung</h2>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">Konkrete Ansatzpunkte aus Ihren aktuellen EÜR-Daten und Simulationseinstellungen.</p>
+          </div>
+          <div className="p-6 sm:p-8">
+            <ul className="divide-y divide-border">
               {recommendations.map((rec, index) => {
                 const Icon = recommendationIconMap[rec.tone];
                 return (
                   <li
                     key={`${rec.title}-${index}`}
-                    className={`flex items-start gap-3 rounded-lg border px-4 py-3 backdrop-blur-sm ${recommendationToneStyles[rec.tone]}`}
+                    className="flex items-start gap-4 py-4 first:pt-0 last:pb-0"
                   >
-                    <Icon className={`mt-0.5 h-5 w-5 ${recommendationIconColor[rec.tone]}`} />
+                    <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${recommendationToneStyles[rec.tone]}`}>
+                      <Icon className={`h-4 w-4 ${recommendationIconColor[rec.tone]}`} />
+                    </span>
                     <div className="space-y-1">
                       <p className="font-medium text-foreground">{rec.title}</p>
                       <p className="text-sm text-muted-foreground leading-relaxed">{rec.description}</p>
@@ -1030,8 +992,8 @@ export default function SteuerSimulationPage() {
                 );
               })}
             </ul>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
     </TooltipProvider>
   );

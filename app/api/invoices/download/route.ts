@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { readFile } from 'fs/promises';
 import { basename, extname } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { findUploadedFile } from '@/lib/upload-path';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import { getRawEInvoiceXml } from '@/lib/e-invoice-parser';
 
 function sanitizeDownloadName(value: string | null | undefined): string {
@@ -61,8 +61,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const sanitizedFileName = basename(invoice.storedFileName);
-    const filePath = findUploadedFile(sanitizedFileName);
+    const filePath = await findOwnedUploadedFile(userId, invoice.storedFileName);
 
     if (!filePath) {
       return NextResponse.json(

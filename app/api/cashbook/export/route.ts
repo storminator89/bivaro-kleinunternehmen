@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
         // Get all transactions
         const transactions = await prisma.cashTransaction.findMany({
             where,
-            orderBy: [{ date: 'asc' }, { createdAt: 'asc' }]
+            orderBy: [{ date: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }]
         });
 
         // Format currency helper

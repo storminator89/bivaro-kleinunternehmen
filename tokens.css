@@ -1,0 +1,119 @@
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
+/* Hallmark · genre: modern-minimal · tone: utilitarian, calm, trustworthy · anchor: mineral petrol · macrostructure: Workbench · theme: Mineral · nav: N3 · footer: Ft2 · enrichment: none */
+
+/*
+ * Bivaro design tokens
+ *
+ * Portable canonical source for product and marketing surfaces. Keep the
+ * Tailwind aliases in app/globals.css mapped to these semantic values.
+ */
+:root {
+  color-scheme: light;
+
+  --color-paper: oklch(98.2% 0.012 86);
+  --color-paper-2: oklch(95.4% 0.018 86);
+  --color-paper-3: oklch(91.8% 0.025 86);
+  --color-ink: oklch(22% 0.035 174);
+  --color-ink-2: oklch(36% 0.04 174);
+  --color-rule: oklch(86% 0.028 88);
+  --color-rule-2: oklch(68% 0.05 88);
+  /* Stable aliases avoid collisions with shadcn's utility-level accent/muted. */
+  --bivaro-color-muted: oklch(49% 0.035 88);
+  --bivaro-color-accent: oklch(43% 0.12 166);
+  --color-muted: var(--bivaro-color-muted);
+  --color-accent: var(--bivaro-color-accent);
+  --color-accent-hover: oklch(36% 0.115 166);
+  --color-accent-ink: oklch(98.2% 0.012 86);
+  --color-brand-teal: oklch(68% 0.12 174);
+  --color-focus: oklch(48% 0.16 166);
+  --color-chart-cyan: oklch(57% 0.11 205);
+  --color-chart-magenta: oklch(61% 0.13 335);
+
+  --color-success: oklch(49% 0.12 153);
+  --color-success-ink: oklch(25% 0.07 153);
+  --color-success-surface: oklch(95% 0.035 153);
+  --color-warning: oklch(59% 0.13 76);
+  --color-warning-ink: oklch(29% 0.065 76);
+  --color-warning-surface: oklch(96% 0.04 86);
+  --color-danger: oklch(54% 0.18 28);
+  --color-danger-ink: oklch(31% 0.1 28);
+  --color-danger-surface: oklch(96% 0.025 28);
+  --color-info: oklch(51% 0.11 210);
+  --color-info-ink: oklch(28% 0.07 210);
+  --color-info-surface: oklch(95% 0.03 210);
+
+  --font-display: var(--font-newsreader), ui-serif, Georgia, serif;
+  --font-body: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+
+  --spacing-0: 0;
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+  --spacing-24: 6rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 180ms;
+  --dur-long: 300ms;
+
+  --radius-card: 0.75rem;
+  --radius-input: 0.5rem;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px color-mix(in oklch, var(--color-ink) 7%, transparent);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-paper: oklch(18% 0.025 174);
+  --color-paper-2: oklch(22% 0.03 174);
+  --color-paper-3: oklch(27% 0.035 174);
+  --color-ink: oklch(95% 0.015 86);
+  --color-ink-2: oklch(80% 0.025 86);
+  --color-rule: oklch(32% 0.03 174);
+  --color-rule-2: oklch(48% 0.04 174);
+  --bivaro-color-muted: oklch(70% 0.025 86);
+  --bivaro-color-accent: oklch(70% 0.13 166);
+  --color-muted: var(--bivaro-color-muted);
+  --color-accent: var(--bivaro-color-accent);
+  --color-accent-hover: oklch(76% 0.13 166);
+  --color-accent-ink: oklch(18% 0.025 174);
+  --color-brand-teal: oklch(75% 0.12 174);
+  --color-focus: oklch(78% 0.13 166);
+  --color-chart-cyan: oklch(70% 0.1 205);
+  --color-chart-magenta: oklch(72% 0.11 335);
+
+  --color-success: oklch(72% 0.13 153);
+  --color-success-ink: oklch(89% 0.06 153);
+  --color-success-surface: oklch(27% 0.045 153);
+  --color-warning: oklch(78% 0.13 82);
+  --color-warning-ink: oklch(91% 0.055 85);
+  --color-warning-surface: oklch(28% 0.05 76);
+  --color-danger: oklch(72% 0.16 28);
+  --color-danger-ink: oklch(91% 0.045 28);
+  --color-danger-surface: oklch(28% 0.06 28);
+  --color-info: oklch(73% 0.11 210);
+  --color-info-ink: oklch(91% 0.04 210);
+  --color-info-surface: oklch(27% 0.05 210);
+}

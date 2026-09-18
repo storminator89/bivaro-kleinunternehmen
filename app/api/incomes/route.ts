@@ -13,11 +13,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount)) {
+      return NextResponse.json({ error: 'Ungültiger Betrag' }, { status: 400 });
+    }
+    const parsedCustomerId = customerId === undefined || customerId === null || customerId === ''
+      ? null
+      : Number(customerId);
+    if (parsedCustomerId !== null && (!Number.isInteger(parsedCustomerId) || parsedCustomerId <= 0)) {
+      return NextResponse.json({ error: 'Ungültiger Kunde' }, { status: 400 });
+    }
+    if (parsedCustomerId !== null) {
+      const customer = await prisma.customer.findFirst({ where: { id: parsedCustomerId, userId } });
+      if (!customer) return NextResponse.json({ error: 'Kunde nicht gefunden' }, { status: 404 });
+    }
+
     const income = await prisma.income.create({
       data: {
         description,
-        amount: parseFloat(amount.toString()),
-        customerId: customerId || null,
+        amount: parsedAmount,
+        customerId: parsedCustomerId,
         taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
         userId,
       },
@@ -89,7 +104,17 @@ export async function GET(request: Request) {
       prisma.income.findMany({
         where,
         orderBy: { date: 'desc' },
-        include: { invoice: true, customer: true },
+        include: {
+          invoice: {
+            select: {
+              id: true,
+              invoiceNumber: true,
+              status: true,
+              paidAt: true,
+            },
+          },
+          customer: true,
+        },
         skip,
         take: pageSize,
       }),
@@ -123,24 +148,52 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount)) {
+      return NextResponse.json({ error: 'Ungültiger Betrag' }, { status: 400 });
+    }
+    const parsedCustomerId = customerId === undefined || customerId === null || customerId === ''
+      ? null
+      : Number(customerId);
+    if (parsedCustomerId !== null && (!Number.isInteger(parsedCustomerId) || parsedCustomerId <= 0)) {
+      return NextResponse.json({ error: 'Ungültiger Kunde' }, { status: 400 });
+    }
+    if (parsedCustomerId !== null) {
+      const customer = await prisma.customer.findFirst({ where: { id: parsedCustomerId, userId } });
+      if (!customer) return NextResponse.json({ error: 'Kunde nicht gefunden' }, { status: 404 });
+    }
+    const parsedDate = date ? new Date(date) : undefined;
+    if (parsedDate && Number.isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
+    }
+
     // Get old values for audit - verify ownership first
     const oldIncome = await prisma.income.findFirst({
       where: { id: Number(id), userId },
+      include: { invoice: true, cashTransaction: true },
     });
 
     if (!oldIncome) {
       return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
     }
+    if (oldIncome.invoice || oldIncome.cashTransaction) {
+      return NextResponse.json({ error: 'Verknüpfte Einnahmen müssen über Rechnung oder Kassenbuch geändert werden' }, { status: 409 });
+    }
 
-    const updatedIncome = await prisma.income.update({
-      where: { id: Number(id), userId },
-      data: {
-        description,
-        amount: parseFloat(amount.toString()),
-        customer: customerId ? { connect: { id: customerId } } : { disconnect: true },
-        taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
-        ...(date && { date: new Date(date) }),
-      },
+    const updatedIncome = await prisma.$transaction(async (tx) => {
+      const current = await tx.income.findFirst({ where: { id: Number(id), userId }, include: { invoice: true, cashTransaction: true } });
+      if (!current) throw new Error('Einnahme nicht gefunden');
+      if (current.invoice || current.cashTransaction) throw new Error('Verknüpfte Einnahmen müssen über Rechnung oder Kassenbuch geändert werden');
+      return tx.income.update({
+        where: { id: Number(id), userId },
+        data: {
+          description,
+          amount: parsedAmount,
+          customer: parsedCustomerId ? { connect: { id: parsedCustomerId } } : { disconnect: true },
+          taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
+          ...(parsedDate && { date: parsedDate }),
+        },
+      });
     });
 
     // Audit log
@@ -152,6 +205,9 @@ export async function PUT(request: Request) {
   } catch (_error: unknown) {
     if (_error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (_error instanceof Error && _error.message.startsWith('Verknüpfte Einnahmen')) {
+      return NextResponse.json({ error: _error.message }, { status: 409 });
     }
     return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
   }
@@ -171,20 +227,21 @@ export async function DELETE(request: Request) {
     // Prüfen, ob eine mit dieser Einnahme verknüpfte Rechnung existiert
     const income = await prisma.income.findUnique({
       where: { id: Number(id), userId },
-      include: { invoice: true },
+      include: { invoice: true, cashTransaction: true },
     });
 
-    if (income && income.invoice) {
-      // Update der Rechnung, um die Verknüpfung aufzuheben
-      await prisma.invoice.update({
-        where: { id: income.invoice.id },
-        data: { income: { disconnect: true } },
-      });
+    if (!income) {
+      return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
+    }
+    if (income.invoice || income.cashTransaction) {
+      return NextResponse.json({ error: 'Verknüpfte Einnahmen müssen über Rechnung oder Kassenbuch gelöscht werden' }, { status: 409 });
     }
 
-    // Jetzt die Einnahme löschen
-    await prisma.income.delete({
-      where: { id: Number(id), userId },
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.income.findFirst({ where: { id: Number(id), userId }, include: { invoice: true, cashTransaction: true } });
+      if (!current) throw new Error('Einnahme nicht gefunden');
+      if (current.invoice || current.cashTransaction) throw new Error('Verknüpfte Einnahmen müssen über Rechnung oder Kassenbuch gelöscht werden');
+      await tx.income.delete({ where: { id: Number(id), userId } });
     });
 
     // Audit log
@@ -196,6 +253,9 @@ export async function DELETE(request: Request) {
   } catch (_error: unknown) {
     if (_error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (_error instanceof Error && _error.message.startsWith('Verknüpfte Einnahmen')) {
+      return NextResponse.json({ error: _error.message }, { status: 409 });
     }
     return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
   }

@@ -1,10 +1,13 @@
 import { execFile } from 'child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import { promisify } from 'util';
 import { PDFDocument } from 'pdf-lib';
 import { addFacturXPdfA3Metadata, getSrgbIccProfileBytes } from '@/lib/pdfa3';
+
+import { withProcessingSlot } from '@/lib/processing-limit';
+import { MAX_PDF_INPUT_BYTES, MAX_XML_INPUT_BYTES, MAX_PDF_XML_COMBINED_BYTES, RequestBodyLimitError } from '@/lib/resource-limits';
 
 const execFileAsync = promisify(execFile);
 const GHOSTSCRIPT_TIMEOUT_MS = 30_000;
@@ -13,6 +16,7 @@ export type CreatePdfA3InvoiceInput = {
   basePdfBytes: Uint8Array;
   xmlContent: string;
   invoiceNumber: string;
+  userId?: string;
 };
 
 function escapePostScriptString(value: string): string {
@@ -65,27 +69,37 @@ export async function createPdfA3Invoice({
   basePdfBytes,
   xmlContent,
   invoiceNumber,
+  userId,
 }: CreatePdfA3InvoiceInput): Promise<Uint8Array> {
-  const workDir = await mkdtemp(path.join(tmpdir(), 'bivaro-pdfa3-'));
-
-  try {
-    const inputPdfPath = path.join(workDir, 'input.pdf');
-    const normalizedPdfPath = path.join(workDir, 'normalized.pdf');
-    const iccProfilePath = path.join(workDir, 'srgb.icc');
-    const prefixPath = path.join(workDir, 'pdfa-prefix.ps');
-
-    await writeFile(inputPdfPath, basePdfBytes);
-    await writeFile(iccProfilePath, getSrgbIccProfileBytes());
-    await writeFile(prefixPath, buildPdfAPrefix(iccProfilePath), 'utf8');
-
-    await normalizePdfWithGhostscript(inputPdfPath, normalizedPdfPath, prefixPath, iccProfilePath);
-
-    const normalizedPdfBytes = await readFile(normalizedPdfPath);
-    const pdfDoc = await PDFDocument.load(normalizedPdfBytes);
-    await addFacturXPdfA3Metadata(pdfDoc, xmlContent, { invoiceNumber });
-
-    return await pdfDoc.save();
-  } finally {
-    await rm(workDir, { recursive: true, force: true });
+  const xmlBytes = Buffer.byteLength(xmlContent, 'utf8');
+  if (basePdfBytes.byteLength > MAX_PDF_INPUT_BYTES || xmlBytes > MAX_XML_INPUT_BYTES || basePdfBytes.byteLength + xmlBytes > MAX_PDF_XML_COMBINED_BYTES) {
+    throw new RequestBodyLimitError('PDF oder XML ist zu groß');
   }
+  return withProcessingSlot(userId, async () => {
+    const workDir = await mkdtemp(path.join(tmpdir(), 'bivaro-pdfa3-'));
+
+    try {
+      const inputPdfPath = path.join(workDir, 'input.pdf');
+      const normalizedPdfPath = path.join(workDir, 'normalized.pdf');
+      const iccProfilePath = path.join(workDir, 'srgb.icc');
+      const prefixPath = path.join(workDir, 'pdfa-prefix.ps');
+
+      await writeFile(inputPdfPath, basePdfBytes);
+      await writeFile(iccProfilePath, getSrgbIccProfileBytes());
+      await writeFile(prefixPath, buildPdfAPrefix(iccProfilePath), 'utf8');
+
+      await normalizePdfWithGhostscript(inputPdfPath, normalizedPdfPath, prefixPath, iccProfilePath);
+
+      if ((await stat(normalizedPdfPath)).size > MAX_PDF_INPUT_BYTES * 2) throw new RequestBodyLimitError('Das konvertierte PDF ist zu groß');
+      const normalizedPdfBytes = await readFile(normalizedPdfPath);
+      const pdfDoc = await PDFDocument.load(normalizedPdfBytes);
+      await addFacturXPdfA3Metadata(pdfDoc, xmlContent, { invoiceNumber });
+
+      const result = await pdfDoc.save();
+      if (result.byteLength > MAX_PDF_INPUT_BYTES * 2) throw new RequestBodyLimitError('Das konvertierte PDF ist zu groß');
+      return result;
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
+  });
 }

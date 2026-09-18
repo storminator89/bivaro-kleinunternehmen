@@ -69,11 +69,11 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-    DRAFT: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-    SENT: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-    ACCEPTED: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-    REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    EXPIRED: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+    DRAFT: 'bg-muted text-muted-foreground',
+    SENT: 'bg-notice-surface text-notice-foreground',
+    ACCEPTED: 'bg-positive-surface text-positive-foreground',
+    REJECTED: 'bg-critical-surface text-critical-foreground',
+    EXPIRED: 'bg-secondary text-muted-foreground',
 };
 
 function QuoteStatusBadge({ status, onStatusChange }: { status: string; onStatusChange: (s: string) => void }) {
@@ -142,12 +142,12 @@ export function QuotesTab({
     return (
         <div className="space-y-6">
             {/* Header card */}
-            <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
-                <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-green-50/50 to-green-50/30 dark:from-green-900/10 dark:to-green-900/5">
+            <div className="overflow-hidden rounded-xl border bg-card">
+                <div className="border-b bg-muted/20 px-6 pb-4 pt-6">
                     <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                         <div>
                             <h2 className="text-xl font-semibold mb-1 flex items-center">
-                                <FileText className="h-5 w-5 mr-2 text-green-500" />
+                                <FileText className="mr-2 h-5 w-5 text-positive" />
                                 Angebote
                             </h2>
                             <p className="text-sm text-muted-foreground">
@@ -192,6 +192,8 @@ export function QuotesTab({
                                 />
                                 {searchTerm && (
                                     <button
+                                        type="button"
+                                        aria-label="Suche leeren"
                                         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         onClick={() => onSearchChange('')}
                                     >
@@ -205,8 +207,34 @@ export function QuotesTab({
                     </div>
                 </div>
 
+                <div className="divide-y lg:hidden" aria-label="Angebotsliste">
+                    {quotes.length > 0 ? quotes.map((quote) => (
+                        <article key={quote.id} className="space-y-3 p-4">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                    <h3 className="truncate font-semibold">{quote.invoiceNumber || 'Angebot ohne Nummer'}</h3>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        {quote.customer?.name || 'Kein Kunde'} · {quote.invoiceDate ? new Date(quote.invoiceDate).toLocaleDateString('de-DE') : new Date(quote.uploadedAt).toLocaleDateString('de-DE')}
+                                    </p>
+                                </div>
+                                <p className="shrink-0 font-semibold tabular-nums">{quote.totalAmount ? formatCurrency(quote.totalAmount) : '–'}</p>
+                            </div>
+                            <QuoteStatusBadge status={quote.status} onStatusChange={(newStatus) => onStatusChange(quote.id, newStatus)} />
+                            <div className="flex flex-wrap gap-2">
+                                <Button variant="outline" size="sm" className="min-h-11" onClick={() => window.open(`/api/quotes/download?id=${quote.id}`, '_blank')}><Eye className="h-4 w-4" />Ansehen</Button>
+                                {quote.status !== 'ACCEPTED' && quote.status !== 'REJECTED' && quote.status !== 'EXPIRED' && (
+                                    <Button variant="outline" size="sm" className="min-h-11" disabled={convertingId === quote.id} onClick={() => setConfirmConvert(quote)}>In Rechnung</Button>
+                                )}
+                                <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={deletingId === quote.id} onClick={() => setConfirmDelete(quote)}>Löschen</Button>
+                            </div>
+                        </article>
+                    )) : (
+                        <p className="p-6 text-center text-sm text-muted-foreground">Keine Angebote vorhanden. Erstellen Sie Ihr erstes Angebot.</p>
+                    )}
+                </div>
+
                 {/* Table */}
-                <div className="overflow-x-auto p-6">
+                <div className="hidden overflow-x-auto p-6 lg:block">
                     <Table>
                         <TableCaption>
                             {isLoading ? 'Lade Angebote...' : `${total} Angebot${total !== 1 ? 'e' : ''}`}
@@ -262,6 +290,7 @@ export function QuotesTab({
                                                      <Tooltip>
                                                          <TooltipTrigger asChild>
                                                              <Button variant="outline" size="icon"
+                                                                 aria-label={`Angebot ${quote.invoiceNumber || quote.id} anzeigen`}
                                                                  onClick={() => window.open(`/api/quotes/download?id=${quote.id}`, '_blank')}>
                                                                  <Eye className="h-4 w-4" />
                                                             </Button>
@@ -275,7 +304,8 @@ export function QuotesTab({
                                                              <Button
                                                                  variant="outline"
                                                                  size="icon"
-                                                                 className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900/50 dark:hover:bg-blue-900/20"
+                                                                 aria-label={`Angebot ${quote.invoiceNumber || quote.id} per E-Mail senden`}
+                                                                 className="border-notice/30 text-notice hover:bg-notice-surface"
                                                                  onClick={() => setEmailQuote(quote)}
                                                                  disabled={quote.status === 'REJECTED' || quote.status === 'EXPIRED'}
                                                              >
@@ -289,6 +319,7 @@ export function QuotesTab({
                                                      <Tooltip>
                                                          <TooltipTrigger asChild>
                                                              <Button variant="outline" size="icon"
+                                                                aria-label={`Angebot ${quote.invoiceNumber || quote.id} herunterladen`}
                                                                 onClick={() => window.open(`/api/quotes/download?id=${quote.id}&download=true`, '_blank')}>
                                                                 <Download className="h-4 w-4" />
                                                             </Button>
@@ -303,7 +334,8 @@ export function QuotesTab({
                                                                 <Button
                                                                     variant="outline"
                                                                     size="icon"
-                                                                    className="text-green-600 border-green-200 hover:bg-green-50 dark:text-green-400 dark:border-green-900/50 dark:hover:bg-green-900/20"
+                                                                    aria-label={`Angebot ${quote.invoiceNumber || quote.id} in Rechnung umwandeln`}
+                                                                    className="border-positive/30 text-positive hover:bg-positive-surface"
                                                                     onClick={() => setConfirmConvert(quote)}
                                                                     disabled={convertingId === quote.id}
                                                                 >
@@ -322,7 +354,8 @@ export function QuotesTab({
                                                             <Button
                                                                 variant="outline"
                                                                 size="icon"
-                                                                className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
+                                                                aria-label={`Angebot ${quote.invoiceNumber || quote.id} löschen`}
+                                                                className="border-critical/30 text-critical hover:bg-critical-surface"
                                                                 onClick={() => setConfirmDelete(quote)}
                                                                 disabled={deletingId === quote.id}
                                                             >
@@ -399,7 +432,7 @@ export function QuotesTab({
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setConfirmConvert(null)}>Abbrechen</Button>
-                        <Button onClick={handleConvert} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                        <Button onClick={handleConvert} className="gap-2">
                             <ArrowRightCircle className="h-4 w-4" />
                             In Rechnung umwandeln
                         </Button>

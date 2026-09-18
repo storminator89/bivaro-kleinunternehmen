@@ -2,8 +2,17 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { auditCreate, auditDelete, createAuditLog } from '@/lib/audit-log';
+import { auditCreate } from '@/lib/audit-log';
 import { getRawEInvoiceXml } from '@/lib/e-invoice-parser';
+import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
+import {
+  isFiniteNumber,
+  readRequestBodyWithinLimit,
+  RequestBodyLimitError,
+  MAX_INVOICE_UPLOAD_BYTES,
+  MAX_JSON_REQUEST_BYTES,
+} from '@/lib/resource-limits';
+import { deleteInvoice, InvoicePaymentError, updateInvoiceStatus } from '@/lib/invoice-payments';
 
 function isPdfFile(fileName: string): boolean {
   return fileName.toLowerCase().endsWith('.pdf');
@@ -12,32 +21,111 @@ function isPdfFile(fileName: string): boolean {
 export async function POST(request: Request) {
   try {
     const userId = await requireUserId();
-    const { fileName, invoiceNumber, invoiceDate, dueDate, totalAmount, parsedData } = await request.json();
+    const body = await readRequestBodyWithinLimit(request, MAX_JSON_REQUEST_BYTES);
+    let input: Record<string, unknown>;
+    try {
+      input = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'Ungültiges JSON' }, { status: 400 });
+    }
+    const { fileName, invoiceNumber, invoiceDate, dueDate, totalAmount, parsedData, customerId, pdfBytes } = input;
 
-    if (!fileName || !parsedData) {
+    if (typeof fileName !== 'string' || fileName.trim().length === 0 || fileName.length > 255 || !parsedData || typeof parsedData !== 'object') {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        fileName,
-        storedFileName: fileName,
-        invoiceNumber: invoiceNumber || null,
-        invoiceDate: invoiceDate ? new Date(invoiceDate) : null,
-        dueDate: dueDate ? new Date(dueDate) : null,
-        totalAmount: totalAmount ? parseFloat(totalAmount.toString()) : null,
-        parsedData,
-        userId,
-      },
-    });
+    // A record without actual document bytes would advertise a downloadable
+    // PDF while containing an empty placeholder. Require callers of this JSON
+    // compatibility endpoint to provide the real file content. The normal UI
+    // uses /api/invoices/upload, which streams a multipart file instead.
+    if (
+      typeof pdfBytes !== 'string'
+      || pdfBytes.length === 0
+      || !/^[A-Za-z0-9+/]*={0,2}$/u.test(pdfBytes)
+      || pdfBytes.length % 4 === 1
+    ) {
+      return NextResponse.json({ error: 'Eine echte PDF-Datei ist erforderlich' }, { status: 400 });
+    }
+    if (Math.ceil((pdfBytes.length * 3) / 4) > MAX_INVOICE_UPLOAD_BYTES) {
+      return NextResponse.json({ error: 'PDF ist zu groß' }, { status: 413 });
+    }
+    const pdfBuffer = Buffer.from(pdfBytes, 'base64');
+    if (pdfBuffer.byteLength === 0) {
+      return NextResponse.json({ error: 'Eine echte PDF-Datei ist erforderlich' }, { status: 400 });
+    }
+    if (pdfBuffer.byteLength > MAX_INVOICE_UPLOAD_BYTES) {
+      return NextResponse.json({ error: 'PDF ist zu groß' }, { status: 413 });
+    }
 
-    // Audit log
-    await auditCreate(userId, 'Invoice', invoice, invoice.invoiceNumber || invoice.fileName);
+    const parsedCustomerId = customerId === undefined || customerId === null || customerId === ''
+      ? null
+      : Number(customerId);
+    if (parsedCustomerId !== null && (!Number.isInteger(parsedCustomerId) || parsedCustomerId <= 0)) {
+      return NextResponse.json({ error: 'Ungültiger Kunde' }, { status: 400 });
+    }
+    if (parsedCustomerId !== null) {
+      const customer = await prisma.customer.findFirst({ where: { id: parsedCustomerId, userId } });
+      if (!customer) return NextResponse.json({ error: 'Kunde nicht gefunden' }, { status: 404 });
+    }
 
-    return NextResponse.json(invoice);
+    const parsedAmount = totalAmount === undefined || totalAmount === null || totalAmount === ''
+      ? null
+      : Number(totalAmount);
+    if (parsedAmount !== null && !isFiniteNumber(parsedAmount)) {
+      return NextResponse.json({ error: 'Ungültiger Betrag' }, { status: 400 });
+    }
+    const parsedInvoiceDate = invoiceDate ? new Date(String(invoiceDate)) : null;
+    const parsedDueDate = dueDate ? new Date(String(dueDate)) : null;
+    if ((parsedInvoiceDate && Number.isNaN(parsedInvoiceDate.getTime())) || (parsedDueDate && Number.isNaN(parsedDueDate.getTime()))) {
+      return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
+    }
+
+    const normalizedInvoiceNumber = invoiceNumber === undefined || invoiceNumber === null || invoiceNumber === ''
+      ? null
+      : String(invoiceNumber).trim();
+    if (normalizedInvoiceNumber) {
+      const existingNumber = await prisma.invoice.findFirst({ where: { invoiceNumber: normalizedInvoiceNumber, userId } });
+      if (existingNumber) {
+        return NextResponse.json({ error: 'Die Rechnungsnummer ist bereits vergeben.' }, { status: 409 });
+      }
+    }
+
+    let storedFileName: string | null = null;
+    try {
+      storedFileName = await writeTenantFile(userId, fileName, pdfBuffer);
+      const invoice = await prisma.invoice.create({
+        data: {
+          fileName,
+          storedFileName,
+          invoiceNumber: normalizedInvoiceNumber,
+          invoiceDate: parsedInvoiceDate,
+          dueDate: parsedDueDate,
+          totalAmount: parsedAmount,
+          parsedData,
+          customerId: parsedCustomerId,
+          userId,
+        },
+      });
+
+      // Audit log
+      await auditCreate(userId, 'Invoice', invoice, invoice.invoiceNumber || invoice.fileName);
+
+      return NextResponse.json(invoice);
+    } catch (error) {
+      if (storedFileName) {
+        try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort orphan cleanup */ }
+      }
+      throw error;
+    }
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof RequestBodyLimitError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if ((error as { code?: string }).code === 'P2002') {
+      return NextResponse.json({ error: 'Die Rechnungsnummer ist bereits vergeben.' }, { status: 409 });
     }
     throw error;
   }
@@ -104,16 +192,36 @@ export async function GET(request: Request) {
       prisma.invoice.findMany({
         where,
         orderBy: { uploadedAt: 'desc' },
-        include: { income: true },
+        select: {
+          id: true,
+          type: true,
+          fileName: true,
+          storedFileName: true,
+          uploadedAt: true,
+          invoiceDate: true,
+          dueDate: true,
+          invoiceNumber: true,
+          parsedData: true,
+          totalAmount: true,
+          status: true,
+          paidAt: true,
+          validUntil: true,
+          originalInvoiceId: true,
+          cancellationReason: true,
+          convertedFromQuoteId: true,
+          customerId: true,
+          userId: true,
+          income: true,
+        },
         skip,
         take: pageSize,
       }),
       prisma.invoice.count({ where }),
     ]);
 
-    const itemsWithCapabilities = items.map(invoice => ({
+    const itemsWithCapabilities = items.map(({ parsedData, ...invoice }) => ({
       ...invoice,
-      hasEInvoiceXml: Boolean(getRawEInvoiceXml(invoice.parsedData)),
+      hasEInvoiceXml: Boolean(getRawEInvoiceXml(parsedData)),
       hasPdfFile: isPdfFile(invoice.fileName) || isPdfFile(invoice.storedFileName),
     }));
 
@@ -136,30 +244,14 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
     }
 
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: Number(id), userId },
-      include: { income: true },
-    });
-
-    if (invoice && invoice.income) {
-      await prisma.income.delete({
-        where: { id: invoice.income.id },
-      });
-    }
-
-    await prisma.invoice.delete({
-      where: { id: Number(id), userId },
-    });
-
-    // Audit log
-    if (invoice) {
-      await auditDelete(userId, 'Invoice', invoice, invoice.invoiceNumber || invoice.fileName);
-    }
-
-    return NextResponse.json({ success: true });
+    const result = await deleteInvoice(userId, Number(id));
+    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof InvoicePaymentError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
   }
@@ -168,48 +260,46 @@ export async function DELETE(request: Request) {
 export async function PUT(request: Request) {
   try {
     const userId = await requireUserId();
-    const { id, status } = await request.json();
+    const body = await readRequestBodyWithinLimit(request, MAX_JSON_REQUEST_BYTES);
+    let input: Record<string, unknown>;
+    try {
+      input = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'Ungültiges JSON' }, { status: 400 });
+    }
+    const { id, status, paidAt, customerId } = input;
 
-    if (!id || !status) {
+    if (!id) {
       return NextResponse.json({ error: 'ID und Status sind erforderlich' }, { status: 400 });
     }
-
-    // Get old values for audit - verify ownership first
-    const oldInvoice = await prisma.invoice.findFirst({
-      where: { id: Number(id), userId },
-    });
-
-    if (!oldInvoice) {
-      return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
+    const parsedId = Number(id);
+    const parsedCustomerId: number | null | undefined = customerId === undefined || customerId === null || customerId === ''
+      ? (customerId as null | undefined)
+      : Number(customerId);
+    if (parsedCustomerId !== undefined && parsedCustomerId !== null
+      && (!Number.isSafeInteger(parsedCustomerId) || parsedCustomerId <= 0)) {
+      return NextResponse.json({ error: 'Ungültiger Kunde' }, { status: 400 });
     }
-
-    const updatedInvoice = await prisma.invoice.update({
-      where: { id: Number(id), userId },
-      data: {
-        status: status
-      },
-      include: {
-        income: true,
-      }
-    });
-
-    // Audit log for status change
-    if (oldInvoice) {
-      await createAuditLog({
-        userId,
-        action: 'STATUS_CHANGED',
-        entityType: 'Invoice',
-        entityId: id,
-        entityName: updatedInvoice.invoiceNumber || updatedInvoice.fileName,
-        oldValues: { status: oldInvoice.status },
-        newValues: { status: updatedInvoice.status },
-      });
-    }
-
+    const parsedPaidAt: string | null | undefined = paidAt === undefined || paidAt === null || paidAt === ''
+      ? (paidAt as null | undefined)
+      : String(paidAt);
+    const updatedInvoice = await updateInvoiceStatus(
+      userId,
+      parsedId,
+      status === undefined ? undefined : String(status),
+      parsedPaidAt,
+      parsedCustomerId,
+    );
     return NextResponse.json(updatedInvoice);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof RequestBodyLimitError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof InvoicePaymentError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
   }

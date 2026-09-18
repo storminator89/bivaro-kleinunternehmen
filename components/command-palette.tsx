@@ -56,14 +56,15 @@ const COMMANDS: CommandItem[] = [
   { id: "nav-users", label: "Benutzerverwaltung", group: "Navigation", icon: UserCog, adminOnly: true, action: ({ router, close }) => { router.push("/users"); close(); } },
 
   // Aktionen
-  { id: "action-new-invoice", label: "Neue Rechnung erstellen", hint: "Wechselt zum Rechnungs-Tab", group: "Aktionen", icon: Plus, keywords: ["create", "rechnung"], action: ({ router, close }) => { router.push("/dashboard?tab=invoices&new=1"); close(); } },
-  { id: "action-new-expense", label: "Neue Ausgabe erfassen", hint: "Wechselt zum Ausgaben-Tab", group: "Aktionen", icon: Plus, keywords: ["beleg"], action: ({ router, close }) => { router.push("/dashboard?tab=expenses&new=1"); close(); } },
-  { id: "action-new-income", label: "Neue Einnahme erfassen", group: "Aktionen", icon: Plus, action: ({ router, close }) => { router.push("/dashboard?tab=incomes&new=1"); close(); } },
+  { id: "action-new-invoice", label: "Neue Rechnung erstellen", hint: "Öffnet den Editor", group: "Aktionen", icon: Plus, keywords: ["create", "rechnung"], action: ({ router, close }) => { router.push("/dashboard/invoices/new"); close(); } },
+  { id: "action-new-quote", label: "Neues Angebot erstellen", hint: "Öffnet den Editor", group: "Aktionen", icon: Plus, keywords: ["create", "angebot"], action: ({ router, close }) => { router.push("/dashboard/quotes/new"); close(); } },
+  { id: "action-new-expense", label: "Neue Ausgabe erfassen", hint: "Fokussiert das Formular", group: "Aktionen", icon: Plus, keywords: ["beleg"], action: ({ router, close }) => { router.push("/dashboard?tab=expenses&new=1"); close(); } },
+  { id: "action-new-income", label: "Neue Einnahme erfassen", hint: "Fokussiert das Formular", group: "Aktionen", icon: Plus, action: ({ router, close }) => { router.push("/dashboard?tab=incomes&new=1"); close(); } },
 
   // Theme
   { id: "theme-light", label: "Helles Design", group: "Erscheinungsbild", icon: Sun, keywords: ["theme", "hell"], action: ({ setTheme, close }) => { setTheme("light"); close(); } },
   { id: "theme-dark", label: "Dunkles Design", group: "Erscheinungsbild", icon: Moon, keywords: ["theme", "dunkel"], action: ({ setTheme, close }) => { setTheme("dark"); close(); } },
-  { id: "theme-system", label: "System-Design", group: "Erscheinungsbill", icon: Sun, keywords: ["theme", "system", "auto"], action: ({ setTheme, close }) => { setTheme("system"); close(); } },
+  { id: "theme-system", label: "System-Design", group: "Erscheinungsbild", icon: Sun, keywords: ["theme", "system", "auto"], action: ({ setTheme, close }) => { setTheme("system"); close(); } },
 
   // Account
   { id: "logout", label: "Abmelden", group: "Konto", icon: LogOut, action: ({ close }) => { close(); signOut({ callbackUrl: "/" }); } },
@@ -136,7 +137,7 @@ export function CommandPalette() {
                     value={`${item.label} ${(item.keywords || []).join(" ")}`}
                     onSelect={() => item.action(helpers)}
                     className={cn(
-                      "flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground",
+                      "flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground",
                       "data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground",
                     )}
                   >
@@ -187,12 +188,13 @@ export function CommandPaletteTrigger({ className }: { className?: string }) {
       type="button"
       onClick={open}
       className={cn(
-        "inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground",
+        "inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground",
         className,
       )}
       aria-label="Befehlspalette öffnen"
     >
       <svg
+        aria-hidden="true"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
         fill="none"

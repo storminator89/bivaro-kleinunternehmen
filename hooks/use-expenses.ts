@@ -66,7 +66,10 @@ export function useExpenses(filters: ExpensesFilter): UseExpensesReturn {
 
   const reloadAll = useCallback(async () => {
     try {
-      const res = await fetch('/api/expenses?page=1&pageSize=10000', { cache: 'no-store' });
+      // This legacy hook is no longer used by the dashboard. Keep its
+      // compatibility method bounded; complete accounting totals come from
+      // /api/dashboard/summary instead of an oversized list request.
+      const res = await fetch('/api/expenses?page=1&pageSize=100', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setExpensesAll(data.items);

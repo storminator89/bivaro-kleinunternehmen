@@ -1,14 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval, isSameMonth } from 'date-fns';
-import { de } from 'date-fns/locale';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { CreateInvoiceModal } from "@/components/dashboard/create-invoice-modal";
-import { CreateQuoteModal } from "@/components/dashboard/create-quote-modal";
 import { QuotesTab, Quote } from "@/components/dashboard/tabs/quotes-tab";
 
 // Importiere extrahierte Komponenten und Typen
@@ -27,10 +25,10 @@ import {
   FilterState,
   DashboardEditData
 } from "@/types/dashboard";
-import { formatCurrency, toQuery } from "@/lib/dashboard-utils";
+import { toQuery } from "@/lib/dashboard-utils";
 import { EURTab, GWGTab, ExpensesTab, IncomesTab, InvoicesTab } from "@/components/dashboard/tabs";
-import { isPrivateWithdrawal } from "@/lib/private-categories";
 import { useDashboardData } from "@/hooks/use-dashboard-data";
+import type { DashboardTab } from "@/hooks/use-dashboard-data";
 
 export function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
@@ -41,7 +39,6 @@ export function DashboardContent() {
   // State Definitionen
   const [quotesStatusFilter, setQuotesStatusFilter] = useState('all');
   const [quotesSearchTerm, setQuotesSearchTerm] = useState('');
-  const [createQuoteModalOpen, setCreateQuoteModalOpen] = useState(false);
 
   // Tabs-State - Tab-Namen normalisieren (income -> incomes)
   const normalizeTab = (tab: string | null) => {
@@ -59,6 +56,32 @@ export function DashboardContent() {
       setActiveTab(newTab);
     }
   }, [tabParam, activeTab]);
+
+  // Deep links from the command palette should execute the requested action,
+  // not only navigate to the corresponding work area.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    const requestedTab = normalizeTab(tabParam);
+
+    if (requestedTab === 'invoices') {
+      router.replace('/dashboard/invoices/new');
+      return;
+    } else if (requestedTab === 'quotes') {
+      router.replace('/dashboard/quotes/new');
+      return;
+    } else {
+      const inputId = requestedTab === 'incomes' ? 'incomeDescription' : 'description';
+      window.setTimeout(() => {
+        const input = document.getElementById(inputId);
+        input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input?.focus();
+      }, 0);
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('new');
+    router.replace(`/dashboard?${nextParams.toString()}`, { scroll: false });
+  }, [router, searchParams, tabParam]);
 
   // Modal States
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -155,8 +178,14 @@ export function DashboardContent() {
     invoices,
     customers,
     quotes,
-    expensesAll,
-    incomesAll,
+    assetExpenses,
+    summary,
+    summaryIsLoading,
+    summaryIsError,
+    summaryError,
+    assetsIsLoading,
+    assetsIsError,
+    assetsError,
     uniqueCategories,
     uniqueCustomers,
     expensesPage,
@@ -187,7 +216,13 @@ export function DashboardContent() {
     loadIncomes,
     loadInvoices,
     loadQuotes,
-  } = useDashboardData({ filters, quotesStatusFilter, quotesSearchTerm });
+  } = useDashboardData({
+    filters,
+    quotesStatusFilter,
+    quotesSearchTerm,
+    activeTab: tabParam ? (activeTab as DashboardTab) : null,
+    selectedTimeRange,
+  });
 
   useEffect(() => {
     setExportError(null);
@@ -632,233 +667,31 @@ export function DashboardContent() {
   };
 
   // Berechnungen für EÜR
-  const { totalIncome, totalExpense, profit, depreciationDetails } = React.useMemo(() => {
-    const today = new Date();
-
-    // Einnahmen berechnen (stornierte Rechnungen ausschließen)
-    const incSum = incomesAll.reduce((sum, income) => {
-      // Stornierte Rechnungen nicht in EÜR berücksichtigen
-      if (income.invoiceStatus === 'CANCELLED') {
-        return sum;
-      }
-
-      const incomeDate = new Date(income.date);
-      let includeIncome = false;
-      if (selectedTimeRange === 'all') {
-        includeIncome = true;
-      } else if (selectedTimeRange === 'last3Months') {
-        includeIncome = incomeDate >= subMonths(today, 3);
-      } else if (selectedTimeRange === 'last6Months') {
-        includeIncome = incomeDate >= subMonths(today, 6);
-      } else if (selectedTimeRange === 'thisYear') {
-        includeIncome = incomeDate.getFullYear() === today.getFullYear();
-      } else if (selectedTimeRange === 'lastYear') {
-        includeIncome = incomeDate.getFullYear() === today.getFullYear() - 1;
-      }
-      return income.taxRelevant && includeIncome ? sum + income.amount : sum;
-    }, 0);
-
-    // Ausgaben und Abschreibungen berechnen
-    const depDetails: Array<{
-      id: number;
-      description: string;
-      date: string;
-      totalAmount: number;
-      years: number;
-      currentYearAmount: number;
-      remainingAmount: number;
-      calculationExplanation: string;
-    }> = [];
-
-    const expSum = expensesAll.reduce((sum, expense) => {
-      const expenseDate = new Date(expense.date);
-
-      // Wenn ein Jahreszeitraum gewählt ist, AfA berücksichtigen
-      if (selectedTimeRange === 'thisYear' || selectedTimeRange === 'lastYear') {
-        if (!expense.taxRelevant) return sum;
-
-        let targetYear = today.getFullYear();
-        if (selectedTimeRange === 'lastYear') {
-          targetYear = today.getFullYear() - 1;
-        }
-
-        let deductibleAmount = 0;
-
-        if (expense.depreciationYears && expense.depreciationYears > 0) {
-          const expenseYear = expenseDate.getFullYear();
-          const endYear = expenseYear + expense.depreciationYears;
-
-          // Prüfen, ob das Asset im Zieljahr abgeschrieben wird
-          if (targetYear >= expenseYear && targetYear < endYear) {
-            const yearlyDepreciation = expense.amount / expense.depreciationYears;
-            let calculationExplanation = "";
-
-            if (targetYear === expenseYear) {
-              // Erstes Jahr: Pro rata temporis
-              const monthsLeft = 12 - expenseDate.getMonth();
-              deductibleAmount = (yearlyDepreciation / 12) * monthsLeft;
-              calculationExplanation = `${formatCurrency(yearlyDepreciation)} / 12 * ${monthsLeft} Mon.`;
-            } else {
-              // Folgejahre
-              deductibleAmount = yearlyDepreciation;
-              calculationExplanation = `${formatCurrency(expense.amount)} / ${expense.depreciationYears} Jahre`;
-            }
-
-            // Details speichern
-            depDetails.push({
-              id: expense.id,
-              description: expense.description,
-              date: expense.date,
-              totalAmount: expense.amount,
-              years: expense.depreciationYears,
-              currentYearAmount: deductibleAmount,
-              remainingAmount: Math.max(0, expense.amount - (yearlyDepreciation * (targetYear - expenseYear + 1))), // Grobe Schätzung Restwert
-              calculationExplanation
-            });
-          }
-        } else {
-          // Sofortabschreibung
-          if (expenseDate.getFullYear() === targetYear) {
-            deductibleAmount = expense.amount;
-          }
-        }
-
-        return sum + (deductibleAmount * (expense.taxDeductiblePercentage || 100) / 100);
-      }
-
-      // Fallback für andere Zeiträume
-      let includeExpense = false;
-      if (selectedTimeRange === 'all') {
-        includeExpense = true;
-      } else if (selectedTimeRange === 'last3Months') {
-        includeExpense = expenseDate >= subMonths(today, 3);
-      } else if (selectedTimeRange === 'last6Months') {
-        includeExpense = expenseDate >= subMonths(today, 6);
-      }
-
-      return expense.taxRelevant && includeExpense ? sum + (expense.amount * (expense.taxDeductiblePercentage || 100) / 100) : sum;
-    }, 0);
-
-    return {
-      totalIncome: incSum,
-      totalExpense: expSum,
-      profit: incSum - expSum,
-      depreciationDetails: depDetails
-    };
-  }, [incomesAll, expensesAll, selectedTimeRange]);
+  const { totalIncome, totalExpense, profit, depreciationDetails } = React.useMemo(() => ({
+    totalIncome: summary?.totalIncome ?? 0,
+    totalExpense: summary?.totalExpense ?? 0,
+    profit: summary?.profit ?? 0,
+    depreciationDetails: summary?.depreciationDetails ?? [],
+  }), [summary]);
 
   // Private transactions calculation (Privatentnahmen / Privateinlagen)
-  const privateTransactions = React.useMemo(() => {
-    const today = new Date();
-
-    // Calculate Privatentnahmen (withdrawals from business to private)
-    const withdrawals = expensesAll.reduce((sum, expense) => {
-      if (!isPrivateWithdrawal(expense.category)) return sum;
-
-      const expenseDate = new Date(expense.date);
-      let include = false;
-      if (selectedTimeRange === 'all') include = true;
-      else if (selectedTimeRange === 'thisYear') include = expenseDate.getFullYear() === today.getFullYear();
-      else if (selectedTimeRange === 'lastYear') include = expenseDate.getFullYear() === today.getFullYear() - 1;
-      else if (selectedTimeRange === 'last3Months') include = expenseDate >= subMonths(today, 3);
-      else if (selectedTimeRange === 'last6Months') include = expenseDate >= subMonths(today, 6);
-
-      return include ? sum + expense.amount : sum;
-    }, 0);
-
-    // Calculate Privateinlagen (deposits from private to business)
-    const deposits = incomesAll.reduce((sum, income) => {
-      // Note: Income doesn't have category field in the same way
-      // We'll check the description for "Privateinlage" or non-tax-relevant status
-      const isPrivateDeposit_ = income.description?.toLowerCase().includes('privateinlage') ||
-        (!income.taxRelevant && income.description?.toLowerCase().includes('privat'));
-      if (!isPrivateDeposit_) return sum;
-
-      const incomeDate = new Date(income.date);
-      let include = false;
-      if (selectedTimeRange === 'all') include = true;
-      else if (selectedTimeRange === 'thisYear') include = incomeDate.getFullYear() === today.getFullYear();
-      else if (selectedTimeRange === 'lastYear') include = incomeDate.getFullYear() === today.getFullYear() - 1;
-      else if (selectedTimeRange === 'last3Months') include = incomeDate >= subMonths(today, 3);
-      else if (selectedTimeRange === 'last6Months') include = incomeDate >= subMonths(today, 6);
-
-      return include ? sum + income.amount : sum;
-    }, 0);
-
-    return {
-      privateWithdrawals: withdrawals,
-      privateDeposits: deposits,
-      privateBalance: deposits - withdrawals
-    };
-  }, [expensesAll, incomesAll, selectedTimeRange]);
+  const privateTransactions = React.useMemo(() => ({
+    privateWithdrawals: summary?.privateWithdrawals ?? 0,
+    privateDeposits: summary?.privateDeposits ?? 0,
+    privateBalance: (summary?.privateDeposits ?? 0) - (summary?.privateWithdrawals ?? 0),
+  }), [summary]);
 
   // Chart Data Preparation
-  const { monthlyChartData, categoryChartData } = React.useMemo(() => {
-    const today = new Date();
-    let start = startOfMonth(new Date(today.getFullYear(), 0, 1)); // Default to this year start
-    let end = endOfMonth(today);
-
-    if (selectedTimeRange === 'last3Months') {
-      start = startOfMonth(subMonths(today, 2));
-      end = endOfMonth(today);
-    } else if (selectedTimeRange === 'last6Months') {
-      start = startOfMonth(subMonths(today, 5));
-      end = endOfMonth(today);
-    } else if (selectedTimeRange === 'thisYear') {
-      start = startOfMonth(new Date(today.getFullYear(), 0, 1));
-      end = endOfMonth(new Date(today.getFullYear(), 11, 31));
-    } else if (selectedTimeRange === 'lastYear') {
-      start = startOfMonth(new Date(today.getFullYear() - 1, 0, 1));
-      end = endOfMonth(new Date(today.getFullYear() - 1, 11, 31));
-    }
-
-    const months = eachMonthOfInterval({ start, end });
-
-    const monthlyData = months.map(month => {
-      const monthIncomes = incomesAll
-        .filter(i => i.taxRelevant && i.invoiceStatus !== 'CANCELLED' && isSameMonth(new Date(i.date), month))
-        .reduce((sum, i) => sum + i.amount, 0);
-
-      const monthExpenses = expensesAll
-        .filter(e => e.taxRelevant && isSameMonth(new Date(e.date), month))
-        .reduce((sum, e) => sum + e.amount, 0);
-
-      return {
-        name: format(month, 'MMM', { locale: de }),
-        fullName: format(month, 'MMMM yyyy', { locale: de }),
-        Einnahmen: monthIncomes,
-        Ausgaben: monthExpenses
-      };
-    });
-
-    // Category Data for Pie Chart
-    const catMap = new Map<string, number>();
-    expensesAll.forEach(expense => {
-      if (!expense.taxRelevant) return;
-      const expenseDate = new Date(expense.date);
-
-      // Simple filter for the selected range
-      let include = false;
-      if (selectedTimeRange === 'all') include = true;
-      else if (selectedTimeRange === 'thisYear') include = expenseDate.getFullYear() === today.getFullYear();
-      else if (selectedTimeRange === 'lastYear') include = expenseDate.getFullYear() === today.getFullYear() - 1;
-      else if (selectedTimeRange === 'last3Months') include = expenseDate >= subMonths(today, 3);
-      else if (selectedTimeRange === 'last6Months') include = expenseDate >= subMonths(today, 6);
-
-      if (include) {
-        const cat = expense.category || 'Sonstiges';
-        catMap.set(cat, (catMap.get(cat) || 0) + expense.amount);
-      }
-    });
-
-    const categoryData = Array.from(catMap.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-
-    return { monthlyChartData: monthlyData, categoryChartData: categoryData };
-  }, [incomesAll, expensesAll, selectedTimeRange]);
-
-  const _COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
+  const monthlyChartData = (summary?.monthlyData ?? []).map((month) => ({
+    name: month.monthName,
+    fullName: new Date(month.year, month.month - 1, 1).toLocaleString('de-DE', { month: 'long', year: 'numeric' }),
+    Einnahmen: month.revenue,
+    Ausgaben: month.expenses,
+  }));
+  const categoryChartData = (summary?.expenseCategories ?? []).map((item) => ({
+    name: item.category,
+    value: item.amount,
+  }));
 
 
 
@@ -880,21 +713,7 @@ export function DashboardContent() {
     csvContent += "BETRIEBSAUSGABEN;\n";
 
     // Gruppierte Ausgaben nach Kategorie
-    const expensesByCategory = Array.from(
-      expensesAll.reduce((acc, expense) => {
-        if (!expense.taxRelevant) return acc;
-        const category = expense.category || 'Sonstiges';
-        // Use the same logic as displayed in the table (simplified for export or full logic?)
-        // For consistency, let's use the simple sum here, or replicate the full logic if needed.
-        // The previous code used simple sum. Let's stick to simple sum of taxRelevant expenses for now, 
-        // but ideally it should match the EÜR logic (depreciation etc).
-        // Given the complexity, let's use the simple sum for now as it was before, but on expensesAll.
-        const deductibleAmount = expense.amount * (expense.taxDeductiblePercentage || 100) / 100;
-        acc.set(category, (acc.get(category) || 0) + deductibleAmount);
-        return acc;
-      }, new Map<string, number>())
-    );
-
+    const expensesByCategory = categoryChartData.map(({ name, value }) => [name, value] as const);
     // Alle Ausgabenkategorien hinzufügen
     expensesByCategory.forEach(([category, amount]) => {
       csvContent += `${category};${amount.toFixed(2).replace('.', ',')}\n`;
@@ -927,19 +746,7 @@ export function DashboardContent() {
     let csvContent = "Datum;Beschreibung;Kategorie;Betrag (Netto)\n";
 
     // Gefilterte GWG-Ausgaben
-    const gwgExpenses = expensesAll.filter(expense => {
-      if (!expense.taxRelevant) return false;
-      if (expense.amount <= 250 || expense.amount > 1000) return false;
-
-      const expenseDate = new Date(expense.date);
-      const today = new Date();
-      if (selectedTimeRange === 'thisYear') {
-        return expenseDate.getFullYear() === today.getFullYear();
-      } else if (selectedTimeRange === 'lastYear') {
-        return expenseDate.getFullYear() === today.getFullYear() - 1;
-      }
-      return true;
-    });
+    const gwgExpenses = assetExpenses;
 
     // Zeilen hinzufügen
     gwgExpenses.forEach(expense => {
@@ -962,30 +769,50 @@ export function DashboardContent() {
 
   // Hauptkomponente rendern
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-              Buchhaltung für Kleinunternehmer
+    <div className="bg-background">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-8 flex flex-col gap-6 border-b border-border pb-7 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Arbeitsbereich</p>
+              <time className="hidden text-xs text-muted-foreground sm:inline" dateTime={new Date().toISOString().split('T')[0]}>
+                {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              </time>
+            </div>
+            <h1 className="min-w-0 [overflow-wrap:anywhere] text-3xl font-semibold tracking-[-0.03em] text-foreground md:text-4xl">
+              Buchhaltung
             </h1>
-            <p className="text-muted-foreground">
-              Verwalten Sie Ihre Finanzen einfach und effizient
+            <p className="mt-2 max-w-2xl text-muted-foreground">
+              Belege erfassen, Angebote versenden und offene Rechnungen im Blick behalten.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2" aria-label="Schnellaktionen">
+              <Button type="button" variant="outline" onClick={() => handleTabChange('expenses')}>
+                Ausgabe erfassen
+              </Button>
+              <Button type="button" variant="outline" onClick={() => handleTabChange('incomes')}>
+                Einnahme erfassen
+              </Button>
+              <Button type="button" onClick={() => router.push('/dashboard/invoices/new')}>
+                Rechnung erstellen
+              </Button>
+            </div>
           </div>
-          <div className="mt-4 md:mt-0 flex items-center gap-3">
-            {/* Year Selector */}
-            <div className="flex items-center gap-1 bg-card border rounded-lg shadow-sm">
+          {(activeTab === 'eur' || activeTab === 'gwg') && (
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
+            <div className="flex min-h-11 flex-1 items-center gap-1 rounded-lg border bg-card sm:flex-none" aria-label="Berichtszeitraum">
+              <span className="sr-only">Berichtszeitraum</span>
               <button
+                type="button"
                 onClick={() => {
                   if (selectedTimeRange === 'thisYear') {
                     setSelectedTimeRange('lastYear');
                   }
                 }}
-                className="px-2 py-2 hover:bg-muted rounded-l-lg transition-colors"
+                className="min-h-11 min-w-11 rounded-l-lg px-2 transition-colors hover:bg-muted"
+                aria-label="Vorheriges Jahr anzeigen"
                 title="Vorheriges Jahr"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
@@ -993,7 +820,7 @@ export function DashboardContent() {
                 value={selectedTimeRange}
                 onValueChange={(value) => setSelectedTimeRange(value as typeof selectedTimeRange)}
               >
-                <SelectTrigger className="border-0 shadow-none bg-transparent min-w-[140px] h-9">
+                <SelectTrigger className="h-11 min-w-[160px] flex-1 border-0 bg-transparent shadow-none">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1005,104 +832,46 @@ export function DashboardContent() {
                 </SelectContent>
               </Select>
               <button
+                type="button"
                 onClick={() => {
                   if (selectedTimeRange === 'lastYear') {
                     setSelectedTimeRange('thisYear');
                   }
                 }}
-                className="px-2 py-2 hover:bg-muted rounded-r-lg transition-colors disabled:opacity-50"
+                className="min-h-11 min-w-11 rounded-r-lg px-2 transition-colors hover:bg-muted disabled:opacity-50"
+                aria-label="Nächstes Jahr anzeigen"
                 title="Nächstes Jahr"
                 disabled={selectedTimeRange === 'thisYear' || selectedTimeRange === 'all'}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
             </div>
-            {/* Current Date Display */}
-            <div className="bg-card border rounded-lg px-4 py-2 shadow-sm">
-              <span className="text-foreground font-medium">
-                {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-              </span>
-            </div>
           </div>
+          )}
         </header>
 
-        <DashboardClient />
-
-        {/* Tabs für verschiedene Sektionen */}
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6 mt-8">
-          <div className="bg-card rounded-xl p-2 shadow-sm border">
-            <TabsList className="w-full flex justify-between gap-1 bg-muted/50 p-1 rounded-lg">
-              <TabsTrigger
-                value="expenses"
-                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="font-medium whitespace-nowrap">Ausgaben</span>
-                </div>
-              </TabsTrigger>
-              <TabsTrigger
-                value="incomes"
-                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="font-medium whitespace-nowrap">Einnahmen</span>
-                </div>
-              </TabsTrigger>
-              <TabsTrigger
-                value="invoices"
-                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 9.414V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span className="font-medium whitespace-nowrap">Rechnungen</span>
-                </div>
-              </TabsTrigger>
-              <TabsTrigger
-                value="eur"
-                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  <span className="font-medium whitespace-nowrap">EÜR</span>
-                </div>
-              </TabsTrigger>
-              <TabsTrigger
-                value="gwg"
-                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  <span className="font-medium whitespace-nowrap">GWG</span>
-                </div>
-              </TabsTrigger>
-              <TabsTrigger
-                value="quotes"
-                className="data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md transition-all duration-200 relative overflow-hidden group flex-1 py-3"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414A1 1 0 0121 8.414V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                  </svg>
-                  <span className="font-medium whitespace-nowrap">Angebote</span>
-                </div>
-              </TabsTrigger>
-            </TabsList>
+        {!tabParam ? (
+          <DashboardClient />
+        ) : (
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+          <div className="lg:hidden">
+            <label htmlFor="mobile-work-area" className="mb-2 block text-sm font-medium">Arbeitsbereich</label>
+            <select
+              id="mobile-work-area"
+              value={activeTab}
+              onChange={(event) => handleTabChange(event.target.value)}
+              className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-base"
+            >
+              <option value="expenses">Ausgaben</option>
+              <option value="incomes">Einnahmen</option>
+              <option value="invoices">Rechnungen</option>
+              <option value="quotes">Angebote</option>
+              <option value="eur">EÜR</option>
+              <option value="gwg">GWG-Verzeichnis</option>
+            </select>
           </div>
-
           {/* Ausgaben Tab */}
           <TabsContent value="expenses" className="space-y-6">
             <ExpensesTab
@@ -1170,7 +939,7 @@ export function DashboardContent() {
               isUploading={isUploading}
               onFileChange={handleFileChange}
               onFileUpload={handleFileUpload}
-              onOpenCreateModal={() => setCreateInvoiceModalOpen(true)}
+              onOpenCreateModal={() => router.push('/dashboard/invoices/new')}
               filters={filters.invoices}
               setFilters={(invoiceFilters) => setFilters({ ...filters, invoices: invoiceFilters })}
               invoices={filteredInvoices}
@@ -1192,28 +961,44 @@ export function DashboardContent() {
 
           {/* EÜR Tab */}
           <TabsContent value="eur" className="space-y-6">
-            <EURTab
-              totalIncome={totalIncome}
-              totalExpense={totalExpense}
-              profit={profit}
-              monthlyChartData={monthlyChartData}
-              categoryChartData={categoryChartData}
-              expensesAll={expensesAll}
-              depreciationDetails={depreciationDetails}
-              selectedTimeRange={selectedTimeRange}
-              onExport={handleExportEUR}
-              privateWithdrawals={privateTransactions.privateWithdrawals}
-              privateDeposits={privateTransactions.privateDeposits}
-            />
+            {summaryIsLoading ? (
+              <div className="rounded-lg border p-6 text-sm text-muted-foreground" role="status">Lade EÜR-Auswertung…</div>
+            ) : summaryIsError ? (
+              <div className="rounded-lg border border-critical/40 bg-critical-surface p-6 text-sm text-critical-foreground" role="alert">
+                Die EÜR-Auswertung konnte nicht geladen werden{summaryError instanceof Error ? `: ${summaryError.message}` : "."}
+              </div>
+            ) : (
+              <EURTab
+                totalIncome={totalIncome}
+                totalExpense={totalExpense}
+                profit={profit}
+                monthlyChartData={monthlyChartData}
+                categoryChartData={categoryChartData}
+                expenseCategories={categoryChartData}
+                depreciationDetails={depreciationDetails}
+                selectedTimeRange={selectedTimeRange}
+                onExport={handleExportEUR}
+                privateWithdrawals={privateTransactions.privateWithdrawals}
+                privateDeposits={privateTransactions.privateDeposits}
+              />
+            )}
           </TabsContent>
 
           {/* GWG Verzeichnis Tab */}
           <TabsContent value="gwg" className="space-y-6">
-            <GWGTab
-              expensesAll={expensesAll}
-              selectedTimeRange={selectedTimeRange}
-              onExport={handleExportGWG}
-            />
+            {assetsIsLoading ? (
+              <div className="rounded-lg border p-6 text-sm text-muted-foreground" role="status">Lade Anlagendaten…</div>
+            ) : assetsIsError ? (
+              <div className="rounded-lg border border-critical/40 bg-critical-surface p-6 text-sm text-critical-foreground" role="alert">
+                Die Anlagendaten konnten nicht geladen werden{assetsError instanceof Error ? `: ${assetsError.message}` : "."}
+              </div>
+            ) : (
+              <GWGTab
+                expensesAll={assetExpenses}
+                selectedTimeRange={selectedTimeRange}
+                onExport={handleExportGWG}
+              />
+            )}
           </TabsContent>
 
           {/* Angebote Tab */}
@@ -1230,7 +1015,7 @@ export function DashboardContent() {
               onPageSizeChange={setQuotesPageSize}
               onStatusFilterChange={(s) => { setQuotesStatusFilter(s); }}
               onSearchChange={(t) => { setQuotesSearchTerm(t); }}
-              onOpenCreateModal={() => setCreateQuoteModalOpen(true)}
+              onOpenCreateModal={() => router.push('/dashboard/quotes/new')}
               onStatusChange={handleQuoteStatusChange}
               onConvertToInvoice={handleConvertToInvoice}
               onDelete={handleQuoteDelete}
@@ -1238,6 +1023,7 @@ export function DashboardContent() {
             />
           </TabsContent>
         </Tabs>
+        )}
 
         {/* Rechnungsdetails-Modal */}
         {invoiceDetailsModalOpen && selectedInvoice && (
@@ -1301,13 +1087,6 @@ export function DashboardContent() {
             await loadIncomes(incomesPage, incomesPageSize);
             if (fromQuote) await loadQuotes(quotesPage, quotesPageSize);
           }}
-        />
-
-        {/* Angebot erstellen Modal */}
-        <CreateQuoteModal
-          isOpen={createQuoteModalOpen}
-          onClose={() => setCreateQuoteModalOpen(false)}
-          onQuoteCreated={() => loadQuotes(1, quotesPageSize)}
         />
 
         {/* Wiederkehrende Ausgaben Modal */}

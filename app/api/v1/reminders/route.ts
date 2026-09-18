@@ -1,3 +1,4 @@
+import { auditCreate, auditDelete } from '@/lib/audit-log';
 /**
  * API v1 - Reminders Endpoint
  * 
@@ -17,8 +18,8 @@ import {
   corsHeaders,
 } from '@/lib/api-auth';
 
-export async function OPTIONS() {
-  return handleCors();
+export async function OPTIONS(request: NextRequest) {
+  return handleCors(request);
 }
 
 // Reminder level labels
@@ -217,6 +218,7 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+    await auditCreate(userId, 'Reminder', reminder);
 
     const response = apiSuccess({
       id: reminder.id,
@@ -264,6 +266,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.reminder.delete({
       where: { id: parseInt(id) },
     });
+    await auditDelete(userId, 'Reminder', existing);
 
     const response = apiSuccess({ deleted: true, id: parseInt(id) });
     Object.entries(corsHeaders()).forEach(([key, value]) => {

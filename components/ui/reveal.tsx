@@ -13,10 +13,19 @@ type RevealProps = {
 export function Reveal({ children, className = "", delay = 0, y = 12, as: Tag = "div" }: RevealProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updateMotionPreference = () => setReduceMotion(mediaQuery.matches);
+    updateMotionPreference();
+    mediaQuery.addEventListener("change", updateMotionPreference);
+
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      mediaQuery.removeEventListener("change", updateMotionPreference);
+      return;
+    }
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -29,13 +38,18 @@ export function Reveal({ children, className = "", delay = 0, y = 12, as: Tag = 
       { rootMargin: "0px 0px -10% 0px", threshold: 0.1 }
     );
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      mediaQuery.removeEventListener("change", updateMotionPreference);
+    };
   }, []);
 
   const style: React.CSSProperties = {
-    transition: "opacity 600ms ease, transform 600ms ease",
-    transitionDelay: `${delay}ms`,
-    transform: visible ? "translateY(0px)" : `translateY(${y}px)`,
+    transition: reduceMotion
+      ? "opacity 120ms ease"
+      : "opacity 300ms var(--ease-out), transform 300ms var(--ease-out)",
+    transitionDelay: reduceMotion ? "0ms" : `${delay}ms`,
+    transform: reduceMotion || visible ? "translateY(0px)" : `translateY(${y}px)`,
     opacity: visible ? 1 : 0,
   };
 
@@ -46,4 +60,3 @@ export function Reveal({ children, className = "", delay = 0, y = 12, as: Tag = 
     </Tag>
   );
 }
-

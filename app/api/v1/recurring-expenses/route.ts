@@ -1,3 +1,4 @@
+import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 /**
  * API v1 - Recurring Expenses Endpoint
  * 
@@ -10,6 +11,7 @@
 import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { calculateNextExecution, firstExecution, validateRecurringValues } from '@/lib/recurring-schedule';
 import {
   withApiAuth,
   apiSuccess,
@@ -18,35 +20,11 @@ import {
   corsHeaders,
 } from '@/lib/api-auth';
 
-export async function OPTIONS() {
-  return handleCors();
+export async function OPTIONS(request: NextRequest) {
+  return handleCors(request);
 }
 
 // Helper: Calculate next execution date
-function calculateNextExecution(interval: string, dayOfMonth: number, fromDate: Date = new Date()): Date {
-  const next = new Date(fromDate);
-  next.setHours(0, 0, 0, 0);
-
-  switch (interval) {
-    case 'MONTHLY':
-      next.setMonth(next.getMonth() + 1);
-      next.setDate(Math.min(dayOfMonth, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
-      break;
-    case 'QUARTERLY':
-      next.setMonth(next.getMonth() + 3);
-      next.setDate(Math.min(dayOfMonth, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
-      break;
-    case 'YEARLY':
-      next.setFullYear(next.getFullYear() + 1);
-      next.setDate(Math.min(dayOfMonth, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
-      break;
-    default:
-      next.setMonth(next.getMonth() + 1);
-  }
-
-  return next;
-}
-
 // GET /api/v1/recurring-expenses
 export async function GET(request: NextRequest) {
   return withApiAuth(request, async ({ userId }) => {
@@ -154,9 +132,11 @@ export async function POST(request: NextRequest) {
       return apiError('Day of month must be between 1 and 31', 400, 'VALIDATION_ERROR');
     }
 
+    const validationError = validateRecurringValues({ amount, interval, dayOfMonth: dayOfMonth ?? 1, taxDeductiblePercentage, startDate, endDate, taxRelevant });
+    if (validationError) return apiError(validationError, 400, 'VALIDATION_ERROR');
+
     const start = startDate ? new Date(startDate) : new Date();
-    const nextExecution = new Date(start);
-    nextExecution.setDate(Math.min(day, new Date(nextExecution.getFullYear(), nextExecution.getMonth() + 1, 0).getDate()));
+    const nextExecution = firstExecution(interval.toUpperCase(), day, start);
 
     const expense = await prisma.recurringExpense.create({
       data: {
@@ -164,7 +144,7 @@ export async function POST(request: NextRequest) {
         amount: parseFloat(amount),
         category: category?.trim() || null,
         taxRelevant: taxRelevant !== undefined ? Boolean(taxRelevant) : true,
-        taxDeductiblePercentage: taxDeductiblePercentage ? parseFloat(taxDeductiblePercentage) : 100,
+        taxDeductiblePercentage: taxDeductiblePercentage == null ? 100 : Number(taxDeductiblePercentage),
         interval: interval.toUpperCase(),
         dayOfMonth: day,
         startDate: start,
@@ -173,6 +153,7 @@ export async function POST(request: NextRequest) {
         userId,
       },
     });
+    await auditCreate(userId, 'RecurringExpense', expense);
 
     const response = apiSuccess(expense);
     response.headers.set('Location', `/api/v1/recurring-expenses?id=${expense.id}`);
@@ -193,7 +174,7 @@ export async function PUT(request: NextRequest) {
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
 
-    if (!id) {
+    if (!id || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
       return apiError('Recurring expense ID is required', 400, 'MISSING_ID');
     }
 
@@ -236,7 +217,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const validIntervals = ['MONTHLY', 'QUARTERLY', 'YEARLY'];
-    if (interval && !validIntervals.includes(interval.toUpperCase())) {
+    if (interval !== undefined && (typeof interval !== 'string' || !validIntervals.includes(interval.toUpperCase()))) {
       return apiError(`Interval must be one of: ${validIntervals.join(', ')}`, 400, 'VALIDATION_ERROR');
     }
 
@@ -247,15 +228,20 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    const validationError = validateRecurringValues({ ...existing, ...body });
+    if (validationError) return apiError(validationError, 400, 'VALIDATION_ERROR');
+
     // Recalculate next execution if interval or day changed
     let nextExecution = existing.nextExecution;
-    if ((interval && interval.toUpperCase() !== existing.interval) ||
-      (dayOfMonth !== undefined && dayOfMonth !== existing.dayOfMonth)) {
-      nextExecution = calculateNextExecution(
-        interval?.toUpperCase() || existing.interval,
-        dayOfMonth !== undefined ? parseInt(dayOfMonth) : existing.dayOfMonth,
-        existing.lastExecuted || new Date()
-      );
+    if ((interval !== undefined && interval.toUpperCase() !== existing.interval) ||
+        (dayOfMonth !== undefined && Number(dayOfMonth) !== existing.dayOfMonth) || startDate !== undefined) {
+      const nextInterval = interval?.toUpperCase() ?? existing.interval;
+      const nextDay = dayOfMonth === undefined ? existing.dayOfMonth : Number(dayOfMonth);
+      nextExecution = existing.lastExecuted
+        ? calculateNextExecution(nextInterval, nextDay, existing.lastExecuted)
+        : firstExecution(nextInterval, nextDay, startDate ? new Date(startDate) : existing.startDate);
+      const earliest = firstExecution(nextInterval, nextDay, startDate ? new Date(startDate) : existing.startDate);
+      if (nextExecution < earliest) nextExecution = earliest;
     }
 
     const expense = await prisma.recurringExpense.update({
@@ -265,7 +251,7 @@ export async function PUT(request: NextRequest) {
         ...(amount !== undefined && { amount: parseFloat(amount) }),
         ...(category !== undefined && { category: category?.trim() || null }),
         ...(taxRelevant !== undefined && { taxRelevant: Boolean(taxRelevant) }),
-        ...(taxDeductiblePercentage !== undefined && { taxDeductiblePercentage: parseFloat(taxDeductiblePercentage) }),
+        ...(taxDeductiblePercentage !== undefined && { taxDeductiblePercentage: taxDeductiblePercentage == null ? 100 : Number(taxDeductiblePercentage) }),
         ...(interval !== undefined && { interval: interval.toUpperCase() }),
         ...(dayOfMonth !== undefined && { dayOfMonth: parseInt(dayOfMonth) }),
         ...(startDate !== undefined && { startDate: new Date(startDate) }),
@@ -274,6 +260,7 @@ export async function PUT(request: NextRequest) {
         nextExecution,
       },
     });
+    await auditUpdate(userId, 'RecurringExpense', existing.id, existing, expense);
 
     const response = apiSuccess(expense);
     Object.entries(corsHeaders()).forEach(([key, value]) => {
@@ -289,7 +276,7 @@ export async function DELETE(request: NextRequest) {
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
 
-    if (!id) {
+    if (!id || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
       return apiError('Recurring expense ID is required', 400, 'MISSING_ID');
     }
 
@@ -305,6 +292,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.recurringExpense.delete({
       where: { id: parseInt(id) },
     });
+    await auditDelete(userId, 'RecurringExpense', existing);
 
     const response = apiSuccess({ deleted: true, id: parseInt(id) });
     Object.entries(corsHeaders()).forEach(([key, value]) => {

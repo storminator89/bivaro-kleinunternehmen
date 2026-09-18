@@ -1,436 +1,247 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, PieChart, FileText, BarChart3, CheckCircle, Shield, Zap, Star } from "lucide-react";
-import { Reveal } from "@/components/ui/reveal";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
+const workflow = [
+  {
+    title: "Erfassen",
+    description:
+      "Geschäftsvorgänge dort aufnehmen, wo sie entstehen: als Einnahme, Ausgabe, Beleg oder E-Rechnung.",
+    details: [
+      ["E-Rechnungen", "ZUGFeRD, Factur-X und XRechnung"],
+      ["Belege", "PDF, JPG und PNG"],
+      ["Buchungen", "Einnahmen und Ausgaben"],
+    ],
+    href: "/dashboard?tab=expenses",
+    linkLabel: "Ausgabe erfassen",
+  },
+  {
+    title: "Ordnen",
+    description:
+      "Kunden, Kategorien und Zahlungsstatus verbinden die einzelnen Vorgänge zu einer nachvollziehbaren Buchhaltung.",
+    details: [
+      ["Stammdaten", "Kunden zentral verwalten"],
+      ["Zuordnung", "EÜR-Kategorien und Steuerrelevanz"],
+      ["Status", "Entwurf, gesendet, bezahlt oder storniert"],
+    ],
+    href: "/dashboard?tab=invoices",
+    linkLabel: "Rechnungen ordnen",
+  },
+  {
+    title: "Prüfen und exportieren",
+    description:
+      "Offene Forderungen, Einnahmen und Ausgaben prüfen und die benötigten Unterlagen strukturiert ausgeben.",
+    details: [
+      ["Überblick", "Kennzahlen und Jahresvergleich"],
+      ["Auswertung", "EÜR und GWG-Verzeichnis"],
+      ["Ausgabe", "CSV- und Belegexporte"],
+    ],
+    href: "/dashboard?tab=eur",
+    linkLabel: "EÜR prüfen",
+  },
+] as const;
 
 export default function Home() {
-  const { data: _session, status } = useSession();
+  const { status } = useSession();
+  const isAuthenticated = status === "authenticated";
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Hero Section */}
-      <div className="py-16 md:py-24 section section-glow subtle-grid">
-        {/* subtle color accents */}
-        <div className="accent-orb accent-orb--lg" style={{ top: -100, right: -80 }} />
-        <div className="accent-orb accent-orb--md" style={{ bottom: -120, left: -60 }} />
-        <div className="flex flex-col lg:flex-row items-center gap-12">
-          <div className="lg:w-1/2 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium rounded-full bg-primary/10 text-primary mb-6">
-              <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-              Buchhaltung neu gedacht
-            </div>
-            <Reveal>
-              <h1 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight text-foreground">
-                Smarte Finanzen <br />für Kleinunternehmer
-              </h1>
-            </Reveal>
-            <div className="dots-row mb-3" aria-hidden>
-              <span className="dot dot-1"></span>
-              <span className="dot dot-2"></span>
-              <span className="dot dot-3"></span>
-              <span className="dot dot-4"></span>
-              <span className="dot dot-5"></span>
-            </div>
-            <Reveal delay={100}>
-              <p className="text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-8">
-                Fokussieren Sie sich auf Ihr Kerngeschäft, während wir Ihre Buchhaltung vereinfachen.
-                <span className="block mt-2 font-medium text-primary">Einfacher. Schneller. Moderner.</span>
+    <div className="overflow-x-clip">
+      <div className="mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-8">
+        <section className="border-b border-border pb-20 pt-14 sm:pb-24 sm:pt-16 lg:pb-28 lg:pt-20">
+          <div className="mb-8 flex flex-col gap-2 border-y border-border py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Buchhaltung für Kleinunternehmen</span>
+            <span className="font-mono text-xs">Rechnungen · Belege · EÜR</span>
+          </div>
+
+          <h1 className="min-w-0 max-w-[13ch] [overflow-wrap:anywhere] font-marketing text-[clamp(3.25rem,9vw,8.5rem)] font-medium leading-[0.88] tracking-[-0.045em] text-foreground">
+            Rechnungen und Belege im Griff.
+          </h1>
+
+          <div className="mt-10 grid min-w-0 gap-10 lg:mt-14 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:items-start">
+            <div className="min-w-0">
+              <p className="max-w-lg text-lg leading-8 text-muted-foreground sm:text-xl">
+                Bivaro führt Belege, Rechnungen, Kunden und Auswertungen in einem klaren Arbeitsablauf zusammen.
               </p>
-            </Reveal>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Reveal delay={150}>
-                {status === "authenticated" ? (
-                  <Link href="/dashboard">
-                    <Button size="lg" className="px-8 transition-all duration-300 hover:scale-105">
-                      <span>Zum Dashboard</span>
-                      <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                    </Button>
-                  </Link>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                {isAuthenticated ? (
+                  <Button asChild size="lg" className="min-h-11 px-6">
+                    <Link href="/dashboard">
+                      Dashboard öffnen
+                      <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </Button>
                 ) : (
                   <>
-                    <Link href="/register">
-                      <Button size="lg" className="px-8 transition-all duration-300 hover:scale-105">
-                        <span>Jetzt registrieren</span>
-                        <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                      </Button>
-                    </Link>
-                    <Link href="/login">
-                      <Button size="lg" variant="outline" className="transition-all duration-300 hover:scale-105">
-                        Anmelden
-                      </Button>
-                    </Link>
+                    <Button asChild size="lg" className="min-h-11 px-6">
+                      <Link href="/register">
+                        Konto anlegen
+                        <ArrowRight aria-hidden="true" />
+                      </Link>
+                    </Button>
+                    <Button asChild size="lg" variant="outline" className="min-h-11 px-6">
+                      <Link href="/login">Anmelden</Link>
+                    </Button>
                   </>
                 )}
-              </Reveal>
-            </div>
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mt-8">
-              <span className="inline-flex items-center gap-1 text-xs font-medium bg-muted text-foreground/80 px-3 py-1 rounded-full">
-                <CheckCircle className="h-3 w-3" />
-                DSGVO-konform
-              </span>
-              <span className="inline-flex items-center gap-1 text-xs font-medium bg-muted text-foreground/80 px-3 py-1 rounded-full">
-                <CheckCircle className="h-3 w-3" />
-                Lokale Datenspeicherung
-              </span>
-              <span className="inline-flex items-center gap-1 text-xs font-medium bg-muted text-foreground/80 px-3 py-1 rounded-full">
-                <CheckCircle className="h-3 w-3" />
-                Finanzamt-tauglich
-              </span>
-            </div>
-          </div>
-          <div className="lg:w-1/2">
-            <Reveal delay={120}>
-              <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-2">
-                <Image
-                  src="/screenshot/dashboard.png"
-                  width={600}
-                  height={400}
-                  alt="Dashboard Vorschau"
-                  className="rounded-lg border"
-                />
               </div>
-            </Reveal>
-          </div>
-        </div>
-      </div>
 
-      {/* Features Section */}
-      <div className="py-16 md:py-24 section section-glow subtle-grid">
-        <div className="accent-orb accent-orb--sm" style={{ top: -40, left: 40 }} />
-        <div className="accent-orb accent-orb--sm" style={{ bottom: -60, right: 60 }} />
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium rounded-full bg-muted text-foreground/80 mb-4">
-            Funktionen
-          </div>
-          <Reveal>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-foreground accent-underline">Alles was Sie brauchen</h2>
-          </Reveal>
-          <div className="dots-row justify-center mb-4" aria-hidden>
-            <span className="dot dot-2"></span>
-            <span className="dot dot-3"></span>
-            <span className="dot dot-4"></span>
-          </div>
-          <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            Unsere Lösung bietet alles, was Kleinunternehmer für eine einfache und gesetzeskonforme Buchhaltung benötigen.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          <Reveal as="div">
-            <Card>
-              <CardHeader>
-                <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ '--accent': 'var(--chart-1)' } as React.CSSProperties}>
-                  <BarChart3 className="h-6 w-6" />
-                </div>
-                <CardTitle>Einfache Erfassung</CardTitle>
-                <CardDescription>
-                  Schnelle und unkomplizierte Erfassung aller Geschäftsvorgänge
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Mit unserer benutzerfreundlichen Oberfläche können Sie alle geschäftlichen
-                  Transaktionen mit wenigen Klicks erfassen und nach Kategorien organisieren.
-                </p>
-                <ul className="mt-4 space-y-2">
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Intelligente Kategorisierung von Ausgaben</span>
-                  </li>
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Automatische Steuerrelevanz-Erkennung</span>
-                  </li>
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Drag & Drop Belege hochladen und verknüpfen</span>
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Link href="/dashboard?tab=expenses" className="w-full">
-                  <Button className="w-full transition-all duration-300 hover:scale-[1.02]">
-                    <span>Ausgaben erfassen</span>
-                    <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                  </Button>
-                </Link>
-              </CardFooter>
-            </Card>
-          </Reveal>
-
-          <Reveal as="div" delay={80}>
-            <Card>
-              <CardHeader>
-                <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ '--accent': 'var(--chart-2)' } as React.CSSProperties}>
-                  <FileText className="h-6 w-6" />
-                </div>
-                <CardTitle>E-Rechnungs-Integration</CardTitle>
-                <CardDescription>
-                  Automatische Rechnungsverarbeitung mit KI-Technologie
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Laden Sie ZUGFeRD-/Factur-X-PDFs oder XRechnung-XMLs hoch und lassen Sie die
-                  Daten automatisch extrahieren und in Ihre Buchhaltung integrieren.
-                </p>
-                <ul className="mt-4 space-y-2">
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Strukturierte Datenextraktion aus PDF- und XML-E-Rechnungen</span>
-                  </li>
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Automatische Kategorisierung und MwSt-Berechnung</span>
-                  </li>
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Digitale Archivierung und schneller Zugriff</span>
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Link href="/dashboard?tab=invoices" className="w-full">
-                  <Button variant="outline" className="w-full transition-all duration-300 hover:scale-[1.02]">
-                    <span>Rechnungen verwalten</span>
-                    <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                  </Button>
-                </Link>
-              </CardFooter>
-            </Card>
-          </Reveal>
-
-          <Reveal as="div" delay={140}>
-            <Card>
-              <CardHeader>
-                <div className="w-12 h-12 mb-4 rounded-lg icon-accent flex items-center justify-center" style={{ '--accent': 'var(--chart-3)' } as React.CSSProperties}>
-                  <PieChart className="h-6 w-6" />
-                </div>
-                <CardTitle>EÜR-Übersicht</CardTitle>
-                <CardDescription>
-                  Live-Übersicht für all Ihre steuerlichen Pflichten
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Mit unserem EÜR-Assistenten können Sie jederzeit eine Übersicht Ihrer
-                  steuerlich relevanten Einnahmen und Ausgaben generieren und exportieren.
-                </p>
-                <ul className="mt-4 space-y-2">
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Live EÜR-Vorschau mit Fortschrittsanzeige</span>
-                  </li>
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Export als PDF, CSV oder direkt für ELSTER</span>
-                  </li>
-                  <li className="flex items-start text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5 mr-2 flex-shrink-0" />
-                    <span>Steuerberaterfreundliche Aufbereitung mit Belegen</span>
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Link href="/dashboard?tab=eur" className="w-full">
-                  <Button variant="outline" className="w-full transition-all duration-300 hover:scale-[1.02]">
-                    <span>Zur EÜR-Übersicht</span>
-                    <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                  </Button>
-                </Link>
-              </CardFooter>
-            </Card>
-          </Reveal>
-        </div>
-      </div>
-
-      {/* Testimonials Section */}
-      <div className="py-16 md:py-24 section section-glow subtle-grid">
-        <div className="accent-orb accent-orb--sm" style={{ top: -50, right: 24 }} />
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium rounded-full bg-muted text-foreground/80 mb-4">
-            Erfahrungen
-          </div>
-          <Reveal>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-foreground accent-underline">Was unsere Nutzer sagen</h2>
-          </Reveal>
-          <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            Kleinunternehmer vertrauen auf unsere Lösung für ihre Buchhaltung
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          <Reveal as="div">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center mb-4">
-                  <div className="text-yellow-500 flex">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-current" />
-                    ))}
-                  </div>
-                </div>
-                <p className="text-muted-foreground mb-6">
-                  "Als Freelancer habe ich endlich eine unkomplizierte Lösung für meine Buchhaltung gefunden. Die automatische Verarbeitung von Rechnungen spart mir <span className="font-medium text-primary">Stunden an Arbeit</span> jeden Monat!"
-                </p>
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                    MK
-                  </div>
-                  <div className="ml-3">
-                    <p className="font-semibold">Michael K.</p>
-                    <p className="text-sm text-muted-foreground">Web-Designer, Hamburg</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </Reveal>
-
-          <Reveal as="div" delay={80}>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center mb-4">
-                  <div className="text-yellow-500 flex">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-current" />
-                    ))}
-                  </div>
-                </div>
-                <p className="text-muted-foreground mb-6">
-                  "Die EÜR-Funktion ist ein Lebensretter! Mein Steuerberater war <span className="font-medium text-primary">beeindruckt von der übersichtlichen Aufbereitung</span> meiner Unterlagen."
-                </p>
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                    SB
-                  </div>
-                  <div className="ml-3">
-                    <p className="font-semibold">Sarah B.</p>
-                    <p className="text-sm text-muted-foreground">Online-Shop Betreiberin, München</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </Reveal>
-
-          <Reveal as="div" delay={140}>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center mb-4">
-                  <div className="text-yellow-500 flex">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-current" />
-                    ))}
-                  </div>
-                </div>
-                <p className="text-muted-foreground mb-6">
-                  "Dieses Tool hat meine Buchhaltung revolutioniert. Die <span className="font-medium text-primary">ZUGFeRD-Integration spart enorm viel Zeit</span> und funktioniert perfekt!"
-                </p>
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                    TM
-                  </div>
-                  <div className="ml-3">
-                    <p className="font-semibold">Thomas M.</p>
-                    <p className="text-sm text-muted-foreground">IT-Berater, Berlin</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </Reveal>
-        </div>
-      </div>
-
-      {/* Stats Section */}
-      <div className="py-16 md:py-24 section section-glow subtle-grid">
-        <div className="accent-orb accent-orb--sm" style={{ top: -60, left: 24 }} />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          <Reveal as="div">
-            <Card>
-              <CardContent className="flex flex-col items-center text-center p-6">
-                <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ '--accent': 'var(--chart-4)' } as React.CSSProperties}>
-                  <Shield className="h-6 w-6" />
-                </div>
-                <h3 className="text-2xl font-bold text-foreground mb-2">Sicher</h3>
-                <p className="text-muted-foreground">
-                  Lokale Datenspeicherung für höchste Datensicherheit und Kontrolle
-                </p>
-              </CardContent>
-            </Card>
-          </Reveal>
-          <Reveal as="div" delay={80}>
-            <Card>
-              <CardContent className="flex flex-col items-center text-center p-6">
-                <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ '--accent': 'var(--chart-5)' } as React.CSSProperties}>
-                  <Zap className="h-6 w-6" />
-                </div>
-                <h3 className="text-2xl font-bold text-foreground mb-2">Schnell</h3>
-                <p className="text-muted-foreground">
-                  Automatisierte Prozesse sparen wertvolle Zeit in Ihrem Geschäftsalltag
-                </p>
-              </CardContent>
-            </Card>
-          </Reveal>
-          <Reveal as="div" delay={140}>
-            <Card>
-              <CardContent className="flex flex-col items-center text-center p-6">
-                <div className="w-12 h-12 rounded-lg icon-accent flex items-center justify-center mb-4" style={{ '--accent': 'var(--chart-2)' } as React.CSSProperties}>
-                  <CheckCircle className="h-6 w-6" />
-                </div>
-                <h3 className="text-2xl font-bold text-foreground mb-2">Konform</h3>
-                <p className="text-muted-foreground">
-                  Entspricht allen gesetzlichen Anforderungen für Ihre Steuerberichte
-                </p>
-              </CardContent>
-            </Card>
-          </Reveal>
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div className="py-16 md:py-24 section section-glow subtle-grid">
-        <div className="accent-orb accent-orb--md" style={{ bottom: -120, right: -60 }} />
-        <Card className="max-w-4xl mx-auto">
-          <CardContent className="p-8 md:p-12 text-center">
-            <Reveal>
-              <h2 className="text-3xl md:text-4xl font-bold mb-4 text-foreground accent-underline">Bereit für eine einfachere Buchhaltung?</h2>
-            </Reveal>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto mb-8">
-              Starten Sie noch heute und erleben Sie, wie einfach Buchhaltung sein kann.
-              Keine versteckten Kosten, keine komplizierten Einrichtungen.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Reveal delay={150}>
-                {status === "authenticated" ? (
-                  <Link href="/dashboard">
-                    <Button size="lg" className="px-8 transition-all duration-300 hover:scale-105">
-                      <span>Zum Dashboard</span>
-                      <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                    </Button>
-                  </Link>
-                ) : (
-                  <>
-                    <Link href="/register">
-                      <Button size="lg" className="px-8 transition-all duration-300 hover:scale-105">
-                        <span>Jetzt kostenlos registrieren</span>
-                        <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                      </Button>
-                    </Link>
-                    <Link href="/login">
-                      <Button size="lg" variant="outline" className="transition-all duration-300 hover:scale-105">
-                        Anmelden
-                      </Button>
-                    </Link>
-                  </>
-                )}
-              </Reveal>
+              <p className="mt-6 text-sm leading-6 text-muted-foreground">
+                Für selbstständige Arbeit mit direktem Zugriff auf die eigenen Geschäftsdaten.
+              </p>
             </div>
-          </CardContent>
-        </Card>
+
+            <figure className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+              <Image
+                src="/screenshot/dashboard.png"
+                width={1910}
+                height={1626}
+                alt="Bivaro-Dashboard mit Finanzübersicht, Einnahmen, Ausgaben und EÜR-Auswertung"
+                priority
+                sizes="(max-width: 1023px) calc(100vw - 2rem), (max-width: 1439px) 62vw, 880px"
+                className="h-auto w-full lg:max-h-[32rem] lg:object-cover lg:object-top"
+              />
+              <figcaption className="flex flex-col gap-1 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>Die echte Bivaro-Finanzübersicht</span>
+                <span>Ergebnisse statt Beispielmetriken</span>
+              </figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section className="py-16 sm:py-20 lg:py-24" aria-labelledby="workflow-title">
+          <div className="grid gap-8 pb-12 sm:pb-16 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-end">
+            <h2
+              id="workflow-title"
+              className="min-w-0 max-w-[12ch] [overflow-wrap:anywhere] font-marketing text-4xl font-medium leading-[0.98] tracking-[-0.03em] text-foreground sm:text-5xl lg:text-6xl"
+            >
+              Vom Eingang bis zur Auswertung.
+            </h2>
+            <p className="max-w-2xl text-lg leading-8 text-muted-foreground lg:justify-self-end">
+              Kein loses Nebeneinander von Funktionen. Drei aufeinanderfolgende Schritte halten den Weg durch die Buchhaltung verständlich.
+            </p>
+          </div>
+
+          <div className="border-b border-border">
+            {workflow.map((step, index) => {
+              const detailFirst = index === 1;
+
+              return (
+                <article
+                  key={step.title}
+                  className="grid min-w-0 gap-8 border-t border-border py-10 sm:py-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16 lg:py-16"
+                >
+                  <div className={detailFirst ? "min-w-0 lg:order-2" : "min-w-0"}>
+                    <h3 className="mb-6 min-w-0 [overflow-wrap:anywhere] font-marketing text-4xl font-medium leading-none tracking-[-0.025em] text-foreground sm:text-5xl">
+                      {step.title}
+                    </h3>
+                    <p className="max-w-xl text-lg leading-8 text-muted-foreground">
+                      {step.description}
+                    </p>
+                    <Link
+                      href={step.href}
+                      className="mt-7 inline-flex min-h-11 items-center gap-2 whitespace-nowrap text-sm font-semibold text-primary underline-offset-4 transition-colors hover:text-[var(--color-accent-hover)] hover:underline"
+                    >
+                      {step.linkLabel}
+                      <ArrowRight className="size-4" aria-hidden="true" />
+                    </Link>
+                  </div>
+
+                  <dl
+                    className={
+                      detailFirst
+                        ? "min-w-0 border-t border-border lg:order-1"
+                        : "min-w-0 border-t border-border"
+                    }
+                  >
+                    {step.details.map(([term, description]) => (
+                      <div
+                        key={term}
+                        className="grid min-w-0 gap-1 border-b border-border py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-6 sm:py-5"
+                      >
+                        <dt className="font-semibold text-foreground">{term}</dt>
+                        <dd className="min-w-0 text-muted-foreground sm:text-right">{description}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="grid gap-8 border-y border-border bg-secondary px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-center lg:px-12 lg:py-20">
+          <div>
+            <h2 className="min-w-0 max-w-[13ch] [overflow-wrap:anywhere] font-marketing text-4xl font-medium leading-[0.98] tracking-[-0.03em] text-foreground sm:text-5xl lg:text-6xl">
+              Ihre Buchhaltung bleibt nachvollziehbar.
+            </h2>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
+              Originalbelege, strukturierte E-Rechnungsdaten und zugehörige Buchungen bleiben miteinander verbunden und direkt auffindbar.
+            </p>
+          </div>
+
+          <dl className="border-t border-border">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border py-4">
+              <dt className="text-muted-foreground">E-Rechnungen</dt>
+              <dd className="font-medium text-foreground">PDF + XML</dd>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border py-4">
+              <dt className="text-muted-foreground">Belegarchiv</dt>
+              <dd className="font-medium text-foreground">Direkt verknüpft</dd>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border py-4">
+              <dt className="text-muted-foreground">Auswertungen</dt>
+              <dd className="font-medium text-foreground">Exportierbar</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="py-16 sm:py-20 lg:py-24" aria-labelledby="closing-title">
+          <div className="grid gap-8 border-b border-border pb-12 lg:grid-cols-[minmax(0,8fr)_minmax(0,4fr)] lg:items-end">
+            <div>
+              <h2
+                id="closing-title"
+                className="min-w-0 max-w-[12ch] [overflow-wrap:anywhere] font-marketing text-5xl font-medium leading-[0.92] tracking-[-0.035em] text-foreground sm:text-6xl lg:text-7xl"
+              >
+                Bereit für den nächsten Beleg?
+              </h2>
+              <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">
+                Öffnen Sie Bivaro und beginnen Sie direkt mit dem Vorgang, der jetzt ansteht.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 lg:items-end">
+              {isAuthenticated ? (
+                <Button asChild size="lg" className="min-h-11 w-full px-6 sm:w-auto">
+                  <Link href="/dashboard">
+                    Zum Dashboard
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button asChild size="lg" className="min-h-11 w-full px-6 sm:w-auto">
+                    <Link href="/register">
+                      Konto anlegen
+                      <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </Button>
+                  <Link
+                    href="/login"
+                    className="inline-flex min-h-11 items-center whitespace-nowrap text-sm font-semibold text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                  >
+                    Bereits registriert? Anmelden
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

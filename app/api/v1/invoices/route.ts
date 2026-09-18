@@ -10,6 +10,7 @@
 import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { updateInvoiceStatus, deleteInvoice, InvoicePaymentError } from '@/lib/invoice-payments';
 import {
   withApiAuth,
   apiSuccess,
@@ -18,8 +19,8 @@ import {
   corsHeaders,
 } from '@/lib/api-auth';
 
-export async function OPTIONS() {
-  return handleCors();
+export async function OPTIONS(request: NextRequest) {
+  return handleCors(request);
 }
 
 // GET /api/v1/invoices
@@ -144,22 +145,13 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const invoice = await prisma.invoice.update({
-      where: { id: parseInt(id) },
-      data: {
-        ...(status !== undefined && { status: status.toUpperCase() }),
-        ...(paidAt !== undefined && { paidAt: paidAt ? new Date(paidAt) : null }),
-        ...(customerId !== undefined && { customerId: customerId ? parseInt(customerId) : null }),
-      },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    let invoice;
+    try {
+      invoice = await updateInvoiceStatus(userId, Number(id), status?.toUpperCase(), paidAt, customerId === undefined ? undefined : customerId === null ? null : Number(customerId));
+    } catch (error) {
+      if (error instanceof InvoicePaymentError) return apiError(error.message, error.status);
+      throw error;
+    }
 
     const response = apiSuccess(invoice);
     Object.entries(corsHeaders()).forEach(([key, value]) => {
@@ -179,20 +171,13 @@ export async function DELETE(request: NextRequest) {
       return apiError('Invoice ID is required', 400, 'MISSING_ID');
     }
 
-    // Check if invoice exists and belongs to user
-    const existing = await prisma.invoice.findFirst({
-      where: { id: parseInt(id), userId },
-    });
-
-    if (!existing) {
-      return apiError('Invoice not found', 404, 'NOT_FOUND');
+    let result;
+    try { result = await deleteInvoice(userId, Number(id)); }
+    catch (error) {
+      if (error instanceof InvoicePaymentError) return apiError(error.message, error.status);
+      throw error;
     }
-
-    await prisma.invoice.delete({
-      where: { id: parseInt(id) },
-    });
-
-    const response = apiSuccess({ deleted: true, id: parseInt(id) });
+    const response = apiSuccess(result);
     Object.entries(corsHeaders()).forEach(([key, value]) => {
       response.headers.set(key, value);
     });

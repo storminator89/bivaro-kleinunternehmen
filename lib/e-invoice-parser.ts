@@ -1,6 +1,7 @@
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFStream, PDFString } from 'pdf-lib';
 import { parseStringPromise } from 'xml2js';
 import zlib from 'zlib';
+import { MAX_XML_INPUT_BYTES, MAX_INVOICE_UPLOAD_BYTES, RequestBodyLimitError } from '@/lib/resource-limits';
 
 type XmlObject = Record<string, unknown>;
 
@@ -308,7 +309,7 @@ function decodeXmlCandidate(data: Uint8Array): string | null {
 
 function inflateXmlCandidate(data: Uint8Array): string | null {
   try {
-    const inflated = zlib.inflateSync(Buffer.from(data));
+    const inflated = zlib.inflateSync(Buffer.from(data), { maxOutputLength: MAX_XML_INPUT_BYTES });
     const text = new TextDecoder().decode(inflated);
     return text.trim().startsWith('<') ? text : null;
   } catch {
@@ -318,7 +319,7 @@ function inflateXmlCandidate(data: Uint8Array): string | null {
 
 function gunzipXmlCandidate(data: Uint8Array): string | null {
   try {
-    const gunzipped = zlib.gunzipSync(Buffer.from(data));
+    const gunzipped = zlib.gunzipSync(Buffer.from(data), { maxOutputLength: MAX_XML_INPUT_BYTES });
     const text = new TextDecoder().decode(gunzipped);
     return text.trim().startsWith('<') ? text : null;
   } catch {
@@ -337,6 +338,7 @@ async function extractAttachments(pdfDoc: PDFDocument): Promise<PdfAttachment[]>
     if (!embeddedFiles.has(PDFName.of('Names'))) return [];
     const efNames = embeddedFiles.lookup(PDFName.of('Names'), PDFArray);
 
+    if (efNames.size() > 128) throw new RequestBodyLimitError('Zu viele PDF-Anhänge');
     const attachments: { fileName: PDFHexString | PDFString; fileSpec: PDFDict }[] = [];
     for (let idx = 0, len = efNames.size(); idx < len; idx += 2) {
       const fileName = efNames.lookup(idx) as PDFHexString | PDFString;
@@ -356,6 +358,7 @@ async function extractAttachments(pdfDoc: PDFDocument): Promise<PdfAttachment[]>
 }
 
 export async function extractEmbeddedEInvoiceXml(pdfBuffer: Buffer): Promise<string | null> {
+  if (pdfBuffer.byteLength > MAX_INVOICE_UPLOAD_BYTES) throw new RequestBodyLimitError('PDF ist zu groß');
   const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
   const attachments = await extractAttachments(pdfDoc);
   const candidates = attachments.filter(attachment => {
@@ -364,6 +367,7 @@ export async function extractEmbeddedEInvoiceXml(pdfBuffer: Buffer): Promise<str
   });
 
   for (const attachment of candidates) {
+    if (attachment.data.byteLength > MAX_XML_INPUT_BYTES) continue;
     const decoded = decodeXmlCandidate(attachment.data);
     if (decoded) return decoded;
 
@@ -378,6 +382,7 @@ export async function extractEmbeddedEInvoiceXml(pdfBuffer: Buffer): Promise<str
 }
 
 export async function parseEInvoiceXml(xmlContent: string): Promise<ParsedEInvoice> {
+  if (Buffer.byteLength(xmlContent, 'utf8') > MAX_XML_INPUT_BYTES) throw new RequestBodyLimitError('XML ist zu groß');
   const rawXml = xmlContent.trim();
   if (!rawXml.startsWith('<')) {
     throw new Error('Die E-Rechnungsdatei enthält kein XML.');

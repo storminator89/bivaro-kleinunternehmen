@@ -5,6 +5,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 const STATIC_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/dashboard/reminders": "Mahnwesen",
+  "/dashboard/invoices/new": "Neue Rechnung",
+  "/dashboard/quotes/new": "Neues Angebot",
   "/cashbook": "Kassenbuch",
   "/customers": "Kunden",
   "/settings": "Einstellungen",
@@ -21,6 +23,8 @@ const DASHBOARD_TAB_TITLES: Record<string, string> = {
   expenses: "Ausgaben",
   invoices: "Rechnungen",
   quotes: "Angebote",
+  eur: "EÜR",
+  gwg: "GWG-Verzeichnis",
   customers: "Kunden",
   reports: "Auswertungen",
 };

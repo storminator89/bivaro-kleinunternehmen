@@ -1,0 +1,29 @@
+[
+  {
+    "date": "2026-07-31",
+    "scope": "app",
+    "macrostructure": "Workbench / mineral surface system / side rail",
+    "theme": "custom Bivaro Mineral",
+    "theme_axes": "light-warm / geometric sans / chromatic-other",
+    "enrichment": "none",
+    "brief": "Business-app redesign: replace prototype blue with a warm porcelain and mineral petrol system"
+  },
+  {
+    "date": "2026-07-31",
+    "scope": "app phase 2",
+    "macrostructure": "Workbench editors / sidebar-led accounting / responsive reports",
+    "theme": "custom Bivaro",
+    "theme_axes": "light-dark / geometric sans / cool",
+    "enrichment": "none",
+    "brief": "Full-page invoice and quote editors, mobile EÜR and GWG, single-source desktop navigation"
+  },
+  {
+    "date": "2026-07-31",
+    "scope": "app",
+    "macrostructure": "Workbench / Marquee Hero / Long Document",
+    "theme": "custom Bivaro",
+    "theme_axes": "light / mixed serif-sans / cool",
+    "enrichment": "real dashboard screenshot",
+    "brief": "Bivaro multi-page UI/UX redesign phase 1"
+  }
+]

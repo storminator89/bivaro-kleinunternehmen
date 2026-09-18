@@ -5,9 +5,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import * as fs from 'fs';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   withApiAuth,
@@ -16,7 +14,18 @@ import {
   handleCors,
   corsHeaders,
 } from '@/lib/api-auth';
-import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
+import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
+import { getNextDocumentNumber } from '@/lib/invoice-numbers';
+import { ProcessingCapacityError, withProcessingSlot } from '@/lib/processing-limit';
+import { inTransaction } from '@/lib/db-transaction';
+import {
+  isRequestBodyWithinLimit,
+  readRequestBodyWithinLimit,
+  requestWithBody,
+  RequestBodyLimitError,
+  MAX_INVOICE_UPLOAD_BYTES,
+  MAX_XML_INPUT_BYTES,
+} from '@/lib/resource-limits';
 import {
   extractEmbeddedEInvoiceXml,
   parseEInvoiceXml,
@@ -32,8 +41,8 @@ const XML_MIME_TYPES = new Set([
   'application/octet-stream',
 ]);
 
-export async function OPTIONS() {
-  return handleCors();
+export async function OPTIONS(request: NextRequest) {
+  return handleCors(request);
 }
 
 function getSupportedFileKind(file: File): SupportedInvoiceFileKind | null {
@@ -43,11 +52,6 @@ function getSupportedFileKind(file: File): SupportedInvoiceFileKind | null {
   if (mimeType === 'application/pdf' || lowerName.endsWith('.pdf')) return 'pdf';
   if (XML_MIME_TYPES.has(mimeType) || lowerName.endsWith('.xml')) return 'xml';
   return null;
-}
-
-function sanitizeFileName(fileName: string): string {
-  const sanitized = path.basename(fileName || 'invoice').replace(/\s+/g, '_').replace(/[^A-Za-z0-9._-]/g, '_');
-  return sanitized || 'invoice';
 }
 
 function decodeStandaloneXml(buffer: Buffer): string | null {
@@ -62,17 +66,21 @@ async function getInvoiceXmlContent(fileKind: SupportedInvoiceFileKind, buffer: 
   return decodeStandaloneXml(buffer);
 }
 
-async function findOrCreateCustomer(parsedInvoice: ParsedEInvoice, userId: string) {
+async function findOrCreateCustomer(
+  parsedInvoice: ParsedEInvoice,
+  userId: string,
+  db: Pick<Prisma.TransactionClient, 'customer'> = prisma,
+) {
   const customerName = parsedInvoice.customerName;
   if (!customerName) return null;
 
-  const existingCustomer = await prisma.customer.findFirst({
+  const existingCustomer = await db.customer.findFirst({
     where: { name: customerName, userId },
   });
 
   if (existingCustomer) return existingCustomer;
 
-  return prisma.customer.create({
+  return db.customer.create({
     data: {
       name: customerName,
       email: parsedInvoice.buyerInfo.email ?? undefined,
@@ -107,17 +115,24 @@ export async function POST(request: NextRequest) {
     if (!contentType.includes('multipart/form-data')) {
       return apiError('Content-Type must be multipart/form-data', 400, 'INVALID_CONTENT_TYPE');
     }
+    if (!isRequestBodyWithinLimit(request, MAX_INVOICE_UPLOAD_BYTES + 128 * 1024)) {
+      return apiError('Request is too large', 413, 'PAYLOAD_TOO_LARGE');
+    }
 
-    let formData;
+    let formData: FormData;
     try {
-      formData = await request.formData();
-    } catch {
+      const boundedBody = await readRequestBodyWithinLimit(request, MAX_INVOICE_UPLOAD_BYTES + 128 * 1024);
+      formData = await requestWithBody(request, boundedBody).formData();
+    } catch (error) {
+      if (error instanceof RequestBodyLimitError) {
+        return apiError(error.message, error.status, 'PAYLOAD_TOO_LARGE');
+      }
       return apiError('Failed to parse form data', 400, 'INVALID_FORM_DATA');
     }
 
-    const file = formData.get('file') as File;
+    const file = formData.get('file');
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return apiError('No file uploaded. Use field name "file"', 400, 'MISSING_FILE');
     }
 
@@ -126,21 +141,39 @@ export async function POST(request: NextRequest) {
       return apiError('Only PDF or XML e-invoices are supported', 400, 'INVALID_FILE_TYPE');
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const xmlContent = await getInvoiceXmlContent(fileKind, buffer);
-
-    if (!xmlContent) {
-      const message = fileKind === 'pdf'
-        ? 'No ZUGFeRD/Factur-X XML found in PDF'
-        : 'XML file could not be read as an e-invoice';
-      return apiError(message, 400, fileKind === 'pdf' ? 'NO_ZUGFERD_XML' : 'INVALID_XML');
+    const maxFileBytes = fileKind === 'pdf' ? MAX_INVOICE_UPLOAD_BYTES : MAX_XML_INPUT_BYTES;
+    if (file.size > maxFileBytes) {
+      return apiError('File is too large', 413, 'PAYLOAD_TOO_LARGE');
     }
 
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    if (buffer.byteLength > maxFileBytes) {
+      return apiError('File is too large', 413, 'PAYLOAD_TOO_LARGE');
+    }
     let parsedInvoice: ParsedEInvoice;
     try {
-      parsedInvoice = await parseEInvoiceXml(xmlContent);
+      const parsed = await withProcessingSlot(userId, async () => {
+        const extracted = await getInvoiceXmlContent(fileKind, buffer);
+        if (!extracted) return { extracted, parsed: null };
+        return { extracted, parsed: await parseEInvoiceXml(extracted) };
+      });
+      if (!parsed.extracted || !parsed.parsed) {
+        const message = fileKind === 'pdf'
+          ? 'No ZUGFeRD/Factur-X XML found in PDF'
+          : 'XML file could not be read as an e-invoice';
+        return apiError(message, 400, fileKind === 'pdf' ? 'NO_ZUGFERD_XML' : 'INVALID_XML');
+      }
+      parsedInvoice = parsed.parsed;
     } catch (error) {
+      if (error instanceof ProcessingCapacityError) {
+        const response = apiError(error.message, error.status, 'PROCESSING_BUSY');
+        response.headers.set('Retry-After', '1');
+        return response;
+      }
+      if (error instanceof RequestBodyLimitError) {
+        return apiError(error.message, error.status, 'PAYLOAD_TOO_LARGE');
+      }
       const message = error instanceof Error ? error.message : 'Invalid e-invoice XML';
       return apiError(message, 400, 'INVALID_XML');
     }
@@ -155,48 +188,44 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const safeOriginalFileName = sanitizeFileName(file.name);
-    const uniqueFileName = `${uuidv4()}_${safeOriginalFileName}`;
-    ensureUploadDirExists();
-    const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
-    fs.writeFileSync(permanentFilePath, buffer);
-
-    const customerRecord = await findOrCreateCustomer(parsedInvoice, userId);
     const invoiceDate = parsedInvoice.invoiceDate || new Date();
-    const invoiceNumber = parsedInvoice.invoiceNumber || `RG-${Date.now()}`;
+    if (Number.isNaN(invoiceDate.getTime()) || (parsedInvoice.dueDate && Number.isNaN(parsedInvoice.dueDate.getTime()))) {
+      return apiError('Invalid invoice date', 400, 'INVALID_DATE');
+    }
+    if (parsedInvoice.totalAmount !== null && !Number.isFinite(parsedInvoice.totalAmount)) {
+      return apiError('Invalid invoice amount', 400, 'INVALID_AMOUNT');
+    }
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        fileName: file.name,
-        storedFileName: uniqueFileName,
-        invoiceNumber,
-        invoiceDate,
-        dueDate: parsedInvoice.dueDate,
-        totalAmount: parsedInvoice.totalAmount ?? undefined,
-        parsedData: toStoredParsedData(parsedInvoice),
-        customerId: customerRecord?.id,
-        userId,
-      },
-    });
-
-    if (parsedInvoice.totalAmount !== null && parsedInvoice.totalAmount > 0) {
-      const income = await prisma.income.create({
-        data: {
-          description: `Rechnung ${invoiceNumber}`.substring(0, 255),
-          amount: parsedInvoice.totalAmount,
-          customerId: customerRecord ? customerRecord.id : null,
-          invoiceId: invoice.id,
-          taxRelevant: true,
-          userId,
-        },
+    let storedFileName: string | null = null;
+    let invoice;
+    try {
+      storedFileName = await writeTenantFile(userId, file.name, buffer);
+      invoice = await inTransaction(async (tx) => {
+        const customerRecord = await findOrCreateCustomer(parsedInvoice, userId, tx);
+        const invoiceNumber = parsedInvoice.invoiceNumber || await getNextDocumentNumber(tx, userId, 'INVOICE', invoiceDate.getFullYear());
+        return tx.invoice.create({
+          data: {
+            type: 'INVOICE',
+            fileName: file.name,
+            storedFileName: storedFileName!,
+            invoiceNumber,
+            invoiceDate,
+            dueDate: parsedInvoice.dueDate,
+            totalAmount: parsedInvoice.totalAmount ?? undefined,
+            parsedData: toStoredParsedData(parsedInvoice),
+            customerId: customerRecord?.id,
+            userId,
+          },
+        });
       });
-
-      await prisma.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          income: { connect: { id: income.id } },
-        },
-      });
+    } catch (error) {
+      if (storedFileName) {
+        try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort orphan cleanup */ }
+      }
+      if ((error as { code?: string }).code === 'P2002') {
+        return apiError('Invoice number already exists', 409, 'DUPLICATE_INVOICE');
+      }
+      throw error;
     }
 
     const response = apiSuccess({

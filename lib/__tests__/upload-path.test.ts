@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
+    deleteTenantFile,
+    getTenantUploadPath,
     getUploadPath,
     isPathWithinUploadDir,
+    readTenantFile,
     UPLOAD_BASE_DIR,
+    writeTenantFile,
 } from '../upload-path'
 import path from 'path'
 
@@ -24,20 +28,15 @@ describe('getUploadPath', () => {
     })
 
     it('should sanitize path traversal attempts', () => {
-        const result = getUploadPath('../../../etc/passwd')
-        // Should only contain the basename, not the traversal
-        expect(result).toBe(path.join(UPLOAD_BASE_DIR, 'passwd'))
-        expect(result).not.toContain('..')
+        expect(() => getUploadPath('../../../etc/passwd')).toThrow()
     })
 
     it('should extract basename from nested paths', () => {
-        const result = getUploadPath('subdir/nested/file.pdf')
-        expect(result).toBe(path.join(UPLOAD_BASE_DIR, 'file.pdf'))
+        expect(() => getUploadPath('subdir/nested/file.pdf')).toThrow()
     })
 
     it('should handle filenames with special characters', () => {
-        const result = getUploadPath('file with spaces.pdf')
-        expect(result).toContain('file with spaces.pdf')
+        expect(() => getUploadPath('file with spaces.pdf')).toThrow()
     })
 })
 
@@ -66,3 +65,18 @@ describe('isPathWithinUploadDir', () => {
         expect(isPathWithinUploadDir(UPLOAD_BASE_DIR)).toBe(true)
     })
 })
+
+describe('tenant file storage', () => {
+    it('keeps equal original names in separate private tenant directories', async () => {
+        const first = await writeTenantFile('tenant-a', '../../same.pdf', new Uint8Array([1, 2, 3]));
+        const second = await writeTenantFile('tenant-b', '../../same.pdf', new Uint8Array([4, 5, 6]));
+
+        expect(first).not.toBe(second);
+        expect(getTenantUploadPath('tenant-a', first)).not.toBe(getTenantUploadPath('tenant-b', second));
+        await expect(readTenantFile('tenant-a', first)).resolves.toEqual(Buffer.from([1, 2, 3]));
+        await expect(readTenantFile('tenant-b', second)).resolves.toEqual(Buffer.from([4, 5, 6]));
+
+        await deleteTenantFile('tenant-a', first);
+        await deleteTenantFile('tenant-b', second);
+    });
+});

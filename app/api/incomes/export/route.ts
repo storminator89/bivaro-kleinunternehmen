@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 import { promises as fs } from 'fs';
 import { extname, basename } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { findUploadedFile } from '@/lib/upload-path';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 
 type DateRangeParam = 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
@@ -85,7 +85,7 @@ function formatCurrency(value: number) {
 }
 export async function GET(request: NextRequest) {
   try {
-    await requireUserId(); // Ensure user is authenticated
+    const userId = await requireUserId();
     const url = new URL(request.url);
     const where: Prisma.IncomeWhereInput = await parseFilters(url);
 
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const filePath = findUploadedFile(income.invoice.storedFileName);
+      const filePath = await findOwnedUploadedFile(userId, income.invoice.storedFileName);
 
       if (!filePath) {
         missingFiles.push(`${income.id}: ${income.invoice.storedFileName}`);

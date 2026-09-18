@@ -1,32 +1,10 @@
 import { NextResponse } from 'next/server';
+import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 import { prisma } from '@/lib/prisma';
+import { calculateNextExecution, firstExecution, validateRecurringValues } from '@/lib/recurring-schedule';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 // Hilfsfunktion: Berechnet das nächste Ausführungsdatum
-function calculateNextExecution(interval: string, dayOfMonth: number, fromDate: Date = new Date()): Date {
-  const next = new Date(fromDate);
-  next.setHours(0, 0, 0, 0);
-  
-  switch (interval) {
-    case 'MONTHLY':
-      next.setMonth(next.getMonth() + 1);
-      next.setDate(Math.min(dayOfMonth, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
-      break;
-    case 'QUARTERLY':
-      next.setMonth(next.getMonth() + 3);
-      next.setDate(Math.min(dayOfMonth, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
-      break;
-    case 'YEARLY':
-      next.setFullYear(next.getFullYear() + 1);
-      next.setDate(Math.min(dayOfMonth, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
-      break;
-    default:
-      next.setMonth(next.getMonth() + 1);
-  }
-  
-  return next;
-}
-
 // GET: Alle wiederkehrenden Ausgaben abrufen
 export async function GET() {
   try {
@@ -65,13 +43,15 @@ export async function POST(request: Request) {
       endDate,
     } = body;
     
-    if (!description || !amount || !interval) {
+    if (typeof description !== 'string' || !description.trim() || !amount || !interval) {
       return NextResponse.json({ error: 'Beschreibung, Betrag und Intervall sind erforderlich' }, { status: 400 });
     }
     
+    const validationError = validateRecurringValues({ amount, interval, dayOfMonth: dayOfMonth ?? 1, taxDeductiblePercentage, startDate, endDate, taxRelevant });
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+
     const start = startDate ? new Date(startDate) : new Date();
-    const nextExecution = new Date(start);
-    nextExecution.setDate(Math.min(dayOfMonth, new Date(nextExecution.getFullYear(), nextExecution.getMonth() + 1, 0).getDate()));
+    const nextExecution = firstExecution(interval.toUpperCase(), Number(dayOfMonth), start);
     
     // NICHT zum nächsten Intervall springen - verpasste Ausführungen werden nachgeholt
     
@@ -81,8 +61,8 @@ export async function POST(request: Request) {
         amount: parseFloat(amount.toString()),
         category,
         taxRelevant,
-        taxDeductiblePercentage: taxDeductiblePercentage ? parseFloat(taxDeductiblePercentage.toString()) : 100,
-        interval,
+        taxDeductiblePercentage: taxDeductiblePercentage == null ? 100 : Number(taxDeductiblePercentage),
+        interval: interval.toUpperCase(),
         dayOfMonth: parseInt(dayOfMonth.toString()),
         startDate: start,
         endDate: endDate ? new Date(endDate) : null,
@@ -91,6 +71,7 @@ export async function POST(request: Request) {
       },
     });
     
+    await auditCreate(userId, 'RecurringExpense', recurringExpense);
     return NextResponse.json(recurringExpense);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -121,7 +102,7 @@ export async function PUT(request: Request) {
       isActive,
     } = body;
     
-    if (!id) {
+    if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
       return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
     }
     
@@ -134,16 +115,25 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Wiederkehrende Ausgabe nicht gefunden' }, { status: 404 });
     }
     
+    if (description !== undefined && (typeof description !== 'string' || !description.trim())) {
+      return NextResponse.json({ error: 'Ungültige Beschreibung' }, { status: 400 });
+    }
+    const validationError = validateRecurringValues({ ...existing, ...body });
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+
     // Nächste Ausführung neu berechnen wenn Intervall oder Tag geändert wurde
     let nextExecution = existing.nextExecution;
-    if (interval !== existing.interval || dayOfMonth !== existing.dayOfMonth) {
-      nextExecution = calculateNextExecution(
-        interval || existing.interval,
-        dayOfMonth || existing.dayOfMonth,
-        existing.lastExecuted || new Date()
-      );
+    if ((interval !== undefined && interval.toUpperCase() !== existing.interval) ||
+        (dayOfMonth !== undefined && Number(dayOfMonth) !== existing.dayOfMonth) || startDate !== undefined) {
+      const nextInterval = interval?.toUpperCase() ?? existing.interval;
+      const nextDay = dayOfMonth === undefined ? existing.dayOfMonth : Number(dayOfMonth);
+      nextExecution = existing.lastExecuted
+        ? calculateNextExecution(nextInterval, nextDay, existing.lastExecuted)
+        : firstExecution(nextInterval, nextDay, startDate ? new Date(startDate) : existing.startDate);
+      const earliest = firstExecution(nextInterval, nextDay, startDate ? new Date(startDate) : existing.startDate);
+      if (nextExecution < earliest) nextExecution = earliest;
     }
-    
+
     const updated = await prisma.recurringExpense.update({
       where: { id: Number(id) },
       data: {
@@ -151,8 +141,8 @@ export async function PUT(request: Request) {
         ...(amount !== undefined && { amount: parseFloat(amount.toString()) }),
         ...(category !== undefined && { category }),
         ...(taxRelevant !== undefined && { taxRelevant }),
-        ...(taxDeductiblePercentage !== undefined && { taxDeductiblePercentage: parseFloat(taxDeductiblePercentage.toString()) }),
-        ...(interval && { interval }),
+        ...(taxDeductiblePercentage !== undefined && { taxDeductiblePercentage: taxDeductiblePercentage == null ? 100 : Number(taxDeductiblePercentage) }),
+        ...(interval && { interval: interval.toUpperCase() }),
         ...(dayOfMonth !== undefined && { dayOfMonth: parseInt(dayOfMonth.toString()) }),
         ...(startDate && { startDate: new Date(startDate) }),
         ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
@@ -161,6 +151,7 @@ export async function PUT(request: Request) {
       },
     });
     
+    await auditUpdate(userId, 'RecurringExpense', existing.id, existing, updated);
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -178,7 +169,7 @@ export async function DELETE(request: Request) {
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     
-    if (!id) {
+    if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
       return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
     }
     
@@ -195,6 +186,7 @@ export async function DELETE(request: Request) {
       where: { id: Number(id) },
     });
     
+    await auditDelete(userId, 'RecurringExpense', existing);
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof UnauthorizedError) {

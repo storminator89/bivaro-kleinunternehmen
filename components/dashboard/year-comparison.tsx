@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
 
 interface MonthlyData {
@@ -73,7 +72,7 @@ function ChartBar({ month, lastYearMonth, thisYearHeight, lastYearHeight, isFutu
             {!isFuture && (month.revenue > 0 || lastYearMonth.revenue > 0) && (
               <div className="flex justify-between pt-1 border-t mt-1">
                 <span className="text-muted-foreground">Veränderung:</span>
-                <span className={isPositive ? 'text-green-600' : 'text-red-600'}>
+                <span className={isPositive ? 'text-positive' : 'text-critical'}>
                   {isPositive ? '+' : ''}{change.toFixed(1)}%
                 </span>
               </div>
@@ -86,12 +85,12 @@ function ChartBar({ month, lastYearMonth, thisYearHeight, lastYearHeight, isFutu
       <div className="flex gap-0.5 items-end h-24 w-full cursor-pointer">
         {/* Vorjahr */}
         <div
-          className="flex-1 bg-muted rounded-t transition-all hover:bg-muted/80"
+          className="flex-1 rounded-t bg-muted transition-colors hover:bg-muted/80"
           style={{ height: `${lastYearHeight}%`, minHeight: lastYearMonth.revenue > 0 ? '4px' : '0' }}
         />
         {/* Aktuelles Jahr */}
         <div
-          className={`flex-1 rounded-t transition-all ${isFuture ? 'bg-primary/20 hover:bg-primary/30' : 'bg-primary hover:bg-primary/80'}`}
+          className={`flex-1 rounded-t transition-colors ${isFuture ? 'bg-primary/20 hover:bg-primary/30' : 'bg-primary hover:bg-primary/80'}`}
           style={{ height: `${thisYearHeight}%`, minHeight: month.revenue > 0 ? '4px' : '0' }}
         />
       </div>
@@ -129,9 +128,12 @@ export function YearComparison({ data }: YearComparisonProps) {
 
   return (
     <Card className="bg-card border rounded-xl shadow-sm overflow-hidden">
-      <div
-        className="flex items-center justify-between cursor-pointer p-4"
+      <button
+        type="button"
+        className="flex min-h-14 w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-muted/40"
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
+        aria-controls="year-comparison-content"
       >
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-primary" />
@@ -142,13 +144,11 @@ export function YearComparison({ data }: YearComparisonProps) {
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="icon">
-          {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-        </Button>
-      </div>
+        {isExpanded ? <ChevronUp className="h-5 w-5 shrink-0" aria-hidden="true" /> : <ChevronDown className="h-5 w-5 shrink-0" aria-hidden="true" />}
+      </button>
 
       {isExpanded && (
-        <CardContent className="pt-0">
+        <CardContent id="year-comparison-content" className="pt-0">
           <Tabs defaultValue="overview" className="space-y-4">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="overview">Übersicht</TabsTrigger>
@@ -282,7 +282,7 @@ function ComparisonCard({ title, currentValue, previousValue, change, currentYea
       <div className="text-sm font-medium text-muted-foreground">{title}</div>
       <div className="mt-2 flex items-baseline gap-2">
         <span className="text-2xl font-bold">{formatCurrency(currentValue)}</span>
-        <span className={`text-sm font-medium flex items-center gap-1 ${isGood ? 'text-green-600' : 'text-red-600'}`}>
+        <span className={`flex items-center gap-1 text-sm font-medium ${isGood ? 'text-positive' : 'text-critical'}`}>
           {isPositive ? (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
@@ -353,9 +353,9 @@ function MonthlyComparisonTable({
             return (
               <tr key={idx} className={`border-b ${isFuture ? 'text-muted-foreground/50' : ''}`}>
                 <td className="py-2">{month.monthName}</td>
-                <td className="text-right py-2">{formatCurrency(previousValue)}</td>
-                <td className="text-right py-2 font-medium">{formatCurrency(currentValue)}</td>
-                <td className={`text-right py-2 ${!isFuture && currentValue > 0 ? (isGood ? 'text-green-600' : 'text-red-600') : ''}`}>
+                <td className="text-right py-2 tabular-nums">{formatCurrency(previousValue)}</td>
+                <td className="text-right py-2 font-medium tabular-nums">{formatCurrency(currentValue)}</td>
+                <td className={`py-2 text-right ${!isFuture && currentValue > 0 ? (isGood ? 'text-positive' : 'text-critical') : ''}`}>
                   {!isFuture && (currentValue > 0 || previousValue > 0) ? (
                     <span className="flex items-center justify-end gap-1">
                       {isPositive ? '+' : ''}{change.toFixed(1)}%
@@ -385,7 +385,7 @@ function MonthlyComparisonTable({
                 const isPositive = totalChange >= 0;
                 const isGood = positiveIsGood ? isPositive : !isPositive;
                 return (
-                  <span className={isGood ? 'text-green-600' : 'text-red-600'}>
+                  <span className={isGood ? 'text-positive' : 'text-critical'}>
                     {isPositive ? '+' : ''}{totalChange.toFixed(1)}%
                   </span>
                 );

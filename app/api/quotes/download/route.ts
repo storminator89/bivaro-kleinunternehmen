@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
 import { requireUserId, UnauthorizedError } from '@/lib/get-user-id';
-import { findUploadedFile } from '@/lib/upload-path';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 
 // Allow this route to be embedded in iframes (same origin only)
 const FRAME_HEADERS = { 'X-Frame-Options': 'SAMEORIGIN' } as const;
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
     const sanitizedFileName = basename(quote.storedFileName);
-    const filePath = findUploadedFile(sanitizedFileName);
+    const filePath = await findOwnedUploadedFile(userId, sanitizedFileName);
 
     if (!filePath) {
       return jsonResponse({ error: 'Datei nicht gefunden' }, 404);

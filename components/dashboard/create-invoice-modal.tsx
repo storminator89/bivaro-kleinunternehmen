@@ -9,12 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import QRCode from 'qrcode';
 import { generateZugferdXml, validateZugferdData, type ZugferdData } from "@/lib/zugferd-generator";
-import { Eye, EyeOff, FileText, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Copy, Eye, EyeOff, FileText, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 interface CreateInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInvoiceCreated?: () => void;
+  presentation?: "dialog" | "page";
   fromQuote?: {
     id: number;
     parsedData: {
@@ -69,7 +70,13 @@ interface Template {
 
 type InvoiceOutputMode = 'zugferd-pdf' | 'xml-only';
 
-export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuote }: CreateInvoiceModalProps) {
+export function CreateInvoiceModal({
+  isOpen,
+  onClose,
+  onInvoiceCreated,
+  fromQuote,
+  presentation = "dialog",
+}: CreateInvoiceModalProps) {
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1068,6 +1075,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
   const uploadGeneratedInvoice = async (file: File): Promise<boolean> => {
     const formData = new FormData();
     formData.append('file', file);
+    if (fromQuote) formData.append('fromQuoteId', String(fromQuote.id));
 
     let uploadRes: Response;
     try {
@@ -1086,18 +1094,6 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
       console.error("Auto-upload failed:", err);
       alert("Speichern fehlgeschlagen: " + (err?.error || "Unbekannter Fehler"));
       return false;
-    }
-
-    if (fromQuote) {
-      try {
-        await fetch('/api/quotes', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: fromQuote.id, status: 'ACCEPTED' }),
-        });
-      } catch (e) {
-        console.error('Failed to update quote status:', e);
-      }
     }
 
     if (onInvoiceCreated) {
@@ -1193,22 +1189,47 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
     }
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`max-h-[90vh] overflow-hidden ${showPreview ? 'sm:max-w-[1400px]' : 'sm:max-w-[800px]'}`}>
-        <DialogHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle>Rechnung erstellen</DialogTitle>
-              <DialogDescription>
-                Erstellen Sie eine ZUGFeRD-PDF-Rechnung oder eine eigenständige E-Rechnungs-XML.
-              </DialogDescription>
+  const isPage = presentation === "page";
+  const editorContent = (
+    <>
+        <DialogHeader className="pb-2 text-left">
+          {isPage && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              className="w-fit gap-2 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Zu den Rechnungen
+            </Button>
+          )}
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-2">
+              {isPage ? (
+                <h1 className="[overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
+                  Rechnung erstellen
+                </h1>
+              ) : (
+                <DialogTitle>Rechnung erstellen</DialogTitle>
+              )}
+              {isPage ? (
+                <p className="max-w-[65ch] text-sm text-muted-foreground">
+                  Erfassen Sie Empfänger, Leistungsdaten und Positionen. Bivaro prüft die E-Rechnungsdaten vor dem Speichern.
+                </p>
+              ) : (
+                <DialogDescription>
+                  Erstellen Sie eine ZUGFeRD-PDF-Rechnung oder eine eigenständige E-Rechnungs-XML.
+                </DialogDescription>
+              )}
             </div>
             <Button
+              type="button"
               variant={showPreview ? "default" : "outline"}
               size="sm"
               onClick={() => setShowPreview(!showPreview)}
-              className="gap-2"
+              className="w-fit gap-2 whitespace-nowrap"
+              aria-pressed={showPreview}
             >
               {showPreview ? (
                 <>
@@ -1225,67 +1246,71 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
           </div>
         </DialogHeader>
 
-        <div className={`grid gap-6 ${showPreview ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid min-w-0 gap-8 ${showPreview ? (isPage ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.85fr)]' : 'lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.85fr)]') : 'grid-cols-1'}`}>
           {/* Form Section */}
-          <div className="overflow-y-auto max-h-[calc(90vh-180px)] pr-2 space-y-6 py-4">
+          <div className={isPage ? "min-w-0 space-y-8 py-4" : "min-w-0 space-y-6 py-4"}>
             {/* Template Section */}
-            <div className="bg-muted/30 p-3 rounded-md border mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-sm font-medium">Vorlage laden / speichern</Label>
+            <section className={isPage ? "space-y-3 border-b border-border pb-8" : "mb-2 rounded-md border bg-muted/30 p-3"} aria-labelledby="invoice-template-title">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Label id="invoice-template-title" className="text-sm font-medium">Vorlage laden oder speichern</Label>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-6 text-xs"
+                  className="w-fit text-xs whitespace-nowrap"
                   onClick={() => setIsSaveTemplateOpen(!isSaveTemplateOpen)}
+                  aria-expanded={isSaveTemplateOpen}
                 >
-                  {isSaveTemplateOpen ? "Abbrechen" : "+ Als Vorlage speichern"}
+                  {isSaveTemplateOpen ? "Eingabe schließen" : "Als Vorlage speichern"}
                 </Button>
               </div>
 
               {isSaveTemplateOpen ? (
-                <div className="flex gap-2 items-center">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Input
+                    aria-label="Name der neuen Rechnungsvorlage"
                     placeholder="Name der Vorlage"
                     value={newTemplateName}
                     onChange={(e) => setNewTemplateName(e.target.value)}
-                    className="h-8 text-sm"
+                    className="text-sm"
                   />
-                  <Button size="sm" onClick={handleSaveTemplate} className="h-8">Speichern</Button>
+                  <Button type="button" size="sm" onClick={handleSaveTemplate}>Vorlage speichern</Button>
                 </div>
               ) : (
-                <div className="flex gap-2 items-center">
+                <div className="flex items-center gap-2">
                   <select
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label="Rechnungsvorlage auswählen"
+                    className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                     value={selectedTemplateId}
                     onChange={(e) => handleLoadTemplate(e.target.value)}
                   >
-                    <option value="">-- Vorlage wählen --</option>
+                    <option value="">Vorlage wählen</option>
                     {templates.map(t => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
                   {selectedTemplateId && (
                     <Button
+                      type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive"
                       onClick={() => handleDeleteTemplate(selectedTemplateId)}
                       title="Vorlage löschen"
+                      aria-label="Ausgewählte Vorlage löschen"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   )}
                 </div>
               )}
-            </div>
+            </section>
 
-            <div className="bg-blue-50/60 dark:bg-blue-950/20 p-3 rounded-md border border-blue-100 dark:border-blue-900/40">
-              <Label htmlFor="invoice-output-mode" className="text-sm font-medium">Ausgabeformat</Label>
+            <section className={isPage ? "space-y-2 border-b border-border pb-8" : "rounded-md border border-primary/20 bg-primary/5 p-3"} aria-labelledby="invoice-output-title">
+              <Label id="invoice-output-title" htmlFor="invoice-output-mode" className="text-sm font-medium">Ausgabeformat</Label>
               <select
                 id="invoice-output-mode"
-                className="mt-2 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="mt-2 flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                 value={outputMode}
                 onChange={(e) => setOutputMode(e.target.value as InvoiceOutputMode)}
               >
@@ -1297,7 +1322,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
                   ? 'Erstellt eine eigenständige XRechnung-CII-XML-Datei. Sie wird gespeichert, heruntergeladen und kann danach mit dem E-Rechnungs-Viewer angesehen werden.'
                   : 'Erstellt eine PDF-Rechnung mit eingebetteter strukturierter XML-Datei für ZUGFeRD/Factur-X.'}
               </p>
-            </div>
+            </section>
 
             {/* Top Row: Invoice Details */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1308,10 +1333,12 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
                   value={invoiceNumber}
                   onChange={(e) => setInvoiceNumber(e.target.value)}
                   placeholder="RE-2024-001"
-                  className={invoiceNumberError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                  aria-invalid={Boolean(invoiceNumberError)}
+                  aria-describedby={invoiceNumberError ? "invoice-number-error" : undefined}
+                  className={invoiceNumberError ? "border-destructive outline-destructive" : ""}
                 />
                 {invoiceNumberError && (
-                  <p className="text-xs text-red-500 font-medium">{invoiceNumberError}</p>
+                  <p id="invoice-number-error" className="min-h-[1lh] text-xs font-medium text-destructive">{invoiceNumberError}</p>
                 )}
               </div>
               <div className="space-y-2">
@@ -1331,11 +1358,12 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
 
                 {/* Customer Selection Dropdown */}
                 <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Gespeicherten Kunden auswählen"
+                  className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                   onChange={handleCustomerSelect}
                   defaultValue=""
                 >
-                  <option value="" disabled>Kunden auswählen...</option>
+                  <option value="" disabled>Kunden auswählen …</option>
                   {customers.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -1363,19 +1391,21 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
                   className="min-h-[60px]"
                 />
 
-                <div className="flex items-center space-x-2 mt-4">
-                  <input
-                    type="checkbox"
-                    id="includeQRCode"
-                    checked={includeQRCode}
-                    onChange={(e) => setIncludeQRCode(e.target.checked)}
-                    disabled={outputMode === 'xml-only'}
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <Label htmlFor="includeQRCode" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                <Label htmlFor="includeQRCode" className="mt-4 flex min-h-11 cursor-pointer items-center gap-1 text-sm font-medium leading-tight has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-70">
+                  <span className="grid size-11 shrink-0 place-items-center">
+                    <input
+                      type="checkbox"
+                      id="includeQRCode"
+                      checked={includeQRCode}
+                      onChange={(e) => setIncludeQRCode(e.target.checked)}
+                      disabled={outputMode === 'xml-only'}
+                      className="h-5 w-5 rounded border-input accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed"
+                    />
+                  </span>
+                  <span>
                     GiroCode (QR-Code) für Banking-Apps hinzufügen{outputMode === 'xml-only' ? ' (nur PDF)' : ''}
-                  </Label>
-                </div>
+                  </span>
+                </Label>
               </div>
             </div>
 
@@ -1383,7 +1413,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
             <div className="space-y-2">
               <Label>Positionen</Label>
               <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_70px_90px_100px_70px_90px] gap-2 bg-muted p-2 text-sm font-medium items-center">
+                <div className="hidden grid-cols-[minmax(0,1fr)_70px_90px_100px_70px_90px] items-center gap-2 bg-muted p-2 text-sm font-medium md:grid">
                   <div className="pl-2">Beschreibung</div>
                   <div className="text-center">Menge</div>
                   <div className="text-center">Einheit</div>
@@ -1393,67 +1423,82 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
                 </div>
                 <div className="divide-y">
                   {items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-[1fr_70px_90px_100px_70px_90px] gap-2 p-2 items-start">
-                      <Input
-                        value={item.description}
-                        onChange={(e) => updateItem(index, 'description', e.target.value)}
-                        placeholder="Leistung / Produkt"
-                      />
-                      <Input
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                        placeholder="1"
-                        className="text-right"
-                      />
-                      <select
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        value={item.unit}
-                        onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                      >
-                        <option value="Stück">Stück</option>
-                        <option value="Stunde">Stunde</option>
-                        <option value="Tag">Tag</option>
-                        <option value="Pauschal">Pauschal</option>
-                      </select>
-                      <Input
-                        type="number"
-                        value={item.unitPrice}
-                        onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
-                        placeholder="0.00"
-                        className="text-right"
-                      />
-                      <div className="relative">
+                    <div key={index} className="grid min-w-0 grid-cols-2 items-start gap-3 p-4 md:grid-cols-[minmax(0,1fr)_70px_90px_100px_70px_90px] md:gap-2 md:p-2">
+                      <div className="col-span-2 min-w-0 md:col-span-1">
+                        <Label htmlFor={`invoice-item-description-${index}`} className="mb-1 block md:sr-only">Beschreibung</Label>
                         <Input
+                          id={`invoice-item-description-${index}`}
+                          value={item.description}
+                          onChange={(e) => updateItem(index, 'description', e.target.value)}
+                          placeholder="Leistung / Produkt"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`invoice-item-quantity-${index}`} className="mb-1 block md:sr-only">Menge</Label>
+                        <Input
+                          id={`invoice-item-quantity-${index}`}
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                          placeholder="1"
+                          className="text-right tabular-nums"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`invoice-item-unit-${index}`} className="mb-1 block md:sr-only">Einheit</Label>
+                        <select
+                          id={`invoice-item-unit-${index}`}
+                          className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring"
+                          value={item.unit}
+                          onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                        >
+                          <option value="Stück">Stück</option>
+                          <option value="Stunde">Stunde</option>
+                          <option value="Tag">Tag</option>
+                          <option value="Pauschal">Pauschal</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label htmlFor={`invoice-item-price-${index}`} className="mb-1 block md:sr-only">Einzelpreis</Label>
+                        <Input
+                          id={`invoice-item-price-${index}`}
+                          type="number"
+                          value={item.unitPrice}
+                          onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
+                          placeholder="0,00"
+                          className="text-right tabular-nums"
+                        />
+                      </div>
+                      <div className="relative">
+                        <Label htmlFor={`invoice-item-tax-${index}`} className="mb-1 block md:sr-only">Steuer</Label>
+                        <Input
+                          id={`invoice-item-tax-${index}`}
                           type="number"
                           value={item.taxRate}
                           onChange={(e) => updateItem(index, 'taxRate', e.target.value)}
                           placeholder="0"
-                          className="text-right pr-6"
+                          className="pr-7 text-right tabular-nums"
                         />
-                        <span className="absolute right-2 top-2.5 text-sm text-muted-foreground">%</span>
+                        <span className="pointer-events-none absolute right-2 bottom-3 text-sm text-muted-foreground">%</span>
                       </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => duplicateItem(index)} title="Zeile duplizieren" className="text-muted-foreground hover:text-foreground">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
+                      <div className="col-span-2 flex justify-end gap-1 md:col-span-1">
+                        <Button type="button" variant="ghost" size="icon" onClick={() => duplicateItem(index)} title="Zeile duplizieren" aria-label={`Position ${index + 1} duplizieren`} className="text-muted-foreground hover:text-foreground">
+                          <Copy className="h-4 w-4" aria-hidden="true" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} className="text-destructive hover:text-destructive">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label={`Position ${index + 1} entfernen`} className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="flex justify-between items-center mt-2">
+              <div className="mt-3 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                  + Position hinzufügen
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Position hinzufügen
                 </Button>
-                <div className="text-right font-bold">
+                <div className="text-left font-bold tabular-nums sm:text-right">
                   Gesamt: {items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                 </div>
               </div>
@@ -1462,18 +1507,19 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
 
           {/* Preview Section */}
           {showPreview && (
-            <div className="border-l pl-4 flex flex-col h-[calc(90vh-180px)]">
+            <aside className={isPage ? "flex min-h-[36rem] min-w-0 flex-col border-t border-border pt-6 xl:sticky xl:top-24 xl:h-[calc(100dvh-8rem)] xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0" : "flex min-h-[28rem] min-w-0 flex-col border-t border-border pt-4 lg:h-[calc(90vh-180px)] lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0"} aria-label="Rechnungsvorschau">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium">PDF-Vorschau</span>
                 </div>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={generatePreview}
                   disabled={isGeneratingPreview}
-                  className="h-7 text-xs gap-1"
+                  className="gap-1 whitespace-nowrap text-xs"
                 >
                   {isGeneratingPreview ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -1489,7 +1535,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
                   <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      <span className="text-sm text-muted-foreground">Vorschau wird generiert...</span>
+                      <span className="text-sm text-muted-foreground">Vorschau wird generiert …</span>
                     </div>
                   </div>
                 )}
@@ -1513,7 +1559,7 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
                 {isGeneratingPreview && previewUrl && (
                   <div className="absolute top-2 right-2 bg-background/90 rounded-md px-2 py-1 text-xs text-muted-foreground flex items-center gap-1">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    Aktualisiere...
+                    Aktualisiere …
                   </div>
                 )}
               </div>
@@ -1521,18 +1567,33 @@ export function CreateInvoiceModal({ isOpen, onClose, onInvoiceCreated, fromQuot
               <p className="text-xs text-muted-foreground mt-2">
                 Die Vorschau aktualisiert sich automatisch bei Änderungen. {outputMode === 'xml-only' ? 'Bei XML-only dient sie nur als Layoutkontrolle; gespeichert wird ausschließlich die XML-Datei.' : 'Der QR-Code wird erst in der finalen PDF angezeigt.'}
               </p>
-            </div>
+            </aside>
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Abbrechen</Button>
-          <Button onClick={createInvoiceFile} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
+        <DialogFooter className={isPage ? "mt-8 border-t border-border pt-4" : undefined}>
+          <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
+          <Button type="button" onClick={createInvoiceFile} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
             {isGenerating
-              ? (outputMode === 'xml-only' ? "Erstelle XML..." : "Erstelle PDF...")
+              ? (outputMode === 'xml-only' ? "Erstelle XML …" : "Erstelle PDF …")
               : (outputMode === 'xml-only' ? "XML erstellen" : "PDF erstellen")}
           </Button>
         </DialogFooter>
+    </>
+  );
+
+  if (isPage) {
+    return (
+      <section className="min-w-0" aria-label="Neue Rechnung">
+        {editorContent}
+      </section>
+    );
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className={`max-h-[90vh] overflow-y-auto ${showPreview ? 'sm:max-w-[1400px]' : 'sm:max-w-[800px]'}`}>
+        {editorContent}
       </DialogContent>
     </Dialog>
   );

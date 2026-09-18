@@ -14,6 +14,8 @@ const eslintConfig = [
             "out/**",
             "build/**",
             "dist/**",
+            "test-results/**",
+            "playwright-report/**",
             "*.config.js",
             "*.config.mjs",
             "*.config.cjs",

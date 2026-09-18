@@ -19,12 +19,12 @@
     "db:studio": "npx prisma studio",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e:prepare": "rm -f prisma/e2e.db && DATABASE_URL=file:$(pwd)/prisma/e2e.db npx prisma migrate deploy",
+    "e2e:prepare": "node scripts/prepare-e2e.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.9.0",
-    "@prisma/client": "^6.5.0",
+    "@auth/prisma-adapter": "^2.11.3",
+    "@prisma/client": "6.19.3",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -46,10 +46,10 @@
     "formidable": "^3.5.4",
     "jszip": "^3.10.1",
     "lucide-react": "^0.487.0",
-    "next": "^16.1.1",
-    "next-auth": "^4.24.11",
+    "next": "^16.3.5",
+    "next-auth": "^4.24.15",
     "next-themes": "^0.4.6",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^10.0.10",
     "pdf-lib": "^1.17.1",
     "pdf.js-extract": "^0.2.1",
     "pdfjs-dist": "^4.8.69",
@@ -73,20 +73,28 @@
     "@types/uuid": "^10.0.0",
     "@types/xml2js": "^0.4.14",
     "eslint": "9.39.1",
-    "eslint-config-next": "16.0.3",
+    "eslint-config-next": "16.3.5",
     "globals": "^17.0.0",
-    "prisma": "^6.5.0",
+    "prisma": "6.19.3",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.0.16"
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "next": {
-      "postcss": "8.5.13"
+      "postcss": "8.5.28",
+      "sharp": "0.35.4"
     },
+    "minimatch": "10.2.6",
     "next-auth": {
       "uuid": "14.0.0"
     },
-    "nodemailer": "^8.0.7"
+    "nodemailer": "^10.0.10",
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    }
+  },
+  "engines": {
+    "node": ">=22.13 <25"
   }
 }

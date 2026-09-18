@@ -140,12 +140,12 @@ export function ExpensesTab({
   return (
     <div className="space-y-6">
       {/* New Expense Form */}
-      <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
-        <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-red-50/50 to-red-50/30 dark:from-red-900/10 dark:to-red-900/5">
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="border-b bg-muted/20 px-6 pb-4 pt-6">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
             <div>
               <h2 className="text-xl font-semibold mb-1 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5 text-critical" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 Neue Ausgabe erfassen
@@ -306,7 +306,7 @@ export function ExpensesTab({
               </div>
             </div>
             <div>
-              <Button type="submit" className="text-white bg-red-600 hover:bg-red-700">
+              <Button type="submit">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
@@ -330,7 +330,7 @@ export function ExpensesTab({
                 <div className="relative">
                   <select
                     id="expense-category-filter"
-                    className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                    className="h-11 w-full cursor-pointer appearance-none rounded-md border border-input bg-background py-2 pl-3 pr-8 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
                     value={filters.category}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
                   >
@@ -353,7 +353,7 @@ export function ExpensesTab({
                 <div className="relative">
                   <select
                     id="expense-date-filter"
-                    className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                    className="h-11 w-full cursor-pointer appearance-none rounded-md border border-input bg-background py-2 pl-3 pr-8 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
                     value={filters.dateRange}
                     onChange={(e) => setFilters({ ...filters, dateRange: e.target.value as FilterState['expenses']['dateRange'] })}
                   >
@@ -376,7 +376,7 @@ export function ExpensesTab({
                 <div className="relative">
                   <select
                     id="expense-tax-filter"
-                    className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                    className="h-11 w-full cursor-pointer appearance-none rounded-md border border-input bg-background py-2 pl-3 pr-8 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
                     value={filters.taxRelevant}
                     onChange={(e) => setFilters({ ...filters, taxRelevant: e.target.value as FilterState['expenses']['taxRelevant'] })}
                   >
@@ -398,7 +398,7 @@ export function ExpensesTab({
                 <div className="relative">
                   <select
                     id="expense-receipt-filter"
-                    className="w-full h-10 rounded-md border border-input pl-3 pr-8 py-2 bg-background text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary transition-all cursor-pointer"
+                    className="h-11 w-full cursor-pointer appearance-none rounded-md border border-input bg-background py-2 pl-3 pr-8 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
                     value={filters.hasReceipt}
                     onChange={(e) => setFilters({ ...filters, hasReceipt: e.target.value as FilterState['expenses']['hasReceipt'] })}
                   >
@@ -433,6 +433,8 @@ export function ExpensesTab({
                   />
                   {filters.searchTerm && (
                     <button
+                      type="button"
+                      aria-label="Suche leeren"
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                       onClick={() => setFilters({ ...filters, searchTerm: '' })}
                     >
@@ -452,7 +454,7 @@ export function ExpensesTab({
                   <span className="font-medium text-foreground">{expenses.length}</span> Ausgaben gefunden
                 </div>
                 {exportError && (
-                  <p className="mt-1 text-xs text-red-600">
+                  <p className="mt-1 text-xs text-critical">
                     {exportError}
                   </p>
                 )}
@@ -505,7 +507,32 @@ export function ExpensesTab({
 
         {/* Expenses Table */}
         <div className="overflow-hidden">
-          <div className="overflow-x-auto p-6">
+          <div className="divide-y lg:hidden" aria-label="Ausgabenliste">
+            {expenses.length > 0 ? expenses.map((expense) => (
+              <article key={expense.id} className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold">{expense.description}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {new Date(expense.date).toLocaleDateString('de-DE')} · {expense.category || 'Sonstiges'}
+                    </p>
+                  </div>
+                  <p className="shrink-0 font-semibold tabular-nums text-critical">{formatCurrency(expense.amount)}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">{expense.taxRelevant ? 'Steuerrelevant' : 'Nicht steuerrelevant'}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => onEdit(expense)}>Bearbeiten</Button>
+                  {expense.storedReceiptFileName && (
+                    <Button variant="outline" size="sm" className="min-h-11" onClick={() => onViewReceipt(`/api/expenses/download?id=${expense.id}`)}>Beleg ansehen</Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={isDeleting} onClick={() => onDelete(expense.id)}>Löschen</Button>
+                </div>
+              </article>
+            )) : (
+              <p className="p-6 text-center text-sm text-muted-foreground">Keine Ausgaben vorhanden. Erfassen Sie oben Ihre erste Ausgabe.</p>
+            )}
+          </div>
+          <div className="hidden overflow-x-auto p-6 lg:block">
             <Table>
               <TableCaption>Alle erfassten Geschäftsausgaben</TableCaption>
               <TableHeader>
@@ -529,17 +556,17 @@ export function ExpensesTab({
                           {expense.category || 'Sonstiges'}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right font-medium text-red-600 dark:text-red-500">{formatCurrency(expense.amount)}</TableCell>
+                      <TableCell className="text-right font-medium text-critical">{formatCurrency(expense.amount)}</TableCell>
                       <TableCell className="text-center">
                         {expense.taxRelevant ? (
-                          <span className="inline-flex items-center justify-center w-5 h-5 bg-green-100 dark:bg-green-800/30 rounded-full">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-green-600 dark:text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-positive-surface">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-positive" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center justify-center w-5 h-5 bg-red-100 dark:bg-red-800/30 rounded-full">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-red-600 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-critical-surface">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-critical" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414z" clipRule="evenodd" />
                             </svg>
                           </span>
@@ -555,6 +582,7 @@ export function ExpensesTab({
                                     <Button
                                       variant="outline"
                                       size="icon"
+                                      aria-label={`Beleg zu ${expense.description} anzeigen`}
                                       onClick={() => onViewReceipt(`/api/expenses/download?id=${expense.id}`)}
                                     >
                                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -572,6 +600,7 @@ export function ExpensesTab({
                                     <Button
                                       variant="outline"
                                       size="icon"
+                                      aria-label={`Beleg zu ${expense.description} herunterladen`}
                                       onClick={() => {
                                         window.open(`/api/expenses/download?id=${expense.id}&download=true`, 'Beleg Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
                                       }}
@@ -592,6 +621,7 @@ export function ExpensesTab({
                                 <Button
                                   variant="outline"
                                   size="icon"
+                                  aria-label={`${expense.description} duplizieren`}
                                   onClick={() => onDuplicate(expense)}
                                 >
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -608,6 +638,7 @@ export function ExpensesTab({
                                 <Button
                                   variant="outline"
                                   size="icon"
+                                  aria-label={`${expense.description} bearbeiten`}
                                   onClick={() => onEdit(expense)}
                                 >
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -624,7 +655,8 @@ export function ExpensesTab({
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
+                                  aria-label={`${expense.description} löschen`}
+                                  className="border-critical/30 text-critical hover:bg-critical-surface"
                                   onClick={() => onDelete(expense.id)}
                                   disabled={isDeleting}
                                 >

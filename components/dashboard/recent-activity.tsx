@@ -19,7 +19,7 @@ function formatCurrency(amount: number) {
 
 export function RecentActivity({ activities }: RecentActivityProps) {
   return (
-    <Card className="bg-card border rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+    <Card className="overflow-hidden rounded-xl border bg-card shadow-none">
       <CardContent className="p-0">
         <div className="space-y-0">
           {activities.length > 0 ? (
@@ -29,7 +29,7 @@ export function RecentActivity({ activities }: RecentActivityProps) {
                   <p className="text-sm font-medium leading-none">{activity.description}</p>
                   <p className="text-sm text-muted-foreground">{new Date(activity.date).toLocaleDateString('de-DE')}</p>
                 </div>
-                <div className={`text-right font-medium ${activity.type === 'income' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'}`}>
+                <div className={`text-right font-medium ${activity.type === 'income' ? 'text-positive' : 'text-critical'}`}>
                   {formatCurrency(activity.amount)}
                 </div>
                 <Badge variant={activity.type === 'income' ? 'default' : 'destructive'} className="ml-4">

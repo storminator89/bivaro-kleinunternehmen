@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 interface CollapsibleKpiCardProps {
   title: string;
@@ -12,39 +11,31 @@ interface CollapsibleKpiCardProps {
 
 export function CollapsibleKpiCard({ title, value, icon, children }: CollapsibleKpiCardProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const detailsId = useId();
 
   return (
-    <Card className="bg-card border rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md hover:border-primary/20">
-      <CardHeader 
-        className={`flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer ${isOpen ? 'border-b' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <div className="flex items-center space-x-2">
-          {icon && (
-            <div className="p-2 rounded-lg bg-primary/10 text-primary">
-              {icon}
-            </div>
-          )}
-          <CardTitle className="text-base font-semibold">{title}</CardTitle>
-        </div>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-6 w-6 rounded-full hover:bg-primary/10 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsOpen(!isOpen);
-          }}
+    <Card className="overflow-hidden rounded-xl border bg-card shadow-none">
+      <CardHeader className="space-y-0 p-0">
+        <button
+          type="button"
+          className={`flex min-h-14 w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-muted/50 ${isOpen ? 'border-b' : ''}`}
+          aria-expanded={isOpen}
+          aria-controls={detailsId}
+          onClick={() => setIsOpen((value) => !value)}
         >
-          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </Button>
+          <span className="flex items-center gap-3">
+            {icon && <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">{icon}</span>}
+            <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+          </span>
+          {isOpen ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+        </button>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="px-6 py-4">
-          <div className="text-2xl font-bold">{value}</div>
+        <div className="px-4 py-4">
+          <div className="text-2xl font-bold tabular-nums">{value}</div>
         </div>
         {isOpen && children && (
-          <div className="px-6 pb-4 border-t bg-muted/30">
+          <div id={detailsId} className="border-t bg-muted/30 px-4 pb-4">
             {children}
           </div>
         )}

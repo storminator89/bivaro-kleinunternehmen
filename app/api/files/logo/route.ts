@@ -8,14 +8,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
-import * as fs from 'fs';
 import path from 'path';
-import { findUploadedFile } from '@/lib/upload-path';
+import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { privateLogoUrl } from '@/lib/upload-path';
+import { prisma } from '@/lib/prisma';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 
 export async function GET(request: NextRequest) {
   try {
-    // For logo, we allow unauthenticated access for public invoice PDFs
-    // But we still validate the request
+    const userId = await requireUserId();
+
     const url = new URL(request.url);
     const filename = url.searchParams.get('file');
 
@@ -26,19 +28,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validate filename format - only allow logo files
-    const sanitizedFilename = path.basename(filename);
-    if (!sanitizedFilename.startsWith('logo_')) {
-      return NextResponse.json(
-        { error: 'Invalid file type' },
-        { status: 400 }
-      );
+    const setting = await prisma.settings.findUnique({
+      where: { userId }, select: { logoUrl: true },
+    });
+    if (!setting || privateLogoUrl(setting.logoUrl) !== `/api/files/logo?file=${encodeURIComponent(filename)}`) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    // Find the file (checks both new and legacy locations)
-    const filePath = findUploadedFile(sanitizedFilename);
+    // Ownership is derived from the settings row and the tenant-scoped path;
+    // legacy root files additionally require an exclusive DB reference.
+    const filePath = await findOwnedUploadedFile(userId, filename);
 
-    if (!filePath || !fs.existsSync(filePath)) {
+    if (!filePath) {
       return NextResponse.json(
         { error: 'File not found' },
         { status: 404 }
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
     const fileBuffer = await readFile(filePath);
 
     // Determine content type
-    const ext = path.extname(sanitizedFilename).toLowerCase();
+    const ext = path.extname(filename).toLowerCase();
     let contentType = 'application/octet-stream';
     if (ext === '.png') contentType = 'image/png';
     else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof UnauthorizedError) return unauthorizedResponse();
     console.error('Error serving logo file:', error);
     return NextResponse.json(
       { error: 'Error serving file' },

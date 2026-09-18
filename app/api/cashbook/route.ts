@@ -6,8 +6,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { inTransaction } from '@/lib/db-transaction';
+import { CashbookError, cashAmount, recalculateCashBalances } from '@/lib/cashbook-service';
 import { getUserId } from '@/lib/get-user-id';
 import { auditCreate, auditUpdate, auditDelete, AuditEntityType } from '@/lib/audit-log';
+
+function parseId(value: unknown): number {
+    const id = Number(value);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new CashbookError('Ungültige Kassenbuch-ID');
+    return id;
+}
+
+function parseText(value: unknown, field: string, required = false): string | null {
+    if (value === undefined || value === null) {
+        if (required) throw new CashbookError(`${field} ist erforderlich`);
+        return null;
+    }
+    if (typeof value !== 'string') throw new CashbookError(`Ungültiges Feld: ${field}`);
+    const text = value.trim();
+    if (required && !text) throw new CashbookError(`${field} ist erforderlich`);
+    if (text.length > 255) throw new CashbookError(`Ungültiges Feld: ${field}`);
+    return text || null;
+}
 
 // GET: Liste aller Kassenbücher des Benutzers
 export async function GET(_request: Request) {
@@ -21,7 +41,7 @@ export async function GET(_request: Request) {
             where: { userId },
             include: {
                 _count: {
-                    select: { transactions: true }
+                    select: { transactions: { where: { userId } } }
                 }
             },
             orderBy: { createdAt: 'desc' }
@@ -31,8 +51,8 @@ export async function GET(_request: Request) {
         const cashBooksWithBalance = await Promise.all(
             cashBooks.map(async (cashBook) => {
                 const lastTransaction = await prisma.cashTransaction.findFirst({
-                    where: { cashBookId: cashBook.id },
-                    orderBy: { date: 'desc' }
+                    where: { cashBookId: cashBook.id, userId },
+                    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }]
                 });
 
                 return {
@@ -64,19 +84,16 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { name, description, initialBalance = 0, currency = 'EUR' } = body;
 
-        if (!name || name.trim().length === 0) {
-            return NextResponse.json(
-                { error: 'Name ist erforderlich' },
-                { status: 400 }
-            );
-        }
+        const parsedName = parseText(name, 'Name', true)!;
+        const parsedDescription = parseText(description, 'Beschreibung');
+        const parsedCurrency = parseText(currency, 'Währung', true)!;
 
         const cashBook = await prisma.cashBook.create({
             data: {
-                name: name.trim(),
-                description: description?.trim() || null,
-                initialBalance: parseFloat(String(initialBalance)) || 0,
-                currency,
+                name: parsedName,
+                description: parsedDescription,
+                initialBalance: cashAmount(initialBalance, false),
+                currency: parsedCurrency,
                 userId
             }
         });
@@ -85,6 +102,9 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(cashBook, { status: 201 });
     } catch (error) {
+        if (error instanceof CashbookError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         console.error('Error creating cash book:', error);
         return NextResponse.json(
             { error: 'Fehler beim Erstellen des Kassenbuchs' },
@@ -112,33 +132,33 @@ export async function PUT(request: NextRequest) {
         }
 
         // Check ownership
-        const existing = await prisma.cashBook.findFirst({
-            where: { id: parseInt(String(id)), userId }
-        });
-
-        if (!existing) {
-            return NextResponse.json(
-                { error: 'Kassenbuch nicht gefunden' },
-                { status: 404 }
-            );
-        }
+        const cashBookId = parseId(id);
 
         const updateData: Prisma.CashBookUpdateInput = {};
-        if (name !== undefined) updateData.name = name.trim();
-        if (description !== undefined) updateData.description = description?.trim() || null;
-        if (initialBalance !== undefined) updateData.initialBalance = parseFloat(String(initialBalance));
-        if (currency !== undefined) updateData.currency = currency;
-        if (isActive !== undefined) updateData.isActive = isActive;
+        if (name !== undefined) updateData.name = parseText(name, 'Name', true)!;
+        if (description !== undefined) updateData.description = parseText(description, 'Beschreibung');
+        if (initialBalance !== undefined) updateData.initialBalance = cashAmount(initialBalance, false);
+        if (currency !== undefined) updateData.currency = parseText(currency, 'Währung', true)!;
+        if (isActive !== undefined) {
+            if (typeof isActive !== 'boolean') throw new CashbookError('Ungültiges Feld: Aktiv');
+            updateData.isActive = isActive;
+        }
 
-        const cashBook = await prisma.cashBook.update({
-            where: { id: parseInt(String(id)) },
-            data: updateData
+        const result = await inTransaction(async tx => {
+            const existing = await tx.cashBook.findFirst({ where: { id: cashBookId, userId } });
+            if (!existing) throw new CashbookError('Kassenbuch nicht gefunden', 404);
+            const updated = await tx.cashBook.update({ where: { id: cashBookId, userId }, data: updateData });
+            if (initialBalance !== undefined) await recalculateCashBalances(tx, updated.id, userId);
+            return { existing, updated };
         });
 
-        await auditUpdate(userId, 'CashBook' as AuditEntityType, id, existing, cashBook, cashBook.name);
+        await auditUpdate(userId, 'CashBook' as AuditEntityType, cashBookId, result.existing, result.updated, result.updated.name);
 
-        return NextResponse.json(cashBook);
+        return NextResponse.json(result.updated);
     } catch (error) {
+        if (error instanceof CashbookError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         console.error('Error updating cash book:', error);
         return NextResponse.json(
             { error: 'Fehler beim Aktualisieren des Kassenbuchs' },
@@ -165,37 +185,27 @@ export async function DELETE(request: NextRequest) {
             );
         }
 
-        // Check ownership
-        const existing = await prisma.cashBook.findFirst({
-            where: { id: parseInt(id), userId },
-            include: {
-                _count: { select: { transactions: true } }
+        const cashBookId = parseId(id);
+        const existing = await inTransaction(async tx => {
+            const current = await tx.cashBook.findFirst({
+                where: { id: cashBookId, userId },
+                include: { _count: { select: { transactions: true } } },
+            });
+            if (!current) throw new CashbookError('Kassenbuch nicht gefunden', 404);
+            if (current._count.transactions > 0) {
+                throw new CashbookError(`Kassenbuch enthält ${current._count.transactions} Buchungen. Löschen Sie zuerst alle Buchungen.`);
             }
-        });
-
-        if (!existing) {
-            return NextResponse.json(
-                { error: 'Kassenbuch nicht gefunden' },
-                { status: 404 }
-            );
-        }
-
-        // Check if there are transactions (optional: prevent deletion)
-        if (existing._count.transactions > 0) {
-            return NextResponse.json(
-                { error: `Kassenbuch enthält ${existing._count.transactions} Buchungen. Löschen Sie zuerst alle Buchungen.` },
-                { status: 400 }
-            );
-        }
-
-        await prisma.cashBook.delete({
-            where: { id: parseInt(id) }
+            await tx.cashBook.delete({ where: { id: cashBookId, userId } });
+            return current;
         });
 
         await auditDelete(userId, 'CashBook' as AuditEntityType, existing, existing.name);
 
         return NextResponse.json({ success: true });
     } catch (error) {
+        if (error instanceof CashbookError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         console.error('Error deleting cash book:', error);
         return NextResponse.json(
             { error: 'Fehler beim Löschen des Kassenbuchs' },

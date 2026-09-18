@@ -139,7 +139,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                 {/* Header */}
                 <DialogHeader className="pb-4 border-b">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                        <div className="rounded-lg bg-primary p-2 text-primary-foreground">
                             <FileSpreadsheet className="h-6 w-6" />
                         </div>
                         <div>
@@ -215,7 +215,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                         <>
                             {/* Summary Cards - Main KPIs */}
                             <div className="grid gap-4 md:grid-cols-3">
-                                <Card className="relative overflow-hidden bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20 border-emerald-200 dark:border-emerald-800">
+                                <Card className="relative overflow-hidden border-positive/40 bg-positive-surface">
                                     <div className="absolute top-0 right-0 w-24 h-24 transform translate-x-8 -translate-y-8">
                                         <div className="w-full h-full rounded-full bg-emerald-200/30 dark:bg-emerald-800/20" />
                                     </div>
@@ -233,7 +233,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                     </CardContent>
                                 </Card>
 
-                                <Card className="relative overflow-hidden bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/30 dark:to-red-950/20 border-rose-200 dark:border-rose-800">
+                                <Card className="relative overflow-hidden border-critical/40 bg-critical-surface">
                                     <div className="absolute top-0 right-0 w-24 h-24 transform translate-x-8 -translate-y-8">
                                         <div className="w-full h-full rounded-full bg-rose-200/30 dark:bg-rose-800/20" />
                                     </div>
@@ -252,8 +252,8 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                 </Card>
 
                                 <Card className={`relative overflow-hidden ${previewData.data.profit >= 0
-                                    ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800'
-                                    : 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-amber-200 dark:border-amber-800'
+                                    ? 'border-notice/40 bg-notice-surface'
+                                    : 'border-caution/40 bg-caution-surface'
                                     }`}>
                                     <div className="absolute top-0 right-0 w-24 h-24 transform translate-x-8 -translate-y-8">
                                         <div className={`w-full h-full rounded-full ${previewData.data.profit >= 0 ? 'bg-blue-200/30 dark:bg-blue-800/20' : 'bg-amber-200/30 dark:bg-amber-800/20'
@@ -430,8 +430,8 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
 
                             {/* Result Line - Prominent Display */}
                             <div className={`p-6 rounded-xl ${previewData.data.profit >= 0
-                                ? 'bg-gradient-to-r from-blue-100 via-indigo-50 to-blue-100 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-blue-950/40 border border-blue-200 dark:border-blue-800'
-                                : 'bg-gradient-to-r from-amber-100 via-orange-50 to-amber-100 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-amber-950/40 border border-amber-200 dark:border-amber-800'
+                                ? 'border border-notice/40 bg-notice-surface'
+                                : 'border border-caution/40 bg-caution-surface'
                                 }`}>
                                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div className="flex items-center gap-3">

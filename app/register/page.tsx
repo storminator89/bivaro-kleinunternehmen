@@ -123,7 +123,7 @@ export default function RegisterPage() {
             </p>
           </CardContent>
           <CardFooter>
-            <Link href="/login" className="text-blue-600 hover:underline text-sm">
+            <Link href="/login" className="text-primary hover:underline text-sm">
               Zurück zur Anmeldung
             </Link>
           </CardFooter>

@@ -3,7 +3,7 @@ import { basename, extname } from 'path';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit-log';
-import { findUploadedFile } from '@/lib/upload-path';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 
 export type EmailDocumentType = 'invoice' | 'quote' | 'reminder';
 
@@ -315,7 +315,7 @@ async function loadEmailDocument(userId: string, request: EmailDraftRequest): Pr
   }
 
   const sanitizedFileName = basename(invoice.storedFileName);
-  const attachmentPath = findUploadedFile(sanitizedFileName);
+  const attachmentPath = await findOwnedUploadedFile(userId, sanitizedFileName);
   if (!attachmentPath) {
     throw new Error('Datei nicht gefunden');
   }

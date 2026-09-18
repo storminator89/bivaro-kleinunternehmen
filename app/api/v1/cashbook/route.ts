@@ -10,6 +10,7 @@
 import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { CashbookError, createCashTransaction, updateCashTransaction, deleteCashTransaction } from '@/lib/cashbook-service';
 import {
     withApiAuth,
     apiSuccess,
@@ -18,8 +19,8 @@ import {
     corsHeaders,
 } from '@/lib/api-auth';
 
-export async function OPTIONS() {
-    return handleCors();
+export async function OPTIONS(request: NextRequest) {
+    return handleCors(request);
 }
 
 // GET /api/v1/cashbook
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
         const [transactions, total] = await Promise.all([
             prisma.cashTransaction.findMany({
                 where: transactionWhere,
-                orderBy: { date: 'desc' },
+                orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
                 skip,
                 take: pageSize,
                 select: {
@@ -107,180 +108,24 @@ export async function GET(request: NextRequest) {
     }, { requiredScopes: ['read'] });
 }
 
-// POST /api/v1/cashbook
-export async function POST(request: NextRequest) {
-    return withApiAuth(request, async ({ userId }) => {
-        let body;
-        try {
-            body = await request.json();
-        } catch {
-            return apiError('Invalid JSON body', 400, 'INVALID_JSON');
-        }
-
-        const {
-            cashBookId,
-            type,
-            description,
-            amount,
-            date,
-            category,
-            receiptNumber,
-            taxRelevant,
-            notes,
-        } = body;
-
-        // Validation
-        if (!cashBookId) {
-            return apiError('Cash book ID is required', 400, 'VALIDATION_ERROR');
-        }
-
-        if (!type || !['EINNAHME', 'AUSGABE'].includes(type)) {
-            return apiError('Type must be EINNAHME or AUSGABE', 400, 'VALIDATION_ERROR');
-        }
-
-        if (!description || typeof description !== 'string' || description.trim().length === 0) {
-            return apiError('Description is required', 400, 'VALIDATION_ERROR');
-        }
-
-        if (amount === undefined || amount === null || isNaN(parseFloat(amount))) {
-            return apiError('Valid amount is required', 400, 'VALIDATION_ERROR');
-        }
-
-        if (parseFloat(amount) <= 0) {
-            return apiError('Amount must be positive', 400, 'VALIDATION_ERROR');
-        }
-
-        // Verify cash book belongs to user
-        const cashBook = await prisma.cashBook.findFirst({
-            where: { id: parseInt(cashBookId), userId },
-        });
-
-        if (!cashBook) {
-            return apiError('Cash book not found', 404, 'NOT_FOUND');
-        }
-
-        // Calculate running balance
-        const lastTransaction = await prisma.cashTransaction.findFirst({
-            where: { cashBookId: parseInt(cashBookId) },
-            orderBy: { date: 'desc' },
-        });
-
-        const previousBalance = lastTransaction?.runningBalance ?? cashBook.initialBalance;
-        const transactionAmount = parseFloat(amount);
-        const newBalance = type === 'EINNAHME'
-            ? previousBalance + transactionAmount
-            : previousBalance - transactionAmount;
-
-        const transaction = await prisma.cashTransaction.create({
-            data: {
-                cashBookId: parseInt(cashBookId),
-                type,
-                description: description.trim(),
-                amount: transactionAmount,
-                runningBalance: newBalance,
-                date: date ? new Date(date) : new Date(),
-                category: category?.trim() || null,
-                receiptNumber: receiptNumber?.trim() || null,
-                taxRelevant: taxRelevant !== undefined ? Boolean(taxRelevant) : true,
-                notes: notes?.trim() || null,
-                userId,
-            },
-        });
-
-        const response = apiSuccess(transaction);
-        response.headers.set('Location', `/api/v1/cashbook/${transaction.id}`);
-        Object.entries(corsHeaders()).forEach(([key, value]) => {
-            response.headers.set(key, value);
-        });
-
-        return new Response(response.body, {
-            status: 201,
-            headers: response.headers,
-        });
-    }, { requiredScopes: ['write'] });
+async function mutate(request: NextRequest, method: 'POST' | 'PUT' | 'DELETE') {
+  return withApiAuth(request, async ({ userId }) => {
+    try {
+      const id = Number(new URL(request.url).searchParams.get('id'));
+      if (method === 'DELETE') return apiSuccess(await deleteCashTransaction(userId, id));
+      const body = await request.json();
+      if (method === 'PUT' && ['amount', 'date', 'type', 'cashBookId', 'incomeId', 'expenseId'].some(key => key in body)) {
+        return apiError('Only non-financial fields can be updated through this endpoint', 400);
+      }
+      const entry = method === 'POST' ? await createCashTransaction(userId, body) : await updateCashTransaction(userId, id, body);
+      const response = apiSuccess(entry);
+      return new Response(response.body, { status: method === 'POST' ? 201 : 200, headers: response.headers });
+    } catch (error) {
+      if (error instanceof CashbookError) return apiError(error.message, error.status);
+      throw error;
+    }
+  }, { requiredScopes: [method === 'DELETE' ? 'delete' : 'write'] });
 }
-
-// PUT /api/v1/cashbook?id=<id>
-export async function PUT(request: NextRequest) {
-    return withApiAuth(request, async ({ userId }) => {
-        const url = new URL(request.url);
-        const id = url.searchParams.get('id');
-
-        if (!id) {
-            return apiError('Transaction ID is required', 400, 'MISSING_ID');
-        }
-
-        let body;
-        try {
-            body = await request.json();
-        } catch {
-            return apiError('Invalid JSON body', 400, 'INVALID_JSON');
-        }
-
-        const {
-            description,
-            category,
-            receiptNumber,
-            taxRelevant,
-            notes,
-        } = body;
-
-        // Check if transaction exists and belongs to user
-        const existing = await prisma.cashTransaction.findFirst({
-            where: { id: parseInt(id), userId },
-        });
-
-        if (!existing) {
-            return apiError('Transaction not found', 404, 'NOT_FOUND');
-        }
-
-        // Only allow updating non-financial fields (for GoBD compliance)
-        const transaction = await prisma.cashTransaction.update({
-            where: { id: parseInt(id) },
-            data: {
-                ...(description !== undefined && { description: description.trim() }),
-                ...(category !== undefined && { category: category?.trim() || null }),
-                ...(receiptNumber !== undefined && { receiptNumber: receiptNumber?.trim() || null }),
-                ...(taxRelevant !== undefined && { taxRelevant: Boolean(taxRelevant) }),
-                ...(notes !== undefined && { notes: notes?.trim() || null }),
-            },
-        });
-
-        const response = apiSuccess(transaction);
-        Object.entries(corsHeaders()).forEach(([key, value]) => {
-            response.headers.set(key, value);
-        });
-        return response;
-    }, { requiredScopes: ['write'] });
-}
-
-// DELETE /api/v1/cashbook?id=<id>
-export async function DELETE(request: NextRequest) {
-    return withApiAuth(request, async ({ userId }) => {
-        const url = new URL(request.url);
-        const id = url.searchParams.get('id');
-
-        if (!id) {
-            return apiError('Transaction ID is required', 400, 'MISSING_ID');
-        }
-
-        // Check if transaction exists and belongs to user
-        const existing = await prisma.cashTransaction.findFirst({
-            where: { id: parseInt(id), userId },
-        });
-
-        if (!existing) {
-            return apiError('Transaction not found', 404, 'NOT_FOUND');
-        }
-
-        await prisma.cashTransaction.delete({
-            where: { id: parseInt(id) },
-        });
-
-        const response = apiSuccess({ deleted: true, id: parseInt(id) });
-        Object.entries(corsHeaders()).forEach(([key, value]) => {
-            response.headers.set(key, value);
-        });
-        return response;
-    }, { requiredScopes: ['delete'] });
-}
+export async function POST(request: NextRequest) { return mutate(request, 'POST'); }
+export async function PUT(request: NextRequest) { return mutate(request, 'PUT'); }
+export async function DELETE(request: NextRequest) { return mutate(request, 'DELETE'); }

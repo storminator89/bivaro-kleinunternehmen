@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 import { promises as fs } from 'fs';
 import { extname, basename } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { findUploadedFile } from '@/lib/upload-path';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 
 type DateRangeParam = 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const filePath = findUploadedFile(expense.storedReceiptFileName);
+      const filePath = await findOwnedUploadedFile(userId, expense.storedReceiptFileName);
 
       if (!filePath) {
         missingFiles.push(`${expense.id}: ${expense.storedReceiptFileName}`);

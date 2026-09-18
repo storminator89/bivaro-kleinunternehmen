@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Public, unauthenticated page routes.
@@ -14,6 +15,12 @@ const PUBLIC_PATHS = new Set<string>(["/", "/login", "/register"]);
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
+  // Legacy documents may still exist in public/uploads after an upgrade.
+  // Never let Next.js serve those files through its unauthenticated static path.
+  if (pathname === '/uploads' || pathname.startsWith('/uploads/')) {
+    return new NextResponse(null, { status: 404 });
+  }
+
   let token: unknown = null;
   try {
     token = await getToken({
@@ -26,7 +33,44 @@ export async function proxy(request: NextRequest) {
     console.error("[proxy] JWT decryption failed:", error);
   }
 
-  const isAuthenticated = Boolean(token);
+  const tokenRecord = token as {
+    id?: unknown;
+    sub?: unknown;
+    role?: unknown;
+    sessionVersion?: unknown;
+    revoked?: unknown;
+  } | null;
+  let isAuthenticated = false;
+  const tokenUserId =
+    typeof tokenRecord?.id === "string"
+      ? tokenRecord.id
+      : typeof tokenRecord?.sub === "string"
+        ? tokenRecord.sub
+        : null;
+
+  if (
+    tokenRecord &&
+    tokenUserId &&
+    !tokenRecord.revoked &&
+    (tokenRecord.role === "USER" || tokenRecord.role === "ADMIN") &&
+    typeof tokenRecord.sessionVersion === "number"
+  ) {
+    try {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: tokenUserId },
+        select: { role: true, sessionVersion: true },
+      });
+      isAuthenticated = Boolean(
+        currentUser &&
+          (currentUser.role === "USER" || currentUser.role === "ADMIN") &&
+          currentUser.role === tokenRecord.role &&
+          currentUser.sessionVersion === tokenRecord.sessionVersion,
+      );
+    } catch (error) {
+      // Fail closed when the revocation lookup cannot be completed.
+      console.error("[proxy] session validation failed:", error);
+    }
+  }
 
   // Authenticated users on /login or /register go straight to the dashboard.
   if (isAuthenticated && (pathname === "/login" || pathname === "/register")) {
@@ -53,5 +97,5 @@ export const config = {
    *  - favicon.ico
    *  - anything containing a dot (static files like .png, .css, .js, .map, …)
    */
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+  matcher: ["/uploads/:path*", "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };

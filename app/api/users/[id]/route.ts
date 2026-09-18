@@ -1,102 +1,229 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
+import { isValidEmail, sanitizeString, validatePassword } from "@/lib/security";
+import { isValidRole, UserRole } from "@/lib/auth";
+import {
+  ForbiddenError,
+  forbiddenResponse,
+  requireAdminSession,
+  UnauthorizedError,
+  unauthorizedResponse,
+} from "@/lib/get-user-id";
+import { auditDelete, auditSecurityEvent, auditUpdate } from "@/lib/audit-log";
+import { inTransaction } from "@/lib/db-transaction";
+
+class UserNotFoundError extends Error {}
+class LastAdminError extends Error {}
+
+function parseRole(value: unknown, fallback: UserRole): UserRole | null {
+  if (value === undefined) return fallback;
+  return isValidRole(value) ? value : null;
+}
+
+function authErrorResponse(error: unknown) {
+  if (error instanceof UnauthorizedError) return unauthorizedResponse();
+  if (error instanceof ForbiddenError) return forbiddenResponse();
+  return null;
+}
+
+const userSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  createdAt: true,
+  sessionVersion: true,
+} as const;
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-
-  if (!session || session.user.role !== "ADMIN") {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
   try {
+    const { user: actor } = await requireAdminSession();
     const { id } = await params;
     const body = await req.json();
-    const { name, email, password, role } = body;
+    const requestedEmail = body?.email;
+    const requestedPassword = typeof body?.password === "string" ? body.password : "";
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({
+    const current = await prisma.user.findUnique({
       where: { id },
+      select: userSelect,
     });
+    if (!current) return new NextResponse("User not found", { status: 404 });
+    if (!isValidRole(current.role)) return new NextResponse("Invalid role", { status: 500 });
 
-    if (!existingUser) {
-      return new NextResponse("User not found", { status: 404 });
+    const nextRole = parseRole(body?.role, current.role);
+    if (!nextRole) return new NextResponse("Invalid role", { status: 400 });
+
+    let nextEmail = current.email;
+    if (requestedEmail !== undefined) {
+      if (typeof requestedEmail !== "string") {
+        return new NextResponse("Invalid email", { status: 400 });
+      }
+      nextEmail = requestedEmail.trim().toLowerCase();
+      if (!isValidEmail(nextEmail)) return new NextResponse("Invalid email", { status: 400 });
     }
 
-    const updateData: Prisma.UserUpdateInput = { name };
-
-    if (role) {
-      updateData.role = role;
+    let nextName = current.name;
+    if (body?.name !== undefined) {
+      if (body.name !== null && typeof body.name !== "string") {
+        return new NextResponse("Invalid name", { status: 400 });
+      }
+      nextName = body.name === null ? null : sanitizeString(body.name, 100) || null;
     }
 
-    // If email is being changed, check if it's already taken
-    if (email && email !== existingUser.email) {
-      const emailExists = await prisma.user.findUnique({
-        where: { email },
+    const passwordChanged = requestedPassword.length > 0;
+    if (passwordChanged) {
+      const passwordValidation = validatePassword(requestedPassword);
+      if (!passwordValidation.valid) {
+        return NextResponse.json({ message: passwordValidation.message }, { status: 400 });
+      }
+    }
+    const passwordHash = passwordChanged ? await hashPassword(requestedPassword) : undefined;
+    const roleChanged = current.role !== nextRole;
+    const emailChanged = current.email !== nextEmail;
+    const sessionMustBeRevoked = roleChanged || emailChanged || passwordChanged;
+
+    const result = await inTransaction(async (tx) => {
+      const target = await tx.user.findUnique({
+        where: { id },
+        select: userSelect,
       });
+      if (!target) throw new UserNotFoundError();
+      if (!isValidRole(target.role)) throw new Error("Invalid role");
 
-      if (emailExists) {
-        return new NextResponse("Email already in use", { status: 409 });
+      if (target.role === "ADMIN" && nextRole !== "ADMIN") {
+        const adminCount = await tx.user.count({ where: { role: "ADMIN" } });
+        if (adminCount <= 1) throw new LastAdminError();
       }
-      updateData.email = email;
-    }
 
-    // If password is provided, hash it
-    if (password && password.length > 0) {
-      if (password.length < 6) {
-        return new NextResponse("Password must be at least 6 characters", { status: 400 });
-      }
-      const hashedPassword = await hashPassword(password);
-      updateData.password = hashedPassword;
-    }
+      const data: Prisma.UserUpdateInput = {
+        name: nextName,
+        email: nextEmail,
+        role: nextRole,
+      };
+      if (passwordHash) data.password = passwordHash;
+      if (sessionMustBeRevoked) data.sessionVersion = { increment: 1 };
 
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: updateData,
+      const updated = await tx.user.update({
+        where: { id },
+        data,
+        select: userSelect,
+      });
+      return { target, updated };
     });
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = updatedUser;
+    await auditUpdate(
+      actor.id,
+      "User",
+      result.updated.id,
+      result.target,
+      result.updated,
+      result.updated.email,
+    );
+    await auditSecurityEvent(actor.id, {
+      event: "ADMIN_USER_CHANGE",
+      outcome: "success",
+      severity: passwordChanged || roleChanged ? "warning" : "info",
+      metadata: {
+        action: "UPDATE",
+        targetUserId: result.updated.id,
+        roleChanged,
+        passwordChanged,
+        emailChanged,
+      },
+    });
+    if (passwordChanged) {
+      await auditSecurityEvent(actor.id, {
+        event: "AUTH_PASSWORD_CHANGED",
+        outcome: "success",
+        severity: "warning",
+        metadata: { targetUserId: result.updated.id, via: "admin" },
+      });
+    }
+    if (roleChanged) {
+      await auditSecurityEvent(actor.id, {
+        event: "AUTH_ROLE_CHANGED",
+        outcome: "success",
+        severity: "warning",
+        metadata: {
+          targetUserId: result.updated.id,
+          oldRole: result.target.role,
+          newRole: result.updated.role,
+        },
+      });
+    }
 
-    return NextResponse.json(userWithoutPassword);
+    return NextResponse.json(result.updated);
   } catch (error) {
+    const response = authErrorResponse(error);
+    if (response) return response;
+    if (error instanceof UserNotFoundError) return new NextResponse("User not found", { status: 404 });
+    if (error instanceof LastAdminError) {
+      return new NextResponse("At least one administrator must remain", { status: 400 });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return new NextResponse("Email already in use", { status: 409 });
+    }
     console.error("[USER_PATCH]", error);
     return new NextResponse("Internal Error", { status: 500 });
   }
 }
 
 export async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-
-  if (!session || session.user.role !== "ADMIN") {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
   try {
+    const { user: actor } = await requireAdminSession();
     const { id } = await params;
 
-    // Prevent deleting yourself
-    if (session.user.id === id) {
+    if (actor.id === id) {
       return new NextResponse("Cannot delete your own account", { status: 400 });
     }
 
-    await prisma.user.delete({
-      where: {
-        id: id,
-      },
+    const deleted = await inTransaction(async (tx) => {
+      const target = await tx.user.findUnique({
+        where: { id },
+        select: userSelect,
+      });
+      if (!target) throw new UserNotFoundError();
+      if (!isValidRole(target.role)) throw new Error("Invalid role");
+
+      if (target.role === "ADMIN") {
+        const adminCount = await tx.user.count({ where: { role: "ADMIN" } });
+        if (adminCount <= 1) throw new LastAdminError();
+      }
+
+      await tx.user.delete({ where: { id } });
+      return target;
+    });
+
+    await auditDelete(actor.id, "User", deleted, deleted.email);
+    await auditSecurityEvent(actor.id, {
+      event: "ADMIN_USER_CHANGE",
+      outcome: "success",
+      severity: "warning",
+      metadata: { action: "DELETE", targetUserId: id, role: deleted.role },
+    });
+    await auditSecurityEvent(actor.id, {
+      event: "AUTH_USER_DELETED",
+      outcome: "success",
+      severity: "warning",
+      metadata: { targetUserId: id, role: deleted.role },
     });
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
+    const response = authErrorResponse(error);
+    if (response) return response;
+    if (error instanceof UserNotFoundError) return new NextResponse("User not found", { status: 404 });
+    if (error instanceof LastAdminError) {
+      return new NextResponse("At least one administrator must remain", { status: 400 });
+    }
     console.error("[USER_DELETE]", error);
     return new NextResponse("Internal Error", { status: 500 });
   }

@@ -1,6 +1,8 @@
 "use client";
 
-import React from 'react';
+import React from "react";
+import { ClipboardList, Download, Info } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -8,10 +10,12 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
 } from "@/components/ui/table";
-import { Expense, TimeRange } from "@/types/dashboard";
 import { formatCurrency } from "@/lib/dashboard-utils";
+import { Expense, TimeRange } from "@/types/dashboard";
+
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
 
 type GWGTabProps = {
   expensesAll: Expense[];
@@ -19,99 +23,138 @@ type GWGTabProps = {
   onExport: () => void;
 };
 
-export function GWGTab({
-  expensesAll,
-  selectedTimeRange,
-  onExport,
-}: GWGTabProps) {
-  const gwgExpenses = expensesAll.filter(expense => {
+function getPeriodLabel(selectedTimeRange: TimeRange) {
+  if (selectedTimeRange === "thisYear") return "Aktuelles Jahr";
+  if (selectedTimeRange === "lastYear") return "Vorjahr";
+  if (selectedTimeRange === "last3Months") return "Letzte 3 Monate";
+  if (selectedTimeRange === "last6Months") return "Letzte 6 Monate";
+  return "Alle Jahre";
+}
+
+export function GWGTab({ expensesAll, selectedTimeRange, onExport }: GWGTabProps) {
+  const gwgExpenses = expensesAll.filter((expense) => {
     if (!expense.taxRelevant) return false;
     if (expense.amount <= 250 || expense.amount > 1000) return false;
-    
+
     const expenseDate = new Date(expense.date);
     const today = new Date();
-    if (selectedTimeRange === 'thisYear') {
+    if (selectedTimeRange === "thisYear") {
       return expenseDate.getFullYear() === today.getFullYear();
-    } else if (selectedTimeRange === 'lastYear') {
+    }
+    if (selectedTimeRange === "lastYear") {
       return expenseDate.getFullYear() === today.getFullYear() - 1;
     }
     return true;
   });
+  const totalAmount = gwgExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
-        <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-amber-50/50 to-amber-50/30 dark:from-amber-900/10 dark:to-amber-900/5">
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-            <div>
-              <h2 className="text-xl font-semibold mb-1 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                GWG-Verzeichnis
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Verzeichnis für Geringwertige Wirtschaftsgüter (GWG) über 250 € bis 1.000 € Netto.
-              </p>
-            </div>
-            <Button
-              onClick={onExport}
-              className="self-start bg-amber-600 hover:bg-amber-700 text-white"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
-              </svg>
-              GWG-Verzeichnis exportieren
-            </Button>
-          </div>
+    <div className="min-w-0 space-y-6">
+      <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+            <ClipboardList aria-hidden="true" className="h-5 w-5 shrink-0 text-caution" />
+            <span className="[overflow-wrap:anywhere]">GWG-Verzeichnis</span>
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Steuerrelevante Wirtschaftsgüter über 250 € bis einschließlich 1.000 € netto.
+          </p>
         </div>
-        <div className="p-6">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                Anzeige für: <span className="font-medium text-foreground">
-                  {selectedTimeRange === 'thisYear' ? 'Aktuelles Jahr' : selectedTimeRange === 'lastYear' ? 'Vorjahr' : 'Alle Jahre'}
-                </span>
-              </div>
+        <Button onClick={onExport} className="min-h-11 w-full whitespace-nowrap sm:w-auto">
+          <Download aria-hidden="true" className="mr-2 h-4 w-4" />
+          GWG exportieren
+        </Button>
+      </header>
+
+      <section aria-labelledby="gwg-summary" className="overflow-hidden rounded-lg border">
+        <div className="border-b bg-muted/30 px-4 py-3 sm:px-6">
+          <h3 id="gwg-summary" className="font-semibold">Verzeichnisübersicht</h3>
+        </div>
+        <dl className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="px-4 py-4 sm:px-6">
+            <dt className="text-sm text-muted-foreground">Zeitraum</dt>
+            <dd className="mt-1 font-medium">{getPeriodLabel(selectedTimeRange)}</dd>
+          </div>
+          <div className="px-4 py-4 sm:px-6">
+            <dt className="text-sm text-muted-foreground">Einträge</dt>
+            <dd className="mt-1 text-xl font-semibold tabular-nums">{gwgExpenses.length}</dd>
+          </div>
+          <div className="px-4 py-4 sm:px-6">
+            <dt className="text-sm text-muted-foreground">Nettosumme</dt>
+            <dd className="mt-1 text-xl font-semibold tabular-nums">{formatCurrency(totalAmount)}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section aria-labelledby="gwg-list-heading" className="overflow-hidden rounded-lg border">
+        <div className="border-b px-4 py-4 sm:px-6">
+          <h3 id="gwg-list-heading" className="font-semibold">Erfasste Wirtschaftsgüter</h3>
+        </div>
+
+        {gwgExpenses.length > 0 ? (
+          <>
+            <div className="divide-y lg:hidden">
+              {gwgExpenses.map((expense) => (
+                <article key={expense.id} className="min-w-0 px-4 py-4 sm:px-6">
+                  <div className="flex min-w-0 items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h4 className="font-medium [overflow-wrap:anywhere]">{expense.description}</h4>
+                      <p className="mt-1 text-sm text-muted-foreground">{new Date(expense.date).toLocaleDateString("de-DE")}</p>
+                    </div>
+                    <p className="shrink-0 font-semibold tabular-nums">{formatCurrency(expense.amount)}</p>
+                  </div>
+                  <dl className="mt-4 text-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="text-muted-foreground">Kategorie</dt>
+                      <dd className="min-w-0 text-right [overflow-wrap:anywhere]">{expense.category || "Ohne Kategorie"}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
             </div>
-            
-            <div className="rounded-md border">
+
+            <div className="hidden lg:block">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="font-medium">Datum</TableHead>
-                    <TableHead className="font-medium">Beschreibung</TableHead>
-                    <TableHead className="font-medium">Kategorie</TableHead>
-                    <TableHead className="text-right font-medium">Betrag (Netto)</TableHead>
+                    <TableHead>Datum</TableHead>
+                    <TableHead>Beschreibung</TableHead>
+                    <TableHead>Kategorie</TableHead>
+                    <TableHead className="text-right">Betrag (Netto)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {gwgExpenses.length > 0 ? (
-                    gwgExpenses.map((expense) => (
-                      <TableRow key={expense.id}>
-                        <TableCell>{new Date(expense.date).toLocaleDateString('de-DE')}</TableCell>
-                        <TableCell>{expense.description}</TableCell>
-                        <TableCell>{expense.category}</TableCell>
-                        <TableCell className="text-right font-medium">{formatCurrency(expense.amount)}</TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                        Keine GWG-Anschaffungen im gewählten Zeitraum gefunden.
-                      </TableCell>
+                  {gwgExpenses.map((expense) => (
+                    <TableRow key={expense.id}>
+                      <TableCell>{new Date(expense.date).toLocaleDateString("de-DE")}</TableCell>
+                      <TableCell className="font-medium">{expense.description}</TableCell>
+                      <TableCell>{expense.category || "Ohne Kategorie"}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">{formatCurrency(expense.amount)}</TableCell>
                     </TableRow>
-                  )}
+                  ))}
+                  <TableRow className="bg-muted/50 font-semibold">
+                    <TableCell colSpan={3}>Summe</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(totalAmount)}</TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Hinweis: Dieses Verzeichnis listet automatisch alle steuerrelevanten Ausgaben zwischen 250 € und 1.000 € auf.
-              Es dient als Nachweis gemäß § 6 Abs. 2 EStG.
-            </p>
+          </>
+        ) : (
+          <div className="flex flex-col items-start gap-3 px-4 py-8 sm:px-6">
+            <ClipboardList aria-hidden="true" className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <p className="font-medium">Keine GWG-Anschaffungen gefunden</p>
+              <p className="mt-1 text-sm text-muted-foreground">Im gewählten Zeitraum gibt es keine steuerrelevanten Ausgaben innerhalb der GWG-Grenzen.</p>
+            </div>
           </div>
+        )}
+
+        <div className="flex items-start gap-2 border-t bg-muted/20 px-4 py-4 text-xs text-muted-foreground sm:px-6">
+          <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>Das Verzeichnis dient als Nachweis gemäß § 6 Abs. 2 EStG und listet passende Ausgaben automatisch.</p>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

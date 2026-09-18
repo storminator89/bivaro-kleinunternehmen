@@ -15,6 +15,11 @@ import {
     getEURLineDefinition,
 } from '@/lib/eur-line-mapping';
 import { EURLineValue, EURExportData, UnmappedCategory } from '@/types/eur-export';
+import {
+    calculateExpenseDeductionForYear,
+    getIncomeAccountingDate,
+    isIncludedIncome,
+} from '@/lib/accounting';
 
 export async function GET(request: NextRequest) {
     try {
@@ -31,27 +36,35 @@ export async function GET(request: NextRequest) {
         const startDate = new Date(year, 0, 1);
         const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
 
-        // Fetch all incomes for the year
+        // Fetch the small accounting projections. Invoice parsedData is not
+        // needed for an EÜR and must stay out of this query.
         const incomes = await prisma.income.findMany({
             where: {
                 userId,
                 taxRelevant: true,
-                date: {
-                    gte: startDate,
-                    lte: endDate,
-                },
+            },
+            select: {
+                amount: true,
+                date: true,
+                taxRelevant: true,
+                invoice: { select: { status: true, paidAt: true } },
             },
         });
 
-        // Fetch all expenses for the year
+        // Older assets can still contribute AfA in the export year, so their
+        // acquisition date may precede the selected year.
         const expenses = await prisma.expense.findMany({
             where: {
                 userId,
                 taxRelevant: true,
-                date: {
-                    gte: startDate,
-                    lte: endDate,
-                },
+            },
+            select: {
+                amount: true,
+                date: true,
+                category: true,
+                taxRelevant: true,
+                taxDeductiblePercentage: true,
+                depreciationYears: true,
             },
         });
 
@@ -67,6 +80,9 @@ export async function GET(request: NextRequest) {
         // Process incomes - for Kleinunternehmer, all goes to line 16
         const defaultIncomeLine = getDefaultIncomeLineForKleinunternehmer();
         for (const income of incomes) {
+            if (!isIncludedIncome(income)) continue;
+            const incomeDate = getIncomeAccountingDate(income);
+            if (incomeDate < startDate || incomeDate > endDate) continue;
             const lineNumber = defaultIncomeLine;
             lineAmounts.set(lineNumber, (lineAmounts.get(lineNumber) || 0) + income.amount);
         }
@@ -76,37 +92,9 @@ export async function GET(request: NextRequest) {
             const category = expense.category || 'Sonstiges';
             let lineNumber = getEURLineForCategory(category);
 
-            // Calculate deductible amount (considering tax deductible percentage and depreciation)
-            let deductibleAmount = expense.amount;
-
-            // Apply tax deductible percentage if set
-            if (expense.taxDeductiblePercentage !== null && expense.taxDeductiblePercentage !== undefined) {
-                deductibleAmount = expense.amount * (expense.taxDeductiblePercentage / 100);
-            }
-
-            // Handle depreciation (AfA)
-            if (expense.depreciationYears && expense.depreciationYears > 0) {
-                const expenseYear = new Date(expense.date).getFullYear();
-                const endYear = expenseYear + expense.depreciationYears;
-
-                if (year >= expenseYear && year < endYear) {
-                    const yearlyDepreciation = expense.amount / expense.depreciationYears;
-
-                    if (year === expenseYear) {
-                        // Pro-rata for first year
-                        const expenseDate = new Date(expense.date);
-                        const monthsLeft = 12 - expenseDate.getMonth();
-                        deductibleAmount = (yearlyDepreciation / 12) * monthsLeft;
-                    } else {
-                        deductibleAmount = yearlyDepreciation;
-                    }
-
-                    // Set AfA line number for depreciation items
-                    lineNumber = 31; // AfA line
-                } else {
-                    // Not deductible in this year
-                    deductibleAmount = 0;
-                }
+            const deductibleAmount = calculateExpenseDeductionForYear(expense, year);
+            if ((expense.depreciationYears ?? 0) > 0 && deductibleAmount !== 0) {
+                lineNumber = 31; // AfA line
             }
 
             if (deductibleAmount > 0) {

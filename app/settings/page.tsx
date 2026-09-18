@@ -59,7 +59,7 @@ export default function SettingsPage() {
   const [backupLoading, setBackupLoading] = useState(false);
   const [fullBackupLoading, setFullBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
-  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error' | 'warning', text: string } | null>(null);
   const [overwriteMode, setOverwriteMode] = useState(false);
   const [restorePreview, setRestorePreview] = useState<RestorePreview | null>(null);
   const fullFileInputRef = useRef<HTMLInputElement>(null);
@@ -246,7 +246,8 @@ export default function SettingsPage() {
         document.body.removeChild(a);
         setBackupMessage({ type: 'success', text: 'Vollständiges Backup (inkl. Dateien) erfolgreich heruntergeladen!' });
       } else {
-        setBackupMessage({ type: 'error', text: 'Vollständiges Backup fehlgeschlagen.' });
+        const data = await res.json().catch(() => null);
+        setBackupMessage({ type: 'error', text: data?.error || 'Vollständiges Backup fehlgeschlagen.' });
       }
     } catch (error) {
       console.error("Full backup error:", error);
@@ -357,7 +358,7 @@ export default function SettingsPage() {
     try {
       if (restorePreview.kind === 'json') {
         const backup = restorePreview.backup as Record<string, unknown>;
-        const payload = overwriteMode ? { ...backup, confirmOverwrite: true } : backup;
+        const payload = { ...backup, confirmOverwrite: overwriteMode };
         const res = await fetch("/api/backup/restore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -370,9 +371,11 @@ export default function SettingsPage() {
         }
         const { results } = data;
         const modeText = results.overwriteMode ? ' (Daten wurden überschrieben)' : '';
+        const warnings: string[] = Array.isArray(results.warnings) ? results.warnings : [];
+        const warningText = warnings.length ? ` Hinweise: ${warnings.slice(0, 5).join(' ')}${warnings.length > 5 ? ` Weitere ${warnings.length - 5} Hinweise.` : ''}` : '';
         setBackupMessage({
-          type: 'success',
-          text: `Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen.`
+          type: warnings.length ? 'warning' : 'success',
+          text: `Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen.${warningText}`
         });
       } else if (restorePreview.file) {
         const formData = new FormData();
@@ -391,9 +394,11 @@ export default function SettingsPage() {
         }
         const { results } = data;
         const modeText = results.overwriteMode ? ' (Daten wurden überschrieben)' : '';
+        const warnings: string[] = Array.isArray(results.warnings) ? results.warnings : [];
+        const warningText = warnings.length ? ` Hinweise: ${warnings.slice(0, 5).join(' ')}${warnings.length > 5 ? ` Weitere ${warnings.length - 5} Hinweise.` : ''}` : '';
         setBackupMessage({
-          type: 'success',
-          text: `Vollständige Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen, ${results.files.imported} Dateien.`
+          type: warnings.length ? 'warning' : 'success',
+          text: `Vollständige Wiederherstellung erfolgreich${modeText}! Importiert: ${results.customers.imported} Kunden, ${results.expenses.imported} Ausgaben, ${results.incomes.imported} Einnahmen, ${results.invoices.imported} Rechnungen, ${results.files.imported} Dateien.${warningText}`
         });
       }
 
@@ -661,12 +666,12 @@ export default function SettingsPage() {
         <CardContent className="space-y-6">
           {backupMessage && (
             <Alert variant={backupMessage.type === 'error' ? 'destructive' : 'default'}>
-              {backupMessage.type === 'error' ? (
+              {backupMessage.type !== 'success' ? (
                 <AlertTriangle className="h-4 w-4" />
               ) : (
                 <Database className="h-4 w-4" />
               )}
-              <AlertTitle>{backupMessage.type === 'error' ? 'Fehler' : 'Erfolg'}</AlertTitle>
+              <AlertTitle>{backupMessage.type === 'error' ? 'Fehler' : backupMessage.type === 'warning' ? 'Wiederherstellung mit Hinweisen' : 'Erfolg'}</AlertTitle>
               <AlertDescription>{backupMessage.text}</AlertDescription>
             </Alert>
           )}

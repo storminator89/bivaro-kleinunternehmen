@@ -532,7 +532,7 @@ export default function CashBookPage() {
                     </Card>
 
                     {/* Current Balance */}
-                    <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-200 dark:border-green-800">
+                    <Card className="border-positive/40 bg-positive-surface">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                                 <PiggyBank className="h-4 w-4" />

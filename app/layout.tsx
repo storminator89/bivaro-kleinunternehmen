@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import AuthProvider from "@/components/auth/auth-provider";
@@ -18,6 +18,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+  style: "normal",
+  weight: ["500", "600"],
+});
+
 export const metadata: Metadata = {
   title: "Bivaro – Rechnungen und Belege im Griff",
   description: "Eine einfache Buchhaltungsanwendung für Kleinunternehmer",
@@ -31,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="de" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background`}
+        className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} min-h-screen bg-background antialiased`}
       >
         <AuthProvider>
           <ThemeProvider

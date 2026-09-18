@@ -3,7 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import fs from 'fs';
 import JSZip from 'jszip';
-import { findUploadedFile } from '@/lib/upload-path';
+import { loadZipWithinLimits, ZipResourceLimitError } from '@/lib/zip-limits';
+import { MAX_BACKUP_ZIP_ENTRIES, MAX_BACKUP_ZIP_ENTRY_BYTES, MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES } from '@/lib/resource-limits';
+import { isSafeLegacyFileName, isSafeStoredFileName } from '@/lib/upload-path';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import { auditSecurityEvent } from '@/lib/audit-log';
 
 // GET: Export all user data as ZIP including files
@@ -45,18 +48,7 @@ export async function GET() {
       prisma.apiKey.findMany({ where: { userId }, select: { id: true, name: true, keyPrefix: true, scopes: true, isActive: true, expiresAt: true, createdAt: true } }),
     ]);
 
-    await auditSecurityEvent(userId, {
-      event: 'FULL_BACKUP_EXPORT',
-      outcome: 'success',
-      severity: 'info',
-      metadata: {
-        backupType: 'full',
-        expensesCount: expenses.length,
-        incomesCount: incomes.length,
-        invoicesCount: invoices.length,
-        customersCount: customers.length,
-      },
-    });
+
 
     // Create backup metadata
     const backup = {
@@ -134,43 +126,72 @@ export async function GET() {
 
     // Create ZIP archive
     const zip = new JSZip();
+    const missingFiles: string[] = [];
 
     // Add JSON backup
-    zip.file('backup.json', JSON.stringify(backup, null, 2));
+    const metadata = JSON.stringify(backup, null, 2);
+    let totalBytes = Buffer.byteLength(metadata);
+    let fileCount = 1;
+    if (totalBytes > MAX_BACKUP_ZIP_ENTRY_BYTES) throw new ZipResourceLimitError('Backup-Metadaten überschreiten die Wiederherstellungsgrenze');
+    zip.file('backup.json', metadata);
 
-    // Add invoice PDFs
-    for (const invoice of invoices) {
-      if (invoice.storedFileName) {
-        const filePath = findUploadedFile(invoice.storedFileName);
-        if (filePath && fs.existsSync(filePath)) {
-          const fileContent = fs.readFileSync(filePath);
-          zip.file(`invoices/${invoice.storedFileName}`, fileContent);
-        }
+    const addOwnedFile = async (kind: 'invoices' | 'receipts' | 'logos', storedName: string | null | undefined) => {
+      if (!storedName || !(isSafeStoredFileName(storedName) || isSafeLegacyFileName(storedName))) {
+        missingFiles.push(`${kind}/${storedName || '(leer)'}`);
+        return;
       }
+      if (zip.file(`${kind}/${storedName}`)) return;
+      const filePath = await findOwnedUploadedFile(userId, storedName);
+      if (!filePath) {
+        missingFiles.push(`${kind}/${storedName}`);
+        return;
+      }
+      try {
+        const size = (await fs.promises.stat(filePath)).size;
+        // Reserve room for the three directory entries JSZip adds automatically.
+        if (size > MAX_BACKUP_ZIP_ENTRY_BYTES || totalBytes + size > MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES || fileCount + 4 > MAX_BACKUP_ZIP_ENTRIES) {
+          throw new ZipResourceLimitError('Der Datenbestand überschreitet die Größenlimits des vollständigen Backups');
+        }
+        totalBytes += size;
+        fileCount++;
+        const fileContent = await fs.promises.readFile(filePath);
+        zip.file(`${kind}/${storedName}`, fileContent);
+      } catch (error) {
+        if (error instanceof ZipResourceLimitError) throw error;
+        missingFiles.push(`${kind}/${storedName}`);
+      }
+    };
+
+    // Add invoice PDFs. A full archive must fail visibly if a referenced file
+    // cannot be read; otherwise a later restore could only create a broken
+    // invoice record.
+    for (const invoice of invoices) {
+      await addOwnedFile('invoices', invoice.storedFileName);
     }
 
     // Add expense receipts
     for (const expense of expenses) {
-      if (expense.storedReceiptFileName) {
-        const filePath = findUploadedFile(expense.storedReceiptFileName);
-        if (filePath && fs.existsSync(filePath)) {
-          const fileContent = fs.readFileSync(filePath);
-          zip.file(`receipts/${expense.storedReceiptFileName}`, fileContent);
-        }
-      }
+      if (expense.storedReceiptFileName) await addOwnedFile('receipts', expense.storedReceiptFileName);
     }
 
     // Add logo if exists
     if (settings?.logoUrl) {
       const logoMatch = settings.logoUrl.match(/(?:file=|\/uploads\/)(.+?)(?:$|&)/);
       if (logoMatch) {
-        const logoFileName = logoMatch[1];
-        const logoPath = findUploadedFile(logoFileName);
-        if (logoPath && fs.existsSync(logoPath)) {
-          const fileContent = fs.readFileSync(logoPath);
-          zip.file(`logos/${logoFileName}`, fileContent);
-        }
+        let logoFileName: string | null = null;
+        try { logoFileName = decodeURIComponent(logoMatch[1]); } catch { /* reported below */ }
+        await addOwnedFile('logos', logoFileName);
+      } else {
+        missingFiles.push('logos/(ungültige Referenz)');
       }
+    }
+
+    if (missingFiles.length > 0) {
+      return NextResponse.json({
+        error: 'Vollständiges Backup nicht möglich: referenzierte Dateien fehlen oder sind nicht zugreifbar.',
+        missingFiles: missingFiles.slice(0, 100),
+        missingCount: missingFiles.length,
+      }, { status: 409 });
     }
 
     // Generate ZIP buffer
@@ -178,6 +199,22 @@ export async function GET() {
       type: 'nodebuffer',
       compression: 'DEFLATE',
       compressionOptions: { level: 9 }
+    });
+
+    // Never emit an archive that our own restore endpoint would reject.
+    await loadZipWithinLimits(zipBuffer);
+
+    await auditSecurityEvent(userId, {
+      event: 'FULL_BACKUP_EXPORT',
+      outcome: 'success',
+      severity: 'info',
+      metadata: {
+        backupType: 'full',
+        expensesCount: expenses.length,
+        incomesCount: incomes.length,
+        invoicesCount: invoices.length,
+        customersCount: customers.length,
+      },
     });
 
     const filename = `bivaro-full-backup-${new Date().toISOString().split('T')[0]}.zip`;
@@ -194,6 +231,7 @@ export async function GET() {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof ZipResourceLimitError) return NextResponse.json({ error: error.message }, { status: 413 });
     console.error('Full backup error:', error);
     return NextResponse.json({ error: 'Vollständiges Backup fehlgeschlagen' }, { status: 500 });
   }

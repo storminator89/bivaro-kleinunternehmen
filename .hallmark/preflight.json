@@ -1,0 +1,10 @@
+{
+  "scanned_at": "2026-07-31",
+  "framework": "Next.js 16 App Router",
+  "styling": "Tailwind CSS 4 with shadcn/Radix primitives",
+  "fonts": ["Geist", "Geist Mono", "Newsreader (marketing only)"],
+  "palette": "Custom Bivaro Mineral OKLCH tokens in tokens.css: warm porcelain, mineral petrol, semantic status colors",
+  "motion": "motion-cut; functional property transitions with reduced-motion fallback",
+  "spacing": "Named 4-point scale in tokens.css",
+  "design_system": "design.md"
+}

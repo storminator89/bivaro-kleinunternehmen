@@ -3,7 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { findUploadedFile } from '@/lib/upload-path';
+import { findOwnedUploadedFile } from '@/lib/upload-ownership';
+
+function safeDownloadName(value: string | null | undefined): string {
+  return path.basename(value || 'beleg')
+    .replace(/[\r\n]/gu, '_')
+    .replace(/[^A-Za-z0-9._-]/gu, '_') || 'beleg';
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,11 +44,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Sanitize filename - prevent path traversal
-    const sanitizedFileName = path.basename(expense.storedReceiptFileName);
-
-    // Find file in new or legacy location
-    const filePath = findUploadedFile(sanitizedFileName);
+    // Resolve only through the current tenant's private directory, with a
+    // guarded legacy fallback that checks all DB references for ownership.
+    const filePath = await findOwnedUploadedFile(userId, expense.storedReceiptFileName);
 
     if (!filePath) {
       return NextResponse.json(
@@ -67,7 +71,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Dateiname für den Download - verwende den ursprünglichen Dateinamen wenn verfügbar
-    const downloadFilename = expense.receiptFileName || expense.storedReceiptFileName;
+    const downloadFilename = safeDownloadName(expense.receiptFileName || expense.storedReceiptFileName);
 
     // Response mit Datei und korrekten Headers
     const headers: HeadersInit = {

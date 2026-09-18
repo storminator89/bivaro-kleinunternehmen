@@ -5,18 +5,20 @@ import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
+  const isDark = resolvedTheme === "dark"
 
   return (
     <Button
       variant="outline"
       size="icon"
-      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-      aria-label="Toggle theme"
-      className="rounded-full h-8 w-8"
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      aria-label={isDark ? "Helles Farbschema aktivieren" : "Dunkles Farbschema aktivieren"}
+      title={isDark ? "Helles Farbschema" : "Dunkles Farbschema"}
+      className="relative rounded-full"
     >
-      <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      <Sun className="size-5 rotate-0 opacity-100 transition-[opacity,transform] duration-150 dark:-rotate-90 dark:opacity-0" />
+      <Moon className="absolute size-5 rotate-90 opacity-0 transition-[opacity,transform] duration-150 dark:rotate-0 dark:opacity-100" />
     </Button>
   )
 }

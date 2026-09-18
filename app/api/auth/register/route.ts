@@ -1,152 +1,116 @@
-import { NextResponse, NextRequest } from "next/server";
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from "next/server";
 import { validatePassword, isValidEmail, sanitizeString } from "@/lib/security";
 import { hashPassword } from "@/lib/password";
 import { auditSecurityEvent } from "@/lib/audit-log";
+import {
+  registerUserAtomically,
+  RegistrationClosedError,
+  RegistrationEmailTakenError,
+} from "@/lib/auth-registration";
+import { consumeRateLimit, getTrustedClientIp } from "@/lib/rate-limit";
 
-// Rate limiting for registration
-const registrationAttempts = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_REGISTRATION_ATTEMPTS = 5;
-
-function getClientIP(request: NextRequest): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-         request.headers.get('x-real-ip') || 
-         'unknown';
-}
-
-function checkRegistrationRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = registrationAttempts.get(ip);
-  
-  if (!record || now > record.resetTime) {
-    registrationAttempts.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  
-  if (record.count >= MAX_REGISTRATION_ATTEMPTS) {
-    return false;
-  }
-  
-  record.count++;
-  return true;
-}
+const REGISTRATION_RATE_LIMIT = {
+  limit: 5,
+  windowMs: 15 * 60 * 1000,
+  blockMs: 30 * 60 * 1000,
+};
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting
-    const clientIP = getClientIP(request);
-    if (!checkRegistrationRateLimit(clientIP)) {
+    const clientIp = getTrustedClientIp(request.headers);
+    const rateLimit = await consumeRateLimit(
+      `registration:ip:${clientIp}`,
+      REGISTRATION_RATE_LIMIT,
+    );
+    if (!rateLimit.allowed) {
       return NextResponse.json(
-        { message: "Zu viele Registrierungsversuche. Bitte versuchen Sie es später erneut." },
-        { status: 429 }
+        {
+          message: "Zu viele Registrierungsversuche. Bitte versuchen Sie es später erneut.",
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        },
       );
     }
 
-    const { name, email, password } = await request.json();
+    const body = await request.json();
+    const rawEmail = typeof body?.email === "string" ? body.email : "";
+    const password = typeof body?.password === "string" ? body.password : "";
+    const name = typeof body?.name === "string" ? body.name : "";
+    const email = rawEmail.trim().toLowerCase();
 
-    // Validation
     if (!email || !password) {
       return NextResponse.json(
         { message: "Email und Passwort sind erforderlich" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Email validation
     if (!isValidEmail(email)) {
       return NextResponse.json(
         { message: "Ungültige E-Mail-Adresse" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Password strength validation
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
       return NextResponse.json(
         { message: passwordValidation.message },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Sanitize name
-    const sanitizedName = sanitizeString(name || '', 100);
-
-    // Prüfen ob überhaupt User existieren
-    const userCount = await prisma.user.count();
-    const isFirstUser = userCount === 0;
-
-    // Wenn nicht der erste User, prüfe ob Registrierung erlaubt ist
-    if (!isFirstUser) {
-      const appSettings = await prisma.appSettings.findFirst();
-      if (appSettings && !appSettings.allowRegistration) {
-        return NextResponse.json(
-          { message: "Registrierung ist deaktiviert" },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+    // bcrypt is intentionally outside the short transaction.  The transaction
+    // re-checks bootstrap state and the unique email immediately before insert.
+    const passwordHash = await hashPassword(password);
+    const result = await registerUserAtomically({
+      email,
+      name: sanitizeString(name, 100) || null,
+      passwordHash,
     });
 
-    if (existingUser) {
-      return NextResponse.json(
-        { message: "E-Mail wird bereits verwendet" },
-        { status: 409 }
-      );
-    }
-
-    const hashedPassword = await hashPassword(password);
-
-    // Create user - erster User wird automatisch ADMIN
-    const user = await prisma.user.create({
-      data: {
-        name: sanitizedName || null,
-        email: email.toLowerCase().trim(),
-        password: hashedPassword,
-        role: isFirstUser ? "ADMIN" : "USER",
-      },
-    });
-    await auditSecurityEvent(user.id, {
-      event: 'AUTH_REGISTRATION',
-      outcome: 'success',
-      severity: isFirstUser ? 'warning' : 'info',
+    await auditSecurityEvent(result.user.id, {
+      event: "AUTH_REGISTRATION",
+      outcome: "success",
+      severity: result.firstUser ? "warning" : "info",
       metadata: {
-        firstUser: isFirstUser,
-        role: user.role,
+        firstUser: result.firstUser,
+        role: result.user.role,
       },
     });
 
-    // Wenn erster User, erstelle AppSettings mit deaktivierter Registrierung
-    if (isFirstUser) {
-      await prisma.appSettings.create({
-        data: {
-          allowRegistration: false,
-        },
-      });
-    }
-
-    // Return the user without password
-    const { password: _, ...userWithoutPassword } = user;
-    
+    const { sessionVersion: _sessionVersion, ...publicUser } = result.user;
     return NextResponse.json(
-      { 
-        message: isFirstUser 
-          ? "Admin-Konto erfolgreich erstellt" 
-          : "Registrierung erfolgreich", 
-        user: userWithoutPassword 
+      {
+        message: result.firstUser
+          ? "Admin-Konto erfolgreich erstellt"
+          : "Registrierung erfolgreich",
+        user: publicUser,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
+    if (error instanceof RegistrationClosedError) {
+      return NextResponse.json(
+        { message: error.message },
+        { status: 403 },
+      );
+    }
+
+    if (error instanceof RegistrationEmailTakenError) {
+      return NextResponse.json(
+        { message: error.message },
+        { status: 409 },
+      );
+    }
+
     console.error("Registration error:", error);
     return NextResponse.json(
       { message: "Ein Fehler ist bei der Registrierung aufgetreten" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

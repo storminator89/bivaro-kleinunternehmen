@@ -1,3 +1,4 @@
+import { privateLogoUrl } from '@/lib/upload-path';
 /**
  * API v1 - Settings Endpoint (Read-Only)
  * 
@@ -17,8 +18,8 @@ import {
   corsHeaders,
 } from '@/lib/api-auth';
 
-export async function OPTIONS() {
-  return handleCors();
+export async function OPTIONS(request: NextRequest) {
+  return handleCors(request);
 }
 
 // GET /api/v1/settings
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
     // Mask sensitive data partially
     const maskedSettings = {
       ...settings,
+      logoUrl: privateLogoUrl(settings.logoUrl),
       // Show only last 4 digits of IBAN if present
       iban: settings.iban 
         ? `****${settings.iban.slice(-4)}` 

@@ -8,12 +8,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { consumeRateLimit } from '@/lib/rate-limit';
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 100; // max requests per window
 
-// In-memory rate limit store (in production, use Redis)
+// Compatibility helper for callers of checkRateLimit; authenticated requests use the shared database limiter.
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
 /**
@@ -45,6 +46,7 @@ export async function validateApiKey(apiKey: string): Promise<{
   userId?: string;
   apiKeyId?: number;
   scopes?: string[];
+  lastUsedAt?: Date | null;
   error?: string;
 }> {
   if (!apiKey || !apiKey.startsWith('biv_sk_')) {
@@ -56,11 +58,15 @@ export async function validateApiKey(apiKey: string): Promise<{
   try {
     const apiKeyRecord = await prisma.apiKey.findUnique({
       where: { keyHash },
-      include: { user: true },
+      include: { user: { select: { role: true } } },
     });
 
     if (!apiKeyRecord) {
       return { valid: false, error: 'API key not found' };
+    }
+
+    if (!['USER', 'ADMIN'].includes(apiKeyRecord.user.role)) {
+      return { valid: false, error: 'Account is not active' };
     }
 
     if (!apiKeyRecord.isActive) {
@@ -71,17 +77,16 @@ export async function validateApiKey(apiKey: string): Promise<{
       return { valid: false, error: 'API key has expired' };
     }
 
-    // Update last used timestamp
-    await prisma.apiKey.update({
-      where: { id: apiKeyRecord.id },
-      data: { lastUsedAt: new Date() },
-    });
-
+    const scopes: unknown = apiKeyRecord.scopes ? JSON.parse(apiKeyRecord.scopes) : ['read', 'write'];
+    if (!Array.isArray(scopes) || !scopes.every(scope => typeof scope === 'string')) {
+      return { valid: false, error: 'Invalid API key permissions' };
+    }
     return {
       valid: true,
       userId: apiKeyRecord.userId,
       apiKeyId: apiKeyRecord.id,
-      scopes: apiKeyRecord.scopes ? JSON.parse(apiKeyRecord.scopes) : ['read', 'write'],
+      scopes,
+      lastUsedAt: apiKeyRecord.lastUsedAt,
     };
   } catch (error) {
     console.error('Error validating API key:', error);
@@ -99,6 +104,10 @@ export function checkRateLimit(apiKeyId: number): {
 } {
   const now = Date.now();
   const key = `api_key_${apiKeyId}`;
+  if (rateLimitStore.size >= 10000) {
+    for (const [storedKey, value] of rateLimitStore) if (value.resetTime <= now) rateLimitStore.delete(storedKey);
+    if (rateLimitStore.size >= 10000 && !rateLimitStore.has(key)) return { allowed: false, remaining: 0, resetTime: now + RATE_LIMIT_WINDOW_MS };
+  }
   const record = rateLimitStore.get(key);
 
   if (!record || now > record.resetTime) {
@@ -252,7 +261,8 @@ export async function withApiAuth(
   }
 
   // Check rate limit
-  const rateLimit = checkRateLimit(validation.apiKeyId);
+  const sharedLimit = await consumeRateLimit(`api:${validation.apiKeyId}`, { limit: RATE_LIMIT_MAX_REQUESTS, windowMs: RATE_LIMIT_WINDOW_MS, blockMs: RATE_LIMIT_WINDOW_MS });
+  const rateLimit = { ...sharedLimit, resetTime: Date.now() + sharedLimit.retryAfterSeconds * 1000 };
   if (!rateLimit.allowed) {
     const response = apiError('Rate limit exceeded', 429, 'RATE_LIMIT_EXCEEDED');
     response.headers.set('X-RateLimit-Limit', RATE_LIMIT_MAX_REQUESTS.toString());
@@ -271,6 +281,17 @@ export async function withApiAuth(
     }
   }
 
+  // Bearer credentials are explicit; reject disallowed browser origins before mutation.
+  const requestOrigin = request.headers.get('origin');
+  if (requestOrigin && !(await getAllowedOriginsForUser(validation.userId)).includes(requestOrigin)) {
+    return apiError('Origin is not allowed for this API key', 403, 'ORIGIN_NOT_ALLOWED');
+  }
+  // Coalesce last-used writes and do not write at all for rate-limited requests.
+  if (!validation.lastUsedAt || validation.lastUsedAt.getTime() < Date.now() - 60_000) await prisma.apiKey.updateMany({
+    where: { id: validation.apiKeyId, OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: new Date(Date.now() - 60_000) } }] },
+    data: { lastUsedAt: new Date() },
+  });
+
   // Execute handler
   let response: NextResponse | Response;
   try {
@@ -281,7 +302,9 @@ export async function withApiAuth(
     });
   } catch (error) {
     console.error('API handler error:', error);
-    response = apiError('Internal server error', 500, 'INTERNAL_ERROR');
+    response = error && typeof error === 'object' && 'code' in error && error.code === 'P2025'
+      ? apiError('Record changed or is linked to another booking. Reload before retrying.', 409, 'CONFLICT')
+      : apiError('Internal server error', 500, 'INTERNAL_ERROR');
   }
 
   // Add rate limit headers
@@ -354,6 +377,11 @@ export async function getAllowedOriginsForUser(userId: string): Promise<string[]
       }
     }
 
+    // Bound stale per-user cache entries without retaining an unbounded tenant map.
+    if (corsOriginsCache.size >= 1000) {
+      for (const [key, value] of corsOriginsCache) if (value.expiresAt <= Date.now()) corsOriginsCache.delete(key);
+      if (corsOriginsCache.size >= 1000) corsOriginsCache.delete(corsOriginsCache.keys().next().value!);
+    }
     // Update cache
     corsOriginsCache.set(userId, {
       origins: userOrigins,
@@ -378,59 +406,41 @@ export function clearCorsCache(userId: string): void {
  * CORS headers for API responses (synchronous, for unauthenticated requests)
  * For authenticated requests, use corsHeadersForUser
  */
-export function corsHeaders(request?: NextRequest): HeadersInit {
-  let origin = '';
-  if (request) {
-    const requestOrigin = request.headers.get('origin');
-    if (requestOrigin && DEFAULT_ALLOWED_ORIGINS.includes(requestOrigin)) {
-      origin = requestOrigin;
-    } else if (process.env.NODE_ENV !== 'production') {
-      // In development, be more permissive for unauthenticated CORS preflight
-      origin = requestOrigin || '*';
-    }
-  }
-
+export function corsHeaders(request?: NextRequest): Record<string, string> {
+  const origin = request?.headers.get('origin');
   return {
-    'Access-Control-Allow-Origin': origin || (process.env.NODE_ENV === 'production' ? '' : '*'),
+    ...(origin && DEFAULT_ALLOWED_ORIGINS.includes(origin) ? { 'Access-Control-Allow-Origin': origin } : {}),
+    'Vary': 'Origin',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
-    'Access-Control-Max-Age': '86400',
-    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '300',
   };
 }
 
-/**
- * CORS headers for authenticated API responses (async, checks user-specific origins)
- */
 export async function corsHeadersForUser(request: NextRequest, userId: string): Promise<HeadersInit> {
-  const requestOrigin = request.headers.get('origin');
-  let allowedOrigin = '';
-
-  if (requestOrigin) {
-    const allowedOrigins = await getAllowedOriginsForUser(userId);
-    if (allowedOrigins.includes(requestOrigin)) {
-      allowedOrigin = requestOrigin;
-    } else if (process.env.NODE_ENV !== 'production') {
-      // In development, allow all origins
-      allowedOrigin = requestOrigin;
-    }
-  }
-
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin || '',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
-    'Access-Control-Max-Age': '86400',
-    'Access-Control-Allow-Credentials': 'true',
-  };
+  const origin = request.headers.get('origin');
+  const allowed = origin && (await getAllowedOriginsForUser(userId)).includes(origin);
+  return { ...corsHeaders(), ...(allowed ? { 'Access-Control-Allow-Origin': origin } : {}) };
 }
 
 /**
- * Handle OPTIONS request for CORS
+ * OPTIONS carries no bearer key, so it cannot identify a tenant. Allow the
+ * transport preflight; the authenticated request enforces that tenant's origins
+ * before executing the handler. Cookie credentials are never enabled here.
  */
-export function handleCors(): NextResponse {
-  return new NextResponse(null, {
-    status: 204,
-    headers: corsHeaders(),
-  });
+export function handleCors(request?: NextRequest): NextResponse {
+  const origin = request?.headers.get('origin');
+  if (!origin) return new NextResponse(null, { status: 204, headers: corsHeaders() });
+  try {
+    const parsed = new URL(origin);
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin) throw new Error('Invalid origin');
+  } catch {
+    return new NextResponse(null, { status: 400 });
+  }
+  const method = request?.headers.get('access-control-request-method');
+  const headers = request?.headers.get('access-control-request-headers')?.split(',').map(value => value.trim().toLowerCase()) ?? [];
+  if ((method && !['GET', 'POST', 'PUT', 'DELETE'].includes(method)) || headers.some(value => !['content-type', 'authorization', 'x-api-key'].includes(value))) {
+    return new NextResponse(null, { status: 403 });
+  }
+  return new NextResponse(null, { status: 204, headers: { ...corsHeaders(), 'Access-Control-Allow-Origin': origin } });
 }

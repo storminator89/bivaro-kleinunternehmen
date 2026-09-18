@@ -1,9 +1,14 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { writeFile } from 'fs/promises';
-import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
+import { writeTenantFile } from '@/lib/upload-path';
+import {
+  isRequestBodyWithinLimit,
+  readRequestBodyWithinLimit,
+  requestWithBody,
+  RequestBodyLimitError,
+  MAX_LOGO_UPLOAD_BYTES,
+} from '@/lib/resource-limits';
 
 // Maximum file size: 10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -11,9 +16,13 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 export async function POST(request: NextRequest) {
   try {
     // Authentication check
-    const _userId = await requireUserId();
+    const userId = await requireUserId();
+    if (!isRequestBodyWithinLimit(request, MAX_LOGO_UPLOAD_BYTES + 128 * 1024)) {
+      return NextResponse.json({ error: 'Anfrage ist zu groß' }, { status: 413 });
+    }
 
-    const formData = await request.formData();
+    const boundedBody = await readRequestBodyWithinLimit(request, MAX_LOGO_UPLOAD_BYTES + 128 * 1024);
+    const formData = await requestWithBody(request, boundedBody).formData();
     const file = formData.get('file') as File | null;
 
     if (!file) {
@@ -25,6 +34,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Datei ist zu groß. Maximale Größe: 10MB' },
         { status: 400 }
+      );
+    }
+
+    if (file.size > MAX_LOGO_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: 'Datei ist zu groß' },
+        { status: 413 }
       );
     }
 
@@ -40,26 +56,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Sanitize filename - only allow safe characters
-    const safeExtension = fileExtension.replace(/[^a-z.]/g, '');
-
-    // Generiere einen eindeutigen Dateinamen für die dauerhafte Speicherung
-    const uniqueFileName = `logo_${uuidv4()}${safeExtension}`;
-    ensureUploadDirExists();
-    const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
-
-    // Write file directly to permanent location
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(permanentFilePath, buffer);
+    if (bytes.byteLength > MAX_LOGO_UPLOAD_BYTES) {
+      return NextResponse.json({ error: 'Datei ist zu groß' }, { status: 413 });
+    }
+    const storedFileName = await writeTenantFile(userId, file.name, new Uint8Array(bytes));
 
     // Return API URL for serving logo (not direct file path)
-    const logoUrl = `/api/files/logo?file=${uniqueFileName}`;
+    const logoUrl = `/api/files/logo?file=${encodeURIComponent(storedFileName)}`;
     return NextResponse.json({ url: logoUrl });
 
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof RequestBodyLimitError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('Fehler beim Hochladen des Logos:', error);
     return NextResponse.json(

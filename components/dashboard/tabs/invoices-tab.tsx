@@ -87,12 +87,12 @@ export function InvoicesTab({
   return (
     <div className="space-y-6">
       {/* Upload Form */}
-      <div className="bg-card rounded-xl shadow-sm border overflow-hidden transition-all duration-300 hover:shadow-md">
-        <div className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-blue-50/50 to-blue-50/30 dark:from-blue-900/10 dark:to-blue-900/5">
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="border-b bg-muted/20 px-6 pb-4 pt-6">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
             <div>
               <h2 className="text-xl font-semibold mb-1 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5 text-notice" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 9.414V19a2 2 0 01-2 2z" />
                 </svg>
                 E-Rechnung hochladen
@@ -221,6 +221,8 @@ export function InvoicesTab({
                 />
                 {filters.searchTerm && (
                   <button
+                    type="button"
+                    aria-label="Suche leeren"
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     onClick={() => setFilters({ ...filters, searchTerm: '' })}
                   >
@@ -236,59 +238,84 @@ export function InvoicesTab({
 
         {/* Invoices Table */}
         <div className="overflow-hidden">
-          <div className="overflow-x-auto p-6">
+          <div className="divide-y lg:hidden" aria-label="Rechnungsliste">
+            {invoices.length > 0 ? invoices.map((invoice) => (
+              <article key={invoice.id} className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold">{invoice.invoiceNumber || invoice.fileName}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE') : new Date(invoice.uploadedAt).toLocaleDateString('de-DE')}
+                    </p>
+                  </div>
+                  <p className="shrink-0 font-semibold tabular-nums">{invoice.totalAmount ? formatCurrency(invoice.totalAmount) : '–'}</p>
+                </div>
+                <StatusBadge status={invoice.status} onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)} />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => onOpenDetails(invoice)}><Eye className="h-4 w-4" />Details</Button>
+                  {invoice.hasPdfFile !== false && (
+                    <Button variant="outline" size="sm" className="min-h-11" onClick={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}><FileText className="h-4 w-4" />PDF</Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={isDeleting} onClick={() => onDelete(invoice.id)}>Löschen</Button>
+                </div>
+              </article>
+            )) : (
+              <p className="p-6 text-center text-sm text-muted-foreground">Keine Rechnungen vorhanden. Erstellen oder laden Sie oben Ihre erste Rechnung hoch.</p>
+            )}
+          </div>
+          <div className="hidden overflow-x-auto p-6 lg:block">
             <Table>
               <TableCaption>Alle hochgeladenen Rechnungen</TableCaption>
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead
-                    className="font-medium cursor-pointer hover:bg-muted select-none"
-                    onClick={() => {
+                    className="font-medium"
+                    aria-sort={filters.sortBy === 'date' ? (filters.sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button type="button" className="flex min-h-11 items-center gap-1 rounded px-1 hover:bg-muted" onClick={() => {
                       const newOrder = filters.sortBy === 'date' && filters.sortOrder === 'desc' ? 'asc' : 'desc';
                       setFilters({ ...filters, sortBy: 'date', sortOrder: newOrder });
-                    }}
-                  >
-                    <span className="flex items-center gap-1">
+                    }}>
                       Datum
                       {filters.sortBy === 'date' && (
                         <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${filters.sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       )}
-                    </span>
+                    </button>
                   </TableHead>
                   <TableHead
-                    className="font-medium cursor-pointer hover:bg-muted select-none"
-                    onClick={() => {
+                    className="font-medium"
+                    aria-sort={filters.sortBy === 'invoiceNumber' ? (filters.sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button type="button" className="flex min-h-11 items-center gap-1 rounded px-1 hover:bg-muted" onClick={() => {
                       const newOrder = filters.sortBy === 'invoiceNumber' && filters.sortOrder === 'desc' ? 'asc' : 'desc';
                       setFilters({ ...filters, sortBy: 'invoiceNumber', sortOrder: newOrder });
-                    }}
-                  >
-                    <span className="flex items-center gap-1">
+                    }}>
                       Rechnungsnummer
                       {filters.sortBy === 'invoiceNumber' && (
                         <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${filters.sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       )}
-                    </span>
+                    </button>
                   </TableHead>
                   <TableHead className="font-medium">Dateiname</TableHead>
                   <TableHead
-                    className="text-right font-medium cursor-pointer hover:bg-muted select-none"
-                    onClick={() => {
+                    className="text-right font-medium"
+                    aria-sort={filters.sortBy === 'amount' ? (filters.sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button type="button" className="ml-auto flex min-h-11 items-center justify-end gap-1 rounded px-1 hover:bg-muted" onClick={() => {
                       const newOrder = filters.sortBy === 'amount' && filters.sortOrder === 'desc' ? 'asc' : 'desc';
                       setFilters({ ...filters, sortBy: 'amount', sortOrder: newOrder });
-                    }}
-                  >
-                    <span className="flex items-center justify-end gap-1">
+                    }}>
                       Betrag
                       {filters.sortBy === 'amount' && (
                         <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${filters.sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       )}
-                    </span>
+                    </button>
                   </TableHead>
                   <TableHead className="text-center font-medium">Status</TableHead>
                   <TableHead className="text-right font-medium">Aktionen</TableHead>
@@ -309,7 +336,7 @@ export function InvoicesTab({
                       </TableCell>
                       <TableCell className="text-muted-foreground max-w-[200px] truncate">
                         <div className="flex items-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="mr-1.5 h-4 w-4 text-critical" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                           {invoice.fileName}
@@ -367,7 +394,7 @@ export function InvoicesTab({
                                 disabled={invoice.status === 'CANCELLED'}
                                 onSelect={() => setEmailInvoice(invoice)}
                               >
-                                <Mail className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                <Mail className="h-4 w-4 text-notice" />
                                 Per E-Mail senden
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
@@ -386,7 +413,7 @@ export function InvoicesTab({
                                     window.open(`/api/invoices/download?id=${invoice.id}&format=xml&download=true`, 'E-Rechnung XML Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
                                   }}
                                 >
-                                  <FileCode2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                  <FileCode2 className="h-4 w-4 text-positive" />
                                   XML herunterladen
                                 </DropdownMenuItem>
                               )}
@@ -394,7 +421,7 @@ export function InvoicesTab({
                                 <>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem onSelect={() => onCancel(invoice)}>
-                                    <FileX className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                                    <FileX className="h-4 w-4 text-caution" />
                                     Rechnung stornieren
                                   </DropdownMenuItem>
                                 </>

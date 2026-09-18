@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
+import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
+import { getNextDocumentNumber } from '@/lib/invoice-numbers';
+import { ProcessingCapacityError, withProcessingSlot } from '@/lib/processing-limit';
+import { inTransaction } from '@/lib/db-transaction';
+import {
+  isRequestBodyWithinLimit,
+  readRequestBodyWithinLimit,
+  requestWithBody,
+  RequestBodyLimitError,
+  MAX_INVOICE_UPLOAD_BYTES,
+  MAX_XML_INPUT_BYTES,
+} from '@/lib/resource-limits';
 import {
   extractEmbeddedEInvoiceXml,
   parseEInvoiceXml,
@@ -12,6 +21,13 @@ import {
 } from '@/lib/e-invoice-parser';
 
 type SupportedInvoiceFileKind = 'pdf' | 'xml';
+
+class QuoteConversionError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'QuoteConversionError';
+  }
+}
 
 const XML_MIME_TYPES = new Set([
   'application/xml',
@@ -29,11 +45,6 @@ function getSupportedFileKind(file: File): SupportedInvoiceFileKind | null {
   return null;
 }
 
-function sanitizeFileName(fileName: string): string {
-  const sanitized = path.basename(fileName || 'rechnung').replace(/\s+/g, '_').replace(/[^A-Za-z0-9._-]/g, '_');
-  return sanitized || 'rechnung';
-}
-
 function decodeStandaloneXml(buffer: Buffer): string | null {
   const xmlContent = new TextDecoder().decode(buffer).replace(/^\uFEFF/, '').trim();
   return xmlContent.startsWith('<') ? xmlContent : null;
@@ -46,17 +57,21 @@ async function getInvoiceXmlContent(fileKind: SupportedInvoiceFileKind, buffer: 
   return decodeStandaloneXml(buffer);
 }
 
-async function findOrCreateCustomer(parsedInvoice: ParsedEInvoice, userId: string) {
+async function findOrCreateCustomer(
+  parsedInvoice: ParsedEInvoice,
+  userId: string,
+  db: Pick<Prisma.TransactionClient, 'customer'> = prisma,
+) {
   const customerName = parsedInvoice.customerName;
   if (!customerName) return null;
 
-  const existingCustomer = await prisma.customer.findFirst({
+  const existingCustomer = await db.customer.findFirst({
     where: { name: customerName, userId },
   });
 
   if (existingCustomer) return existingCustomer;
 
-  return prisma.customer.create({
+  return db.customer.create({
     data: {
       name: customerName,
       email: parsedInvoice.buyerInfo.email ?? undefined,
@@ -86,10 +101,14 @@ function toStoredParsedData(parsedInvoice: ParsedEInvoice) {
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireUserId();
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
+    if (!isRequestBodyWithinLimit(request, MAX_INVOICE_UPLOAD_BYTES + 128 * 1024)) {
+      return NextResponse.json({ error: 'Anfrage ist zu groß' }, { status: 413 });
+    }
+    const boundedBody = await readRequestBodyWithinLimit(request, MAX_INVOICE_UPLOAD_BYTES + 128 * 1024);
+    const formData = await requestWithBody(request, boundedBody).formData();
+    const file = formData.get('file');
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 });
     }
 
@@ -98,23 +117,74 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nur PDF- oder XML-E-Rechnungen werden unterstützt' }, { status: 400 });
     }
 
+    const maxFileBytes = fileKind === 'pdf' ? MAX_INVOICE_UPLOAD_BYTES : MAX_XML_INPUT_BYTES;
+    if (file.size > maxFileBytes) {
+      return NextResponse.json({ error: 'Datei ist zu groß' }, { status: 413 });
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const xmlContent = await getInvoiceXmlContent(fileKind, buffer);
-
-    if (!xmlContent) {
-      const message = fileKind === 'pdf'
-        ? 'Keine ZUGFeRD-/Factur-X-XML in der PDF-Datei gefunden'
-        : 'Die XML-Datei konnte nicht als E-Rechnung gelesen werden';
+    if (buffer.byteLength > maxFileBytes) {
+      return NextResponse.json({ error: 'Datei ist zu groß' }, { status: 413 });
+    }
+    let xmlContent: string | null = null;
+    let parsedInvoice: ParsedEInvoice;
+    try {
+      const parsed = await withProcessingSlot(userId, async () => {
+        const extracted = await getInvoiceXmlContent(fileKind, buffer);
+        if (!extracted) return { extracted, parsed: null };
+        return { extracted, parsed: await parseEInvoiceXml(extracted) };
+      });
+      xmlContent = parsed.extracted;
+      if (!parsed.parsed) {
+        const message = fileKind === 'pdf'
+          ? 'Keine ZUGFeRD-/Factur-X-XML in der PDF-Datei gefunden'
+          : 'Die XML-Datei konnte nicht als E-Rechnung gelesen werden';
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      parsedInvoice = parsed.parsed;
+    } catch (error) {
+      if (error instanceof ProcessingCapacityError) {
+        const response = NextResponse.json({ error: error.message }, { status: error.status });
+        response.headers.set('Retry-After', '1');
+        return response;
+      }
+      if (error instanceof RequestBodyLimitError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      const message = error instanceof Error ? error.message : 'Ungültige E-Rechnungs-XML';
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
-    let parsedInvoice: ParsedEInvoice;
-    try {
-      parsedInvoice = await parseEInvoiceXml(xmlContent);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ungültige E-Rechnungs-XML';
-      return NextResponse.json({ error: message }, { status: 400 });
+    // Keep this explicit for type narrowing and to document that only the
+    // bounded, parsed XML is persisted below.
+    if (!xmlContent) return NextResponse.json({ error: 'Ungültige E-Rechnungs-XML' }, { status: 400 });
+
+    const queryFromQuoteValue = new URL(request.url).searchParams.get('fromQuoteId');
+    const formFromQuoteValue = formData.get('fromQuoteId');
+    if (queryFromQuoteValue !== null && formFromQuoteValue !== null && String(formFromQuoteValue) !== queryFromQuoteValue) {
+      return NextResponse.json({ error: 'Widersprüchliche Angebotsreferenz' }, { status: 400 });
+    }
+    const fromQuoteValue = queryFromQuoteValue ?? formFromQuoteValue;
+    const fromQuoteId = fromQuoteValue === null || fromQuoteValue === '' ? null : Number(fromQuoteValue);
+    if (fromQuoteId !== null && (!Number.isSafeInteger(fromQuoteId) || fromQuoteId <= 0)) {
+      return NextResponse.json({ error: 'Ungültige Angebotsreferenz' }, { status: 400 });
+    }
+
+    let sourceQuote: { id: number; status: string; convertedInvoice?: { id: number } | null } | null = null;
+    if (fromQuoteId !== null) {
+      sourceQuote = await prisma.invoice.findFirst({
+        where: { id: fromQuoteId, userId, type: 'QUOTE' },
+        select: { id: true, status: true, convertedInvoice: { select: { id: true } } },
+      });
+      if (!sourceQuote) return NextResponse.json({ error: 'Angebot nicht gefunden' }, { status: 404 });
+      if (sourceQuote.status === 'CANCELLED') {
+        return NextResponse.json({ error: 'Stornierte Angebote können nicht umgewandelt werden' }, { status: 409 });
+      }
+      if (sourceQuote.convertedInvoice) {
+        const existing = await prisma.invoice.findUnique({ where: { id: sourceQuote.convertedInvoice.id }, include: { income: true } });
+        return NextResponse.json({ ...existing, idempotent: true });
+      }
     }
 
     if (parsedInvoice.invoiceNumber) {
@@ -130,54 +200,126 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const safeOriginalFileName = sanitizeFileName(file.name);
-    const uniqueFileName = `${uuidv4()}_${safeOriginalFileName}`;
-    ensureUploadDirExists();
-    const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
-    fs.writeFileSync(permanentFilePath, buffer);
-
-    const customerRecord = await findOrCreateCustomer(parsedInvoice, userId);
     const invoiceDate = parsedInvoice.invoiceDate || new Date();
-    const invoiceNumber = parsedInvoice.invoiceNumber || `RG-${Date.now()}`;
-
-    const invoice = await prisma.invoice.create({
-      data: {
-        fileName: file.name,
-        storedFileName: uniqueFileName,
-        invoiceNumber,
-        invoiceDate,
-        dueDate: parsedInvoice.dueDate,
-        totalAmount: parsedInvoice.totalAmount ?? undefined,
-        parsedData: toStoredParsedData(parsedInvoice),
-        customerId: customerRecord?.id,
-        userId,
-      },
-    });
-
-    if (parsedInvoice.totalAmount !== null && parsedInvoice.totalAmount > 0) {
-      const income = await prisma.income.create({
-        data: {
-          description: `Rechnung ${invoiceNumber}`.substring(0, 255),
-          amount: parsedInvoice.totalAmount,
-          customerId: customerRecord ? customerRecord.id : null,
-          invoiceId: invoice.id,
-          taxRelevant: true,
-          userId,
-        },
-      });
-
-      await prisma.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          income: { connect: { id: income.id } },
-        },
-      });
+    if (Number.isNaN(invoiceDate.getTime()) || (parsedInvoice.dueDate && Number.isNaN(parsedInvoice.dueDate.getTime()))) {
+      return NextResponse.json({ error: 'Ungültiges Rechnungsdatum' }, { status: 400 });
+    }
+    if (parsedInvoice.totalAmount !== null && !Number.isFinite(parsedInvoice.totalAmount)) {
+      return NextResponse.json({ error: 'Ungültiger Rechnungsbetrag' }, { status: 400 });
     }
 
-    return NextResponse.json(invoice);
+    let storedFileName: string | null = null;
+    try {
+      storedFileName = await writeTenantFile(userId, file.name, buffer);
+      const transactionResult = await inTransaction(async (tx) => {
+        // Re-read and claim the quote in the same transaction as invoice
+        // creation. The preflight check above is only an early response; it
+        // must never authorize a stale status or conversion relation.
+        const currentQuote = sourceQuote
+          ? await tx.invoice.findFirst({
+            where: { id: sourceQuote.id, userId, type: 'QUOTE' },
+            select: { id: true, status: true, convertedInvoice: { select: { id: true } } },
+          })
+          : null;
+        if (sourceQuote && !currentQuote) {
+          throw new QuoteConversionError('Angebot nicht gefunden', 404);
+        }
+        if (currentQuote?.status === 'CANCELLED') {
+          throw new QuoteConversionError('Stornierte Angebote können nicht umgewandelt werden', 409);
+        }
+        if (currentQuote?.convertedInvoice) {
+          const existing = await tx.invoice.findUnique({
+            where: { id: currentQuote.convertedInvoice.id },
+            include: { income: true },
+          });
+          if (existing) return { invoice: existing, idempotent: true };
+          throw new QuoteConversionError('Die Angebotsumwandlung ist inkonsistent', 409);
+        }
+
+        const conversionQuoteId = currentQuote?.id ?? null;
+        if (conversionQuoteId) {
+          const claimed = await tx.invoice.updateMany({
+            where: {
+              id: conversionQuoteId,
+              userId,
+              type: 'QUOTE',
+              status: { not: 'CANCELLED' },
+              convertedInvoice: { is: null },
+            },
+            data: { status: 'ACCEPTED' },
+          });
+          if (claimed.count !== 1) {
+            const racedQuote = await tx.invoice.findFirst({
+              where: { id: conversionQuoteId, userId, type: 'QUOTE' },
+              select: { status: true, convertedInvoice: { select: { id: true } } },
+            });
+            if (racedQuote?.convertedInvoice) {
+              const existing = await tx.invoice.findUnique({
+                where: { id: racedQuote.convertedInvoice.id },
+                include: { income: true },
+              });
+              if (existing) return { invoice: existing, idempotent: true };
+            }
+            if (racedQuote?.status === 'CANCELLED') {
+              throw new QuoteConversionError('Stornierte Angebote können nicht umgewandelt werden', 409);
+            }
+            throw new QuoteConversionError('Das Angebot wurde bereits geändert. Bitte erneut versuchen.', 409);
+          }
+        }
+
+        const customerRecord = await findOrCreateCustomer(parsedInvoice, userId, tx);
+        const invoiceNumber = parsedInvoice.invoiceNumber || await getNextDocumentNumber(tx, userId, 'INVOICE', invoiceDate.getFullYear());
+        const created = await tx.invoice.create({
+          data: {
+            type: 'INVOICE',
+            fileName: file.name,
+            storedFileName: storedFileName!,
+            invoiceNumber,
+            invoiceDate,
+            dueDate: parsedInvoice.dueDate,
+            totalAmount: parsedInvoice.totalAmount ?? undefined,
+            parsedData: toStoredParsedData(parsedInvoice),
+            customerId: customerRecord?.id,
+            userId,
+            ...(conversionQuoteId ? { convertedFromQuoteId: conversionQuoteId } : {}),
+          },
+        });
+        return { invoice: created, idempotent: false };
+      });
+
+      if (transactionResult.idempotent && storedFileName) {
+        try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort orphan cleanup */ }
+        storedFileName = null;
+      }
+      return NextResponse.json({ ...transactionResult.invoice, ...(transactionResult.idempotent ? { idempotent: true } : {}) });
+    } catch (error) {
+      // A unique conversion race is idempotent: return the winner's invoice.
+      if (sourceQuote && (error as { code?: string }).code === 'P2002') {
+        const existing = await prisma.invoice.findFirst({ where: { convertedFromQuoteId: sourceQuote.id, userId }, include: { income: true } });
+        if (existing) {
+          if (storedFileName) {
+            try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort cleanup */ }
+          }
+          return NextResponse.json({ ...existing, idempotent: true });
+        }
+      }
+      if (storedFileName) {
+        try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort cleanup */ }
+      }
+      throw error;
+    }
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof RequestBodyLimitError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof QuoteConversionError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if ((error as { code?: string }).code === 'P2002') {
+      return NextResponse.json({ error: 'Die Rechnungsnummer ist bereits vergeben.' }, { status: 409 });
     }
     console.error('Fehler beim Hochladen der Rechnung:', error);
     return NextResponse.json(

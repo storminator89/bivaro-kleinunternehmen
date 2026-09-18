@@ -1,34 +1,64 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
-import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
-import { UPLOAD_BASE_DIR, ensureUploadDirExists } from '@/lib/upload-path';
+import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
+import {
+  isFiniteNumber,
+  isRequestBodyWithinLimit,
+  readRequestBodyWithinLimit,
+  requestWithBody,
+  RequestBodyLimitError,
+  MAX_RECEIPT_UPLOAD_BYTES,
+  MAX_JSON_REQUEST_BYTES,
+} from '@/lib/resource-limits';
 
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireUserId();
+    if (!isRequestBodyWithinLimit(request, MAX_RECEIPT_UPLOAD_BYTES + 128 * 1024)) {
+      return NextResponse.json({ error: 'Anfrage ist zu groß' }, { status: 413 });
+    }
     // Prüfen, ob es sich um einen multipart/form-data-Request handelt
     const contentType = request.headers.get('content-type') || '';
 
     if (contentType.includes('multipart/form-data')) {
       // Formular mit Datei verarbeiten
-      const formData = await request.formData();
+      const boundedBody = await readRequestBodyWithinLimit(request, MAX_RECEIPT_UPLOAD_BYTES + 128 * 1024);
+      const formData = await requestWithBody(request, boundedBody).formData();
       const description = formData.get('description') as string;
       const amount = formData.get('amount') as string;
       const category = formData.get('category') as string;
       const taxRelevant = formData.get('taxRelevant') === 'true';
-      const receipt = formData.get('receipt') as File | null;
+      const receiptValue = formData.get('receipt');
+      if (receiptValue !== null && !(receiptValue instanceof File)) {
+        return NextResponse.json({ error: 'Ungültiger Beleg' }, { status: 400 });
+      }
+      const receipt = receiptValue as File | null;
       const dateStr = formData.get('date') as string;
 
       if (!description || !amount) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
+      }
+
+      const parsedAmount = Number(amount);
+      if (!isFiniteNumber(parsedAmount)) {
+        return NextResponse.json({ error: 'Ungültiger Betrag' }, { status: 400 });
+      }
+      const deductibleValue = formData.get('taxDeductiblePercentage');
+      const parsedDeductible = deductibleValue === null || deductibleValue === ''
+        ? 100
+        : Number(deductibleValue);
+      if (!isFiniteNumber(parsedDeductible) || parsedDeductible < 0 || parsedDeductible > 100) {
+        return NextResponse.json({ error: 'Ungültiger Abzugsanteil' }, { status: 400 });
+      }
+      const depreciationValue = formData.get('depreciationYears');
+      const parsedDepreciation = depreciationValue === null || depreciationValue === ''
+        ? null
+        : Number(depreciationValue);
+      if (parsedDepreciation !== null && (!isFiniteNumber(parsedDepreciation) || !Number.isInteger(parsedDepreciation) || parsedDepreciation <= 0)) {
+        return NextResponse.json({ error: 'Ungültige Abschreibungsdauer' }, { status: 400 });
       }
 
       let receiptFileName = null;
@@ -36,6 +66,9 @@ export async function POST(request: NextRequest) {
 
       // Wenn eine Datei hochgeladen wurde, speichern wir sie
       if (receipt) {
+        if (receipt.size > MAX_RECEIPT_UPLOAD_BYTES) {
+          return NextResponse.json({ error: 'Beleg ist zu groß' }, { status: 413 });
+        }
         // Dateityp prüfen
         const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
         if (!validTypes.includes(receipt.type)) {
@@ -45,70 +78,110 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Datei in temporäres Verzeichnis speichern
-        const tempDir = os.tmpdir();
         const bytes = await receipt.arrayBuffer();
         const buffer = Buffer.from(bytes);
-        const filePath = join(tempDir, receipt.name);
-        await writeFile(filePath, buffer);
-
-        // Generiere einen eindeutigen Dateinamen für die dauerhafte Speicherung
-        const uniqueFileName = `${uuidv4()}_${receipt.name.replace(/\s+/g, '_')}`;
-        ensureUploadDirExists();
-        const permanentFilePath = path.join(UPLOAD_BASE_DIR, uniqueFileName);
-
-        // Kopiere die Datei in das dauerhafte Verzeichnis
-        fs.copyFileSync(filePath, permanentFilePath);
-
-        // Originalname und gespeicherten Namen speichern
-        receiptFileName = receipt.name;
-        storedReceiptFileName = uniqueFileName;
-
-        // Bereinigen (temporäre Datei löschen)
-        try {
-          fs.unlinkSync(filePath);
-        } catch (error) {
-          console.error('Fehler beim Löschen der temporären Datei:', error);
+        if (buffer.byteLength > MAX_RECEIPT_UPLOAD_BYTES) {
+          return NextResponse.json({ error: 'Beleg ist zu groß' }, { status: 413 });
         }
+
+        // The original name is metadata; writeTenantFile generates the path.
+        receiptFileName = receipt.name;
+        storedReceiptFileName = await writeTenantFile(userId, receipt.name, buffer);
       }
 
       // Ausgabe in der Datenbank speichern
-      const expense = await prisma.expense.create({
-        data: {
-          description,
-          amount: parseFloat(amount),
-          date: dateStr ? new Date(dateStr) : new Date(),
-          category: category || null,
-          taxRelevant,
-          taxDeductiblePercentage: formData.get('taxDeductiblePercentage') ? parseInt(formData.get('taxDeductiblePercentage') as string) : 100,
-          receiptFileName,
-          storedReceiptFileName,
-          depreciationYears: formData.get('depreciationYears') ? parseInt(formData.get('depreciationYears') as string) : null,
-          userId,
-        },
-      });
+      const parsedDate = dateStr ? new Date(dateStr) : new Date();
+      if (Number.isNaN(parsedDate.getTime())) {
+        if (storedReceiptFileName) {
+          try { await deleteTenantFile(userId, storedReceiptFileName); } catch { /* best-effort orphan cleanup */ }
+        }
+        return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
+      }
+      try {
+        const expense = await prisma.expense.create({
+          data: {
+            description,
+            amount: parsedAmount,
+            date: parsedDate,
+            category: category || null,
+            taxRelevant,
+            taxDeductiblePercentage: parsedDeductible,
+            receiptFileName,
+            storedReceiptFileName,
+            depreciationYears: parsedDepreciation,
+            userId,
+          },
+        });
 
-      // Audit log
-      await auditCreate(userId, 'Expense', expense, expense.description);
+        // Audit log
+        await auditCreate(userId, 'Expense', expense, expense.description);
 
-      return NextResponse.json(expense);
+        return NextResponse.json(expense);
+      } catch (error) {
+        if (storedReceiptFileName) {
+          try { await deleteTenantFile(userId, storedReceiptFileName); } catch { /* best-effort orphan cleanup */ }
+        }
+        throw error;
+      }
     } else {
       // Verarbeite regulären JSON-Request ohne Datei
-      const { description, amount, category, taxRelevant, taxDeductiblePercentage, depreciationYears, date } = await request.json();
+      const jsonBody = await readRequestBodyWithinLimit(request, MAX_JSON_REQUEST_BYTES);
+      let input: Record<string, unknown>;
+      try {
+        input = JSON.parse(new TextDecoder().decode(jsonBody)) as Record<string, unknown>;
+      } catch {
+        return NextResponse.json({ error: 'Ungültiges JSON' }, { status: 400 });
+      }
+      const { description, amount, category, taxRelevant, taxDeductiblePercentage, depreciationYears, date } = input;
 
-      if (!description || !amount) {
+      const descriptionText = typeof description === 'string' ? description.trim() : '';
+      if (!descriptionText || amount === undefined || amount === null || amount === '') {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
+      }
+
+      const parsedAmount = Number(amount);
+      const parsedDeductible = taxDeductiblePercentage === undefined || taxDeductiblePercentage === null
+        ? 100
+        : Number(taxDeductiblePercentage);
+      const parsedDepreciation = depreciationYears === undefined || depreciationYears === null
+        ? null
+        : Number(depreciationYears);
+      if (!isFiniteNumber(parsedAmount) || !isFiniteNumber(parsedDeductible) || parsedDeductible < 0 || parsedDeductible > 100) {
+        return NextResponse.json({ error: 'Ungültiger Betrag oder Abzugsanteil' }, { status: 400 });
+      }
+      if (parsedDepreciation !== null && (!isFiniteNumber(parsedDepreciation) || !Number.isInteger(parsedDepreciation) || parsedDepreciation <= 0)) {
+        return NextResponse.json({ error: 'Ungültige Abschreibungsdauer' }, { status: 400 });
+      }
+      const categoryText = category === undefined || category === null
+        ? null
+        : typeof category === 'string' ? category : null;
+      if (category !== undefined && category !== null && categoryText === null) {
+        return NextResponse.json({ error: 'Ungültige Kategorie' }, { status: 400 });
+      }
+      const parsedTaxRelevant = taxRelevant === undefined ? true : taxRelevant;
+      if (typeof parsedTaxRelevant !== 'boolean') {
+        return NextResponse.json({ error: 'Ungültige Steuerrelevanz' }, { status: 400 });
+      }
+      const dateValue = date === undefined || date === null || date === ''
+        ? undefined
+        : typeof date === 'string' || typeof date === 'number' ? date : null;
+      if (dateValue === null) {
+        return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
+      }
+      const parsedDate = dateValue === undefined ? new Date() : new Date(dateValue);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
       }
 
       const expense = await prisma.expense.create({
         data: {
-          description,
-          amount: parseFloat(amount.toString()),
-          date: date ? new Date(date) : new Date(),
-          category: category || null,
-          taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
-          taxDeductiblePercentage: taxDeductiblePercentage || 100,
-          depreciationYears: depreciationYears || null,
+          description: descriptionText,
+          amount: parsedAmount,
+          date: parsedDate,
+          category: categoryText,
+          taxRelevant: parsedTaxRelevant,
+          taxDeductiblePercentage: parsedDeductible,
+          depreciationYears: parsedDepreciation,
           userId,
         },
       });
@@ -121,6 +194,9 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof RequestBodyLimitError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('Fehler beim Erstellen der Ausgabe:', error);
     const message = error instanceof Error ? error.message : String(error);
@@ -209,44 +285,108 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: Request) {
   try {
     const userId = await requireUserId();
-    const { id, description, amount, category, taxRelevant, taxDeductiblePercentage, receiptUrl, depreciationYears, date } = await request.json();
+    const jsonBody = await readRequestBodyWithinLimit(request, MAX_JSON_REQUEST_BYTES);
+    let input: Record<string, unknown>;
+    try {
+      input = JSON.parse(new TextDecoder().decode(jsonBody)) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'Ungültiges JSON' }, { status: 400 });
+    }
+    const { id, description, amount, category, taxRelevant, taxDeductiblePercentage, receiptUrl, depreciationYears, date } = input;
 
-    if (!id || !description || !amount) {
+    const parsedId = Number(id);
+    const descriptionText = typeof description === 'string' ? description.trim() : '';
+    if (!Number.isSafeInteger(parsedId) || parsedId <= 0 || !descriptionText || amount === undefined || amount === null || amount === '') {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const parsedAmount = Number(amount);
+    const parsedDeductible = taxDeductiblePercentage === undefined || taxDeductiblePercentage === null
+      ? 100
+      : Number(taxDeductiblePercentage);
+    const parsedDepreciation = depreciationYears === undefined || depreciationYears === null
+      ? null
+      : Number(depreciationYears);
+    if (!isFiniteNumber(parsedAmount) || !isFiniteNumber(parsedDeductible) || parsedDeductible < 0 || parsedDeductible > 100) {
+      return NextResponse.json({ error: 'Ungültiger Betrag oder Abzugsanteil' }, { status: 400 });
+    }
+    if (parsedDepreciation !== null && (!isFiniteNumber(parsedDepreciation) || !Number.isInteger(parsedDepreciation) || parsedDepreciation <= 0)) {
+      return NextResponse.json({ error: 'Ungültige Abschreibungsdauer' }, { status: 400 });
+    }
+    const categoryText = category === undefined || category === null
+      ? null
+      : typeof category === 'string' ? category : null;
+    if (category !== undefined && category !== null && categoryText === null) {
+      return NextResponse.json({ error: 'Ungültige Kategorie' }, { status: 400 });
+    }
+    const parsedTaxRelevant = taxRelevant === undefined ? true : taxRelevant;
+    if (typeof parsedTaxRelevant !== 'boolean') {
+      return NextResponse.json({ error: 'Ungültige Steuerrelevanz' }, { status: 400 });
+    }
+    const receiptUrlText = receiptUrl === undefined || receiptUrl === null
+      ? null
+      : typeof receiptUrl === 'string' ? receiptUrl : null;
+    if (receiptUrl !== undefined && receiptUrl !== null && receiptUrlText === null) {
+      return NextResponse.json({ error: 'Ungültige Beleg-URL' }, { status: 400 });
+    }
+    const dateValue = date === undefined || date === null || date === ''
+      ? undefined
+      : typeof date === 'string' || typeof date === 'number' ? date : null;
+    if (dateValue === null) {
+      return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
+    }
+    const parsedDate = dateValue === undefined ? undefined : new Date(dateValue);
+    if (parsedDate && Number.isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
     }
 
     // Get old values for audit - verify ownership first
     const oldExpense = await prisma.expense.findFirst({
-      where: { id: Number(id), userId },
+      where: { id: parsedId, userId },
+      include: { cashTransaction: true },
     });
 
     if (!oldExpense) {
       return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
     }
+    if (oldExpense.cashTransaction) {
+      return NextResponse.json({ error: 'Mit dem Kassenbuch verknüpfte Ausgaben müssen dort geändert werden' }, { status: 409 });
+    }
 
-    const updatedExpense = await prisma.expense.update({
-      where: { id: Number(id), userId },
-      data: {
-        description,
-        amount: parseFloat(amount.toString()),
-        date: date ? new Date(date) : undefined,
-        category: category || null,
-        taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
-        taxDeductiblePercentage: taxDeductiblePercentage || 100,
-        receiptUrl: receiptUrl || null,
-        depreciationYears: depreciationYears || null,
-      },
+    const updatedExpense = await prisma.$transaction(async (tx) => {
+      const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
+      if (!current) throw new Error('Ausgabe nicht gefunden');
+      if (current.cashTransaction) throw new Error('Mit dem Kassenbuch verknüpfte Ausgaben müssen dort geändert werden');
+      return tx.expense.update({
+        where: { id: parsedId, userId },
+        data: {
+          description: descriptionText,
+          amount: parsedAmount,
+          date: parsedDate,
+          category: categoryText,
+          taxRelevant: parsedTaxRelevant,
+          taxDeductiblePercentage: parsedDeductible,
+          receiptUrl: receiptUrlText,
+          depreciationYears: parsedDepreciation,
+        },
+      });
     });
 
     // Audit log
     if (oldExpense) {
-      await auditUpdate(userId, 'Expense', id, oldExpense, updatedExpense, updatedExpense.description);
+      await auditUpdate(userId, 'Expense', parsedId, oldExpense, updatedExpense, updatedExpense.description);
     }
 
     return NextResponse.json(updatedExpense);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof RequestBodyLimitError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof Error && error.message.startsWith('Mit dem Kassenbuch')) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
     return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
   }
@@ -266,14 +406,21 @@ export async function DELETE(request: Request) {
     // Get expense for audit before deletion - verify ownership
     const expense = await prisma.expense.findFirst({
       where: { id: Number(id), userId },
+      include: { cashTransaction: true },
     });
 
     if (!expense) {
       return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
     }
+    if (expense.cashTransaction) {
+      return NextResponse.json({ error: 'Mit dem Kassenbuch verknüpfte Ausgaben müssen dort gelöscht werden' }, { status: 409 });
+    }
 
-    await prisma.expense.delete({
-      where: { id: Number(id), userId },
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.expense.findFirst({ where: { id: Number(id), userId }, include: { cashTransaction: true } });
+      if (!current) throw new Error('Ausgabe nicht gefunden');
+      if (current.cashTransaction) throw new Error('Mit dem Kassenbuch verknüpfte Ausgaben müssen dort gelöscht werden');
+      await tx.expense.delete({ where: { id: Number(id), userId } });
     });
 
     // Audit log
@@ -285,6 +432,9 @@ export async function DELETE(request: Request) {
   } catch (error: unknown) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof Error && error.message.startsWith('Mit dem Kassenbuch')) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
     return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
   }

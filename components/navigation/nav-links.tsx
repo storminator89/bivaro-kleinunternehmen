@@ -63,6 +63,9 @@ export function NavLinks() {
   const isActive = (href: string) => {
     const [path, query] = href.split('?');
 
+    if (pathname.startsWith('/dashboard/invoices/') && href === '/dashboard?tab=invoices') return true;
+    if (pathname.startsWith('/dashboard/quotes/') && href === '/dashboard?tab=quotes') return true;
+
     // Exakter Pfad-Match (für Unterseiten wie /dashboard/reminders)
     if (pathname === path && !query) {
       return !searchParams.get('tab');
@@ -95,25 +98,28 @@ export function NavLinks() {
       ]
     },
     {
-      title: "Finanzen",
+      title: "Verkauf",
+      items: [
+        { href: "/dashboard?tab=invoices", label: "Rechnungen", icon: FileText, auth: "authenticated" },
+        { href: "/dashboard?tab=quotes", label: "Angebote", icon: FileText, auth: "authenticated" },
+        { href: "/dashboard/reminders", label: "Mahnwesen", icon: AlertCircle, auth: "authenticated" },
+        { href: "/customers", label: "Kunden", icon: Users, auth: "authenticated" },
+      ]
+    },
+    {
+      title: "Buchhaltung",
       items: [
         { href: "/dashboard?tab=incomes", label: "Einnahmen", icon: TrendingUp, auth: "authenticated" },
         { href: "/dashboard?tab=expenses", label: "Ausgaben", icon: TrendingDown, auth: "authenticated" },
-        { href: "/dashboard?tab=invoices", label: "Rechnungen", icon: FileText, auth: "authenticated" },
         { href: "/cashbook", label: "Kassenbuch", icon: Wallet, auth: "authenticated" },
-        { href: "/dashboard/reminders", label: "Mahnwesen", icon: AlertCircle, auth: "authenticated" },
       ]
     },
     {
-      title: "Analyse",
+      title: "Auswertungen",
       items: [
+        { href: "/dashboard?tab=eur", label: "EÜR", icon: Calculator, auth: "authenticated" },
+        { href: "/dashboard?tab=gwg", label: "GWG-Verzeichnis", icon: Calculator, auth: "authenticated" },
         { href: "/steuer-simulation", label: "Steuer-Simulation", icon: Calculator, auth: "authenticated" },
-      ]
-    },
-    {
-      title: "Stammdaten",
-      items: [
-        { href: "/customers", label: "Kunden", icon: Users, auth: "authenticated" },
       ]
     },
     {
@@ -133,7 +139,7 @@ export function NavLinks() {
   // Collapsed view
   if (isCollapsed) {
     return (
-      <nav className="flex flex-col h-full">
+      <div className="flex h-full flex-col">
         <ul className="space-y-1 flex-1">
           {navSections.map((section) => (
             section.items.map((item) => {
@@ -146,9 +152,10 @@ export function NavLinks() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className={`flex items-center justify-center p-3 rounded-lg transition-all duration-200 ${active
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    aria-current={active ? "page" : undefined}
+                    className={`flex min-h-11 items-center justify-center rounded-lg p-3 transition-colors duration-200 ${active
+                      ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                       }`}
                     title={item.label}
                   >
@@ -168,9 +175,10 @@ export function NavLinks() {
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className={`flex items-center justify-center p-3 rounded-lg transition-all duration-200 ${active
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  aria-current={active ? "page" : undefined}
+                  className={`flex min-h-11 items-center justify-center rounded-lg p-3 transition-colors duration-200 ${active
+                    ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                     }`}
                   title={item.label}
                 >
@@ -183,28 +191,28 @@ export function NavLinks() {
 
         {/* Bottom section when collapsed */}
         <div className="pt-4 border-t border-border mt-auto space-y-1">
-          <div className="flex items-center justify-center p-3 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200">
+          <div className="flex items-center justify-center rounded-lg p-3 text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground">
             <ThemeToggle />
           </div>
 
           {status === "authenticated" && (
             <button
               onClick={() => signOut({ callbackUrl: '/' })}
-              className="flex items-center justify-center w-full p-3 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors duration-200"
+              className="flex w-full cursor-pointer items-center justify-center rounded-lg p-3 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
               title="Abmelden"
             >
               <LogOut className="h-5 w-5" />
             </button>
           )}
         </div>
-      </nav>
+      </div>
     );
   }
 
   // Expanded view with sections
   return (
-    <nav className="flex flex-col h-full">
-      <div className="space-y-6 flex-1 overflow-y-auto">
+    <div className="flex h-full flex-col">
+      <div className="app-nav-scroll flex-1 space-y-6 overflow-y-auto pr-1">
         {navSections.map((section) => {
           const visibleItems = section.items.filter(item =>
             item.auth !== "authenticated" || status === "authenticated"
@@ -226,9 +234,10 @@ export function NavLinks() {
                     <li key={item.href}>
                       <Link
                         href={item.href}
-                        className={`flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${active
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        aria-current={active ? "page" : undefined}
+                        className={`flex min-h-11 items-center px-3 py-2 rounded-lg transition-colors duration-200 ${active
+                          ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                           }`}
                       >
                         <Icon className="h-4 w-4 mr-3" />
@@ -257,9 +266,10 @@ export function NavLinks() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className={`flex items-center px-3 py-2 rounded-lg transition-all duration-200 ${active
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      aria-current={active ? "page" : undefined}
+                      className={`flex min-h-11 items-center rounded-lg px-3 py-2 transition-colors duration-200 ${active
+                        ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                         }`}
                     >
                       <Icon className="h-4 w-4 mr-3" />
@@ -275,7 +285,7 @@ export function NavLinks() {
 
       {/* Bottom section when expanded */}
       <div className="pt-4 border-t border-border mt-auto space-y-1">
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200">
+        <div className="flex items-center justify-between rounded-lg px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground">
           <div className="flex items-center">
             <SunMoon className="h-4 w-4 mr-3" />
             <span className="text-sm font-medium">Theme</span>
@@ -286,13 +296,13 @@ export function NavLinks() {
         {status === "authenticated" && (
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
-            className="flex items-center w-full px-3 py-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors duration-200"
+            className="flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
           >
             <LogOut className="h-4 w-4 mr-3" />
             <span className="text-sm font-medium">Abmelden</span>
           </button>
         )}
       </div>
-    </nav>
+    </div>
   );
 }

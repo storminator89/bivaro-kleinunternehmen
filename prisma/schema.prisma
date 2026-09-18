@@ -9,6 +9,9 @@ datasource db {
 
 model AppSettings {
   id                    Int      @id @default(autoincrement())
+  // A single logical settings row is used by registration/bootstrap code.
+  // Existing rows are normalised to unique legacy keys by the auth migration.
+  singletonKey          String   @unique @default("global")
   allowRegistration     Boolean  @default(true)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -20,6 +23,8 @@ model User {
   password  String
   name      String?
   role      String   @default("USER") // USER, ADMIN
+  // Incrementing this value invalidates all JWTs issued before the change.
+  sessionVersion Int    @default(0)
   createdAt DateTime @default(now())
   expenses  Expense[]
   incomes   Income[]
@@ -37,6 +42,19 @@ model User {
   documentations Documentation[]
 }
 
+// Shared, bounded rate-limit state for authentication and other API surfaces.
+// The key is a one-way hash of a logical scope/value pair.
+model RateLimitBucket {
+  id               Int      @id @default(autoincrement())
+  key              String   @unique
+  count            Int      @default(0)
+  windowStartedAt  DateTime
+  blockedUntil     DateTime?
+  updatedAt        DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
 model Expense {
   id                    Int      @id @default(autoincrement())
   description           String
@@ -49,9 +67,15 @@ model Expense {
   receiptFileName       String?  // Originalname der hochgeladenen Belegdatei
   storedReceiptFileName String?  // Eindeutiger gespeicherter Dateiname des Belegs
   depreciationYears     Int?     // Nutzungsdauer in Jahren (AfA)
+  recurringExpenseId    Int?
+  scheduledDate         DateTime?
+  recurringExpense      RecurringExpense? @relation(fields: [recurringExpenseId], references: [id], onDelete: SetNull)
   userId                String
   user                  User     @relation(fields: [userId], references: [id])
   cashTransaction       CashTransaction?
+
+  @@unique([recurringExpenseId, scheduledDate])
+  @@index([userId, date])
 }
 
 model Income {
@@ -67,6 +91,8 @@ model Income {
   userId      String
   user        User     @relation(fields: [userId], references: [id])
   cashTransaction CashTransaction?
+
+  @@index([userId, date])
 }
 
 model Invoice {
@@ -77,7 +103,7 @@ model Invoice {
   uploadedAt    DateTime  @default(now())
   invoiceDate   DateTime?
   dueDate       DateTime?
-  invoiceNumber String? @unique
+  invoiceNumber String?
   parsedData    Json
   totalAmount   Float?
   status        String    @default("DRAFT") // DRAFT, SENT, PAID, CANCELLED
@@ -87,12 +113,19 @@ model Invoice {
   originalInvoice   Invoice? @relation("CreditNotes", fields: [originalInvoiceId], references: [id])
   creditNotes       Invoice[] @relation("CreditNotes")
   cancellationReason String? // Grund für Stornierung
+  convertedFromQuoteId Int? @unique
+  convertedFromQuote Invoice? @relation("QuoteConversion", fields: [convertedFromQuoteId], references: [id], onDelete: SetNull)
+  convertedInvoice Invoice? @relation("QuoteConversion")
   customerId    Int?
   income        Income?
   reminders     Reminder[]
   customer      Customer? @relation(fields: [customerId], references: [id])
   userId        String
   user          User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, invoiceNumber])
+  @@index([userId, type, uploadedAt])
+  @@index([userId, status])
 }
 
 model Customer {
@@ -141,6 +174,7 @@ model InvoiceTemplate {
 }
 
 model RecurringExpense {
+  expenses              Expense[]
   id                    Int      @id @default(autoincrement())
   description           String
   amount                Float
@@ -296,4 +330,14 @@ model Documentation {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([userId])
+}
+
+// Counter reservations are committed with the document that consumes them.
+model InvoiceNumberCounter {
+  userId String
+  type String
+  year Int
+  value Int
+
+  @@id([userId, type, year])
 }

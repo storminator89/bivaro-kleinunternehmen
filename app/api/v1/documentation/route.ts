@@ -1,3 +1,4 @@
+import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 /**
  * API v1 - Documentation Endpoint
  * 
@@ -17,8 +18,8 @@ import {
     corsHeaders,
 } from '@/lib/api-auth';
 
-export async function OPTIONS() {
-    return handleCors();
+export async function OPTIONS(request: NextRequest) {
+    return handleCors(request);
 }
 
 // GET /api/v1/documentation
@@ -91,6 +92,7 @@ export async function POST(request: NextRequest) {
                 userId,
             },
         });
+    await auditCreate(userId, 'Documentation', documentation);
 
         const response = apiSuccess(documentation);
         response.headers.set('Location', `/api/v1/documentation/${documentation.id}`);
@@ -141,6 +143,7 @@ export async function PUT(request: NextRequest) {
                 ...(content !== undefined && { content }),
             },
         });
+    await auditUpdate(userId, 'Documentation', existing.id, existing, documentation);
 
         const response = apiSuccess(documentation);
         Object.entries(corsHeaders()).forEach(([key, value]) => {
@@ -172,6 +175,7 @@ export async function DELETE(request: NextRequest) {
         await prisma.documentation.delete({
             where: { id: parseInt(id) },
         });
+    await auditDelete(userId, 'Documentation', existing);
 
         const response = apiSuccess({ deleted: true, id: parseInt(id) });
         Object.entries(corsHeaders()).forEach(([key, value]) => {

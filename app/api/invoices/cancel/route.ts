@@ -3,13 +3,17 @@ import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { createAuditLog } from '@/lib/audit-log';
 import { generateCreditNotePDF } from '@/lib/credit-note-pdf';
-import path from 'path';
-import fs from 'fs/promises';
+import { inTransaction } from '@/lib/db-transaction';
+import { previewDocumentNumber, getNextDocumentNumber } from '@/lib/invoice-numbers';
+import { writeTenantFile, deleteTenantFile } from '@/lib/upload-path';
 
 // POST: Cancel an invoice by creating a credit note
 export async function POST(request: Request) {
+    let stagedFile: string | null = null;
+    let owner: string | null = null;
     try {
         const userId = await requireUserId();
+        owner = userId;
         const { invoiceId, cancellationReason } = await request.json();
 
         if (!invoiceId) {
@@ -22,7 +26,7 @@ export async function POST(request: Request) {
             include: { customer: true }
         });
 
-        if (!originalInvoice) {
+        if (!originalInvoice || originalInvoice.type !== 'INVOICE') {
             return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
         }
 
@@ -45,25 +49,8 @@ export async function POST(request: Request) {
             where: { userId }
         });
 
-        // Generate credit note number
         const year = new Date().getFullYear();
-        const lastCreditNote = await prisma.invoice.findFirst({
-            where: {
-                userId,
-                type: 'CREDIT_NOTE',
-                invoiceNumber: { startsWith: `GS-${year}-` }
-            },
-            orderBy: { invoiceNumber: 'desc' }
-        });
-
-        let nextNumber = 1;
-        if (lastCreditNote?.invoiceNumber) {
-            const match = lastCreditNote.invoiceNumber.match(/GS-\d{4}-(\d+)/);
-            if (match) {
-                nextNumber = parseInt(match[1], 10) + 1;
-            }
-        }
-        const creditNoteNumber = `GS-${year}-${nextNumber.toString().padStart(2, '0')}`;
+        const creditNoteNumber = (await previewDocumentNumber(prisma, userId, 'CREDIT_NOTE', year)).number;
 
         // Parse the original invoice data
         const parsedData = typeof originalInvoice.parsedData === 'string'
@@ -147,54 +134,58 @@ export async function POST(request: Request) {
                 bic: settings?.bic,
                 footerText: settings?.footerText,
                 logoUrl: settings?.logoUrl,
+                userId,
             }
         );
 
         // Save PDF to uploads directory
         const creditNoteFileName = `Gutschrift_${creditNoteNumber}.pdf`;
-        const storedFileName = `${Date.now()}_${creditNoteFileName}`;
-        const uploadsDir = path.join(process.cwd(), 'data', 'uploads');
-
-        // Ensure uploads directory exists
-        await fs.mkdir(uploadsDir, { recursive: true });
-
-        const pdfPath = path.join(uploadsDir, storedFileName);
-        await fs.writeFile(pdfPath, creditNotePdfBytes);
+        const storedFileName = await writeTenantFile(userId, creditNoteFileName, creditNotePdfBytes);
+        stagedFile = storedFileName;
 
         // Modify parsed data to indicate it's a credit note
         const creditNoteParsedData = {
             ...parsedData,
             type: 'CREDIT_NOTE',
+            rawXml: null,
+            invoiceNumber: creditNoteNumber,
             originalInvoiceNumber: originalInvoice.invoiceNumber,
             cancellationReason: cancellationReason || 'Stornierung der Originalrechnung',
         };
 
-        // Create credit note record
-        const creditNote = await prisma.invoice.create({
-            data: {
-                type: 'CREDIT_NOTE',
-                fileName: creditNoteFileName,
-                storedFileName: storedFileName,
-                invoiceDate: new Date(),
-                invoiceNumber: creditNoteNumber,
-                parsedData: creditNoteParsedData,
-                totalAmount: originalInvoice.totalAmount ? -Math.abs(originalInvoice.totalAmount) : null,
-                status: 'SENT',
-                originalInvoiceId: originalInvoice.id,
-                cancellationReason: cancellationReason || null,
-                customerId: originalInvoice.customerId,
-                userId,
-            },
+        const creditNote = await inTransaction(async tx => {
+            const current = await tx.invoice.findFirst({
+                where: { id: originalInvoice.id, userId },
+                include: { creditNotes: true, income: true },
+            });
+            if (!current || current.status === 'CANCELLED' || current.creditNotes.length) {
+                throw new Error('Die Rechnung wurde bereits storniert');
+            }
+            // Legacy paid invoices may have an income date but no paidAt. Keep
+            // that realized booking date when the original is cancelled.
+            const cancellationPaidAt = current.paidAt ?? (
+                current.status === 'PAID' ? current.income?.date ?? null : null
+            );
+            const reserved = await getNextDocumentNumber(tx, userId, 'CREDIT_NOTE', year);
+            if (reserved !== creditNoteNumber) throw new Error('Nummer wurde zwischenzeitlich vergeben. Bitte erneut versuchen.');
+            const created = await tx.invoice.create({ data: {
+                type: 'CREDIT_NOTE', fileName: creditNoteFileName, storedFileName,
+                invoiceDate: new Date(), invoiceNumber: reserved, parsedData: creditNoteParsedData,
+                totalAmount: -Math.abs(originalInvoice.totalAmount ?? 0), status: 'SENT',
+                originalInvoiceId: originalInvoice.id, cancellationReason: cancellationReason || null,
+                customerId: originalInvoice.customerId, userId,
+            } });
+            await tx.invoice.update({
+                where: { id: originalInvoice.id, userId },
+                data: {
+                    status: 'CANCELLED',
+                    paidAt: cancellationPaidAt,
+                    cancellationReason: cancellationReason || null,
+                },
+            });
+            return created;
         });
-
-        // Update original invoice status to CANCELLED
-        await prisma.invoice.update({
-            where: { id: originalInvoice.id },
-            data: {
-                status: 'CANCELLED',
-                cancellationReason: cancellationReason || null
-            },
-        });
+        stagedFile = null;
 
         // Create audit log entries
         await createAuditLog({
@@ -241,10 +232,11 @@ export async function POST(request: Request) {
             }
         });
     } catch (error) {
+        if (stagedFile && owner) await deleteTenantFile(owner, stagedFile).catch(() => undefined);
         if (error instanceof UnauthorizedError) {
             return unauthorizedResponse();
         }
         console.error('Error cancelling invoice:', error);
-        return NextResponse.json({ error: 'Fehler beim Stornieren der Rechnung' }, { status: 500 });
+        return NextResponse.json({ error: 'Stornierung nicht möglich. Bitte Beleg prüfen und gegebenenfalls erneut versuchen.' }, { status: 409 });
     }
 }

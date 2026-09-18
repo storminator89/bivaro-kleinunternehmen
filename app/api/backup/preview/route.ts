@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { createBackupPreview } from '@/lib/backup-preview';
 import { auditSecurityEvent } from '@/lib/audit-log';
+import { MAX_JSON_BACKUP_BYTES, readRequestBodyWithinLimit, RequestBodyLimitError } from '@/lib/resource-limits';
 
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireUserId();
-    const backup = await request.json();
+    const body = await readRequestBodyWithinLimit(request, MAX_JSON_BACKUP_BYTES);
+    let backup: unknown;
+    try {
+      backup = JSON.parse(new TextDecoder().decode(body));
+    } catch {
+      return NextResponse.json({ error: 'Ungültiges JSON-Backup' }, { status: 400 });
+    }
     const preview = createBackupPreview(backup);
 
     await auditSecurityEvent(userId, {
@@ -24,6 +31,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof RequestBodyLimitError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
     return NextResponse.json(

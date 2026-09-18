@@ -1,3 +1,4 @@
+import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 /**
  * API v1 - Customers Endpoint
  * 
@@ -19,8 +20,8 @@ import {
   corsHeaders,
 } from '@/lib/api-auth';
 
-export async function OPTIONS() {
-  return handleCors();
+export async function OPTIONS(request: NextRequest) {
+  return handleCors(request);
 }
 
 // GET /api/v1/customers
@@ -115,6 +116,7 @@ export async function POST(request: NextRequest) {
         userId,
       },
     });
+    await auditCreate(userId, 'Customer', customer);
 
     const response = apiSuccess(customer);
     response.headers.set('Location', `/api/v1/customers/${customer.id}`);
@@ -178,6 +180,7 @@ export async function PUT(request: NextRequest) {
         ...(taxNumber !== undefined && { taxNumber: taxNumber?.trim() || null }),
       },
     });
+    await auditUpdate(userId, 'Customer', existing.id, existing, customer);
 
     const response = apiSuccess(customer);
     Object.entries(corsHeaders()).forEach(([key, value]) => {
@@ -209,6 +212,7 @@ export async function DELETE(request: NextRequest) {
     await prisma.customer.delete({
       where: { id: parseInt(id) },
     });
+    await auditDelete(userId, 'Customer', existing);
 
     const response = apiSuccess({ deleted: true, id: parseInt(id) });
     Object.entries(corsHeaders()).forEach(([key, value]) => {
