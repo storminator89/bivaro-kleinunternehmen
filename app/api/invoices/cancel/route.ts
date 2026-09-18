@@ -6,6 +6,11 @@ import { generateCreditNotePDF } from '@/lib/credit-note-pdf';
 import { inTransaction } from '@/lib/db-transaction';
 import { previewDocumentNumber, getNextDocumentNumber } from '@/lib/invoice-numbers';
 import { writeTenantFile, deleteTenantFile } from '@/lib/upload-path';
+import { getEInvoiceBookingRejection, getRawEInvoiceXml, parseEInvoiceXml } from '@/lib/e-invoice-parser';
+
+class CancellationUnsupportedError extends Error {
+    readonly status = 422;
+}
 
 // POST: Cancel an invoice by creating a credit note
 export async function POST(request: Request) {
@@ -57,37 +62,94 @@ export async function POST(request: Request) {
             ? JSON.parse(originalInvoice.parsedData)
             : originalInvoice.parsedData;
 
+        const importRejection = await getEInvoiceBookingRejection(parsedData);
+        if (importRejection) {
+            return NextResponse.json({ error: `Stornierung nicht möglich: ${importRejection}` }, { status: 422 });
+        }
+
+        // Older imports did not persist the parsed monetary fields. Re-read
+        // their bounded raw XML so cancellation uses the source totals and
+        // line adjustments instead of silently reconstructing them.
+        let sourceData: Record<string, unknown> = parsedData && typeof parsedData === 'object' && !Array.isArray(parsedData)
+            ? parsedData as Record<string, unknown>
+            : {};
+        const storedRawXml = getRawEInvoiceXml(parsedData);
+        const isStoredEInvoice = Boolean(storedRawXml || sourceData.eInvoiceFormat || sourceData.documentType || sourceData.currency);
+        if (storedRawXml) {
+            try {
+                const reparsed = await parseEInvoiceXml(storedRawXml);
+                sourceData = { ...sourceData, ...reparsed };
+            } catch {
+                return NextResponse.json({ error: 'Stornierung nicht möglich: Die gespeicherte E-Rechnungs-XML konnte nicht gelesen werden.' }, { status: 422 });
+            }
+        }
+
         // Extract items from original invoice
         // Handle different structures (legacy uploaded vs manual vs fixed uploaded)
-        const items = parsedData?.items || parsedData?.lineItems || [];
-        const formattedItems = items.map((item: Record<string, unknown>) => {
+        const items = sourceData.lineItems || sourceData.items || [];
+        const formattedItems = Array.isArray(items) ? items.map((item: Record<string, unknown>) => {
             // 1. Determine Quantity
             // In some uploaded invoices (due to bug), quantity is stored in 'date' field
-            let quantity = (item.quantity as number) || 1;
-            if (!item.quantity && item.date && !isNaN(parseFloat(String(item.date)))) {
+            const toFiniteNumber = (value: unknown): number | null => {
+                if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+                const number = Number(value);
+                return Number.isFinite(number) ? number : null;
+            };
+            const rawQuantity = toFiniteNumber(item.quantity);
+            let quantity = rawQuantity !== null && rawQuantity !== 0 ? rawQuantity : 1;
+            if ((rawQuantity === null || rawQuantity === 0) && item.date && !isNaN(parseFloat(String(item.date)))) {
                 quantity = parseFloat(String(item.date));
             }
 
             // 2. Determine Unit Price
             // In some uploaded invoices, unitPrice is missing but amount (line total) exists
-            let unitPrice = (item.unitPrice as number) || (item.price as number) || 0;
-            if (!unitPrice && item.amount) {
-                unitPrice = (item.amount as number) / quantity;
+            const amount = toFiniteNumber(item.amount);
+            const rawBaseQuantity = toFiniteNumber(item.baseQuantity ?? item.priceBaseQuantity);
+            const baseQuantity = rawBaseQuantity !== null && rawBaseQuantity > 0 ? rawBaseQuantity : null;
+            let unitPrice = toFiniteNumber(item.unitPrice ?? item.price);
+            if (amount === null && unitPrice === null) {
+                throw new CancellationUnsupportedError('Stornierung nicht möglich: Für eine Position fehlen sowohl der Originalbetrag als auch der Einzelpreis.');
             }
-            unitPrice = unitPrice || 0;
+            if (unitPrice === null) {
+                unitPrice = amount !== null ? amount * (baseQuantity ?? 1) / quantity : 0;
+            }
 
             return {
-                description: item.description || item.name || 'Position',
+                description: String(item.description || item.name || 'Position'),
                 quantity: quantity,
                 unitPrice: unitPrice,
-                unit: item.unit || 'Stück',
-                taxRate: item.taxRate || 0,
+                baseQuantity,
+                baseUnit: typeof item.baseUnit === 'string' ? item.baseUnit : null,
+                amount,
+                unit: String(item.unit || 'Stück'),
+                taxRate: Number(item.taxRate) || 0,
+                allowances: Array.isArray(item.allowances) ? item.allowances : [],
+                charges: Array.isArray(item.charges) ? item.charges : [],
             };
-        });
+        }) : [];
+
+        const finiteOrNull = (value: unknown): number | null => {
+            if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+            const number = Number(value);
+            return Number.isFinite(number) ? number : null;
+        };
+        const sourceNetAmount = finiteOrNull(sourceData.netAmount);
+        const sourceTaxAmount = finiteOrNull(sourceData.taxAmount);
+        const sourceGrossAmount = finiteOrNull(sourceData.grossAmount)
+            ?? finiteOrNull(sourceData.totalAmount)
+            ?? finiteOrNull(originalInvoice.totalAmount);
+        const sourceAllowanceTotal = finiteOrNull(sourceData.allowanceTotalAmount);
+        const sourceChargeTotal = finiteOrNull(sourceData.chargeTotalAmount);
+        if (sourceGrossAmount === null) {
+            return NextResponse.json({ error: 'Stornierung nicht möglich: Der ursprüngliche Bruttogesamtbetrag fehlt.' }, { status: 422 });
+        }
+        if (isStoredEInvoice && sourceGrossAmount !== 0 && formattedItems.length === 0) {
+            throw new CancellationUnsupportedError('Stornierung nicht möglich: Die ursprünglichen Positionen fehlen.');
+        }
 
         // --- Extract customer name ---
         let resolvedName: string | null = originalInvoice.customer?.name ?? null;
-        if (!resolvedName && parsedData?.customerName) resolvedName = String(parsedData.customerName);
+        if (!resolvedName && sourceData.customerName) resolvedName = String(sourceData.customerName);
 
         // --- Build combined address block ---
         // parsedData.customerAddress (from CreateInvoiceModal) already contains name + street + city
@@ -95,12 +157,15 @@ export async function POST(request: Request) {
         // We pass everything as customerAddress and customerName=null to avoid double-printing.
         let fullAddress = '';
 
-        if (parsedData?.customerAddress) {
+        if (sourceData.customerAddress) {
             // Already the full block – use as-is
-            fullAddress = String(parsedData.customerAddress).trim();
-        } else if (parsedData?.buyerInfo && typeof parsedData.buyerInfo === 'object') {
-            const bi = parsedData.buyerInfo as Record<string, string | undefined>;
-            const parts = [resolvedName, bi.address, [bi.zipCode, bi.city].filter(Boolean).join(' ')].filter(Boolean);
+            fullAddress = String(sourceData.customerAddress).trim();
+        } else if (sourceData.buyerInfo && typeof sourceData.buyerInfo === 'object') {
+            const bi = sourceData.buyerInfo as Record<string, unknown>;
+            const addressLines = Array.isArray(bi.addressLines)
+                ? bi.addressLines.map(value => String(value)).filter(Boolean)
+                : (bi.address ? [String(bi.address)] : []);
+            const parts = [resolvedName, ...addressLines, [bi.zipCode, bi.city].filter(Boolean).join(' ')].filter(Boolean);
             fullAddress = parts.join('\n');
         } else {
             const c = originalInvoice.customer;
@@ -118,7 +183,12 @@ export async function POST(request: Request) {
                 originalInvoiceNumber: originalInvoice.invoiceNumber,
                 originalInvoiceDate: originalInvoice.invoiceDate,
                 cancellationReason: cancellationReason || 'Stornierung der Originalrechnung',
-                totalAmount: originalInvoice.totalAmount || 0,
+                totalAmount: sourceGrossAmount,
+                netAmount: sourceNetAmount,
+                taxAmount: sourceTaxAmount,
+                grossAmount: sourceGrossAmount,
+                allowanceTotalAmount: sourceAllowanceTotal,
+                chargeTotalAmount: sourceChargeTotal,
                 customerName: null,           // name is already inside fullAddress
                 customerAddress: fullAddress || null,
                 items: formattedItems,
@@ -145,8 +215,10 @@ export async function POST(request: Request) {
 
         // Modify parsed data to indicate it's a credit note
         const creditNoteParsedData = {
-            ...parsedData,
+            ...sourceData,
             type: 'CREDIT_NOTE',
+            documentType: 'CREDIT_NOTE',
+            documentTypeCode: '381',
             rawXml: null,
             invoiceNumber: creditNoteNumber,
             originalInvoiceNumber: originalInvoice.invoiceNumber,
@@ -171,7 +243,7 @@ export async function POST(request: Request) {
             const created = await tx.invoice.create({ data: {
                 type: 'CREDIT_NOTE', fileName: creditNoteFileName, storedFileName,
                 invoiceDate: new Date(), invoiceNumber: reserved, parsedData: creditNoteParsedData,
-                totalAmount: -Math.abs(originalInvoice.totalAmount ?? 0), status: 'SENT',
+                totalAmount: -Math.abs(sourceGrossAmount), status: 'SENT',
                 originalInvoiceId: originalInvoice.id, cancellationReason: cancellationReason || null,
                 customerId: originalInvoice.customerId, userId,
             } });
@@ -235,6 +307,9 @@ export async function POST(request: Request) {
         if (stagedFile && owner) await deleteTenantFile(owner, stagedFile).catch(() => undefined);
         if (error instanceof UnauthorizedError) {
             return unauthorizedResponse();
+        }
+        if (error instanceof CancellationUnsupportedError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
         }
         console.error('Error cancelling invoice:', error);
         return NextResponse.json({ error: 'Stornierung nicht möglich. Bitte Beleg prüfen und gegebenenfalls erneut versuchen.' }, { status: 409 });

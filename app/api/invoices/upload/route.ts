@@ -16,6 +16,7 @@ import {
 } from '@/lib/resource-limits';
 import {
   extractEmbeddedEInvoiceXml,
+  getEInvoiceImportRejection,
   parseEInvoiceXml,
   type ParsedEInvoice,
 } from '@/lib/e-invoice-parser';
@@ -85,9 +86,23 @@ async function findOrCreateCustomer(
 
 function toStoredParsedData(parsedInvoice: ParsedEInvoice) {
   return {
+    extractionStatus: parsedInvoice.extractionStatus,
+    validationStatus: parsedInvoice.validationStatus,
+    documentType: parsedInvoice.documentType,
+    documentTypeCode: parsedInvoice.documentTypeCode,
+    currency: parsedInvoice.currency,
     invoiceNumber: parsedInvoice.invoiceNumber,
     invoiceDate: parsedInvoice.invoiceDate ? parsedInvoice.invoiceDate.toISOString() : null,
     dueDate: parsedInvoice.dueDate ? parsedInvoice.dueDate.toISOString() : null,
+    grossAmount: parsedInvoice.grossAmount,
+    prepaidAmount: parsedInvoice.prepaidAmount,
+    roundingAmount: parsedInvoice.roundingAmount,
+    dueAmount: parsedInvoice.dueAmount,
+    netAmount: parsedInvoice.netAmount,
+    taxAmount: parsedInvoice.taxAmount,
+    lineTotalAmount: parsedInvoice.lineTotalAmount,
+    chargeTotalAmount: parsedInvoice.chargeTotalAmount,
+    allowanceTotalAmount: parsedInvoice.allowanceTotalAmount,
     totalAmount: parsedInvoice.totalAmount,
     customerName: parsedInvoice.customerName,
     lineItems: parsedInvoice.lineItems,
@@ -154,6 +169,11 @@ export async function POST(request: NextRequest) {
       }
       const message = error instanceof Error ? error.message : 'Ungültige E-Rechnungs-XML';
       return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const importRejection = getEInvoiceImportRejection(parsedInvoice);
+    if (importRejection) {
+      return NextResponse.json({ error: importRejection }, { status: 422 });
     }
 
     // Keep this explicit for type narrowing and to document that only the

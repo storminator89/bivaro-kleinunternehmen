@@ -28,6 +28,7 @@ import {
 } from '@/lib/resource-limits';
 import {
   extractEmbeddedEInvoiceXml,
+  getEInvoiceImportRejection,
   parseEInvoiceXml,
   type ParsedEInvoice,
 } from '@/lib/e-invoice-parser';
@@ -94,9 +95,23 @@ async function findOrCreateCustomer(
 
 function toStoredParsedData(parsedInvoice: ParsedEInvoice) {
   return {
+    extractionStatus: parsedInvoice.extractionStatus,
+    validationStatus: parsedInvoice.validationStatus,
+    documentType: parsedInvoice.documentType,
+    documentTypeCode: parsedInvoice.documentTypeCode,
+    currency: parsedInvoice.currency,
     invoiceNumber: parsedInvoice.invoiceNumber,
     invoiceDate: parsedInvoice.invoiceDate ? parsedInvoice.invoiceDate.toISOString() : null,
     dueDate: parsedInvoice.dueDate ? parsedInvoice.dueDate.toISOString() : null,
+    grossAmount: parsedInvoice.grossAmount,
+    prepaidAmount: parsedInvoice.prepaidAmount,
+    roundingAmount: parsedInvoice.roundingAmount,
+    dueAmount: parsedInvoice.dueAmount,
+    netAmount: parsedInvoice.netAmount,
+    taxAmount: parsedInvoice.taxAmount,
+    lineTotalAmount: parsedInvoice.lineTotalAmount,
+    chargeTotalAmount: parsedInvoice.chargeTotalAmount,
+    allowanceTotalAmount: parsedInvoice.allowanceTotalAmount,
     totalAmount: parsedInvoice.totalAmount,
     customerName: parsedInvoice.customerName,
     lineItems: parsedInvoice.lineItems,
@@ -178,6 +193,11 @@ export async function POST(request: NextRequest) {
       return apiError(message, 400, 'INVALID_XML');
     }
 
+    const importRejection = getEInvoiceImportRejection(parsedInvoice);
+    if (importRejection) {
+      return apiError(importRejection, 422, 'UNSUPPORTED_EINVOICE');
+    }
+
     if (parsedInvoice.invoiceNumber) {
       const existingInvoice = await prisma.invoice.findFirst({
         where: { invoiceNumber: parsedInvoice.invoiceNumber, userId },
@@ -238,6 +258,12 @@ export async function POST(request: NextRequest) {
       status: invoice.status,
       customerName: parsedInvoice.customerName,
       eInvoiceFormat: parsedInvoice.format,
+      documentType: parsedInvoice.documentType,
+      currency: parsedInvoice.currency,
+      grossAmount: parsedInvoice.grossAmount,
+      prepaidAmount: parsedInvoice.prepaidAmount,
+      roundingAmount: parsedInvoice.roundingAmount,
+      dueAmount: parsedInvoice.dueAmount,
       hasEInvoiceXml: true,
       hasPdfFile: fileKind === 'pdf',
     });

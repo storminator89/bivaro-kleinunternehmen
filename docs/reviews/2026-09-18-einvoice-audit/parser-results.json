@@ -1,0 +1,147 @@
+{
+  "ciiCreditNote": {
+    "format": "CII",
+    "invoiceNumber": "RE-AUDIT-001",
+    "invoiceDate": "2026-09-18T00:00:00.000Z",
+    "dueDate": "2026-10-18T00:00:00.000Z",
+    "totalAmount": 100,
+    "customerName": "Testkunde",
+    "lineItems": [
+      {
+        "positionNumber": "1",
+        "description": "Test",
+        "details": null,
+        "quantity": 1,
+        "unit": "C62",
+        "unitPrice": 100,
+        "amount": 100,
+        "taxRate": 0
+      }
+    ],
+    "buyerInfo": {
+      "name": "Testkunde",
+      "email": "kunde@example.com",
+      "address": "Kundenweg 1",
+      "zipCode": "10115",
+      "city": "Berlin",
+      "country": "DE"
+    },
+    "sellerInfo": {
+      "name": "Testfirma",
+      "email": "test@example.com",
+      "address": "Teststrasse 1",
+      "zipCode": "10115",
+      "city": "Berlin",
+      "country": "DE"
+    }
+  },
+  "ciiPrepayment": {
+    "format": "CII",
+    "invoiceNumber": "RE-AUDIT-001",
+    "invoiceDate": "2026-09-18T00:00:00.000Z",
+    "dueDate": "2026-10-18T00:00:00.000Z",
+    "totalAmount": 100,
+    "customerName": "Testkunde",
+    "lineItems": [
+      {
+        "positionNumber": "1",
+        "description": "Test",
+        "details": null,
+        "quantity": 1,
+        "unit": "C62",
+        "unitPrice": 100,
+        "amount": 100,
+        "taxRate": 0
+      }
+    ],
+    "buyerInfo": {
+      "name": "Testkunde",
+      "email": "kunde@example.com",
+      "address": "Kundenweg 1",
+      "zipCode": "10115",
+      "city": "Berlin",
+      "country": "DE"
+    },
+    "sellerInfo": {
+      "name": "Testfirma",
+      "email": "test@example.com",
+      "address": "Teststrasse 1",
+      "zipCode": "10115",
+      "city": "Berlin",
+      "country": "DE"
+    }
+  },
+  "ublPrepayment": {
+    "format": "UBL",
+    "invoiceNumber": "XR-2025-77",
+    "invoiceDate": "2025-03-01T00:00:00.000Z",
+    "dueDate": "2025-03-15T00:00:00.000Z",
+    "totalAmount": 60,
+    "customerName": "Kunde AG",
+    "lineItems": [
+      {
+        "positionNumber": "1",
+        "description": "Support",
+        "details": null,
+        "quantity": 3,
+        "unit": "HUR",
+        "unitPrice": 40,
+        "amount": 100,
+        "taxRate": 0
+      }
+    ],
+    "buyerInfo": {
+      "name": "Kunde AG",
+      "email": "rechnung@kunde-ag.de",
+      "address": "Kundenstraße 5",
+      "zipCode": "20095",
+      "city": "Hamburg",
+      "country": "DE"
+    },
+    "sellerInfo": {
+      "name": "Lieferant GmbH",
+      "email": "invoice@lieferant.de",
+      "address": "Lieferweg 1",
+      "zipCode": "10115",
+      "city": "Berlin",
+      "country": "DE"
+    }
+  },
+  "usd": {
+    "format": "CII",
+    "invoiceNumber": "RE-AUDIT-001",
+    "invoiceDate": "2026-09-18T00:00:00.000Z",
+    "dueDate": "2026-10-18T00:00:00.000Z",
+    "totalAmount": 100,
+    "customerName": "Testkunde",
+    "lineItems": [
+      {
+        "positionNumber": "1",
+        "description": "Test",
+        "details": null,
+        "quantity": 1,
+        "unit": "C62",
+        "unitPrice": 100,
+        "amount": 100,
+        "taxRate": 0
+      }
+    ],
+    "buyerInfo": {
+      "name": "Testkunde",
+      "email": "kunde@example.com",
+      "address": "Kundenweg 1",
+      "zipCode": "10115",
+      "city": "Berlin",
+      "country": "DE"
+    },
+    "sellerInfo": {
+      "name": "Testfirma",
+      "email": "test@example.com",
+      "address": "Teststrasse 1",
+      "zipCode": "10115",
+      "city": "Berlin",
+      "country": "DE"
+    }
+  },
+  "ublCreditNote": "Error: Unbekannte E-Rechnungsstruktur. Unterstützt werden ZUGFeRD/Factur-X CII und XRechnung-UBL."
+}

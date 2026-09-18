@@ -153,4 +153,19 @@ describe('invoice numbers and payment lifecycle', () => {
     expect(reopened.income).toBeNull(); expect(reopened.paidAt).toBeNull();
     await expect(updateInvoiceStatus('bob', invoice.id, 'PAID')).rejects.toThrow('Rechnung nicht gefunden');
   });
+
+  it('rejects payment for a legacy stored e-invoice whose raw XML is foreign currency', async () => {
+    const invoice = await database.client.invoice.create({
+      data: {
+        userId: 'alice', fileName: 'legacy.xml', storedFileName: 'legacy.xml', totalAmount: 100,
+        parsedData: {
+          eInvoiceFormat: 'UBL',
+          rawXml: '<Invoice><ID>USD-1</ID><IssueDate>2026-09-18</IssueDate><DocumentCurrencyCode>USD</DocumentCurrencyCode><LegalMonetaryTotal><TaxInclusiveAmount currencyID="USD">100</TaxInclusiveAmount><PayableAmount currencyID="USD">100</PayableAmount></LegalMonetaryTotal></Invoice>',
+        },
+      },
+    });
+
+    await expect(updateInvoiceStatus('alice', invoice.id, 'PAID')).rejects.toThrow('währung');
+    expect(await database.client.income.findUnique({ where: { invoiceId: invoice.id } })).toBeNull();
+  });
 });

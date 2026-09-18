@@ -7,6 +7,17 @@ type XmlObject = Record<string, unknown>;
 
 export type EInvoiceFormat = 'CII' | 'UBL';
 
+export type EInvoiceDocumentType = 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'UNKNOWN';
+
+export type ParsedEInvoiceAdjustment = {
+  amount: number | null;
+  baseAmount: number | null;
+  percentage: number | null;
+  reason: string | null;
+  kind: 'CHARGE' | 'ALLOWANCE';
+  currency: string | null;
+};
+
 export type ParsedEInvoiceParty = {
   name: string | null;
   email: string | null;
@@ -14,6 +25,8 @@ export type ParsedEInvoiceParty = {
   zipCode: string | null;
   city: string | null;
   country: string | null;
+  /** Every address line in source order. `address` is the newline-joined view. */
+  addressLines: string[];
 };
 
 export type ParsedEInvoiceLineItem = {
@@ -23,15 +36,39 @@ export type ParsedEInvoiceLineItem = {
   quantity: number | null;
   unit: string | null;
   unitPrice: number | null;
+  /** Price basis (BT-149 / cbc:BaseQuantity). */
+  baseQuantity: number | null;
+  baseUnit: string | null;
   amount: number | null;
   taxRate: number | null;
+  charges: ParsedEInvoiceAdjustment[];
+  allowances: ParsedEInvoiceAdjustment[];
 };
 
 export type ParsedEInvoice = {
   format: EInvoiceFormat;
+  /** XML extraction result only. No XSD or Schematron validation is performed here. */
+  extractionStatus: 'PARSED';
+  validationStatus: 'NOT_VALIDATED';
+  documentType: EInvoiceDocumentType;
+  documentTypeCode: string | null;
+  currency: string | null;
   invoiceNumber: string | null;
   invoiceDate: Date | null;
   dueDate: Date | null;
+  /** BT-112, the gross invoice total. This is the canonical totalAmount. */
+  grossAmount: number | null;
+  /** BT-113, the amount already prepaid. */
+  prepaidAmount: number | null;
+  /** BT-114, payable rounding adjustment. */
+  roundingAmount: number | null;
+  /** BT-115, the amount remaining payable after prepayment/rounding. */
+  dueAmount: number | null;
+  netAmount: number | null;
+  taxAmount: number | null;
+  lineTotalAmount: number | null;
+  chargeTotalAmount: number | null;
+  allowanceTotalAmount: number | null;
   totalAmount: number | null;
   customerName: string | null;
   lineItems: ParsedEInvoiceLineItem[];
@@ -52,6 +89,7 @@ const emptyParty: ParsedEInvoiceParty = {
   zipCode: null,
   city: null,
   country: null,
+  addressLines: [],
 };
 
 function isRecord(value: unknown): value is XmlObject {
@@ -93,6 +131,14 @@ function getAttribute(value: unknown, attributeName: string): string | null {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
 }
 
+function normalizeCurrency(value: string | null): string | null {
+  return value ? value.trim().toUpperCase() : null;
+}
+
+function getCurrencyFromAmount(value: unknown): string | null {
+  return normalizeCurrency(getAttribute(value, 'currencyID') || getAttribute(value, 'currencyId'));
+}
+
 function asText(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'string') return value.trim() || null;
@@ -118,7 +164,11 @@ function getText(obj: unknown, path: string): string | null {
 function asNumber(value: unknown): number | null {
   const text = asText(value);
   if (!text) return null;
-  const number = Number.parseFloat(text.replace(',', '.'));
+  // XML monetary/quantity values use the decimal lexical space. Do not use
+  // parseFloat here: it would silently turn values such as `100garbage` into
+  // 100 and comma decimals into a value that was never present in the XML.
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return null;
+  const number = Number(text);
   return Number.isFinite(number) ? number : null;
 }
 
@@ -130,17 +180,23 @@ function asDate(value: unknown): Date | null {
   const text = asText(value);
   if (!text) return null;
 
-  const compactDate = text.match(/^(\d{4})(\d{2})(\d{2})/);
+  const compactDate = text.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (compactDate) {
-    return new Date(`${compactDate[1]}-${compactDate[2]}-${compactDate[3]}`);
+    return validCalendarDate(Number(compactDate[1]), Number(compactDate[2]), Number(compactDate[3]));
   }
 
-  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoDate) {
-    return new Date(`${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`);
+    return validCalendarDate(Number(isoDate[1]), Number(isoDate[2]), Number(isoDate[3]));
   }
 
   return null;
+}
+
+function validCalendarDate(year: number, month: number, day: number): Date | null {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date;
 }
 
 function getDate(obj: unknown, path: string): Date | null {
@@ -171,20 +227,70 @@ function firstDate(obj: unknown, paths: string[]): Date | null {
   return null;
 }
 
+function getAddressLines(addressNode: unknown, paths: string[]): string[] {
+  const read = (value: unknown, segments: string[]): unknown[] => {
+    if (segments.length === 0) return toArray(value);
+    if (Array.isArray(value)) return value.flatMap(item => read(item, segments));
+    return read(getChild(value, segments[0]), segments.slice(1));
+  };
+  return paths.flatMap(path => read(addressNode, path.split('.')).map(asText).filter((value): value is string => Boolean(value)));
+}
+
+function getDescendantNodes(value: unknown, wantedName: string): unknown[] {
+  if (Array.isArray(value)) return value.flatMap(item => getDescendantNodes(item, wantedName));
+  if (!isRecord(value)) return [];
+  return Object.entries(value).flatMap(([key, child]) => [
+    ...(key !== '$' && localName(key) === wantedName ? toArray(child) : []),
+    ...getDescendantNodes(child, wantedName),
+  ]);
+}
+
+function parseAdjustment(node: unknown, fallbackKind: 'CHARGE' | 'ALLOWANCE'): ParsedEInvoiceAdjustment {
+  const indicator = firstText(node, ['ChargeIndicator', 'ChargeIndicator.Indicator', 'ChargeIndicatorIndicator']);
+  const isCharge = indicator === null
+    ? fallbackKind === 'CHARGE'
+    : ['true', '1', 'yes'].includes(indicator.toLowerCase());
+  const amountNode = getChild(node, 'ActualAmount') ?? getChild(node, 'Amount');
+  const baseAmountNode = getChild(node, 'BasisAmount') ?? getChild(node, 'BaseAmount');
+
+  return {
+    amount: asNumber(amountNode),
+    baseAmount: asNumber(baseAmountNode),
+    percentage: firstNumber(node, ['CalculationPercent', 'MultiplierFactorNumeric']),
+    reason: firstText(node, ['Reason', 'AllowanceChargeReason']),
+    kind: isCharge ? 'CHARGE' : 'ALLOWANCE',
+    currency: getCurrencyFromAmount(amountNode) || getCurrencyFromAmount(baseAmountNode),
+  };
+}
+
+function parseDocumentType(code: string | null, rootType?: 'Invoice' | 'CreditNote'): EInvoiceDocumentType {
+  if (code !== null) {
+    if (code === '383') return 'DEBIT_NOTE';
+    if (code === '381') return 'CREDIT_NOTE';
+    if (code === '380') return rootType === 'CreditNote' ? 'UNKNOWN' : 'INVOICE';
+    return 'UNKNOWN';
+  }
+  if (rootType === 'Invoice') return 'INVOICE';
+  if (rootType === 'CreditNote') return 'CREDIT_NOTE';
+  return 'UNKNOWN';
+}
+
 function parseCiiParty(party: unknown): ParsedEInvoiceParty {
   if (!party) return { ...emptyParty };
 
   const addressNode = getPath(party, 'PostalTradeAddress');
+  const addressLines = getAddressLines(addressNode, ['LineOne', 'LineTwo', 'LineThree']);
   return {
     name: getText(party, 'Name'),
     email: firstText(party, [
       'DefinedTradeContact.EmailURIUniversalCommunication.URIID',
       'URIUniversalCommunication.URIID',
     ]),
-    address: firstText(addressNode, ['LineOne', 'LineTwo', 'LineThree']),
+    address: addressLines.length ? addressLines.join('\n') : null,
     zipCode: getText(addressNode, 'PostcodeCode'),
     city: getText(addressNode, 'CityName'),
     country: getText(addressNode, 'CountryID'),
+    addressLines,
   };
 }
 
@@ -192,6 +298,12 @@ function parseUblParty(party: unknown): ParsedEInvoiceParty {
   if (!party) return { ...emptyParty };
 
   const addressNode = getPath(party, 'PostalAddress');
+  const addressLines = getAddressLines(addressNode, [
+    'StreetName',
+    'BuildingName',
+    'BuildingNumber',
+    'AddressLine.Line',
+  ]);
   return {
     name: firstText(party, [
       'PartyName.Name',
@@ -199,18 +311,19 @@ function parseUblParty(party: unknown): ParsedEInvoiceParty {
       'EndpointID',
     ]),
     email: getText(party, 'Contact.ElectronicMail'),
-    address: firstText(addressNode, [
-      'StreetName',
-      'AddressLine.Line',
-    ]),
+    address: addressLines.length ? addressLines.join('\n') : null,
     zipCode: getText(addressNode, 'PostalZone'),
     city: getText(addressNode, 'CityName'),
     country: getText(addressNode, 'Country.IdentificationCode'),
+    addressLines,
   };
 }
 
 function parseCiiLineItem(item: unknown): ParsedEInvoiceLineItem {
   const quantityNode = getPath(item, 'SpecifiedLineTradeDelivery.BilledQuantity');
+  const baseQuantityNode = getPath(item, 'SpecifiedLineTradeAgreement.NetPriceProductTradePrice.BasisQuantity');
+  const adjustments = getDescendantNodes(getPath(item, 'SpecifiedLineTradeAgreement'), 'AppliedTradeAllowanceCharge')
+    .map(node => parseAdjustment(node, 'ALLOWANCE'));
 
   return {
     positionNumber: getText(item, 'AssociatedDocumentLineDocument.LineID'),
@@ -222,13 +335,20 @@ function parseCiiLineItem(item: unknown): ParsedEInvoiceLineItem {
     quantity: asNumber(quantityNode),
     unit: getAttribute(quantityNode, 'unitCode'),
     unitPrice: getNumber(item, 'SpecifiedLineTradeAgreement.NetPriceProductTradePrice.ChargeAmount'),
+    baseQuantity: asNumber(baseQuantityNode),
+    baseUnit: getAttribute(baseQuantityNode, 'unitCode'),
     amount: getNumber(item, 'SpecifiedLineTradeSettlement.SpecifiedTradeSettlementLineMonetarySummation.LineTotalAmount'),
     taxRate: getNumber(item, 'SpecifiedLineTradeSettlement.ApplicableTradeTax.RateApplicablePercent'),
+    charges: adjustments.filter(adjustment => adjustment.kind === 'CHARGE'),
+    allowances: adjustments.filter(adjustment => adjustment.kind === 'ALLOWANCE'),
   };
 }
 
 function parseUblLineItem(item: unknown): ParsedEInvoiceLineItem {
   const quantityNode = getPath(item, 'InvoicedQuantity');
+  const creditQuantityNode = quantityNode ?? getPath(item, 'CreditedQuantity');
+  const baseQuantityNode = getPath(item, 'Price.BaseQuantity');
+  const adjustments = toArray(getPath(item, 'AllowanceCharge')).map(node => parseAdjustment(node, 'ALLOWANCE'));
 
   return {
     positionNumber: getText(item, 'ID'),
@@ -237,14 +357,18 @@ function parseUblLineItem(item: unknown): ParsedEInvoiceLineItem {
       'Item.Description',
     ]),
     details: getText(item, 'Item.Description'),
-    quantity: asNumber(quantityNode),
-    unit: getAttribute(quantityNode, 'unitCode'),
+    quantity: asNumber(creditQuantityNode),
+    unit: getAttribute(creditQuantityNode, 'unitCode'),
     unitPrice: getNumber(item, 'Price.PriceAmount'),
+    baseQuantity: asNumber(baseQuantityNode),
+    baseUnit: getAttribute(baseQuantityNode, 'unitCode'),
     amount: getNumber(item, 'LineExtensionAmount'),
     taxRate: firstNumber(item, [
       'Item.ClassifiedTaxCategory.Percent',
       'TaxTotal.TaxSubtotal.TaxCategory.Percent',
     ]),
+    charges: adjustments.filter(adjustment => adjustment.kind === 'CHARGE'),
+    allowances: adjustments.filter(adjustment => adjustment.kind === 'ALLOWANCE'),
   };
 }
 
@@ -257,13 +381,37 @@ function parseCiiInvoice(root: unknown, rawXml: string): ParsedEInvoice {
 
   const buyerInfo = parseCiiParty(getPath(agreement, 'BuyerTradeParty'));
   const sellerInfo = parseCiiParty(getPath(agreement, 'SellerTradeParty'));
+  const documentTypeCode = getText(exchangedDoc, 'TypeCode');
+  const grossAmount = firstNumber(summation, ['GrandTotalAmount']);
+  const prepaidAmount = firstNumber(summation, ['TotalPrepaidAmount']);
+  const roundingAmount = firstNumber(summation, ['RoundingAmount']);
+  const dueAmount = firstNumber(summation, ['DuePayableAmount']);
+  const currency = normalizeCurrency(
+    firstText(settlement, ['InvoiceCurrencyCode'])
+      || getCurrencyFromAmount(getPath(summation, 'GrandTotalAmount'))
+      || getCurrencyFromAmount(getPath(summation, 'DuePayableAmount')),
+  );
 
   return {
     format: 'CII',
+    extractionStatus: 'PARSED',
+    validationStatus: 'NOT_VALIDATED',
+    documentType: parseDocumentType(documentTypeCode),
+    documentTypeCode,
+    currency,
     invoiceNumber: getText(exchangedDoc, 'ID'),
     invoiceDate: getDate(exchangedDoc, 'IssueDateTime.DateTimeString'),
     dueDate: getDate(settlement, 'SpecifiedTradePaymentTerms.DueDateDateTime.DateTimeString'),
-    totalAmount: firstNumber(summation, ['GrandTotalAmount', 'DuePayableAmount']),
+    grossAmount,
+    prepaidAmount,
+    roundingAmount,
+    dueAmount,
+    netAmount: firstNumber(summation, ['TaxBasisTotalAmount']),
+    taxAmount: firstNumber(summation, ['TaxTotalAmount']),
+    lineTotalAmount: firstNumber(summation, ['LineTotalAmount']),
+    chargeTotalAmount: firstNumber(summation, ['ChargeTotalAmount']),
+    allowanceTotalAmount: firstNumber(summation, ['AllowanceTotalAmount']),
+    totalAmount: grossAmount,
     customerName: buyerInfo.name,
     lineItems: toArray(getPath(tradeTransaction, 'IncludedSupplyChainTradeLineItem'))
       .filter(Boolean)
@@ -274,22 +422,43 @@ function parseCiiInvoice(root: unknown, rawXml: string): ParsedEInvoice {
   };
 }
 
-function parseUblInvoice(root: unknown, rawXml: string): ParsedEInvoice {
+function parseUblInvoice(root: unknown, rawXml: string, rootType: 'Invoice' | 'CreditNote'): ParsedEInvoice {
   const buyerInfo = parseUblParty(getPath(root, 'AccountingCustomerParty.Party'));
   const sellerInfo = parseUblParty(getPath(root, 'AccountingSupplierParty.Party'));
+  const summation = getPath(root, 'LegalMonetaryTotal');
+  const documentTypeCode = firstText(root, ['InvoiceTypeCode', 'CreditNoteTypeCode']);
+  const grossAmount = firstNumber(summation, ['TaxInclusiveAmount']);
+  const prepaidAmount = firstNumber(summation, ['PrepaidAmount']);
+  const roundingAmount = firstNumber(summation, ['PayableRoundingAmount']);
+  const dueAmount = firstNumber(summation, ['PayableAmount']);
+  const currency = normalizeCurrency(
+    firstText(root, ['DocumentCurrencyCode'])
+      || getCurrencyFromAmount(getPath(summation, 'TaxInclusiveAmount'))
+      || getCurrencyFromAmount(getPath(summation, 'PayableAmount')),
+  );
 
   return {
     format: 'UBL',
+    extractionStatus: 'PARSED',
+    validationStatus: 'NOT_VALIDATED',
+    documentType: parseDocumentType(documentTypeCode, rootType),
+    documentTypeCode,
+    currency,
     invoiceNumber: getText(root, 'ID'),
     invoiceDate: firstDate(root, ['IssueDate', 'TaxPointDate']),
     dueDate: getDate(root, 'DueDate'),
-    totalAmount: firstNumber(root, [
-      'LegalMonetaryTotal.PayableAmount',
-      'LegalMonetaryTotal.TaxInclusiveAmount',
-      'LegalMonetaryTotal.LineExtensionAmount',
-    ]),
+    grossAmount,
+    prepaidAmount,
+    roundingAmount,
+    dueAmount,
+    netAmount: firstNumber(summation, ['TaxExclusiveAmount']),
+    taxAmount: firstNumber(root, ['TaxTotal.TaxAmount']),
+    lineTotalAmount: firstNumber(summation, ['LineExtensionAmount']),
+    chargeTotalAmount: firstNumber(summation, ['ChargeTotalAmount']),
+    allowanceTotalAmount: firstNumber(summation, ['AllowanceTotalAmount']),
+    totalAmount: grossAmount,
     customerName: buyerInfo.name,
-    lineItems: toArray(getPath(root, 'InvoiceLine'))
+    lineItems: toArray(getPath(root, rootType === 'CreditNote' ? 'CreditNoteLine' : 'InvoiceLine'))
       .filter(Boolean)
       .map(parseUblLineItem),
     buyerInfo,
@@ -396,10 +565,88 @@ export async function parseEInvoiceXml(xmlContent: string): Promise<ParsedEInvoi
 
   const ublRoot = getChild(parsedXml, 'Invoice');
   if (ublRoot && getPath(ublRoot, 'LegalMonetaryTotal')) {
-    return parseUblInvoice(ublRoot, rawXml);
+    return parseUblInvoice(ublRoot, rawXml, 'Invoice');
+  }
+
+  const creditNoteRoot = getChild(parsedXml, 'CreditNote');
+  if (creditNoteRoot && getPath(creditNoteRoot, 'LegalMonetaryTotal')) {
+    return parseUblInvoice(creditNoteRoot, rawXml, 'CreditNote');
   }
 
   throw new Error('Unbekannte E-Rechnungsstruktur. Unterstützt werden ZUGFeRD/Factur-X CII und XRechnung-UBL.');
+}
+
+/**
+ * Returns a user-facing reason when the current EUR-only invoice ledger cannot
+ * safely book the extracted document. Parsing remains format tolerant, but the
+ * upload boundary must not turn unsupported values into EUR invoices.
+ */
+export function getEInvoiceImportRejection(parsed: ParsedEInvoice): string | null {
+  if (parsed.documentType === 'CREDIT_NOTE') {
+    return 'Der Import von Gutschriften (Dokumenttyp 381) wird derzeit nicht unterstützt.';
+  }
+  if (parsed.documentType === 'DEBIT_NOTE') {
+    return 'Der Import von Belastungsanzeigen (Dokumenttyp 383) wird derzeit nicht unterstützt.';
+  }
+  if (parsed.documentType !== 'INVOICE') {
+    return 'Der Dokumenttyp der E-Rechnung ist nicht unterstützt.';
+  }
+  if (!parsed.invoiceDate || Number.isNaN(parsed.invoiceDate.getTime())) {
+    return 'Das Rechnungsdatum fehlt oder ist ungültig.';
+  }
+  if (!parsed.currency) {
+    return 'Die Rechnungswährung fehlt. Nur E-Rechnungen mit eindeutig angegebener Währung können importiert werden.';
+  }
+  if (parsed.currency !== 'EUR') {
+    return `Die Rechnungswährung ${parsed.currency} wird nicht unterstützt. Der Import ist derzeit nur für EUR möglich.`;
+  }
+  if (parsed.grossAmount === null || !Number.isFinite(parsed.grossAmount) || parsed.grossAmount < 0) {
+    return 'Der Bruttogesamtbetrag (BT-112) fehlt. Die E-Rechnung kann nicht sicher verbucht werden.';
+  }
+  if (parsed.dueAmount === null || !Number.isFinite(parsed.dueAmount)) {
+    return 'Der fällige Betrag (BT-115) fehlt. Die E-Rechnung kann nicht sicher verbucht werden.';
+  }
+  if (parsed.prepaidAmount !== null && Math.abs(parsed.prepaidAmount) > 0.000001) {
+    return 'E-Rechnungen mit Vorauszahlungen (BT-113) werden derzeit nicht unterstützt.';
+  }
+  if (parsed.roundingAmount !== null && Math.abs(parsed.roundingAmount) > 0.000001) {
+    return 'E-Rechnungen mit Rundungsbetrag (BT-114) werden derzeit nicht unterstützt.';
+  }
+  if (Math.abs(parsed.dueAmount - parsed.grossAmount) > 0.005) {
+    return 'Der fällige Betrag (BT-115) weicht vom Bruttogesamtbetrag (BT-112) ab. Diese Zahlungsabzüge werden derzeit nicht unterstützt.';
+  }
+  return null;
+}
+
+/** Validate an already stored import before it enters payment bookkeeping. */
+export async function getEInvoiceBookingRejection(parsedData: unknown): Promise<string | null> {
+  const rawXml = getRawEInvoiceXml(parsedData);
+  if (rawXml) {
+    try {
+      return getEInvoiceImportRejection(await parseEInvoiceXml(rawXml));
+    } catch {
+      return 'Die gespeicherte E-Rechnungs-XML konnte nicht erneut gelesen werden.';
+    }
+  }
+
+  let data = parsedData;
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data) as unknown; } catch { return null; }
+  }
+  if (!isRecord(data)) return null;
+
+  const format = typeof data.eInvoiceFormat === 'string' || typeof data.documentType === 'string';
+  if (!format) return null;
+  const documentType = typeof data.documentType === 'string' ? data.documentType : 'INVOICE';
+  if (documentType !== 'INVOICE') return 'Dieser gespeicherte E-Rechnungsbeleg ist keine unterstützte Rechnung.';
+  const currency = typeof data.currency === 'string' ? data.currency.toUpperCase() : null;
+  if (!currency) return 'Die Währung der gespeicherten E-Rechnung ist nicht bekannt. Eine Buchung ist nicht sicher möglich.';
+  if (currency !== 'EUR') return `Die Rechnungswährung ${currency} wird nicht unterstützt. Buchungen sind derzeit nur für EUR möglich.`;
+  const prepaidAmount = typeof data.prepaidAmount === 'number' ? data.prepaidAmount : null;
+  if (prepaidAmount !== null && Math.abs(prepaidAmount) > 0.000001) return 'E-Rechnungen mit Vorauszahlungen werden derzeit nicht unterstützt.';
+  const roundingAmount = typeof data.roundingAmount === 'number' ? data.roundingAmount : null;
+  if (roundingAmount !== null && Math.abs(roundingAmount) > 0.000001) return 'E-Rechnungen mit Rundungsbetrag werden derzeit nicht unterstützt.';
+  return null;
 }
 
 export function getRawEInvoiceXml(parsedData: unknown): string | null {

@@ -135,7 +135,7 @@ bivaro-kleinunternehmen/
 │
 ├── proxy.ts                    # Schützt alle nicht-öffentlichen Routen
 ├── playwright.config.ts        # Playwright-Konfiguration
-├── vitest.config.ts            # Vitest-Konfiguration
+├── vitest.config.mts           # Vitest-Konfiguration
 ├── .env.example                # Vorlage für Umgebungsvariablen
 └── docker-compose.yml          # Docker-Deployment
 ```
@@ -470,4 +470,3 @@ A: Bearbeiten Sie `prisma/schema.prisma` und führen Sie dann `npx prisma migrat
 ## 📝 Lizenz
 
 Dieses Projekt steht unter der **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. Den vollständigen Lizenztext finden Sie in [`LICENSE`](LICENSE).
-

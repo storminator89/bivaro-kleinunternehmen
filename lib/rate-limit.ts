@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isRetryableDatabaseError } from "@/lib/db-transaction";
 
 /**
  * A rate limit is identified by a logical scope and value (for example
@@ -34,21 +35,15 @@ const DEFAULT_BLOCK_MS = 30 * 60 * 1000;
 const MIN_CLEANUP_MS = 60 * 60 * 1000;
 const CLEANUP_CHECK_INTERVAL_MS = 60 * 1000;
 let lastCleanupAt = 0;
-
-function isRetryableDatabaseError(error: unknown): boolean {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    return ["P1008", "P2028", "P2034"].includes(error.code);
-  }
-  return error instanceof Error && /database is locked|SQLITE_BUSY/i.test(error.message);
-}
+let cleanupInFlight: Promise<void> | null = null;
 
 async function withDatabaseRetry<T>(work: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await work();
     } catch (error) {
-      if (!isRetryableDatabaseError(error) || attempt >= 4) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 15 * 2 ** attempt));
+      if (!isRetryableDatabaseError(error) || attempt >= 7) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(250, 10 * 2 ** attempt)));
     }
   }
 }
@@ -92,6 +87,11 @@ export function getTrustedClientIp(headers: HeaderSource): string {
 async function pruneIfDue(now: Date, policy: RateLimitPolicy): Promise<void> {
   if (now.getTime() - lastCleanupAt < CLEANUP_CHECK_INTERVAL_MS) return;
 
+  // All callers can arrive here together on the first request. Share the
+  // cleanup write so it cannot create an avoidable lock against the bucket
+  // upserts that follow it.
+  if (cleanupInFlight) return cleanupInFlight;
+
   const cleanupAfterMs = Math.max(
     MIN_CLEANUP_MS,
     policy.cleanupAfterMs || 0,
@@ -100,12 +100,16 @@ async function pruneIfDue(now: Date, policy: RateLimitPolicy): Promise<void> {
   );
   const cutoff = new Date(now.getTime() - cleanupAfterMs).toISOString();
 
-  await withDatabaseRetry(() =>
+  cleanupInFlight = withDatabaseRetry(() =>
     prisma.$executeRaw(
       Prisma.sql`DELETE FROM "RateLimitBucket" WHERE "updatedAt" < ${cutoff}`,
     ),
-  );
-  lastCleanupAt = now.getTime();
+  ).then(() => {
+    lastCleanupAt = now.getTime();
+  }).finally(() => {
+    cleanupInFlight = null;
+  });
+  return cleanupInFlight;
 }
 
 /** Remove all expired limiter rows. Useful from a scheduled maintenance job. */

@@ -145,7 +145,7 @@ describe('file and restore security integration', () => {
     const quoteResponse = await quotes.POST(jsonRequest('/api/quotes', { fileName: 'quote.pdf', quoteNumber: 'CONVERT-QUOTE', parsedData: {}, pdfBytes: Buffer.from(pdf).toString('base64') }));
     const quote = await quoteResponse.json();
     const document = await PDFDocument.create(); document.addPage();
-    const xml = '<Invoice><ID>CONVERT-INVOICE</ID><IssueDate>2026-09-18</IssueDate><LegalMonetaryTotal><PayableAmount>25</PayableAmount></LegalMonetaryTotal></Invoice>';
+    const xml = '<Invoice><ID>CONVERT-INVOICE</ID><IssueDate>2026-09-18</IssueDate><DocumentCurrencyCode>EUR</DocumentCurrencyCode><LegalMonetaryTotal><TaxInclusiveAmount currencyID="EUR">25</TaxInclusiveAmount><PayableAmount currencyID="EUR">25</PayableAmount></LegalMonetaryTotal></Invoice>';
     await document.attach(new TextEncoder().encode(xml), 'factur-x.xml', { mimeType: 'application/xml' });
     const invoiceBytes = await document.save();
     const request = () => {

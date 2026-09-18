@@ -17,14 +17,25 @@ interface CreditNoteData {
     originalInvoiceDate: Date | null;
     cancellationReason: string | null;
     totalAmount: number;
+    /** Original monetary totals from the source invoice, when available. */
+    netAmount?: number | null;
+    taxAmount?: number | null;
+    grossAmount?: number | null;
+    allowanceTotalAmount?: number | null;
+    chargeTotalAmount?: number | null;
     customerName: string | null;
     customerAddress: string | null;
     items: Array<{
         description: string;
         quantity: number;
         unitPrice: number;
+        baseQuantity?: number | null;
+        baseUnit?: string | null;
+        amount?: number | null;
         unit: string;
         taxRate: number;
+        allowances?: Array<{ amount?: number | null }>;
+        charges?: Array<{ amount?: number | null }>;
     }>;
 }
 
@@ -232,15 +243,20 @@ export async function generateCreditNotePDF(
 
     y -= 25;
 
-    let netTotal = 0;
-    let taxTotal = 0;
+    let calculatedNetTotal = 0;
+    let calculatedTaxTotal = 0;
 
     data.items.forEach((item, index) => {
-        const lineNet = item.quantity * item.unitPrice;
+        // Imported lines may use a price basis (e.g. 200 x 5 EUR per 100)
+        // and may already include line allowances. Prefer the source line
+        // total so cancellation never reconstructs a different amount.
+        const lineNet = Number.isFinite(item.amount)
+            ? Number(item.amount)
+            : item.quantity * item.unitPrice / (item.baseQuantity && item.baseQuantity > 0 ? item.baseQuantity : 1);
         const lineTax = lineNet * (item.taxRate / 100);
 
-        netTotal += lineNet;
-        taxTotal += lineTax;
+        calculatedNetTotal += lineNet;
+        calculatedTaxTotal += lineTax;
 
         const maxDescWidth = colX.qty - colX.desc - 10;
         const words = (item.description || 'Position').split(' ');
@@ -277,7 +293,10 @@ export async function generateCreditNotePDF(
             page.drawText(line, { x: colX.desc, y: y - (i * lineHeight), size: 10, font, color: primaryColor });
         });
 
-        drawTextRight(item.quantity.toString(), colX.qty, y, 10, font, primaryColor);
+        const quantityText = item.baseQuantity && item.baseQuantity > 0
+            ? `${item.quantity} / ${item.baseQuantity}`
+            : item.quantity.toString();
+        drawTextRight(quantityText, colX.qty, y, 10, font, primaryColor);
         page.drawText(item.unit || 'Stück', { x: colX.unit, y, size: 10, font, color: primaryColor });
         drawTextRight(formatCurrency(item.unitPrice), colX.price, y, 10, font, primaryColor);
 
@@ -297,7 +316,9 @@ export async function generateCreditNotePDF(
     const origTotalX = colX.total_orig; // Use the same X as in the table
     // Move label further left to avoid overlap with original total column
     const labelX = origTotalX - 80;
-    const grossTotal = netTotal + taxTotal;
+    const netTotal = Number.isFinite(data.netAmount) ? Number(data.netAmount) : calculatedNetTotal;
+    const taxTotal = Number.isFinite(data.taxAmount) ? Number(data.taxAmount) : calculatedTaxTotal;
+    const grossTotal = Number.isFinite(data.grossAmount) ? Number(data.grossAmount) : netTotal + taxTotal;
 
     page.drawLine({
         start: { x: labelX, y: y + 5 },
@@ -327,6 +348,23 @@ export async function generateCreditNotePDF(
         drawTextRight('0,00 €', totalX, y, 10, font, creditColor);
     }
     y -= 20;
+
+    const documentAllowance = Number.isFinite(data.allowanceTotalAmount) ? Number(data.allowanceTotalAmount) : 0;
+    const documentCharge = Number.isFinite(data.chargeTotalAmount) ? Number(data.chargeTotalAmount) : 0;
+    if (documentAllowance !== 0 || documentCharge !== 0) {
+        if (documentCharge !== 0) {
+            drawTextRight('Dokumentzuschlag:', labelX, y, 10, font);
+            drawTextRight(formatCurrency(documentCharge), origTotalX, y, 10, font, primaryColor);
+            drawTextRight('-' + formatCurrency(documentCharge), totalX, y, 10, font, creditColor);
+            y -= 15;
+        }
+        if (documentAllowance !== 0) {
+            drawTextRight('Dokumentnachlass:', labelX, y, 10, font);
+            drawTextRight('-' + formatCurrency(documentAllowance), origTotalX, y, 10, font, primaryColor);
+            drawTextRight(formatCurrency(documentAllowance), totalX, y, 10, font, creditColor);
+            y -= 15;
+        }
+    }
 
     // Total line
     const totalLabel = 'Gesamtbetrag:';

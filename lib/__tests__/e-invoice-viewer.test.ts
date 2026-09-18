@@ -39,7 +39,7 @@ describe('buildEInvoiceViewerHtml', () => {
             },
         })
 
-        expect(html).toContain('XRechnung / UBL Vorschau')
+        expect(html).toContain('UBL-E-Rechnung Vorschau')
         expect(html).toContain('XR-2026-001')
         expect(html).toContain('Kunde GmbH')
         expect(html).toContain('Bivaro Testfirma')

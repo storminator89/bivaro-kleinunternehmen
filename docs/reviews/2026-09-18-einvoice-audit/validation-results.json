@@ -1,0 +1,143 @@
+{
+  "baseline": {
+    "xsd_valid": true,
+    "failures": []
+  },
+  "facturx_baseline": {
+    "xsd_valid": true,
+    "failures": []
+  },
+  "missing_due_date": {
+    "xsd_valid": true,
+    "failures": []
+  },
+  "missing_emails": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "XRechnung",
+        "id": "PEPPOL-EN16931-R020",
+        "flag": "fatal",
+        "text": "[PEPPOL-EN16931-R020]-Seller electronic address MUST be provided"
+      },
+      {
+        "source": "XRechnung",
+        "id": "PEPPOL-EN16931-R010",
+        "flag": "fatal",
+        "text": "[PEPPOL-EN16931-R010]-Buyer electronic address MUST be provided"
+      },
+      {
+        "source": "XRechnung",
+        "id": "BR-DE-7",
+        "flag": "fatal",
+        "text": "[BR-DE-7] Das Element \"Seller contact email address\" (BT-43) muss übermittelt werden."
+      },
+      {
+        "source": "XRechnung",
+        "id": "BR-DE-28",
+        "flag": "warning",
+        "text": "[BR-DE-28] In BT-43 soll genau ein @-Zeichen enthalten sein, welches nicht von einem Leerzeichen, einem Punkt, aber mindestens zwei Zeichen auf beiden Seiten flankiert werden soll. Ein Punkt sollte nicht am Anfang oder am Ende stehen."
+      }
+    ]
+  },
+  "missing_iban": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "EN16931",
+        "id": "CII-SR-470",
+        "flag": "fatal",
+        "text": "[CII-SR-470] - Either the IBAN or a Proprietary ID (BT-84) shall be used."
+      },
+      {
+        "source": "XRechnung",
+        "id": "BR-DE-23-a",
+        "flag": "fatal",
+        "text": "[BR-DE-23-a] Wenn BT-81 \"Payment means type code\" einen Schlüssel für Überweisungen enthält (30, 58), muss BG-17 \"CREDIT TRANSFER\" übermittelt werden."
+      }
+    ]
+  },
+  "mixed_exempt_standard": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "EN16931",
+        "id": "BR-E-10",
+        "flag": "fatal",
+        "text": "[BR-E-10]-A VAT Breakdown (BG-23) with VAT Category code (BT-118) \"Exempt from VAT\" shall have a VAT exemption reason code (BT-121) or a VAT exemption reason text (BT-120)."
+      }
+    ]
+  },
+  "price_precision": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "XRechnung",
+        "id": "PEPPOL-EN16931-R120",
+        "flag": "warning",
+        "text": "[PEPPOL-EN16931-R120]-Invoice line net amount MUST equal (Invoiced quantity * (Item net price/item price base quantity) + Sum of invoice line charge amount - sum of invoice line allowance amount"
+      }
+    ]
+  },
+  "quantity_precision": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "XRechnung",
+        "id": "PEPPOL-EN16931-R120",
+        "flag": "warning",
+        "text": "[PEPPOL-EN16931-R120]-Invoice line net amount MUST equal (Invoiced quantity * (Item net price/item price base quantity) + Sum of invoice line charge amount - sum of invoice line allowance amount"
+      }
+    ]
+  },
+  "rounding_lines": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "EN16931",
+        "id": "BR-CO-10",
+        "flag": "fatal",
+        "text": "[BR-CO-10]-Sum of Invoice line net amount (BT-106) = Σ Invoice line net amount (BT-131)."
+      }
+    ]
+  },
+  "rounding_tax": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "EN16931",
+        "id": "BR-CO-14",
+        "flag": "fatal",
+        "text": "[BR-CO-14]-Invoice total VAT amount (BT-110) = Σ VAT category tax amount (BT-117)."
+      }
+    ]
+  },
+  "wrong_currency": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "EN16931",
+        "id": "BR-CL-04",
+        "flag": "fatal",
+        "text": "[BR-CL-04]-Invoice currency code MUST be coded using ISO code list 4217 alpha-3"
+      },
+      {
+        "source": "EN16931",
+        "id": "BR-CL-03",
+        "flag": "fatal",
+        "text": "[BR-CL-03]-currencyID MUST be coded using ISO code list 4217 alpha-3"
+      }
+    ]
+  },
+  "wrong_net": {
+    "xsd_valid": true,
+    "failures": [
+      {
+        "source": "EN16931",
+        "id": "BR-CO-10",
+        "flag": "fatal",
+        "text": "[BR-CO-10]-Sum of Invoice line net amount (BT-106) = Σ Invoice line net amount (BT-131)."
+      }
+    ]
+  }
+}

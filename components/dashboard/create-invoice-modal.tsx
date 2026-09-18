@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import QRCode from 'qrcode';
 import { generateZugferdXml, validateZugferdData, type ZugferdData } from "@/lib/zugferd-generator";
+import { calculateInvoiceAmounts } from "@/lib/invoice-calculation";
 import { ArrowLeft, Copy, Eye, EyeOff, FileText, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 interface CreateInvoiceModalProps {
@@ -34,6 +35,8 @@ interface InvoiceItem {
   unitPrice: number;
   unit: string;
   taxRate: number;
+  taxCategory?: 'S' | 'E' | 'Z';
+  exemptionReason?: string;
 }
 
 interface Settings {
@@ -65,6 +68,7 @@ interface Template {
     items?: InvoiceItem[];
     notes?: string;
     includeQRCode?: boolean;
+    taxMode?: 'small-business' | 'standard';
   };
 }
 
@@ -96,6 +100,16 @@ export function CreateInvoiceModal({
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
   const [outputMode, setOutputMode] = useState<InvoiceOutputMode>('zugferd-pdf');
+  const [taxMode, setTaxMode] = useState<'small-business' | 'standard'>('small-business');
+  const [buyerReference, setBuyerReference] = useState('');
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [buyerCountry, setBuyerCountry] = useState('DE');
+  const [sellerCountry, setSellerCountry] = useState('DE');
+  const [buyerPostcode, setBuyerPostcode] = useState('');
+  const [buyerCity, setBuyerCity] = useState('');
+  const [sellerPostcode, setSellerPostcode] = useState('');
+  const [sellerCity, setSellerCity] = useState('');
+  const [paymentMeansCode, setPaymentMeansCode] = useState<'30' | '10'>('30');
 
   // Preview states
   const [showPreview, setShowPreview] = useState(false);
@@ -141,7 +155,11 @@ export function CreateInvoiceModal({
   useEffect(() => {
     if (isOpen && fromQuote) {
       const pd = fromQuote.parsedData;
-      if (pd.items && pd.items.length > 0) setItems(pd.items);
+      if (pd.items && pd.items.length > 0) {
+        setItems(pd.items);
+        // Legacy quotes have no tax mode; taxable lines need the standard editor.
+        setTaxMode(pd.items.some(item => item.taxRate > 0) ? 'standard' : 'small-business');
+      }
       if (pd.notes) setNotes(pd.notes);
       if (pd.customerAddress) setCustomerAddress(pd.customerAddress);
     }
@@ -172,6 +190,7 @@ export function CreateInvoiceModal({
       items,
       notes,
       includeQRCode,
+      taxMode,
       // We don't save customer specific info or dates usually, but maybe notes and items are the most important
     };
 
@@ -210,6 +229,7 @@ export function CreateInvoiceModal({
           taxRate: item.taxRate ?? 0
         })));
       }
+      setTaxMode(data.taxMode ?? (data.items?.some(item => item.taxRate > 0) ? 'standard' : 'small-business'));
       if (data.notes !== undefined) setNotes(data.notes);
       if (data.includeQRCode !== undefined) setIncludeQRCode(data.includeQRCode);
       // Add other fields if needed
@@ -274,6 +294,7 @@ export function CreateInvoiceModal({
     const customer = customers.find(c => c.id.toString() === customerId);
     if (customer) {
       setSelectedCustomer(customer);
+      setBuyerEmail(customer.email || '');
       let addressBlock = customer.name;
       if (customer.address) addressBlock += `\n${customer.address} `;
       const cityLine = `${customer.zipCode || ''} ${customer.city || ''} `.trim();
@@ -334,19 +355,19 @@ export function CreateInvoiceModal({
       .split('\n')
       .map(line => line.trim())
       .filter(Boolean);
-    const calculatedItems = items.map(item => {
-      const lineNet = item.quantity * item.unitPrice;
-      const lineTax = lineNet * (item.taxRate / 100);
-
-      return {
-        ...item,
-        lineNet,
-        lineTax,
-      };
-    });
-    const netTotal = calculatedItems.reduce((sum, item) => sum + item.lineNet, 0);
-    const taxTotal = calculatedItems.reduce((sum, item) => sum + item.lineTax, 0);
-    const grossTotal = netTotal + taxTotal;
+    const buyerPostalLine = [buyerPostcode.trim(), buyerCity.trim()].filter(Boolean).join(' ');
+    if (buyerCountry !== 'DE' && buyerPostalLine && customerLines.at(-1) !== buyerPostalLine) customerLines.push(buyerPostalLine);
+    const sellerPostalLine = [sellerPostcode.trim(), sellerCity.trim()].filter(Boolean).join(' ');
+    if (sellerCountry !== 'DE' && sellerPostalLine && companyAddressLines.at(-1) !== sellerPostalLine) companyAddressLines.push(sellerPostalLine);
+    if (buyerCountry) customerLines.push(buyerCountry);
+    const amounts = calculateInvoiceAmounts(items);
+    const calculatedItems = items.map((item, index) => ({
+      ...item,
+      lineNet: amounts.lines[index].netAmount,
+    }));
+    const netTotal = amounts.netAmount;
+    const taxTotal = amounts.taxAmount;
+    const grossTotal = amounts.grossAmount;
 
     const brandDark = rgb(0.035, 0.078, 0.145);
     const brandBlue = rgb(0.05, 0.22, 0.58);
@@ -360,8 +381,9 @@ export function CreateInvoiceModal({
     const hairline = rgb(0.82, 0.87, 0.94);
 
     const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('de-DE') : '-';
-    const formatQuantity = (value: number) => value.toLocaleString('de-DE', { maximumFractionDigits: 2 });
-    const formatTaxRate = (value: number) => `${value.toLocaleString('de-DE', { maximumFractionDigits: 2 })}%`;
+    const formatQuantity = (value: number) => value.toLocaleString('de-DE', { maximumFractionDigits: 12 });
+    const formatUnitPrice = (value: number) => value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 12 }) + ' €';
+    const formatTaxRate = (value: number) => `${value.toLocaleString('de-DE', { maximumFractionDigits: 12 })}%`;
 
     const drawTextRight = (
       text: string,
@@ -502,7 +524,7 @@ export function CreateInvoiceModal({
     };
 
     let qrCodeImage: PDFImage | undefined;
-    const canRenderQRCode = includeQRCode && Boolean(settings?.iban && settings?.companyName);
+    const canRenderQRCode = paymentMeansCode !== '10' && includeQRCode && Boolean(settings?.iban && settings?.companyName);
     if (canRenderQRCode && !forPreview) {
       try {
         const finalIban = settings?.iban?.replace(/\s/g, '').toUpperCase() ?? '';
@@ -582,7 +604,7 @@ export function CreateInvoiceModal({
       const footerLineHeight = 9;
       const columnWidth = (contentWidth - 44) / 3;
       const contactLine = [settings?.email, settings?.telephone].filter(isNonEmptyString).join(' | ');
-      const footerLeft = [companyName, ...companyAddressLines.slice(0, 2), contactLine].filter(isNonEmptyString);
+      const footerLeft = [companyName, ...companyAddressLines, sellerCountry, contactLine].filter(isNonEmptyString);
       const footerCenter = [
         settings?.bankName,
         settings?.iban ? `IBAN: ${settings.iban}` : undefined,
@@ -607,7 +629,7 @@ export function CreateInvoiceModal({
       targetPage.drawRectangle({ x: margin, y: footerTop + 3, width: 72, height: 2, color: brandAccent });
 
       let footerY = footerStartY;
-      footerLeft.slice(0, 4).forEach(line => {
+      footerLeft.forEach(line => {
         targetPage.drawText(truncateText(line, columnWidth, footerFontSize), {
           x: margin,
           y: footerY,
@@ -700,7 +722,7 @@ export function CreateInvoiceModal({
       }
 
       const cardTop = height - 116;
-      const cardHeight = 112;
+      const cardHeight = Math.max(128, 58 + customerLines.length * 15);
       const gap = 18;
       const detailsWidth = 214;
       const addressWidth = contentWidth - detailsWidth - gap;
@@ -710,7 +732,7 @@ export function CreateInvoiceModal({
       page.drawRectangle({ x: margin, y: cardTop - cardHeight, width: 5, height: cardHeight, color: brandAccent });
       page.drawText('EMPFÄNGER', { x: margin + 17, y: cardTop - 24, size: 7, font: boldFont, color: brandAccent });
 
-      const displayedCustomerLines = (customerLines.length > 0 ? customerLines : ['Empfänger noch nicht angegeben']).slice(0, 6);
+      const displayedCustomerLines = customerLines.length > 0 ? customerLines : ['Empfänger noch nicht angegeben'];
       let addressY = cardTop - 46;
       displayedCustomerLines.forEach((line, index) => {
         page.drawText(truncateText(line, addressWidth - 34, index === 0 ? 11 : 10, index === 0 ? boldFont : font), {
@@ -792,7 +814,7 @@ export function CreateInvoiceModal({
 
       drawTextRight(formatQuantity(item.quantity), colX.qty, textY, 9, font, textColor);
       page.drawText(truncateText(item.unit, 45, 8.5, font), { x: colX.unit, y: textY, size: 8.5, font, color: mutedColor });
-      drawTextRight(formatCurrency(item.unitPrice), colX.price, textY, 9, font, textColor);
+      drawTextRight(formatUnitPrice(item.unitPrice), colX.price, textY, 9, font, textColor);
       drawTextRight(formatTaxRate(item.taxRate), colX.tax, textY, 9, font, mutedColor);
       drawTextRight(formatCurrency(item.lineNet), colX.total, textY, 9, boldFont, textColor);
 
@@ -822,7 +844,7 @@ export function CreateInvoiceModal({
     const qrSize = 72;
     const qrPadding = canRenderQRCode ? 96 : 0;
     const paymentTextWidth = paymentCardWidth - 32 - qrPadding;
-    const paymentLines = [
+    const paymentLines = paymentMeansCode === '10' ? ['Zahlungsart: Barzahlung'] : [
       settings?.bankName ? `Bank: ${settings.bankName}` : undefined,
       settings?.iban ? `IBAN: ${settings.iban}` : undefined,
       settings?.bic ? `BIC: ${settings.bic}` : undefined,
@@ -889,10 +911,17 @@ export function CreateInvoiceModal({
         noteLines.push(...splitText(line, contentWidth - 36, 9, font));
       });
     }
-    if (taxTotal === 0) {
+    if (taxMode === 'small-business') {
       if (noteLines.length > 0) noteLines.push('');
       noteLines.push(...splitText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', contentWidth - 36, 9, font));
     }
+
+    if (taxMode === 'standard') {
+      for (const reason of new Set(items.filter(item => item.taxCategory === 'E').map(item => item.exemptionReason?.trim()).filter(Boolean))) {
+        noteLines.push(...splitText(`Steuerbefreiung: ${reason}`, contentWidth - 36, 9, font));
+      }
+    }
+    if (buyerReference.trim()) noteLines.push(...splitText(`Käuferreferenz: ${buyerReference.trim()}`, contentWidth - 36, 9, font));
 
     const drawTextBlockCard = (title: string, lines: string[]) => {
       let remainingLines = [...lines];
@@ -939,7 +968,7 @@ export function CreateInvoiceModal({
     });
 
     return await pdfDoc.save();
-  }, [customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode, formatCurrency]);
+  }, [customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode, formatCurrency, taxMode, buyerReference, paymentMeansCode, sellerCountry, buyerCountry, buyerPostcode, buyerCity, sellerPostcode, sellerCity]);
 
   // Generate preview with debouncing
   const generatePreview = useCallback(async () => {
@@ -1023,23 +1052,22 @@ export function CreateInvoiceModal({
   }, [showPreview]);
 
   const buildZugferdData = (): ZugferdData => {
-    let netTotal = 0;
-    let taxTotal = 0;
-    items.forEach((item) => {
-      const lineNet = item.quantity * item.unitPrice;
-      const lineTax = lineNet * (item.taxRate / 100);
-      netTotal += lineNet;
-      taxTotal += lineTax;
-    });
-
+    const amounts = calculateInvoiceAmounts(items);
     return {
       invoiceNumber,
-      date: new Date(date),
-      dueDate: dueDate ? new Date(dueDate) : undefined,
-      deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
+      buyerReference: buyerReference.trim() || undefined,
+      taxMode,
+      paymentMeansCode,
+      date: new Date(`${date}T12:00:00`),
+      dueDate: dueDate ? new Date(`${dueDate}T12:00:00`) : undefined,
+      paymentTerms: dueDate ? undefined : 'Zahlbar nach Erhalt der Rechnung',
+      deliveryDate: deliveryDate ? new Date(`${deliveryDate}T12:00:00`) : undefined,
       seller: {
         name: settings?.companyName || '',
         address: settings?.companyAddress || '',
+        countryCode: sellerCountry,
+        zipCode: sellerCountry === 'DE' ? undefined : sellerPostcode.trim(),
+        city: sellerCountry === 'DE' ? undefined : sellerCity.trim(),
         email: settings?.email,
         telephone: settings?.telephone,
         taxNumber: settings?.taxNumber,
@@ -1049,20 +1077,18 @@ export function CreateInvoiceModal({
       buyer: {
         name: customerAddress.split('\n')[0]?.trim() || '',
         address: customerAddress,
-        email: selectedCustomer?.email,
-        zipCode: selectedCustomer?.zipCode,
-        city: selectedCustomer?.city,
+        countryCode: buyerCountry,
+        zipCode: buyerCountry === 'DE' ? undefined : buyerPostcode.trim(),
+        city: buyerCountry === 'DE' ? undefined : buyerCity.trim(),
+        email: buyerEmail.trim() || undefined,
       },
-      items: items.map(item => ({
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        total: item.quantity * item.unitPrice,
-        unit: item.unit,
-        taxRate: item.taxRate,
+      items: items.map((item, index) => ({
+        ...item,
+        taxCategory: taxMode === 'small-business' ? 'E' : item.taxCategory,
+        total: amounts.lines[index].netAmount,
       })),
-      netAmount: netTotal,
-      taxAmount: taxTotal,
+      netAmount: amounts.netAmount,
+      taxAmount: amounts.taxAmount,
       currency: 'EUR',
     };
   };
@@ -1183,12 +1209,18 @@ export function CreateInvoiceModal({
     } catch (error) {
       console.error("Error generating invoice file:", error);
       const message = error instanceof Error ? error.message : null;
-      alert(outputMode === 'xml-only' ? "Fehler beim Erstellen der XML-Datei." : message ?? "Fehler beim Erstellen der PDF.");
+      alert(message ?? (outputMode === 'xml-only' ? "Fehler beim Erstellen der XML-Datei." : "Fehler beim Erstellen der PDF."));
     } finally {
       setIsGenerating(false);
     }
   };
 
+  let displayedNetAmount = '–';
+  try {
+    displayedNetAmount = formatCurrency(calculateInvoiceAmounts(items).netAmount);
+  } catch {
+    // Incomplete/invalid numerical input is explained by export validation.
+  }
   const isPage = presentation === "page";
   const editorContent = (
     <>
@@ -1324,6 +1356,43 @@ export function CreateInvoiceModal({
               </p>
             </section>
 
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="invoice-tax-mode">Umsatzsteuerbehandlung</Label>
+                <select
+                  id="invoice-tax-mode"
+                  className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={taxMode}
+                  onChange={e => {
+                    const mode = e.target.value as typeof taxMode;
+                    setTaxMode(mode);
+                    if (mode === 'small-business') {
+                      setItems(current => current.map(item => ({ ...item, taxRate: 0, taxCategory: 'E', exemptionReason: undefined })));
+                    } else {
+                      setItems(current => current.map(item => ({ ...item, taxCategory: undefined, exemptionReason: undefined })));
+                    }
+                  }}
+                >
+                  <option value="small-business">Kleinunternehmer (§ 19 UStG)</option>
+                  <option value="standard">Steuer je Position festlegen</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoice-buyer-reference">Käuferreferenz / Leitweg-ID{outputMode === 'xml-only' ? ' (Pflichtfeld)' : ''}</Label>
+                <Input id="invoice-buyer-reference" value={buyerReference} onChange={e => setBuyerReference(e.target.value)} placeholder="Vom Rechnungsempfänger vorgegebene Referenz" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoice-seller-country">Land des Rechnungsausstellers (ISO-Code)</Label>
+                <Input id="invoice-seller-country" value={sellerCountry} maxLength={2} onChange={e => setSellerCountry(e.target.value.toUpperCase())} placeholder="DE" />
+                {sellerCountry !== 'DE' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><Label htmlFor="invoice-seller-postcode">PLZ des Ausstellers</Label><Input id="invoice-seller-postcode" value={sellerPostcode} onChange={e => setSellerPostcode(e.target.value)} /></div>
+                    <div><Label htmlFor="invoice-seller-city">Ort des Ausstellers</Label><Input id="invoice-seller-city" value={sellerCity} onChange={e => setSellerCity(e.target.value)} /></div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Top Row: Invoice Details */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -1376,12 +1445,36 @@ export function CreateInvoiceModal({
                   placeholder="Musterfirma GmbH&#10;Musterstraße 1&#10;12345 Musterstadt"
                   className="min-h-[100px]"
                 />
+                <Label htmlFor="invoice-buyer-email">E-Mail des Empfängers{outputMode === 'xml-only' ? ' (Pflichtfeld)' : ''}</Label>
+                <Input id="invoice-buyer-email" type="email" value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)} placeholder="rechnung@kunde.de" />
+                <Label htmlFor="invoice-buyer-country">Land des Empfängers (ISO-Code)</Label>
+                <Input id="invoice-buyer-country" value={buyerCountry} maxLength={2} onChange={e => setBuyerCountry(e.target.value.toUpperCase())} placeholder="DE" />
+                {buyerCountry !== 'DE' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><Label htmlFor="invoice-buyer-postcode">PLZ des Empfängers</Label><Input id="invoice-buyer-postcode" value={buyerPostcode} onChange={e => setBuyerPostcode(e.target.value)} /></div>
+                    <div><Label htmlFor="invoice-buyer-city">Ort des Empfängers</Label><Input id="invoice-buyer-city" value={buyerCity} onChange={e => setBuyerCity(e.target.value)} /></div>
+                  </div>
+                )}
               </div>
 
               {/* Right: Payment Terms */}
               <div className="space-y-2">
                 <Label htmlFor="due-date">Fälligkeitsdatum</Label>
                 <Input id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                <Label htmlFor="invoice-payment-means">Zahlungsart</Label>
+                <select
+                  id="invoice-payment-means"
+                  className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={paymentMeansCode}
+                  onChange={e => {
+                    const code = e.target.value as typeof paymentMeansCode;
+                    setPaymentMeansCode(code);
+                    if (code === '10') setIncludeQRCode(false);
+                  }}
+                >
+                  <option value="30">Überweisung (IBAN in den Einstellungen erforderlich)</option>
+                  <option value="10">Barzahlung</option>
+                </select>
                 <Label htmlFor="notes" className="mt-2 block">Anmerkungen (Optional)</Label>
                 <Textarea
                   id="notes"
@@ -1398,7 +1491,7 @@ export function CreateInvoiceModal({
                       id="includeQRCode"
                       checked={includeQRCode}
                       onChange={(e) => setIncludeQRCode(e.target.checked)}
-                      disabled={outputMode === 'xml-only'}
+                      disabled={outputMode === 'xml-only' || paymentMeansCode === '10'}
                       className="h-5 w-5 rounded border-input accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed"
                     />
                   </span>
@@ -1438,6 +1531,7 @@ export function CreateInvoiceModal({
                         <Input
                           id={`invoice-item-quantity-${index}`}
                           type="number"
+                          step="any"
                           value={item.quantity}
                           onChange={(e) => updateItem(index, 'quantity', e.target.value)}
                           placeholder="1"
@@ -1463,6 +1557,7 @@ export function CreateInvoiceModal({
                         <Input
                           id={`invoice-item-price-${index}`}
                           type="number"
+                          step="any"
                           value={item.unitPrice}
                           onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
                           placeholder="0,00"
@@ -1474,6 +1569,8 @@ export function CreateInvoiceModal({
                         <Input
                           id={`invoice-item-tax-${index}`}
                           type="number"
+                          step="any"
+                          disabled={taxMode === 'small-business' || item.taxCategory === 'E' || item.taxCategory === 'Z'}
                           value={item.taxRate}
                           onChange={(e) => updateItem(index, 'taxRate', e.target.value)}
                           placeholder="0"
@@ -1489,6 +1586,34 @@ export function CreateInvoiceModal({
                           <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
+                      {taxMode === 'standard' && (
+                        <div className="col-span-2 grid gap-2 md:col-span-6 md:grid-cols-2">
+                          <div>
+                            <Label htmlFor={`invoice-item-tax-category-${index}`}>Steuerart für Position {index + 1}</Label>
+                            <select
+                              id={`invoice-item-tax-category-${index}`}
+                              className="mt-1 flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                              value={item.taxCategory || 'S'}
+                              onChange={e => {
+                                const category = e.target.value as InvoiceItem['taxCategory'];
+                                setItems(current => current.map((entry, itemIndex) => itemIndex === index
+                                  ? { ...entry, taxCategory: category, taxRate: category === 'S' ? entry.taxRate : 0 }
+                                  : entry));
+                              }}
+                            >
+                              <option value="S">Umsatzsteuerpflichtig</option>
+                              <option value="Z">Nullsteuersatz (0 %)</option>
+                              <option value="E">Steuerbefreit (mit Begründung)</option>
+                            </select>
+                          </div>
+                          {item.taxCategory === 'E' && (
+                            <div>
+                              <Label htmlFor={`invoice-item-exemption-${index}`}>Grund der Steuerbefreiung</Label>
+                              <Input id={`invoice-item-exemption-${index}`} className="mt-1" value={item.exemptionReason || ''} onChange={e => updateItem(index, 'exemptionReason', e.target.value)} />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1499,7 +1624,7 @@ export function CreateInvoiceModal({
                   Position hinzufügen
                 </Button>
                 <div className="text-left font-bold tabular-nums sm:text-right">
-                  Gesamt: {items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  Netto: {displayedNetAmount}
                 </div>
               </div>
             </div>

@@ -6,6 +6,7 @@ export type EInvoiceViewerSource = {
   invoiceDate: Date | string | null;
   dueDate: Date | string | null;
   totalAmount: number | null;
+  currency?: string | null;
   parsedData: unknown;
 };
 
@@ -16,6 +17,7 @@ type ViewerParty = {
   zipCode: string | null;
   city: string | null;
   country: string | null;
+  addressLines: string[];
 };
 
 type ViewerLineItem = {
@@ -25,6 +27,8 @@ type ViewerLineItem = {
   quantity: number | null;
   unit: string | null;
   unitPrice: number | null;
+  baseQuantity: number | null;
+  baseUnit: string | null;
   amount: number | null;
   taxRate: number | null;
 };
@@ -59,6 +63,10 @@ function asNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function asStringArray(value: unknown): string[] {
+  return toArray(value).map(asString).filter((item): item is string => Boolean(item));
+}
+
 function toArray(value: unknown): unknown[] {
   if (value === null || value === undefined) return [];
   return Array.isArray(value) ? value : [value];
@@ -91,6 +99,7 @@ function parseParty(value: unknown, fallbackName: string | null = null): ViewerP
     zipCode: asString(record.zipCode),
     city: asString(record.city),
     country: asString(record.country),
+    addressLines: asStringArray(record.addressLines),
   };
 }
 
@@ -103,6 +112,7 @@ function parseLegacyCustomerAddress(addressBlock: string | null): Partial<Viewer
   return {
     name: lines[0] || null,
     address: lines.length > 2 ? lines.slice(1, -1).join(', ') : lines[1] || null,
+    addressLines: lines.length > 2 ? lines.slice(1, -1) : lines[1] ? [lines[1]] : [],
     zipCode: cityMatch?.[1] || null,
     city: cityMatch?.[2] || null,
   };
@@ -122,6 +132,8 @@ function parseLineItem(value: unknown, index: number): ViewerLineItem {
     quantity,
     unit: firstString(record, ['unit', 'unitCode']),
     unitPrice,
+    baseQuantity: firstNumber(record, ['baseQuantity', 'priceBaseQuantity']),
+    baseUnit: firstString(record, ['baseUnit', 'priceBaseUnit']),
     amount,
     taxRate: firstNumber(record, ['taxRate', 'vatRate']),
   };
@@ -147,11 +159,20 @@ function formatNumber(value: number | null): string {
   }).format(value);
 }
 
-function formatCurrency(value: number | null): string {
+function formatMeasure(value: number | null): string {
   if (value === null) return '-';
   return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 12,
+  }).format(value);
+}
+
+function formatCurrency(value: number | null, currency: string | null): string {
+  if (value === null) return '-';
+  if (!currency || !/^[A-Z]{3}$/.test(currency)) return formatNumber(value);
+  return new Intl.NumberFormat('de-DE', {
     style: 'currency',
-    currency: 'EUR',
+    currency,
   }).format(value);
 }
 
@@ -173,7 +194,7 @@ function partyHtml(title: string, party: ViewerParty): string {
   const cityLine = [party.zipCode, party.city].filter(Boolean).join(' ');
   const lines = [
     party.name,
-    party.address,
+    ...(party.addressLines.length > 0 ? party.addressLines : [party.address]),
     cityLine || null,
     party.country,
     party.email,
@@ -190,9 +211,19 @@ function partyHtml(title: string, party: ViewerParty): string {
 
 function getFormatLabel(parsedData: JsonRecord): string {
   const format = asString(parsedData.eInvoiceFormat);
-  if (format === 'UBL') return 'XRechnung / UBL';
+  if (format === 'UBL') {
+    const profile = asString(parsedData.eInvoiceProfile);
+    return profile?.toLowerCase().includes('xrechnung') ? 'XRechnung / UBL' : 'UBL-E-Rechnung';
+  }
   if (format === 'CII') return 'ZUGFeRD / Factur-X CII';
   return 'E-Rechnung';
+}
+
+function getDocumentLabel(parsedData: JsonRecord): string {
+  const type = asString(parsedData.documentType);
+  if (type === 'CREDIT_NOTE') return 'Gutschrift';
+  if (type === 'DEBIT_NOTE') return 'Belastungsanzeige';
+  return 'Rechnung';
 }
 
 export function buildEInvoiceViewerHtml(source: EInvoiceViewerSource): string {
@@ -209,11 +240,20 @@ export function buildEInvoiceViewerHtml(source: EInvoiceViewerSource): string {
     if (item.amount === null || item.taxRate === null) return sum;
     return sum + item.amount * (item.taxRate / 100);
   }, 0);
-  const totalAmount = source.totalAmount ?? asNumber(parsedData.totalAmount) ?? (lineSubtotal || null);
+  const rawCurrency = source.currency || asString(parsedData.currency);
+  const currency = rawCurrency ? rawCurrency.toUpperCase() : null;
+  const displayedNet = asNumber(parsedData.netAmount) ?? (lineItems.length > 0 ? lineSubtotal : null);
+  const displayedTax = asNumber(parsedData.taxAmount) ?? taxTotal;
+  const totalAmount = asNumber(parsedData.grossAmount) ?? source.totalAmount ?? asNumber(parsedData.totalAmount) ?? (lineItems.length > 0 ? lineSubtotal : null);
+  const prepaidAmount = asNumber(parsedData.prepaidAmount);
+  const dueAmount = asNumber(parsedData.dueAmount);
+  const roundingAmount = asNumber(parsedData.roundingAmount);
   const invoiceNumber = source.invoiceNumber || asString(parsedData.invoiceNumber) || source.fileName;
   const invoiceDate = source.invoiceDate || asString(parsedData.invoiceDate);
   const dueDate = source.dueDate || asString(parsedData.dueDate);
   const formatLabel = getFormatLabel(parsedData);
+  const documentLabel = getDocumentLabel(parsedData);
+  const validationStatus = asString(parsedData.validationStatus);
 
   const rows = lineItems.length > 0
     ? lineItems.map(item => `
@@ -222,12 +262,13 @@ export function buildEInvoiceViewerHtml(source: EInvoiceViewerSource): string {
         <td>
           <strong>${text(item.description)}</strong>
           ${item.details ? `<small>${text(item.details)}</small>` : ''}
+          ${item.baseQuantity !== null ? `<small>Preis je ${formatMeasure(item.baseQuantity)}${item.baseUnit ? ` ${text(item.baseUnit)}` : ''}</small>` : ''}
         </td>
-        <td class="num">${formatNumber(item.quantity)}</td>
+        <td class="num">${formatMeasure(item.quantity)}</td>
         <td>${text(item.unit)}</td>
-        <td class="num">${formatCurrency(item.unitPrice)}</td>
+        <td class="num">${formatCurrency(item.unitPrice, currency)}</td>
         <td class="num">${item.taxRate === null ? '-' : `${formatNumber(item.taxRate)} %`}</td>
-        <td class="num">${formatCurrency(item.amount)}</td>
+        <td class="num">${formatCurrency(item.amount, currency)}</td>
       </tr>`).join('')
     : `<tr><td colspan="7" class="empty">Keine Positionsdaten in der E-Rechnung gefunden.</td></tr>`;
 
@@ -427,12 +468,13 @@ export function buildEInvoiceViewerHtml(source: EInvoiceViewerSource): string {
     <header class="top">
       <div>
         <p class="eyebrow">${escapeHtml(formatLabel)} Vorschau</p>
-        <h1>Rechnung</h1>
+        <h1>${escapeHtml(documentLabel)}</h1>
       </div>
       <section class="meta" aria-label="Rechnungsdaten">
         <div class="meta-row"><span>Rechnungsnummer</span><span>${text(invoiceNumber)}</span></div>
         <div class="meta-row"><span>Rechnungsdatum</span><span>${escapeHtml(formatDate(invoiceDate))}</span></div>
         <div class="meta-row"><span>Fällig am</span><span>${escapeHtml(formatDate(dueDate))}</span></div>
+        <div class="meta-row"><span>Währung</span><span>${text(currency || 'unbekannt')}</span></div>
       </section>
     </header>
 
@@ -461,15 +503,19 @@ export function buildEInvoiceViewerHtml(source: EInvoiceViewerSource): string {
 
     <section class="summary" aria-label="Summen">
       <div class="summary-card">
-        <div class="summary-row"><span>Zwischensumme</span><strong>${formatCurrency(lineSubtotal || null)}</strong></div>
-        <div class="summary-row"><span>Umsatzsteuer</span><strong>${formatCurrency(taxTotal || 0)}</strong></div>
-        <div class="summary-row"><span>Gesamtbetrag</span><strong>${formatCurrency(totalAmount)}</strong></div>
+        <div class="summary-row"><span>Zwischensumme</span><strong>${formatCurrency(displayedNet, currency)}</strong></div>
+        <div class="summary-row"><span>Umsatzsteuer</span><strong>${formatCurrency(displayedTax, currency)}</strong></div>
+        ${prepaidAmount !== null ? `<div class="summary-row"><span>Vorausgezahlt</span><strong>${formatCurrency(prepaidAmount, currency)}</strong></div>` : ''}
+        ${roundingAmount !== null ? `<div class="summary-row"><span>Rundung</span><strong>${formatCurrency(roundingAmount, currency)}</strong></div>` : ''}
+        ${dueAmount !== null ? `<div class="summary-row"><span>Fällig</span><strong>${formatCurrency(dueAmount, currency)}</strong></div>` : ''}
+        <div class="summary-row"><span>Gesamtbetrag</span><strong>${formatCurrency(totalAmount, currency)}</strong></div>
       </div>
     </section>
 
     <p class="note">
       Diese Ansicht ist eine vereinfachte Lesedarstellung der strukturierten E-Rechnung.
       Maßgeblich bleibt die importierte XML-Datei; XRechnung selbst enthält kein verbindliches Drucklayout.
+      ${validationStatus === 'NOT_VALIDATED' ? 'Standardkonformität nicht geprüft.' : ''}
     </p>
   </main>
 </body>

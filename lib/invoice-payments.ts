@@ -1,5 +1,6 @@
 import { inTransaction } from '@/lib/db-transaction';
 import { auditDelete, createAuditLog } from '@/lib/audit-log';
+import { getEInvoiceBookingRejection } from '@/lib/e-invoice-parser';
 
 export class InvoicePaymentError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -53,6 +54,10 @@ export async function updateInvoiceStatus(
       status: nextStatus, paidAt: paymentDate, ...(customerId !== undefined ? { customerId } : {}),
     } });
     if (nextStatus === 'PAID') {
+      const importRejection = await getEInvoiceBookingRejection(invoice.parsedData);
+      if (importRejection) {
+        throw new InvoicePaymentError(`Die Zahlung kann nicht gebucht werden: ${importRejection}`, 409);
+      }
       if (invoice.totalAmount === null || !Number.isFinite(invoice.totalAmount) || invoice.totalAmount < 0) {
         throw new InvoicePaymentError('Für die Zahlung ist ein gültiger Rechnungsbetrag erforderlich');
       }
