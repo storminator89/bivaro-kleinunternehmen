@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-09-19",
+    "scope": "app redesign",
+    "macrostructure": "Workbench / task-first header / left side rail",
+    "theme": "custom Bivaro Mineral",
+    "theme_axes": "light-warm / geometric sans / chromatic-other",
+    "enrichment": "none",
+    "brief": "App-wide UI polish: consistent shell, navigation, auth surfaces, controls and dashboard density"
+  },
+  {
     "date": "2026-07-31",
     "scope": "app",
     "macrostructure": "Workbench / mineral surface system / side rail",

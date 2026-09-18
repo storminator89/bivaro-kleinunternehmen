@@ -118,7 +118,7 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetails
             </DetailItem>
           </dl>
         </div>
-        <DialogFooter className="flex-col gap-3 border-t border-border px-6 pb-6 pt-4 sm:px-8 sm:pb-8">
+        <DialogFooter className="!flex-col gap-3 border-t border-border px-6 pb-6 pt-4 sm:px-8 sm:pb-8">
           <div className="grid w-full min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2">
             <Button
               type="button"

@@ -65,7 +65,7 @@ export function CollapseButton() {
   return (
     <button 
       onClick={toggleCollapse}
-      className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       title={collapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
     >
       {collapsed ? (

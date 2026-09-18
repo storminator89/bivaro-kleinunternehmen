@@ -17,9 +17,7 @@ import { usePageTitle } from "@/hooks/use-page-title";
 
 function PageHeading() {
   const title = usePageTitle();
-  return (
-    <p className="truncate text-base font-semibold text-foreground sm:text-lg">{title}</p>
-  );
+  return <p className="app-page-title truncate text-foreground">{title}</p>;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -50,22 +48,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           Zum Inhalt springen
         </a>
-        <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur-sm">
-          <div className="container mx-auto py-4 px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center">
+        <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-xl">
+          <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center">
               <Link href="/" className="flex items-center">
                 <Image
                   src="/Bivaro_Logo.png"
                   alt="Bivaro Logo"
                   width={106}
                   height={40}
-                  className="h-10 w-auto dark:brightness-150 dark:contrast-125"
+                  className="h-9 w-auto dark:brightness-0 dark:invert"
                   unoptimized
                 />
               </Link>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <ThemeToggle />
-                <nav aria-label="Öffentliche Navigation" className="flex items-center gap-2">
+                <nav aria-label="Öffentliche Navigation" className="flex items-center gap-1.5 sm:gap-2">
                   {session ? (
                     <Button asChild>
                       <Link href="/dashboard">Dashboard</Link>
@@ -90,9 +88,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
 
-        <footer className="border-t border-border bg-card py-6">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <p className="text-center text-muted-foreground text-sm">
+        <footer className="border-t border-border/80 bg-background py-5">
+          <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+            <p className="text-sm text-muted-foreground">
               &copy; {new Date().getFullYear()} Bivaro |
               Alle Beträge werden in Euro (€) angezeigt
             </p>
@@ -117,15 +115,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Suspense>
 
       {/* Sidebar for desktop */}
-      <aside aria-label="Anwendungsnavigation" className="sticky top-0 hidden h-screen w-64 flex-col border-r border-border bg-card lg:flex">
-        <div className="sidebar-header relative flex items-center justify-center border-b border-border px-4 py-5">
+      <aside aria-label="Anwendungsnavigation" className="sticky top-0 hidden h-dvh w-64 flex-col border-r border-border/80 bg-card/70 lg:flex">
+        <div className="sidebar-header relative flex items-center border-b border-border/80 px-5 py-4">
           <Link href="/dashboard" className="brand-link text-xl font-bold text-foreground">
             <Image
               src="/Bivaro_Logo.png"
               alt="Bivaro Logo"
               width={127}
               height={48}
-              className="brand-full h-12 w-auto max-w-full object-contain dark:brightness-150 dark:contrast-125"
+              className="brand-full h-10 w-auto max-w-full object-contain dark:brightness-0 dark:invert"
               unoptimized
             />
             <Image
@@ -133,7 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               alt="Bivaro Logo kompakt"
               width={85}
               height={32}
-              className="brand-compact h-8 w-auto max-w-full object-contain dark:brightness-150 dark:contrast-125"
+              className="brand-compact h-8 w-auto max-w-full object-contain dark:brightness-0 dark:invert"
               unoptimized
             />
           </Link>
@@ -141,7 +139,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <CollapseButton />
           </div>
         </div>
-        <nav aria-label="Hauptnavigation" className="flex-1 px-4 py-2 overflow-y-auto">
+        <nav aria-label="Hauptnavigation" className="flex-1 overflow-y-auto px-3 py-4">
           <NavLinks />
         </nav>
       </aside>
@@ -149,14 +147,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         {/* Desktop top bar */}
-        <header className="sticky top-0 z-30 hidden border-b border-border bg-card/95 backdrop-blur-md lg:block">
-          <div className="flex items-center justify-between gap-4 px-6 py-3 lg:px-8">
+        <header className="sticky top-0 z-30 hidden border-b border-border/80 bg-background/90 backdrop-blur-xl lg:block">
+          <div className="flex min-h-16 items-center justify-between gap-6 px-6 py-3 xl:px-10">
             <Suspense fallback={<div className="h-6 w-32 animate-pulse rounded bg-muted/60" />}>
               <PageHeading />
             </Suspense>
-            <div className="flex flex-1 items-center justify-end gap-2">
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
               <Suspense fallback={null}>
-                <CommandPaletteTrigger className="hidden lg:inline-flex w-72" />
+                <CommandPaletteTrigger className="hidden w-full max-w-sm lg:inline-flex" />
               </Suspense>
               <ThemeToggle />
               <UserMenu />
@@ -165,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur-sm lg:hidden">
+        <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-2">
               <Sheet>
@@ -174,21 +172,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-64 p-0">
+                <SheetContent side="left" className="w-[min(20rem,calc(100vw-2rem))] p-0">
                   <div className="flex h-full flex-col bg-card">
-                    <div className="p-6 pb-4 border-b border-border">
+                    <div className="border-b border-border/80 p-5 pb-4">
                       <Link href="/dashboard" className="flex items-center text-2xl font-bold text-foreground">
                         <Image
                           src="/Bivaro_Logo.png"
                           alt="Bivaro Logo"
                           width={127}
                           height={48}
-                          className="h-12 w-auto dark:brightness-150 dark:contrast-125"
+                          className="h-10 w-auto dark:brightness-0 dark:invert"
                           unoptimized
                         />
                       </Link>
                     </div>
-                    <nav aria-label="Mobile Hauptnavigation" className="flex-1 px-4 py-4 overflow-y-auto">
+                    <nav aria-label="Mobile Hauptnavigation" className="flex-1 overflow-y-auto px-3 py-4">
                       <NavLinks />
                     </nav>
                   </div>
@@ -198,19 +196,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <PageHeading />
               </Suspense>
             </div>
-            <UserMenu />
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <UserMenu />
+            </div>
           </div>
         </header>
 
         <main id="main-content" tabIndex={-1} className="flex-grow bg-background outline-none">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mx-auto w-full max-w-[90rem] px-4 py-6 sm:px-6 sm:py-8 xl:px-10">
             {children}
           </div>
         </main>
 
-        <footer className="border-t border-border bg-card py-6">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <p className="text-center text-muted-foreground text-sm">
+        <footer className="border-t border-border/80 bg-background py-5">
+          <div className="mx-auto w-full max-w-[90rem] px-4 sm:px-6 xl:px-10">
+            <p className="text-sm text-muted-foreground">
               &copy; {new Date().getFullYear()} Bivaro |
               Alle Beträge werden in Euro (€) angezeigt
             </p>

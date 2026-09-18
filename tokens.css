@@ -1,5 +1,5 @@
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
-/* Hallmark · genre: modern-minimal · tone: utilitarian, calm, trustworthy · anchor: mineral petrol · macrostructure: Workbench · theme: Mineral · nav: N3 · footer: Ft2 · enrichment: none */
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: Mineral · enrichment: none · nav: N3 · footer: Ft2 · designed-as-app */
+/* Hallmark · pre-emit critique: P5 H5 E4 S4 R5 V4 */
 
 /*
  * Bivaro design tokens
@@ -55,6 +55,18 @@
   --text-3xl: 1.875rem;
   --text-4xl: 2.25rem;
   --text-5xl: 3rem;
+  --text-display: clamp(2.25rem, 3vw + 1rem, 4rem);
+  --text-display-s: clamp(2rem, 2.4vw + 1rem, 3rem);
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
 
   --spacing-0: 0;
   --spacing-1: 0.25rem;
@@ -81,18 +93,19 @@
   --radius-input: 0.5rem;
   --radius-pill: 999px;
   --shadow-card: 0 1px 2px color-mix(in oklch, var(--color-ink) 7%, transparent);
+  --shadow-floating: 0 16px 36px color-mix(in oklch, var(--color-ink) 12%, transparent);
 }
 
 .dark {
   color-scheme: dark;
 
-  --color-paper: oklch(18% 0.025 174);
-  --color-paper-2: oklch(22% 0.03 174);
-  --color-paper-3: oklch(27% 0.035 174);
+  --color-paper: oklch(17% 0.024 174);
+  --color-paper-2: oklch(21% 0.028 174);
+  --color-paper-3: oklch(26% 0.034 174);
   --color-ink: oklch(95% 0.015 86);
   --color-ink-2: oklch(80% 0.025 86);
-  --color-rule: oklch(32% 0.03 174);
-  --color-rule-2: oklch(48% 0.04 174);
+  --color-rule: oklch(31% 0.03 174);
+  --color-rule-2: oklch(50% 0.04 174);
   --bivaro-color-muted: oklch(70% 0.025 86);
   --bivaro-color-accent: oklch(70% 0.13 166);
   --color-muted: var(--bivaro-color-muted);
@@ -116,4 +129,5 @@
   --color-info: oklch(73% 0.11 210);
   --color-info-ink: oklch(91% 0.04 210);
   --color-info-surface: oklch(27% 0.05 210);
+  --shadow-floating: 0 18px 42px color-mix(in oklch, oklch(5% 0.02 174) 32%, transparent);
 }

@@ -107,10 +107,10 @@ export function CommandPalette() {
     >
       <div
         aria-hidden="true"
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 bg-foreground/45 backdrop-blur-sm"
         onClick={() => setOpen(false)}
       />
-      <div className="fixed left-1/2 top-[15%] z-[90] w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-popover shadow-2xl">
+      <div className="fixed left-1/2 top-[12%] z-[90] w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-border/80 bg-popover shadow-[var(--shadow-floating)]">
         <Dialog.Title className="sr-only">Befehlspalette</Dialog.Title>
         <div className="border-b border-border px-3">
           <Command.Input
@@ -187,8 +187,8 @@ export function CommandPaletteTrigger({ className }: { className?: string }) {
     <button
       type="button"
       onClick={open}
-      className={cn(
-        "inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground",
+        className={cn(
+        "inline-flex min-h-11 items-center gap-2 rounded-md border border-border/80 bg-card px-3 py-2 text-sm text-muted-foreground shadow-none transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-secondary hover:text-foreground",
         className,
       )}
       aria-label="Befehlspalette öffnen"

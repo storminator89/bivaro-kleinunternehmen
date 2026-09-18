@@ -127,10 +127,10 @@ export function YearComparison({ data }: YearComparisonProps) {
   const currentMonth = new Date().getMonth();
 
   return (
-    <Card className="bg-card border rounded-xl shadow-sm overflow-hidden">
+    <Card className="overflow-hidden rounded-xl border-border/80 bg-card">
       <button
         type="button"
-        className="flex min-h-14 w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-muted/40"
+        className="flex min-h-14 w-full items-center justify-between gap-3 border-b border-transparent p-4 text-left transition-colors hover:bg-secondary/40"
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
         aria-controls="year-comparison-content"
@@ -278,7 +278,7 @@ function ComparisonCard({ title, currentValue, previousValue, change, currentYea
   const isGood = positiveIsGood ? isPositive : !isPositive;
 
   return (
-    <div className="p-4 rounded-lg border bg-card">
+    <div className="rounded-lg border border-border/80 bg-card/70 p-4">
       <div className="text-sm font-medium text-muted-foreground">{title}</div>
       <div className="mt-2 flex items-baseline gap-2">
         <span className="text-2xl font-bold">{formatCurrency(currentValue)}</span>

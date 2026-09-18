@@ -769,27 +769,26 @@ export function DashboardContent() {
 
   // Hauptkomponente rendern
   return (
-    <div className="bg-background">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col gap-6 border-b border-border pb-7 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-8">
+        <header className="flex flex-col gap-7 border-b border-border/80 pb-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Arbeitsbereich</p>
+              <p className="app-section-label text-primary">Arbeitsbereich</p>
               <time className="hidden text-xs text-muted-foreground sm:inline" dateTime={new Date().toISOString().split('T')[0]}>
                 {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
               </time>
             </div>
-            <h1 className="min-w-0 [overflow-wrap:anywhere] text-3xl font-semibold tracking-[-0.03em] text-foreground md:text-4xl">
+            <h1 className="min-w-0 [overflow-wrap:anywhere] text-4xl font-semibold tracking-[-0.04em] text-foreground md:text-5xl">
               Buchhaltung
             </h1>
-            <p className="mt-2 max-w-2xl text-muted-foreground">
+            <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
               Belege erfassen, Angebote versenden und offene Rechnungen im Blick behalten.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2" aria-label="Schnellaktionen">
-              <Button type="button" variant="outline" onClick={() => handleTabChange('expenses')}>
+            <div className="mt-6 flex flex-wrap gap-2" aria-label="Schnellaktionen">
+              <Button type="button" variant="ghost" onClick={() => handleTabChange('expenses')}>
                 Ausgabe erfassen
               </Button>
-              <Button type="button" variant="outline" onClick={() => handleTabChange('incomes')}>
+              <Button type="button" variant="ghost" onClick={() => handleTabChange('incomes')}>
                 Einnahme erfassen
               </Button>
               <Button type="button" onClick={() => router.push('/dashboard/invoices/new')}>
@@ -799,7 +798,7 @@ export function DashboardContent() {
           </div>
           {(activeTab === 'eur' || activeTab === 'gwg') && (
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
-            <div className="flex min-h-11 flex-1 items-center gap-1 rounded-lg border bg-card sm:flex-none" aria-label="Berichtszeitraum">
+            <div className="flex min-h-11 flex-1 items-center gap-1 rounded-md border border-border/80 bg-card sm:flex-none" aria-label="Berichtszeitraum">
               <span className="sr-only">Berichtszeitraum</span>
               <button
                 type="button"
@@ -862,7 +861,7 @@ export function DashboardContent() {
               id="mobile-work-area"
               value={activeTab}
               onChange={(event) => handleTabChange(event.target.value)}
-              className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-base"
+              className="min-h-11 w-full rounded-md border border-input bg-card px-3 text-base"
             >
               <option value="expenses">Ausgaben</option>
               <option value="incomes">Einnahmen</option>
@@ -1109,7 +1108,6 @@ export function DashboardContent() {
           invoice={invoiceToCancel}
           onSuccess={handleCreditNoteSuccess}
         />
-      </div>
     </div>
   );
 }

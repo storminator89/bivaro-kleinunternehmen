@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { ThemeToggle } from "@/components/theme-switch";
 import {
   LayoutDashboard,
   Users,
@@ -11,7 +10,6 @@ import {
   UserPlus,
   LogOut,
   Calculator,
-  SunMoon,
   Settings,
   UserCog,
   TrendingUp,
@@ -153,8 +151,9 @@ export function NavLinks() {
                   <Link
                     href={item.href}
                     aria-current={active ? "page" : undefined}
-                    className={`flex min-h-11 items-center justify-center rounded-lg p-3 transition-colors duration-200 ${active
-                      ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                    data-active={active}
+                    className={`app-nav-link flex items-center justify-center p-3 ${active
+                      ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                       }`}
                     title={item.label}
@@ -176,8 +175,9 @@ export function NavLinks() {
                 <Link
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex min-h-11 items-center justify-center rounded-lg p-3 transition-colors duration-200 ${active
-                    ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                  data-active={active}
+                  className={`app-nav-link flex items-center justify-center p-3 ${active
+                    ? 'bg-primary/10 text-primary'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                     }`}
                   title={item.label}
@@ -190,15 +190,11 @@ export function NavLinks() {
         </ul>
 
         {/* Bottom section when collapsed */}
-        <div className="pt-4 border-t border-border mt-auto space-y-1">
-          <div className="flex items-center justify-center rounded-lg p-3 text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground">
-            <ThemeToggle />
-          </div>
-
+        <div className="mt-auto space-y-1 border-t border-border/80 pt-3">
           {status === "authenticated" && (
             <button
               onClick={() => signOut({ callbackUrl: '/' })}
-              className="flex w-full cursor-pointer items-center justify-center rounded-lg p-3 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
+              className="flex min-h-11 w-full cursor-pointer items-center justify-center rounded-md p-3 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
               title="Abmelden"
             >
               <LogOut className="h-5 w-5" />
@@ -235,8 +231,9 @@ export function NavLinks() {
                       <Link
                         href={item.href}
                         aria-current={active ? "page" : undefined}
-                        className={`flex min-h-11 items-center px-3 py-2 rounded-lg transition-colors duration-200 ${active
-                          ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                        data-active={active}
+                        className={`app-nav-link flex items-center px-3 py-2 ${active
+                          ? 'bg-primary/10 text-primary'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                           }`}
                       >
@@ -267,8 +264,9 @@ export function NavLinks() {
                     <Link
                       href={item.href}
                       aria-current={active ? "page" : undefined}
-                      className={`flex min-h-11 items-center rounded-lg px-3 py-2 transition-colors duration-200 ${active
-                        ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15'
+                      data-active={active}
+                      className={`app-nav-link flex min-h-11 items-center px-3 py-2 ${active
+                        ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                         }`}
                     >
@@ -284,19 +282,11 @@ export function NavLinks() {
       </div>
 
       {/* Bottom section when expanded */}
-      <div className="pt-4 border-t border-border mt-auto space-y-1">
-        <div className="flex items-center justify-between rounded-lg px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground">
-          <div className="flex items-center">
-            <SunMoon className="h-4 w-4 mr-3" />
-            <span className="text-sm font-medium">Theme</span>
-          </div>
-          <ThemeToggle />
-        </div>
-
+      <div className="mt-auto space-y-1 border-t border-border/80 pt-3">
         {status === "authenticated" && (
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
-            className="flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
+            className="flex min-h-11 w-full cursor-pointer items-center rounded-md px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
           >
             <LogOut className="h-4 w-4 mr-3" />
             <span className="text-sm font-medium">Abmelden</span>

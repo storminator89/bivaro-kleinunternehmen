@@ -9,6 +9,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-body);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
   --font-marketing: var(--font-display);
   --color-positive: var(--color-success);
   --color-positive-foreground: var(--color-success-ink);
@@ -63,7 +64,7 @@
 
 :root {
   --radius: var(--radius-card);
-  --background: var(--color-paper-2);
+  --background: var(--color-paper);
   --foreground: var(--color-ink);
   --card: var(--color-paper);
   --card-foreground: var(--color-ink);
@@ -87,7 +88,7 @@
   --chart-3: var(--color-chart-cyan);
   --chart-4: var(--color-warning);
   --chart-5: var(--color-chart-magenta);
-  --sidebar: var(--color-paper-2);
+  --sidebar: var(--color-paper);
   --sidebar-foreground: var(--color-ink);
   --sidebar-primary: var(--color-accent);
   --sidebar-primary-foreground: var(--color-accent-ink);
@@ -98,11 +99,11 @@
 }
 
 .dark {
-  --background: var(--color-paper-2);
+  --background: var(--color-paper);
   --foreground: var(--color-ink);
-  --card: var(--color-paper-2);
+  --card: var(--color-paper);
   --card-foreground: var(--color-ink);
-  --popover: var(--color-paper-2);
+  --popover: var(--color-paper);
   --popover-foreground: var(--color-ink);
   --primary: var(--color-accent);
   --primary-foreground: var(--color-accent-ink);
@@ -122,7 +123,7 @@
   --chart-3: var(--color-chart-cyan);
   --chart-4: var(--color-warning);
   --chart-5: var(--color-chart-magenta);
-  --sidebar: var(--color-paper-2);
+  --sidebar: var(--color-paper);
   --sidebar-foreground: var(--color-ink);
   --sidebar-primary: var(--color-accent);
   --sidebar-primary-foreground: var(--color-accent-ink);
@@ -147,9 +148,59 @@
     text-rendering: optimizeLegibility;
     letter-spacing: -0.005em;
   }
+  ::selection {
+    background: var(--color-brand-teal);
+    color: var(--color-ink);
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
   :where(button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])):focus-visible {
     outline: 3px solid var(--ring);
     outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .app-surface {
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-card);
+    background: var(--color-paper);
+  }
+
+  .app-section-label {
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .app-nav-link {
+    position: relative;
+    min-height: 2.75rem;
+    border-radius: var(--radius-input);
+    transition: color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out);
+  }
+
+  .app-nav-link[data-active="true"]::before {
+    position: absolute;
+    inset-block: 0.5rem;
+    inset-inline-start: 0;
+    width: 0.1875rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-accent);
+    content: "";
+  }
+
+  .app-page-title {
+    font-size: var(--text-sm);
+    font-weight: 650;
+    letter-spacing: -0.01em;
   }
 }
 

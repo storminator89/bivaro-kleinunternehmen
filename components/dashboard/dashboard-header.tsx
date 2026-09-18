@@ -32,7 +32,7 @@ function formatCurrency(amount: number) {
 }
 
 export function DashboardHeader({ data }: DashboardHeaderProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   // Speichere den Zustand im localStorage
   useEffect(() => {
@@ -75,7 +75,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
       <section aria-labelledby="dashboard-overview-title">
         <button
           type="button"
-          className="flex min-h-11 w-full items-center justify-between border-b py-3 text-left"
+          className="flex min-h-12 w-full items-center justify-between border-b border-border/80 py-3 text-left"
           onClick={() => setIsExpanded(!isExpanded)}
           aria-expanded={isExpanded}
           aria-controls="dashboard-overview-content"
@@ -88,9 +88,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
         </button>
 
         {isExpanded && (
-          <div id="dashboard-overview-content" className="space-y-6 pt-5">
+          <div id="dashboard-overview-content" className="space-y-6 pt-6">
             {/* Kleinunternehmer-Status Tracker (Neue Regelung ab 2025) */}
-            <div className="rounded-lg border bg-muted/20 p-4">
+            <div className="rounded-xl border border-border/80 bg-card p-5">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-sm">Kleinunternehmer-Status 2025</span>
@@ -115,7 +115,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                   <span>Vorjahresgrenze (für Folgejahr-Status)</span>
                   <span>{formatCurrency(data.revenueThisYear)} / {formatCurrency(previousYearLimit)}</span>
                 </div>
-                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
                   <div
                     className={`h-full ${isOverPreviousYearLimit ? 'bg-critical' : isCloseToYearlyLimit ? 'bg-caution' : 'bg-positive'}`}
                     style={{ width: `${percentage}%` }}
@@ -129,7 +129,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                   <span>Harte Grenze lfd. Jahr (sofortige Steuerpflicht)</span>
                   <span>{formatCurrency(data.revenueThisYear)} / {formatCurrency(currentYearLimit)}</span>
                 </div>
-                <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                   <div
                     className={`h-full ${isOverHardLimit ? 'bg-critical' : 'bg-notice'}`}
                     style={{ width: `${percentageHardLimit}%` }}
@@ -137,7 +137,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                 </div>
               </div>
 
-              <div className="mt-3 p-2 bg-background/50 rounded text-xs text-muted-foreground space-y-1">
+              <div className="mt-4 space-y-1 border-t border-border/80 pt-4 text-xs text-muted-foreground">
                 {isOverHardLimit ? (
                   <p className="font-medium text-critical">
                     ⚠️ ACHTUNG: Sie haben die 100.000 € Grenze überschritten! Sie sind ab dem Umsatz,
@@ -159,7 +159,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
               <CollapsibleKpiCard
                 title="Umsatz diesen Monat"
                 value={formatCurrency(data.revenueThisMonth)}
@@ -266,8 +266,8 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
             </div>
 
             {/* Letzte Aktivitäten im Übersichtsbereich */}
-            <div className="border rounded-lg">
-              <div className="border-b p-4">
+            <div className="overflow-hidden rounded-xl border border-border/80 bg-card">
+              <div className="border-b border-border/80 p-5">
                 <h3 className="font-semibold flex items-center">
                   <Activity className="h-5 w-5 mr-2 text-muted-foreground" />
                   Letzte Aktivitäten
@@ -277,7 +277,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                 <div className="space-y-0">
                   {data.recentActivities.length > 0 ? (
                     data.recentActivities.slice(0, 5).map((activity) => (
-                      <div key={`${activity.type}-${activity.id}`} className="flex flex-wrap items-center gap-3 border-b p-4 transition-colors last:border-b-0 hover:bg-muted/50">
+                      <div key={`${activity.type}-${activity.id}`} className="flex flex-wrap items-center gap-3 border-b border-border/70 p-4 transition-colors last:border-b-0 hover:bg-secondary/40">
                         <div className="flex-1">
                           <p className="text-sm font-medium leading-none">{activity.description}</p>
                           <p className="text-sm text-muted-foreground">{new Date(activity.date).toLocaleDateString('de-DE')}</p>

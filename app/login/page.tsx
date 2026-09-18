@@ -53,17 +53,34 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-9rem)] items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <Lock className="h-5 w-5 text-muted-foreground" />
+    <div className="mx-auto grid min-h-[calc(100dvh-9rem)] w-full max-w-5xl items-center gap-10 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] lg:gap-20">
+      <div className="hidden max-w-md lg:block">
+        <p className="app-section-label">Bivaro</p>
+        <h1 className="mt-4 min-w-0 [overflow-wrap:anywhere] font-marketing text-5xl font-medium leading-[0.94] tracking-[-0.04em] text-foreground xl:text-6xl">
+          Buchhaltung, die den nächsten Schritt zeigt.
+        </h1>
+        <p className="mt-6 max-w-sm text-lg leading-8 text-muted-foreground">
+          Rechnungen, Belege und Auswertungen bleiben in einem klaren Arbeitsablauf verbunden.
+        </p>
+        <div className="mt-10 grid grid-cols-3 gap-3 border-y border-border py-4 text-sm">
+          <span>Rechnungen</span>
+          <span>Belege</span>
+          <span>EÜR</span>
+        </div>
+      </div>
+
+      <Card className="w-full rounded-2xl border-border/80 bg-card/90">
+        <CardHeader className="space-y-4 pb-5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Lock className="h-5 w-5" />
           </div>
-          <CardTitle className="text-2xl">Willkommen zurück</CardTitle>
-          <CardDescription>Melden Sie sich mit Ihren Zugangsdaten an</CardDescription>
+          <div>
+            <CardTitle className="text-3xl tracking-[-0.03em]">Willkommen zurück</CardTitle>
+            <CardDescription className="mt-2">Melden Sie sich mit Ihren Zugangsdaten an.</CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <CardContent className="pt-0">
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {error && (
               <div
                 role="alert"
@@ -119,7 +136,7 @@ export default function LoginPage() {
                 </p>
               )}
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="min-h-12 w-full" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Wird angemeldet…
@@ -130,8 +147,8 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col space-y-2">
-          <div className="text-sm text-center text-muted-foreground">
+        <CardFooter className="border-t border-border/80 pt-5">
+          <div className="w-full text-center text-sm text-muted-foreground">
             Sie haben noch kein Konto?{" "}
             <Link href="/register" className="font-medium text-foreground hover:underline">
               Registrieren
