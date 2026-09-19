@@ -1,139 +1,36 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import fs from 'fs';
 import JSZip from 'jszip';
 import { loadZipWithinLimits, ZipResourceLimitError } from '@/lib/zip-limits';
 import { MAX_BACKUP_ZIP_ENTRIES, MAX_BACKUP_ZIP_ENTRY_BYTES, MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES } from '@/lib/resource-limits';
 import { isSafeLegacyFileName, isSafeStoredFileName } from '@/lib/upload-path';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import { auditSecurityEvent } from '@/lib/audit-log';
+import { createBackupManifest, CURRENT_BACKUP_VERSION } from '@/lib/backup-manifest';
+import { BackupFileConsistencyError, BackupFileSizeError, getBackupFileVersion, readBackupSnapshot, readStableBackupFile } from '@/lib/backup-snapshot';
 
 // GET: Export all user data as ZIP including files
 export async function GET() {
   try {
     const userId = await requireUserId();
 
-    // Fetch all user data including new models
-    const [
-      user,
-      expenses,
-      incomes,
-      invoices,
-      customers,
-      settings,
-      templates,
-      recurringExpenses,
-      reminders,
-      cashBooks,
-      cashTransactions,
-      documentations,
-      apiKeys
-    ] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, email: true, name: true, role: true, createdAt: true }
-      }),
-      prisma.expense.findMany({ where: { userId } }),
-      prisma.income.findMany({ where: { userId } }),
-      prisma.invoice.findMany({ where: { userId } }),
-      prisma.customer.findMany({ where: { userId } }),
-      prisma.settings.findUnique({ where: { userId } }),
-      prisma.invoiceTemplate.findMany({ where: { userId } }),
-      prisma.recurringExpense.findMany({ where: { userId } }),
-      prisma.reminder.findMany({ where: { userId } }),
-      prisma.cashBook.findMany({ where: { userId } }),
-      prisma.cashTransaction.findMany({ where: { userId } }),
-      prisma.documentation.findMany({ where: { userId } }),
-      prisma.apiKey.findMany({ where: { userId }, select: { id: true, name: true, keyPrefix: true, scopes: true, isActive: true, expiresAt: true, createdAt: true } }),
-    ]);
-
-
-
-    // Create backup metadata
-    const backup = {
-      version: "2.0",
-      type: "full",
-      exportedAt: new Date().toISOString(),
-      user: {
-        email: user?.email,
-        name: user?.name,
-      },
-      data: {
-        expenses: expenses.map(e => ({
-          ...e,
-          userId: undefined,
-        })),
-        incomes: incomes.map(i => ({
-          ...i,
-          userId: undefined,
-        })),
-        invoices: invoices.map(inv => ({
-          ...inv,
-          userId: undefined,
-        })),
-        customers: customers.map(c => ({
-          ...c,
-          userId: undefined,
-        })),
-        settings: settings ? {
-          ...settings,
-          id: undefined,
-          userId: undefined,
-        } : null,
-        templates: templates.map(t => ({
-          ...t,
-          userId: undefined,
-        })),
-        recurringExpenses: recurringExpenses.map(r => ({
-          ...r,
-          userId: undefined,
-        })),
-        reminders: reminders.map(r => ({
-          ...r,
-          userId: undefined,
-        })),
-        cashBooks: cashBooks.map(cb => ({
-          ...cb,
-          userId: undefined,
-        })),
-        cashTransactions: cashTransactions.map(ct => ({
-          ...ct,
-          userId: undefined,
-        })),
-        documentations: documentations.map(d => ({
-          ...d,
-          userId: undefined,
-        })),
-        apiKeys: apiKeys.map(ak => ({
-          ...ak,
-        })),
-      },
-      stats: {
-        expenses: expenses.length,
-        incomes: incomes.length,
-        invoices: invoices.length,
-        customers: customers.length,
-        templates: templates.length,
-        recurringExpenses: recurringExpenses.length,
-        reminders: reminders.length,
-        cashBooks: cashBooks.length,
-        cashTransactions: cashTransactions.length,
-        documentations: documentations.length,
-        apiKeys: apiKeys.length,
-      }
-    };
+    const snapshot = await readBackupSnapshot(userId);
+    const { data } = snapshot;
+    const count = (key: string) => Array.isArray(data[key]) ? data[key].length : 0;
+    const invoices = Array.isArray(data.invoices) ? data.invoices as Array<{ storedFileName?: string | null }> : [];
+    const expenses = Array.isArray(data.expenses) ? data.expenses as Array<{ storedReceiptFileName?: string | null }> : [];
+    const settings = data.settings as { logoUrl?: string | null } | null;
+    const exportedAt = snapshot.info.endedAt;
 
     // Create ZIP archive
     const zip = new JSZip();
     const missingFiles: string[] = [];
 
-    // Add JSON backup
-    const metadata = JSON.stringify(backup, null, 2);
-    let totalBytes = Buffer.byteLength(metadata);
+    // Add files first; backup.json is written after its file manifest is complete.
+    let totalBytes = 0;
     let fileCount = 1;
-    if (totalBytes > MAX_BACKUP_ZIP_ENTRY_BYTES) throw new ZipResourceLimitError('Backup-Metadaten überschreiten die Wiederherstellungsgrenze');
-    zip.file('backup.json', metadata);
+    const fileManifest: import('@/lib/backup-manifest').BackupFileManifestEntry[] = [];
+    const packedFiles: Array<{ path: string; sourceVersion: string; sourceName: string }> = [];
 
     const addOwnedFile = async (kind: 'invoices' | 'receipts' | 'logos', storedName: string | null | undefined) => {
       if (!storedName || !(isSafeStoredFileName(storedName) || isSafeLegacyFileName(storedName))) {
@@ -147,17 +44,27 @@ export async function GET() {
         return;
       }
       try {
-        const size = (await fs.promises.stat(filePath)).size;
+        if (fileCount + 4 > MAX_BACKUP_ZIP_ENTRIES) throw new ZipResourceLimitError('Der Datenbestand überschreitet die Größenlimits des vollständigen Backups');
+        const stable = await readStableBackupFile(filePath, Math.min(MAX_BACKUP_ZIP_ENTRY_BYTES, MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES - totalBytes));
+        if (!stable) {
+          missingFiles.push(`${kind}/${storedName}`);
+          return;
+        }
+        const size = stable.bytes.byteLength;
         // Reserve room for the three directory entries JSZip adds automatically.
-        if (size > MAX_BACKUP_ZIP_ENTRY_BYTES || totalBytes + size > MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES || fileCount + 4 > MAX_BACKUP_ZIP_ENTRIES) {
+        if (size > MAX_BACKUP_ZIP_ENTRY_BYTES || totalBytes + size > MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES) {
           throw new ZipResourceLimitError('Der Datenbestand überschreitet die Größenlimits des vollständigen Backups');
         }
         totalBytes += size;
         fileCount++;
-        const fileContent = await fs.promises.readFile(filePath);
-        zip.file(`${kind}/${storedName}`, fileContent);
+        zip.file(`${kind}/${storedName}`, stable.bytes);
+        const manifestKind = kind === 'invoices' ? 'invoice' : kind === 'receipts' ? 'receipt' : 'logo';
+        fileManifest.push({ kind: manifestKind, sourceName: storedName, zipPath: `${kind}/${storedName}`, bytes: stable.bytes.byteLength, sha256: stable.sha256, sourceVersion: stable.sourceVersion });
+        packedFiles.push({ path: filePath, sourceVersion: stable.sourceVersion, sourceName: storedName });
       } catch (error) {
         if (error instanceof ZipResourceLimitError) throw error;
+        if (error instanceof BackupFileConsistencyError) throw error;
+        if (error instanceof BackupFileSizeError) throw new ZipResourceLimitError(error.message);
         missingFiles.push(`${kind}/${storedName}`);
       }
     };
@@ -194,6 +101,45 @@ export async function GET() {
       }, { status: 409 });
     }
 
+    // Recheck every source after all file reads and before the archive metadata
+    // is finalized. There is no immutable file-version store yet, so this
+    // bounds ordinary concurrent mutation but cannot promise a filesystem-wide
+    // atomic point beyond the final stat.
+    for (const packed of packedFiles) {
+      if (await getBackupFileVersion(packed.path) !== packed.sourceVersion) {
+        throw new BackupFileConsistencyError(`Datei ${packed.sourceName} wurde während des Backups verändert`);
+      }
+    }
+
+    const backup = {
+      version: CURRENT_BACKUP_VERSION,
+      type: 'full',
+      exportedAt,
+      manifest: createBackupManifest({ sourceUserId: userId, generatedAt: exportedAt, data, fileManifest, snapshot: snapshot.info }),
+      user: data.user,
+      data,
+      stats: {
+        expenses: count('expenses'),
+        incomes: count('incomes'),
+        invoices: count('invoices'),
+        customers: count('customers'),
+        templates: count('templates'),
+        recurringExpenses: count('recurringExpenses'),
+        reminders: count('reminders'),
+        cashBooks: count('cashBooks'),
+        cashTransactions: count('cashTransactions'),
+        documentations: count('documentations'),
+        apiKeys: count('apiKeys'),
+        auditLogs: count('auditLogs'),
+        invoiceNumberCounters: count('invoiceNumberCounters'),
+      },
+    };
+    const metadata = JSON.stringify(backup, null, 2);
+    const metadataBytes = Buffer.byteLength(metadata);
+    if (metadataBytes > MAX_BACKUP_ZIP_ENTRY_BYTES || totalBytes + metadataBytes > MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES) throw new ZipResourceLimitError('Backup-Metadaten überschreiten die Wiederherstellungsgrenze');
+    totalBytes += metadataBytes;
+    zip.file('backup.json', metadata);
+
     // Generate ZIP buffer
     const zipBuffer = await zip.generateAsync({
       type: 'nodebuffer',
@@ -210,10 +156,10 @@ export async function GET() {
       severity: 'info',
       metadata: {
         backupType: 'full',
-        expensesCount: expenses.length,
-        incomesCount: incomes.length,
-        invoicesCount: invoices.length,
-        customersCount: customers.length,
+        expensesCount: count('expenses'),
+        incomesCount: count('incomes'),
+        invoicesCount: count('invoices'),
+        customersCount: count('customers'),
       },
     });
 
@@ -231,6 +177,7 @@ export async function GET() {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof BackupFileConsistencyError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ZipResourceLimitError) return NextResponse.json({ error: error.message }, { status: 413 });
     console.error('Full backup error:', error);
     return NextResponse.json({ error: 'Vollständiges Backup fehlgeschlagen' }, { status: 500 });

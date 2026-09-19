@@ -19,7 +19,6 @@ vi.mock('@/lib/get-user-id', () => ({
   UnauthorizedError: class UnauthorizedError extends Error {},
   unauthorizedResponse: () => new Response(null, { status: 401 }),
 }));
-vi.mock('@/lib/audit-log', () => ({ createAuditLog: vi.fn() }));
 vi.mock('@/lib/credit-note-pdf', () => ({
   generateCreditNotePDF: vi.fn(async (data: Record<string, unknown>) => {
     state.lastPdfData = data;

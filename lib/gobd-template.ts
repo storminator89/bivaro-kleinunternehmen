@@ -1,6 +1,8 @@
+import packageJson from '@/package.json';
+
 /**
  * GoBD Verfahrensdokumentation Template Library
- * Provides structure and auto-generation for GoBD-compliant documentation
+ * Provides structure and auto-generation for a reviewable documentation draft.
  * 
  * Basierend auf dem BMF-Schreiben vom 28.11.2019 (GoBD)
  * "Grundsätze zur ordnungsmäßigen Führung und Aufbewahrung von
@@ -8,8 +10,8 @@
  * sowie zum Datenzugriff"
  */
 
-// Software version from package.json
-const APP_VERSION = '0.1.0';
+// Keep the generated documentation tied to the release metadata shipped with the app.
+const APP_VERSION = packageJson.version;
 const APP_NAME = 'Bivaro Buchhaltung';
 
 export interface DocumentationSection {
@@ -36,6 +38,8 @@ export interface SystemInfo {
     softwareVersion: string;
     databaseType: string;
     features: string[];
+    operatorTasks: string[];
+    knownLimitations: string[];
     lastUpdated: string;
 }
 
@@ -48,18 +52,31 @@ export function getSystemInfo(): SystemInfo {
         softwareVersion: APP_VERSION,
         databaseType: 'SQLite',
         features: [
-            'Einnahmen-Überschuss-Rechnung (EÜR) gemäß § 4 Abs. 3 EStG',
-            'Kassenbuchführung gemäß § 146 AO',
-            'Rechnungserstellung gemäß § 14 UStG',
-            'Belegverwaltung mit digitaler Archivierung (§ 147 AO)',
+            'Einnahmen-Überschuss-Rechnung (EÜR)',
+            'Kassenbücher mit laufender Saldenberechnung',
+            'Rechnungserstellung und Status-/Zahlungserfassung',
+            'Belegverwaltung mit mandantenbezogenem, privatem Upload-Speicher',
             'Kundenverwaltung',
-            'Abschreibungen (AfA) gemäß § 7 EStG',
-            'GWG-Verzeichnis (§ 6 Abs. 2 EStG)',
+            'Abschreibungen (AfA)',
+            'GWG-Verzeichnis',
             'Wiederkehrende Ausgaben',
             'Mahnwesen',
-            'Unveränderliches Audit-Log (§ 146 Abs. 4 AO)',
-            'Datensicherung und Backup',
+            'Transaktionales Finanz-Audit für ausgewählte Rechnungs- und Zahlungspfade; übrige Mutationen und Security-Telemetrie best effort',
+            'Backup v3 mit Manifest, Auditsegment und Rechnungsnummern-High-Water-Mark; v2 als Legacy-Format',
             'API-Zugang für externe Systeme',
+        ],
+        operatorTasks: [
+            'HTTPS/TLS am Reverse Proxy oder am Host einrichten und regelmäßig prüfen; die Anwendung weist diese Konfiguration nicht nach.',
+            'Verschlüsselung des Hosts und des Datenträgers für Datenbank, Uploads und Backups einrichten; eine Anwendungsverschlüsselung ist nicht vorhanden.',
+            'Backups regelmäßig, getrennt und wiederherstellbar ausführen und die Ergebnisse dokumentieren; automatische Backup-Zeitpläne sind nicht Teil der Anwendung.',
+            'Verantwortliche Person, Vertretung, Freigabe und fachliche Aufbewahrungsregeln eintragen und regelmäßig prüfen.',
+        ],
+        knownLimitations: [
+            'Fachliche Datensätze und Kassenbuchungen können über autorisierte Wege geändert oder gelöscht werden. Ein unveränderlicher Datenbestand oder ein allgemeiner Stornozwang ist nicht nachgewiesen.',
+            'Das Finanz-Audit ist nur für ausgewählte Rechnungs-, Zahlungs- und Stornopfade transaktional verpflichtend. Andere Mutationen sowie Security-Telemetrie bleiben best effort; eine vollständige Ereignisabdeckung ist offen.',
+            'Backup v3 weist Modellabdeckung, ein append-only Auditsegment, Rechnungsnummern-High-Water-Marks und bei ZIP-Dateien Dateihashes aus. Das belegt keine vollständige Original- oder Dateiabdeckung; v2 bleibt ohne diese Nachweise.',
+            'Die Anwendung prüft weder Hostverschlüsselung noch eine vollständige GoBD-Abdeckung. Diese Punkte bleiben offene Betreiber- beziehungsweise Reviewaufgaben.',
+            'Die Weboberfläche aktualisiert den bestehenden Dokumentdatensatz. Eine dauerhafte, unveränderliche Freigabehistorie ist für diesen Workflow nicht eingerichtet.',
         ],
         lastUpdated: new Date().toISOString(),
     };
@@ -86,32 +103,51 @@ export function getDefaultDocumentationTemplate(): DocumentationSection[] {
 
 ## 1.2 Anwendungsbereich
 
-Die Software dient der ordnungsgemäßen Buchführung für:
+Die Software kann grundsätzlich für folgende Betriebstypen geprüft werden; eine
+fachliche Eignung oder rechtliche Freigabe ist damit nicht zugesagt:
 - Kleinunternehmer gemäß § 19 UStG
 - Gewerbetreibende mit Einnahmen-Überschuss-Rechnung (§ 4 Abs. 3 EStG)
 - Freiberufler
 
-## 1.3 Rechtliche Grundlagen
+## 1.3 Geltungsstatus und fachliche Prüfung
 
-Die Verfahrensdokumentation erfüllt die Anforderungen aus:
+Diese automatisch erzeugte Systembeschreibung ist ein technischer Entwurf. Sie ist
+kein Zertifikat, keine rechtliche Freigabe und kein Nachweis einer vollständigen
+GoBD-Abdeckung. Die folgenden Rechtsquellen dienen als Prüf- und Abstimmungsgrundlage:
 - § 145 AO (Allgemeine Anforderungen an Buchführung und Aufzeichnungen)
 - § 146 AO (Ordnungsvorschriften für die Buchführung und für Aufzeichnungen)
 - § 147 AO (Ordnungsvorschriften für die Aufbewahrung von Unterlagen)
 - BMF-Schreiben vom 28.11.2019 (GoBD)
 
-## 1.4 Verfügbare Funktionen
+Die verantwortliche Person muss den betrieblichen Ablauf, die Aufbewahrung, die
+Freigabe und die offenen Betreiberaufgaben fachlich prüfen und ergänzen.
+
+## 1.4 Im Code erkennbare Funktionen
 
 ${systemInfo.features.map(f => `- ${f}`).join('\n')}
 
-## 1.5 Grundsätze ordnungsgemäßer Buchführung
+## 1.5 Betreiberaufgaben und offene Abweichungen
 
-Das System gewährleistet:
-- **Nachvollziehbarkeit und Nachprüfbarkeit** (§ 145 Abs. 1 AO)
-- **Vollständigkeit** aller Geschäftsvorfälle
-- **Richtigkeit** der Erfassung
-- **Zeitgerechte Buchung** und Aufzeichnung
-- **Ordnung** durch systematische Erfassung
-- **Unveränderbarkeit** durch Audit-Log`,
+### Betreiberaufgaben
+
+${systemInfo.operatorTasks.map(task => `- [ ] ${task}`).join('\n')}
+
+### Bekannte Abweichungen und Grenzen
+
+${systemInfo.knownLimitations.map(limitation => `- ${limitation}`).join('\n')}
+
+## 1.6 Nachgewiesene technische Kontrollen
+
+Die folgenden Kontrollen sind im aktuellen Code erkennbar; ihre fachliche Eignung
+und Vollständigkeit sind durch die verantwortliche Person zu bestätigen:
+- Server prüft Benutzer-/Mandantenbezug an den betroffenen Datenzugriffen.
+- Ausgewählte Rechnungs-, Zahlungs- und Stornopfade schreiben ihr Finanz-Audit in derselben Datenbanktransaktion; andere Mutationen rufen das Audit-Log best effort auf.
+- Uploads werden unter servergenerierten Namen außerhalb von public/ in einem mandantenbezogenen Verzeichnis gespeichert.
+- Passwörter werden als bcrypt-Hash gespeichert; das ist keine reversible Verschlüsselung.
+- Backup- und Restore-Pfade validieren Struktur und Dateireferenzen.
+
+Ein technischer Nachweis für Unveränderbarkeit, Verschlüsselung at rest oder eine
+vollständige Verfahrensabdeckung ist damit nicht verbunden.`,
             isAutoGenerated: true,
         },
         {
@@ -128,8 +164,8 @@ Das System gewährleistet:
 ## 2.2 Anmeldung und Authentifizierung
 
 - Zugang erfolgt über persönliche Benutzerkonten (E-Mail + Passwort)
-- Passwörter werden verschlüsselt gespeichert (bcrypt)
-- Jede An- und Abmeldung wird im Audit-Log protokolliert
+- Passwörter werden als bcrypt-Hash gespeichert (keine reversible Verschlüsselung)
+- Sicherheits- und Mutationsereignisse werden an ausgewählten Stellen im Audit-Log erfasst. Für die ausgewählten Rechnungs- und Zahlungspfade ist das Finanz-Audit transaktional; eine vollständige Ereignisabdeckung ist nicht zugesagt.
 
 ## 2.3 Erfassung von Geschäftsvorfällen
 
@@ -152,7 +188,7 @@ Das System gewährleistet:
 2. Tägliche Erfassung aller Bargeschäfte
 3. Jede Bewegung mit Datum, Beleg-Nr., Beschreibung, Betrag
 4. Täglicher Kassenabschluss mit Soll-Ist-Vergleich
-5. Keine nachträgliche Änderung möglich (Stornobuchung erforderlich)
+5. Änderungen und Löschungen sind über autorisierte Wege möglich und müssen betrieblich kontrolliert sowie nachvollziehbar dokumentiert werden
 
 ### Rechnungserstellung (§ 14 UStG)
 1. Navigation zu "Dashboard" → Tab "Rechnungen"
@@ -164,17 +200,19 @@ Das System gewährleistet:
 ## 2.4 Korrektur von Buchungen
 
 Gemäß § 146 Abs. 4 AO dürfen Aufzeichnungen nicht nachträglich geändert werden.
-Das System erzwingt:
-- **Stornobuchung** statt Löschung
-- **Automatisches Audit-Log** aller Änderungen
-- **Sichtbarer Änderungsverlauf** unter Einstellungen → Audit-Log
+Die Anwendung erzwingt dies nicht allgemein: Fachmutationen können je nach
+Entität geändert oder gelöscht werden. Für ausgewählte Rechnungs-, Zahlungs- und
+Stornopfade wird der Finanz-Audit-Eintrag in derselben Transaktion geschrieben;
+ein Fehler rollt diese Fachmutation zurück. Andere Audit-Einträge werden
+nachgelagert und best effort geschrieben. Der Audit-Log unter Einstellungen
+unterstützt die Prüfung, ersetzt aber keine fachliche Freigabe.
 
 ## 2.5 Belegablage und Archivierung
 
-- Belege werden im Originalformat gespeichert (keine Konvertierung)
-- Speicherort: /data/uploads (verschlüsselter Ordner)
-- Zugriff nur für authentifizierte Benutzer
-- Aufbewahrung gemäß § 147 AO (10 Jahre)`,
+- Bei direktem Upload wird der empfangene Inhalt gespeichert; PDF/A-3- und XML-Pfade erzeugen daneben abgeleitete Dokumente. Ein allgemeiner Originalerhalt über alle Konvertierungspfade ist nicht nachgewiesen.
+- Speicherort: data/uploads unterhalb des konfigurierten Arbeitsverzeichnisses, außerhalb von public/, mandantenbezogen
+- Zugriff über authentifizierte, besitzgeprüfte Routen; Host- und Datenträgerverschlüsselung ist Betreiberaufgabe
+- Aufbewahrungsfristen und Lösch-/Hold-Regeln müssen vom Betreiber festgelegt und geprüft werden`,
             isAutoGenerated: false,
         },
         {
@@ -186,7 +224,8 @@ Das System erzwingt:
 **Anwendungstyp:** Webbasierte Anwendung (Self-Hosted)
 **Framework:** Next.js (React)
 **Datenbank:** ${systemInfo.databaseType} (lokale Datei)
-**Verschlüsselung:** HTTPS/TLS für Netzwerkzugriff
+**Netzwerkschutz:** HTTPS/TLS muss am Reverse Proxy oder am Host konfiguriert und geprüft werden; die Anwendung weist diese Einstellung nicht nach.
+**Verschlüsselung at rest:** Keine anwendungsseitige Verschlüsselung der Datenbank oder Uploads nachgewiesen; Host-/Datenträgerverschlüsselung bleibt Betreiberaufgabe.
 
 ## 3.2 Datenspeicherung und -struktur
 
@@ -196,15 +235,16 @@ Das System erzwingt:
 - Fremdschlüsselbeziehungen für Datenkonsistenz
 
 ### Speicherorte
-- **Datenbank:** /prisma/dev.db
-- **Belege/Dokumente:** /data/uploads/
-- **Backups:** Manueller Export über Einstellungen
+- **Datenbank:** DATABASE_URL; die Entwicklungs-Voreinstellung ist prisma/dev.db
+- **Belege/Dokumente:** data/uploads unterhalb des Arbeitsverzeichnisses, außerhalb von public/, mit mandantenbezogenen Verzeichnissen
+- **Backups:** JSON- und ZIP-Export über die Backup-Funktionen; die Ablage, Trennung und Prüfung der Sicherungen ist Betreiberaufgabe
 
-## 3.3 Unveränderbarkeit (§ 146 Abs. 4 AO)
+## 3.3 Änderungs- und Löschbarkeit (offene Abweichung)
 
-Das System gewährleistet Unveränderbarkeit durch:
+Die Anwendung bietet technische Kontrollen, stellt aber keine allgemeine
+Unveränderbarkeit her:
 
-1. **Audit-Log-Tabelle:** Jede Datenänderung wird protokolliert mit:
+1. **Audit-Log-Tabelle:** Ausgewählte Rechnungs-, Zahlungs- und Stornopfade lösen in derselben Transaktion einen Eintrag aus; andere Datenänderungen lösen nach der Fachmutation einen best-effort Eintrag aus mit:
    - Zeitstempel (createdAt)
    - Benutzer-ID
    - Aktion (CREATE, UPDATE, DELETE)
@@ -212,21 +252,30 @@ Das System gewährleistet Unveränderbarkeit durch:
    - Alte und neue Werte (JSON)
    - IP-Adresse
 
-2. **Keine physische Löschung:** Gelöschte Datensätze werden markiert, nicht entfernt
+   Bei den ausgewählten Finanzpfaden rollt ein Audit-Fehler die Fachmutation zurück.
+   Bei anderen Pfaden bleibt das Schreiben best effort. Eine vollständige
+   Abdeckung und Unverlierbarkeit sind offen.
 
-3. **Zeitstempelbasierte Versionierung:** Jede Änderung erhält neuen Zeitstempel
+2. **Fachliche Änderungen:** Rechnungsstatus, Stammdaten und Kassenbuchungen
+   können über autorisierte Routen geändert werden. Datensätze können je nach
+   Entität physisch gelöscht werden. Ein allgemeiner Stornozwang ist nicht
+   implementiert.
+
+3. **Betreiberkontrolle:** Freigabe, Aufbewahrung, Hold und regelmäßige Prüfung
+   müssen außerhalb der Anwendung organisiert und belegt werden.
 
 ## 3.4 Datensicherung (§ 147 Abs. 6 AO)
 
 ### Backup-Funktionen
-- **JSON-Backup:** Export aller Daten als JSON-Datei
-- **ZIP-Backup:** Vollständiges Backup inkl. Dateien
+- **JSON-Backup v3:** Mandantenbezogener Export der ausgewiesenen Modellabdeckung mit Manifest, Hashes, Auditsegment und Rechnungsnummern-High-Water-Marks. Geheimnisse werden ausgeschlossen; API-Schlüssel müssen nach dem Restore neu ausgestellt werden. Das ist keine Zusage vollständiger fachlicher oder historischer Abdeckung.
+- **ZIP-Backup v3:** JSON-v3-Metadaten mit Dateimanifest und Hashes sowie referenzierte Rechnungs-, Beleg- und Logodateien, soweit sie zugreifbar sind. Fehlende Referenzen führen zu einem sichtbaren Fehler; Originalerhalt über alle Konvertierungspfade ist nicht nachgewiesen.
+- **Legacy-Backup v2:** Unterstütztes Altformat ohne v3-Manifest, Auditsegment und Rechnungsnummern-High-Water-Mark; Vollständigkeit muss vor einer Nutzung separat geprüft werden.
 - **Wiederherstellung:** Import über Einstellungen → Datensicherung
 
-### Empfohlene Backup-Strategie
-- Täglich: Inkrementelles Backup
-- Wöchentlich: Vollständiges Backup
-- Monatlich: Externes Backup (offsite)
+### Betreiberaufgaben für Backups
+- Sicherungsrhythmus, Aufbewahrung und getrennten Speicherort festlegen
+- Wiederherstellung regelmäßig mit synthetischen oder freigegebenen Daten prüfen
+- Zugriff auf Backups begrenzen und Verschlüsselung des Zielsystems nachweisen
 
 ## 3.5 Schnittstellen
 
@@ -241,10 +290,14 @@ Das System gewährleistet Unveränderbarkeit durch:
 
 ## 3.6 Datenzugriff (§ 147 Abs. 6 AO)
 
-Für Betriebsprüfungen stehen folgende Zugriffsmöglichkeiten bereit:
-- **Z1 (Unmittelbarer Zugriff):** Lesezugriff über Benutzeroberfläche
-- **Z2 (Mittelbarer Zugriff):** Export über API oder Backup-Funktion
-- **Z3 (Datenträgerüberlassung):** Vollständiges ZIP-Backup`,
+Die Anwendung stellt folgende technische Zugriffswege bereit; die Einordnung als
+Z1/Z2/Z3 und deren fachliche Eignung muss qualifiziert geprüft werden:
+- Lesezugriff über die Benutzeroberfläche
+- Export über API oder Backup-Funktion
+- JSON-/ZIP-Backup v3 mit ausgewiesener Modellabdeckung und Audit-/Countersegmenten; ZIP-Dateien enthalten referenzierte Dateien und Hashes, soweit diese zugreifbar sind
+
+Ein Betriebsprüfungszugang, eine vollständige Datenabdeckung oder eine
+unveränderte Datenträgerüberlassung wird damit nicht zugesagt.`,
             isAutoGenerated: true,
         },
         {
@@ -265,19 +318,20 @@ Für Betriebsprüfungen stehen folgende Zugriffsmöglichkeiten bereit:
 ### Zugriffskontrollen
 - Persönliche Benutzerkonten (keine Sammelkonten)
 - Rollenbasierte Berechtigungen (Admin/Benutzer)
-- Automatische Abmeldung nach Inaktivität
-- Protokollierung aller Zugriffsversuche
+- Server prüft Session, Benutzer- und Mandantenbezug an geschützten Routen
+- TLS-Konfiguration, Kontosperren und weitere Host-/Betriebsmaßnahmen sind zu prüfen
 
 ### Eingabekontrollen
 - Pflichtfeldvalidierung bei Erfassung
 - Formatprüfung (Datum, Beträge, IBAN)
-- Plausibilitätsprüfungen (z.B. keine negativen Einnahmen)
-- Warnhinweise bei ungewöhnlichen Beträgen
+- Fachspezifische Plausibilitätsprüfungen sind je Route unterschiedlich und nicht als vollständige Abdeckung nachgewiesen
+- Ungewöhnliche Beträge und Belegvollständigkeit müssen betrieblich geprüft werden
 
 ### Verarbeitungskontrollen
 - Automatische Berechnung von Summen
-- Keine manuelle Manipulation von Berechnungen
-- Prüfsummen für exportierte Daten
+- Transaktionen schützen ausgewählte mehrschrittige Mutationen vor Teilzuständen
+- Audit-Log-Aufrufe dokumentieren ausgewählte Mutationen best effort
+- Unveränderbarkeit und Prüfsummen für Exporte sind nicht allgemein nachgewiesen
 
 ## 4.3 Regelmäßige Prozesse
 
@@ -303,15 +357,19 @@ Für Betriebsprüfungen stehen folgende Zugriffsmöglichkeiten bereit:
 - [ ] Prüfung und Aktualisierung dieser Verfahrensdokumentation
 - [ ] Prüfung der Aufbewahrungsfristen
 
-## 4.4 Aufbewahrungsfristen (§ 147 AO)
+## 4.4 Aufbewahrung und Fristen (fachlich zu prüfen)
 
-| Dokumentenart | Frist | Beginn |
+| Dokumentenart | Betriebliche Frist eintragen | Beginn festlegen |
 |---------------|-------|--------|
-| Handelsbücher, Inventare, Bilanzen | 10 Jahre | Ende des Kalenderjahres |
-| Buchungsbelege | 10 Jahre | Ende des Kalenderjahres |
-| Empfangene Handels- und Geschäftsbriefe | 6 Jahre | Ende des Kalenderjahres |
-| Wiedergaben abgesandter Handels- und Geschäftsbriefe | 6 Jahre | Ende des Kalenderjahres |
-| Sonstige Unterlagen | 6 Jahre | Ende des Kalenderjahres |
+| Handelsbücher, Inventare, Bilanzen | [fachlich prüfen] | [fachlich prüfen] |
+| Buchungsbelege | [fachlich prüfen] | [fachlich prüfen] |
+| Empfangene Handels- und Geschäftsbriefe | [fachlich prüfen] | [fachlich prüfen] |
+| Wiedergaben abgesandter Handels- und Geschäftsbriefe | [fachlich prüfen] | [fachlich prüfen] |
+| Sonstige Unterlagen | [fachlich prüfen] | [fachlich prüfen] |
+
+Die Anwendung erzwingt diese Fristen nicht automatisch. Aufbewahrung, Holds,
+Löschfreigaben und ein datensparsamer Nachweis sind als Betreiberprozess zu
+definieren und qualifiziert freizugeben.
 
 ## 4.5 Verfahren bei Systemausfällen
 
@@ -337,7 +395,7 @@ Für Betriebsprüfungen stehen folgende Zugriffsmöglichkeiten bereit:
 
 | Version | Datum | Änderung | Verantwortlich |
 |---------|-------|----------|----------------|
-| 1.0 | [Datum] | Erstfassung | [Name] |
+| ${systemInfo.softwareVersion} | ${systemInfo.lastUpdated} | Automatisch erzeugter technischer Entwurf; fachliche Freigabe offen | [verantwortliche Person eintragen] |
 | | | | |
 | | | | |
 
@@ -351,13 +409,19 @@ Bei jeder Änderung der Verfahrensdokumentation ist zu dokumentieren:
 
 ## 5.3 Aufbewahrung alter Versionen
 
-Alle Versionen dieser Verfahrensdokumentation sind für die Dauer der Aufbewahrungsfristen (§ 147 AO) aufzubewahren. Die Aufbewahrung erfolgt:
-- Digital im System (automatisch versioniert)
-- Optional: Ausdruck in Papierform
+Die Aufbewahrung und die Dauer sind fachlich festzulegen. Der aktuelle Web-
+Workflow aktualisiert den bestehenden Dokumentdatensatz; eine dauerhafte,
+unveränderliche Freigabehistorie wird dabei nicht automatisch angelegt. Alte
+freigegebene Fassungen müssen vor einer Änderung außerhalb dieses Workflows
+gesichert und nachvollziehbar referenziert werden.
 
 ## 5.4 Gültigkeit
 
-Diese Verfahrensdokumentation tritt mit Datum der Erstfassung in Kraft und ist gültig bis zur nächsten Aktualisierung.
+**Stand des technischen Entwurfs:** ${systemInfo.lastUpdated}
+
+**Gültigkeit und Freigabedatum:** [fachlich festlegen]
+
+**Verantwortliche Person:** [eintragen und Freigabe dokumentieren]
 
 **Unterschrift Geschäftsführung:**
 

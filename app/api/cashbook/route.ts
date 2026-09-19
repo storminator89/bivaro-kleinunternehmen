@@ -87,12 +87,14 @@ export async function POST(request: NextRequest) {
         const parsedName = parseText(name, 'Name', true)!;
         const parsedDescription = parseText(description, 'Beschreibung');
         const parsedCurrency = parseText(currency, 'Währung', true)!;
+        const parsedInitialBalance = cashAmount(initialBalance, false);
+        if (Number(initialBalance) < 0) throw new CashbookError('Der Kassenanfangsbestand darf nicht negativ sein', 409);
 
         const cashBook = await prisma.cashBook.create({
             data: {
                 name: parsedName,
                 description: parsedDescription,
-                initialBalance: cashAmount(initialBalance, false),
+                initialBalance: parsedInitialBalance,
                 currency: parsedCurrency,
                 userId
             }
@@ -137,7 +139,10 @@ export async function PUT(request: NextRequest) {
         const updateData: Prisma.CashBookUpdateInput = {};
         if (name !== undefined) updateData.name = parseText(name, 'Name', true)!;
         if (description !== undefined) updateData.description = parseText(description, 'Beschreibung');
-        if (initialBalance !== undefined) updateData.initialBalance = cashAmount(initialBalance, false);
+        if (initialBalance !== undefined) {
+            updateData.initialBalance = cashAmount(initialBalance, false);
+            if (Number(initialBalance) < 0) throw new CashbookError('Der Kassenanfangsbestand darf nicht negativ sein', 409);
+        }
         if (currency !== undefined) updateData.currency = parseText(currency, 'Währung', true)!;
         if (isActive !== undefined) {
             if (typeof isActive !== 'boolean') throw new CashbookError('Ungültiges Feld: Aktiv');

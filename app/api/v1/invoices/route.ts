@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
           dueDate: true,
           totalAmount: true,
           status: true,
+          issuanceState: true,
           paidAt: true,
           uploadedAt: true,
           customerId: true,

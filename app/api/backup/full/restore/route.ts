@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
 import { restoreBackupData, BackupValidationError } from '@/lib/backup-restore';
+import { CURRENT_BACKUP_VERSION, hashBytes, validateBackupManifest } from '@/lib/backup-manifest';
 import { createZipReadBudget, loadZipWithinLimits, readZipEntryWithinLimit, ZipResourceLimitError } from '@/lib/zip-limits';
 import {
   MAX_BACKUP_ZIP_BYTES,
@@ -45,11 +46,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Das ZIP-Backup enthält keinen vollständigen Export' }, { status: 400 });
     }
 
+    let manifest: ReturnType<typeof validateBackupManifest> | null = null;
+    if (backup.version === CURRENT_BACKUP_VERSION) {
+      try {
+        manifest = validateBackupManifest(backup.manifest, backup.data as Record<string, unknown>);
+      } catch (error) {
+        throw new BackupValidationError(error instanceof Error ? error.message : 'Backup-Manifest ist ungültig');
+      }
+    }
+
     const resolveFile = async (kind: 'invoice' | 'receipt' | 'logo', sourceName: string): Promise<Uint8Array | null> => {
       const prefix = kind === 'invoice' ? 'invoices' : kind === 'receipt' ? 'receipts' : 'logos';
       const entry = zip.file(`${prefix}/${sourceName}`);
       if (!entry) return null;
-      return readZipEntryWithinLimit(entry, undefined, zipReadBudget);
+      const bytes = await readZipEntryWithinLimit(entry, undefined, zipReadBudget);
+      const expected = manifest?.fileManifest.find((file) => file.kind === kind && file.sourceName === sourceName);
+      if (manifest && !expected) throw new BackupValidationError(`Datei ${sourceName} fehlt im Backup-Manifest`);
+      if (expected && expected.bytes !== bytes.byteLength) throw new BackupValidationError(`Größe der Datei ${sourceName} stimmt nicht mit dem Backup-Manifest überein`);
+      if (expected && hashBytes(bytes) !== expected.sha256) throw new BackupValidationError(`Hash der Datei ${sourceName} stimmt nicht mit dem Backup-Manifest überein`);
+      return bytes;
     };
 
     const results = await restoreBackupData({

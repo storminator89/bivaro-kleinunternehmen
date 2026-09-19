@@ -53,5 +53,7 @@ next-env.d.ts
 /prisma/dev.db
 /prisma/prisma/dev.db
 /prisma/data/
+/prisma/backups/
+*.pre-upgrade
 *.db
 *.db-journal

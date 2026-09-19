@@ -1,58 +1,29 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
+import { createBackupManifest, CURRENT_BACKUP_VERSION } from '@/lib/backup-manifest';
+import { readBackupSnapshot } from '@/lib/backup-snapshot';
 
 // GET: Export all user data as JSON
 export async function GET() {
   try {
     const userId = await requireUserId();
 
-    // Fetch all user data including new models
-    const [
-      user,
-      expenses,
-      incomes,
-      invoices,
-      customers,
-      settings,
-      templates,
-      recurringExpenses,
-      reminders,
-      cashBooks,
-      cashTransactions,
-      documentations,
-      apiKeys
-    ] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, email: true, name: true, role: true, createdAt: true }
-      }),
-      prisma.expense.findMany({ where: { userId } }),
-      prisma.income.findMany({ where: { userId } }),
-      prisma.invoice.findMany({ where: { userId } }),
-      prisma.customer.findMany({ where: { userId } }),
-      prisma.settings.findUnique({ where: { userId } }),
-      prisma.invoiceTemplate.findMany({ where: { userId } }),
-      prisma.recurringExpense.findMany({ where: { userId } }),
-      prisma.reminder.findMany({ where: { userId } }),
-      prisma.cashBook.findMany({ where: { userId } }),
-      prisma.cashTransaction.findMany({ where: { userId } }),
-      prisma.documentation.findMany({ where: { userId } }),
-      prisma.apiKey.findMany({ where: { userId }, select: { id: true, name: true, keyPrefix: true, scopes: true, isActive: true, expiresAt: true, createdAt: true } }),
-    ]);
+    const snapshot = await readBackupSnapshot(userId);
+    const { data } = snapshot;
+    const count = (key: string) => Array.isArray(data[key]) ? data[key].length : 0;
 
     // Audit log
     await auditBackup(userId, 'BACKUP', {
-      expensesCount: expenses.length,
-      incomesCount: incomes.length,
-      invoicesCount: invoices.length,
-      customersCount: customers.length,
-      recurringExpensesCount: recurringExpenses.length,
-      remindersCount: reminders.length,
-      cashBooksCount: cashBooks.length,
-      cashTransactionsCount: cashTransactions.length,
-      documentationsCount: documentations.length,
+      expensesCount: count('expenses'),
+      incomesCount: count('incomes'),
+      invoicesCount: count('invoices'),
+      customersCount: count('customers'),
+      recurringExpensesCount: count('recurringExpenses'),
+      remindersCount: count('reminders'),
+      cashBooksCount: count('cashBooks'),
+      cashTransactionsCount: count('cashTransactions'),
+      documentationsCount: count('documentations'),
     });
     await auditSecurityEvent(userId, {
       event: 'BACKUP_EXPORT',
@@ -60,83 +31,35 @@ export async function GET() {
       severity: 'info',
       metadata: {
         backupType: 'json',
-        expensesCount: expenses.length,
-        incomesCount: incomes.length,
-        invoicesCount: invoices.length,
-        customersCount: customers.length,
+        expensesCount: count('expenses'),
+        incomesCount: count('incomes'),
+        invoicesCount: count('invoices'),
+        customersCount: count('customers'),
       },
     });
 
+    const exportedAt = snapshot.info.endedAt;
     const backup = {
-      version: "2.0",
-      exportedAt: new Date().toISOString(),
-      user: {
-        email: user?.email,
-        name: user?.name,
-      },
-      data: {
-        expenses: expenses.map(e => ({
-          ...e,
-          userId: undefined, // Remove userId from export
-        })),
-        incomes: incomes.map(i => ({
-          ...i,
-          userId: undefined,
-        })),
-        invoices: invoices.map(inv => ({
-          ...inv,
-          userId: undefined,
-        })),
-        customers: customers.map(c => ({
-          ...c,
-          userId: undefined,
-        })),
-        settings: settings ? {
-          ...settings,
-          id: undefined,
-          userId: undefined,
-        } : null,
-        templates: templates.map(t => ({
-          ...t,
-          userId: undefined,
-        })),
-        recurringExpenses: recurringExpenses.map(r => ({
-          ...r,
-          userId: undefined,
-        })),
-        reminders: reminders.map(r => ({
-          ...r,
-          userId: undefined,
-        })),
-        cashBooks: cashBooks.map(cb => ({
-          ...cb,
-          userId: undefined,
-        })),
-        cashTransactions: cashTransactions.map(ct => ({
-          ...ct,
-          userId: undefined,
-        })),
-        documentations: documentations.map(d => ({
-          ...d,
-          userId: undefined,
-        })),
-        apiKeys: apiKeys.map(ak => ({
-          ...ak,
-          // Note: keyHash is excluded for security - API keys need to be recreated after restore
-        })),
-      },
+      version: CURRENT_BACKUP_VERSION,
+      type: 'json',
+      exportedAt,
+      manifest: createBackupManifest({ sourceUserId: userId, generatedAt: exportedAt, data, snapshot: snapshot.info }),
+      user: data.user,
+      data,
       stats: {
-        expenses: expenses.length,
-        incomes: incomes.length,
-        invoices: invoices.length,
-        customers: customers.length,
-        templates: templates.length,
-        recurringExpenses: recurringExpenses.length,
-        reminders: reminders.length,
-        cashBooks: cashBooks.length,
-        cashTransactions: cashTransactions.length,
-        documentations: documentations.length,
-        apiKeys: apiKeys.length,
+        expenses: count('expenses'),
+        incomes: count('incomes'),
+        invoices: count('invoices'),
+        customers: count('customers'),
+        templates: count('templates'),
+        recurringExpenses: count('recurringExpenses'),
+        reminders: count('reminders'),
+        cashBooks: count('cashBooks'),
+        cashTransactions: count('cashTransactions'),
+        documentations: count('documentations'),
+        apiKeys: count('apiKeys'),
+        auditLogs: count('auditLogs'),
+        invoiceNumberCounters: count('invoiceNumberCounters'),
       }
     };
 

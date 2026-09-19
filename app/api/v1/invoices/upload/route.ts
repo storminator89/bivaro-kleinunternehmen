@@ -18,6 +18,7 @@ import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
 import { getNextDocumentNumber } from '@/lib/invoice-numbers';
 import { ProcessingCapacityError, withProcessingSlot } from '@/lib/processing-limit';
 import { inTransaction } from '@/lib/db-transaction';
+import { createFinancialAuditLog } from '@/lib/audit-log';
 import {
   isRequestBodyWithinLimit,
   readRequestBodyWithinLimit,
@@ -223,7 +224,7 @@ export async function POST(request: NextRequest) {
       invoice = await inTransaction(async (tx) => {
         const customerRecord = await findOrCreateCustomer(parsedInvoice, userId, tx);
         const invoiceNumber = parsedInvoice.invoiceNumber || await getNextDocumentNumber(tx, userId, 'INVOICE', invoiceDate.getFullYear());
-        return tx.invoice.create({
+        const created = await tx.invoice.create({
           data: {
             type: 'INVOICE',
             fileName: file.name,
@@ -234,9 +235,27 @@ export async function POST(request: NextRequest) {
             totalAmount: parsedInvoice.totalAmount ?? undefined,
             parsedData: toStoredParsedData(parsedInvoice),
             customerId: customerRecord?.id,
+            // Uploaded/imported documents have no trusted never-issued proof.
+            issuanceState: 'UNKNOWN',
             userId,
           },
         });
+        await createFinancialAuditLog({
+          userId,
+          action: 'CREATE',
+          entityType: 'Invoice',
+          entityId: created.id,
+          entityName: created.invoiceNumber || created.fileName,
+          newValues: { status: created.status, issuanceState: created.issuanceState, invoiceNumber: created.invoiceNumber },
+          metadata: {
+            actorId: userId,
+            tenantId: userId,
+            operation: 'invoice.upload',
+            originalReference: created.invoiceNumber ?? `invoice:${created.id}`,
+            reason: 'invoice draft uploaded',
+          },
+        }, tx);
+        return created;
       });
     } catch (error) {
       if (storedFileName) {
@@ -256,6 +275,7 @@ export async function POST(request: NextRequest) {
       dueDate: invoice.dueDate,
       totalAmount: invoice.totalAmount,
       status: invoice.status,
+      issuanceState: invoice.issuanceState,
       customerName: parsedInvoice.customerName,
       eInvoiceFormat: parsedInvoice.format,
       documentType: parsedInvoice.documentType,

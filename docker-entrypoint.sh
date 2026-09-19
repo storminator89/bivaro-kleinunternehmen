@@ -1,92 +1,48 @@
 #!/bin/sh
-# =============================================================================
-# Docker Entrypoint Script
-# Initializes database and starts the application
-# =============================================================================
+#
+# Bivaro runtime entrypoint.
+#
+# Database upgrades are an explicit, operator-run step:
+#   node scripts/upgrade-database.mjs
+#
+# Startup intentionally performs only non-mutating target and migration-status
+# checks. It never creates, links, deletes, or synchronises a database.
 
-set -e
+set -eu
 
-echo "🚀 Starting Buchhaltung..."
+APP_ROOT=${APP_ROOT:-/app}
+SCHEMA=${PRISMA_SCHEMA:-$APP_ROOT/prisma/schema.prisma}
+PRISMA_CLI=${PRISMA_CLI:-$APP_ROOT/node_modules/prisma/build/index.js}
 
-# Prisma CLI path
-PRISMA_CLI="./node_modules/prisma/build/index.js"
+export APP_ROOT PRISMA_SCHEMA="$SCHEMA" PRISMA_CLI
 
-# Debug: Show current user and permissions
-echo "📋 Running as user: $(whoami) ($(id))"
-echo "📋 Data directory permissions:"
-ls -la /app/data/ 2>/dev/null || echo "   Directory does not exist or no permissions"
-
-# Ensure data directory exists and is writable
-if [ ! -d /app/data ]; then
-    echo "📁 Creating data directory..."
-    mkdir -p /app/data
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "ERROR: DATABASE_URL is required; startup refuses to choose a fallback database." >&2
+  exit 1
 fi
 
-# Check write permissions
-if [ ! -w /app/data ]; then
-    echo "❌ ERROR: No write permissions on /app/data"
-    echo "   Please ensure the volume is mounted with correct permissions"
-    echo "   Try: docker compose down -v && docker compose up -d"
-    exit 1
+echo "Starting Bivaro application startup checks..."
+node "$APP_ROOT/scripts/database-runtime.mjs" --mode startup
+
+if [ ! -f "$PRISMA_CLI" ]; then
+  echo "ERROR: Prisma CLI not found at $PRISMA_CLI; refusing to start without a schema check." >&2
+  exit 1
 fi
 
-# Erstelle Symlink: Prisma sucht in ./dev.db relativ zum Schema
-# Wir linken /app/prisma/dev.db -> /app/data/prod.db
-echo "🔗 Setting up database symlink..."
-rm -f /app/prisma/dev.db 2>/dev/null || true
-ln -sf /app/data/prod.db /app/prisma/dev.db
-echo "   /app/prisma/dev.db -> /app/data/prod.db"
-
-# Setze DATABASE_URL für Prisma CLI (relativ zum prisma-Verzeichnis)
-export DATABASE_URL="file:./dev.db"
-echo "📋 DATABASE_URL: $DATABASE_URL"
-
-# Check if database exists, if not initialize it
-if [ ! -f /app/data/prod.db ]; then
-    echo "📦 Initializing database..."
-    
-    # Erstelle leere Datei damit der Symlink funktioniert
-    touch /app/data/prod.db
-    
-    # Run Prisma migrations to create the database
-    cd /app/prisma
-    if node /app/$PRISMA_CLI migrate deploy --schema=/app/prisma/schema.prisma; then
-        echo "✅ Database initialized successfully!"
-    else
-        echo "❌ Migration failed! Trying to create database with db push..."
-        node /app/$PRISMA_CLI db push --schema=/app/prisma/schema.prisma --accept-data-loss
-        echo "✅ Database created with db push!"
-    fi
-    cd /app
-else
-    echo "📦 Database exists, checking for pending migrations..."
-    
-    # Apply any pending migrations
-    cd /app/prisma
-    if node /app/$PRISMA_CLI migrate deploy --schema=/app/prisma/schema.prisma; then
-        echo "✅ Migrations applied!"
-        # Also run db push to catch any schema drift
-        echo "🔄 Syncing schema with db push..."
-        node /app/$PRISMA_CLI db push --schema=/app/prisma/schema.prisma --accept-data-loss 2>/dev/null || true
-        echo "✅ Schema synced!"
-    else
-        echo "⚠️ Migration deploy failed, trying db push with --accept-data-loss..."
-        node /app/$PRISMA_CLI db push --schema=/app/prisma/schema.prisma --accept-data-loss
-        echo "✅ Schema synced with db push!"
-    fi
-    cd /app
+echo "Checking physical schema compatibility without changing the database..."
+if ! node "$PRISMA_CLI" migrate diff \
+  --from-url="$DATABASE_URL" \
+  --to-schema-datamodel="$SCHEMA" \
+  --exit-code; then
+  echo "ERROR: physical database schema differs from the checked-in Prisma schema; startup is blocked and no repair is attempted." >&2
+  exit 1
 fi
 
-# Verify database exists
-if [ -f /app/data/prod.db ]; then
-    DB_SIZE=$(ls -la /app/data/prod.db | awk '{print $5}')
-    echo "✅ Database file exists: /app/data/prod.db (${DB_SIZE} bytes)"
-else
-    echo "❌ ERROR: Database file was not created!"
-    exit 1
+echo "Checking versioned migrations without changing the database..."
+if ! node "$PRISMA_CLI" migrate status --schema="$SCHEMA"; then
+  echo "ERROR: database is not migration-compatible. Run the explicit upgrade job, inspect drift, and retry startup." >&2
+  exit 1
 fi
 
-echo "🌐 Starting server..."
-
-# Start the application
+echo "Database target and migration status are ready. Starting server..."
 exec node server.js

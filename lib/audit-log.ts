@@ -74,6 +74,28 @@ export interface AuditLogEntry {
   metadata?: Record<string, unknown>;
 }
 
+/** Required, deliberately small context for a financial mutation. */
+export interface FinancialAuditMetadata {
+  actorId: string;
+  tenantId: string;
+  operation: string;
+  originalReference: string;
+  reason: string;
+}
+
+export type FinancialAuditEntry = Omit<AuditLogEntry, 'metadata'> & {
+  metadata: FinancialAuditMetadata;
+};
+
+/**
+ * A Prisma transaction client is deliberately required for financial audit
+ * events.  The existing `createAuditLog` helper remains best effort because
+ * it is also used for security telemetry and must not turn an otherwise
+ * successful login into an error.  Financial writes use this writer instead;
+ * an insert failure is allowed to abort their enclosing transaction.
+ */
+export type FinancialAuditClient = Prisma.TransactionClient;
+
 // Fields to exclude from audit logs (sensitive data)
 const SENSITIVE_FIELDS = [
   'password',
@@ -81,6 +103,10 @@ const SENSITIVE_FIELDS = [
   'iban',
   'bic',
   'bankName',
+  'token',
+  'keyHash',
+  'secret',
+  'authorization',
 ];
 
 // Fields to mask partially in logs
@@ -93,47 +119,30 @@ const MASKED_FIELDS = [
  * Sanitize values for audit log storage
  * Removes sensitive fields and masks partial data
  */
-function sanitizeValues(values: Record<string, unknown> | undefined): string | null {
+function sanitizeValues(values: object | undefined): string | null {
   if (!values) return null;
 
-  const sanitized: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(values)) {
-    // Skip sensitive fields entirely
-    if (SENSITIVE_FIELDS.includes(key)) {
-      sanitized[key] = '[REDACTED]';
-      continue;
+  const sanitize = (value: unknown, key?: string): unknown => {
+    const normalizedKey = key?.toLowerCase();
+    if (normalizedKey && SENSITIVE_FIELDS.some(field => normalizedKey === field.toLowerCase() || normalizedKey.includes(field.toLowerCase()))) {
+      return '[REDACTED]';
     }
-
-    // Mask certain fields
-    if (MASKED_FIELDS.includes(key) && typeof value === 'string') {
+    if (key && MASKED_FIELDS.includes(key) && typeof value === 'string') {
       if (key === 'email' && value.includes('@')) {
         const [local, domain] = value.split('@');
-        sanitized[key] = `${local.substring(0, 2)}***@${domain}`;
-      } else if (value.length > 4) {
-        sanitized[key] = `${value.substring(0, 2)}***${value.substring(value.length - 2)}`;
-      } else {
-        sanitized[key] = '***';
+        return `${local.substring(0, 2)}***@${domain}`;
       }
-      continue;
+      return value.length > 4 ? `${value.substring(0, 2)}***${value.substring(value.length - 2)}` : '***';
     }
-
-    // Handle nested objects
-    if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-      sanitized[key] = JSON.parse(sanitizeValues(value as Record<string, unknown>) || '{}');
-      continue;
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map(item => sanitize(item));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([childKey, childValue]) => [childKey, sanitize(childValue, childKey)]));
     }
+    return value;
+  };
 
-    // Handle dates
-    if (value instanceof Date) {
-      sanitized[key] = value.toISOString();
-      continue;
-    }
-
-    sanitized[key] = value;
-  }
-
-  return JSON.stringify(sanitized);
+  return JSON.stringify(sanitize(values));
 }
 
 /**
@@ -189,32 +198,54 @@ async function getClientInfo(): Promise<{ ipAddress: string | null; userAgent: s
   }
 }
 
+type AuditEntryForData = Omit<AuditLogEntry, 'metadata'> & {
+  metadata?: Record<string, unknown> | FinancialAuditMetadata;
+};
+
+async function auditData(entry: AuditEntryForData) {
+  const { ipAddress, userAgent } = await getClientInfo();
+  const changedFields = getChangedFields(entry.oldValues, entry.newValues);
+
+  return {
+    userId: entry.userId,
+    action: entry.action,
+    entityType: entry.entityType,
+    entityId: entry.entityId?.toString() || null,
+    entityName: entry.entityName || null,
+    oldValues: sanitizeValues(entry.oldValues),
+    newValues: sanitizeValues(entry.newValues),
+    changedFields: changedFields.length > 0 ? JSON.stringify(changedFields) : null,
+    ipAddress,
+    userAgent: userAgent?.substring(0, 500) || null,
+    // Metadata is sanitized too.  In particular, a future caller must not be
+    // able to bypass the redaction rules by putting a secret in metadata.
+    metadata: sanitizeValues(entry.metadata),
+  } satisfies Prisma.AuditLogUncheckedCreateInput;
+}
+
+/**
+ * Write a financial audit event inside the caller's transaction.
+ *
+ * This function intentionally propagates database errors.  Callers must
+ * invoke it before the transaction callback returns so a failed audit insert
+ * rolls back the corresponding invoice/income mutation.
+ */
+export async function createFinancialAuditLog(
+  entry: FinancialAuditEntry,
+  tx: FinancialAuditClient,
+): Promise<void> {
+  await tx.auditLog.create({ data: await auditData(entry) });
+}
+
 /**
  * Create an audit log entry
  */
 export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
   try {
-    const { ipAddress, userAgent } = await getClientInfo();
-    const changedFields = getChangedFields(entry.oldValues, entry.newValues);
-
-    await prisma.auditLog.create({
-      data: {
-        userId: entry.userId,
-        action: entry.action,
-        entityType: entry.entityType,
-        entityId: entry.entityId?.toString() || null,
-        entityName: entry.entityName || null,
-        oldValues: sanitizeValues(entry.oldValues),
-        newValues: sanitizeValues(entry.newValues),
-        changedFields: changedFields.length > 0 ? JSON.stringify(changedFields) : null,
-        ipAddress,
-        userAgent: userAgent?.substring(0, 500) || null, // Truncate long user agents
-        metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
-      },
-    });
-  } catch (_error) {
+    await prisma.auditLog.create({ data: await auditData(entry) });
+  } catch {
     // Log error but don't throw - audit logging should not break main functionality
-    console.error('Failed to create audit log:', _error);
+    console.error('Failed to create audit log');
   }
 }
 

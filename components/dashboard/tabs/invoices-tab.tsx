@@ -26,6 +26,20 @@ import { EmailPreviewDialog } from "@/components/dashboard/email-preview-dialog"
 import { Invoice, FilterState } from "@/types/dashboard";
 import { formatCurrency } from "@/lib/dashboard-utils";
 
+function canDeleteDraft(invoice: Invoice): boolean {
+  return invoice.type !== 'CREDIT_NOTE' && invoice.type !== 'QUOTE'
+    && invoice.status === 'DRAFT' && invoice.issuanceState === 'UNISSUED'
+    && !invoice.income && !invoice.paidAt;
+}
+
+function availableInvoiceStatuses(invoice: Invoice): string[] {
+  if (invoice.type === 'CREDIT_NOTE' || invoice.type === 'QUOTE'
+    || invoice.income || invoice.paidAt) return [];
+  if (invoice.status === 'DRAFT') return ['SENT', 'PAID'];
+  if (invoice.status === 'SENT') return ['PAID'];
+  return [];
+}
+
 type InvoicesTabProps = {
   // Upload state
   selectedFile: File | null;
@@ -250,14 +264,17 @@ export function InvoicesTab({
                   </div>
                   <p className="shrink-0 font-semibold tabular-nums">{invoice.totalAmount ? formatCurrency(invoice.totalAmount) : '–'}</p>
                 </div>
-                <StatusBadge status={invoice.status} onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)} />
+                <StatusBadge status={invoice.status} availableStatuses={availableInvoiceStatuses(invoice)} onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)} />
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" className="min-h-11" onClick={() => onOpenDetails(invoice)}><Eye className="h-4 w-4" />Details</Button>
                   {invoice.hasPdfFile !== false && (
                     <Button variant="outline" size="sm" className="min-h-11" onClick={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}><FileText className="h-4 w-4" />PDF</Button>
                   )}
-                  <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={isDeleting} onClick={() => onDelete(invoice.id)}>Löschen</Button>
+                  <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={isDeleting || !canDeleteDraft(invoice)} onClick={() => onDelete(invoice.id)}>Löschen</Button>
                 </div>
+                {!canDeleteDraft(invoice) && (
+                  <p className="text-xs text-muted-foreground">Löschen ist nur für nachweislich unausgestellte Entwürfe ohne Zahlung möglich.</p>
+                )}
               </article>
             )) : (
               <p className="p-6 text-center text-sm text-muted-foreground">Keine Rechnungen vorhanden. Erstellen oder laden Sie oben Ihre erste Rechnung hoch.</p>
@@ -350,6 +367,7 @@ export function InvoicesTab({
                       <TableCell className="text-center">
                         <StatusBadge
                           status={invoice.status}
+                          availableStatuses={availableInvoiceStatuses(invoice)}
                           onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)}
                         />
                       </TableCell>
@@ -429,12 +447,15 @@ export function InvoicesTab({
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 variant="destructive"
-                                disabled={isDeleting}
+                                disabled={isDeleting || !canDeleteDraft(invoice)}
                                 onSelect={() => onDelete(invoice.id)}
                               >
                                 <Trash2 className="h-4 w-4" />
                                 Rechnung löschen
                               </DropdownMenuItem>
+                              {!canDeleteDraft(invoice) && (
+                                <p className="px-2 py-1.5 text-xs text-muted-foreground">Nur nachweislich unausgestellte Entwürfe ohne Zahlung sind löschbar.</p>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>

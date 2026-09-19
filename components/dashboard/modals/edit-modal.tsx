@@ -17,6 +17,7 @@ import { AfaTableDialog } from "@/components/afa-table-dialog";
 import { Customer, DashboardEditData } from "@/types/dashboard";
 import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
 import { isPrivateCategory } from "@/lib/private-categories";
+import { formatBusinessDate } from "@/lib/business-date";
 
 type EditModalProps = {
   isOpen: boolean;
@@ -121,8 +122,8 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
             <Input
               id="edit-date"
               type="date"
-              value={formData.date ? new Date(formData.date).toISOString().split('T')[0] : ''}
-              onChange={(e) => setFormData({ ...formData, date: new Date(e.target.value).toISOString() })}
+              value={formData.date ? (type === 'income' ? formatBusinessDate(formData.date) : new Date(formData.date).toISOString().split('T')[0]) : ''}
+              onChange={(e) => setFormData({ ...formData, date: type === 'income' ? e.target.value : new Date(e.target.value).toISOString() })}
               required
               className="dark:bg-background dark:border-input"
             />

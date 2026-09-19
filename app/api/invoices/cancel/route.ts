@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { createAuditLog } from '@/lib/audit-log';
+import { createFinancialAuditLog } from '@/lib/audit-log';
 import { generateCreditNotePDF } from '@/lib/credit-note-pdf';
 import { inTransaction } from '@/lib/db-transaction';
 import { previewDocumentNumber, getNextDocumentNumber } from '@/lib/invoice-numbers';
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
             const created = await tx.invoice.create({ data: {
                 type: 'CREDIT_NOTE', fileName: creditNoteFileName, storedFileName,
                 invoiceDate: new Date(), invoiceNumber: reserved, parsedData: creditNoteParsedData,
-                totalAmount: -Math.abs(sourceGrossAmount), status: 'SENT',
+                totalAmount: -Math.abs(sourceGrossAmount), status: 'SENT', issuanceState: 'ISSUED',
                 originalInvoiceId: originalInvoice.id, cancellationReason: cancellationReason || null,
                 customerId: originalInvoice.customerId, userId,
             } });
@@ -255,39 +255,40 @@ export async function POST(request: Request) {
                     cancellationReason: cancellationReason || null,
                 },
             });
+            await createFinancialAuditLog({
+                userId,
+                action: 'CANCELLED',
+                entityType: 'Invoice',
+                entityId: originalInvoice.id,
+                entityName: current.invoiceNumber || current.fileName,
+                oldValues: { status: current.status, paidAt: current.paidAt },
+                newValues: { status: 'CANCELLED', cancellationReason: cancellationReason || null, creditNoteId: created.id },
+                metadata: {
+                    actorId: userId,
+                    tenantId: userId,
+                    operation: 'invoice.cancel',
+                    originalReference: current.invoiceNumber ?? `invoice:${current.id}`,
+                    reason: cancellationReason || 'invoice cancelled with credit note',
+                },
+            }, tx);
+            await createFinancialAuditLog({
+                userId,
+                action: 'CREATE',
+                entityType: 'CreditNote',
+                entityId: created.id,
+                entityName: reserved,
+                newValues: { originalInvoiceId: current.id, totalAmount: created.totalAmount, status: created.status },
+                metadata: {
+                    actorId: userId,
+                    tenantId: userId,
+                    operation: 'credit-note.create',
+                    originalReference: current.invoiceNumber ?? `invoice:${current.id}`,
+                    reason: cancellationReason || 'credit note created for cancellation',
+                },
+            }, tx);
             return created;
         });
         stagedFile = null;
-
-        // Create audit log entries
-        await createAuditLog({
-            userId,
-            action: 'CANCELLED',
-            entityType: 'Invoice',
-            entityId: originalInvoice.id.toString(),
-            entityName: originalInvoice.invoiceNumber || originalInvoice.fileName,
-            oldValues: { status: originalInvoice.status },
-            newValues: {
-                status: 'CANCELLED',
-                cancellationReason,
-                creditNoteId: creditNote.id,
-                creditNoteNumber
-            },
-        });
-
-        await createAuditLog({
-            userId,
-            action: 'CREATE',
-            entityType: 'CreditNote',
-            entityId: creditNote.id.toString(),
-            entityName: creditNoteNumber,
-            newValues: {
-                originalInvoiceId: originalInvoice.id,
-                originalInvoiceNumber: originalInvoice.invoiceNumber,
-                totalAmount: creditNote.totalAmount,
-                pdfGenerated: true,
-            },
-        });
 
         return NextResponse.json({
             success: true,

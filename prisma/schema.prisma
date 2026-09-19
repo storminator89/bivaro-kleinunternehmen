@@ -107,6 +107,9 @@ model Invoice {
   parsedData    Json
   totalAmount   Float?
   status        String    @default("DRAFT") // DRAFT, SENT, PAID, CANCELLED
+  // Conservative issuance proof: legacy/imported rows remain UNKNOWN until
+  // an explicit lifecycle path proves they were never issued.
+  issuanceState String    @default("UNKNOWN") // UNKNOWN, UNISSUED, ISSUED
   paidAt        DateTime?
   validUntil    DateTime? // Gültig bis (nur für Angebote/QUOTE)
   originalInvoiceId Int?  // Referenz zur Originalrechnung (bei Gutschriften)

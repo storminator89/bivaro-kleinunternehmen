@@ -10,6 +10,7 @@ import { XCircle } from "lucide-react";
 export interface StatusBadgeProps {
   status: string;
   onStatusChange?: (newStatus: string) => void;
+  availableStatuses?: string[];
 }
 
 const statusConfig: {
@@ -24,9 +25,12 @@ const statusConfig: {
 // Statuses that can be changed via dropdown
 const changeableStatuses = ["DRAFT", "SENT", "PAID"];
 
-export function StatusBadge({ status, onStatusChange }: StatusBadgeProps) {
+export function StatusBadge({ status, onStatusChange, availableStatuses }: StatusBadgeProps) {
   const { label, color } = statusConfig[status] || { label: "Unbekannt", color: "bg-gray-300" };
-  const isChangeable = changeableStatuses.includes(status);
+  const options = availableStatuses === undefined
+    ? changeableStatuses
+    : changeableStatuses.filter((value) => availableStatuses.includes(value));
+  const isChangeable = changeableStatuses.includes(status) && options.length > 0;
 
   // CANCELLED status gets special styling with strikethrough icon
   if (status === "CANCELLED") {
@@ -60,7 +64,7 @@ export function StatusBadge({ status, onStatusChange }: StatusBadgeProps) {
         </Badge>
       </DropdownMenuTrigger>
       <DropdownMenuContent>
-        {changeableStatuses.map((key) => (
+        {options.map((key) => (
           <DropdownMenuItem key={key} onSelect={() => onStatusChange(key)}>
             {statusConfig[key].label}
           </DropdownMenuItem>

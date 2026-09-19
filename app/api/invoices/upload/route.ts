@@ -6,6 +6,7 @@ import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
 import { getNextDocumentNumber } from '@/lib/invoice-numbers';
 import { ProcessingCapacityError, withProcessingSlot } from '@/lib/processing-limit';
 import { inTransaction } from '@/lib/db-transaction';
+import { createFinancialAuditLog } from '@/lib/audit-log';
 import {
   isRequestBodyWithinLimit,
   readRequestBodyWithinLimit,
@@ -300,10 +301,27 @@ export async function POST(request: NextRequest) {
             totalAmount: parsedInvoice.totalAmount ?? undefined,
             parsedData: toStoredParsedData(parsedInvoice),
             customerId: customerRecord?.id,
+            // Uploaded/imported documents have no trusted never-issued proof.
+            issuanceState: 'UNKNOWN',
             userId,
             ...(conversionQuoteId ? { convertedFromQuoteId: conversionQuoteId } : {}),
           },
         });
+        await createFinancialAuditLog({
+          userId,
+          action: 'CREATE',
+          entityType: 'Invoice',
+          entityId: created.id,
+          entityName: created.invoiceNumber || created.fileName,
+          newValues: { status: created.status, issuanceState: created.issuanceState, invoiceNumber: created.invoiceNumber },
+          metadata: {
+            actorId: userId,
+            tenantId: userId,
+            operation: 'invoice.upload',
+            originalReference: created.invoiceNumber ?? `invoice:${created.id}`,
+            reason: 'invoice draft uploaded',
+          },
+        }, tx);
         return { invoice: created, idempotent: false };
       });
 

@@ -336,11 +336,19 @@ Für den Betrieb auf einem eigenen Server empfehlen wir Docker:
 cp .env.example .env
 # NEXTAUTH_SECRET und NEXTAUTH_URL anpassen!
 
-# 2. Image bauen und starten
+# 2. Image bauen
 npm run docker:build
+
+# 3. Vorhandene App stoppen; während des Upgrades keine weiteren DB-Schreiber betreiben
+docker compose stop buchhaltung
+
+# 4. Expliziten Upgrade-Job im selben Image ausführen
+docker compose run --rm --no-deps buchhaltung node scripts/upgrade-database.mjs
+
+# 5. Nur nach erfolgreichem Upgrade starten
 npm run docker:up
 
-# 3. Logs prüfen
+# 6. Logs prüfen
 npm run docker:logs
 ```
 
@@ -352,8 +360,28 @@ Die App ist dann unter `http://localhost:3000` erreichbar (Port über `PORT`-Var
 
 **Produktionsbetrieb:**
 ```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml stop buchhaltung
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps buchhaltung node scripts/upgrade-database.mjs
+# Nur fortfahren, wenn der Upgrade-Job erfolgreich beendet wurde:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
+
+Der Containerstart prüft das vorhandene Datenbankziel und den Migrationsstand.
+Die Datenbank wird ausschließlich durch den expliziten Upgrade-Job initialisiert
+oder migriert. Bei einem Fehler bleibt die Anwendung gestoppt; Schemaabweichungen
+müssen geprüft und über versionierte Migrationen behoben werden.
+
+Für diese Containerpfade muss `DATABASE_URL` eine absolute lokale SQLite-Datei
+bezeichnen, standardmäßig `file:/app/data/prod.db`. Relative Ziele werden abgelehnt,
+damit Prisma-CLI und Standalone-App dieselbe Datei verwenden. Die Konfiguration
+wird nicht auf eine andere Datenbank umgeschrieben.
+
+Vor Änderungen an einer vorhandenen Datenbank erstellt der Upgrade-Job eine
+SQLite-Sicherung und prüft Migrationen zunächst an einer isolierten Kopie.
+Die Sicherung bleibt für eine kontrollierte Wiederherstellung erhalten. Eine
+zusätzliche getrennte Sicherung der Datenbank **und** der Upload-Dateien sowie
+die fachliche Wiederherstellungsprüfung gehören zum Releaseablauf. Einzelheiten,
+Prüfgrenzen und Rückfallverfahren stehen in [BV-001/BV-002](docs/backlog/BV-001-002.md).
 
 ### 📧 E-Mail-Versand im Docker-Betrieb
 

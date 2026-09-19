@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { auditCreate } from '@/lib/audit-log';
+import { createFinancialAuditLog } from '@/lib/audit-log';
+import { inTransaction } from '@/lib/db-transaction';
 import { getRawEInvoiceXml } from '@/lib/e-invoice-parser';
 import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
 import {
@@ -93,22 +94,40 @@ export async function POST(request: Request) {
     let storedFileName: string | null = null;
     try {
       storedFileName = await writeTenantFile(userId, fileName, pdfBuffer);
-      const invoice = await prisma.invoice.create({
-        data: {
-          fileName,
-          storedFileName,
-          invoiceNumber: normalizedInvoiceNumber,
-          invoiceDate: parsedInvoiceDate,
-          dueDate: parsedDueDate,
-          totalAmount: parsedAmount,
-          parsedData,
-          customerId: parsedCustomerId,
+      const invoice = await inTransaction(async tx => {
+        const created = await tx.invoice.create({
+          data: {
+            fileName,
+            storedFileName: storedFileName!,
+            invoiceNumber: normalizedInvoiceNumber,
+            invoiceDate: parsedInvoiceDate,
+            dueDate: parsedDueDate,
+            totalAmount: parsedAmount,
+            parsedData,
+            customerId: parsedCustomerId,
+            // This compatibility endpoint imports caller-provided bytes; it
+            // cannot prove that the document was never issued.
+            issuanceState: 'UNKNOWN',
+            userId,
+          },
+        });
+        await createFinancialAuditLog({
           userId,
-        },
+          action: 'CREATE',
+          entityType: 'Invoice',
+          entityId: created.id,
+          entityName: created.invoiceNumber || created.fileName,
+          newValues: { status: created.status, issuanceState: created.issuanceState, invoiceNumber: created.invoiceNumber },
+          metadata: {
+            actorId: userId,
+            tenantId: userId,
+            operation: 'invoice.create',
+            originalReference: created.invoiceNumber ?? `invoice:${created.id}`,
+            reason: 'invoice draft created',
+          },
+        }, tx);
+        return created;
       });
-
-      // Audit log
-      await auditCreate(userId, 'Invoice', invoice, invoice.invoiceNumber || invoice.fileName);
 
       return NextResponse.json(invoice);
     } catch (error) {
@@ -204,6 +223,7 @@ export async function GET(request: Request) {
           parsedData: true,
           totalAmount: true,
           status: true,
+          issuanceState: true,
           paidAt: true,
           validUntil: true,
           originalInvoiceId: true,

@@ -93,6 +93,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Runtime diagnostics and the explicit upgrade job are outside Next standalone
+# tracing and must be present in the final image.
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/database-runtime.mjs ./scripts/database-runtime.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/upgrade-database.mjs ./scripts/upgrade-database.mjs
 
 # Copy Prisma binaries and CLI (needed for migrations at runtime)
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma

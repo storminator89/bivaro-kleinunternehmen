@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { inTransaction } from '@/lib/db-transaction';
-import { auditCreate, auditDelete, auditUpdate } from '@/lib/audit-log';
+import { createFinancialAuditLog } from '@/lib/audit-log';
 
 export class CashbookError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -12,7 +12,8 @@ export function cashAmount(value: unknown, positive = true): number {
     throw new CashbookError('Ungültiger Betrag');
   }
   const rounded = Math.round((amount + Number.EPSILON) * 100) / 100;
-  // Cashbook amounts are stored in cents.  A positive sub-cent value must not
+  // Cashbook amounts are rounded to cents (the legacy storage is Float).
+  // A positive sub-cent value must not
   // silently become a zero-value booking after rounding.
   if (positive && rounded <= 0) throw new CashbookError('Ungültiger Betrag');
   return rounded;
@@ -37,7 +38,11 @@ function textValue(value: unknown, required = false): string | null {
 }
 
 function cents(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100);
+  const result = Math.round((value + Number.EPSILON) * 100);
+  if (!Number.isFinite(value) || !Number.isSafeInteger(result)) {
+    throw new CashbookError('Kassenbetrag überschreitet den sicher berechenbaren Bereich', 409);
+  }
+  return result;
 }
 
 /** The UI sends date-only cashbook values, so compare the business date. */
@@ -47,22 +52,35 @@ function sameBusinessDate(left: Date, right: Date): boolean {
     && left.getUTCDate() === right.getUTCDate();
 }
 
-/** Recalculate only the affected suffix; ordering is stable even on identical timestamps. */
+/** Validate the complete chronology; update only the affected suffix. */
 export async function recalculateCashBalances(tx: Prisma.TransactionClient, cashBookId: number, userId: string, from?: Date) {
   const book = await tx.cashBook.findFirst({ where: { id: cashBookId, userId } });
   if (!book) throw new CashbookError('Kassenbuch nicht gefunden', 404);
-  const previous = from ? await tx.cashTransaction.findFirst({
-    where: { cashBookId, userId, date: { lt: from } }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
-  }) : null;
-  let cents = Math.round((previous?.runningBalance ?? book.initialBalance) * 100);
+  let balanceCents = cents(book.initialBalance);
+  if (book.initialBalance < 0) throw new CashbookError('Der Kassenanfangsbestand darf nicht negativ sein', 409);
   const entries = await tx.cashTransaction.findMany({
-    where: { cashBookId, userId, ...(from ? { date: { gte: from } } : {}) },
+    where: { cashBookId, userId },
     orderBy: [{ date: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, type: true, amount: true, runningBalance: true },
+    select: { id: true, date: true, type: true, amount: true, runningBalance: true },
   });
+  const updates: Array<{ id: number; runningBalance: number }> = [];
   for (const entry of entries) {
-    cents += (entry.type === 'EINNAHME' ? 1 : -1) * Math.round(entry.amount * 100);
-    if (entry.runningBalance !== cents / 100) await tx.cashTransaction.update({ where: { id: entry.id }, data: { runningBalance: cents / 100 } });
+    const amountCents = cents(entry.amount);
+    if (!['EINNAHME', 'AUSGABE'].includes(entry.type) || amountCents <= 0) {
+      throw new CashbookError('Das Kassenbuch enthält eine ungültige Buchung; bitte den Bestand prüfen', 409);
+    }
+    balanceCents += (entry.type === 'EINNAHME' ? 1 : -1) * amountCents;
+    if (!Number.isSafeInteger(balanceCents)) throw new CashbookError('Kassensaldo überschreitet den sicher berechenbaren Bereich', 409);
+    if (balanceCents < 0) {
+      throw new CashbookError(`Die Buchung würde einen negativen Kassenbestand am ${entry.date.toISOString().slice(0, 10)} erzeugen. Bitte Betrag und Reihenfolge prüfen.`, 409);
+    }
+    if ((!from || entry.date >= from) && entry.runningBalance !== balanceCents / 100) {
+      updates.push({ id: entry.id, runningBalance: balanceCents / 100 });
+    }
+  }
+  // No balance write occurs until every intermediate balance is valid.
+  for (const update of updates) {
+    await tx.cashTransaction.update({ where: { id: update.id }, data: { runningBalance: update.runningBalance } });
   }
 }
 
@@ -100,9 +118,14 @@ export async function createCashTransaction(userId: string, body: Record<string,
       taxRelevant: body.taxRelevant === undefined ? true : body.taxRelevant as boolean,
     } });
     await recalculateCashBalances(tx, cashBookId, userId, date);
-    return tx.cashTransaction.findUniqueOrThrow({ where: { id: created.id } });
+    const persisted = await tx.cashTransaction.findUniqueOrThrow({ where: { id: created.id } });
+    await createFinancialAuditLog({
+      userId, action: 'CREATE', entityType: 'CashTransaction', entityId: persisted.id,
+      entityName: persisted.description, newValues: { ...persisted },
+      metadata: { actorId: userId, tenantId: userId, operation: 'cash.create', originalReference: `cashbook:${cashBookId}`, reason: 'cash transaction recorded' },
+    }, tx);
+    return persisted;
   });
-  await auditCreate(userId, 'CashTransaction', entry, entry.description);
   return entry;
 }
 
@@ -132,21 +155,29 @@ export async function updateCashTransaction(userId: string, id: number, body: Re
     await tx.cashTransaction.update({ where: { id, userId }, data });
     const from = data.date instanceof Date && data.date < old.date ? data.date : old.date;
     await recalculateCashBalances(tx, old.cashBookId, userId, from);
-    return { old, entry: await tx.cashTransaction.findUniqueOrThrow({ where: { id } }) };
+    const entry = await tx.cashTransaction.findUniqueOrThrow({ where: { id } });
+    await createFinancialAuditLog({
+      userId, action: 'UPDATE', entityType: 'CashTransaction', entityId: id,
+      entityName: entry.description, oldValues: { ...old }, newValues: { ...entry },
+      metadata: { actorId: userId, tenantId: userId, operation: 'cash.update', originalReference: `cashbook:${old.cashBookId}:transaction:${id}`, reason: 'cash transaction corrected' },
+    }, tx);
+    return { old, entry };
   });
-  await auditUpdate(userId, 'CashTransaction', id, result.old, result.entry, result.entry.description);
   return result.entry;
 }
 
 export async function deleteCashTransaction(userId: string, id: number) {
   idValue(id);
-  const old = await inTransaction(async tx => {
+  await inTransaction(async tx => {
     const entry = await tx.cashTransaction.findFirst({ where: { id, userId } });
     if (!entry) throw new CashbookError('Buchung nicht gefunden', 404);
     await tx.cashTransaction.delete({ where: { id, userId } });
     await recalculateCashBalances(tx, entry.cashBookId, userId, entry.date);
-    return entry;
+    await createFinancialAuditLog({
+      userId, action: 'DELETE', entityType: 'CashTransaction', entityId: id,
+      entityName: entry.description, oldValues: { ...entry },
+      metadata: { actorId: userId, tenantId: userId, operation: 'cash.delete', originalReference: `cashbook:${entry.cashBookId}:transaction:${id}`, reason: 'cash transaction deleted' },
+    }, tx);
   });
-  await auditDelete(userId, 'CashTransaction', old, old.description);
   return { success: true };
 }

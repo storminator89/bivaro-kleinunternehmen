@@ -1,0 +1,1831 @@
+{
+  "generatedAt": "2026-09-19",
+  "statusObservedAt": "2026-09-19T10:57:43+02:00",
+  "auditBaseCommit": "85972ed9fe61d268b6640882ea2ddc6e616d1859",
+  "source": "/home/pmeyhoefer/Downloads/Bivaro_Agent_Backlog.json",
+  "statusSummary": {
+    "partial": 7,
+    "in_progress": 3,
+    "architecture_discovery": 5,
+    "proposed_unimplemented": 145
+  },
+  "knownIncidents": [
+    {
+      "id": "PRUEFVORFALL-2026-09-19",
+      "status": "documented_operator_review_open",
+      "summary": "Bestätigter migrate-deploy-Aufruf ohne temporäre DATABASE_URL; Migrationen 20260918120000_auth_hardening und 20260918195000_bookkeeping_integrity wurden auf die lokale, bislang ignorierte prisma/dev.db angewandt.",
+      "scope": "Lokale prisma/dev.db; keine vorherige Agentensicherung, kein Vorher-Hash und kein Vorher-Snapshot; externe Sicherung unbekannt. SQL-Quellen ohne Datensatzlöschung oder Betragsfeld-Update, aber kein Gesamtintegritätsbeleg ohne Vorher-Messung.",
+      "recovery": "Keine automatische Rücknahme und keine Recovery ausgeführt. Der Nutzer hat die Datenbank als lokale Testdatenbank eingeordnet und keine Wiederherstellung gewünscht; der Vorfall ist kein Arbeitsblocker. Betreiberbewertung bleibt dokumentarisch offen.",
+      "userDecision": "2026-09-19: Lokale Testdatenbank; keine Wiederherstellung gewünscht.",
+      "blocking": false,
+      "evidence": "docs/backlog/PRUEFVORFALL-2026-09-19.md"
+    },
+    {
+      "id": "PRUEFVORFALL-2026-09-19-COMPOSE-DIAGNOSE",
+      "status": "documented_operator_review_open",
+      "summary": "docker compose config war erfolgreich, gab aber erste 80 Zeilen aus und schrieb eine temporäre Ausgabe mit festgestelltem nichtleerem NEXTAUTH_SECRET.",
+      "scope": "Diagnoseausgabe und Toolhistorie; Secretwert wird nicht dokumentiert.",
+      "recovery": "Temporäre Ausgabe entfernt; keine Secretrotation und keine .env-Änderung; sichere betriebliche Bewertung offen.",
+      "evidence": "docs/backlog/PRUEFVORFALL-2026-09-19.md"
+    }
+  ],
+  "tickets": [
+    {
+      "id": "BV-001",
+      "title": "Produktionsstart ohne destruktives db push",
+      "status": "partial",
+      "implemented": "Technische lokale Start-/Upgrade- bzw. DB-Zielprüfung abgeschlossen und mit 7 Runtime-Integrationstests sowie zentraler Gesamtprüfung belegt.",
+      "remaining": "Release-/Produktivfreigabe, Betreiberfreigaben und sichere Bewertung der Compose-Diagnose offen.",
+      "tests": [
+        "7 Runtime-Integrationstests; zentrale npm test/lint/build-Prüfung und Docker-Build/Compose-Checks am 19.09.2026 dokumentiert."
+      ],
+      "evidence": [
+        "docs/backlog/BV-001-002.md"
+      ]
+    },
+    {
+      "id": "BV-002",
+      "title": "Nichtdestruktive Betriebsdiagnose und DB-Zielprüfung",
+      "status": "partial",
+      "implemented": "Technische lokale Start-/Upgrade- bzw. DB-Zielprüfung abgeschlossen und mit 7 Runtime-Integrationstests sowie zentraler Gesamtprüfung belegt.",
+      "remaining": "Release-/Produktivfreigabe, Betreiberfreigaben und sichere Bewertung der Compose-Diagnose offen.",
+      "tests": [
+        "7 Runtime-Integrationstests; zentrale npm test/lint/build-Prüfung und Docker-Build/Compose-Checks am 19.09.2026 dokumentiert."
+      ],
+      "evidence": [
+        "docs/backlog/BV-001-002.md"
+      ]
+    },
+    {
+      "id": "BV-003",
+      "title": "Löschen ausgestellter Rechnungen serverseitig sperren",
+      "status": "partial",
+      "implemented": "Welle 2: erste vertikale Rechnungsscheibe mit serverseitiger Löschsperre und transaktionalem Finanz-Audit für Web/v1-Service technisch umgesetzt.",
+      "remaining": "Vollständiges Journal/Refund, Backup-/Restore- und weitere Schreibwege, API-/SMTP-Race-Tests sowie fachliche und produktive Freigaben offen; technische Gesamtprüfung grün.",
+      "tests": [
+        "Gezielter realer Integrationslauf: 3 Testdateien, 21 Tests bestanden; npx tsc --noEmit und gezieltes ESLint für Kernpfade erfolgreich.",
+        "Zwischen- und Abschlussprüfung: File-Security-Integration 10/10, Betriebsagentenlauf 25/25, Playwright/E2E 7/7 mit Productionbuild in 18,4 s sowie finale Gesamtprüfung 26 Dateien/240 Tests bestanden/1 Skip in 15,48 s; Lint warnungsfrei. PAID-409-Zahlungsintegrität sowie Desktop-/Mobile-Screenshots geprüft."
+      ],
+      "evidence": [
+        "docs/backlog/BV-003-006.md",
+        "docs/backlog/WELLE-2.md"
+      ]
+    },
+    {
+      "id": "BV-004",
+      "title": "Zahlungskorrekturen als Gegenereignis statt Statuslöschung",
+      "status": "partial",
+      "implemented": "Welle 2: BV-004-AC1-Guard gegen PAID-Reopen und Statusrücknahme technisch umgesetzt.",
+      "remaining": "AC2–AC4, vollständiges Zahlungsjournal/Gegenereignis, Erstattungen und Abhängigkeiten BV-014/BV-005 offen; keine produktive Freigabe behauptet.",
+      "tests": [
+        "Gezielter BV-003/BV-006-Lauf deckt PAID-Reopen und abweichendes Zahlungsdatum als 409 mit erhaltenem Income/paidAt ab; finale Gesamtprüfung ist grün."
+      ],
+      "evidence": [
+        "docs/backlog/WELLE-2.md"
+      ]
+    },
+    {
+      "id": "BV-005",
+      "title": "Buchungsentwürfe, Festschreibung und Periodensperren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-006",
+      "title": "Finanz-Audit in dieselbe Transaktion aufnehmen",
+      "status": "partial",
+      "implemented": "Welle 2: erste vertikale Rechnungsmutation mit Audit an gemeinsamer transaktionaler Servicegrenze technisch umgesetzt.",
+      "remaining": "Weitere Finanzschreibwege, API-/SMTP-Races, Review sowie fachliche und produktive Freigaben offen; technische Gesamtprüfung grün, BV-001 bleibt technische Vorstufe.",
+      "tests": [
+        "Gezielter realer Integrationslauf: 3 Testdateien, 21 Tests bestanden; npx tsc --noEmit und gezieltes ESLint für Kernpfade erfolgreich.",
+        "Zwischen- und Abschlussprüfung: File-Security-Integration 10/10, Betriebsagentenlauf 25/25, Playwright/E2E 7/7 mit Productionbuild in 18,4 s sowie finale Gesamtprüfung 26 Dateien/240 Tests bestanden/1 Skip in 15,48 s; Lint warnungsfrei. PAID-409-Zahlungsintegrität sowie Desktop-/Mobile-Screenshots geprüft."
+      ],
+      "evidence": [
+        "docs/backlog/BV-003-006.md",
+        "docs/backlog/WELLE-2.md",
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+      ]
+    },
+    {
+      "id": "BV-007",
+      "title": "Konten deaktivieren ohne Finanzhistorie zu löschen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-008",
+      "title": "Produkt- und GoBD-Zusagen an nachgewiesene Kontrollen binden",
+      "status": "partial",
+      "implemented": "Templateclaims, Betreiberaufgaben, Grenzen, Releaseversion und Negativtests umgesetzt.",
+      "remaining": "AC1/AC3 nur Teilnachweis; Fachreview, verlinkte Evidenz, Verantwortlicher, Release-Commit, Exportabnahme und AC4-Freigabehistorie offen.",
+      "tests": [
+        "lib/__tests__/gobd-template.test.ts; gezielter Lauf 4/4 bestanden."
+      ],
+      "evidence": [
+        "docs/backlog/BV-008.md"
+      ]
+    },
+    {
+      "id": "BV-009",
+      "title": "Audit-Abdeckung und Retention risikobasiert schließen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-010",
+      "title": "Unveränderbarer Kassen-Tagesabschluss",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-011",
+      "title": "Negative Zwischenstände der Barkasse atomar verhindern",
+      "status": "in_progress",
+      "implemented": "Welle 3 gestartet: root bearbeitet einen atomaren Kassen-Guard gegen negative chronologische Zwischenstände mit Centarithmetik.",
+      "remaining": "Rollback-/Paralleltests, bestehende Kassenfachlogik, Negativmatrix, AC-Evidenz und Freigaben offen; vollständige BV-012-Money-Migration ist ausdrücklich nicht Teil der Scheibe.",
+      "tests": [
+        "Noch kein paketbezogener Testnachweis; Welle-2-Gesamtprüfung bleibt Vergleichsbasis."
+      ],
+      "evidence": [
+        "docs/backlog/WELLE-3.md"
+      ]
+    },
+    {
+      "id": "BV-012",
+      "title": "Durchgängiges Money-Modell und geprüfte Float-Migration",
+      "status": "architecture_discovery",
+      "implemented": "Codeinventar, Invarianten, Abhängigkeiten und vertikale Planung dokumentiert; keine Produktcodeänderung.",
+      "remaining": "Architekturentscheidungen, Implementierung, Tests und alle ACs offen.",
+      "tests": [
+        "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
+      ],
+      "evidence": [
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+      ]
+    },
+    {
+      "id": "BV-013",
+      "title": "Eine kanonische Wahrheit für Betrag, PDF und XML",
+      "status": "architecture_discovery",
+      "implemented": "Codeinventar, Invarianten, Abhängigkeiten und vertikale Planung dokumentiert; keine Produktcodeänderung.",
+      "remaining": "Architekturentscheidungen, Implementierung, Tests und alle ACs offen.",
+      "tests": [
+        "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
+      ],
+      "evidence": [
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+      ]
+    },
+    {
+      "id": "BV-014",
+      "title": "Zahlungsjournal mit Teilzahlungen und Zuordnungen",
+      "status": "architecture_discovery",
+      "implemented": "Codeinventar, Invarianten, Abhängigkeiten und vertikale Planung dokumentiert; keine Produktcodeänderung.",
+      "remaining": "Architekturentscheidungen, Implementierung, Tests und alle ACs offen.",
+      "tests": [
+        "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
+      ],
+      "evidence": [
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+      ]
+    },
+    {
+      "id": "BV-015",
+      "title": "Eingangs- und Ausgangsbelege explizit unterscheiden",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-016",
+      "title": "Formale E-Rechnungs- und PDF/A-Releasevalidierung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-017",
+      "title": "Originalnummer und Summenprüfung beim Import erhalten",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-018",
+      "title": "Unterstützungsmatrix und Quarantäne für Sonderbelege",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-019",
+      "title": "Steuersimulation auf vollständige Serveraggregation umstellen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-020",
+      "title": "Eine gemeinsame Gewinnlogik für EÜR und Simulation",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-021",
+      "title": "§35-Anrechnung jahresbezogen fachlich korrigieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-022",
+      "title": "Sozial- und Steuerparameter nach Veranlagungsjahr versionieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-023",
+      "title": "Unterstützte Steuerfälle und Jahresgrenzen explizit modellieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-024",
+      "title": "Tarif-Endrundung und Soli-Minimumformel korrigieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-025",
+      "title": "Zahlungsdatum bei manueller Einnahme verbindlich übernehmen",
+      "status": "in_progress",
+      "implemented": "Welle 3 gestartet: betriebssicherheit bearbeitet Pflicht-BusinessDate für manuelle Einnahmen in Web, v1 und UI mit enger BV-057-Grundlage und BV-006-Auditgrenze.",
+      "remaining": "Keine Altbestands-Rückdatierung; vollständige Business-Date-/UTC-Modellierung, weitere Einnahmewege, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [
+        "Noch kein paketbezogener Testnachweis; Welle-2-Gesamtprüfung bleibt Vergleichsbasis."
+      ],
+      "evidence": [
+        "docs/backlog/WELLE-3.md"
+      ]
+    },
+    {
+      "id": "BV-026",
+      "title": "EÜR-Korrekturen und Erstattungen vorzeichenrichtig behandeln",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-027",
+      "title": "Jahresversionierter EÜR-Export mit ehrlicher Formatbezeichnung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-028",
+      "title": "Kleinunternehmer-Profil mit nachvollziehbarem Grenzwächter",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-029",
+      "title": "Backup v3 mit Audit und Nummern-High-Water-Marks",
+      "status": "partial",
+      "implemented": "Welle 2: Manifest v3, append-only Audit-/Mappingereignisse, transaktionaler Restore-Audit, Counter-Maximum vor Overwrite, konservative Marker, Income-Konflikte und Dateimanifestvalidierung technisch umgesetzt.",
+      "remaining": "Gemeinsamer Snapshot-Export, vollständige Fachmodell-/API-Key-Matrix, automatischer DMMF-Abgleich neuer Exportmodelle, nicht geprüfte Merge-/Overwrite-Kombinationen, Produktionsrollout und fachliche Abnahme offen; lokaler Testdatenbank-Rollout ist erfolgreich; vorhandene ISSUED-Marker und externe UNKNOWN-Importe bleiben konservativ.",
+      "tests": [
+        "Eigener Backup-v3-Lauf 4/4; Typecheck und globales Lint des Agentenlaufs grün. File-Security-Integration 10/10; finale Gesamtprüfung 26 Dateien/240 Tests bestanden/1 Skip und E2E 7/7 grün. Lokaler Testdatenbank-Rollout mit Canary, Diff, Integrity und 23 aktuellen Migrationen erfolgreich; Schema-Diff 0, FK-Verletzungen 0."
+      ],
+      "evidence": [
+        "docs/backlog/BV-029.md",
+        "docs/backlog/WELLE-2.md",
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+      ]
+    },
+    {
+      "id": "BV-030",
+      "title": "Konsistentes Snapshot-Backup statt unabhängiger Tabellenreads",
+      "status": "in_progress",
+      "implemented": "Welle 3 gestartet: architektur_vorpruefung bearbeitet gemeinsamen DB-Read-Snapshot für JSON/ZIP mit Snapshot-Metadaten, kurzer Lockphase und echtem Parallel-Payment-Test.",
+      "remaining": "BV-029-/BV-006-Abhängigkeiten, Export-/Restore-ACs, Performancegrenzen, Tests, AC-Evidenz und fachliche Abnahme offen.",
+      "tests": [
+        "Noch kein paketbezogener Testnachweis; Welle-2-Gesamtprüfung bleibt Vergleichsbasis."
+      ],
+      "evidence": [
+        "docs/backlog/WELLE-3.md"
+      ]
+    },
+    {
+      "id": "BV-031",
+      "title": "Restore auf dieselben Fachinvarianten wie Live-Buchungen verpflichten",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-032",
+      "title": "Merge-Restore mit stabilen Herkunfts-IDs idempotent machen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-033",
+      "title": "Overwrite-Restore mit Step-up und Wartungssperre sichern",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-034",
+      "title": "Ressourcenbegrenzte asynchrone Backup-Erstellung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-035",
+      "title": "Erstadmin nur mit einmaligem Bootstrap-Nachweis anlegen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-036",
+      "title": "Passwort-Bytepolicy und migrationsfähiges Hashformat",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-037",
+      "title": "Proxyvertrauen und Rate-Limits deploymentfest konfigurieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-038",
+      "title": "MFA, Recovery und Step-up als vollständigen Kontoflow bauen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-039",
+      "title": "CSP-/HTTPS-Härtung ohne kaputte PDF-Vorschau ausrollen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-040",
+      "title": "Dateisignatur, Parserbudgets und Quarantäne zentralisieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-041",
+      "title": "Dokument-Worker von App-Secrets und Netzwerk isolieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-042",
+      "title": "Einheitliche Requestschemas und kleine Standardbudgets",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-043",
+      "title": "Datensparsame Auditpayloads und kontrollierte Fehlerantworten",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-044",
+      "title": "Rechnungs-API-Vertrag und OpenAPI-Detailpfad korrigieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-045",
+      "title": "Idempotenzschlüssel und feingranulare Agentenrechte",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-046",
+      "title": "E-Mail-Outbox und nachvollziehbare Versandversuche",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-047",
+      "title": "Versandereignis darf Rechnungsstatus nicht zurücksetzen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-048",
+      "title": "Mahnfähigkeit serverseitig im Versandzeitpunkt prüfen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-049",
+      "title": "Empfänger- und Versandquoten mit Absenderkontrolle",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-050",
+      "title": "Serienausgaben von realen Zahlungen entkoppeln",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-051",
+      "title": "Datenbank-Admission und Transaktionsbudgets begrenzen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-052",
+      "title": "Rechnungslisten ohne parsedData/Raw-XML laden",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-053",
+      "title": "Aggregationen und Nummernvergabe von Vollscans befreien",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-054",
+      "title": "Historische Kassen-/Restore-Schreiblast verkürzen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-055",
+      "title": "Querypläne und Tenant-Referenzconstraints systematisch härten",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-056",
+      "title": "Kennzahlenverträge und Beleg-Drill-down vereinheitlichen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-057",
+      "title": "Business-Date und UTC-Ereigniszeit sauber trennen",
+      "status": "architecture_discovery",
+      "implemented": "Codeinventar, Invarianten, Abhängigkeiten und vertikale Planung dokumentiert; keine Produktcodeänderung.",
+      "remaining": "Architekturentscheidungen, Implementierung, Tests und alle ACs offen.",
+      "tests": [
+        "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
+      ],
+      "evidence": [
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+      ]
+    },
+    {
+      "id": "BV-058",
+      "title": "Invoice-Editor in testbare Module und schlanke Ladepfade zerlegen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-059",
+      "title": "Reproduzierbare Dependency- und Runtime-Releasebasis herstellen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-060",
+      "title": "Release-Gates über Build und Unit-Tests hinaus erweitern",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-061",
+      "title": "Organisation/Mitgliedschaft von Benutzeridentität entkoppeln",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-062",
+      "title": "Lizenz-, Release- und Supportzusagen investorentauglich dokumentieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-063",
+      "title": "Vollständige API-/Tenant-/CSRF-Negativmatrix abnehmen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-064",
+      "title": "Verschlüsseltes Offsite-Backup und nachgewiesener Wiederanlauf",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-065",
+      "title": "Geführter Start mit produktiver Bereitschaftsprüfung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-066",
+      "title": "Verbindliche Produktgrenze Single-Company versus SaaS",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-067",
+      "title": "Getrennter Demo- und Übungsmandant",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-068",
+      "title": "Migrationsassistent für CSV und Altsoftware",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-069",
+      "title": "Lieferantenstamm und Kreditorenübersicht",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-070",
+      "title": "Zentrales Belegpostfach mit kontrolliertem Prüfstatus",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-071",
+      "title": "Beleg und Buchung in beide Richtungen zuordnen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-072",
+      "title": "Bankumsätze per CSV read-only importieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-073",
+      "title": "CAMT-Kontoauszüge mit Strukturvalidierung importieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-074",
+      "title": "Erklärbarer Bankabgleich mit manueller Freigabe",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-075",
+      "title": "Sammelzahlungen und Gebühren nachvollziehbar aufteilen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-076",
+      "title": "Open-Banking-Anbindung als separaten Anbieter-Entscheid vorbereiten",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-077",
+      "title": "Versionierte Kontierungsregeln mit Vorschau",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-078",
+      "title": "Mehrstufige Dublettenerkennung für Dokumente und Zahlungen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-079",
+      "title": "Bank- und Buchhaltungsabstimmung je Periode",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-080",
+      "title": "Vorhandenen Zahlungs-QR gegen Rechnung und IBAN validieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-081",
+      "title": "Artikel- und Leistungskatalog mit Preisversionen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-082",
+      "title": "Projektakte mit Budget und abrechenbaren Leistungen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-083",
+      "title": "Zeiterfassung mit abrechenbar/nicht abrechenbar",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-084",
+      "title": "Zeiten und Projektkosten ohne Doppelabrechnung fakturieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-085",
+      "title": "Angebotslebenszyklus mit Annahme- und Ablehnungsgründen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-086",
+      "title": "Kundenportal für beleggebundene Angebotsannahme",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-087",
+      "title": "Auftragsbestätigung und Leistungsnachweis",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-088",
+      "title": "Wiederkehrende Ausgangsrechnungen mit Freigabe",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-089",
+      "title": "Wartungs- und Retainerkontingente",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-090",
+      "title": "Abschlags-, Teil- und Schlussrechnung als Fachmodell",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-091",
+      "title": "Rabatte und Zuschläge im kanonischen Modell",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-092",
+      "title": "Stornorechnung und umsatzsteuerliche Gutschrift sprachlich trennen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-093",
+      "title": "Mehrwährungsfähigkeit erst mit Wechselkurs- und Differenzmodell",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-094",
+      "title": "Regelbesteuerung als eigener freizugebender Produktumfang",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-095",
+      "title": "Grenzüberschreitende Steuerfälle bewusst begrenzen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-096",
+      "title": "Eingehende Gutschriften und Belastungsanzeigen verarbeiten",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-097",
+      "title": "Begleiteter Wechsel aus der Kleinunternehmerregelung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-098",
+      "title": "Anlagenverzeichnis statt nur Abschreibungsfeld",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-099",
+      "title": "Anlagenabgang, Verkauf und Privatentnahme",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-100",
+      "title": "Explizite Typen für Einlagen, Entnahmen und Transfers",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-101",
+      "title": "Gemischte Belege auf Kategorien und Abzugsquoten aufteilen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-102",
+      "title": "Fahrtkosten als prüfbarer Nebenprozess",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-103",
+      "title": "Reisekosten und Erstattungen mit Belegkette",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-104",
+      "title": "Belegintegrität mit Hashmanifest und unabhängigem Nachweis",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-105",
+      "title": "Dokumentversionen und Freigabezustände",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-106",
+      "title": "Optionale OCR mit Feldkonfidenz und menschlicher Prüfung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-107",
+      "title": "E-Mail-Belegannahme mit sicheren Anhängen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-108",
+      "title": "Mobile Belegerfassung ohne Datenverlust",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-109",
+      "title": "Mandantensichere Suche über Belege und Buchungen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-110",
+      "title": "Arbeitskorb für ungeklärte Finanzvorgänge",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-111",
+      "title": "Dashboard nach To-dos und Datenqualität strukturieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-112",
+      "title": "Entwurfs-Autosave mit Versionskonflikten",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-113",
+      "title": "Sichere Massenaktionen mit Vorschau und Teilergebnis",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-114",
+      "title": "Barrierefreie Kernabläufe nach prüfbarem UI-Ziel",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-115",
+      "title": "Konsistente Sprache, Zahlen und Datumsdarstellung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-116",
+      "title": "Schnellerfassung und Tastaturbefehle für Routinearbeit",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-117",
+      "title": "Rückgängig nur für Entwürfe, Korrektur für Gebuchtes",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-118",
+      "title": "Benachrichtigungspräferenzen und Eskalationsregeln",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-119",
+      "title": "Geführter Monats- und Jahresabschluss",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-120",
+      "title": "Steuerberater-Lesezugang mit zeitlicher Begrenzung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-121",
+      "title": "DATEV-orientierter Export mit Belegzuordnung und Kontrollsummen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-122",
+      "title": "Direkte Steuerberater-/DATEV-Anbindung wirtschaftlich entscheiden",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-123",
+      "title": "Belegbezogene Rückfragen und Freigaben",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-124",
+      "title": "Prüfungspaket mit Journal, Belegen und Datenwörterbuch",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-125",
+      "title": "Offenes Exit-Format statt Vendor-Lock-in",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-126",
+      "title": "Persistenter Scheduler mit Leases und Dead-letter-Queue",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-127",
+      "title": "Versand angenommen, zugestellt und unklar getrennt anzeigen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-128",
+      "title": "Kundenkontoauszug und strittige Forderungen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-129",
+      "title": "Kassensturz mit Stückelung und Differenzbeleg",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-130",
+      "title": "Bargeld-/Banktransfers ohne Umsatzverdoppelung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-131",
+      "title": "Schlüssel- und Notfallzugang mit dokumentierter Rotation",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-132",
+      "title": "Strukturierte Telemetrie und fachliche Alarmierung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-133",
+      "title": "Liveness, Readiness und Speicherplatzprüfung trennen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-134",
+      "title": "Reproduzierbares Lastprofil für Single-Host-Betrieb",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-135",
+      "title": "Property-/Fuzz-Tests für Geld, Daten und Dokumente",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-136",
+      "title": "SAST, Secret-Scan, SBOM und Imageprüfung als Supply-Chain-Gates",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-137",
+      "title": "Sicherer Updateassistent mit Changelog und Rückfallplan",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-138",
+      "title": "Agentenfähige Architekturregeln und PR-Definition-of-Done",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-139",
+      "title": "Liquiditätsvorschau mit Szenarien und Unsicherheit",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-140",
+      "title": "Steuerrücklagenampel für Nebengewerbe mit Annahmen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-141",
+      "title": "Was hat sich seit dem letzten Abschluss geändert?",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-142",
+      "title": "Prüfbereitschaft als begründete Checkliste, nicht Gütesiegel",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-143",
+      "title": "IBAN-Wechsel und verdächtige Zahlungsdaten als Prüfsignal",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-144",
+      "title": "Fehlende Belege und mögliche Doppelzahlungen priorisieren",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-145",
+      "title": "Was-wäre-wenn-Szenarien mit isoliertem Datenraum",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-146",
+      "title": "Sicherer Agentenzugang: lesen, vorschlagen, separat freigeben",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-147",
+      "title": "Beleggebundene Fragen und Antworten mit Quellen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-148",
+      "title": "Offline nur für verschlüsselte Entwürfe, nicht für endgültige Buchungen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-149",
+      "title": "Exit-Kit mit eigenständig lesbarer Mini-Dokumentation",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-150",
+      "title": "Notfall- und Nachfolgepaket für Einzelunternehmer",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-151",
+      "title": "Zielgruppen- und Problemvalidierung vor weiterem Ausbau",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-152",
+      "title": "Betriebskostenmodell und Build-versus-buy-Entscheid",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-153",
+      "title": "Öffentliche Demo ohne Echtdaten und ohne implizite Produktionsfreigabe",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-154",
+      "title": "Datenschutz- und Verantwortlichkeitsmodell je Betriebsform",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-155",
+      "title": "Support- und Schwachstellenprozess mit realistischen Zusagen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-156",
+      "title": "Featureflags und gestufte fachliche Freigabe",
+      "status": "architecture_discovery",
+      "implemented": "Codeinventar, Invarianten, Abhängigkeiten und vertikale Planung dokumentiert; keine Produktcodeänderung.",
+      "remaining": "Architekturentscheidungen, Implementierung, Tests und alle ACs offen.",
+      "tests": [
+        "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
+      ],
+      "evidence": [
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+      ]
+    },
+    {
+      "id": "BV-157",
+      "title": "Mandantenquoten und faire Ressourcenverteilung",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-158",
+      "title": "Datenbankwahl für Mehrmandantenbetrieb anhand Benchmarks entscheiden",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-159",
+      "title": "Mandantenaustritt, Datenregion und Wiederherstellungsgrenzen",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    },
+    {
+      "id": "BV-160",
+      "title": "Datensparsame Produktmetriken mit explizitem Opt-in",
+      "status": "proposed_unimplemented",
+      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
+      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "tests": [],
+      "evidence": [
+        "Bivaro_Agent_Backlog.json"
+      ]
+    }
+  ]
+}

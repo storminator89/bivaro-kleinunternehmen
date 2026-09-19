@@ -10,7 +10,10 @@ import { createTestDatabase } from './helpers/database';
 const state = vi.hoisted(() => ({ client: null as unknown, userId: 'alice' }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
 vi.mock('@/lib/get-user-id', () => ({ requireUserId: async () => state.userId, UnauthorizedError: class extends Error {}, unauthorizedResponse: () => new Response(null, { status: 401 }) }));
-vi.mock('@/lib/audit-log', () => ({ auditCreate: vi.fn(), auditDelete: vi.fn(), auditUpdate: vi.fn(), createAuditLog: vi.fn(), auditBackup: vi.fn(), auditSecurityEvent: vi.fn() }));
+vi.mock('@/lib/audit-log', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/audit-log')>(),
+  auditCreate: vi.fn(), auditDelete: vi.fn(), auditUpdate: vi.fn(), createAuditLog: vi.fn(), auditBackup: vi.fn(), auditSecurityEvent: vi.fn(),
+}));
 
 let database: ReturnType<typeof createTestDatabase>;
 let directory: string;
@@ -65,7 +68,7 @@ describe('file and restore security integration', () => {
     expect(await readFile(marker, 'utf8')).toBe('unchanged');
     expect(await readFile(storage.getTenantUploadPath('alice', quote.storedFileName))).toEqual(Buffer.from(pdf));
     const foreignCustomer = await database.client.customer.create({ data: { userId: 'bob', name: 'Foreign customer' } });
-    const denied = await incomeRoute.POST(jsonRequest('/api/incomes', { description: 'Foreign relation', amount: 1, customerId: foreignCustomer.id }));
+    const denied = await incomeRoute.POST(jsonRequest('/api/incomes', { description: 'Foreign relation', amount: 1, date: '2026-06-15', customerId: foreignCustomer.id }));
     expect(denied.status).toBe(404);
     expect(await database.client.income.count({ where: { userId: 'alice' } })).toBe(0);
   });
@@ -172,8 +175,33 @@ describe('file and restore security integration', () => {
   });
 
 
+  it('rolls back overwrite when the restore audit cannot be recorded', async () => {
+    await database.client.user.create({ data: { id: 'audit-rollback', email: 'audit-rollback@files.test', password: 'unused' } });
+    const invoice = await database.client.invoice.create({ data: {
+      userId: 'audit-rollback', invoiceNumber: '2026-90', fileName: 'preserved.pdf', storedFileName: 'preserved.pdf',
+      parsedData: {}, totalAmount: 90, status: 'PAID', issuanceState: 'ISSUED',
+      income: { create: { userId: 'audit-rollback', description: 'Preserved payment', amount: 90 } },
+    }, include: { income: true } });
+    await database.client.$executeRawUnsafe(`CREATE TRIGGER restore_audit_failure BEFORE INSERT ON AuditLog WHEN NEW.action = 'RESTORE' BEGIN SELECT RAISE(ABORT, 'synthetic restore audit failure'); END;`);
+    try {
+      await expect(restore.restoreBackupData({
+        userId: 'audit-rollback', overwrite: true, backup: { version: '2.0', data: {} },
+      })).rejects.toThrow();
+    } finally {
+      await database.client.$executeRawUnsafe('DROP TRIGGER restore_audit_failure');
+    }
+    expect(await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { income: true } })).toEqual(invoice);
+    expect(await database.client.invoiceNumberCounter.count({ where: { userId: 'audit-rollback' } })).toBe(0);
+  });
+
   it('roundtrips a real full ZIP export into another tenant with new file references', async () => {
     state.userId = 'restore';
+    const original = await database.client.invoice.findFirstOrThrow({ where: { userId: 'restore', invoiceNumber: 'RESTORE-INVOICE' } });
+    await database.client.auditLog.create({ data: {
+      userId: 'restore', action: 'CREATE', entityType: 'Invoice', entityId: String(original.id),
+      metadata: JSON.stringify({ source: 'zip-roundtrip', token: 'fixture-secret-must-not-export' }),
+    } });
+    await database.client.invoiceNumberCounter.create({ data: { userId: 'restore', type: 'INVOICE', year: 2026, value: 987 } });
     const exported = await exportFull.GET();
     expect(exported.status).toBe(200);
     const archive = new Uint8Array(await exported.arrayBuffer());
@@ -181,12 +209,17 @@ describe('file and restore security integration', () => {
     const form = new FormData(); form.append('file', new File([archive], 'backup.zip', { type: 'application/zip' }));
     const imported = await restoreFull.POST(new NextRequest('http://localhost/api/backup/full/restore', { method: 'POST', body: form }));
     expect(imported.status).toBe(200);
-    const original = await database.client.invoice.findFirstOrThrow({ where: { userId: 'restore', invoiceNumber: 'RESTORE-INVOICE' } });
     const copy = await database.client.invoice.findFirstOrThrow({ where: { userId: 'bob', invoiceNumber: 'RESTORE-INVOICE' }, include: { income: true, convertedFromQuote: true } });
     expect(copy.storedFileName).not.toBe(original.storedFileName);
     expect(copy.income?.amount).toBe(10);
     expect(copy.convertedFromQuote?.userId).toBe('bob');
     expect(await readFile(storage.getTenantUploadPath('bob', copy.storedFileName))).toEqual(Buffer.from(pdf));
+    const copiedAudit = await database.client.auditLog.findFirstOrThrow({ where: { userId: 'bob', action: 'CREATE', entityType: 'Invoice', entityId: String(copy.id) } });
+    expect(copiedAudit.metadata).toContain('zip-roundtrip');
+    expect(copiedAudit.metadata).not.toContain('fixture-secret-must-not-export');
+    expect((await database.client.invoiceNumberCounter.findUniqueOrThrow({ where: {
+      userId_type_year: { userId: 'bob', type: 'INVOICE', year: 2026 },
+    } })).value).toBe(987);
   });
 
 

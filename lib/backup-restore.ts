@@ -1,7 +1,17 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { createFinancialAuditLog } from '@/lib/audit-log';
 import { readFile } from 'fs/promises';
-import { recalculateCashBalances } from '@/lib/cashbook-service';
+import { CashbookError, recalculateCashBalances } from '@/lib/cashbook-service';
+import { documentNumberPrefix, maximumDocumentSequence, type DocumentType } from '@/lib/invoice-numbers';
+import {
+  CURRENT_BACKUP_VERSION,
+  LEGACY_BACKUP_VERSION,
+  manifestWarning,
+  redactAuditLog,
+  validateBackupManifest,
+  type BackupManifest,
+} from '@/lib/backup-manifest';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import {
   deleteTenantFile,
@@ -51,18 +61,22 @@ type RestoreResult = {
   cashBooks: { imported: number; skipped: number };
   cashTransactions: { imported: number; skipped: number };
   documentations: { imported: number; skipped: number };
+  auditLogs: { imported: number; skipped: number };
+  invoiceNumberCounters: { imported: number; skipped: number };
   warnings: string[];
 };
 
 type ValidatedBackup = {
   version: string;
   data: JsonRecord;
+  manifest?: BackupManifest;
+  warnings: string[];
 };
 
 const ARRAY_KEYS = [
   'customers', 'expenses', 'incomes', 'invoices', 'templates',
   'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
-  'documentations', 'apiKeys',
+  'documentations', 'apiKeys', 'auditLogs',
 ] as const;
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -196,8 +210,29 @@ function validateBackupReferences(data: JsonRecord, sets: Record<string, Set<num
 export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   const root = asRecord(backup, 'Backup');
   const version = asRequiredString(root.version, 'Backup-Version', 32);
-  if (version !== '2.0') throw new BackupValidationError(`Nicht unterstützte Backup-Version ${version}`);
+  if (version !== LEGACY_BACKUP_VERSION && version !== CURRENT_BACKUP_VERSION) throw new BackupValidationError(`Nicht unterstützte Backup-Version ${version}`);
   const data = asRecord(root.data, 'Backup-Daten');
+  let manifest: BackupManifest | undefined;
+  const warnings: string[] = [];
+  if (version === CURRENT_BACKUP_VERSION) {
+    try {
+      manifest = validateBackupManifest(root.manifest, data);
+    } catch (error) {
+      throw new BackupValidationError(error instanceof Error ? error.message : 'Backup-Manifest ist ungültig');
+    }
+    const dataUser = asRecord(data.user, 'Backup-Daten.user');
+    if (asRequiredString(dataUser.id, 'Backup-Daten.user.id', 255) !== manifest.sourceUserId) {
+      throw new BackupValidationError('Backup-Manifest sourceUserId stimmt nicht mit data.user.id überein');
+    }
+    if (root.user !== undefined && root.user !== null) {
+      const topLevelUser = asRecord(root.user, 'Backup.user');
+      if (asRequiredString(topLevelUser.id, 'Backup.user.id', 255) !== manifest.sourceUserId) {
+        throw new BackupValidationError('Backup-Manifest sourceUserId stimmt nicht mit user.id überein');
+      }
+    }
+  } else {
+    warnings.push(manifestWarning(LEGACY_BACKUP_VERSION)!);
+  }
 
   const arrays = Object.fromEntries(ARRAY_KEYS.map((key) => [key, asArray(data, key)]));
   const sets: Record<string, Set<number>> = {};
@@ -221,6 +256,9 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
     validateStoredName(invoice.storedFileName, `invoices[${index}].storedFileName`);
     asOptionalString(invoice.invoiceNumber, `invoices[${index}].invoiceNumber`, 255);
     asOptionalFinite(invoice.totalAmount, `invoices[${index}].totalAmount`);
+    if (version === CURRENT_BACKUP_VERSION && invoice.issuanceState !== undefined && !['UNKNOWN', 'UNISSUED', 'ISSUED'].includes(String(invoice.issuanceState))) {
+      throw new BackupValidationError(`invoices[${index}].issuanceState ist ungültig`);
+    }
     if (invoice.parsedData !== undefined) asJson(invoice.parsedData, `invoices[${index}].parsedData`);
   });
   arrays.expenses.forEach((expense, index) => {
@@ -248,10 +286,33 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
     asRequiredString(doc.version, `documentations[${index}].version`, 64);
     asRequiredString(doc.content, `documentations[${index}].content`, 2_000_000);
   });
+  arrays.auditLogs.forEach((audit, index) => {
+    asOptionalInt(audit.id, `auditLogs[${index}].id`);
+    asRequiredString(audit.action, `auditLogs[${index}].action`, 64);
+    asRequiredString(audit.entityType, `auditLogs[${index}].entityType`, 64);
+    asOptionalString(audit.entityId, `auditLogs[${index}].entityId`, 255);
+    asOptionalString(audit.entityName, `auditLogs[${index}].entityName`, 1_000);
+    asOptionalString(audit.oldValues, `auditLogs[${index}].oldValues`, 2_000_000);
+    asOptionalString(audit.newValues, `auditLogs[${index}].newValues`, 2_000_000);
+    asOptionalString(audit.changedFields, `auditLogs[${index}].changedFields`, 100_000);
+    asOptionalString(audit.metadata, `auditLogs[${index}].metadata`, 2_000_000);
+    asOptionalString(audit.userId, `auditLogs[${index}].userId`, 255);
+    asDate(audit.createdAt, `auditLogs[${index}].createdAt`);
+  });
+  const counterKeys = new Set<string>();
+  for (const [index, counter] of asArray(data, 'invoiceNumberCounters').entries()) {
+    const type = asRequiredString(counter.type, `invoiceNumberCounters[${index}].type`, 32);
+    const year = asOptionalInt(counter.year, `invoiceNumberCounters[${index}].year`);
+    const value = asOptionalInt(counter.value, `invoiceNumberCounters[${index}].value`);
+    if (year === null || year < 0 || value === null || value < 0) throw new BackupValidationError(`invoiceNumberCounters[${index}] ist ungültig`);
+    const key = `${type}:${year}`;
+    if (counterKeys.has(key)) throw new BackupValidationError(`invoiceNumberCounters enthält doppelte Schlüssel: ${key}`);
+    counterKeys.add(key);
+  }
 
   if (data.settings !== undefined && data.settings !== null) asRecord(data.settings, 'settings');
   validateBackupReferences(data, sets);
-  return { version, data };
+  return { version, data, manifest, warnings };
 }
 
 function resultTemplate(overwrite: boolean): RestoreResult {
@@ -270,6 +331,8 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     cashBooks: { imported: 0, skipped: 0 },
     cashTransactions: { imported: 0, skipped: 0 },
     documentations: { imported: 0, skipped: 0 },
+    auditLogs: { imported: 0, skipped: 0 },
+    invoiceNumberCounters: { imported: 0, skipped: 0 },
     warnings: [],
   };
 }
@@ -289,6 +352,108 @@ function logoFileName(value: unknown): string | null {
   let decoded: string;
   try { decoded = decodeURIComponent(match[1]); } catch { return null; }
   return (isSafeStoredFileName(decoded) || isSafeLegacyFileName(decoded)) ? decoded : null;
+}
+
+type CounterValueMap = Map<string, number>;
+
+function counterKey(type: string, year: number): string {
+  return `${type}:${year}`;
+}
+
+function addCounterValue(target: CounterValueMap, type: string, year: number, value: number): void {
+  const key = counterKey(type, year);
+  target.set(key, Math.max(target.get(key) ?? 0, value));
+}
+
+function historicalCounterValues(invoices: Array<{ type: string; invoiceNumber: string | null }>): CounterValueMap {
+  const values: CounterValueMap = new Map();
+  const supportedTypes: DocumentType[] = ['INVOICE', 'QUOTE', 'CREDIT_NOTE'];
+  for (const invoice of invoices) {
+    if (!supportedTypes.includes(invoice.type as DocumentType) || !invoice.invoiceNumber) continue;
+    const type = invoice.type as DocumentType;
+    const numberPattern = type === 'QUOTE' ? /^AN-(\d{4})-(\d+)$/u : type === 'CREDIT_NOTE' ? /^GS-(\d{4})-(\d+)$/u : /^(\d{4})-(\d+)$/u;
+    const match = invoice.invoiceNumber.match(numberPattern);
+    if (!match) continue;
+    const year = Number(match[1]);
+    const sequence = maximumDocumentSequence([invoice.invoiceNumber], documentNumberPrefix(type, year));
+    if (sequence > 0) addCounterValue(values, type, year, sequence);
+  }
+  return values;
+}
+
+function mapAuditEntityId(entityType: string, sourceEntityId: string | null, maps: {
+  userId: string;
+  sourceUserId?: string;
+  customers: Map<number, number>;
+  expenses: Map<number, number>;
+  incomes: Map<number, number>;
+  invoices: Map<number, number>;
+  recurringExpenses: Map<number, number>;
+  reminders: Map<number, number>;
+  cashBooks: Map<number, number>;
+  cashTransactions: Map<number, number>;
+  templates: Map<number, number>;
+  documentations: Map<number, number>;
+  settings: Map<number, number>;
+}): { entityId: string | null; state: 'mapped' | 'unresolved' | 'not-applicable'; sourceEntityId: string | null } {
+  if (!sourceEntityId) return { entityId: null, state: 'not-applicable', sourceEntityId: null };
+  if (entityType === 'User') {
+    return { entityId: maps.sourceUserId === sourceEntityId ? maps.userId : null, state: maps.sourceUserId === sourceEntityId ? 'mapped' : 'unresolved', sourceEntityId };
+  }
+  const mapByType: Record<string, Map<number, number> | undefined> = {
+    Customer: maps.customers,
+    Expense: maps.expenses,
+    Income: maps.incomes,
+    Invoice: maps.invoices,
+    Quote: maps.invoices,
+    CreditNote: maps.invoices,
+    RecurringExpense: maps.recurringExpenses,
+    Reminder: maps.reminders,
+    CashBook: maps.cashBooks,
+    CashTransaction: maps.cashTransactions,
+    InvoiceTemplate: maps.templates,
+    Documentation: maps.documentations,
+    Settings: maps.settings,
+  };
+  const map = mapByType[entityType];
+  const numericId = Number(sourceEntityId);
+  if (!map || !Number.isSafeInteger(numericId)) return { entityId: null, state: 'unresolved', sourceEntityId };
+  const mapped = map.get(numericId);
+  return { entityId: mapped === undefined ? null : String(mapped), state: mapped === undefined ? 'unresolved' : 'mapped', sourceEntityId };
+}
+
+function auditImportKey(backupId: string, sourceUserId: string | undefined, sourceAuditId: number | null, index: number): string {
+  if (sourceAuditId !== null) return `${sourceUserId ?? 'unknown-source'}:audit:${sourceAuditId}`;
+  return `${backupId}:index-${index}`;
+}
+
+function parseObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function restoredIssuanceState(invoice: JsonRecord, version: string, paidInvoiceIds: Set<number>): 'UNKNOWN' | 'UNISSUED' | 'ISSUED' {
+  if (version === LEGACY_BACKUP_VERSION || typeof invoice.issuanceState !== 'string') return 'UNKNOWN';
+  const candidate = invoice.issuanceState;
+  if (!['UNKNOWN', 'UNISSUED', 'ISSUED'].includes(candidate)) throw new BackupValidationError('invoice.issuanceState ist ungültig');
+  const sourceId = asOptionalInt(invoice.id, 'invoice.id');
+  const status = asOptionalString(invoice.status, 'invoice.status', 32) ?? 'DRAFT';
+  if (candidate === 'UNISSUED' && (status !== 'DRAFT' || (sourceId !== null && paidInvoiceIds.has(sourceId)))) return 'ISSUED';
+  // A backup is an untrusted import.  It may preserve a trusted ISSUED
+  // state, but it cannot establish the positive evidence required for
+  // UNISSUED; keep that conservative state UNKNOWN.
+  return candidate === 'ISSUED' ? 'ISSUED' : 'UNKNOWN';
+}
+
+function issuanceStateRank(value: string | null | undefined): number {
+  // UNKNOWN is the conservative deletion guard: an imported backup cannot
+  // prove UNISSUED, while ISSUED remains the strongest state.
+  return value === 'ISSUED' ? 2 : value === 'UNKNOWN' ? 1 : 0;
 }
 
 async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Promise<void> {
@@ -311,8 +476,9 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
 
 export async function restoreBackupData(options: RestoreOptions): Promise<RestoreResult> {
   const { userId, overwrite, resolveFile } = options;
-  const { data } = validateBackupForRestore(options.backup);
+  const { data, manifest, warnings: validationWarnings } = validateBackupForRestore(options.backup);
   const result = resultTemplate(overwrite);
+  result.warnings.push(...validationWarnings);
   const stagedFiles = new Set<string>();
   const usedFiles = new Set<string>();
   const fileMap = new Map<string, string>();
@@ -360,6 +526,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const cashTransactions = asArray(data, 'cashTransactions');
     const documentations = asArray(data, 'documentations');
     const apiKeys = asArray(data, 'apiKeys');
+    const auditLogs = asArray(data, 'auditLogs');
+    const invoiceNumberCounters = asArray(data, 'invoiceNumberCounters');
+    const paidInvoiceIds = new Set(incomes.map((income) => asOptionalInt(income.invoiceId, 'income.invoiceId')).filter((id): id is number => id !== null));
     const settings = data.settings === null || data.settings === undefined ? null : asRecord(data.settings, 'settings');
     if (apiKeys.length > 0) {
       result.warnings.push(`${apiKeys.length} API-Schlüssel wurden nicht übernommen; aus Sicherheitsgründen müssen neue Schlüssel erstellt werden.`);
@@ -384,6 +553,19 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (sourceLogo) await stageFile('logo', sourceLogo, sourceLogo);
 
     await prisma.$transaction(async (tx) => {
+      // Read both counters and invoice-number history before overwrite can
+      // remove the rows.  Historical years come from the number grammar.
+      const [existingCounters, existingInvoices] = await Promise.all([
+        tx.invoiceNumberCounter.findMany({ where: { userId } }),
+        tx.invoice.findMany({ where: { userId }, select: { type: true, invoiceNumber: true } }),
+      ]);
+      const preservedCounterValues: CounterValueMap = new Map();
+      for (const counter of existingCounters) addCounterValue(preservedCounterValues, counter.type, counter.year, counter.value);
+      for (const [key, value] of historicalCounterValues(existingInvoices).entries()) {
+        const separator = key.lastIndexOf(':');
+        addCounterValue(preservedCounterValues, key.slice(0, separator), Number(key.slice(separator + 1)), value);
+      }
+
       if (overwrite) await deleteUserData(tx, userId);
 
       const customerMap = new Map<number, number>();
@@ -392,6 +574,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const recurringMap = new Map<number, number>();
       const expenseMap = new Map<number, number>();
       const incomeMap = new Map<number, number>();
+      const templateMap = new Map<number, number>();
+      const reminderMap = new Map<number, number>();
+      const cashTransactionMap = new Map<number, number>();
+      const documentationMap = new Map<number, number>();
+      const settingsMap = new Map<number, number>();
       const createdInvoiceIds = new Set<number>();
 
       // In merge mode only records that existed before this restore are
@@ -467,6 +654,10 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           ? await tx.invoice.findFirst({ where: { userId, invoiceNumber } })
           : null;
         if (existing) {
+          const importedIssuanceState = restoredIssuanceState(invoice, manifest?.version ?? LEGACY_BACKUP_VERSION, paidInvoiceIds);
+          if (issuanceStateRank(importedIssuanceState) > issuanceStateRank(existing.issuanceState)) {
+            await tx.invoice.update({ where: { id: existing.id, userId }, data: { issuanceState: importedIssuanceState } });
+          }
           invoiceMap.set(sourceId, existing.id);
           result.invoices.skipped += 1;
           continue;
@@ -484,6 +675,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           parsedData: asJson(invoice.parsedData, 'invoice.parsedData'),
           totalAmount: asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount'),
           status: asOptionalString(invoice.status, 'invoice.status', 32) ?? 'DRAFT',
+          issuanceState: restoredIssuanceState(invoice, manifest?.version ?? LEGACY_BACKUP_VERSION, paidInvoiceIds),
           paidAt: asDate(invoice.paidAt, 'invoice.paidAt'),
           cancellationReason: asOptionalString(invoice.cancellationReason, 'invoice.cancellationReason', 1_000),
           customerId: relationMapValue(customerMap, invoice.customerId, 'invoice.customerId'),
@@ -540,13 +732,33 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
       for (const income of incomes) {
         const sourceId = asOptionalInt(income.id, 'income.id')!;
+        const description = asRequiredString(income.description, 'income.description', 255);
+        const amount = asOptionalFinite(income.amount, 'income.amount') ?? 0;
+        const date = asDate(income.date, 'income.date', new Date())!;
+        const customerId = relationMapValue(customerMap, income.customerId, 'income.customerId');
+        const invoiceId = relationMapValue(invoiceMap, income.invoiceId, 'income.invoiceId');
+        const taxRelevant = asOptionalBoolean(income.taxRelevant, 'income.taxRelevant') ?? true;
+        const existing = invoiceId === null ? null : await tx.income.findUnique({ where: { invoiceId } });
+        if (existing) {
+          const sameIncome = existing.description === description
+            && existing.amount === amount
+            && existing.date.getTime() === date.getTime()
+            && existing.customerId === customerId
+            && existing.taxRelevant === taxRelevant;
+          if (!sameIncome) {
+            throw new BackupValidationError(`income.invoiceId ${invoiceId} ist bereits mit abweichenden Einnahmedaten verknüpft`);
+          }
+          incomeMap.set(sourceId, existing.id);
+          result.incomes.skipped += 1;
+          continue;
+        }
         const created = await tx.income.create({ data: {
-          description: asRequiredString(income.description, 'income.description', 255),
-          amount: asOptionalFinite(income.amount, 'income.amount') ?? 0,
-          date: asDate(income.date, 'income.date', new Date())!,
-          customerId: relationMapValue(customerMap, income.customerId, 'income.customerId'),
-          invoiceId: relationMapValue(invoiceMap, income.invoiceId, 'income.invoiceId'),
-          taxRelevant: asOptionalBoolean(income.taxRelevant, 'income.taxRelevant') ?? true,
+          description,
+          amount,
+          date,
+          customerId,
+          invoiceId,
+          taxRelevant,
           userId,
         } });
         incomeMap.set(sourceId, created.id);
@@ -570,31 +782,39 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           logoUrl: mappedLogo ? `/api/files/logo?file=${encodeURIComponent(mappedLogo)}` : null,
           allowedOrigins: asOptionalString(settings.allowedOrigins, 'settings.allowedOrigins', 10_000),
         };
-        await tx.settings.upsert({ where: { userId }, update: settingData, create: { userId, ...settingData } });
+        const restoredSettings = await tx.settings.upsert({ where: { userId }, update: settingData, create: { userId, ...settingData } });
+        const sourceSettingsId = asOptionalInt(settings.id, 'settings.id');
+        if (sourceSettingsId !== null) settingsMap.set(sourceSettingsId, restoredSettings.id);
         if (mappedLogo) usedFiles.add(mappedLogo);
         result.settings.imported = true;
       }
 
       for (const template of templates) {
+        const sourceId = asOptionalInt(template.id, 'template.id');
         const name = asRequiredString(template.name, 'template.name', 255);
         const existingId = existingTemplatesByName.get(name);
-        if (existingId) result.templates.skipped += 1;
+        if (existingId) {
+          if (sourceId !== null) templateMap.set(sourceId, existingId);
+          result.templates.skipped += 1;
+        }
         else {
-          await tx.invoiceTemplate.create({ data: {
+          const created = await tx.invoiceTemplate.create({ data: {
             name,
             data: asJson(template.data, 'template.data'),
             createdAt: asDate(template.createdAt, 'template.createdAt', new Date())!,
             updatedAt: asDate(template.updatedAt, 'template.updatedAt', new Date())!,
             userId,
           } });
+          if (sourceId !== null) templateMap.set(sourceId, created.id);
           result.templates.imported += 1;
         }
       }
 
       for (const reminder of reminders) {
+        const sourceId = asOptionalInt(reminder.id, 'reminder.id');
         const invoiceId = relationMapValue(invoiceMap, reminder.invoiceId, 'reminder.invoiceId');
         if (!invoiceId) throw new BackupValidationError('reminder.invoiceId fehlt');
-        await tx.reminder.create({ data: {
+        const created = await tx.reminder.create({ data: {
           invoiceId,
           reminderLevel: asOptionalInt(reminder.reminderLevel, 'reminder.reminderLevel') ?? 1,
           sentAt: asDate(reminder.sentAt, 'reminder.sentAt', new Date())!,
@@ -604,6 +824,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           createdAt: asDate(reminder.createdAt, 'reminder.createdAt', new Date())!,
           userId,
         } });
+        if (sourceId !== null) reminderMap.set(sourceId, created.id);
         result.reminders.imported += 1;
       }
 
@@ -631,9 +852,10 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       }
 
       for (const transaction of cashTransactions) {
+        const sourceId = asOptionalInt(transaction.id, 'cashTransaction.id');
         const cashBookId = relationMapValue(cashBookMap, transaction.cashBookId, 'cashTransaction.cashBookId');
         if (!cashBookId) throw new BackupValidationError('cashTransaction.cashBookId fehlt');
-        await tx.cashTransaction.create({ data: {
+        const created = await tx.cashTransaction.create({ data: {
           date: asDate(transaction.date, 'cashTransaction.date', new Date())!,
           createdAt: asDate(transaction.createdAt, 'cashTransaction.createdAt', new Date())!,
           updatedAt: asDate(transaction.updatedAt, 'cashTransaction.updatedAt', new Date())!,
@@ -650,16 +872,23 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           incomeId: relationMapValue(incomeMap, transaction.incomeId, 'cashTransaction.incomeId'),
           userId,
         } });
+        if (sourceId !== null) cashTransactionMap.set(sourceId, created.id);
         result.cashTransactions.imported += 1;
       }
 
       const importedCashBookIds = new Set(cashBookMap.values());
       for (const cashBookId of importedCashBookIds) {
-        await recalculateCashBalances(tx, cashBookId, userId);
+        try {
+          await recalculateCashBalances(tx, cashBookId, userId);
+        } catch (error) {
+          if (error instanceof CashbookError) throw new BackupValidationError(error.message);
+          throw error;
+        }
       }
 
       for (const doc of documentations) {
-        await tx.documentation.create({ data: {
+        const sourceId = asOptionalInt(doc.id, 'documentation.id');
+        const created = await tx.documentation.create({ data: {
           version: asRequiredString(doc.version, 'documentation.version', 64),
           title: asOptionalString(doc.title, 'documentation.title', 255) ?? 'Verfahrensdokumentation',
           content: asRequiredString(doc.content, 'documentation.content', 2_000_000),
@@ -667,8 +896,178 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           updatedAt: asDate(doc.updatedAt, 'documentation.updatedAt', new Date())!,
           userId,
         } });
+        if (sourceId !== null) documentationMap.set(sourceId, created.id);
         result.documentations.imported += 1;
       }
+
+      const restoredCounterValues: CounterValueMap = new Map(preservedCounterValues);
+      for (const counter of invoiceNumberCounters) {
+        addCounterValue(
+          restoredCounterValues,
+          asRequiredString(counter.type, 'invoiceNumberCounter.type', 32),
+          asOptionalInt(counter.year, 'invoiceNumberCounter.year')!,
+          asOptionalInt(counter.value, 'invoiceNumberCounter.value')!,
+        );
+      }
+      const importedInvoiceHistory = invoices.map((invoice) => ({
+        type: asOptionalString(invoice.type, 'invoice.type', 32) ?? 'INVOICE',
+        invoiceNumber: asOptionalString(invoice.invoiceNumber, 'invoice.invoiceNumber', 255),
+      }));
+      for (const [key, value] of historicalCounterValues(importedInvoiceHistory).entries()) {
+        const separator = key.lastIndexOf(':');
+        addCounterValue(restoredCounterValues, key.slice(0, separator), Number(key.slice(separator + 1)), value);
+      }
+      const importedCounterKeys = new Set(invoiceNumberCounters.map((counter) => counterKey(String(counter.type), Number(counter.year))));
+      for (const [key, value] of restoredCounterValues.entries()) {
+        const separator = key.lastIndexOf(':');
+        const type = key.slice(0, separator);
+        const year = Number(key.slice(separator + 1));
+        const existingValue = preservedCounterValues.get(key) ?? 0;
+        await tx.invoiceNumberCounter.upsert({
+          where: { userId_type_year: { userId, type, year } },
+          create: { userId, type, year, value },
+          update: { value },
+        });
+        if (importedCounterKeys.has(key) && value > existingValue) result.invoiceNumberCounters.imported += 1;
+        else if (importedCounterKeys.has(key)) result.invoiceNumberCounters.skipped += 1;
+      }
+
+      const sourceUserId = manifest?.sourceUserId;
+      const auditMaps = {
+        userId,
+        sourceUserId,
+        customers: customerMap,
+        expenses: expenseMap,
+        incomes: incomeMap,
+        invoices: invoiceMap,
+        recurringExpenses: recurringMap,
+        reminders: reminderMap,
+        cashBooks: cashBookMap,
+        cashTransactions: cashTransactionMap,
+        templates: templateMap,
+        documentations: documentationMap,
+        settings: settingsMap,
+      };
+      const existingAuditRows = await tx.auditLog.findMany({ where: { userId }, select: { id: true, entityId: true, metadata: true } });
+      const existingAuditImportRows = new Map<string, { id: number; entityId: string | null; metadata: string | null }>();
+      for (const row of existingAuditRows) {
+        const metadata = parseObject(row.metadata);
+        const key = metadata?.backupImport && typeof metadata.backupImport === 'object'
+          ? (metadata.backupImport as Record<string, unknown>).importKey
+          : null;
+        if (typeof key === 'string') existingAuditImportRows.set(key, row);
+      }
+      const backupId = manifest?.backupId ?? 'legacy-v2';
+      for (const [index, audit] of auditLogs.entries()) {
+        const sanitizedAudit = redactAuditLog({ ...audit });
+        const sourceAuditId = asOptionalInt(sanitizedAudit.id, `auditLogs[${index}].id`);
+        const auditSourceUserId = typeof sanitizedAudit.userId === 'string' ? sanitizedAudit.userId : sourceUserId;
+        const importKey = auditImportKey(backupId, auditSourceUserId, sourceAuditId, index);
+        const sourceEntityId = asOptionalString(sanitizedAudit.entityId, `auditLogs[${index}].entityId`, 255);
+        const sourceEntityType = asRequiredString(sanitizedAudit.entityType, `auditLogs[${index}].entityType`, 64);
+        const mapped = mapAuditEntityId(sourceEntityType, sourceEntityId, auditMaps);
+        const existingImported = existingAuditImportRows.get(importKey);
+        if (existingImported) {
+          result.auditLogs.skipped += 1;
+          if (existingImported.entityId !== mapped.entityId) {
+            // Audit rows are append-only.  An overwrite creates new target
+            // IDs, so retain the original imported row and append a mapping
+            // event that records the previous and current target references.
+            const mappingImportKey = `${importKey}:mapping:${mapped.entityId ?? 'unresolved'}`;
+            if (!existingAuditImportRows.has(mappingImportKey)) {
+              const mappingProvenance = {
+                importKey: mappingImportKey,
+                sourceImportKey: importKey,
+                backupId,
+                sourceUserId: auditSourceUserId ?? null,
+                sourceActorId: auditSourceUserId ?? null,
+                sourceTenantId: sourceUserId ?? null,
+                targetTenantId: userId,
+                targetUserId: userId,
+                sourceAuditId,
+                sourceEntityType,
+                sourceEntityId,
+                entityMapping: mapped.state,
+                mappingEvent: true,
+                previousTargetEntityId: existingImported.entityId,
+                targetEntityId: mapped.entityId,
+                ...(mapped.state === 'unresolved' ? { unresolvedReference: true } : {}),
+              };
+              const mappingMetadata = JSON.stringify({ backupImport: mappingProvenance });
+              await tx.auditLog.create({ data: {
+                userId,
+                action: 'RESTORE',
+                entityType: sourceEntityType,
+                entityId: mapped.entityId,
+                entityName: asOptionalString(sanitizedAudit.entityName, `auditLogs[${index}].entityName`, 1_000),
+                oldValues: JSON.stringify({ entityId: existingImported.entityId, importKey }),
+                newValues: JSON.stringify({ entityId: mapped.entityId, importKey }),
+                changedFields: JSON.stringify(['entityId']),
+                metadata: mappingMetadata,
+                createdAt: new Date(),
+              } });
+              existingAuditImportRows.set(mappingImportKey, { id: -1, entityId: mapped.entityId, metadata: mappingMetadata });
+              result.auditLogs.imported += 1;
+            }
+          }
+          continue;
+        }
+        const sourceMetadata = typeof sanitizedAudit.metadata === 'string' ? sanitizedAudit.metadata : null;
+        const provenance = {
+          importKey,
+          backupId,
+          sourceUserId: auditSourceUserId ?? null,
+          sourceActorId: auditSourceUserId ?? null,
+          sourceTenantId: sourceUserId ?? null,
+          targetTenantId: userId,
+          targetUserId: userId,
+          sourceAuditId,
+          sourceEntityType,
+          sourceEntityId,
+          entityMapping: mapped.state,
+          ...(mapped.state === 'unresolved' ? { unresolvedReference: true } : {}),
+        };
+        const metadata = JSON.stringify({
+          ...(parseObject(sourceMetadata) ?? (sourceMetadata ? { sourceMetadata } : {})),
+          backupImport: provenance,
+        });
+        await tx.auditLog.create({ data: {
+          userId,
+          action: asRequiredString(sanitizedAudit.action, `auditLogs[${index}].action`, 64),
+          entityType: sourceEntityType,
+          entityId: mapped.entityId,
+          entityName: asOptionalString(sanitizedAudit.entityName, `auditLogs[${index}].entityName`, 1_000),
+          oldValues: asOptionalString(sanitizedAudit.oldValues, `auditLogs[${index}].oldValues`, 2_000_000),
+          newValues: asOptionalString(sanitizedAudit.newValues, `auditLogs[${index}].newValues`, 2_000_000),
+          changedFields: asOptionalString(sanitizedAudit.changedFields, `auditLogs[${index}].changedFields`, 100_000),
+          ipAddress: asOptionalString(sanitizedAudit.ipAddress, `auditLogs[${index}].ipAddress`, 255),
+          userAgent: asOptionalString(sanitizedAudit.userAgent, `auditLogs[${index}].userAgent`, 500),
+          sessionId: asOptionalString(sanitizedAudit.sessionId, `auditLogs[${index}].sessionId`, 255),
+          metadata,
+          createdAt: asDate(sanitizedAudit.createdAt, `auditLogs[${index}].createdAt`, new Date())!,
+        } });
+        existingAuditImportRows.set(importKey, { id: -1, entityId: mapped.entityId, metadata });
+        result.auditLogs.imported += 1;
+      }
+
+      await createFinancialAuditLog({
+        userId,
+        action: 'RESTORE',
+        entityType: 'Backup',
+        entityId: backupId,
+        entityName: 'Backup-Restore',
+        metadata: {
+          actorId: userId,
+          tenantId: userId,
+          operation: overwrite ? 'backup.restore.overwrite' : 'backup.restore.merge',
+          originalReference: manifest
+            ? `backup:${backupId}:source-user:${manifest.sourceUserId}`
+            : 'legacy-v2',
+          reason: manifest
+            ? `Version ${manifest.version} wiederhergestellt; Auditsegment angehängt und Nummernzähler per Maximum zusammengeführt.`
+            : 'Legacy-Backup 2.0 wiederhergestellt; Vollständigkeit und historische High-Water-Marks sind nicht nachgewiesen.',
+        },
+      }, tx);
     }, { maxWait: 15_000, timeout: 120_000 });
 
     for (const storedName of stagedFiles) {

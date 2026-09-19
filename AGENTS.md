@@ -60,9 +60,18 @@
 - Pull requests must describe the problem, solution, test evidence, and database impact; attach UI screenshots for visual changes.
 - Link relevant issues or tickets and request review from the domain owner before merging.
 
+## Backlog Progress Documentation
+- Assign one participating subagent to maintain the ticket documentation during backlog work, as requested by the user.
+- Keep `docs/backlog/TICKETSTATUS.md` and `docs/backlog/ticket-status.json` consistent after each completed work package and before handoff.
+- Record the ticket ID, implemented scope, remaining acceptance criteria, actual test results, evidence links, date, and commit or uncommitted state.
+- Distinguish implementation, partial implementation, architecture discovery, and untouched tickets; do not mark a ticket complete while required acceptance evidence is missing.
+- Link unexpected incidents and unresolved recovery work in the current status. Preserve the supplied audit/backlog source files.
+
 ## Environment & Configuration
 - Copy `.env.example` when configuring the project; keep secrets out of version control.
 - The default SQLite database lives at `prisma/dev.db`; update `DATABASE_URL` when switching providers.
+- Every database experiment must pass an explicit `DATABASE_URL` pointing into a newly created temporary fixture directory. Never let a probe inherit the repository `.env` database target; never use `prisma/dev.db` as a test fixture.
+- Validate Compose with `docker compose config --quiet`. Do not print or save the resolved configuration, because it contains expanded secrets.
 - After altering authentication, uploads, or routing, verify related changes in `proxy.ts`, `next.config.ts`, and affected `app/api` handlers.
 - When running the standalone server (`npm run start` or E2E), copy static assets into the standalone directory:
   ```bash

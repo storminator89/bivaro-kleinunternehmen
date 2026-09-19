@@ -2,7 +2,8 @@ import { readFile } from 'fs/promises';
 import { basename, extname } from 'path';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { prisma } from '@/lib/prisma';
-import { createAuditLog } from '@/lib/audit-log';
+import { createAuditLog, createFinancialAuditLog } from '@/lib/audit-log';
+import { inTransaction } from '@/lib/db-transaction';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 
 export type EmailDocumentType = 'invoice' | 'quote' | 'reminder';
@@ -244,6 +245,37 @@ export async function sendDocumentEmail(userId: string, request: SendEmailReques
     },
   });
 
+  // Reserve issuance before contacting SMTP.  If SMTP succeeds but the
+  // follow-up status write fails, the marker still keeps the draft locked
+  // against deletion.  A concurrent payment can win between these steps;
+  // the later CAS below then leaves PAID untouched.
+  if (request.documentType !== 'reminder' && loaded.invoice.status === 'DRAFT') {
+    await inTransaction(async tx => {
+      const current = await tx.invoice.findFirst({
+        where: { id: loaded.invoice.id, userId },
+        select: { status: true, issuanceState: true, invoiceNumber: true, fileName: true },
+      });
+      if (!current || current.status !== 'DRAFT' || current.issuanceState === 'ISSUED') return;
+      await tx.invoice.update({ where: { id: loaded.invoice.id, userId }, data: { issuanceState: 'ISSUED' } });
+      await createFinancialAuditLog({
+        userId,
+        action: 'STATUS_CHANGED',
+        entityType: request.documentType === 'quote' ? 'Quote' : 'Invoice',
+        entityId: loaded.invoice.id,
+        entityName: current.invoiceNumber || current.fileName,
+        oldValues: { status: current.status, issuanceState: current.issuanceState },
+        newValues: { status: current.status, issuanceState: 'ISSUED' },
+        metadata: {
+          actorId: userId,
+          tenantId: userId,
+          operation: 'invoice.issue-attempt',
+          originalReference: current.invoiceNumber ?? `invoice:${loaded.invoice.id}`,
+          reason: 'document email prepared for delivery',
+        },
+      }, tx);
+    });
+  }
+
   const info = await transport.sendMail(mail);
 
   if (request.documentType === 'reminder') {
@@ -282,9 +314,31 @@ export async function sendDocumentEmail(userId: string, request: SendEmailReques
   }
 
   if (loaded.invoice.status === 'DRAFT') {
-    await prisma.invoice.update({
-      where: { id: loaded.invoice.id, userId },
-      data: { status: 'SENT' },
+    await inTransaction(async tx => {
+      const current = await tx.invoice.findFirst({
+        where: { id: loaded.invoice.id, userId },
+        select: { status: true, issuanceState: true, invoiceNumber: true, fileName: true },
+      });
+      // Compare-and-set prevents a stale pre-SMTP read from overwriting a
+      // concurrent PAID transition with SENT.
+      if (!current || current.status !== 'DRAFT' || current.issuanceState !== 'ISSUED') return;
+      await tx.invoice.update({ where: { id: loaded.invoice.id, userId, status: 'DRAFT' }, data: { status: 'SENT' } });
+      await createFinancialAuditLog({
+        userId,
+        action: 'STATUS_CHANGED',
+        entityType: request.documentType === 'quote' ? 'Quote' : 'Invoice',
+        entityId: loaded.invoice.id,
+        entityName: current.invoiceNumber || current.fileName,
+        oldValues: { status: 'DRAFT', issuanceState: current.issuanceState },
+        newValues: { status: 'SENT', issuanceState: current.issuanceState },
+        metadata: {
+          actorId: userId,
+          tenantId: userId,
+          operation: 'invoice.issued',
+          originalReference: current.invoiceNumber ?? `invoice:${loaded.invoice.id}`,
+          reason: 'document email delivered',
+        },
+      }, tx);
     });
   }
 

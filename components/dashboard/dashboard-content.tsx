@@ -26,6 +26,7 @@ import {
   DashboardEditData
 } from "@/types/dashboard";
 import { toQuery } from "@/lib/dashboard-utils";
+import { formatBusinessDate, formatLocalBusinessDate } from "@/lib/business-date";
 import { EURTab, GWGTab, ExpensesTab, IncomesTab, InvoicesTab } from "@/components/dashboard/tabs";
 import { useDashboardData } from "@/hooks/use-dashboard-data";
 import type { DashboardTab } from "@/hooks/use-dashboard-data";
@@ -159,11 +160,13 @@ export function DashboardContent() {
   const [newIncome, setNewIncome] = useState<{
     description: string;
     amount: string;
+    date: string;
     customerId?: number;
     taxRelevant: boolean;
   }>({
     description: '',
     amount: '',
+    date: formatLocalBusinessDate(),
     customerId: undefined,
     taxRelevant: true
   });
@@ -419,6 +422,7 @@ export function DashboardContent() {
         body: JSON.stringify({
           description: newIncome.description,
           amount: parseFloat(newIncome.amount),
+          date: newIncome.date,
           customerId: newIncome.customerId,
           taxRelevant: newIncome.taxRelevant
         }),
@@ -429,6 +433,7 @@ export function DashboardContent() {
         setNewIncome({
           description: '',
           amount: '',
+          date: formatLocalBusinessDate(),
           customerId: undefined,
           taxRelevant: true
         });
@@ -447,8 +452,8 @@ export function DashboardContent() {
 
     if (isDuplicate) {
       editData.id = undefined;
-      editData.date = new Date().toISOString();
       if (type === 'expense') {
+        editData.date = new Date().toISOString();
         editData.receiptFileName = undefined;
         editData.storedReceiptFileName = undefined;
       }
@@ -479,8 +484,17 @@ export function DashboardContent() {
         }
       }
       dataToSend.amount = parseFloat(formData.amount); // Betrag als Zahl senden
-      if (typeof dataToSend.date === 'string') {
+      if (editType === 'expense' && typeof dataToSend.date === 'string') {
         dataToSend.date = new Date(dataToSend.date).toISOString();
+      } else if (editType === 'income' && typeof dataToSend.date === 'string') {
+        if (isNewItem) {
+          // A duplicate is a new manual write: send its explicit calendar day.
+          dataToSend.date = formatBusinessDate(dataToSend.date);
+        } else if (!/^\d{4}-\d{2}-\d{2}$/.test(dataToSend.date)) {
+          // Legacy rows may still contain an instant. Omitting it preserves the
+          // existing value instead of silently converting its timezone.
+          delete dataToSend.date;
+        }
       }
 
       const response = await fetch(endpoint, {

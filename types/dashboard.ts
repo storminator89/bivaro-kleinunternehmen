@@ -49,6 +49,9 @@ export type Invoice = {
   invoiceNumber?: string;
   totalAmount?: number;
   status: string;
+  issuanceState?: 'UNKNOWN' | 'UNISSUED' | 'ISSUED';
+  paidAt?: string | null;
+  income?: { id: number } | null;
   invoiceDate?: string;
   dueDate?: string;
   validUntil?: string;

@@ -2,50 +2,98 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
+import { BusinessDateError, parseBusinessDate } from '@/lib/business-date';
+import {
+  createManualIncome,
+  deleteManualIncome,
+  IncomeMutationError,
+  updateManualIncome,
+} from '@/lib/income-service';
+
+function mutationErrorResponse(error: unknown) {
+  if (error instanceof IncomeMutationError) {
+    return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+  }
+  return null;
+}
+
+function parseIncomeId(value: unknown): number {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültige Einnahme-ID');
+  return id;
+}
+
+function parseIncomeAmount(value: unknown, required: boolean): number | undefined {
+  if (value === undefined || value === null || value === '') {
+    if (required) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ein gültiger Betrag ist erforderlich');
+    return undefined;
+  }
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültiger Betrag');
+  }
+  if (typeof value === 'string' && value.trim().length === 0) {
+    throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültiger Betrag');
+  }
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültiger Betrag');
+  return amount;
+}
+
+function parseIncomeCustomerId(value: unknown, present: boolean): number | null | undefined {
+  if (!present) return undefined;
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'number' && typeof value !== 'string') throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültiger Kunde');
+  if (typeof value === 'string' && value.trim().length === 0) return null;
+  const id = Number(value);
+  if ((typeof value === 'string' && !/^[1-9]\d*$/.test(value)) || !Number.isSafeInteger(id) || id <= 0) {
+    throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültiger Kunde');
+  }
+  return id;
+}
+
+function parseIncomeTaxRelevant(value: unknown, present: boolean): boolean | undefined {
+  if (!present) return undefined;
+  if (typeof value !== 'boolean') throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'taxRelevant muss boolesch sein');
+  return value;
+}
 
 export async function POST(request: Request) {
   try {
     const userId = await requireUserId();
-    const { description, amount, customerId, taxRelevant } = await request.json();
-
-    if (!description || !amount) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    const body = await request.json();
+    const { description, amount, customerId, taxRelevant, date } = body;
+    if (typeof description !== 'string' || description.trim().length === 0) {
+      return NextResponse.json({ error: 'Beschreibung ist erforderlich', field: 'description' }, { status: 400 });
     }
 
-    const parsedAmount = Number(amount);
-    if (!Number.isFinite(parsedAmount)) {
-      return NextResponse.json({ error: 'Ungültiger Betrag' }, { status: 400 });
-    }
-    const parsedCustomerId = customerId === undefined || customerId === null || customerId === ''
-      ? null
-      : Number(customerId);
-    if (parsedCustomerId !== null && (!Number.isInteger(parsedCustomerId) || parsedCustomerId <= 0)) {
-      return NextResponse.json({ error: 'Ungültiger Kunde' }, { status: 400 });
-    }
-    if (parsedCustomerId !== null) {
-      const customer = await prisma.customer.findFirst({ where: { id: parsedCustomerId, userId } });
-      if (!customer) return NextResponse.json({ error: 'Kunde nicht gefunden' }, { status: 404 });
+    const parsedAmount = parseIncomeAmount(amount, true)!;
+    const parsedCustomerId = parseIncomeCustomerId(customerId, Object.prototype.hasOwnProperty.call(body, 'customerId')) ?? null;
+    const parsedTaxRelevant = parseIncomeTaxRelevant(taxRelevant, Object.prototype.hasOwnProperty.call(body, 'taxRelevant')) ?? true;
+    let parsedDate: Date;
+    try {
+      parsedDate = parseBusinessDate(date);
+    } catch (error) {
+      if (error instanceof BusinessDateError) {
+        return NextResponse.json({ error: 'Zahlungsdatum muss als YYYY-MM-DD angegeben werden', field: 'date' }, { status: 400 });
+      }
+      throw error;
     }
 
-    const income = await prisma.income.create({
-      data: {
-        description,
-        amount: parsedAmount,
-        customerId: parsedCustomerId,
-        taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
-        userId,
-      },
+    const income = await createManualIncome(userId, {
+      description: description.trim(),
+      amount: parsedAmount,
+      date: parsedDate,
+      customerId: parsedCustomerId,
+      taxRelevant: parsedTaxRelevant,
     });
-
-    // Audit log
-    await auditCreate(userId, 'Income', income, income.description);
 
     return NextResponse.json(income);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    const response = mutationErrorResponse(error);
+    if (response) return response;
     throw error;
   }
 }
@@ -142,74 +190,44 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const userId = await requireUserId();
-    const { id, description, amount, customerId, taxRelevant, date } = await request.json();
-
-    if (!id || !description || !amount) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    const body = await request.json();
+    const { id, description, amount, customerId, taxRelevant, date } = body;
+    const parsedId = parseIncomeId(id);
+    if (description !== undefined && (typeof description !== 'string' || description.trim().length === 0)) {
+      return NextResponse.json({ error: 'Beschreibung darf nicht leer sein', field: 'description' }, { status: 400 });
+    }
+    const parsedAmount = parseIncomeAmount(amount, false);
+    const hasCustomer = Object.prototype.hasOwnProperty.call(body, 'customerId');
+    const parsedCustomerId = parseIncomeCustomerId(customerId, hasCustomer);
+    const parsedTaxRelevant = parseIncomeTaxRelevant(taxRelevant, Object.prototype.hasOwnProperty.call(body, 'taxRelevant'));
+    let parsedDate: Date | undefined;
+    if (date !== undefined) {
+      try {
+        parsedDate = parseBusinessDate(date);
+      } catch (error) {
+        if (error instanceof BusinessDateError) {
+          return NextResponse.json({ error: 'Zahlungsdatum muss als YYYY-MM-DD angegeben werden', field: 'date' }, { status: 400 });
+        }
+        throw error;
+      }
     }
 
-    const parsedAmount = Number(amount);
-    if (!Number.isFinite(parsedAmount)) {
-      return NextResponse.json({ error: 'Ungültiger Betrag' }, { status: 400 });
-    }
-    const parsedCustomerId = customerId === undefined || customerId === null || customerId === ''
-      ? null
-      : Number(customerId);
-    if (parsedCustomerId !== null && (!Number.isInteger(parsedCustomerId) || parsedCustomerId <= 0)) {
-      return NextResponse.json({ error: 'Ungültiger Kunde' }, { status: 400 });
-    }
-    if (parsedCustomerId !== null) {
-      const customer = await prisma.customer.findFirst({ where: { id: parsedCustomerId, userId } });
-      if (!customer) return NextResponse.json({ error: 'Kunde nicht gefunden' }, { status: 404 });
-    }
-    const parsedDate = date ? new Date(date) : undefined;
-    if (parsedDate && Number.isNaN(parsedDate.getTime())) {
-      return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
-    }
-
-    // Get old values for audit - verify ownership first
-    const oldIncome = await prisma.income.findFirst({
-      where: { id: Number(id), userId },
-      include: { invoice: true, cashTransaction: true },
+    const updatedIncome = await updateManualIncome(userId, parsedId, {
+      ...(description !== undefined && { description: description.trim() }),
+      ...(parsedAmount !== undefined && { amount: parsedAmount }),
+      ...(parsedDate !== undefined && { date: parsedDate }),
+      ...(hasCustomer && { customerId: parsedCustomerId! }),
+      ...(parsedTaxRelevant !== undefined && { taxRelevant: parsedTaxRelevant }),
     });
-
-    if (!oldIncome) {
-      return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
-    }
-    if (oldIncome.invoice || oldIncome.cashTransaction) {
-      return NextResponse.json({ error: 'Verknüpfte Einnahmen müssen über Rechnung oder Kassenbuch geändert werden' }, { status: 409 });
-    }
-
-    const updatedIncome = await prisma.$transaction(async (tx) => {
-      const current = await tx.income.findFirst({ where: { id: Number(id), userId }, include: { invoice: true, cashTransaction: true } });
-      if (!current) throw new Error('Einnahme nicht gefunden');
-      if (current.invoice || current.cashTransaction) throw new Error('Verknüpfte Einnahmen müssen über Rechnung oder Kassenbuch geändert werden');
-      return tx.income.update({
-        where: { id: Number(id), userId },
-        data: {
-          description,
-          amount: parsedAmount,
-          customer: parsedCustomerId ? { connect: { id: parsedCustomerId } } : { disconnect: true },
-          taxRelevant: taxRelevant !== undefined ? taxRelevant : true,
-          ...(parsedDate && { date: parsedDate }),
-        },
-      });
-    });
-
-    // Audit log
-    if (oldIncome) {
-      await auditUpdate(userId, 'Income', id, oldIncome, updatedIncome, updatedIncome.description);
-    }
 
     return NextResponse.json(updatedIncome);
-  } catch (_error: unknown) {
-    if (_error instanceof UnauthorizedError) {
+  } catch (error: unknown) {
+    if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
-    if (_error instanceof Error && _error.message.startsWith('Verknüpfte Einnahmen')) {
-      return NextResponse.json({ error: _error.message }, { status: 409 });
-    }
-    return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
+    const response = mutationErrorResponse(error);
+    if (response) return response;
+    throw error;
   }
 }
 
@@ -223,40 +241,14 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
     }
-
-    // Prüfen, ob eine mit dieser Einnahme verknüpfte Rechnung existiert
-    const income = await prisma.income.findUnique({
-      where: { id: Number(id), userId },
-      include: { invoice: true, cashTransaction: true },
-    });
-
-    if (!income) {
-      return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
-    }
-    if (income.invoice || income.cashTransaction) {
-      return NextResponse.json({ error: 'Verknüpfte Einnahmen müssen über Rechnung oder Kassenbuch gelöscht werden' }, { status: 409 });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      const current = await tx.income.findFirst({ where: { id: Number(id), userId }, include: { invoice: true, cashTransaction: true } });
-      if (!current) throw new Error('Einnahme nicht gefunden');
-      if (current.invoice || current.cashTransaction) throw new Error('Verknüpfte Einnahmen müssen über Rechnung oder Kassenbuch gelöscht werden');
-      await tx.income.delete({ where: { id: Number(id), userId } });
-    });
-
-    // Audit log
-    if (income) {
-      await auditDelete(userId, 'Income', income, income.description);
-    }
-
+    await deleteManualIncome(userId, parseIncomeId(id));
     return NextResponse.json({ success: true });
-  } catch (_error: unknown) {
-    if (_error instanceof UnauthorizedError) {
+  } catch (error: unknown) {
+    if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
-    if (_error instanceof Error && _error.message.startsWith('Verknüpfte Einnahmen')) {
-      return NextResponse.json({ error: _error.message }, { status: 409 });
-    }
-    return NextResponse.json({ error: 'Einnahme nicht gefunden' }, { status: 404 });
+    const response = mutationErrorResponse(error);
+    if (response) return response;
+    throw error;
   }
 }

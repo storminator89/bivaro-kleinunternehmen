@@ -22,10 +22,12 @@ import {
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Income, Customer, FilterState } from "@/types/dashboard";
 import { formatCurrency } from "@/lib/dashboard-utils";
+import { formatBusinessDateDisplay } from "@/lib/business-date";
 
 type NewIncome = {
   description: string;
   amount: string;
+  date: string;
   customerId?: number;
   taxRelevant: boolean;
 };
@@ -133,6 +135,16 @@ export function IncomesTab({
                   value={newIncome.amount}
                   onChange={(e) => setNewIncome({ ...newIncome, amount: e.target.value })}
                   placeholder="0.00"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="income-date" className="text-sm font-medium">Zahlungsdatum</Label>
+                <Input
+                  id="income-date"
+                  type="date"
+                  value={newIncome.date}
+                  onChange={(e) => setNewIncome({ ...newIncome, date: e.target.value })}
                   required
                 />
               </div>
@@ -352,7 +364,7 @@ export function IncomesTab({
                   <div className="min-w-0">
                     <h3 className="truncate font-semibold">{income.description}</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {new Date(income.date).toLocaleDateString('de-DE')}{income.customerName ? ` · ${income.customerName}` : ''}
+                      {formatBusinessDateDisplay(income.date)}{income.customerName ? ` · ${income.customerName}` : ''}
                     </p>
                   </div>
                   <p className="shrink-0 font-semibold tabular-nums text-positive">{formatCurrency(income.amount)}</p>
@@ -386,7 +398,7 @@ export function IncomesTab({
                 {incomes.length > 0 ? (
                   incomes.map((income) => (
                     <TableRow key={income.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell className="text-muted-foreground">{new Date(income.date).toLocaleDateString('de-DE')}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatBusinessDateDisplay(income.date)}</TableCell>
                       <TableCell className="font-medium">{income.description}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {income.customerName ? (
@@ -414,6 +426,7 @@ export function IncomesTab({
                         {income.invoiceStatus ? (
                           <StatusBadge
                             status={income.invoiceStatus}
+                            availableStatuses={[]}
                             onStatusChange={(newStatus) => onInvoiceStatusChange(income.invoiceId, newStatus)}
                           />
                         ) : (

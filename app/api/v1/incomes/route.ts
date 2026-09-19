@@ -1,4 +1,3 @@
-import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 /**
  * API v1 - Incomes Endpoint
  * 
@@ -11,7 +10,13 @@ import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { inTransaction } from '@/lib/db-transaction';
+import { BusinessDateError, parseBusinessDate } from '@/lib/business-date';
+import {
+  createManualIncome,
+  deleteManualIncome,
+  IncomeMutationError,
+  updateManualIncome,
+} from '@/lib/income-service';
 import {
   withApiAuth,
   apiSuccess,
@@ -19,12 +24,6 @@ import {
   handleCors,
   corsHeaders,
 } from '@/lib/api-auth';
-
-class IncomeMutationError extends Error {
-  constructor(public readonly status: number, public readonly code: string, message: string) {
-    super(message);
-  }
-}
 
 function parsePositiveId(value: unknown, label: string): number {
   const text = String(value ?? '');
@@ -37,17 +36,11 @@ function parsePositiveId(value: unknown, label: string): number {
 
 function parseOptionalCustomerId(value: unknown): number | null {
   if (value === undefined || value === null || value === '') return null;
-  return parsePositiveId(value, 'customer ID');
-}
-
-function parseDate(value: unknown, fallbackNow = false): Date {
-  if (value === undefined || value === null || value === '') {
-    if (fallbackNow) return new Date();
-    throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid date');
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid customer ID');
   }
-  const date = new Date(String(value));
-  if (!Number.isFinite(date.getTime())) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid date');
-  return date;
+  if (typeof value === 'string' && value.trim().length === 0) return null;
+  return parsePositiveId(value, 'customer ID');
 }
 
 function parseAmount(value: unknown, required = false): number | undefined {
@@ -56,9 +49,26 @@ function parseAmount(value: unknown, required = false): number | undefined {
     throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Valid amount is required');
   }
   if (typeof value !== 'number' && typeof value !== 'string') throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid amount');
+  if (typeof value === 'string' && value.trim().length === 0) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid amount');
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount < 0) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid amount');
   return amount;
+}
+
+function parseRequiredBusinessDate(value: unknown): Date {
+  try {
+    return parseBusinessDate(value);
+  } catch (error) {
+    if (error instanceof BusinessDateError) {
+      throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Business date must use a valid YYYY-MM-DD value');
+    }
+    throw error;
+  }
+}
+
+function parseOptionalBusinessDate(value: unknown): Date | undefined {
+  if (value === undefined) return undefined;
+  return parseRequiredBusinessDate(value);
 }
 
 function parseTaxRelevant(value: unknown): boolean {
@@ -160,27 +170,17 @@ export async function POST(request: NextRequest) {
         return apiError('Description is required', 400, 'VALIDATION_ERROR');
       }
       const parsedAmount = parseAmount(amount, true)!;
-      const parsedDate = parseDate(date, true);
+      const parsedDate = parseRequiredBusinessDate(date);
       const parsedCustomerId = parseOptionalCustomerId(customerId);
       const parsedTaxRelevant = taxRelevant === undefined ? true : parseTaxRelevant(taxRelevant);
 
-      const income = await inTransaction(async tx => {
-        if (parsedCustomerId !== null && !await tx.customer.findFirst({ where: { id: parsedCustomerId, userId }, select: { id: true } })) {
-          throw new IncomeMutationError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found');
-        }
-        return tx.income.create({
-          data: {
-            description: description.trim(),
-            amount: parsedAmount,
-            date: parsedDate,
-            customerId: parsedCustomerId,
-            taxRelevant: parsedTaxRelevant,
-            userId,
-          },
-          include: { customer: { select: { id: true, name: true } } },
-        });
+      const income = await createManualIncome(userId, {
+        description: description.trim(),
+        amount: parsedAmount,
+        date: parsedDate,
+        customerId: parsedCustomerId,
+        taxRelevant: parsedTaxRelevant,
       });
-      await auditCreate(userId, 'Income', income);
 
       const response = apiSuccess(income);
       response.headers.set('Location', `/api/v1/incomes/${income.id}`);
@@ -218,36 +218,19 @@ export async function PUT(request: NextRequest) {
         return apiError('Description cannot be empty', 400, 'VALIDATION_ERROR');
       }
       const parsedAmount = parseAmount(amount);
-      const parsedDate = date === undefined ? undefined : parseDate(date);
+      const parsedDate = parseOptionalBusinessDate(date);
       const hasCustomer = customerId !== undefined;
       const parsedCustomerId = hasCustomer ? parseOptionalCustomerId(customerId) : undefined;
       const parsedTaxRelevant = taxRelevant === undefined ? undefined : parseTaxRelevant(taxRelevant);
-
-      const result = await inTransaction(async tx => {
-        const existing = await tx.income.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
-        if (!existing) throw new IncomeMutationError(404, 'NOT_FOUND', 'Income not found');
-        if (existing.cashTransaction || existing.invoiceId !== null) {
-          throw new IncomeMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
-        }
-        if (parsedCustomerId !== undefined && parsedCustomerId !== null && !await tx.customer.findFirst({ where: { id: parsedCustomerId, userId }, select: { id: true } })) {
-          throw new IncomeMutationError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found');
-        }
-        const income = await tx.income.update({
-          where: { id: parsedId, AND: [{ userId }, { invoiceId: null }, { cashTransaction: { is: null } }] },
-          data: {
-            ...(description !== undefined && { description: description.trim() }),
-            ...(parsedAmount !== undefined && { amount: parsedAmount }),
-            ...(parsedDate !== undefined && { date: parsedDate }),
-            ...(hasCustomer && { customerId: parsedCustomerId! }),
-            ...(parsedTaxRelevant !== undefined && { taxRelevant: parsedTaxRelevant }),
-          },
-          include: { customer: { select: { id: true, name: true } } },
-        });
-        return { existing, income };
+      const income = await updateManualIncome(userId, parsedId, {
+        ...(description !== undefined && { description: description.trim() }),
+        ...(parsedAmount !== undefined && { amount: parsedAmount }),
+        ...(parsedDate !== undefined && { date: parsedDate }),
+        ...(hasCustomer && { customerId: parsedCustomerId! }),
+        ...(parsedTaxRelevant !== undefined && { taxRelevant: parsedTaxRelevant }),
       });
-      await auditUpdate(userId, 'Income', result.existing.id, result.existing, result.income);
 
-      const response = apiSuccess(result.income);
+      const response = apiSuccess(income);
       Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));
       return response;
     } catch (error) {
@@ -270,16 +253,7 @@ export async function DELETE(request: NextRequest) {
 
     try {
       const parsedId = parsePositiveId(id, 'income ID');
-      const existing = await inTransaction(async tx => {
-        const current = await tx.income.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
-        if (!current) throw new IncomeMutationError(404, 'NOT_FOUND', 'Income not found');
-        if (current.cashTransaction || current.invoiceId !== null) {
-          throw new IncomeMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
-        }
-        await tx.income.delete({ where: { id: parsedId, AND: [{ userId }, { invoiceId: null }, { cashTransaction: { is: null } }] } });
-        return current;
-      });
-      await auditDelete(userId, 'Income', existing);
+      await deleteManualIncome(userId, parsedId);
 
       const response = apiSuccess({ deleted: true, id: parsedId });
       Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));

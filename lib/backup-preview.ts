@@ -1,3 +1,11 @@
+import {
+  CURRENT_BACKUP_VERSION,
+  LEGACY_BACKUP_VERSION,
+  manifestWarning,
+  validateBackupManifest,
+  type BackupManifest,
+} from '@/lib/backup-manifest';
+
 export type BackupPreview = {
   version: string;
   type: 'json' | 'full' | 'unknown';
@@ -18,9 +26,12 @@ export type BackupPreview = {
     cashTransactions: number;
     documentations: number;
     apiKeys: number;
+    auditLogs: number;
+    invoiceNumberCounters: number;
   };
   totalRecords: number;
   warnings: string[];
+  manifest?: Pick<BackupManifest, 'schemaVersion' | 'modelCoverage' | 'auditSegment' | 'invoiceNumberCounters' | 'excludesSecrets' | 'excludedSecretFields' | 'rekeyRequired' | 'fileManifest' | 'snapshot'>;
 };
 
 type BackupLike = {
@@ -32,6 +43,7 @@ type BackupLike = {
     name?: unknown;
   };
   data?: Record<string, unknown>;
+  manifest?: unknown;
 };
 
 function countArray(data: Record<string, unknown>, key: string): number {
@@ -62,10 +74,17 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     cashTransactions: countArray(data, 'cashTransactions'),
     documentations: countArray(data, 'documentations'),
     apiKeys: countArray(data, 'apiKeys'),
+    auditLogs: countArray(data, 'auditLogs'),
+    invoiceNumberCounters: countArray(data, 'invoiceNumberCounters'),
   };
 
   const warnings: string[] = [];
-  if (candidate.version !== '2.0') {
+  let manifest: BackupPreview['manifest'];
+  if (candidate.version === CURRENT_BACKUP_VERSION) {
+    manifest = validateBackupManifest(candidate.manifest, data);
+  } else if (candidate.version === LEGACY_BACKUP_VERSION) {
+    warnings.push(manifestWarning(LEGACY_BACKUP_VERSION)!);
+  } else {
     warnings.push(`Backup-Version ${candidate.version} kann inkompatibel sein.`);
   }
   if (counts.apiKeys > 0) {
@@ -79,7 +98,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
 
   return {
     version: candidate.version,
-    type: candidate.type === 'full' ? 'full' : candidate.type === undefined ? 'json' : 'unknown',
+    type: candidate.type === 'full' ? 'full' : candidate.type === 'json' || candidate.type === undefined ? 'json' : 'unknown',
     exportedAt: typeof candidate.exportedAt === 'string' ? candidate.exportedAt : undefined,
     user: candidate.user && typeof candidate.user === 'object' ? {
       email: typeof candidate.user.email === 'string' ? candidate.user.email : undefined,
@@ -88,5 +107,6 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     counts,
     totalRecords,
     warnings,
+    manifest,
   };
 }

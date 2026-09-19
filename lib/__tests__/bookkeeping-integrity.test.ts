@@ -3,7 +3,10 @@ import { createTestDatabase } from './helpers/database';
 
 const state = vi.hoisted(() => ({ client: null as unknown }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
-vi.mock('@/lib/audit-log', () => ({ auditCreate: vi.fn(), auditUpdate: vi.fn(), auditDelete: vi.fn(), createAuditLog: vi.fn() }));
+vi.mock('@/lib/audit-log', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/audit-log')>();
+  return { ...actual, auditCreate: vi.fn(), auditUpdate: vi.fn(), auditDelete: vi.fn(), createAuditLog: vi.fn() };
+});
 
 import { firstExecution, calculateNextExecution } from '@/lib/recurring-schedule';
 import { executeRecurringExpenses } from '@/lib/recurring-expenses-service';
@@ -141,7 +144,7 @@ describe('invoice numbers and payment lifecycle', () => {
     await database.client.invoice.create({ data: { ...fixture, userId: 'bob', invoiceNumber: '2026-100' } });
   });
 
-  it('creates one income on payment, preserves its date on retries and removes it on reopening', async () => {
+  it('creates one income on payment, preserves its date on retries and blocks reopening', async () => {
     const invoice = await database.client.invoice.create({ data: { userId: 'alice', fileName: 'test.pdf', storedFileName: 'test.pdf', parsedData: {}, totalAmount: 123.45 } });
     const paid = await updateInvoiceStatus('alice', invoice.id, 'PAID', '2026-04-15T12:00:00Z');
     expect(paid.income?.amount).toBe(123.45);
@@ -149,8 +152,10 @@ describe('invoice numbers and payment lifecycle', () => {
     const repeated = await updateInvoiceStatus('alice', invoice.id, 'PAID');
     expect(repeated.income?.id).toBe(paid.income?.id);
     expect(repeated.paidAt).toEqual(paid.paidAt);
-    const reopened = await updateInvoiceStatus('alice', invoice.id, 'SENT');
-    expect(reopened.income).toBeNull(); expect(reopened.paidAt).toBeNull();
+    await expect(updateInvoiceStatus('alice', invoice.id, 'SENT')).rejects.toThrow('nicht wieder geöffnet');
+    const stillPaid = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { income: true } });
+    expect(stillPaid.income?.id).toBe(paid.income?.id);
+    expect(stillPaid.paidAt).toEqual(paid.paidAt);
     await expect(updateInvoiceStatus('bob', invoice.id, 'PAID')).rejects.toThrow('Rechnung nicht gefunden');
   });
 

@@ -139,6 +139,7 @@ export default function ApiDocsPage() {
   -d '{
     "description": "Beratungsleistung",
     "amount": 1500.00,
+    "date": "2025-11-27",
     "customerId": 5
   }'`,
         response: `{
@@ -152,7 +153,7 @@ export default function ApiDocsPage() {
       "id": 5,
       "name": "Musterfirma GmbH"
     },
-    "date": "2025-11-27T20:00:00.000Z"
+    "date": "2025-11-27T00:00:00.000Z"
   },
   "timestamp": "2025-11-27T20:00:00.000Z"
 }`

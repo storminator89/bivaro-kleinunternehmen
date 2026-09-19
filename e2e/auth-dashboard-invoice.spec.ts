@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { PDFDocument } from 'pdf-lib';
 
 const testUser = {
   name: 'E2E Admin',
@@ -47,7 +48,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
     await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
     await expect(page).toHaveURL(/\/dashboard/);
-    const incomeResponse = await page.request.post('/api/incomes', { data: { description: 'Must survive merge', amount: 42 } });
+    const incomeResponse = await page.request.post('/api/incomes', { data: { description: 'Must survive merge', amount: 42, date: '2026-06-15' } });
     expect(incomeResponse.ok()).toBe(true);
     const income = await incomeResponse.json();
 
@@ -149,6 +150,119 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const path = testInfo.outputPath('factur-x.pdf');
     await download.saveAs(path);
     expect((await readFile(path)).subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  test('preserves a paid invoice and hides destructive actions on desktop and mobile', async ({ page }, testInfo) => {
+    await page.goto('/login');
+    await page.getByLabel('E-Mail').fill(testUser.email);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+    await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+
+    const pdf = await PDFDocument.create();
+    pdf.addPage();
+    const invoiceNumber = 'E2E-PROTECTED-PAYMENT';
+    const created = await page.request.post('/api/invoices', { data: {
+      fileName: 'synthetic-payment.pdf', invoiceNumber, totalAmount: 123.45,
+      parsedData: {}, pdfBytes: await pdf.saveAsBase64(),
+    } });
+    expect(created.ok()).toBe(true);
+    const invoice = await created.json();
+    const originalPdf = await (await page.request.get(`/api/invoices/download?id=${invoice.id}`)).body();
+    const payment = await page.request.put('/api/invoices', { data: {
+      id: invoice.id, status: 'PAID', paidAt: '2026-06-15T12:00:00.000Z',
+    } });
+    expect(payment.ok()).toBe(true);
+    expect((await page.request.delete(`/api/invoices?id=${invoice.id}`)).status()).toBe(409);
+    expect((await page.request.put('/api/invoices', { data: { id: invoice.id, status: 'SENT' } })).status()).toBe(409);
+    const list = await (await page.request.get(`/api/invoices?search=${invoiceNumber}`)).json();
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0]).toMatchObject({
+      id: invoice.id, status: 'PAID', issuanceState: 'ISSUED',
+      income: { amount: 123.45, date: '2026-06-15T12:00:00.000Z' },
+    });
+    const retainedPdf = await page.request.get(`/api/invoices/download?id=${invoice.id}`);
+    expect(retainedPdf.ok()).toBe(true);
+    expect(await retainedPdf.body()).toEqual(originalPdf);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/dashboard?tab=invoices');
+    await page.getByRole('button', { name: `Weitere Aktionen fuer Rechnung ${invoiceNumber}`, exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'Rechnung löschen', exact: true })).toBeDisabled();
+    await page.screenshot({ path: testInfo.outputPath('protected-invoice-desktop.png'), fullPage: true, animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 390, height: 844 });
+    const card = page.getByRole('article').filter({ hasText: invoiceNumber });
+    await expect(card.getByRole('button', { name: 'Löschen', exact: true })).toBeDisabled();
+    await expect(card.getByText('Löschen ist nur für nachweislich unausgestellte Entwürfe ohne Zahlung möglich.')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('protected-invoice-mobile.png'), fullPage: true, animations: 'disabled' });
+  });
+
+  test('keeps a backdated manual income on the entered calendar day across browser timezones', async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ timezoneId: 'America/Los_Angeles' });
+    const page = await context.newPage();
+    try {
+      await page.goto('http://127.0.0.1:3100/login');
+      await page.getByLabel('E-Mail').fill(testUser.email);
+      await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+      await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+      await expect(page).toHaveURL(/\/dashboard/);
+      await page.getByRole('button', { name: 'Einnahme erfassen', exact: true }).click();
+      await page.locator('#incomeDescription').fill('E2E Jahreswechsel Einnahme');
+      await page.locator('#incomeAmount').fill('45.67');
+      await expect(page.getByLabel('Zahlungsdatum', { exact: true })).toHaveAttribute('required', '');
+      await page.getByLabel('Zahlungsdatum', { exact: true }).fill('2025-12-31');
+      const saved = page.waitForResponse(response => response.url().endsWith('/api/incomes') && response.request().method() === 'POST');
+      await page.getByRole('button', { name: 'Einnahme speichern', exact: true }).click();
+      const response = await saved;
+      expect(response.ok()).toBe(true);
+      expect(response.request().postDataJSON().date).toBe('2025-12-31');
+      expect((await response.json()).date).toBe('2025-12-31T00:00:00.000Z');
+      const row = page.getByRole('row').filter({ hasText: 'E2E Jahreswechsel Einnahme' });
+      await expect(row.getByText('31.12.2025', { exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('income-business-date-desktop.png'), fullPage: true, animations: 'disabled' });
+      await page.setViewportSize({ width: 390, height: 844 });
+      const card = page.getByRole('article').filter({ hasText: 'E2E Jahreswechsel Einnahme' });
+      await expect(card.getByText('31.12.2025', { exact: false })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('income-business-date-mobile.png'), fullPage: true, animations: 'disabled' });
+      for (const date of [undefined, '2026-02-30']) {
+        const invalid = await page.request.post('http://127.0.0.1:3100/api/incomes', { data: { description: 'Invalid income date', amount: 1, date } });
+        expect(invalid.status()).toBe(400);
+        expect((await invalid.json()).field).toBe('date');
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('shows the cash overdraft error and retains the zero balance', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel('E-Mail').fill(testUser.email);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+    await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    const created = await page.request.post('/api/cashbook', { data: { name: 'E2E Nullbestand', initialBalance: 0 } });
+    expect(created.status()).toBe(201);
+    const cashBook = await created.json();
+    await page.goto('/cashbook');
+    await page.getByRole('button', { name: 'Buchung', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Neue Kassenbuchung' });
+    await dialog.getByRole('button', { name: 'Ausgabe', exact: true }).click();
+    await dialog.locator('#tx-amount').fill('1');
+    await dialog.locator('#tx-description').fill('E2E nicht gedeckte Barausgabe');
+    const denied = page.waitForResponse(response => response.url().endsWith('/api/cashbook/transactions') && response.request().method() === 'POST');
+    const errorMessage = page.waitForEvent('dialog').then(async alert => {
+      expect(alert.message()).toContain('negativen Kassenbestand');
+      await alert.accept();
+    });
+    await dialog.getByRole('button', { name: 'Buchung erfassen', exact: true }).click();
+    expect((await denied).status()).toBe(409);
+    await errorMessage;
+    await expect(dialog).toBeVisible();
+    const transactions = await (await page.request.get(`/api/cashbook/transactions?cashBookId=${cashBook.id}`)).json();
+    expect(transactions.items).toEqual([]);
+    const books = await (await page.request.get('/api/cashbook')).json();
+    expect(books.find((item: { id: number }) => item.id === cashBook.id).currentBalance).toBe(0);
   });
 
   test('blocks anonymous data access and revokes an existing cookie after a password reset', async ({ page, request }) => {

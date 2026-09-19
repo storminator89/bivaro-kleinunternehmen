@@ -60,13 +60,13 @@ describe('external API boundaries', () => {
     const foreignCustomer = await database.client.customer.create({ data: { userId: 'foreign-api', name: 'Foreign customer' } });
 
     const foreignIncome = await createIncome(request('/api/v1/incomes', 'POST', {
-      description: 'Foreign reference', amount: 12, customerId: foreignCustomer.id,
+      description: 'Foreign reference', amount: 12, date: '2026-12-31', customerId: foreignCustomer.id,
     }));
     expect(foreignIncome.status).toBe(404);
     expect(await database.client.income.count({ where: { userId: 'api-fixture', description: 'Foreign reference' } })).toBe(0);
 
     const incomeResponse = await createIncome(request('/api/v1/incomes', 'POST', {
-      description: 'Audit income', amount: 12, taxRelevant: false,
+      description: 'Audit income', amount: 12, date: '2026-12-31', taxRelevant: false,
     }));
     expect(incomeResponse.status).toBe(201);
     const { data: income } = await incomeResponse.json();
