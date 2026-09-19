@@ -108,7 +108,7 @@ export function EURTab({
           </Button>
           <Button onClick={() => setShowElsterDialog(true)} className="min-h-11 whitespace-nowrap">
             <FileText aria-hidden="true" className="mr-2 h-4 w-4" />
-            ELSTER exportieren
+            EÜR-Übertragungshilfe öffnen
           </Button>
         </div>
       </header>

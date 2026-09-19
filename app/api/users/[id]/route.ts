@@ -11,11 +11,12 @@ import {
   UnauthorizedError,
   unauthorizedResponse,
 } from "@/lib/get-user-id";
-import { auditDelete, auditSecurityEvent, auditUpdate } from "@/lib/audit-log";
+import { auditSecurityEvent, auditUpdate } from "@/lib/audit-log";
 import { inTransaction } from "@/lib/db-transaction";
 
 class UserNotFoundError extends Error {}
 class LastAdminError extends Error {}
+class DeactivatedUserError extends Error {}
 
 function parseRole(value: unknown, fallback: UserRole): UserRole | null {
   if (value === undefined) return fallback;
@@ -35,6 +36,7 @@ const userSelect = {
   role: true,
   createdAt: true,
   sessionVersion: true,
+  deactivatedAt: true,
 } as const;
 
 export async function PATCH(
@@ -53,6 +55,7 @@ export async function PATCH(
       select: userSelect,
     });
     if (!current) return new NextResponse("User not found", { status: 404 });
+    if (current.deactivatedAt) return new NextResponse("Deaktivierte Konten können nicht bearbeitet werden", { status: 409 });
     if (!isValidRole(current.role)) return new NextResponse("Invalid role", { status: 500 });
 
     const nextRole = parseRole(body?.role, current.role);
@@ -88,15 +91,20 @@ export async function PATCH(
     const sessionMustBeRevoked = roleChanged || emailChanged || passwordChanged;
 
     const result = await inTransaction(async (tx) => {
+      const currentActor = await tx.user.findUnique({ where: { id: actor.id } });
+      if (!currentActor || currentActor.deactivatedAt || currentActor.role !== "ADMIN" || currentActor.sessionVersion !== actor.sessionVersion) {
+        throw new UnauthorizedError();
+      }
       const target = await tx.user.findUnique({
         where: { id },
         select: userSelect,
       });
       if (!target) throw new UserNotFoundError();
+      if (target.deactivatedAt) throw new DeactivatedUserError();
       if (!isValidRole(target.role)) throw new Error("Invalid role");
 
       if (target.role === "ADMIN" && nextRole !== "ADMIN") {
-        const adminCount = await tx.user.count({ where: { role: "ADMIN" } });
+        const adminCount = await tx.user.count({ where: { role: "ADMIN", deactivatedAt: null } });
         if (adminCount <= 1) throw new LastAdminError();
       }
 
@@ -162,6 +170,7 @@ export async function PATCH(
     const response = authErrorResponse(error);
     if (response) return response;
     if (error instanceof UserNotFoundError) return new NextResponse("User not found", { status: 404 });
+    if (error instanceof DeactivatedUserError) return new NextResponse("Deaktivierte Konten können nicht bearbeitet werden", { status: 409 });
     if (error instanceof LastAdminError) {
       return new NextResponse("At least one administrator must remain", { status: 400 });
     }
@@ -182,38 +191,47 @@ export async function DELETE(
     const { id } = await params;
 
     if (actor.id === id) {
-      return new NextResponse("Cannot delete your own account", { status: 400 });
+      return new NextResponse("Sie können Ihren eigenen Zugang nicht deaktivieren", { status: 400 });
     }
 
-    const deleted = await inTransaction(async (tx) => {
+    await inTransaction(async (tx) => {
+      // Recheck authorization inside the write transaction, including an
+      // administrator deactivated while this request was being processed.
+      const currentActor = await tx.user.findUnique({ where: { id: actor.id } });
+      if (!currentActor || currentActor.deactivatedAt || currentActor.role !== "ADMIN" || currentActor.sessionVersion !== actor.sessionVersion) {
+        throw new UnauthorizedError();
+      }
       const target = await tx.user.findUnique({
         where: { id },
         select: userSelect,
       });
       if (!target) throw new UserNotFoundError();
       if (!isValidRole(target.role)) throw new Error("Invalid role");
+      if (target.deactivatedAt) return;
 
       if (target.role === "ADMIN") {
-        const adminCount = await tx.user.count({ where: { role: "ADMIN" } });
+        const adminCount = await tx.user.count({ where: { role: "ADMIN", deactivatedAt: null } });
         if (adminCount <= 1) throw new LastAdminError();
       }
 
-      await tx.user.delete({ where: { id } });
-      return target;
+      const deactivatedAt = new Date();
+      await tx.user.update({ where: { id }, data: { deactivatedAt, sessionVersion: { increment: 1 } } });
+      await tx.apiKey.updateMany({ where: { userId: id }, data: { isActive: false } });
+      await tx.auditLog.create({ data: {
+        userId: actor.id,
+        action: "UPDATE",
+        entityType: "User",
+        entityId: id,
+        metadata: JSON.stringify({ event: "ACCOUNT_DEACTIVATED", targetUserId: id, historyPreserved: true }),
+        newValues: JSON.stringify({ deactivatedAt: deactivatedAt.toISOString() }),
+      } });
     });
 
-    await auditDelete(actor.id, "User", deleted, deleted.email);
     await auditSecurityEvent(actor.id, {
       event: "ADMIN_USER_CHANGE",
       outcome: "success",
       severity: "warning",
-      metadata: { action: "DELETE", targetUserId: id, role: deleted.role },
-    });
-    await auditSecurityEvent(actor.id, {
-      event: "AUTH_USER_DELETED",
-      outcome: "success",
-      severity: "warning",
-      metadata: { targetUserId: id, role: deleted.role },
+      metadata: { action: "DEACTIVATE", targetUserId: id, historyPreserved: true },
     });
 
     return new NextResponse(null, { status: 204 });

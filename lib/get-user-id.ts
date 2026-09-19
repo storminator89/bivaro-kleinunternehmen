@@ -39,6 +39,7 @@ export async function getValidatedSession(): Promise<ValidatedSession | null> {
       id: true,
       role: true,
       sessionVersion: true,
+      deactivatedAt: true,
       email: true,
       name: true,
     },
@@ -46,6 +47,7 @@ export async function getValidatedSession(): Promise<ValidatedSession | null> {
 
   if (
     !user ||
+    user.deactivatedAt ||
     !isValidRole(user.role) ||
     user.role !== sessionUser.role ||
     user.sessionVersion !== sessionUser.sessionVersion

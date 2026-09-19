@@ -58,14 +58,14 @@ export async function validateApiKey(apiKey: string): Promise<{
   try {
     const apiKeyRecord = await prisma.apiKey.findUnique({
       where: { keyHash },
-      include: { user: { select: { role: true } } },
+      include: { user: { select: { role: true, deactivatedAt: true } } },
     });
 
     if (!apiKeyRecord) {
       return { valid: false, error: 'API key not found' };
     }
 
-    if (!['USER', 'ADMIN'].includes(apiKeyRecord.user.role)) {
+    if (apiKeyRecord.user.deactivatedAt || !['USER', 'ADMIN'].includes(apiKeyRecord.user.role)) {
       return { valid: false, error: 'Account is not active' };
     }
 

@@ -265,6 +265,79 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect(books.find((item: { id: number }) => item.id === cashBook.id).currentBalance).toBe(0);
   });
 
+  test('deactivates access while keeping the user visible and rejects old sessions and keys', async ({ page, browser }, testInfo) => {
+    await page.goto('/login');
+    await page.getByLabel('E-Mail').fill(testUser.email);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+    await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    const email = 'former-e2e@example.test';
+    expect((await page.request.post('/api/users', { data: { email, name: 'Former user', password: 'SecurePass123', role: 'USER' } })).ok()).toBe(true);
+    const context = await browser.newContext({ baseURL: 'http://127.0.0.1:3100' });
+    const former = await context.newPage();
+    try {
+      await former.goto('/login');
+      await former.getByLabel('E-Mail').fill(email);
+      await former.getByLabel('Passwort', { exact: true }).fill('SecurePass123');
+      await former.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+      await expect(former).toHaveURL(/\/dashboard/);
+      expect((await former.request.post('/api/incomes', { data: { description: 'Retained income', amount: 10, date: '2026-01-01' } })).ok()).toBe(true);
+      const keyResponse = await former.request.post('/api/api-keys', { data: { name: 'Revocation test', scopes: ['read'] } });
+      expect(keyResponse.status()).toBe(201);
+      const { key } = await keyResponse.json();
+      await page.goto('/users');
+      const row = page.getByRole('row').filter({ hasText: email });
+      await expect(row.getByText('Aktiv', { exact: true })).toBeVisible();
+      page.once('dialog', dialog => dialog.accept());
+      await row.getByRole('button', { name: 'Zugang deaktivieren' }).click();
+      await expect(row.getByText('Deaktiviert', { exact: true })).toBeVisible();
+      await expect(row.getByRole('button', { name: 'Zugang deaktivieren' })).toBeDisabled();
+      await page.screenshot({ path: testInfo.outputPath('deactivated-user.png'), fullPage: true });
+      expect((await former.request.get('/api/incomes')).status()).toBe(401);
+      expect((await former.request.get('/api/v1/incomes', { headers: { Authorization: `Bearer ${key}` } })).status()).toBe(401);
+      await former.goto('/dashboard');
+      await expect(former).toHaveURL(/\/login/);
+      await former.getByLabel('E-Mail').fill(email);
+      await former.getByLabel('Passwort', { exact: true }).fill('SecurePass123');
+      await former.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+      await expect(former.getByRole('alert')).toBeVisible();
+      await expect(former).toHaveURL(/\/login/);
+    } finally { await context.close(); }
+  });
+
+  test('shows annual tax data and downloads an explicitly limited EÜR working paper', async ({ page }, testInfo) => {
+    await page.goto('/login');
+    await page.getByLabel('E-Mail').fill(testUser.email);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+    await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto('/steuer-simulation');
+    const annual = page.waitForResponse(response => response.url().includes('/api/tax-summary?') && response.url().includes('year=2025'));
+    await page.getByLabel('Steuerjahr', { exact: true }).selectOption('2025');
+    const summary = await (await annual).json();
+    expect(summary.complete).toBe(true);
+    expect(summary.annualBasis).toBe(true);
+    expect(summary.profit).toBe(45.67);
+    await expect(page.getByRole('heading', { name: 'Gewinn laut EÜR' })).toBeVisible();
+    await expect(page.getByText('Zeitraum: Steuerjahr 2025', { exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('tax-annual.png'), fullPage: true });
+    await page.getByLabel('Analysezeitraum').selectOption('last3Months');
+    await expect(page.getByRole('alert').filter({ hasText: 'keine endgültige Steuerlast' })).toBeVisible();
+    await expect(page.getByText('nicht berechnet', { exact: true }).first()).toBeVisible();
+    await page.goto('/dashboard?tab=eur');
+    await page.getByRole('button', { name: 'EÜR-Übertragungshilfe öffnen', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Anlage EÜR – Übertragungshilfe' });
+    await expect(dialog.getByText('anlage-euer-2025-v1', { exact: false })).toBeVisible();
+    const downloadPromise = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'CSV herunterladen' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('Anlage-EUER-Uebertragungshilfe-2025.csv');
+    const csv = await readFile((await download.path())!, 'utf8');
+    expect(csv).toContain('45,67');
+    expect(csv).toContain('anlage-euer-2025-v1');
+    await page.screenshot({ path: testInfo.outputPath('eur-working-paper.png'), fullPage: true });
+  });
+
   test('blocks anonymous data access and revokes an existing cookie after a password reset', async ({ page, request }) => {
     expect((await request.get('/api/users')).status()).toBe(401);
     expect((await request.get('/api/incomes')).status()).toBe(401);

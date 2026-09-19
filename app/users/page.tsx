@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trash2, UserPlus, Loader2, Pencil, ShieldAlert } from "lucide-react";
+import { UserX, UserPlus, Loader2, Pencil, ShieldAlert } from "lucide-react";
 
 interface User {
   id: string;
@@ -32,6 +32,7 @@ interface User {
   email: string;
   role: string;
   createdAt: string;
+  deactivatedAt: string | null;
 }
 
 export default function UsersPage() {
@@ -73,7 +74,7 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Sind Sie sicher, dass Sie diesen Benutzer löschen möchten?")) return;
+    if (!confirm("Zugang deaktivieren? Anmeldung und API-Schlüssel werden gesperrt. Belege, Buchungen und Protokolle bleiben erhalten.")) return;
 
     try {
       const response = await fetch(`/api/users/${id}`, {
@@ -81,14 +82,14 @@ export default function UsersPage() {
       });
 
       if (response.ok) {
-        setUsers(users.filter((user) => user.id !== id));
+        await fetchUsers();
       } else {
         const error = await response.text();
-        alert(error || "Fehler beim Löschen des Benutzers");
+        alert(error || "Fehler beim Deaktivieren des Zugangs");
       }
     } catch (error) {
-      console.error("Failed to delete user", error);
-      alert("Fehler beim Löschen des Benutzers");
+      console.error("Failed to deactivate user", error);
+      alert("Fehler beim Deaktivieren des Zugangs");
     }
   };
 
@@ -338,6 +339,7 @@ export default function UsersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>E-Mail</TableHead>
                 <TableHead>Rolle</TableHead>
+                <TableHead>Zugang</TableHead>
                 <TableHead>Erstellt am</TableHead>
                 <TableHead className="text-right">Aktionen</TableHead>
               </TableRow>
@@ -355,6 +357,7 @@ export default function UsersPage() {
                       {user.role === 'ADMIN' ? 'Administrator' : 'Benutzer'}
                     </span>
                   </TableCell>
+                  <TableCell>{user.deactivatedAt ? "Deaktiviert" : "Aktiv"}</TableCell>
                   <TableCell>
                     {new Date(user.createdAt).toLocaleDateString("de-DE")}
                   </TableCell>
@@ -364,6 +367,7 @@ export default function UsersPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleEditClick(user)}
+                        disabled={!!user.deactivatedAt}
                         title="Bearbeiten"
                       >
                         <Pencil className="h-4 w-4" />
@@ -372,10 +376,11 @@ export default function UsersPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleDelete(user.id)}
-                        disabled={session?.user?.email === user.email}
-                        title={session?.user?.email === user.email ? "Sie können sich nicht selbst löschen" : "Löschen"}
+                        disabled={!!user.deactivatedAt || session?.user?.id === user.id}
+                        title={session?.user?.id === user.id ? "Sie können sich nicht selbst deaktivieren" : "Zugang deaktivieren"}
+                        aria-label="Zugang deaktivieren"
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <UserX className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </TableCell>
@@ -383,7 +388,7 @@ export default function UsersPage() {
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-4">
+                  <TableCell colSpan={6} className="text-center py-4">
                     Keine Benutzer gefunden.
                   </TableCell>
                 </TableRow>

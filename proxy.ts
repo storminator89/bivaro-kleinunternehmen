@@ -58,10 +58,11 @@ export async function proxy(request: NextRequest) {
     try {
       const currentUser = await prisma.user.findUnique({
         where: { id: tokenUserId },
-        select: { role: true, sessionVersion: true },
+        select: { role: true, sessionVersion: true, deactivatedAt: true },
       });
       isAuthenticated = Boolean(
         currentUser &&
+          !currentUser.deactivatedAt &&
           (currentUser.role === "USER" || currentUser.role === "ADMIN") &&
           currentUser.role === tokenRecord.role &&
           currentUser.sessionVersion === tokenRecord.sessionVersion,

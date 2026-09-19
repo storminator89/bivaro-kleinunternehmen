@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
     calculateIncomeTax,
     calculateSolidaritySurcharge,
+    calculateSolidaritySurchargeForYear,
     calculateTradeTax,
+    calculateTradeTaxCredit,
     calculateChurchTax,
 } from '../tax-calculator'
 
@@ -24,13 +26,13 @@ describe('calculateIncomeTax', () => {
     describe('Zone 2 (12.349€ - 17.799€)', () => {
         it('should calculate tax for income at start of Zone 2', () => {
             const tax = calculateIncomeTax(12349)
-            expect(tax).toBeGreaterThan(0)
-            expect(tax).toBeLessThan(100)
+            // §32a requires the tariff result itself to be rounded down.
+            expect(tax).toBe(0)
         })
 
         it('should calculate tax for income at end of Zone 2', () => {
             const tax = calculateIncomeTax(17799)
-            expect(tax).toBeCloseTo(1034.87, 0)
+            expect(tax).toBe(1034)
         })
     })
 
@@ -61,8 +63,8 @@ describe('calculateIncomeTax', () => {
     describe('Zone 5 - Reichensteuer (>277.825€)', () => {
         it('should apply 45% marginal rate for 300.000€ income', () => {
             const tax = calculateIncomeTax(300000)
-            // 0.45 * 300000 - 19470.38 = 115529.62
-            expect(tax).toBeCloseTo(115529.62, 0)
+            // 0.45 * 300000 - 19470.38 = 115529.62, rounded down.
+            expect(tax).toBe(115529)
         })
     })
 
@@ -85,6 +87,14 @@ describe('calculateSolidaritySurcharge', () => {
         const soli = calculateSolidaritySurcharge(25000)
         // (25000 - 20350) * 0.119 = 553.35
         expect(soli).toBeCloseTo(553.35, 1)
+    })
+
+    it('uses the year-specific 2025 allowance and exact cent truncation', () => {
+        expect(calculateSolidaritySurchargeForYear(20000, 2025)).toBe(5.95)
+        expect(calculateSolidaritySurchargeForYear(20000, 2026)).toBe(0)
+        expect(calculateSolidaritySurchargeForYear(20400, 2026)).toBe(5.95)
+        expect(calculateSolidaritySurchargeForYear(20450, 2026)).toBe(11.90)
+        expect(calculateSolidaritySurchargeForYear(20580, 2026)).toBe(27.37)
     })
 
     it('should apply full 5.5% above Milderungszone', () => {
@@ -114,6 +124,27 @@ describe('calculateTradeTax', () => {
         const tax200 = calculateTradeTax(profit, 200)
         const tax400 = calculateTradeTax(profit, 400)
         expect(tax400).toBe(tax200 * 2)
+    })
+
+    it('rounds the Gewerbeertrag down to full hundreds before the allowance', () => {
+        expect(calculateTradeTax(50_099, 400)).toBe(3_570)
+    })
+
+    it('uses four times the messbetrag and the proportional cap for §35', () => {
+        expect(calculateTradeTaxCredit({
+            incomeTax: 10_000,
+            businessProfit: 50_000,
+            totalPositiveIncome: 50_000,
+            tradeTaxBaseAmount: 1_000,
+            actuallyPayableTradeTax: 4_500,
+        })).toBe(4_000)
+        expect(calculateTradeTaxCredit({
+            incomeTax: 5_000,
+            businessProfit: 25_000,
+            totalPositiveIncome: 50_000,
+            tradeTaxBaseAmount: 1_000,
+            actuallyPayableTradeTax: 4_500,
+        })).toBe(2_500)
     })
 })
 

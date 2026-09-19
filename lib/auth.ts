@@ -94,10 +94,11 @@ export const authOptions: NextAuthOptions = {
             password: true,
             role: true,
             sessionVersion: true,
+            deactivatedAt: true,
           },
         });
 
-        if (!user || !isValidRole(user.role)) return null;
+        if (!user || user.deactivatedAt || !isValidRole(user.role)) return null;
 
         const isPasswordValid = await verifyPassword(credentials.password, user.password);
         if (!isPasswordValid) {
@@ -174,10 +175,11 @@ export const authOptions: NextAuthOptions = {
           name: true,
           role: true,
           sessionVersion: true,
+          deactivatedAt: true,
         },
       });
 
-      if (!currentUser || !isValidRole(currentUser.role)) {
+      if (!currentUser || currentUser.deactivatedAt || !isValidRole(currentUser.role)) {
         return { ...token, revoked: true };
       }
 

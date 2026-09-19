@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   AccountingTimeRange,
+  calculateAccountingYear,
   calculateDepreciationForYear,
   calculateExpenseDeductionForMonth,
   calculateExpenseDeductionForRange,
@@ -35,24 +36,24 @@ function parseTimeRange(value: string | null): AccountingTimeRange {
 }
 
 function getChartMonths(timeRange: AccountingTimeRange, now: Date): Month[] {
-  let start = new Date(now.getFullYear(), 0, 1);
+  let start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   let count = 12;
 
   if (timeRange === "last3Months") {
-    start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 2, 1));
     count = 3;
   } else if (timeRange === "last6Months") {
-    start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
     count = 6;
   } else if (timeRange === "lastYear") {
-    start = new Date(now.getFullYear() - 1, 0, 1);
+    start = new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1));
   } else if (timeRange === "thisYear") {
-    start = new Date(now.getFullYear(), 0, 1);
+    start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   }
 
   return Array.from({ length: count }, (_, index) => {
-    const date = new Date(start.getFullYear(), start.getMonth() + index, 1);
-    return { year: date.getFullYear(), month: date.getMonth() };
+    const date = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + index, 1));
+    return { year: date.getUTCFullYear(), month: date.getUTCMonth() };
   });
 }
 
@@ -69,10 +70,10 @@ function periodAmountForExpense(
   now: Date,
 ) {
   if (timeRange === "thisYear") {
-    return calculateExpenseDeductionForYear(expense, now.getFullYear());
+    return calculateExpenseDeductionForYear(expense, now.getUTCFullYear());
   }
   if (timeRange === "lastYear") {
-    return calculateExpenseDeductionForYear(expense, now.getFullYear() - 1);
+    return calculateExpenseDeductionForYear(expense, now.getUTCFullYear() - 1);
   }
   return calculateExpenseDeductionForRange(expense, range);
 }
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     // Only accounting columns are selected. In particular, this endpoint does
     // not load invoice parsedData or any receipt contents.
-    const [incomes, expenses] = await Promise.all([
+    const [incomes, expenses] = await prisma.$transaction([
       prisma.income.findMany({
         where: { userId },
         select: {
@@ -118,14 +119,18 @@ export async function GET(request: NextRequest) {
       isDateInRange(getIncomeAccountingDate(income), range),
     );
 
-    const totalIncome = incomeInRange.reduce((sum, income) => sum + income.amount, 0);
+    const targetYear = timeRange === "thisYear"
+      ? now.getUTCFullYear()
+      : timeRange === "lastYear" ? now.getUTCFullYear() - 1 : null;
+    const annual = targetYear === null ? null : calculateAccountingYear(targetYear, incomes, expenses);
+    const totalIncome = annual?.totalIncome ?? incomeInRange.reduce((sum, income) => sum + income.amount, 0);
     const expenseAmounts = expenses
       .map((expense) => ({
         expense,
         amount: periodAmountForExpense(expense, timeRange, range, now),
       }))
       .filter(({ amount }) => amount !== 0);
-    const totalExpense = expenseAmounts.reduce((sum, item) => sum + item.amount, 0);
+    const totalExpense = annual?.totalExpense ?? expenseAmounts.reduce((sum, item) => sum + item.amount, 0);
 
     const categoryMap = new Map<string, number>();
     for (const { expense, amount } of expenseAmounts) {
@@ -136,11 +141,6 @@ export async function GET(request: NextRequest) {
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 
-    const targetYear = timeRange === "thisYear"
-      ? now.getFullYear()
-      : timeRange === "lastYear"
-        ? now.getFullYear() - 1
-        : null;
     const depreciationDetails = targetYear === null
       ? []
       : expenses.flatMap((expense) => {
@@ -163,8 +163,8 @@ export async function GET(request: NextRequest) {
 
     const months = getChartMonths(timeRange, now);
     const monthlyData = months.map(({ year, month }) => {
-      const monthStart = new Date(year, month, 1);
-      const monthEnd = new Date(year, month + 1, 1);
+      const monthStart = new Date(Date.UTC(year, month, 1));
+      const monthEnd = new Date(Date.UTC(year, month + 1, 1));
       const monthIncomes = includedIncomes
         .filter((income) => {
           const date = getIncomeAccountingDate(income);
@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
       return {
         month: month + 1,
         year,
-        monthName: new Intl.DateTimeFormat("de-DE", { month: "short" }).format(monthStart),
+        monthName: new Intl.DateTimeFormat("de-DE", { month: "short", timeZone: "UTC" }).format(monthStart),
         revenue: monthIncomes,
         expenses: monthExpenses,
         profit: monthIncomes - monthExpenses,

@@ -7,6 +7,8 @@
  * income date as their booking date.
  */
 
+import { isPrivateWithdrawal } from '@/lib/private-categories';
+
 export const ACCOUNTING_TIME_RANGES = [
   "all",
   "last3Months",
@@ -23,6 +25,7 @@ export type AccountingInvoice = {
 };
 
 export type AccountingIncome = {
+  id?: number;
   amount: number;
   date: Date | string;
   taxRelevant: boolean;
@@ -42,6 +45,10 @@ export type AccountingExpense = {
   taxRelevant: boolean;
   taxDeductiblePercentage?: number | null;
   depreciationYears?: number | null;
+  /** Optional provenance fields used by correction-aware exports. */
+  correctionOfId?: number | null;
+  correctionReason?: string | null;
+  entryKind?: "expense" | "refund" | "correction";
 };
 
 export type DateRange = {
@@ -58,6 +65,25 @@ export type DepreciationCalculation = {
 
 function asDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
+}
+
+/** Calendar fields used for accounting periods are stable UTC fields. */
+export function getUTCYear(value: Date | string): number {
+  return asDate(value).getUTCFullYear();
+}
+
+export function getUTCMonth(value: Date | string): number {
+  return asDate(value).getUTCMonth();
+}
+
+export function isDateInCalendarYear(value: Date | string, year: number): boolean {
+  return getUTCYear(value) === year;
+}
+
+export function getBusinessDate(value: Date | string): string {
+  const date = asDate(value);
+  if (!Number.isFinite(date.getTime())) throw new Error("Ungültiges Buchungsdatum");
+  return date.toISOString().slice(0, 10);
 }
 
 /** Return the cash booking date for an income. */
@@ -107,15 +133,15 @@ export function getDateRange(
 
   if (timeRange === "thisYear") {
     return {
-      start: new Date(now.getFullYear(), 0, 1),
-      endExclusive: new Date(now.getFullYear() + 1, 0, 1),
+      start: new Date(Date.UTC(now.getUTCFullYear(), 0, 1)),
+      endExclusive: new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1)),
     };
   }
 
   if (timeRange === "lastYear") {
     return {
-      start: new Date(now.getFullYear() - 1, 0, 1),
-      endExclusive: new Date(now.getFullYear(), 0, 1),
+      start: new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1)),
+      endExclusive: new Date(Date.UTC(now.getUTCFullYear(), 0, 1)),
     };
   }
 
@@ -166,7 +192,7 @@ export function applyDeductiblePercentage(
 }
 
 function getAcquisitionMonth(expense: AccountingExpense): number {
-  return asDate(expense.date).getMonth();
+  return getUTCMonth(expense.date);
 }
 
 /**
@@ -183,7 +209,7 @@ export function calculateDepreciationForMonth(
   if (years <= 0) return null;
 
   const acquisitionDate = asDate(expense.date);
-  const acquisitionYear = acquisitionDate.getFullYear();
+  const acquisitionYear = acquisitionDate.getUTCFullYear();
   const acquisitionMonth = getAcquisitionMonth(expense);
   const monthIndex = (year - acquisitionYear) * 12 + month - acquisitionMonth;
   const totalMonths = years * 12;
@@ -227,13 +253,13 @@ export function calculateExpenseBaseForYear(
   expense: AccountingExpense,
   year: number,
 ): number {
-  if (!expense.taxRelevant) return 0;
+  if (!expense.taxRelevant || isPrivateWithdrawal(expense.category)) return 0;
 
   if ((expense.depreciationYears ?? 0) > 0) {
     return calculateDepreciationForYear(expense, year)?.amount ?? 0;
   }
 
-  return asDate(expense.date).getFullYear() === year ? expense.amount : 0;
+  return isDateInCalendarYear(expense.date, year) ? expense.amount : 0;
 }
 
 /** Deductible amount in a calendar year, including a stored 0 % share. */
@@ -256,7 +282,7 @@ export function calculateExpenseDeductionForRange(
   expense: AccountingExpense,
   range: DateRange,
 ): number {
-  if (!expense.taxRelevant || !isDateInRange(expense.date, range)) return 0;
+  if (!expense.taxRelevant || isPrivateWithdrawal(expense.category) || !isDateInRange(expense.date, range)) return 0;
   return applyDeductiblePercentage(expense.amount, expense.taxDeductiblePercentage);
 }
 
@@ -267,15 +293,15 @@ export function calculateExpenseDeductionForMonth(
   month: number,
   yearlyAccounting = false,
 ): number {
-  if (!expense.taxRelevant) return 0;
+  if (!expense.taxRelevant || isPrivateWithdrawal(expense.category)) return 0;
 
   const base = yearlyAccounting
     ? ((expense.depreciationYears ?? 0) > 0
       ? calculateDepreciationForMonth(expense, year, month)?.amount ?? 0
-      : (asDate(expense.date).getFullYear() === year && asDate(expense.date).getMonth() === month
+        : (getUTCYear(expense.date) === year && getUTCMonth(expense.date) === month
         ? expense.amount
         : 0))
-    : (asDate(expense.date).getFullYear() === year && asDate(expense.date).getMonth() === month
+    : (getUTCYear(expense.date) === year && getUTCMonth(expense.date) === month
       ? expense.amount
       : 0);
 
@@ -287,12 +313,51 @@ export function calculateRemainingDepreciableAmount(
   throughYear: number,
 ): number {
   if ((expense.depreciationYears ?? 0) <= 0) return 0;
-  const acquisitionYear = asDate(expense.date).getFullYear();
+  const acquisitionYear = getUTCYear(expense.date);
   let booked = 0;
   for (let year = acquisitionYear; year <= throughYear; year += 1) {
     booked += calculateDepreciationForYear(expense, year)?.amount ?? 0;
   }
   return Math.max(0, expense.amount - booked);
+}
+
+export type AccountingYearSummary = {
+  year: number;
+  totalIncome: number;
+  totalExpense: number;
+  profit: number;
+  incomeIds: number[];
+  expenseIds: number[];
+};
+
+/**
+ * Canonical cash-basis yearly aggregation shared by EÜR and simulations.
+ * Expense corrections retain their stored sign. A negative expense is not
+ * guessed to be income; it remains a correction on its expense line and is
+ * visible to the export's correction drill-down.
+ */
+export function calculateAccountingYear(
+  year: number,
+  incomes: AccountingIncome[],
+  expenses: AccountingExpense[],
+): AccountingYearSummary {
+  const includedIncomes = incomes.filter((income) =>
+    isIncludedIncome(income) && isDateInCalendarYear(getIncomeAccountingDate(income), year),
+  );
+  const includedExpenses = expenses
+    .map((expense) => ({ expense, amount: calculateExpenseDeductionForYear(expense, year) }))
+    .filter(({ amount }) => amount !== 0);
+
+  const totalIncome = includedIncomes.reduce((sum, income) => sum + income.amount, 0);
+  const totalExpense = includedExpenses.reduce((sum, item) => sum + item.amount, 0);
+  return {
+    year,
+    totalIncome,
+    totalExpense,
+    profit: totalIncome - totalExpense,
+    incomeIds: includedIncomes.flatMap((income) => income.id === undefined ? [] : [income.id]),
+    expenseIds: includedExpenses.flatMap(({ expense }) => expense.id === undefined ? [] : [expense.id]),
+  };
 }
 
 function formatAmount(amount: number): string {

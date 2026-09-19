@@ -22,6 +22,7 @@ vi.mock("@/lib/audit-log", () => ({
 import { GET as getSummary } from "@/app/api/dashboard/summary/route";
 import { GET as getKpis } from "@/app/api/dashboard/kpis/route";
 import { GET as getEurExport } from "@/app/api/eur-export/route";
+import { GET as getTaxSummary } from "@/app/api/tax-summary/route";
 
 let database: ReturnType<typeof createTestDatabase>;
 let selectQueryCount = 0;
@@ -206,12 +207,41 @@ describe("dashboard accounting routes", () => {
     expect(selectQueryCount).toBeLessThanOrEqual(10);
   });
 
-  it("includes an older active asset in the export year and preserves 50 %", async () => {
+  it("rejects an export year without an approved form mapping", async () => {
     const response = await getEurExport(new NextRequest("http://localhost/api/eur-export?year=2026&format=json"));
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    const afaLine = data.data.lines.find((line: { lineNumber: number }) => line.lineNumber === 31);
-    expect(afaLine.amount).toBe(600);
-    expect(data.data.totalIncome).toBe(1067);
+    expect(response.status).toBe(400);
+  });
+
+  it("matches dashboard, EÜR and simulation for a complete year with corrections and prior-year assets", async () => {
+    const db = database.client;
+    await db.user.create({ data: { id: 'reconcile', email: 'reconcile@test.invalid', password: 'unused' } });
+    await db.income.createMany({ data: Array.from({ length: 105 }, () => ({ userId: 'reconcile', description: 'Year-end income', amount: 10, date: new Date('2025-12-31T00:00:00Z') })) });
+    await db.income.create({ data: { userId: 'reconcile', description: 'Next year', amount: 1000, date: new Date('2026-01-01T00:00:00Z') } });
+    await db.expense.createMany({ data: [
+      { userId: 'reconcile', description: 'Earlier asset', category: 'AfA', amount: 3600, date: new Date('2024-07-01T00:00:00Z'), depreciationYears: 3, taxDeductiblePercentage: 50 },
+      { userId: 'reconcile', description: 'Office supply', category: 'Bürobedarf', amount: 100, date: new Date('2025-01-01T00:00:00Z') },
+      { userId: 'reconcile', description: 'Supplier correction', category: 'Bürobedarf', amount: -20, date: new Date('2025-12-31T00:00:00Z') },
+      { userId: 'reconcile', description: 'Private withdrawal', category: 'Privatentnahme', amount: 500, date: new Date('2025-06-01T00:00:00Z'), taxRelevant: true },
+    ] });
+    state.userId = 'reconcile';
+    try {
+      const dashboardResponse = await getSummary(new NextRequest('http://localhost/api/dashboard/summary?timeRange=lastYear'));
+      const exportResponse = await getEurExport(new NextRequest('http://localhost/api/eur-export?year=2025&format=json'));
+      const simulationResponse = await getTaxSummary(new NextRequest('http://localhost/api/tax-summary?year=2025&timeRange=thisYear'));
+      expect([dashboardResponse.status, exportResponse.status, simulationResponse.status]).toEqual([200, 200, 200]);
+      const dashboard = await dashboardResponse.json();
+      const { data: exported } = await exportResponse.json();
+      const simulation = await simulationResponse.json();
+      // 105 * 10 income; 600 annual AfA + 100 expense - 20 correction.
+      for (const result of [dashboard, exported, simulation]) {
+        expect(result.totalIncome).toBe(1050);
+        expect(result.profit).toBe(370);
+      }
+      expect(dashboard.totalExpense).toBe(680);
+      expect(exported.totalExpense).toBe(680);
+      expect(simulation.totalExpenses).toBe(680);
+      const expenseLines = exported.lines.filter((line: { type: string }) => line.type === 'expense');
+      expect(expenseLines.reduce((sum: number, line: { amount: number }) => sum + line.amount, 0)).toBe(680);
+    } finally { state.userId = 'alice'; }
   });
 });

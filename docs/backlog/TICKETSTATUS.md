@@ -1,6 +1,6 @@
 # Zentrale Ticketübersicht
 
-Stand: 19.09.2026, 10:57:43 Europe/Berlin (Statusdokumentation der laufenden Arbeitswelle)
+Stand: 19.09.2026, 22:12:00 Europe/Berlin (Statusdokumentation der laufenden Arbeitswelle)
 Audit-/Backlogbasis: `85972ed9fe61d268b6640882ea2ddc6e616d1859`
 Quelle: `/home/pmeyhoefer/Downloads/Bivaro_Agent_Backlog.json` (nur gelesen; Originaldatei unverändert)
 Arbeitsbaum zum Dokumentationsstand: uncommitted Agentenänderungen; Details und Fremdänderungen siehe unten.
@@ -42,10 +42,10 @@ dokumentiert, die sichere betriebliche Bewertung bleibt offen.
 
 | Statusgruppe | Anzahl | Bedeutung |
 |---|---:|---|
-| Teilumsetzung | 7 | BV-001/BV-002, BV-003/BV-004, BV-006 und BV-029: technische Scheiben belegt, Restumfang bzw. Freigaben offen; BV-008: Template-/Nachweis-Scheibe mit AC1/AC3-Teilnachweis und offenem AC4. |
+| Teilumsetzung | 16 | Vorherige technische Scheiben plus BV-007 AC1/AC2, BV-019–BV-024 und BV-026/BV-027: technische Nachweise liegen vor, fachliche, rechtliche oder produktive Freigaben bleiben offen. |
 | In Arbeit | 3 | BV-011, BV-025 und BV-030: Welle-3-Scheiben gestartet, paketbezogene Tests und AC-Nachweise offen. |
 | Architektur-Discovery | 5 | BV-012/BV-013/BV-014/BV-057/BV-156: Inventar und Plan, keine Produktcodeänderung in dieser Welle. |
-| Vorgeschlagen/unbearbeitet in dieser Welle | 148 | Kein belastbarer Implementierungsnachweis in dieser Arbeitswelle. |
+| Vorgeschlagen/unbearbeitet in dieser Welle | 136 | Kein belastbarer Implementierungsnachweis in dieser Arbeitswelle. |
 
 ## Implementierte bzw. teilumgesetzte Scheiben
 
@@ -53,6 +53,22 @@ dokumentiert, die sichere betriebliche Bewertung bleibt offen.
 |---|---|---|---|
 | BV-001/BV-002 | Sichere Start-/Upgrade- und DB-Zielprüfung; technische lokale Scheibe mit synthetischen Fixtures abgeschlossen. `docker build --tag bivaro-bv001002-test:local .` und `docker compose config` waren erfolgreich. | Release-/Produktivfreigabe und Betreiberfreigaben offen; die Compose-Diagnose erzeugte den oben beschriebenen Secret-Expositionsvorfall. | [Bericht](BV-001-002.md) |
 | BV-008 | Templateclaims auf belegte Fähigkeiten, Betreiberaufgaben und bekannte Grenzen zurückgeführt; Version aus `package.json`; Negativtests ergänzt. | Verlinkte Evidenz, Fachreview, tatsächlicher Verantwortlicher, Release-Commit, Exportabnahme und AC4-Freigabehistorie offen. | [Bericht](BV-008.md) |
+
+## Welle 4: Steuer, EÜR und Kontodeaktivierung
+
+| Ticket | Besitzer und gelieferte Scheibe | Nachweis und offene Grenzen | Detail |
+|---|---|---|---|
+| BV-007 | `root`: additive Kontodeaktivierung mit `deactivatedAt`; Finanzhistorie und Audit-Referenzen bleiben erhalten; Sessions/API-Keys werden transaktional entzogen. | Gezielter Deaktivierungslauf 5/5, kombinierter Auth-/API-Key-/Deaktivierungslauf 24/24 sowie E2E 11/11 mit Productionbuild und geprüften Screenshots. AC1/AC2 technisch belegt; AC3/AC4, Retention, Legal Hold und Ownernachfolge offen. | [BV-007](BV-007.md) |
+| BV-019/BV-020 | `steuer`: vollständige serverseitige Steuer-Summary ohne Listen-Paginierung; gemeinsame Jahresaggregation für Simulation, Dashboard und EÜR-Grundlage. | `tax-summary`- und Accounting-Scheibe testet 101 Einnahmen/1.001 Ausgaben, Zahlungsdatum und AfA; die Steuer-Summary-Route besteht 3/3 Integrationstests für Mandantentrennung, Authentifizierung, mehr als 100 Buchungen und nicht unterstützte Kombinationen. API-/UI-Abnahme, Verlustsonderfälle und fachliche Steuerfreigabe offen. | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-021/BV-024 | `steuer`: jahresbezogene Tarifparameter, §35-Begrenzung, Gewerbeertrag-Hunderterabrundung, Soli-Minimum und Tarif-Endrundung. | Unabhängiges BigInt-Referenzgitter: 4 Tests mit 1.000.004 Vergleichswerten für 2025/2026 bestanden. Steuerberaterprüfung, weitere Veranlagungsfälle und produktive Freigabe offen. | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-022/BV-023 | `steuer`: unterstützte Jahre und begrenzter Fallumfang explizit; unbekannte Jahre werden abgelehnt, Sozialparameter sind jahrbezogen. | Aktuell sind 2025/2026 technisch unterstützt. Joint Assessment, weitere Einkünfte, Verlustvortrag/-rücktrag und andere Sonderfälle bleiben außerhalb und müssen fachlich bestätigt werden. | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-026/BV-027 | `eur`: signierte Korrekturen/Erstattungen in der gemeinsamen Accounting-Summe, jahresversionierte EÜR-Arbeitsunterlage mit Mappingversion, Kontrollsummen und Quellenhinweisen. | Gezielter Welle-4-Lauf mit 7 Dateien/76 Tests (inkl. Mapping und Export-Accounting) bestanden. Nur CSV-Arbeitsunterlage; kein ELSTER-Import. Formularzeilen, AfA-Anlagearten und fachliche Exportabnahme offen. | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+
+Die Welle-4-Nachweise sind technische Teilumsetzungen. Der [Welle-4-Bericht](WELLE-4.md)
+und der [Prüf- und
+Abnahmeplan für GoBD, Steuer und Recht](PRUEFPLAN-GOBD-RECHT.md) führt die
+verbindlichen Betreiber-, Fach- und Rechtsprüfungen auf. Er ersetzt keine
+fachliche Freigabe und behauptet keine allgemeine GoBD-Konformität.
 
 ## Welle 2: technische Teilumsetzungen
 
@@ -85,12 +101,12 @@ Die folgenden Tickets haben eine belastbare Vorprüfung und Priorisierung, aber 
 | BV-002 | Nichtdestruktive Betriebsdiagnose und DB-Zielprüfung | Teilumsetzung – technische lokale Scheibe abgeschlossen; Release-/Produktivfreigabe offen | [BV-001/BV-002](BV-001-002.md) |
 | BV-003 | Löschen ausgestellter Rechnungen serverseitig sperren | Teilumsetzung – Welle 2: erste vertikale Rechnungsscheibe technisch umgesetzt; 21/21 Zieltests | [BV-003/BV-006](BV-003-006.md); Restumfang und Freigaben offen, technische Gesamtprüfung grün |
 | BV-004 | Zahlungskorrekturen als Gegenereignis statt Statuslöschung | Teilumsetzung – Welle 2: AC1-Guard technisch umgesetzt | [Welle 2](WELLE-2.md); AC2–AC4, Journal und Erstattung offen |
-| BV-005 | Buchungsentwürfe, Festschreibung und Periodensperren | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
+| BV-005 | Buchungsentwürfe, Festschreibung und Periodensperren | Vorgeschlagen – keine Umsetzung; offen sind posting status, correctionOf, Festschreibung, Periodensperre und Rekonstruktion früherer Exporte | Vier Backlog-ACs offen: Entwurf aus Auswertungen ausschließen, Festschreibung schützen, Wiedereröffnung protokollieren, Korrekturdifferenzen erhalten |
 | BV-006 | Finanz-Audit in dieselbe Transaktion aufnehmen | Teilumsetzung – Welle 2: Rechnungsscheibe mit transaktionalem Finanz-Audit technisch umgesetzt; 21/21 Zieltests | [BV-003/BV-006](BV-003-006.md); Restumfang und Freigaben offen, technische Gesamtprüfung grün |
-| BV-007 | Konten deaktivieren ohne Finanzhistorie zu löschen | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
+| BV-007 | Konten deaktivieren ohne Finanzhistorie zu löschen | Teilumsetzung – AC1/AC2 technisch belegt; Retention/Legal Hold/Ownernachfolge und Freigaben offen | [BV-007](BV-007.md) |
 | BV-008 | Produkt- und GoBD-Zusagen an nachgewiesene Kontrollen binden | Teilumsetzung – AC1/AC3 nur Teilnachweis; AC4 offen | [BV-008](BV-008.md) |
-| BV-009 | Audit-Abdeckung und Retention risikobasiert schließen | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-010 | Unveränderbarer Kassen-Tagesabschluss | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
+| BV-009 | Audit-Abdeckung und Retention risikobasiert schließen | Vorgeschlagen – keine Umsetzung; alle schreibenden Routen, technische Logbereinigung, Retentionklassen und Legal-Hold-Freigabe fehlen | Backlog-ACs offen: Import/Quote-Ereignisse, CI-Mutationsmatrix, Schutz buchungsrelevanter Auditdaten >730 Tage und dokumentierte Freigabe jeder Löschung |
+| BV-010 | Unveränderbarer Kassen-Tagesabschluss | Vorgeschlagen – keine Umsetzung; `CashDayClose`, Zählprotokoll, append-only Korrektur und Export-/Restore-Referenzen fehlen | Vier Backlog-ACs offen: Abschlusswerte/Verantwortlicher, Änderungs-/Löschschutz, Differenzereignis und identischer Restore/Export |
 | BV-011 | Negative Zwischenstände der Barkasse atomar verhindern | In Arbeit – Welle 3: atomarer Kassen-Guard mit Centarithmetik und Rollback-/Paralleltests | [Welle 3](WELLE-3.md); keine vollständige BV-012-Money-Migration |
 | BV-012 | Durchgängiges Money-Modell und geprüfte Float-Migration | Architektur-Discovery/Planung – keine Produktcodeänderung; Implementierung und ACs offen | [Architektur-Vorprüfung](ARCHITEKTUR-VORPRUEFUNG.md) |
 | BV-013 | Eine kanonische Wahrheit für Betrag, PDF und XML | Architektur-Discovery/Planung – keine Produktcodeänderung; Implementierung und ACs offen | [Architektur-Vorprüfung](ARCHITEKTUR-VORPRUEFUNG.md) |
@@ -99,15 +115,15 @@ Die folgenden Tickets haben eine belastbare Vorprüfung und Priorisierung, aber 
 | BV-016 | Formale E-Rechnungs- und PDF/A-Releasevalidierung | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-017 | Originalnummer und Summenprüfung beim Import erhalten | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-018 | Unterstützungsmatrix und Quarantäne für Sonderbelege | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-019 | Steuersimulation auf vollständige Serveraggregation umstellen | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-020 | Eine gemeinsame Gewinnlogik für EÜR und Simulation | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-021 | §35-Anrechnung jahresbezogen fachlich korrigieren | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-022 | Sozial- und Steuerparameter nach Veranlagungsjahr versionieren | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-023 | Unterstützte Steuerfälle und Jahresgrenzen explizit modellieren | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-024 | Tarif-Endrundung und Soli-Minimumformel korrigieren | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
+| BV-019 | Steuersimulation auf vollständige Serveraggregation umstellen | Teilumsetzung – `tax-summary` lädt den vollständigen Serverdatenstand; technische Tests offen für zentrale Gesamtprüfung | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-020 | Eine gemeinsame Gewinnlogik für EÜR und Simulation | Teilumsetzung – gemeinsame Accounting-Jahresaggregation für Dashboard, Simulation und EÜR-Grundlage | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-021 | §35-Anrechnung jahresbezogen fachlich korrigieren | Teilumsetzung – §35-Credit mit Messbetrag, tatsächlicher Gewerbesteuer und positivem Gewerbeanteil begrenzt | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-022 | Sozial- und Steuerparameter nach Veranlagungsjahr versionieren | Teilumsetzung – Regelpakete und Sozialparameter für 2025/2026; weitere Jahre abgelehnt | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-023 | Unterstützte Steuerfälle und Jahresgrenzen explizit modellieren | Teilumsetzung – unterstützte Jahre/Fallgrenzen sichtbar; Sonderfälle weiterhin offen bzw. ausgeschlossen | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-024 | Tarif-Endrundung und Soli-Minimumformel korrigieren | Teilumsetzung – Endrundung und jahresbezogene Soli-Minimumformel mit unabhängiger Referenz geprüft | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
 | BV-025 | Zahlungsdatum bei manueller Einnahme verbindlich übernehmen | In Arbeit – Welle 3: Pflicht-`BusinessDate` für manuellen Income-Pfad in Web/v1/UI | [Welle 3](WELLE-3.md); Altbestände, UTC-Modell und weitere Wege offen |
-| BV-026 | EÜR-Korrekturen und Erstattungen vorzeichenrichtig behandeln | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-027 | Jahresversionierter EÜR-Export mit ehrlicher Formatbezeichnung | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
+| BV-026 | EÜR-Korrekturen und Erstattungen vorzeichenrichtig behandeln | Teilumsetzung – negative Korrekturen bleiben signiert, werden in Kontrollsummen und Prüfspur ausgewiesen | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
+| BV-027 | Jahresversionierter EÜR-Export mit ehrlicher Formatbezeichnung | Teilumsetzung – 2024/2025-Mapping, Version, Quellen, Kontrollsummen und CSV-Arbeitsunterlage; kein ELSTER-Import | [Prüfplan](PRUEFPLAN-GOBD-RECHT.md) |
 | BV-028 | Kleinunternehmer-Profil mit nachvollziehbarem Grenzwächter | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-029 | Backup v3 mit Audit und Nummern-High-Water-Marks | Teilumsetzung – Welle 2: Manifest v3, Audit-/Mapping-/Restore-Ereignisse, Counter-Maximum, Marker-/Income-Schutz und Dateimanifestvalidierung | [BV-029](BV-029.md); Snapshot, Vollständigkeitsmatrix, DMMF-Abgleich und fachliche Abnahme offen |
 | BV-030 | Konsistentes Snapshot-Backup statt unabhängiger Tabellenreads | In Arbeit – Welle 3: gemeinsamer DB-Read-Snapshot für JSON/ZIP | [Welle 3](WELLE-3.md); Metadaten, Lockphase, Paralleltest und ACs offen |
@@ -144,7 +160,7 @@ Die folgenden Tickets haben eine belastbare Vorprüfung und Priorisierung, aber 
 | BV-061 | Organisation/Mitgliedschaft von Benutzeridentität entkoppeln | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-062 | Lizenz-, Release- und Supportzusagen investorentauglich dokumentieren | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-063 | Vollständige API-/Tenant-/CSRF-Negativmatrix abnehmen | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-064 | Verschlüsseltes Offsite-Backup und nachgewiesener Wiederanlauf | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
+| BV-064 | Verschlüsseltes Offsite-Backup und nachgewiesener Wiederanlauf | Vorgeschlagen – keine Umsetzung; RPO/RTO, unabhängige verschlüsselte Kopie, Schlüsselwiederherstellung und Empty-Host-Drill fehlen | Backlog-ACs offen: Hostverlust-Recovery, Summen/Nummern/Dateihashes, Manipulationsablehnung sowie gemessener Datenstand und Wiederanlaufzeit |
 | BV-065 | Geführter Start mit produktiver Bereitschaftsprüfung | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-066 | Verbindliche Produktgrenze Single-Company versus SaaS | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-067 | Getrennter Demo- und Übungsmandant | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
@@ -234,7 +250,7 @@ Die folgenden Tickets haben eine belastbare Vorprüfung und Priorisierung, aber 
 | BV-151 | Zielgruppen- und Problemvalidierung vor weiterem Ausbau | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-152 | Betriebskostenmodell und Build-versus-buy-Entscheid | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-153 | Öffentliche Demo ohne Echtdaten und ohne implizite Produktionsfreigabe | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
-| BV-154 | Datenschutz- und Verantwortlichkeitsmodell je Betriebsform | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
+| BV-154 | Datenschutz- und Verantwortlichkeitsmodell je Betriebsform | Vorgeschlagen – keine Umsetzung; Datenflussregister, Rollen-/Anbieterabgrenzung, Betroffenenprozess und Incident-Runbook fehlen | Backlog-ACs offen: Verantwortlicher/Auftragsverarbeiter, OCR-/Mail-/KI-Datenfluss und Vertrag, Löschanfrage mit Abwägung sowie Sicherheitsvorfall/Meldewege |
 | BV-155 | Support- und Schwachstellenprozess mit realistischen Zusagen | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
 | BV-156 | Featureflags und gestufte fachliche Freigabe | Architektur-Discovery/Planung – keine Produktcodeänderung; Implementierung und ACs offen | [Architektur-Vorprüfung](ARCHITEKTUR-VORPRUEFUNG.md) |
 | BV-157 | Mandantenquoten und faire Ressourcenverteilung | Vorgeschlagen – nicht implementiert in dieser Arbeitswelle | Backlog-Quelle; keine Umsetzung in dieser Welle |
@@ -256,6 +272,8 @@ Die folgenden Tickets haben eine belastbare Vorprüfung und Priorisierung, aber 
 - Die dokumentierten Scheibentests nutzten synthetische Daten und versendeten nichts extern. Der lokale `prisma/dev.db`-Vorfall ist im Prüfvorfallbericht dokumentiert; eine globale Aussage über unveränderte Daten wird nicht getroffen. Der Nutzer wünscht für diese lokale Testdatenbank keine Wiederherstellung; der Vorfall ist kein Arbeitsblocker, die Betreiberbewertung bleibt als Dokumentationspunkt offen.
 - Die finale Welle-2-Prüfung ist mit 26 Testdateien, 240 bestandenen Tests und 1 Skip, warnungsfreiem Lint sowie 7/7 E2E abgeschlossen. Die 226/1-Baseline bleibt als Ausgangsvergleich erhalten; neue Remote-CI, Produktivdeployment, fachliche Betreiberabnahme und verbleibende AC-Nachweise sind davon nicht umfasst.
 - Welle 3 ist gestartet: BV-011, BV-025 und BV-030 haben noch keinen paketbezogenen Testnachweis. Die Welle-2-Gesamtprüfung bleibt ihre Vergleichsbasis; neue Parallel-, Rollback-, Business-Date- und Snapshot-Tests werden je Paket nachgeführt.
+- Welle 4 liefert technische Scheiben für BV-007, BV-019–BV-024 und BV-026/BV-027. Die zentrale Prüfung lief mit 35 Testdateien, 285 Tests bestanden und 1 Skip; Typecheck und Lint waren grün. Der E2E-Lauf bestand mit 11/11 in 18,8 s einschließlich Productionbuild; drei Welle-4-Screenshots wurden visuell geprüft. Zusätzlich umfasst der gezielte Nachweis 5/5 Kontodeaktivierungstests, 24/24 kombinierte Auth-/API-Key-/Deaktivierungstests, 4/4 unabhängige Steuer-Referenztests mit 1.000.004 Vergleichswerten sowie 76/76 EÜR-/Accounting-/Summary-/Mapping-Tests. Fachliche, rechtliche und produktive Freigaben stehen weiterhin aus.
+- Für die offene GoBD-/Rechtsarbeit wurde ein verbindlicher Prüf- und Abnahmeplan mit Scope-, Betriebsform-, Verfahrensdokumentations-, Retention-, Originalerhalt-, Restore- und Steuerfachbeispiel-Gates erstellt. Er behauptet keine Konformität.
 - `AGENTS.md` verlangt inzwischen synchronisierte Statusberichte sowie für DB-Probes ein explizites temporäres `DATABASE_URL` und für Compose-Diagnosen `docker compose config --quiet`; diese Regeln gelten für die nächste Arbeitswelle.
 
 ## Änderungslog dieser Arbeitswelle
@@ -273,6 +291,8 @@ Die folgenden Tickets haben eine belastbare Vorprüfung und Priorisierung, aber 
 | 19.09.2026 | Zwischenprüfung nach Korrekturen: File-Security-Integration 10/10 und Playwright/E2E 7/7 mit Productionbuild, PAID-409-Zahlungsintegrität und Desktop-/Mobile-Screenshots grün; erster Lauf mit altem Audit-Mock und zwei Lint-Warnungen wurde behoben. | Die finale Gesamtprüfung ist inzwischen separat dokumentiert; fachliche/produktive Freigaben bleiben offen. |
 | 19.09.2026 | Finale Gesamtprüfung: 26 Dateien, 240 Tests bestanden, 1 Skip, Lint ohne Warnungen; E2E 7/7 mit isolierter DB, Productionbuild, Typecheck und Standalone. | [BV-029](BV-029.md) technisch teilumgesetzt; Remote-CI, Produktivdeployment und fachliche Abnahmen offen. |
 | 19.09.2026 | Welle 3 gestartet: BV-011, BV-025 und BV-030 als begrenzte Pakete mit Eigentümern, Abhängigkeiten und offenen ACs dokumentiert. | [Welle 3](WELLE-3.md); keine Produktcode-/Schemaänderung durch diese Dokumentationsscheibe, paketbezogene Tests offen. |
+| 19.09.2026 | Welle 4 technisch teilumgesetzt: BV-007 AC1/AC2, BV-019–BV-024 und BV-026/BV-027; unabhängige Steuer-Referenzgitter und gezielte EÜR-/Accounting-Tests dokumentiert. Zentrale Prüfung 35 Dateien/285 Tests + 1 Skip, Lint/Typecheck grün; E2E 11/11 mit Productionbuild und drei visuell geprüften Screenshots. | [BV-007](BV-007.md), [Welle 4](WELLE-4.md), [Prüfplan](PRUEFPLAN-GOBD-RECHT.md); Fachreview, Rechts-/Betreiber- und Produktivfreigaben offen. |
+| 19.09.2026 | Ein zwischenzeitlicher E2E-Locatorfehler beim Zeitraum-Hinweis wurde auf die konkrete Warnung begrenzt und der Steuerjahr-2025-Text korrigiert; der abschließende Lauf bestand danach 11/11. | E2E-Abschlusslauf 18,8 s einschließlich Productionbuild; kein offener technischer E2E-Fehler. |
 
 ## Voraussetzungen für Statuswechsel
 
@@ -280,3 +300,4 @@ Die folgenden Tickets haben eine belastbare Vorprüfung und Priorisierung, aber 
 - „Teilumsetzung“ darf erst nach fachlichem Review, verlinkter Evidenz und bestandenen/abgenommenen ACs als abgeschlossen gelten.
 - „Discovery“ darf erst nach Architekturentscheidung, Besitzer, vertikaler Implementierung und AC-Evidenz in einen Umsetzungsstatus wechseln.
 - Kein Ticket erhält wegen eines grünen Teiltests den Status „Erledigt“, solange Scope, offene ACs oder Freigaben verbleiben.
+- BV-007 bleibt Teilumsetzung, solange Retention/Legal Hold und Ownernachfolge fehlen. Steuer- und EÜR-Tickets bleiben Teilumsetzung, solange unabhängige fachliche Beispiele, Formular-/Jahresabnahme und konkrete Betriebsfreigabe fehlen.

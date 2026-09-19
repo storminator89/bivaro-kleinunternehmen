@@ -84,7 +84,7 @@ export function getSystemInfo(): SystemInfo {
 
 /**
  * Get the default GoBD documentation template
- * Vollständige Verfahrensdokumentation gemäß BMF-Schreiben GoBD Rz. 151-155
+ * Entwurf zur betrieblichen Ergänzung und Prüfung, keine vollständige Abnahme.
  */
 export function getDefaultDocumentationTemplate(): DocumentationSection[] {
     const systemInfo = getSystemInfo();
@@ -117,7 +117,7 @@ GoBD-Abdeckung. Die folgenden Rechtsquellen dienen als Prüf- und Abstimmungsgru
 - § 145 AO (Allgemeine Anforderungen an Buchführung und Aufzeichnungen)
 - § 146 AO (Ordnungsvorschriften für die Buchführung und für Aufzeichnungen)
 - § 147 AO (Ordnungsvorschriften für die Aufbewahrung von Unterlagen)
-- BMF-Schreiben vom 28.11.2019 (GoBD)
+- BMF-Schreiben vom 28.11.2019 (GoBD), einschließlich der Änderungen vom 11.03.2024 und 14.07.2025
 
 Die verantwortliche Person muss den betrieblichen Ablauf, die Aufbewahrung, die
 Freigabe und die offenen Betreiberaufgaben fachlich prüfen und ergänzen.
@@ -199,7 +199,8 @@ vollständige Verfahrensabdeckung ist damit nicht verbunden.`,
 
 ## 2.4 Korrektur von Buchungen
 
-Gemäß § 146 Abs. 4 AO dürfen Aufzeichnungen nicht nachträglich geändert werden.
+Gemäß § 146 Abs. 4 AO muss bei Änderungen der ursprüngliche Inhalt feststellbar
+bleiben; auch die zeitliche Einordnung der Eintragung muss nachvollziehbar sein.
 Die Anwendung erzwingt dies nicht allgemein: Fachmutationen können je nach
 Entität geändert oder gelöscht werden. Für ausgewählte Rechnungs-, Zahlungs- und
 Stornopfade wird der Finanz-Audit-Eintrag in derselben Transaktion geschrieben;
@@ -264,6 +265,13 @@ Unveränderbarkeit her:
 3. **Betreiberkontrolle:** Freigabe, Aufbewahrung, Hold und regelmäßige Prüfung
    müssen außerhalb der Anwendung organisiert und belegt werden.
 
+4. **Zugang deaktivieren:** Die Benutzerverwaltung sperrt Anmeldung und
+   API-Schlüssel, statt das Benutzerkonto physisch zu löschen. Belege,
+   Buchungen und vorhandene Audit-Referenzen bleiben erhalten. Die Sperrung
+   und ihr Protokolleintrag werden gemeinsam gespeichert. Eine geregelte
+   Datenübernahme durch einen Nachfolger, Reaktivierung und eine endgültige
+   Löschung nach Aufbewahrungsprüfung sind noch nicht implementiert.
+
 ## 3.4 Datensicherung (§ 147 Abs. 6 AO)
 
 ### Backup-Funktionen
@@ -284,9 +292,10 @@ Unveränderbarkeit her:
 - Dokumentation: /settings/api-keys/docs
 - Endpunkte für: Kunden, Ausgaben, Einnahmen, Rechnungen
 
-### Elster Export
-- CSV-Export für EÜR-Formulare
-- Zuordnung zu offiziellen EÜR-Zeilen (Anlage EÜR)
+### EÜR-Arbeitsblatt
+- CSV-/JSON-Auswertung zur fachlichen Prüfung und manuellen Übertragung
+- Die unterstützten Formularjahre und Zuordnungen werden beim Export ausgewiesen
+- Kein nachgewiesener Direktimport und keine elektronische Übermittlung an ELSTER
 
 ## 3.6 Datenzugriff (§ 147 Abs. 6 AO)
 

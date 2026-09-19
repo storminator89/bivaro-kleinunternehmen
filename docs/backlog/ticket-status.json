@@ -1,13 +1,13 @@
 {
   "generatedAt": "2026-09-19",
-  "statusObservedAt": "2026-09-19T10:57:43+02:00",
+  "statusObservedAt": "2026-09-19T22:12:00+02:00",
   "auditBaseCommit": "85972ed9fe61d268b6640882ea2ddc6e616d1859",
   "source": "/home/pmeyhoefer/Downloads/Bivaro_Agent_Backlog.json",
   "statusSummary": {
-    "partial": 7,
+    "partial": 16,
     "in_progress": 3,
     "architecture_discovery": 5,
-    "proposed_unimplemented": 145
+    "proposed_unimplemented": 136
   },
   "knownIncidents": [
     {
@@ -89,7 +89,7 @@
       "title": "Buchungsentwürfe, Festschreibung und Periodensperren",
       "status": "proposed_unimplemented",
       "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "remaining": "Postingstatus, correctionOf, Festschreibung, Periodensperren und Rekonstruktion früherer Exporte sind offen; alle vier ACs, Tests und Freigaben fehlen.",
       "tests": [],
       "evidence": [
         "Bivaro_Agent_Backlog.json"
@@ -114,12 +114,16 @@
     {
       "id": "BV-007",
       "title": "Konten deaktivieren ohne Finanzhistorie zu löschen",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Technische Teilumsetzung: additive User.deactivatedAt-Deaktivierung; Finanzhistorie und Audit-Referenzen bleiben erhalten, Session/API-Key-Zugriff wird transaktional entzogen, Auditfehler rollen zurück.",
+      "remaining": "AC1/AC2 technisch und per E2E belegt; Retention-/Legal-Hold-Workflow, Ownernachfolge, AC3/AC4 und fachliche/produktive Freigaben offen.",
+      "tests": [
+        "Gezielter user-deactivation.test.ts: 5/5 bestanden; kombinierter Auth-/API-Key-/Deaktivierungslauf: 24/24 bestanden, jeweils isolierte temporäre Datenbank.",
+        "Playwright/E2E: 11/11 bestanden in 18,8 s einschließlich Productionbuild; drei Welle-4-Screenshots visuell geprüft."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/BV-007.md",
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
@@ -140,7 +144,7 @@
       "title": "Audit-Abdeckung und Retention risikobasiert schließen",
       "status": "proposed_unimplemented",
       "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "remaining": "Mutationsmatrix, Import-/Quote-Ereignisse, Schutz buchungsrelevanter Auditdaten und dokumentierte Frist-/Hold-/Freigabeprüfung fehlen; alle vier ACs offen.",
       "tests": [],
       "evidence": [
         "Bivaro_Agent_Backlog.json"
@@ -151,7 +155,7 @@
       "title": "Unveränderbarer Kassen-Tagesabschluss",
       "status": "proposed_unimplemented",
       "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "remaining": "CashDayClose, Zählprotokoll, append-only Differenzereignis, Änderungs-/Löschschutz und Export-/Restore-Referenzen fehlen; alle vier ACs offen.",
       "tests": [],
       "evidence": [
         "Bivaro_Agent_Backlog.json"
@@ -256,67 +260,80 @@
     {
       "id": "BV-019",
       "title": "Steuersimulation auf vollständige Serveraggregation umstellen",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Steuer-Simulation nutzt eine vollständige serverseitige tax-summary ohne Listen-Paginierung und weist Datenstand sowie begrenzten Regelumfang aus.",
+      "remaining": "API-/UI-Abnahme, Sonderfälle und fachliche Steuerfreigabe offen; zentrale technische Prüfung und E2E sind grün.",
+      "tests": [
+        "tax-summary.test.ts: 5/5 bestanden einschließlich 101 Einnahmen/1.001 Ausgaben, Zahlungsdatum, AfA, Privatentnahme und unbekanntem Jahr.",
+        "tax-summary-route.integration.test.ts: 3/3 bestanden für Mandantentrennung, Authentifizierung, mehr als 100 Buchungen und nicht unterstützte Kombinationen."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
       "id": "BV-020",
       "title": "Eine gemeinsame Gewinnlogik für EÜR und Simulation",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Gemeinsame Accounting-Jahresaggregation und AfA-/Zahlungsdatumlogik für EÜR, Simulation und Dashboard-Grundlage eingeführt.",
+      "remaining": "Vollständige Schreibweg-/Sonderfallmatrix und fachliche Freigabe offen; zentrale technische Prüfung und E2E sind grün.",
+      "tests": [
+        "eur-export-accounting.test.ts und tax-summary.test.ts; gezielte Wave-4-Scheiben insgesamt grün."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
       "id": "BV-021",
       "title": "§35-Anrechnung jahresbezogen fachlich korrigieren",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "§35-Credit berücksichtigt Messbetrag, tatsächlich zahlbare Gewerbesteuer, verfügbaren Einkommensteuerbetrag und den positiven Gewerbeanteil.",
+      "remaining": "Fachliche Prüfung mit unabhängigen Steuerbeispielen und produktive Freigabe offen.",
+      "tests": [
+        "tax-calculator.test.ts und unabhängiges tax-reference-grid.test.ts; 4 Referenztests mit 1.000.004 Vergleichswerten bestanden."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
       "id": "BV-022",
       "title": "Sozial- und Steuerparameter nach Veranlagungsjahr versionieren",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Versionierte Regelpakete und Sozialparameter für die technisch unterstützten Jahre 2025 und 2026; unbekannte Jahre werden abgelehnt.",
+      "remaining": "Weitere Veranlagungsjahre, fachliche Parameterfreigabe und produktive Freigabe offen.",
+      "tests": [
+        "tax-calculator.test.ts sowie unabhängiges tax-reference-grid.test.ts für 2025/2026."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
       "id": "BV-023",
       "title": "Unterstützte Steuerfälle und Jahresgrenzen explizit modellieren",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Unterstützte Jahre und begrenzter Fallumfang sind im Regelpaket sichtbar; nicht unterstützte Jahre werden mit Fehler und unterstützten Jahren zurückgewiesen.",
+      "remaining": "Joint Assessment, weitere Einkünfte, Verlustvor-/rücktrag und sonstige Sonderfälle bleiben ausgeschlossen bzw. fachlich zu bestätigen.",
+      "tests": [
+        "tax-summary.test.ts prüft unbekanntes Jahr; tax-reference-grid.test.ts prüft unterstützte Jahresparameter."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
       "id": "BV-024",
       "title": "Tarif-Endrundung und Soli-Minimumformel korrigieren",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Tarif-Endrundung auf volle Euro sowie jahresbezogene Soli-Minimumformel und Hunderterabrundung des Gewerbeertrags umgesetzt.",
+      "remaining": "Steuerfachliche Abnahme mit unabhängigem Erwartungsblatt und produktive Freigabe offen.",
+      "tests": [
+        "Unabhängiges BigInt-Referenzgitter: 4 Tests, 1.000.004 ganzzahlige Vergleichswerte für Einkommensteuer und Solidaritätszuschlag in 2025/2026 bestanden."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
@@ -335,23 +352,27 @@
     {
       "id": "BV-026",
       "title": "EÜR-Korrekturen und Erstattungen vorzeichenrichtig behandeln",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Gemeinsame Accounting-Summe übernimmt negative Ausgaben-/Erstattungsbuchungen mit Vorzeichen; EÜR-Export führt Korrekturen und Prüfspur in Kontrollsummen.",
+      "remaining": "Fachliche Abnahme von Storno-/Erstattungsfällen, Ursprungsbelegen und allen weiteren Zahlungswegen offen.",
+      "tests": [
+        "eur-export-accounting.test.ts sowie gezielter Wave-4-Lauf; negative Korrektur bleibt in Summe und CSV-Prüfspur sichtbar."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
       "id": "BV-027",
       "title": "Jahresversionierter EÜR-Export mit ehrlicher Formatbezeichnung",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "EÜR-Arbeitsunterlage verwendet explizite Mappingversion, Quellenhinweise, Kontrollsummen und unterstützte Jahre; CSV bezeichnet sich als Übertragungshilfe ohne ELSTER-Einreichung.",
+      "remaining": "Amtliche Formular-/Jahresabnahme, AfA-Anlagearten, tatsächlicher Importnachweis und produktive Freigabe offen.",
+      "tests": [
+        "eur-line-mapping.test.ts, eur-export-accounting.test.ts und dashboard-accounting.test.ts im gezielten Wave-4-Lauf bestanden."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "docs/backlog/PRUEFPLAN-GOBD-RECHT.md"
       ]
     },
     {
@@ -763,7 +784,7 @@
       "title": "Verschlüsseltes Offsite-Backup und nachgewiesener Wiederanlauf",
       "status": "proposed_unimplemented",
       "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "remaining": "RPO/RTO, unabhängige verschlüsselte Offsite-Kopie, Schlüsselwiederherstellung, Empty-Host-Drill, Manipulationsablehnung und gemessener Wiederanlauf fehlen; alle vier ACs offen.",
       "tests": [],
       "evidence": [
         "Bivaro_Agent_Backlog.json"
@@ -1753,7 +1774,7 @@
       "title": "Datenschutz- und Verantwortlichkeitsmodell je Betriebsform",
       "status": "proposed_unimplemented",
       "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "remaining": "Datenflussregister, Verantwortlicher/Auftragsverarbeiter, Anbieter-/Vertragsprüfung, Betroffenenprozess und Incident-Runbook fehlen; alle vier fachlichen ACs offen.",
       "tests": [],
       "evidence": [
         "Bivaro_Agent_Backlog.json"

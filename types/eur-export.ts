@@ -1,6 +1,8 @@
 /**
  * Types for EÜR (Einnahmen-Überschuss-Rechnung) Elster Export
- * Based on Anlage EÜR 2024 form structure
+ * The application exports a CSV working paper. It does not produce the
+ * authenticated ELSTER data set and therefore must not describe the file as
+ * an ELSTER submission/import.
  */
 
 export type EURLineType = 'income' | 'expense' | 'result';
@@ -20,8 +22,32 @@ export interface EURLineValue {
     type: EURLineType;
 }
 
+export interface EURCorrectionDetail {
+    expenseId?: number;
+    date: string;
+    description?: string | null;
+    category: string;
+    amount: number;
+    lineNumber: number | null;
+    correctionReason: string;
+    originalExpenseId?: number | null;
+}
+
+export interface EURControlTotals {
+    incomeCount: number;
+    expenseCount: number;
+    correctionCount: number;
+    incomeAmount: number;
+    expenseAmount: number;
+    profit: number;
+}
+
 export interface EURExportData {
     year: number;
+    /** Version of the official form mapping used for this working paper. */
+    mappingVersion: string;
+    /** Always `csv-working-paper`; no ELSTER submission is performed here. */
+    exportKind: 'csv-working-paper';
     companyName?: string;
     taxNumber?: string;
     lines: EURLineValue[];
@@ -29,6 +55,9 @@ export interface EURExportData {
     totalExpense: number;
     profit: number;
     generatedAt: string;
+    controlTotals: EURControlTotals;
+    corrections: EURCorrectionDetail[];
+    sourceReferences: string[];
 }
 
 export interface CategoryEURMapping {

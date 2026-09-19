@@ -35,6 +35,7 @@ export async function GET() {
         email: true,
         role: true,
         createdAt: true,
+        deactivatedAt: true,
       },
       orderBy: { createdAt: "desc" },
     });

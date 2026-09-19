@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -41,6 +41,7 @@ import {
     Building2
 } from "lucide-react";
 import { EURExportData, UnmappedCategory } from '@/types/eur-export';
+import { getSupportedEURYears } from '@/lib/eur-line-mapping';
 
 interface EURElsterExportDialogProps {
     isOpen: boolean;
@@ -48,7 +49,8 @@ interface EURElsterExportDialogProps {
 }
 
 export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialogProps) {
-    const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+    const supportedYears = getSupportedEURYears();
+    const [selectedYear, setSelectedYear] = useState<string>(String(supportedYears[supportedYears.length - 1]));
     const [isLoading, setIsLoading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [previewData, setPreviewData] = useState<{
@@ -57,11 +59,12 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
         warnings: string[];
     } | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const previewRequestRef = useRef(0);
+    const previewAbortRef = useRef<AbortController | null>(null);
 
-    // Available years (current year and 5 years back)
-    const availableYears = Array.from({ length: 6 }, (_, i) =>
-        (new Date().getFullYear() - i).toString()
-    );
+    // Only years with a checked official mapping can be selected. New form
+    // years are added after their BMF/ELSTER source has been reviewed.
+    const availableYears = supportedYears.map(String);
 
     // Format currency
     const formatCurrency = (amount: number) => {
@@ -73,29 +76,42 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
 
     // Load preview data
     const loadPreview = useCallback(async () => {
+        const requestId = ++previewRequestRef.current;
+        previewAbortRef.current?.abort();
+        const controller = new AbortController();
+        previewAbortRef.current = controller;
         setIsLoading(true);
         setError(null);
+        setPreviewData(null);
         try {
-            const res = await fetch(`/api/eur-export?year=${selectedYear}&format=json`);
+            const res = await fetch(`/api/eur-export?year=${selectedYear}&format=json`, { signal: controller.signal });
+            if (requestId !== previewRequestRef.current) return;
             if (res.ok) {
                 const data = await res.json();
+                if (requestId !== previewRequestRef.current) return;
                 setPreviewData(data);
             } else {
                 const errorData = await res.json();
+                if (requestId !== previewRequestRef.current) return;
                 setError(errorData.error || 'Fehler beim Laden der Vorschau');
             }
         } catch (err) {
+            if (controller.signal.aborted || requestId !== previewRequestRef.current) return;
             console.error('Error loading preview:', err);
             setError('Fehler beim Laden der Vorschau');
         } finally {
-            setIsLoading(false);
+            if (requestId === previewRequestRef.current) setIsLoading(false);
         }
     }, [selectedYear]);
+
+    useEffect(() => () => previewAbortRef.current?.abort(), []);
 
     // Load preview when year changes
     useEffect(() => {
         if (isOpen) {
             loadPreview();
+        } else {
+            previewAbortRef.current?.abort();
         }
     }, [isOpen, selectedYear, loadPreview]);
 
@@ -109,7 +125,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `Anlage-EUER-${selectedYear}.csv`;
+                a.download = `Anlage-EUER-Uebertragungshilfe-${selectedYear}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
@@ -144,13 +160,21 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                         </div>
                         <div>
                             <DialogTitle className="text-xl font-bold">
-                                Anlage EÜR für Elster
+                                Anlage EÜR – Übertragungshilfe
                             </DialogTitle>
                             <DialogDescription className="text-sm">
-                                Export der Einnahmen-Überschuss-Rechnung im Elster-kompatiblen CSV-Format
+                                CSV-Arbeitsunterlage mit geprüfter Jahreszuordnung; keine ELSTER-Einreichung
                             </DialogDescription>
                         </div>
                     </div>
+
+                    {previewData && (
+                        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                            <span className="font-medium text-foreground">Mappingversion:</span> {previewData.data.mappingVersion}
+                            <span className="mx-2">·</span>
+                            <span>Kontrollsummen: {previewData.data.controlTotals.incomeCount} Einnahmen, {previewData.data.controlTotals.expenseCount} Ausgaben</span>
+                        </div>
+                    )}
                 </DialogHeader>
 
                 {/* Scrollable Content */}
@@ -263,7 +287,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                         <div className={`flex items-center gap-2 mb-2 ${previewData.data.profit >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'
                                             }`}>
                                             <Scale className="h-5 w-5" />
-                                            <span className="text-sm font-medium">Gewinn / Verlust</span>
+                                            <span className="text-sm font-medium">Berechneter Überschuss</span>
                                         </div>
                                         <div className={`text-3xl font-bold ${previewData.data.profit >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300'
                                             }`}>
@@ -271,7 +295,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                         </div>
                                         <p className={`text-xs mt-1 ${previewData.data.profit >= 0 ? 'text-blue-600/70' : 'text-amber-600/70'
                                             }`}>
-                                            Zeile 87 der Anlage EÜR
+                                            Zeile 90 der Anlage EÜR
                                         </p>
                                     </CardContent>
                                 </Card>
@@ -300,7 +324,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                         <span className="font-semibold">Nicht zugeordnete Kategorien</span>
                                     </div>
                                     <p className="text-sm text-orange-600 dark:text-orange-500 mb-3">
-                                        Diese Kategorien wurden automatisch zu Zeile 72 (Sonstige Betriebsausgaben) hinzugefügt:
+                                        Diese Kategorien sind noch nicht belastbar zugeordnet. Sie werden vorläufig zu Zeile 60 (übrige unbeschränkt abziehbare Betriebsausgaben) gerechnet und müssen geprüft werden:
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         {previewData.unmappedCategories.map((cat, i) => (
@@ -310,6 +334,29 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                                 <span className="text-orange-600">{formatCurrency(cat.amount)}</span>
                                                 <span className="ml-1 text-muted-foreground">({cat.count}×)</span>
                                             </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {previewData.data.corrections.length > 0 && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/20">
+                                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 mb-3">
+                                        <AlertTriangle className="h-5 w-5" />
+                                        <span className="font-semibold">Negative Korrekturen / Erstattungen</span>
+                                    </div>
+                                    <p className="text-sm text-amber-700/80 dark:text-amber-500 mb-3">
+                                        Das gespeicherte Vorzeichen wurde übernommen. Bitte Ursprungsbeleg und Erstattungsgrund fachlich prüfen.
+                                    </p>
+                                    <div className="space-y-1 text-sm">
+                                        {previewData.data.corrections.map((correction, index) => (
+                                            <div key={`${correction.expenseId ?? 'correction'}-${index}`} className="flex flex-wrap gap-x-3 gap-y-1">
+                                                <span className="font-mono">{correction.date}</span>
+                                                <span>{correction.description || correction.category}</span>
+                                                <span className="font-medium">{formatCurrency(correction.amount)}</span>
+                                                <span className="text-muted-foreground">Zeile {correction.lineNumber ?? 'offen'}</span>
+                                                <span className="text-muted-foreground">{correction.originalExpenseId ? `Ursprung #${correction.originalExpenseId}` : 'Ursprung nicht verknüpft'}</span>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
@@ -441,8 +488,8 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                                 }`} />
                                         </div>
                                         <div>
-                                            <span className="font-mono text-sm text-muted-foreground">Zeile 87</span>
-                                            <p className="font-semibold text-lg">Gewinn / Verlust aus der EÜR</p>
+                                            <span className="font-mono text-sm text-muted-foreground">Zeile 90</span>
+                                            <p className="font-semibold text-lg">Vereinfachter Überschuss für Zeile 90</p>
                                         </div>
                                     </div>
                                     <div className={`text-4xl font-bold ${previewData.data.profit >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300'
@@ -462,7 +509,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                         <p className="font-semibold mb-1">Hinweis zum Export-Format</p>
                                         <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Die CSV-Datei verwendet das deutsche Format (Semikolon als Trennzeichen, Komma als Dezimaltrennzeichen)
-                                            und kann direkt in Excel geöffnet oder als Vorlage für die manuelle Elster-Eingabe verwendet werden.
+                                            und kann in Excel geöffnet und von einer fachkundigen Person übertragen werden. Die späteren amtlichen Ergebniszeilen 92, 95 und 97 werden hier nicht vollständig ermittelt. Eine ELSTER-Einreichung findet hier nicht statt.
                                         </p>
                                     </div>
                                 </div>
@@ -478,7 +525,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                     </Button>
                     <Button
                         onClick={handleExport}
-                        disabled={isLoading || isExporting || !previewData}
+                                disabled={isLoading || isExporting || !previewData}
                         className="min-w-[180px]"
                         size="lg"
                     >

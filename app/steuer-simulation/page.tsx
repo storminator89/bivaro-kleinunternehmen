@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,36 +20,17 @@ import {
   TrendingUp,
   Briefcase,
 } from "lucide-react";
-import { subMonths } from "date-fns";
-
-type Expense = {
-  id: number;
-  description: string;
-  amount: number;
-  date: string;
-  category?: string | null;
-  taxRelevant: boolean;
-  taxDeductiblePercentage?: number | null;
-};
-
-type Income = {
-  id: number;
-  description: string;
-  amount: number;
-  date: string;
-  customerId?: number;
-  customerName?: string | null;
-  taxRelevant: boolean;
-};
-
 type TimeRange = "all" | "last3Months" | "last6Months" | "thisYear" | "lastYear";
 
 import {
   calculateIncomeTax,
   calculateSolidaritySurcharge,
-  calculateTradeTax,
+  calculateTradeTaxDetails,
+  calculateTradeTaxCredit,
   calculateChurchTax,
+  getTaxRulePack,
 } from "@/lib/tax-calculator";
+import type { TaxSummary } from "@/lib/tax-summary";
 
 const defaultSettings = {
   healthInsurance: 4000,
@@ -97,11 +78,12 @@ function ParameterLabel({ htmlFor, label, tooltip }: ParameterLabelProps) {
 }
 
 export default function SteuerSimulationPage() {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [incomes, setIncomes] = useState<Income[]>([]);
+  const [summary, setSummary] = useState<TaxSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>("thisYear");
+  const [taxYear, setTaxYear] = useState<number>(new Date().getFullYear());
+  const requestVersion = useRef(0);
 
   const [healthInsurance, setHealthInsurance] = useState<number>(defaultSettings.healthInsurance);
   const [pensionInsurance, setPensionInsurance] = useState<number>(defaultSettings.pensionInsurance);
@@ -113,17 +95,22 @@ export default function SteuerSimulationPage() {
   const [includeChurchTax, setIncludeChurchTax] = useState<boolean>(defaultSettings.includeChurchTax);
 
   // Neue States für Angestelltenverhältnis
+  const [businessType, setBusinessType] = useState<"gewerblich" | "freiberuflich">("gewerblich");
   const [employmentType, setEmploymentType] = useState<"self-employed" | "side-business">("self-employed");
   const [grossSalary, setGrossSalary] = useState<number>(50000);
   const [employeeExpenses, setEmployeeExpenses] = useState<number>(1230); // Werbungskostenpauschale 2024
-  const [autoCalcSocial, setAutoCalcSocial] = useState<boolean>(true);
+  // Social contributions are user assumptions by default. The optional
+  // helper uses only rough employee rates and is not a full SV calculator.
+  const [autoCalcSocial, setAutoCalcSocial] = useState<boolean>(false);
   const [numberOfChildren, setNumberOfChildren] = useState<number>(0);
 
   useEffect(() => {
     if (employmentType === "side-business" && autoCalcSocial) {
-      // Beitragsbemessungsgrenzen 2025 (West)
-      const bbG_KV = 66150;
-      const bbG_RV = 96600;
+      // Versionierte Beitragsbemessungsgrenzen aus dem ausgewählten Jahr.
+      const socialRules = getTaxRulePack(taxYear)?.socialSecurity;
+      if (!socialRules) return;
+      const bbG_KV = socialRules.healthContributionAssessmentCeiling;
+      const bbG_RV = socialRules.pensionContributionAssessmentCeiling;
 
       const salaryForKV = Math.min(grossSalary, bbG_KV);
       const salaryForRV = Math.min(grossSalary, bbG_RV);
@@ -140,137 +127,47 @@ export default function SteuerSimulationPage() {
       setPensionInsurance(Math.round(salaryForRV * 0.093));
       setCareInsurance(Math.round(salaryForKV * pvRate));
     }
-  }, [grossSalary, employmentType, autoCalcSocial, numberOfChildren]);
+  }, [grossSalary, employmentType, autoCalcSocial, numberOfChildren, taxYear]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    const version = ++requestVersion.current;
     try {
       setLoading(true);
       setError(null);
-      const [expensesRes, incomesRes] = await Promise.all([
-        fetch("/api/expenses?page=1&pageSize=10000"),
-        fetch("/api/incomes?page=1&pageSize=10000"),
-      ]);
-
-      if (!expensesRes.ok || !incomesRes.ok) {
-        throw new Error("Daten konnten nicht geladen werden.");
-      }
-
-      const [expensesJson, incomesJson] = await Promise.all([expensesRes.json(), incomesRes.json()]);
-      setExpenses(expensesJson.items ?? []);
-      setIncomes(incomesJson.items ?? []);
+      const response = await fetch(`/api/tax-summary?year=${taxYear}&timeRange=${selectedTimeRange}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Daten konnten nicht geladen werden.");
+      if (version !== requestVersion.current) return;
+      setSummary(result as TaxSummary);
     } catch (err) {
+      if (version !== requestVersion.current) return;
       console.error("Fehler beim Laden der Finanzdaten:", err);
-      setError("Die Finanzdaten konnten nicht geladen werden. Bitte versuchen Sie es erneut.");
+      setSummary(null);
+      setError(err instanceof Error ? err.message : "Die Finanzdaten konnten nicht geladen werden. Bitte versuchen Sie es erneut.");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  };
+  }, [selectedTimeRange, taxYear]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  const shouldInclude = useCallback((isoDate: string) => {
-    const date = new Date(isoDate);
-    if (Number.isNaN(date.getTime())) {
-      return false;
-    }
-    if (selectedTimeRange === "all") {
-      return true;
-    }
-    const today = new Date();
-    if (selectedTimeRange === "last3Months") {
-      const threshold = subMonths(today, 3);
-      return date >= threshold;
-    }
-    if (selectedTimeRange === "last6Months") {
-      const threshold = subMonths(today, 6);
-      return date >= threshold;
-    }
-    if (selectedTimeRange === "thisYear") {
-      return date.getFullYear() === today.getFullYear();
-    }
-    if (selectedTimeRange === "lastYear") {
-      return date.getFullYear() === today.getFullYear() - 1;
-    }
-    return true;
-  }, [selectedTimeRange]);
-
-  const filteredIncomes = useMemo(
-    () => incomes.filter((income) => income.taxRelevant && shouldInclude(income.date)),
-    [incomes, shouldInclude]
-  );
-
-  const filteredExpenses = useMemo(
-    () =>
-      expenses.filter((expense) => expense.taxRelevant && shouldInclude(expense.date)),
-    [expenses, shouldInclude]
-  );
-
-  const filteredIncomesAll = useMemo(
-    () => incomes.filter((income) => shouldInclude(income.date)),
-    [incomes, shouldInclude]
-  );
-
-  const filteredExpensesAll = useMemo(
-    () => expenses.filter((expense) => shouldInclude(expense.date)),
-    [expenses, shouldInclude]
-  );
-
-  const totalIncome = useMemo(
-    () => filteredIncomes.reduce((sum, income) => sum + income.amount, 0),
-    [filteredIncomes]
-  );
-
-  const totalExpenses = useMemo(
-    () =>
-      filteredExpenses.reduce((sum, expense) => {
-        const percentage = expense.taxDeductiblePercentage ?? 100;
-        return sum + expense.amount * (percentage / 100);
-      }, 0),
-    [filteredExpenses]
-  );
-
-  const partialDeductionShortfall = useMemo(
-    () =>
-      filteredExpensesAll.reduce((sum, expense) => {
-        if (!expense.taxRelevant) {
-          return sum;
-        }
-        const percentage = expense.taxDeductiblePercentage ?? 100;
-        if (percentage >= 100) {
-          return sum;
-        }
-        return sum + expense.amount * (1 - percentage / 100);
-      }, 0),
-    [filteredExpensesAll]
-  );
-
-  const nonTaxRelevantExpenses = useMemo(
-    () => filteredExpensesAll.filter((expense) => !expense.taxRelevant),
-    [filteredExpensesAll]
-  );
-
-  const nonTaxRelevantExpenseAmount = useMemo(
-    () => nonTaxRelevantExpenses.reduce((sum, expense) => sum + expense.amount, 0),
-    [nonTaxRelevantExpenses]
-  );
-
-  const nonTaxRelevantIncomes = useMemo(
-    () => filteredIncomesAll.filter((income) => !income.taxRelevant),
-    [filteredIncomesAll]
-  );
-
-  const nonTaxRelevantIncomeAmount = useMemo(
-    () => nonTaxRelevantIncomes.reduce((sum, income) => sum + income.amount, 0),
-    [nonTaxRelevantIncomes]
-  );
-
-  const profit = totalIncome - totalExpenses;
+  const totalIncome = summary?.totalIncome ?? 0;
+  const totalExpenses = summary?.totalExpenses ?? 0;
+  const partialDeductionShortfall = summary?.partialDeductionShortfall ?? 0;
+  const nonTaxRelevantExpenseCount = summary?.nonTaxRelevantExpenseCount ?? 0;
+  const nonTaxRelevantExpenseAmount = summary?.nonTaxRelevantExpenseAmount ?? 0;
+  const nonTaxRelevantIncomeCount = summary?.nonTaxRelevantIncomeCount ?? 0;
+  const nonTaxRelevantIncomeAmount = summary?.nonTaxRelevantIncomeAmount ?? 0;
+  const profit = summary?.profit ?? 0;
   const profitFloor = Math.max(0, profit);
 
+  const taxCalculationSupported = Boolean(summary?.annualBasis && profit >= 0);
+
   // 1. Gewerbesteuer
-  const tradeTax = calculateTradeTax(profitFloor, tradeTaxHebesatz);
+  const tradeTaxDetails = calculateTradeTaxDetails(profitFloor, tradeTaxHebesatz);
+  const tradeTax = taxCalculationSupported && businessType === "gewerblich" ? tradeTaxDetails.tradeTax : 0;
 
   // 2. Zu versteuerndes Einkommen (zvE)
   const totalDeductions = healthInsurance + pensionInsurance + careInsurance + otherDeductions;
@@ -280,51 +177,67 @@ export default function SteuerSimulationPage() {
     incomeFromEmployment = Math.max(0, grossSalary - employeeExpenses);
   }
 
-  const taxableIncome = Math.max(0, profitFloor + incomeFromEmployment - totalDeductions);
+  const taxableIncome = Math.max(0, profit + incomeFromEmployment - totalDeductions);
 
   // 3. Tarifliche Einkommensteuer
-  const baseIncomeTax = calculateIncomeTax(taxableIncome);
+  const baseIncomeTax = calculateIncomeTax(taxableIncome, taxYear);
 
-  // 4. Gewerbesteueranrechnung (3,8-facher Messbetrag, max. die tatsächliche GewSt)
-  // Messbetrag = (Gewinn - 24500) * 3.5%
-  const tradeTaxBaseAmount = Math.max(0, profitFloor - 24500) * 0.035;
-  const tradeTaxCredit = Math.min(tradeTax, tradeTaxBaseAmount * 3.8, baseIncomeTax);
+  // 4. Gewerbesteueranrechnung nach §35 EStG (vierfacher Messbetrag plus
+  // tatsächlich gezahlte Gewerbesteuer und anteilige Höchstgrenze).
+  const tradeTaxCredit = taxCalculationSupported && businessType === "gewerblich" ? calculateTradeTaxCredit({
+    incomeTax: baseIncomeTax,
+    businessProfit: profit,
+    totalPositiveIncome: Math.max(0, profit) + Math.max(0, incomeFromEmployment),
+    tradeTaxBaseAmount: tradeTaxDetails.tradeTaxBaseAmount,
+    actuallyPayableTradeTax: tradeTax,
+  }) : 0;
 
-  const finalIncomeTax = Math.max(0, baseIncomeTax - tradeTaxCredit);
+  const finalIncomeTax = taxCalculationSupported
+    ? Math.max(0, baseIncomeTax - tradeTaxCredit)
+    : 0;
 
   // 5. Zuschläge
-  const solidaritySurcharge = includeSolidarity ? calculateSolidaritySurcharge(finalIncomeTax) : 0;
-  const churchTax = includeChurchTax ? calculateChurchTax(finalIncomeTax, churchTaxRate) : 0;
+  const solidaritySurcharge = taxCalculationSupported && includeSolidarity
+    ? calculateSolidaritySurcharge(finalIncomeTax, taxYear)
+    : 0;
+  // §51a EStG bases the simple church-tax estimate on the tariff income tax;
+  // §35 is not applied to this surcharge base. State-specific rules and
+  // personal allowances remain outside this limited simulation.
+  const churchTax = taxCalculationSupported && includeChurchTax ? calculateChurchTax(baseIncomeTax, churchTaxRate) : 0;
 
-  const totalTax = finalIncomeTax + solidaritySurcharge + churchTax + tradeTax;
+  const totalTax = taxCalculationSupported
+    ? finalIncomeTax + solidaritySurcharge + churchTax + tradeTax
+    : 0;
 
   // Berechnung der Grenzsteuerbelastung für Nebengewerbe
   let marginalTax = totalTax;
   let taxWithoutBusiness = 0;
 
-  if (employmentType === "side-business") {
+  if (employmentType === "side-business" && taxCalculationSupported) {
     // Steuerlast ohne Gewerbe berechnen (nur Job)
     const taxableIncomeBase = Math.max(0, incomeFromEmployment - totalDeductions);
-    const baseIncomeTaxOnly = calculateIncomeTax(taxableIncomeBase);
-    const baseSoli = includeSolidarity ? calculateSolidaritySurcharge(baseIncomeTaxOnly) : 0;
+    const baseIncomeTaxOnly = calculateIncomeTax(taxableIncomeBase, taxYear);
+    const baseSoli = includeSolidarity ? calculateSolidaritySurcharge(baseIncomeTaxOnly, taxYear) : 0;
     const baseChurch = includeChurchTax ? calculateChurchTax(baseIncomeTaxOnly, churchTaxRate) : 0;
 
     taxWithoutBusiness = baseIncomeTaxOnly + baseSoli + baseChurch;
     marginalTax = totalTax - taxWithoutBusiness;
   }
 
-  const netProfitAfterTax = employmentType === "side-business"
-    ? profit - marginalTax
-    : profit - totalTax;
+  const netProfitAfterTax = taxCalculationSupported
+    ? (employmentType === "side-business" ? profit - marginalTax : profit - totalTax)
+    : 0;
 
-  const effectiveTaxRate = profit > 0
+  const effectiveTaxRate = taxCalculationSupported && profit > 0
     ? (marginalTax / profit) * 100
     : 0;
 
   const svBeitraege = healthInsurance + pensionInsurance + careInsurance;
-  const totalNetIncome = employmentType === "side-business"
-    ? grossSalary - svBeitraege + profit - totalTax
-    : profit - totalTax;
+  const totalNetIncome = taxCalculationSupported
+    ? (employmentType === "side-business"
+      ? grossSalary - svBeitraege + profit - totalTax
+      : profit - totalTax)
+    : 0;
 
   // Für UI-Anzeige
   const deductionsApplied = totalDeductions;
@@ -332,6 +245,8 @@ export default function SteuerSimulationPage() {
 
   const formatCurrency = useCallback((value: number) =>
     new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value), []);
+  const formatSimulationValue = useCallback((value: number) =>
+    taxCalculationSupported ? formatCurrency(value) : "nicht berechnet", [formatCurrency, taxCalculationSupported]);
 
   const recommendationToneStyles: Record<Recommendation["tone"], string> = {
     info: "border-primary/30 bg-primary/5",
@@ -361,11 +276,11 @@ export default function SteuerSimulationPage() {
         description: `Sie verzeichnen aktuell einen Verlust von ${formatCurrency(Math.abs(profit))}. Prüfen Sie Verlustvor- bzw. -rücktrag und passen Sie Vorauszahlungen an.`,
       });
 
-      if (nonTaxRelevantExpenses.length > 0) {
+      if (nonTaxRelevantExpenseCount > 0) {
         recs.push({
           tone: "info",
           title: "Nicht berücksichtigte Ausgaben analysieren",
-          description: `${nonTaxRelevantExpenses.length} Ausgaben (${formatCurrency(nonTaxRelevantExpenseAmount)}) sind als nicht steuerrelevant markiert. Überprüfen Sie, ob sich Belege doch steuerlich ansetzen lassen.`,
+          description: `${nonTaxRelevantExpenseCount} Ausgaben (${formatCurrency(nonTaxRelevantExpenseAmount)}) sind als nicht steuerrelevant markiert. Überprüfen Sie, ob sich Belege doch steuerlich ansetzen lassen.`,
         });
       }
 
@@ -406,23 +321,23 @@ export default function SteuerSimulationPage() {
       });
     }
 
-    if (nonTaxRelevantExpenses.length > 0) {
+    if (nonTaxRelevantExpenseCount > 0) {
       recs.push({
         tone: "info",
         title: "Nicht steuerrelevante Kosten bewerten",
-        description: `${nonTaxRelevantExpenses.length} Ausgaben (${formatCurrency(nonTaxRelevantExpenseAmount)}) werden steuerlich nicht berücksichtigt. Stellen Sie sicher, dass die Zuordnung korrekt ist oder dokumentieren Sie private Anteile sauber.`,
+        description: `${nonTaxRelevantExpenseCount} Ausgaben (${formatCurrency(nonTaxRelevantExpenseAmount)}) werden steuerlich nicht berücksichtigt. Stellen Sie sicher, dass die Zuordnung korrekt ist oder dokumentieren Sie private Anteile sauber.`,
       });
     }
 
-    if (nonTaxRelevantIncomes.length > 0 && nonTaxRelevantIncomeAmount > 0) {
+    if (nonTaxRelevantIncomeCount > 0 && nonTaxRelevantIncomeAmount > 0) {
       recs.push({
         tone: "warning",
         title: "Steuerfreie Einnahmen plausibilisieren",
-        description: `${nonTaxRelevantIncomes.length} Einnahmen in Höhe von ${formatCurrency(nonTaxRelevantIncomeAmount)} sind als steuerfrei klassifiziert. Prüfen Sie, ob alle Voraussetzungen (z. B. echte Privatverkäufe) erfüllt sind.`,
+        description: `${nonTaxRelevantIncomeCount} Einnahmen in Höhe von ${formatCurrency(nonTaxRelevantIncomeAmount)} sind als steuerfrei klassifiziert. Prüfen Sie, ob alle Voraussetzungen (z. B. echte Privatverkäufe) erfüllt sind.`,
       });
     }
 
-    if (tradeTaxHebesatz < 200 && profit > 24500) {
+    if (businessType === "gewerblich" && tradeTaxHebesatz < 200 && profit > 24500) {
       recs.push({
         tone: "warning",
         title: "Gewerbesteuer-Hebesatz prüfen",
@@ -460,15 +375,16 @@ export default function SteuerSimulationPage() {
     expenseCoverage,
     formatCurrency,
     nonTaxRelevantExpenseAmount,
-    nonTaxRelevantExpenses,
+    nonTaxRelevantExpenseCount,
     nonTaxRelevantIncomeAmount,
-    nonTaxRelevantIncomes,
+    nonTaxRelevantIncomeCount,
     partialDeductionShortfall,
     profit,
     taxableIncome,
     totalDeductions,
     totalIncome,
     tradeTaxHebesatz,
+    businessType,
 
     employmentType,
   ]);
@@ -482,10 +398,11 @@ export default function SteuerSimulationPage() {
     setChurchTaxRate(defaultSettings.churchTaxRate);
     setIncludeSolidarity(defaultSettings.includeSolidarity);
     setIncludeChurchTax(defaultSettings.includeChurchTax);
+    setBusinessType("gewerblich");
     setEmploymentType("self-employed");
     setGrossSalary(50000);
     setEmployeeExpenses(1230);
-    setAutoCalcSocial(true);
+    setAutoCalcSocial(false);
     setNumberOfChildren(0);
   };
 
@@ -506,6 +423,20 @@ export default function SteuerSimulationPage() {
             </div>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1 space-y-2 sm:min-w-32">
+              <Label htmlFor="taxYear" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Steuerjahr
+              </Label>
+              <select
+                id="taxYear"
+                value={taxYear}
+                onChange={(event) => setTaxYear(Number(event.target.value))}
+                className="block h-11 w-full rounded-[var(--radius-input)] border border-input bg-background px-3 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value={2026}>2026</option>
+                <option value={2025}>2025</option>
+              </select>
+            </div>
             <div className="min-w-0 flex-1 space-y-2 sm:min-w-52">
               <Label htmlFor="timeRange" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Analysezeitraum
@@ -516,8 +447,7 @@ export default function SteuerSimulationPage() {
                 onChange={(event) => setSelectedTimeRange(event.target.value as TimeRange)}
                 className="block h-11 w-full rounded-[var(--radius-input)] border border-input bg-background px-3 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <option value="thisYear">Aktuelles Jahr</option>
-                <option value="lastYear">Vorjahr</option>
+                <option value="thisYear">Gewähltes Steuerjahr</option>
                 <option value="last3Months">Letzte 3 Monate</option>
                 <option value="last6Months">Letzte 6 Monate</option>
                 <option value="all">Gesamter Zeitraum</option>
@@ -538,6 +468,16 @@ export default function SteuerSimulationPage() {
         {error && (
           <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
+          </div>
+        )}
+        {summary?.warnings.map((warning) => (
+          <div key={warning} role="status" className="rounded-[var(--radius-input)] border border-amber-300/60 bg-amber-100/40 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+            {warning}
+          </div>
+        ))}
+        {!taxCalculationSupported && summary && (
+          <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Für diesen Datenstand wird keine endgültige Steuerlast angezeigt. Die Simulation unterstützt nur vollständige Jahreszeiträume ohne Verlust, Verlustvortrag oder Verlustrücktrag.
           </div>
         )}
 
@@ -584,11 +524,11 @@ export default function SteuerSimulationPage() {
               </div>
               <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
                 <dt className="text-sm text-muted-foreground">Buchungen</dt>
-                <dd className="text-right text-sm font-medium tabular-nums">{filteredIncomes.length + filteredExpenses.length}</dd>
+                <dd className="text-right text-sm font-medium tabular-nums">{summary?.sourceCount ?? 0}</dd>
               </div>
             </dl>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Zeitraum: {selectedTimeRange === "thisYear" ? "Aktuelles Jahr" : selectedTimeRange === "lastYear" ? "Vorjahr" : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}
+              Zeitraum: {selectedTimeRange === "thisYear" ? `Steuerjahr ${taxYear}` : selectedTimeRange === "lastYear" ? `Steuerjahr ${taxYear - 1}` : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}
             </p>
           </div>
         </section>
@@ -604,7 +544,24 @@ export default function SteuerSimulationPage() {
               Standardwerte
             </Button>
           </div>
-          <div className="space-y-8 p-6 sm:p-8">
+            <div className="space-y-8 p-6 sm:p-8">
+            <div className="rounded-[var(--radius-input)] border border-border bg-muted/25 p-5">
+              <ParameterLabel
+                htmlFor="businessType"
+                label="Tätigkeitsart"
+                tooltip="Die vereinfachte Simulation unterstützt Einzelunternehmen als Gewerbebetrieb oder freiberufliche Tätigkeit. Andere Rechtsformen und Sonderfälle sind nicht enthalten."
+              />
+              <select
+                id="businessType"
+                value={businessType}
+                onChange={(event) => setBusinessType(event.target.value as "gewerblich" | "freiberuflich")}
+                className="mt-2 block h-11 w-full max-w-sm rounded-[var(--radius-input)] border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="gewerblich">Gewerbebetrieb</option>
+                <option value="freiberuflich">Freiberufliche Tätigkeit</option>
+              </select>
+              <p className="mt-2 text-xs text-muted-foreground">Bei freiberuflicher Tätigkeit wird keine Gewerbesteuer angesetzt. Die Einordnung muss fachlich zutreffen.</p>
+            </div>
             <div className="rounded-[var(--radius-input)] border border-border bg-muted/25 p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
@@ -687,14 +644,14 @@ export default function SteuerSimulationPage() {
                       onChange={(event) => setAutoCalcSocial(event.target.checked)}
                     />
                     <Label htmlFor="autoCalcSocial" className="font-normal">
-                      Sozialversicherungsbeiträge automatisch aus Bruttogehalt berechnen
+                      Sozialversicherungsbeiträge näherungsweise aus Bruttogehalt berechnen
                     </Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <CircleHelp className="h-4 w-4 text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
-                        Berechnet die abzugsfähigen Vorsorgeaufwendungen (KV, RV, PV) basierend auf Ihrem Bruttogehalt automatisch. Diese mindern Ihre Steuerlast.
+                        Näherung mit den Beitragsbemessungsgrenzen des Steuerjahres und vereinfachten Arbeitnehmeranteilen. Zusatzbeiträge, Sachsenregel und persönliche Besonderheiten bitte prüfen; die Felder bleiben überschreibbar.
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -820,7 +777,7 @@ export default function SteuerSimulationPage() {
                 <ParameterLabel
                   htmlFor="churchTaxRate"
                   label="Kirchensteuer (%)"
-                  tooltip="Prozentsatz der Kirchensteuer auf die Einkommensteuer (8% oder 9%)."
+                  tooltip="Vereinfachte Annahme: Prozentsatz auf die tarifliche Einkommensteuer nach §51a EStG (8% oder 9%). Landesrecht und persönliche Freibeträge werden nicht abgebildet."
                 />
                 <Input
                   id="churchTaxRate"
@@ -865,7 +822,7 @@ export default function SteuerSimulationPage() {
             </div>
             <div className="flex flex-col gap-3 rounded-[var(--radius-input)] border border-dashed border-border px-4 py-3 sm:flex-row sm:items-center">
               <p className="text-sm text-muted-foreground">
-                Einkommensteuertarif 2026 · Grundfreibetrag 12.348 € berücksichtigt.
+                Einkommensteuertarif {taxYear} · Grundfreibetrag {taxYear === 2025 ? "12.096" : "12.348"} € berücksichtigt.
               </p>
             </div>
           </div>
@@ -881,7 +838,7 @@ export default function SteuerSimulationPage() {
               </div>
               <div className="text-left sm:text-right">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}</p>
-                <p className="mt-1 text-3xl font-semibold tabular-nums text-primary">{formatCurrency(netProfitAfterTax)}</p>
+                <p className="mt-1 text-3xl font-semibold tabular-nums text-primary">{formatSimulationValue(netProfitAfterTax)}</p>
               </div>
             </div>
           </div>
@@ -923,12 +880,12 @@ export default function SteuerSimulationPage() {
                   <span className="text-sm text-muted-foreground">
                     {employmentType === "side-business" ? "Steuer auf Gewerbe" : "Gesamte Steuerlast"}
                   </span>
-                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(marginalTax)}</span>
+                  <span className="text-sm font-semibold tabular-nums">{formatSimulationValue(marginalTax)}</span>
                 </div>
                 {employmentType === "side-business" && (
                   <div className="flex items-center justify-between gap-4 py-3 text-sm">
                     <span className="text-muted-foreground">Gesamtsteuer inkl. Job</span>
-                    <span className="font-medium tabular-nums">{formatCurrency(totalTax)}</span>
+                    <span className="font-medium tabular-nums">{formatSimulationValue(totalTax)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-4 py-3">
@@ -936,14 +893,14 @@ export default function SteuerSimulationPage() {
                     {employmentType === "side-business" ? "Belastung Gewerbe" : "Effektiver Steuersatz"}
                   </span>
                   <span className="text-sm font-medium tabular-nums">
-                    {profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : "-"}
+                    {taxCalculationSupported && profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : "nicht berechnet"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">{employmentType === "side-business" ? "Netto vom Gewerbe" : "Netto nach Steuern"}</span>
-                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(netProfitAfterTax)}</span>
+                  <span className="text-sm font-semibold tabular-nums">{formatSimulationValue(netProfitAfterTax)}</span>
                 </div>
-                {employmentType === "side-business" && <div className="flex items-center justify-between gap-4 border-t border-border py-3"><span className="text-sm font-medium">Gesamtes Netto</span><span className="text-sm font-bold tabular-nums text-primary">{formatCurrency(totalNetIncome)}</span></div>}
+                {employmentType === "side-business" && <div className="flex items-center justify-between gap-4 border-t border-border py-3"><span className="text-sm font-medium">Gesamtes Netto</span><span className="text-sm font-bold tabular-nums text-primary">{formatSimulationValue(totalNetIncome)}</span></div>}
                 </dl>
               </div>
             </div>
@@ -951,7 +908,7 @@ export default function SteuerSimulationPage() {
               {[['Einkommensteuer', finalIncomeTax], ['Solidaritätszuschlag', solidaritySurcharge], ['Kirchensteuer', churchTax], ['Gewerbesteuer', tradeTax]].map(([label, value]) => (
                 <div key={label} className="bg-background px-4 py-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums">{formatCurrency(value as number)}</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">{formatSimulationValue(value as number)}</p>
                 </div>
               ))}
             </div>

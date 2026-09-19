@@ -25,6 +25,7 @@ model User {
   role      String   @default("USER") // USER, ADMIN
   // Incrementing this value invalidates all JWTs issued before the change.
   sessionVersion Int    @default(0)
+  deactivatedAt DateTime?
   createdAt DateTime @default(now())
   expenses  Expense[]
   incomes   Income[]
