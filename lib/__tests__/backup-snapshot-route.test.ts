@@ -42,16 +42,21 @@ vi.mock('@/lib/backup-snapshot', async importOriginal => {
 });
 vi.mock('jszip', async importOriginal => {
   const actual = await importOriginal<typeof import('jszip')>();
-  const BaseZip = actual.default;
+  // `jszip` is declared with `export = JSZip`; Vitest exposes that CommonJS
+  // export through `default` at runtime even though TypeScript's dynamic
+  // import type does not declare the property.
+  const BaseZip = (actual as unknown as { default: typeof import('jszip') }).default;
+  type ZipInstance = InstanceType<typeof BaseZip>;
+  const originalGenerateAsync = BaseZip.prototype.generateAsync;
   class GatedZip extends BaseZip {
-    override async generateAsync(...args: Parameters<BaseZip['generateAsync']>) {
+    override generateAsync = (async (...args: Parameters<ZipInstance['generateAsync']>) => {
       if (control.gateEnabled) {
         control.gateEnabled = false;
         control.signalEntered?.();
         await new Promise<void>((resolve) => { control.release = resolve; });
       }
-      return super.generateAsync(...args);
-    }
+      return Reflect.apply(originalGenerateAsync, this, args);
+    }) as ZipInstance['generateAsync'];
   }
   return { ...actual, default: GatedZip };
 });
