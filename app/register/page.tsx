@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { validatePassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -16,20 +17,23 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [isFirstUser, setIsFirstUser] = useState(false);
-  const [registrationAllowed, setRegistrationAllowed] = useState(true);
+  const [registrationAllowed, setRegistrationAllowed] = useState(false);
+  const [bootstrapRequired, setBootstrapRequired] = useState(false);
+  const [bootstrapConsumed, setBootstrapConsumed] = useState(false);
 
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
   const passwordStrength = useMemo(() => {
     let score = 0;
-    if (password.length >= 6) score += 1;
+    if (password.length >= 8) score += 1;
     if (password.length >= 10) score += 1;
     if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
     if (/\d/.test(password)) score += 1;
@@ -47,6 +51,8 @@ export default function RegisterPage() {
           const data = await res.json();
           setIsFirstUser(data.isFirstUser);
           setRegistrationAllowed(data.allowRegistration);
+          setBootstrapRequired(data.bootstrapRequired === true);
+          setBootstrapConsumed(data.bootstrapConsumed === true);
         }
       } catch (error) {
         console.error("Failed to check registration status", error);
@@ -65,8 +71,9 @@ export default function RegisterPage() {
       return setError("Passwörter stimmen nicht überein");
     }
 
-    if (password.length < 6) {
-      return setError("Passwort muss mindestens 6 Zeichen lang sein");
+    const validation = validatePassword(password);
+    if (!validation.valid) {
+      return setError(validation.message ?? "Ungültiges Passwort");
     }
 
     setLoading(true);
@@ -81,6 +88,7 @@ export default function RegisterPage() {
           name,
           email,
           password,
+          ...(bootstrapRequired ? { setupToken } : {}),
         }),
       });
 
@@ -107,19 +115,33 @@ export default function RegisterPage() {
     );
   }
 
-  if (!registrationAllowed && !isFirstUser) {
+  if (!registrationAllowed) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="text-2xl">Registrierung deaktiviert</CardTitle>
+            <CardTitle className="text-2xl">
+              {isFirstUser
+                ? bootstrapConsumed
+                  ? "Erstregistrierung abgeschlossen"
+                  : "Erstregistrierung deaktiviert"
+                : "Registrierung deaktiviert"}
+            </CardTitle>
             <CardDescription>
-              Die Registrierung neuer Benutzer ist derzeit nicht möglich.
+              {isFirstUser
+                ? bootstrapConsumed
+                  ? "Die einmalige Erstregistrierung wurde bereits abgeschlossen."
+                  : "Der Server ist noch nicht für die Erstregistrierung eingerichtet."
+                : "Die Registrierung neuer Benutzer ist derzeit nicht möglich."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Bitte wenden Sie sich an den Administrator, wenn Sie Zugang benötigen.
+              {isFirstUser
+                ? bootstrapConsumed
+                  ? "Ein weiteres Erstadmin-Konto kann nicht über die öffentliche Registrierung angelegt werden."
+                  : "Setzen Sie BIVARO_SETUP_TOKEN in der Server-Konfiguration und starten Sie die App neu."
+                : "Bitte wenden Sie sich an den Administrator, wenn Sie Zugang benötigen."}
             </p>
           </CardContent>
           <CardFooter>
@@ -182,6 +204,23 @@ export default function RegisterPage() {
                 <span>Dieses Konto erhält automatisch Administrator-Rechte.</span>
               </div>
             )}
+            {bootstrapRequired && (
+              <div className="space-y-2">
+                <Label htmlFor="setupToken">Bootstrap-Nachweis</Label>
+                <Input
+                  id="setupToken"
+                  type="password"
+                  placeholder="Server-Setup-Token"
+                  autoComplete="off"
+                  value={setupToken}
+                  onChange={(e) => setSetupToken(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Der Nachweis wird nur einmal akzeptiert und nicht gespeichert.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input
@@ -218,7 +257,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                   className="pr-10"
                 />
                 <button
@@ -231,6 +270,7 @@ export default function RegisterPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
               {password.length > 0 && (
                 <div className="space-y-1">
                   <div className="flex gap-1" aria-hidden="true">

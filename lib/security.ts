@@ -189,34 +189,7 @@ export function isValidEmail(email: string): boolean {
  * @param password - Password to validate
  * @returns Object with validation result and message
  */
-export function validatePassword(password: string): { valid: boolean; message?: string } {
-  if (!password || typeof password !== 'string') {
-    return { valid: false, message: 'Passwort ist erforderlich' };
-  }
-  
-  if (password.length < 8) {
-    return { valid: false, message: 'Passwort muss mindestens 8 Zeichen lang sein' };
-  }
-  
-  if (password.length > 128) {
-    return { valid: false, message: 'Passwort darf maximal 128 Zeichen lang sein' };
-  }
-  
-  // Check for at least one uppercase, one lowercase, and one digit
-  if (!/[A-Z]/.test(password)) {
-    return { valid: false, message: 'Passwort muss mindestens einen Großbuchstaben enthalten' };
-  }
-  
-  if (!/[a-z]/.test(password)) {
-    return { valid: false, message: 'Passwort muss mindestens einen Kleinbuchstaben enthalten' };
-  }
-  
-  if (!/[0-9]/.test(password)) {
-    return { valid: false, message: 'Passwort muss mindestens eine Zahl enthalten' };
-  }
-  
-  return { valid: true };
-}
+export { validatePassword } from "@/lib/password-policy";
 
 /**
  * Rate limit key generator for IP-based limiting

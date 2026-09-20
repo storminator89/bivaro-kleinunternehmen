@@ -27,6 +27,7 @@ export type AuditAction =
   | 'SETTINGS_CHANGED'
   | 'STATUS_CHANGED'
   | 'PAYMENT_RECEIVED'
+  | 'REVIEW'
   | 'REMINDER_SENT'
   | 'EMAIL_SENT'
   | 'VIEW'
@@ -81,6 +82,12 @@ export interface FinancialAuditMetadata {
   operation: string;
   originalReference: string;
   reason: string;
+  /** SMTP acknowledgement context; never include credentials or message bodies. */
+  messageId?: string;
+  expectedStatus?: string;
+  observedStatus?: string;
+  resultingStatus?: string;
+  statusConflict?: boolean;
 }
 
 export type FinancialAuditEntry = Omit<AuditLogEntry, 'metadata'> & {
@@ -373,6 +380,7 @@ export type SecurityEventName =
   | 'AUTH_ROLE_CHANGED'
   | 'AUTH_USER_DELETED'
   | 'AUTH_REGISTRATION_SETTINGS_CHANGED'
+  | 'AUTH_SMTP_SETTINGS_CHANGED'
   | 'ADMIN_USER_CHANGE';
 
 export type SecurityEventOutcome = 'success' | 'failure' | 'blocked';

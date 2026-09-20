@@ -54,7 +54,10 @@ export async function POST(request: NextRequest) {
     const status = error instanceof BackupValidationError ? error.status : 500;
     console.error('Restore error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Wiederherstellung fehlgeschlagen' },
+      {
+        error: error instanceof Error ? error.message : 'Wiederherstellung fehlgeschlagen',
+        ...(error instanceof BackupValidationError ? { issues: error.issues, truncated: error.truncated } : {}),
+      },
       { status },
     );
   }

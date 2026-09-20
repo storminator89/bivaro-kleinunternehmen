@@ -27,6 +27,7 @@ services:
       - DATABASE_URL=file:/app/data/prod.db
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      - BIVARO_SETUP_TOKEN=${BIVARO_SETUP_TOKEN:-}
       # API CORS Configuration
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       # Optional: Email configuration

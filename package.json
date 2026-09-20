@@ -18,6 +18,7 @@
     "db:generate": "npx prisma generate",
     "db:studio": "npx prisma studio",
     "test": "vitest run",
+    "money:report": "node --experimental-strip-types scripts/money-migration-report.mjs",
     "einvoice:validate": "node --experimental-strip-types scripts/einvoice-validation/run.mjs",
     "test:watch": "vitest",
     "e2e:prepare": "node scripts/prepare-e2e.mjs",

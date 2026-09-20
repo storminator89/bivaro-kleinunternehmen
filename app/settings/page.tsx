@@ -16,6 +16,7 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import Link from "next/link";
+import { SmtpSettings } from "@/components/settings/smtp-settings";
 
 type RestorePreview = {
   kind: 'json' | 'full';
@@ -621,6 +622,8 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </form>
+
+      {isAdmin && <SmtpSettings />}
 
       {isAdmin && (
         <Card className="mt-6">

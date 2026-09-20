@@ -170,6 +170,7 @@ export function DashboardContent() {
     customerId: undefined,
     taxRelevant: true
   });
+  const [incomeFormError, setIncomeFormError] = useState<{ field?: string; message: string } | null>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -412,6 +413,7 @@ export function DashboardContent() {
 
   const handleIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIncomeFormError(null);
 
     try {
       const response = await fetch('/api/incomes', {
@@ -437,9 +439,23 @@ export function DashboardContent() {
           customerId: undefined,
           taxRelevant: true
         });
+      } else {
+        let errorData: { error?: string; field?: string } = {};
+        try {
+          errorData = await response.json();
+        } catch {
+          // Keep the form error useful even when the server does not return JSON.
+        }
+        setIncomeFormError({
+          field: errorData.field,
+          message: errorData.field === 'date'
+            ? 'Bitte geben Sie ein gültiges Zahlungsdatum an.'
+            : errorData.error || 'Die Einnahme konnte nicht gespeichert werden.',
+        });
       }
     } catch (error) {
       console.error('Error creating income:', error);
+      setIncomeFormError({ message: 'Die Einnahme konnte nicht gespeichert werden.' });
     }
   };
 
@@ -922,6 +938,7 @@ export function DashboardContent() {
               newIncome={newIncome}
               setNewIncome={setNewIncome}
               onSubmit={handleIncomeSubmit}
+              formError={incomeFormError}
               customers={customers}
               filters={filters.incomes}
               setFilters={(incomeFilters) => setFilters({ ...filters, incomes: incomeFilters })}

@@ -2,7 +2,8 @@ import { NextResponse, NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
+import { createFinancialAuditLog } from '@/lib/audit-log';
+import { inTransaction } from '@/lib/db-transaction';
 import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
 import {
   isFiniteNumber,
@@ -98,23 +99,38 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
       }
       try {
-        const expense = await prisma.expense.create({
-          data: {
-            description,
-            amount: parsedAmount,
-            date: parsedDate,
-            category: category || null,
-            taxRelevant,
-            taxDeductiblePercentage: parsedDeductible,
-            receiptFileName,
-            storedReceiptFileName,
-            depreciationYears: parsedDepreciation,
+        const expense = await inTransaction(async tx => {
+          const created = await tx.expense.create({
+            data: {
+              description,
+              amount: parsedAmount,
+              date: parsedDate,
+              category: category || null,
+              taxRelevant,
+              taxDeductiblePercentage: parsedDeductible,
+              receiptFileName,
+              storedReceiptFileName,
+              depreciationYears: parsedDepreciation,
+              userId,
+            },
+          });
+          await createFinancialAuditLog({
             userId,
-          },
+            action: 'CREATE',
+            entityType: 'Expense',
+            entityId: created.id,
+            entityName: created.description,
+            newValues: created,
+            metadata: {
+              actorId: userId,
+              tenantId: userId,
+              operation: 'expense.create',
+              originalReference: `expense:${created.id}`,
+              reason: 'Expense created',
+            },
+          }, tx);
+          return created;
         });
-
-        // Audit log
-        await auditCreate(userId, 'Expense', expense, expense.description);
 
         return NextResponse.json(expense);
       } catch (error) {
@@ -173,21 +189,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
       }
 
-      const expense = await prisma.expense.create({
-        data: {
-          description: descriptionText,
-          amount: parsedAmount,
-          date: parsedDate,
-          category: categoryText,
-          taxRelevant: parsedTaxRelevant,
-          taxDeductiblePercentage: parsedDeductible,
-          depreciationYears: parsedDepreciation,
+      const expense = await inTransaction(async tx => {
+        const created = await tx.expense.create({
+          data: {
+            description: descriptionText,
+            amount: parsedAmount,
+            date: parsedDate,
+            category: categoryText,
+            taxRelevant: parsedTaxRelevant,
+            taxDeductiblePercentage: parsedDeductible,
+            depreciationYears: parsedDepreciation,
+            userId,
+          },
+        });
+        await createFinancialAuditLog({
           userId,
-        },
+          action: 'CREATE',
+          entityType: 'Expense',
+          entityId: created.id,
+          entityName: created.description,
+          newValues: created,
+          metadata: {
+            actorId: userId,
+            tenantId: userId,
+            operation: 'expense.create',
+            originalReference: `expense:${created.id}`,
+            reason: 'Expense created',
+          },
+        }, tx);
+        return created;
       });
-
-      // Audit log
-      await auditCreate(userId, 'Expense', expense, expense.description);
 
       return NextResponse.json(expense);
     }
@@ -340,24 +371,11 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
     }
 
-    // Get old values for audit - verify ownership first
-    const oldExpense = await prisma.expense.findFirst({
-      where: { id: parsedId, userId },
-      include: { cashTransaction: true },
-    });
-
-    if (!oldExpense) {
-      return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
-    }
-    if (oldExpense.cashTransaction) {
-      return NextResponse.json({ error: 'Mit dem Kassenbuch verknüpfte Ausgaben müssen dort geändert werden' }, { status: 409 });
-    }
-
-    const updatedExpense = await prisma.$transaction(async (tx) => {
+    const result = await inTransaction(async (tx) => {
       const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
       if (!current) throw new Error('Ausgabe nicht gefunden');
       if (current.cashTransaction) throw new Error('Mit dem Kassenbuch verknüpfte Ausgaben müssen dort geändert werden');
-      return tx.expense.update({
+      const updated = await tx.expense.update({
         where: { id: parsedId, userId },
         data: {
           description: descriptionText,
@@ -370,14 +388,25 @@ export async function PUT(request: Request) {
           depreciationYears: parsedDepreciation,
         },
       });
+      await createFinancialAuditLog({
+        userId,
+        action: 'UPDATE',
+        entityType: 'Expense',
+        entityId: updated.id,
+        entityName: updated.description,
+        oldValues: current,
+        newValues: updated,
+        metadata: {
+          actorId: userId,
+          tenantId: userId,
+          operation: 'expense.update',
+          originalReference: `expense:${updated.id}`,
+          reason: 'Expense updated',
+        },
+      }, tx);
+      return updated;
     });
-
-    // Audit log
-    if (oldExpense) {
-      await auditUpdate(userId, 'Expense', parsedId, oldExpense, updatedExpense, updatedExpense.description);
-    }
-
-    return NextResponse.json(updatedExpense);
+    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
@@ -385,10 +414,14 @@ export async function PUT(request: Request) {
     if (error instanceof RequestBodyLimitError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    if (error instanceof Error && error.message === 'Ausgabe nicht gefunden') {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
     if (error instanceof Error && error.message.startsWith('Mit dem Kassenbuch')) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
+    console.error('Fehler beim Aktualisieren der Ausgabe:', error);
+    return NextResponse.json({ error: 'Fehler beim Aktualisieren der Ausgabe' }, { status: 500 });
   }
 }
 
@@ -403,39 +436,45 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
     }
 
-    // Get expense for audit before deletion - verify ownership
-    const expense = await prisma.expense.findFirst({
-      where: { id: Number(id), userId },
-      include: { cashTransaction: true },
-    });
-
-    if (!expense) {
-      return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
-    }
-    if (expense.cashTransaction) {
-      return NextResponse.json({ error: 'Mit dem Kassenbuch verknüpfte Ausgaben müssen dort gelöscht werden' }, { status: 409 });
+    const parsedId = Number(id);
+    if (!Number.isSafeInteger(parsedId) || parsedId <= 0) {
+      return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 });
     }
 
-    await prisma.$transaction(async (tx) => {
-      const current = await tx.expense.findFirst({ where: { id: Number(id), userId }, include: { cashTransaction: true } });
+    await inTransaction(async (tx) => {
+      const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
       if (!current) throw new Error('Ausgabe nicht gefunden');
       if (current.cashTransaction) throw new Error('Mit dem Kassenbuch verknüpfte Ausgaben müssen dort gelöscht werden');
-      await tx.expense.delete({ where: { id: Number(id), userId } });
+      await tx.expense.delete({ where: { id: parsedId, userId } });
+      await createFinancialAuditLog({
+        userId,
+        action: 'DELETE',
+        entityType: 'Expense',
+        entityId: current.id,
+        entityName: current.description,
+        oldValues: current,
+        metadata: {
+          actorId: userId,
+          tenantId: userId,
+          operation: 'expense.delete',
+          originalReference: `expense:${current.id}`,
+          reason: 'Expense deleted',
+        },
+      }, tx);
     });
-
-    // Audit log
-    if (expense) {
-      await auditDelete(userId, 'Expense', expense, expense.description);
-    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof Error && error.message === 'Ausgabe nicht gefunden') {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
     if (error instanceof Error && error.message.startsWith('Mit dem Kassenbuch')) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    return NextResponse.json({ error: 'Ausgabe nicht gefunden' }, { status: 404 });
+    console.error('Fehler beim Löschen der Ausgabe:', error);
+    return NextResponse.json({ error: 'Fehler beim Löschen der Ausgabe' }, { status: 500 });
   }
 }

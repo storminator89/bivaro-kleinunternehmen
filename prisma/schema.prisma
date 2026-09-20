@@ -13,8 +13,28 @@ model AppSettings {
   // Existing rows are normalised to unique legacy keys by the auth migration.
   singletonKey          String   @unique @default("global")
   allowRegistration     Boolean  @default(true)
+  // Once the first administrator has been provisioned, this marker remains
+  // set even if the user is later removed or the server restarts.
+  bootstrapConsumedAt   DateTime?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+// Host-wide SMTP override. Password material is stored only as AES-GCM
+// ciphertext; the encryption key is derived from NEXTAUTH_SECRET at runtime.
+model SmtpSettings {
+  id                  Int      @id @default(autoincrement())
+  singletonKey        String   @unique @default("global")
+  host                String
+  port                Int
+  secure              Boolean
+  from                String
+  user                String?
+  passwordCiphertext  String?
+  passwordIv          String?
+  passwordTag         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model User {

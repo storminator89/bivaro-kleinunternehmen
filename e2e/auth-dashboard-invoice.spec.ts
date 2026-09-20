@@ -9,11 +9,23 @@ const testUser = {
 };
 
 test.describe.serial('auth, dashboard and invoice flow', () => {
-  test('registers the first admin user and opens the dashboard', async ({ page }) => {
+  test('registers the first admin user and opens the dashboard', async ({ page }, testInfo) => {
+    const deniedBootstrap = await page.request.post('/api/auth/register', { data: {
+      email: 'unproven-admin@example.test', name: 'Unproven', password: testUser.password,
+    } });
+    expect(deniedBootstrap.status()).toBe(403);
     await page.goto('/register');
 
     await page.getByLabel('Name').fill(testUser.name);
     await page.getByLabel('E-Mail').fill(testUser.email);
+    await page.getByLabel('Bootstrap-Nachweis', { exact: true }).fill('e2e-bootstrap-token-for-isolated-fixtures-only');
+    const overlongPassword = 'Aa1' + '😀'.repeat(18);
+    await page.getByLabel('Passwort', { exact: true }).fill(overlongPassword);
+    await page.getByLabel('Passwort bestätigen').fill(overlongPassword);
+    await page.getByRole('button', { name: 'Admin-Konto erstellen' }).click();
+    await expect(page.getByText('Passwort darf maximal 72 UTF-8-Bytes lang sein.', { exact: false })).toBeVisible();
+    await expect(page).toHaveURL(/\/register/);
+    await page.screenshot({ path: testInfo.outputPath('password-byte-policy.png'), fullPage: true });
     await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
     await page.getByLabel('Passwort bestätigen').fill(testUser.password);
     await page.getByRole('button', { name: 'Admin-Konto erstellen' }).click();
@@ -42,6 +54,52 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByRole('heading', { name: 'Rechnung erstellen', level: 1 })).toBeVisible();
   });
 
+  test('lets an admin maintain SMTP without exposing the stored password', async ({ page }, testInfo) => {
+    expect((await page.request.get('/api/settings/smtp')).status()).toBe(401);
+    expect((await page.request.put('/api/settings/smtp', { data: {} })).status()).toBe(401);
+    expect((await page.request.delete('/api/settings/smtp')).status()).toBe(401);
+    await page.goto('/login');
+    await page.getByLabel('E-Mail').fill(testUser.email);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+    await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto('/settings');
+    await page.locator('#smtp-host').fill('smtp.example.test');
+    await page.locator('#smtp-port').fill('587');
+    await page.locator('#smtp-from').fill('rechnung@example.test');
+    await page.locator('#smtp-user').fill('synthetic-mail-user');
+    const syntheticPassword = 'synthetic-smtp-password-e2e';
+    await page.locator('#smtp-password').fill(syntheticPassword);
+    await page.getByRole('button', { name: 'SMTP speichern', exact: true }).click();
+    await expect(page.getByText('SMTP-Konfiguration gespeichert.', { exact: true })).toBeVisible();
+    await expect(page.locator('#smtp-password')).toHaveValue('');
+
+    await page.reload();
+    await expect(page.locator('#smtp-host')).toHaveValue('smtp.example.test');
+    await expect(page.locator('#smtp-password')).toHaveValue('');
+    await expect(page.getByText('· Passwort gespeichert', { exact: true })).toBeVisible();
+    await page.locator('#smtp-port').fill('465');
+    await page.locator('#smtp-secure').click();
+    await page.getByRole('button', { name: 'SMTP speichern', exact: true }).click();
+    await expect(page.getByText('SMTP-Konfiguration gespeichert.', { exact: true })).toBeVisible();
+    const response = await page.request.get('/api/settings/smtp');
+    expect(response.ok()).toBe(true);
+    const configuration = await response.json();
+    expect(configuration).toMatchObject({ port: 465, secure: true, source: 'database', passwordConfigured: true });
+    expect(configuration).not.toHaveProperty('password');
+    expect(configuration).not.toHaveProperty('encryptedPassword');
+    expect(JSON.stringify(configuration)).not.toContain(syntheticPassword);
+    const backup = await page.request.get('/api/backup');
+    expect(backup.ok()).toBe(true);
+    expect(await backup.text()).not.toContain(syntheticPassword);
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await page.locator('#smtp-versand').scrollIntoViewIfNeeded();
+    await page.locator('#smtp-versand').screenshot({ path: testInfo.outputPath('smtp-settings.png') });
+    await page.getByRole('button', { name: 'Gespeicherte Konfiguration entfernen', exact: true }).click();
+    await expect(page.getByText('Gespeicherte SMTP-Konfiguration entfernt.', { exact: false })).toBeVisible();
+    expect((await (await page.request.get('/api/settings/smtp')).json()).source).not.toBe('database');
+  });
+
   test('honors merge mode even when the backup requests overwrite and displays missing-file warnings', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('E-Mail').fill(testUser.email);
@@ -51,6 +109,20 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const incomeResponse = await page.request.post('/api/incomes', { data: { description: 'Must survive merge', amount: 42, date: '2026-06-15' } });
     expect(incomeResponse.ok()).toBe(true);
     const income = await incomeResponse.json();
+
+    const invalidBackup = { version: '2.0', confirmOverwrite: true, data: {
+      invoices: [{ id: 1, fileName: 'paid.pdf', storedFileName: 'paid.pdf', status: 'PAID', totalAmount: 100, parsedData: {} }],
+      incomes: [{ id: 1, description: 'Conflicting payment', amount: 90, invoiceId: 1, date: '2026-06-15' }],
+    } };
+    for (const endpoint of ['/api/backup/preview', '/api/backup/restore']) {
+      const rejected = await page.request.post(endpoint, { data: invalidBackup });
+      expect(rejected.status()).toBe(400);
+      expect((await rejected.json()).issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: 'incomes[0].amount' }),
+      ]));
+    }
+    const preserved = await (await page.request.get('/api/incomes')).json();
+    expect(preserved.items.some((item: { id: number }) => item.id === income.id)).toBe(true);
 
     await page.goto('/settings');
     await page.locator('#restore-file').setInputFiles({
@@ -212,6 +284,16 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await page.locator('#incomeAmount').fill('45.67');
       await expect(page.getByLabel('Zahlungsdatum', { exact: true })).toHaveAttribute('required', '');
       await page.getByLabel('Zahlungsdatum', { exact: true }).fill('2025-12-31');
+      // Exercise a real server-side calendar rejection and the form's recovery.
+      await page.route('**/api/incomes', async route => {
+        await route.continue({ postData: JSON.stringify({ ...route.request().postDataJSON(), date: '2026-02-30' }) });
+      }, { times: 1 });
+      const rejected = page.waitForResponse(response => response.url().endsWith('/api/incomes') && response.request().method() === 'POST');
+      await page.getByRole('button', { name: 'Einnahme speichern', exact: true }).click();
+      expect((await rejected).status()).toBe(400);
+      await expect(page.locator('#income-date-error')).toContainText('Zahlungsdatum');
+      await expect(page.getByLabel('Zahlungsdatum', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+      await page.getByLabel('Zahlungsdatum', { exact: true }).locator('..').screenshot({ path: testInfo.outputPath('income-date-field-error.png'), animations: 'disabled' });
       const saved = page.waitForResponse(response => response.url().endsWith('/api/incomes') && response.request().method() === 'POST');
       await page.getByRole('button', { name: 'Einnahme speichern', exact: true }).click();
       const response = await saved;

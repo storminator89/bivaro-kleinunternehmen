@@ -37,6 +37,7 @@ type IncomesTabProps = {
   newIncome: NewIncome;
   setNewIncome: React.Dispatch<React.SetStateAction<NewIncome>>;
   onSubmit: (e: React.FormEvent) => void;
+  formError: { field?: string; message: string } | null;
   customers: Customer[];
   
   // Filter state
@@ -73,6 +74,7 @@ export function IncomesTab({
   newIncome,
   setNewIncome,
   onSubmit,
+  formError,
   customers,
   filters,
   setFilters,
@@ -145,8 +147,15 @@ export function IncomesTab({
                   type="date"
                   value={newIncome.date}
                   onChange={(e) => setNewIncome({ ...newIncome, date: e.target.value })}
+                  aria-invalid={formError?.field === 'date'}
+                  aria-describedby={formError?.field === 'date' ? 'income-date-error' : undefined}
                   required
                 />
+                {formError?.field === 'date' && (
+                  <p id="income-date-error" role="alert" className="text-sm text-destructive">
+                    {formError.message}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="customer">Kunde/Auftraggeber</Label>
@@ -186,6 +195,11 @@ export function IncomesTab({
               </Button>
             </div>
           </form>
+          {formError && formError.field !== 'date' && (
+            <p role="alert" className="mt-3 text-sm text-destructive">
+              {formError.message}
+            </p>
+          )}
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { normalizeSendEmailRequest, sendDocumentEmail } from '@/lib/email';
+import { EmailDeliveryRecordingError, normalizeSendEmailRequest, sendDocumentEmail } from '@/lib/email';
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +12,12 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
+    }
+    if (error instanceof EmailDeliveryRecordingError) {
+      return NextResponse.json({
+        error: error.message, code: 'DELIVERY_RECORDING_FAILED',
+        smtpAccepted: true, retryUnsafe: true, messageId: error.messageId,
+      }, { status: 502 });
     }
 
     console.error('E-Mail-Versand fehlgeschlagen:', error);

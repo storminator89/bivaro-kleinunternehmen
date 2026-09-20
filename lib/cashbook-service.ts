@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
+import { parseMoneyEUR } from '@/lib/money';
 
 export class CashbookError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -11,7 +12,7 @@ export function cashAmount(value: unknown, positive = true): number {
   if (!Number.isFinite(amount) || Math.abs(amount) > 1e12 || (positive && amount <= 0)) {
     throw new CashbookError('Ungültiger Betrag');
   }
-  const rounded = Math.round((amount + Number.EPSILON) * 100) / 100;
+  const rounded = cents(amount) / 100;
   // Cashbook amounts are rounded to cents (the legacy storage is Float).
   // A positive sub-cent value must not
   // silently become a zero-value booking after rounding.
@@ -38,10 +39,13 @@ function textValue(value: unknown, required = false): string | null {
 }
 
 function cents(value: number): number {
-  const result = Math.round((value + Number.EPSILON) * 100);
-  if (!Number.isFinite(value) || !Number.isSafeInteger(result)) {
+  let result: number;
+  try {
+    result = Number(parseMoneyEUR(value, { mode: 'normalize' }));
+  } catch {
     throw new CashbookError('Kassenbetrag überschreitet den sicher berechenbaren Bereich', 409);
   }
+  if (!Number.isSafeInteger(result)) throw new CashbookError('Kassenbetrag überschreitet den sicher berechenbaren Bereich', 409);
   return result;
 }
 

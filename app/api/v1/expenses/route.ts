@@ -1,4 +1,4 @@
-import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
+import { createFinancialAuditLog } from '@/lib/audit-log';
 /**
  * API v1 - Expenses Endpoint
  * 
@@ -204,19 +204,36 @@ export async function POST(request: NextRequest) {
       const parsedTaxRelevant = taxRelevant === undefined ? true : parseTaxRelevant(taxRelevant);
       const parsedDeductible = parsePercentage(taxDeductiblePercentage, 100);
       const parsedDepreciation = parseDepreciationYears(depreciationYears);
-      const expense = await inTransaction(async tx => tx.expense.create({
-        data: {
-          description: description.trim(),
-          amount: parsedAmount,
-          date: parsedDate,
-          category: parsedCategory,
-          taxRelevant: parsedTaxRelevant,
-          taxDeductiblePercentage: parsedDeductible,
-          depreciationYears: parsedDepreciation,
+      const expense = await inTransaction(async tx => {
+        const created = await tx.expense.create({
+          data: {
+            description: description.trim(),
+            amount: parsedAmount,
+            date: parsedDate,
+            category: parsedCategory,
+            taxRelevant: parsedTaxRelevant,
+            taxDeductiblePercentage: parsedDeductible,
+            depreciationYears: parsedDepreciation,
+            userId,
+          },
+        });
+        await createFinancialAuditLog({
           userId,
-        },
-      }));
-      await auditCreate(userId, 'Expense', expense);
+          action: 'CREATE',
+          entityType: 'Expense',
+          entityId: created.id,
+          entityName: created.description,
+          newValues: created,
+          metadata: {
+            actorId: userId,
+            tenantId: userId,
+            operation: 'expense.create',
+            originalReference: `expense:${created.id}`,
+            reason: 'Expense created through API v1',
+          },
+        }, tx);
+        return created;
+      });
 
       const response = apiSuccess(expense);
       response.headers.set('Location', `/api/v1/expenses/${expense.id}`);
@@ -286,9 +303,24 @@ export async function PUT(request: NextRequest) {
             ...(depreciationYears !== undefined && { depreciationYears: parsedDepreciation }),
           },
         });
+        await createFinancialAuditLog({
+          userId,
+          action: 'UPDATE',
+          entityType: 'Expense',
+          entityId: expense.id,
+          entityName: expense.description,
+          oldValues: existing,
+          newValues: expense,
+          metadata: {
+            actorId: userId,
+            tenantId: userId,
+            operation: 'expense.update',
+            originalReference: `expense:${expense.id}`,
+            reason: 'Expense updated through API v1',
+          },
+        }, tx);
         return { existing, expense };
       });
-      await auditUpdate(userId, 'Expense', result.existing.id, result.existing, result.expense);
 
       const response = apiSuccess(result.expense);
       Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));
@@ -313,16 +345,30 @@ export async function DELETE(request: NextRequest) {
 
     try {
       const parsedId = parsePositiveId(id, 'expense ID');
-      const existing = await inTransaction(async tx => {
+      await inTransaction(async tx => {
         const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
         if (!current) throw new ExpenseMutationError(404, 'NOT_FOUND', 'Expense not found');
         if (current.cashTransaction) {
           throw new ExpenseMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
         }
         await tx.expense.delete({ where: { id: parsedId, AND: [{ userId }, { cashTransaction: { is: null } }] } });
+        await createFinancialAuditLog({
+          userId,
+          action: 'DELETE',
+          entityType: 'Expense',
+          entityId: current.id,
+          entityName: current.description,
+          oldValues: current,
+          metadata: {
+            actorId: userId,
+            tenantId: userId,
+            operation: 'expense.delete',
+            originalReference: `expense:${current.id}`,
+            reason: 'Expense deleted through API v1',
+          },
+        }, tx);
         return current;
       });
-      await auditDelete(userId, 'Expense', existing);
 
       const response = apiSuccess({ deleted: true, id: parsedId });
       Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));

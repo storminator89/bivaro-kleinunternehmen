@@ -209,7 +209,7 @@ npm run dev
 
 Die Anwendung ist nun unter **[http://localhost:3000](http://localhost:3000)** erreichbar.
 
-Beim ersten Aufruf von `/register` können Sie das **erste Admin-Konto** erstellen. Danach ist die Registrierung standardmäßig gesperrt und muss vom Admin freigegeben werden.
+Beim ersten Aufruf von `/register` können Sie das **erste Admin-Konto** nur mit dem einmaligen Bootstrap-Nachweis aus `BIVARO_SETUP_TOKEN` erstellen. Ohne gesetztes Server-Token bleibt die Erstregistrierung geschlossen. Nach erfolgreicher Erstellung wird der Nachweis dauerhaft als verbraucht markiert und kann auch nach einem Neustart oder einer späteren Benutzerlöschung nicht erneut verwendet werden. Danach ist die Registrierung standardmäßig gesperrt und kann vom Admin bewusst freigegeben werden.
 
 ---
 
@@ -222,6 +222,7 @@ Alle Einstellungen erfolgen über die `.env`-Datei (Kopie von `.env.example`):
 | `DATABASE_URL` | Pfad zur SQLite-Datenbank | `file:./prisma/dev.db` |
 | `NEXTAUTH_SECRET` | Geheimschlüssel für Sitzungen (mind. 32 Zeichen) | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | Öffentliche URL der App | `http://localhost:3000` |
+| `BIVARO_SETUP_TOKEN` | Einmaliger serverseitiger Nachweis für das erste Admin-Konto; wird weder gespeichert noch zurückgegeben | `openssl rand -hex 32` |
 | `PORT` | TCP-Port (optional, Standard: 3000) | `3000` |
 | `ALLOWED_ORIGINS` | CORS-Whitelist für externe API-Nutzung | `https://meine-domain.de` |
 | `SMTP_HOST` | SMTP-Server für optionalen E-Mail-Versand | `smtp.example.de` |
@@ -234,6 +235,10 @@ Alle Einstellungen erfolgen über die `.env`-Datei (Kopie von `.env.example`):
 **Wichtig:** Die `.env`-Datei darf **niemals** in Git eingecheckt werden (steht bereits in `.gitignore`).
 
 Der E-Mail-Versand nutzt SMTP als Standardschnittstelle. Vor dem Versand öffnet die App eine Vorschau mit editierbarem Empfänger, Betreff, Text und PDF-Anhang-Viewer; ohne vollständige SMTP-Konfiguration ist nur die Vorschau verfügbar.
+
+Administratoren können die globale SMTP-Konfiguration unter *Einstellungen → SMTP-Versand* pflegen. Die API `/api/settings/smtp` ist ausschließlich für Administratoren verfügbar. Ein gespeichertes SMTP-Passwort wird mit AES-GCM und einem aus `NEXTAUTH_SECRET` abgeleiteten Schlüssel verschlüsselt und weder angezeigt noch in die Benutzer-Backupexporte übernommen. Ohne Datenbank-Override verwendet der Versand die `SMTP_*`-/`EMAIL_FROM`-Umgebungsvariablen. Bei einem gespeicherten Override erzwingt `secure=false` STARTTLS; die ENV-Konfiguration behält das bisherige Transportverhalten.
+
+Nach einer Änderung von `NEXTAUTH_SECRET` muss das SMTP-Passwort erneut eingegeben werden. Ein leeres Passwortfeld behält das bestehende Passwort bei; ein leerer Benutzername entfernt die Anmeldung. Speichern prüft die Konfiguration, baut aber keine Verbindung auf und versendet keine Testmail. Beim Upgrade ist vor der Nutzung der neuen Oberfläche `npm run db:migrate` auf der vorgesehenen Anwendungsdatenbank auszuführen.
 
 ---
 
@@ -334,7 +339,7 @@ Für den Betrieb auf einem eigenen Server empfehlen wir Docker:
 ```bash
 # 1. Secrets in .env setzen
 cp .env.example .env
-# NEXTAUTH_SECRET und NEXTAUTH_URL anpassen!
+# NEXTAUTH_SECRET, BIVARO_SETUP_TOKEN und NEXTAUTH_URL anpassen!
 
 # 2. Image bauen
 npm run docker:build
@@ -383,11 +388,17 @@ zusätzliche getrennte Sicherung der Datenbank **und** der Upload-Dateien sowie
 die fachliche Wiederherstellungsprüfung gehören zum Releaseablauf. Einzelheiten,
 Prüfgrenzen und Rückfallverfahren stehen in [BV-001/BV-002](docs/backlog/BV-001-002.md).
 
+Die Migration `20260920150000_income_date_review` erzeugt für vorhandene manuelle
+Einnahmen einmalige **Prüfhinweise** im Audit-Log. Prüfen Sie das gespeicherte
+Zahlungsdatum anhand Ihrer Belege; der Hinweis bedeutet nicht, dass es nachweislich
+falsch ist. Historische Datumswerte, Beträge und Verknüpfungen bleiben unverändert.
+Auch Einnahmen mit Mitternachtsdatum oder Kassenverknüpfung werden berücksichtigt.
+
 ### 📧 E-Mail-Versand im Docker-Betrieb
 
 Der E-Mail-Versand ist vollständig optional. Ohne SMTP-Konfiguration bleibt die Vorschau verfügbar, der Versand-Button wird aber in der UI deaktiviert.
 
-Tragen Sie die SMTP-Variablen in Ihre `.env`-Datei ein – Docker Compose liest sie beim Start automatisch aus:
+Richten Sie den Mailserver als Administrator unter *Einstellungen → SMTP-Versand* ein. Alternativ können Sie die SMTP-Variablen in Ihre `.env`-Datei eintragen – Docker Compose liest sie beim Start automatisch aus:
 
 ```env
 # .env (neben docker-compose.yml)
@@ -420,7 +431,7 @@ EMAIL_FROM=Bivaro <rechnung@example.de>
 
 > 💡 **Tipp für Gmail:** Aktivieren Sie unter *Google-Konto → Sicherheit* ein **App-Passwort** statt Ihr normales Passwort zu verwenden. 2FA muss dabei aktiv sein.
 
-> 🔒 **Sicherheit:** SMTP-Passwörter gehören **nicht** in die `docker-compose.yml`. Nutzen Sie immer die `.env`-Datei (steht in `.gitignore`) oder Docker Secrets für Produktivumgebungen.
+> 🔒 **Sicherheit:** SMTP-Passwörter gehören **nicht** in die `docker-compose.yml`. Nutzen Sie die verschlüsselte Speicherung über die Einstellungen oder für Serverkonfigurationen die `.env`-Datei (steht in `.gitignore`) beziehungsweise Docker Secrets.
 
 ---
 

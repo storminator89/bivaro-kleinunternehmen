@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/password";
 import { auditSecurityEvent } from "@/lib/audit-log";
 import {
   registerUserAtomically,
+  BootstrapVerificationError,
   RegistrationClosedError,
   RegistrationEmailTakenError,
 } from "@/lib/auth-registration";
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
     const rawEmail = typeof body?.email === "string" ? body.email : "";
     const password = typeof body?.password === "string" ? body.password : "";
     const name = typeof body?.name === "string" ? body.name : "";
+    const setupToken = typeof body?.setupToken === "string" ? body.setupToken : undefined;
     const email = rawEmail.trim().toLowerCase();
 
     if (!email || !password) {
@@ -70,6 +72,7 @@ export async function POST(request: NextRequest) {
       email,
       name: sanitizeString(name, 100) || null,
       passwordHash,
+      setupToken,
     });
 
     await auditSecurityEvent(result.user.id, {
@@ -94,6 +97,13 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof RegistrationClosedError) {
+      return NextResponse.json(
+        { message: error.message },
+        { status: 403 },
+      );
+    }
+
+    if (error instanceof BootstrapVerificationError) {
       return NextResponse.json(
         { message: error.message },
         { status: 403 },

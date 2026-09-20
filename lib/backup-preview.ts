@@ -5,6 +5,7 @@ import {
   validateBackupManifest,
   type BackupManifest,
 } from '@/lib/backup-manifest';
+import { validateBackupForRestore } from '@/lib/backup-restore';
 
 export type BackupPreview = {
   version: string;
@@ -60,6 +61,11 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   if (typeof candidate.version !== 'string' || !candidate.data || typeof candidate.data !== 'object') {
     throw new Error('Ungültiges Backup-Format');
   }
+
+  // Preview is the dry-run gate for restore. Keep this call before building
+  // counts so a backup accepted here is governed by exactly the same shape,
+  // relationship and domain rules as the committing restore.
+  validateBackupForRestore(backup);
 
   const data = candidate.data;
   const counts = {

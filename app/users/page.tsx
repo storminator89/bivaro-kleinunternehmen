@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserX, UserPlus, Loader2, Pencil, ShieldAlert } from "lucide-react";
+import { validatePassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
 
 interface User {
   id: string;
@@ -95,6 +96,8 @@ export default function UsersPage() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validation = validatePassword(newUser.password);
+    if (!validation.valid) return alert(validation.message);
     setIsSubmitting(true);
 
     try {
@@ -133,6 +136,10 @@ export default function UsersPage() {
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingUser.password) {
+      const validation = validatePassword(editingUser.password);
+      if (!validation.valid) return alert(validation.message);
+    }
     setIsSubmitting(true);
 
     try {
@@ -246,8 +253,9 @@ export default function UsersPage() {
                     value={newUser.password}
                     onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                     required
-                    minLength={6}
+                    minLength={8}
                   />
+                  <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
                 </div>
               </div>
               <DialogFooter>
@@ -309,9 +317,10 @@ export default function UsersPage() {
                     type="password"
                     value={editingUser.password}
                     onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
-                    minLength={6}
+                    minLength={8}
                     placeholder="••••••"
                   />
+                  <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
                 </div>
               </div>
               <DialogFooter>

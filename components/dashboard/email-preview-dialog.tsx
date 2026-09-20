@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { AlertCircle, CheckCircle2, Loader2, Mail, Paperclip, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -238,6 +239,11 @@ export function EmailPreviewDialog({
                     <AlertTitle>E-Mail-Server nicht vollständig konfiguriert</AlertTitle>
                     <AlertDescription>
                       Fehlend: {draft.missingConfiguration.join(", ")}. Die Vorschau ist möglich, der Versand erst nach der SMTP-Konfiguration.
+                      <span className="mt-2 block">
+                        <Link href="/settings#smtp-versand" className="font-medium underline underline-offset-2">
+                          SMTP-Einstellungen öffnen
+                        </Link>{" "}(Änderung nur durch Administratoren)
+                      </span>
                     </AlertDescription>
                   </Alert>
                 )}

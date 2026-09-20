@@ -17,6 +17,7 @@ export function createTestDatabase() {
   const client = new PrismaClient({ datasources: { db: { url } }, log: [{ emit: 'event', level: 'query' }] });
   return {
     client,
+    url,
     async cleanup() { await client.$disconnect(); rmSync(directory, { recursive: true, force: true }); },
   };
 }

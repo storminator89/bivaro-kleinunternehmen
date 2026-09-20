@@ -91,6 +91,7 @@ interface Pagination {
 }
 
 const ACTION_LABELS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  REVIEW: { label: 'Prüfhinweis', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', icon: <AlertTriangle className="h-3 w-3" /> },
   CREATE: { label: 'Erstellt', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', icon: <Plus className="h-3 w-3" /> },
   UPDATE: { label: 'Geändert', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: <Pencil className="h-3 w-3" /> },
   DELETE: { label: 'Gelöscht', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: <Trash2 className="h-3 w-3" /> },
@@ -262,7 +263,7 @@ export default function AuditLogsPage() {
               <div>
                 <Label htmlFor="entityType">Bereich</Label>
                 <Select value={entityType} onValueChange={setEntityType}>
-                  <SelectTrigger>
+                  <SelectTrigger id="entityType">
                     <SelectValue placeholder="Alle Bereiche" />
                   </SelectTrigger>
                   <SelectContent>
@@ -283,7 +284,7 @@ export default function AuditLogsPage() {
               <div>
                 <Label htmlFor="action">Aktion</Label>
                 <Select value={action} onValueChange={setAction}>
-                  <SelectTrigger>
+                  <SelectTrigger id="action">
                     <SelectValue placeholder="Alle Aktionen" />
                   </SelectTrigger>
                   <SelectContent>
@@ -294,6 +295,7 @@ export default function AuditLogsPage() {
                     <SelectItem value="LOGIN">Anmeldung</SelectItem>
                     <SelectItem value="EXPORT">Export</SelectItem>
                     <SelectItem value="BACKUP">Backup</SelectItem>
+                    <SelectItem value="REVIEW">Prüfhinweis</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
 
-const state = vi.hoisted(() => ({ client: null as unknown, userId: 'cash-owner' }));
-vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
+const state = vi.hoisted(() => ({ client: null as unknown, userId: 'cash-owner', context: null as AsyncLocalStorage<PrismaClient> | null }));
+vi.mock('@/lib/prisma', () => ({ get prisma() { return state.context?.getStore() ?? state.client; } }));
 vi.mock('@/lib/get-user-id', () => ({ getUserId: async () => state.userId }));
 
 import { createCashTransaction, updateCashTransaction, deleteCashTransaction } from '@/lib/cashbook-service';
@@ -18,6 +20,7 @@ let apiKey: string;
 beforeAll(async () => {
   database = createTestDatabase();
   state.client = database.client;
+  state.context = new AsyncLocalStorage<PrismaClient>();
   await database.client.user.createMany({ data: ['cash-owner', 'other-owner'].map(id => ({ id, email: `${id}@cash.test`, password: 'unused' })) });
   const generated = generateApiKey();
   apiKey = generated.key;
@@ -68,6 +71,34 @@ describe('atomic nonnegative cash chronology', () => {
     await entry(cashBook.id, 'AUSGABE', 0.3);
     expect((await rows(cashBook.id)).map(row => row.runningBalance)).toEqual([0.1, 0.3, 0]);
   });
+
+  it('rounds decimal half-cents consistently with the shared money policy', async () => {
+    const cashBook = await book();
+    const deposit = await entry(cashBook.id, 'EINNAHME', 10.075);
+    expect(deposit.amount).toBe(10.08);
+    await entry(cashBook.id, 'AUSGABE', 10.08);
+    expect((await rows(cashBook.id)).map(row => row.runningBalance)).toEqual([10.08, 0]);
+  });
+
+  it('prevents overspending across independent database connections', async () => {
+    const cashBook = await book(10);
+    // eslint-disable-next-line no-restricted-syntax -- a second connection to this suite's isolated fixture exercises the DB lock, not the process queue.
+    const secondClient = new PrismaClient({ datasources: { db: { url: database.url } } });
+    try {
+      const results = await Promise.allSettled([
+        state.context!.run(database.client, () => entry(cashBook.id, 'AUSGABE', 7)),
+        state.context!.run(secondClient, () => entry(cashBook.id, 'AUSGABE', 7)),
+      ]);
+      expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.find(result => result.status === 'rejected') as PromiseRejectedResult;
+      expect(rejected.reason).toMatchObject({ status: 409 });
+      const persisted = await rows(cashBook.id);
+      expect(persisted.map(row => row.runningBalance)).toEqual([3]);
+      expect(await database.client.auditLog.count({ where: { entityType: 'CashTransaction', entityId: String(persisted[0].id), action: 'CREATE' } })).toBe(1);
+    } finally {
+      await secondClient.$disconnect();
+    }
+  }, 40_000);
 
   it('enforces the same overdraw boundary for simultaneous web and v1 requests', async () => {
     const cashBook = await book(10);

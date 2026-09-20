@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { inTransaction } from '@/lib/db-transaction';
-import { auditCreate } from '@/lib/audit-log';
+import { createFinancialAuditLog } from '@/lib/audit-log';
 import { calculateNextExecution, endOfDay } from '@/lib/recurring-schedule';
 
 // Keep catch-up transactions bounded; additional calls resume from nextExecution.
@@ -29,11 +29,29 @@ export async function executeRecurringExpenses(userId: string, id?: number, at =
       while (current <= cutoff && processed < remainingBudget) {
         const key = { recurringExpenseId: recurring.id, scheduledDate: current };
         const existing = await tx.expense.findUnique({ where: { recurringExpenseId_scheduledDate: key } });
-        if (!existing) expenses.push(await tx.expense.create({ data: {
-          ...key, userId, description: recurring.description, amount: recurring.amount,
-          date: current, category: recurring.category, taxRelevant: recurring.taxRelevant,
-          taxDeductiblePercentage: recurring.taxDeductiblePercentage,
-        } }));
+        if (!existing) {
+          const created = await tx.expense.create({ data: {
+            ...key, userId, description: recurring.description, amount: recurring.amount,
+            date: current, category: recurring.category, taxRelevant: recurring.taxRelevant,
+            taxDeductiblePercentage: recurring.taxDeductiblePercentage,
+          } });
+          await createFinancialAuditLog({
+            userId,
+            action: 'CREATE',
+            entityType: 'Expense',
+            entityId: created.id,
+            entityName: created.description,
+            newValues: created,
+            metadata: {
+              actorId: userId,
+              tenantId: userId,
+              operation: 'expense.recurring.create',
+              originalReference: `expense:${created.id}`,
+              reason: 'Recurring expense executed',
+            },
+          }, tx);
+          expenses.push(created);
+        }
         lastExecuted = current;
         current = calculateNextExecution(recurring.interval, recurring.dayOfMonth, current);
         processed++;
@@ -50,7 +68,6 @@ export async function executeRecurringExpenses(userId: string, id?: number, at =
       updatedRecurring.push(result.updated);
     }
   }
-  for (const expense of createdExpenses) await auditCreate(userId, 'Expense', expense, expense.description);
   const hasMore = await prisma.recurringExpense.count({ where: {
     userId, isActive: true, nextExecution: { lte: today }, ...(id ? { id } : {}),
   } }) > 0;

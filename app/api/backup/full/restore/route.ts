@@ -111,7 +111,10 @@ export async function POST(request: NextRequest) {
       : 500;
     console.error('Full restore error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Wiederherstellung fehlgeschlagen' },
+      {
+        error: error instanceof Error ? error.message : 'Wiederherstellung fehlgeschlagen',
+        ...(error instanceof BackupValidationError ? { issues: error.issues, truncated: error.truncated } : {}),
+      },
       { status },
     );
   }

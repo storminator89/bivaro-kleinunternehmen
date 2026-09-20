@@ -71,11 +71,11 @@ describe('validatePassword', () => {
             expect(result.message).toContain('8 Zeichen')
         })
 
-        it('should reject passwords longer than 128 characters', () => {
+        it('should reject passwords longer than 72 UTF-8 bytes', () => {
             const longPassword = 'Aa1' + 'x'.repeat(130)
             const result = validatePassword(longPassword)
             expect(result.valid).toBe(false)
-            expect(result.message).toContain('128 Zeichen')
+            expect(result.message).toContain('72 UTF-8-Bytes')
         })
     })
 

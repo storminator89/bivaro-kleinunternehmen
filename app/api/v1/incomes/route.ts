@@ -7,7 +7,7 @@
  * DELETE /api/v1/incomes?id=   - Delete income
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { BusinessDateError, parseBusinessDate } from '@/lib/business-date';
@@ -60,7 +60,7 @@ function parseRequiredBusinessDate(value: unknown): Date {
     return parseBusinessDate(value);
   } catch (error) {
     if (error instanceof BusinessDateError) {
-      throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Business date must use a valid YYYY-MM-DD value');
+      throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Business date must use a valid YYYY-MM-DD value', 'date');
     }
     throw error;
   }
@@ -77,7 +77,16 @@ function parseTaxRelevant(value: unknown): boolean {
 }
 
 function mutationErrorResponse(error: unknown) {
-  return error instanceof IncomeMutationError ? apiError(error.message, error.status, error.code) : null;
+  if (!(error instanceof IncomeMutationError)) return null;
+  if (!error.field) return apiError(error.message, error.status, error.code);
+  return NextResponse.json({
+    error: {
+      message: error.message,
+      code: error.code,
+      field: error.field,
+      timestamp: new Date().toISOString(),
+    },
+  }, { status: error.status });
 }
 
 export async function OPTIONS(request: NextRequest) {

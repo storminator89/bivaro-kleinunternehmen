@@ -1,13 +1,16 @@
 {
-  "generatedAt": "2026-09-19",
-  "statusObservedAt": "2026-09-19T22:12:00+02:00",
+  "generatedAt": "2026-09-20",
+  "statusObservedAt": "2026-09-20T21:29:59+02:00",
   "auditBaseCommit": "85972ed9fe61d268b6640882ea2ddc6e616d1859",
+  "gitBasis": "0208c62f26ff60cf855dfef21e74e0ff6466e7c9",
+  "worktreeAtDocumentation": "Welle 7 documentation added on the uncommitted Welle-5/Welle-6 worktree; Welle-5 and Welle-6 changes preserved, with uncommitted BV-011/BV-025/BV-030 implementation and focused test files visible at status observation",
   "source": "/home/pmeyhoefer/Downloads/Bivaro_Agent_Backlog.json",
   "statusSummary": {
-    "partial": 16,
-    "in_progress": 3,
-    "architecture_discovery": 5,
-    "proposed_unimplemented": 136
+    "complete": 3,
+    "partial": 21,
+    "in_progress": 0,
+    "architecture_discovery": 4,
+    "proposed_unimplemented": 132
   },
   "knownIncidents": [
     {
@@ -99,16 +102,19 @@
       "id": "BV-006",
       "title": "Finanz-Audit in dieselbe Transaktion aufnehmen",
       "status": "partial",
-      "implemented": "Welle 2: erste vertikale Rechnungsmutation mit Audit an gemeinsamer transaktionaler Servicegrenze technisch umgesetzt.",
-      "remaining": "Weitere Finanzschreibwege, API-/SMTP-Races, Review sowie fachliche und produktive Freigaben offen; technische Gesamtprüfung grün, BV-001 bleibt technische Vorstufe.",
+      "implemented": "Welle 2: erste vertikale Rechnungsmutation mit Audit an gemeinsamer transaktionaler Servicegrenze technisch umgesetzt. Welle 5 ergänzt die Ausgabenmutationen in Web, v1 und wiederkehrender Ausführung an derselben finanziellen Auditgrenze.",
+      "remaining": "Finanzagent meldet 8/8 gezielte Ausgaben-Auditfälle einschließlich Multipart-Dateibereinigung und v1- PUT/DELETE-Auditrollback; Root-Review sieht für diesen Scope keine weitere Lücke. Weitere Finanzrouten, ein dauerhaftes Idempotenzmodell, fachliche und produktive Freigaben bleiben offen; BV-001 ist technische Vorstufe.",
       "tests": [
         "Gezielter realer Integrationslauf: 3 Testdateien, 21 Tests bestanden; npx tsc --noEmit und gezieltes ESLint für Kernpfade erfolgreich.",
-        "Zwischen- und Abschlussprüfung: File-Security-Integration 10/10, Betriebsagentenlauf 25/25, Playwright/E2E 7/7 mit Productionbuild in 18,4 s sowie finale Gesamtprüfung 26 Dateien/240 Tests bestanden/1 Skip in 15,48 s; Lint warnungsfrei. PAID-409-Zahlungsintegrität sowie Desktop-/Mobile-Screenshots geprüft."
+        "Zwischen- und Abschlussprüfung: File-Security-Integration 10/10, Betriebsagentenlauf 25/25, Playwright/E2E 7/7 mit Productionbuild in 18,4 s sowie finale Gesamtprüfung 26 Dateien/240 Tests bestanden/1 Skip in 15,48 s; Lint warnungsfrei. PAID-409-Zahlungsintegrität sowie Desktop-/Mobile-Screenshots geprüft.",
+        "Welle-5-Ausgaben: 8/8 gezielte Fälle einschließlich Multipart-Dateibereinigung und v1- PUT/DELETE-Auditrollback; Root-Review für den begrenzten Scope ohne weitere Lücke. Weitere Finanzrouten und Idempotenz bleiben offen.",
+        "Root-Gesamtprüfung: 39 Testdateien, 309 Tests bestanden und 1 Skip; Lint ohne Warnungen, Typecheck grün, E2E 11/11 mit Productionbuild."
       ],
       "evidence": [
         "docs/backlog/BV-003-006.md",
         "docs/backlog/WELLE-2.md",
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md",
+        "docs/backlog/WELLE-5.md"
       ]
     },
     {
@@ -164,27 +170,32 @@
     {
       "id": "BV-011",
       "title": "Negative Zwischenstände der Barkasse atomar verhindern",
-      "status": "in_progress",
-      "implemented": "Welle 3 gestartet: root bearbeitet einen atomaren Kassen-Guard gegen negative chronologische Zwischenstände mit Centarithmetik.",
-      "remaining": "Rollback-/Paralleltests, bestehende Kassenfachlogik, Negativmatrix, AC-Evidenz und Freigaben offen; vollständige BV-012-Money-Migration ist ausdrücklich nicht Teil der Scheibe.",
+      "status": "complete",
+      "implemented": "Technischer Abschluss: atomarer chronologischer Kassen-Guard mit Centarithmetik, shared-MoneyPolicy-Rundung und fokussierte Regressionen für Nullbestand, Rückdatierung, Parallelität, Centgenauigkeit und Rollback.",
+      "remaining": "Kein Produktivdeployment, GoBD-Zertifikat oder vollständige BV-012-Money-Migration wird aus diesem technischen Ticketabschluss abgeleitet.",
       "tests": [
-        "Noch kein paketbezogener Testnachweis; Welle-2-Gesamtprüfung bleibt Vergleichsbasis."
+        "Gezielter Root-Lauf aus lib/__tests__/cashbook-nonnegative.test.ts und lib/__tests__/bookkeeping-integrity.test.ts: 23/23 am 20.09.2026 21:20:02; korrigierte Rundung 10,075 → 10,08 und zweiter PrismaClient-Race via AsyncLocalStorage geprüft.",
+        "Vier Original-ACs sowie Rollback-, Isolation- und Separate-DB-Connection-Fälle belegt; die Welle-6-Baseline mit 342 Tests, 1 Skip und 12/12 E2E wird nicht als neuer Nachweis gezählt."
       ],
       "evidence": [
+        "docs/backlog/WELLE-7.md",
+        "docs/backlog/BV-011.md",
         "docs/backlog/WELLE-3.md"
       ]
     },
     {
       "id": "BV-012",
       "title": "Durchgängiges Money-Modell und geprüfte Float-Migration",
-      "status": "architecture_discovery",
-      "implemented": "Codeinventar, Invarianten, Abhängigkeiten und vertikale Planung dokumentiert; keine Produktcodeänderung.",
-      "remaining": "Architekturentscheidungen, Implementierung, Tests und alle ACs offen.",
+      "status": "partial",
+      "implemented": "Welle 6 ergänzt eine versionierte exakte EUR-Cent-Grundlage (money-eur-v1) mit signierter Halbcent-Rundung, Strict-/Overflow-Schutz und einen read-only CLI-Migrations-/Differenzbericht über die Prisma-Floatfelder; kein globaler Rollout und keine Money-Berichtsoberfläche.",
+      "remaining": "Backfill, globale Money-Migration, produktive Reconciliation-Freigabe und BV-012-AC4 über alle Verbraucher fehlen; fachliche Prüfung steht aus.",
       "tests": [
-        "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
+        "Money-/Migrationsbericht-Suite 11/11 am 20.09.2026 21:01:08; inklusive unabhängigem Referenzgitter 2/2 mit 40.001 signierten Beträgen mit drei Nachkommastellen (Millieuro), read-only-SQL-Schreibschutz, Query-only-Fehlerpfad und CLI-Zielschutz.",
+        "Abschließender Root-Gesamtcheck 20.09.2026 21:08:13: 46 Testdateien bestanden, eine übersprungen; 342 Tests bestanden, 1 Skip; Lint 0 Warnungen und Typecheck grün. E2E 12/12 mit Productionbuild, inklusive SMTP-UI und Backup-Secretprüfung; gezielter Screenshot-E2E-/Build-Nachlauf 2/2 ebenfalls grün."
       ],
       "evidence": [
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
+        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md",
+        "docs/backlog/WELLE-6.md"
       ]
     },
     {
@@ -339,13 +350,17 @@
     {
       "id": "BV-025",
       "title": "Zahlungsdatum bei manueller Einnahme verbindlich übernehmen",
-      "status": "in_progress",
-      "implemented": "Welle 3 gestartet: betriebssicherheit bearbeitet Pflicht-BusinessDate für manuelle Einnahmen in Web, v1 und UI mit enger BV-057-Grundlage und BV-006-Auditgrenze.",
-      "remaining": "Keine Altbestands-Rückdatierung; vollständige Business-Date-/UTC-Modellierung, weitere Einnahmewege, Tests, AC-Evidenz und Freigaben offen.",
+      "status": "complete",
+      "implemented": "Technischer Abschluss: striktes Business-Date für manuelle Einnahmen in Web, v1 und UI mit enger BV-057-Grundlage und BV-006-Auditgrenze; Altbestandsprüfung erzeugt idempotente REVIEW-Hinweise ohne Datumsraten.",
+      "remaining": "Kein Produktivdeployment, GoBD-Zertifikat, systemweiter UTC-Rollout oder weitere Einnahmewege werden aus diesem technischen Ticketabschluss abgeleitet.",
       "tests": [
-        "Noch kein paketbezogener Testnachweis; Welle-2-Gesamtprüfung bleibt Vergleichsbasis."
+        "Gezielter Agentenlauf: 2 Dateien/6 Tests grün; gleiche 31.12.-Payload unter Januar-Datefake, Web-Feldfehler `date`, v1 `error.field = date` und Web/v1-Vertragsgleichheit geprüft.",
+        "Migration 20260920150000_income_date_review im echten Pre-Upgrade-Fixture (nur Schema/Migrationen plus Seed) zweimal deployed: bestehende Income invoiceId-null einschließlich Cash-Links/Mitternacht erhalten genau einen userId-gebundenen REVIEW-Hinweis mit ISO originalDate, rawDate und guessedDate null; Datum unverändert.",
+        "Welle-7-Gesamtcheck: 47 Testdateien, 346 Tests bestanden und 1 Skip; Lint 0 Warnungen, Typecheck grün, E2E 12/12 mit Productionbuild. Die frühere Welle-6-Baseline wird nicht als neuer BV-025-Nachweis gezählt."
       ],
       "evidence": [
+        "docs/backlog/WELLE-7.md",
+        "docs/backlog/BV-025.md",
         "docs/backlog/WELLE-3.md"
       ]
     },
@@ -404,24 +419,32 @@
     {
       "id": "BV-030",
       "title": "Konsistentes Snapshot-Backup statt unabhängiger Tabellenreads",
-      "status": "in_progress",
-      "implemented": "Welle 3 gestartet: architektur_vorpruefung bearbeitet gemeinsamen DB-Read-Snapshot für JSON/ZIP mit Snapshot-Metadaten, kurzer Lockphase und echtem Parallel-Payment-Test.",
-      "remaining": "BV-029-/BV-006-Abhängigkeiten, Export-/Restore-ACs, Performancegrenzen, Tests, AC-Evidenz und fachliche Abnahme offen.",
+      "status": "complete",
+      "implemented": "Technischer Abschluss: gemeinsamer DB-Read-Snapshot für JSON/ZIP, Snapshot-Metadaten, kurze Lockphase und Dateiversionsprüfung.",
+      "remaining": "Kein vollständiger BV-029-/Restore-Freigabeschluss, BV-064-Empty-Host-Drill, Produktivdeployment oder darüber hinausgehender fachlicher Freigabestatus wird aus diesem technischen Ticketabschluss abgeleitet.",
       "tests": [
-        "Noch kein paketbezogener Testnachweis; Welle-2-Gesamtprüfung bleibt Vergleichsbasis."
+        "Gezielter Agentenlauf über 4 Dateien mit 18 Tests grün; backup-snapshot-route.test.ts restauriert das echte ZIP in einen leeren Zielmandanten derselben isolierten temporären Test-DB und akzeptiert für Invoice/Income/Counter/Audit nur den vollständigen Vor- oder Nachzustand.",
+        "Dateidrift führt zu HTTP 409; Hash und sourceVersion sind gebunden; Manifest enthält snapshot.id, Start, Ende und single-read-transaction; Pack-Gate zeigt Zahlung vor Packfreigabe abgeschlossen.",
+        "Die Welle-6-Baseline mit 342 Tests, 1 Skip und 12/12 E2E wird nicht als neuer BV-030-Nachweis gezählt."
       ],
       "evidence": [
+        "docs/backlog/WELLE-7.md",
+        "docs/backlog/BV-030.md",
         "docs/backlog/WELLE-3.md"
       ]
     },
     {
       "id": "BV-031",
       "title": "Restore auf dieselben Fachinvarianten wie Live-Buchungen verpflichten",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Welle 5: Restore-Validierung um begrenzte Pfad-/Fehlerbefunde und fachliche Validierungshaken erweitert; Änderungen sind uncommitted.",
+      "remaining": "7/7 eigene Restore-Tests und 26/26 Regressionstests mit Root-Review bestanden. Globale Money-Migration und target-aware Full-Dry-run bleiben außerhalb der Scheibe; fachlicher Restore-Drill, AC-Freigaben und produktive Freigabe offen.",
+      "tests": [
+        "7/7 eigene Restore-Tests und 26/26 Regressionstests bestanden; Root-Review korrigierte Source-ID-Reihenfolge, fehlende Cash-Date, negative Bruchteil-Anfangsbestände, Overflow und PAID-Nullbetrag auch ohne ID.",
+        "Root-Gesamtprüfung: 39 Testdateien, 309 Tests bestanden und 1 Skip; Lint ohne Warnungen, Typecheck grün, E2E 11/11 mit Productionbuild."
+      ],
       "evidence": [
+        "docs/backlog/WELLE-5.md",
         "Bivaro_Agent_Backlog.json"
       ]
     },
@@ -461,22 +484,31 @@
     {
       "id": "BV-035",
       "title": "Erstadmin nur mit einmaligem Bootstrap-Nachweis anlegen",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Welle 6 ergänzt `bootstrap_w6`: serverseitiger Setup-Nachweis, atomarer Verbrauch mit Erstadminanlage, Konkurrenz-/Neustartschutz und additive Migration, die bestehende Nutzerinstallationen als verbraucht markiert. Der zusätzlich vom Nutzer angeforderte und implementierte Host-/Admin-SMTP-Bereich umfasst UI, geschützte API, verschlüsseltes Passwort und ENV-Fallback, ohne Testmails.",
+      "remaining": "Bootstrap sowie SMTP-UI und -Route sind technisch belegt; AC-Evidenz im Produktivpfad, Recovery-/Betreiberprüfung und fachliche/produktive Prüfung stehen aus.",
+      "tests": [
+        "Gezielte Bootstrap-Suite 12/12 am 20.09.2026 20:56:22 in drei isolierten Testdateien grün; fehlender Setup-Nachweis, atomarer Verbrauch/Rollback, Neustart, Parallelaufrufe, Freischaltung und additive Bestandsmigration geprüft.",
+        "Root-Gesamtcheck 46 Testdateien, 342 Tests bestanden, 1 Skip; E2E 12/12 mit Productionbuild und SMTP-UI-/Backup-Secretprüfung. Korrigierter gezielter E2E-/Build-Nachlauf 2/2 mit Productionbuild; Screenshot docs/backlog/evidence/welle-6/smtp-settings.png visuell geprüft."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "Bivaro_Agent_Backlog.json",
+        "docs/backlog/WELLE-6.md",
+        "lib/auth-registration.ts",
+        "prisma/migrations/20260920100000_bootstrap_token/migration.sql"
       ]
     },
     {
       "id": "BV-036",
       "title": "Passwort-Bytepolicy und migrationsfähiges Hashformat",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Welle 5: gemeinsame 72-UTF-8-Bytepolicy für neue Passwort-Hashes in `lib/password.ts` und uncommitted `lib/password-policy.ts` umgesetzt; bestehende bcrypt-2a/2b-Hashes bleiben verifizierbar, historische Loginverifikation behält die 72-Byte-Trunkierung zur Kompatibilität.",
+      "remaining": "Gezielter Endlauf und Gesamtprüfung sind grün; produktive Sicherheitsfreigabe und Änderungsempfehlung für historische Überlänge bleiben offen, ohne automatische Migration/Erkennung; keine Argon2-Migration.",
+      "tests": [
+        "Gezielter Root-Endlauf: 54/54 Tests in vier Dateien auf isolierten Fixtures (Expense 8/8, Passwortpolicy 8/8, Passwort-Routen 1/1, Security 37/37). Gesamtprüfung: 39 Dateien, 309 Tests bestanden, 1 Skip; Lint ohne Warnungen, Typecheck grün, E2E 11/11 mit Productionbuild; password-byte-policy.png visuell geprüft."
+      ],
       "evidence": [
+        "docs/backlog/WELLE-5.md",
         "Bivaro_Agent_Backlog.json"
       ]
     },
@@ -583,22 +615,28 @@
       "id": "BV-046",
       "title": "E-Mail-Outbox und nachvollziehbare Versandversuche",
       "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
+      "implemented": "Keine Outbox-Implementierung in Welle 6 dokumentiert; die begrenzte BV-047-Schutzkorrektur schließt BV-046 nicht ab.",
+      "remaining": "Outbox-Worker, Lease, Retrybudget, uncertain-SMTP-Zustand, Crash-Wiederaufnahme, alle vier ACs und Freigaben offen.",
       "tests": [],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "Bivaro_Agent_Backlog.json",
+        "docs/backlog/WELLE-6.md"
       ]
     },
     {
       "id": "BV-047",
       "title": "Versandereignis darf Rechnungsstatus nicht zurücksetzen",
-      "status": "proposed_unimplemented",
-      "implemented": "Keine Umsetzung in dieser Arbeitswelle dokumentiert.",
-      "remaining": "Discovery, Implementierung, Tests, AC-Evidenz und Freigaben offen.",
-      "tests": [],
+      "status": "partial",
+      "implemented": "Root-Schutzkorrektur ergänzt `lib/email-delivery.ts` und die Versandroute: atomarer SMTP-Annahmebeleg mit Message-ID-Deduplizierung, konservativer DRAFT→SENT-Projektion, Konfliktmetadata für konkurrierende PAID-/CANCELLED-Zustände und expliziter SMTP-accepted/DB-failed-502-Antwort; uncommitted. Der Beleg bestätigt SMTP-Annahme, keine Zustellung.",
+      "remaining": "E2E-/Produktivversandnachweis, vollständige BV-047-AC-Freigaben und fachliche Prüfung offen; keine Outbox oder SMTP-exactly-once.",
+      "tests": [
+        "Root 20.09.2026 21:05:40: 7/7 isolierte Integrationstests mit gemocktem SMTP und isolierter Prisma-DB grün (SENT-Deduplizierung seriell/parallel, PAID-/CANCELLED-Race, Auditrollback/Retry, Fremdtenant-Schutz, HTTP-502 mit smtpAccepted/retryUnsafe bei DB-Fehler sowie SMTP-Transportkonfiguration); gezieltes ESLint grün. Kein echter Mailversand und keine Outbox.",
+        "Root-Gesamtcheck 46 Testdateien, 342 Tests bestanden, 1 Skip; E2E 12/12 mit Productionbuild inklusive SMTP-UI und Backup-Secretprüfung; korrigierter gezielter E2E-/Build-Nachlauf 2/2 mit Productionbuild und visuell geprüftem docs/backlog/evidence/welle-6/smtp-settings.png."
+      ],
       "evidence": [
-        "Bivaro_Agent_Backlog.json"
+        "Bivaro_Agent_Backlog.json",
+        "docs/backlog/WELLE-6.md",
+        "lib/email-delivery.ts"
       ]
     },
     {

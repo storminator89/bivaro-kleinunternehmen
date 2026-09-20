@@ -4,6 +4,7 @@ import { createFinancialAuditLog } from '@/lib/audit-log';
 import { readFile } from 'fs/promises';
 import { CashbookError, recalculateCashBalances } from '@/lib/cashbook-service';
 import { documentNumberPrefix, maximumDocumentSequence, type DocumentType } from '@/lib/invoice-numbers';
+import { validateRecurringValues } from '@/lib/recurring-schedule';
 import {
   CURRENT_BACKUP_VERSION,
   LEGACY_BACKUP_VERSION,
@@ -23,6 +24,9 @@ import {
 
 type JsonRecord = Record<string, unknown>;
 type FileKind = 'invoice' | 'receipt' | 'logo';
+// Optional legacy dates need a stable value so dry-run ordering and persisted
+// ordering cannot diverge while importing the same source graph.
+const RESTORE_DEFAULT_DATE = new Date(0);
 
 export type RestoreFileResolver = (
   kind: FileKind,
@@ -31,12 +35,21 @@ export type RestoreFileResolver = (
 
 export class BackupValidationError extends Error {
   readonly status = 400;
+  readonly issues: readonly BackupValidationIssue[];
+  readonly truncated: boolean;
 
-  constructor(message: string) {
+  constructor(message: string, issues: readonly BackupValidationIssue[] = [], truncated = false) {
     super(message);
     this.name = 'BackupValidationError';
+    this.issues = issues;
+    this.truncated = truncated;
   }
 }
+
+/** A safe, bounded validation finding suitable for API responses and UI. */
+export type BackupValidationIssue = { path: string; message: string };
+
+export const MAX_BACKUP_VALIDATION_ISSUES = 25;
 
 type RestoreOptions = {
   userId: string;
@@ -159,7 +172,8 @@ function validateIds(records: JsonRecord[], key: string): Set<number> {
   for (const [index, record] of records.entries()) {
     const id = asOptionalInt(record.id, `${key}[${index}].id`);
     if (id === null || id <= 0 || ids.has(id)) {
-      throw new BackupValidationError(`${key} enthält doppelte oder ungültige IDs`);
+      const path = `${key}[${index}].id`;
+      throw new BackupValidationError(`${key} enthält doppelte oder ungültige IDs`, [{ path, message: 'Die Objekt-ID fehlt, ist ungültig oder doppelt.' }]);
     }
     ids.add(id);
   }
@@ -203,6 +217,197 @@ function validateBackupReferences(data: JsonRecord, sets: Record<string, Set<num
     check(transaction.cashBookId, 'cashBooks', `cashTransactions[${index}].cashBookId`);
     check(transaction.expenseId, 'expenses', `cashTransactions[${index}].expenseId`);
     check(transaction.incomeId, 'incomes', `cashTransactions[${index}].incomeId`);
+  }
+}
+
+type RestoreInvariantValidation = {
+  issues: BackupValidationIssue[];
+  truncated: boolean;
+};
+
+function addInvariantIssue(state: RestoreInvariantValidation, path: string, message: string): void {
+  if (state.issues.length < MAX_BACKUP_VALIDATION_ISSUES) state.issues.push({ path, message });
+  else state.truncated = true;
+}
+
+function centsForRestore(value: unknown): number | null {
+  const amount = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  if (!Number.isFinite(amount) || !Number.isSafeInteger(Math.round((amount + Number.EPSILON) * 100))) return null;
+  return Math.round((amount + Number.EPSILON) * 100);
+}
+
+function sameBusinessDateForRestore(left: Date, right: Date): boolean {
+  return left.getUTCFullYear() === right.getUTCFullYear()
+    && left.getUTCMonth() === right.getUTCMonth()
+    && left.getUTCDate() === right.getUTCDate();
+}
+
+function restoreCashTransactionOrder(
+  left: { transaction: JsonRecord; index: number },
+  right: { transaction: JsonRecord; index: number },
+): number {
+  const leftDate = asDate(left.transaction.date, `cashTransactions[${left.index}].date`, RESTORE_DEFAULT_DATE)?.getTime() ?? 0;
+  const rightDate = asDate(right.transaction.date, `cashTransactions[${right.index}].date`, RESTORE_DEFAULT_DATE)?.getTime() ?? 0;
+  if (leftDate !== rightDate) return leftDate - rightDate;
+  const leftCreated = asDate(left.transaction.createdAt, `cashTransactions[${left.index}].createdAt`, RESTORE_DEFAULT_DATE)?.getTime() ?? 0;
+  const rightCreated = asDate(right.transaction.createdAt, `cashTransactions[${right.index}].createdAt`, RESTORE_DEFAULT_DATE)?.getTime() ?? 0;
+  if (leftCreated !== rightCreated) return leftCreated - rightCreated;
+  const leftId = asOptionalInt(left.transaction.id, `cashTransactions[${left.index}].id`) ?? 0;
+  const rightId = asOptionalInt(right.transaction.id, `cashTransactions[${right.index}].id`) ?? 0;
+  return leftId - rightId || left.index - right.index;
+}
+
+/**
+ * Domain checks shared by dry-run and the committing restore. They operate on
+ * the source graph, before target IDs or database rows exist.
+ */
+function validateRestoreInvariants(
+  data: JsonRecord,
+  state: RestoreInvariantValidation,
+): void {
+  const invoices = asArray(data, 'invoices');
+  const incomes = asArray(data, 'incomes');
+  const invoiceById = new Map<number, { totalAmount: number | null; status: string }>();
+  for (const [index, invoice] of invoices.entries()) {
+    const id = asOptionalInt(invoice.id, `invoices[${index}].id`);
+    const status = asOptionalString(invoice.status, `invoices[${index}].status`, 32) ?? 'DRAFT';
+    const totalAmount = asOptionalFinite(invoice.totalAmount, `invoices[${index}].totalAmount`);
+    if (status === 'PAID' && (totalAmount === null || (centsForRestore(totalAmount) ?? -1) < 0)) {
+      addInvariantIssue(state, `invoices[${index}].totalAmount`, 'Eine bezahlte Rechnung benötigt einen gültigen nichtnegativen Betrag.');
+    }
+    if (id === null) continue;
+    invoiceById.set(id, { totalAmount, status });
+  }
+  const incomeByInvoice = new Map<number, number>();
+  for (const [index, income] of incomes.entries()) {
+    const invoiceId = asOptionalInt(income.invoiceId, `incomes[${index}].invoiceId`);
+    if (invoiceId === null) continue;
+    if (incomeByInvoice.has(invoiceId)) {
+      addInvariantIssue(state, `incomes[${index}].invoiceId`, 'Eine Rechnung darf nur eine Einnahme haben.');
+      continue;
+    }
+    incomeByInvoice.set(invoiceId, index);
+    const invoice = invoiceById.get(invoiceId);
+    if (!invoice || invoice.status !== 'PAID' || invoice.totalAmount === null) continue;
+    const incomeAmount = asOptionalFinite(income.amount, `incomes[${index}].amount`);
+    const invoiceCents = centsForRestore(invoice.totalAmount);
+    const incomeCents = centsForRestore(incomeAmount);
+    if (invoiceCents === null || incomeCents === null || invoiceCents !== incomeCents) {
+      addInvariantIssue(state, `incomes[${index}].amount`, 'Der Betrag der Einnahme stimmt nicht mit dem Betrag der bezahlten Rechnung überein.');
+    }
+  }
+
+  const recurringExpenses = asArray(data, 'recurringExpenses');
+  for (const [index, recurring] of recurringExpenses.entries()) {
+    const error = validateRecurringValues({
+      amount: recurring.amount,
+      interval: recurring.interval,
+      dayOfMonth: recurring.dayOfMonth,
+      taxDeductiblePercentage: recurring.taxDeductiblePercentage,
+      startDate: recurring.startDate,
+      endDate: recurring.endDate,
+      taxRelevant: recurring.taxRelevant,
+      isActive: recurring.isActive,
+    });
+    if (!error) continue;
+    const path = error.includes('Intervall')
+      ? `recurringExpenses[${index}].interval`
+      : error.includes('Monatstag')
+        ? `recurringExpenses[${index}].dayOfMonth`
+        : error.includes('Zeitraum')
+          ? `recurringExpenses[${index}].endDate`
+          : `recurringExpenses[${index}]`;
+    addInvariantIssue(state, path, 'Die wiederkehrende Ausgabe verletzt die Buchungsregel.');
+  }
+
+  const cashBooks = asArray(data, 'cashBooks');
+  const cashTransactions = asArray(data, 'cashTransactions');
+  const cashBookById = new Map<number, { initialBalance: number }>();
+  for (const [index, book] of cashBooks.entries()) {
+    const id = asOptionalInt(book.id, `cashBooks[${index}].id`);
+    const initialBalance = asOptionalFinite(book.initialBalance, `cashBooks[${index}].initialBalance`) ?? 0;
+    if (id !== null) cashBookById.set(id, { initialBalance });
+    const cents = centsForRestore(initialBalance);
+    if (cents === null || initialBalance < 0 || cents < 0) {
+      addInvariantIssue(state, `cashBooks[${index}].initialBalance`, 'Der Kassenanfangsbestand darf nicht negativ oder unberechenbar sein.');
+    }
+  }
+  const incomesById = new Map<number, { amount: number | null; date: Date | null }>();
+  for (const [index, income] of incomes.entries()) {
+    const id = asOptionalInt(income.id, `incomes[${index}].id`);
+    if (id !== null) incomesById.set(id, {
+      amount: asOptionalFinite(income.amount, `incomes[${index}].amount`),
+      date: asDate(income.date, `incomes[${index}].date`, RESTORE_DEFAULT_DATE),
+    });
+  }
+  const expensesById = new Map<number, { amount: number | null; date: Date | null }>();
+  for (const [index, expense] of asArray(data, 'expenses').entries()) {
+    const id = asOptionalInt(expense.id, `expenses[${index}].id`);
+    if (id !== null) expensesById.set(id, {
+      amount: asOptionalFinite(expense.amount, `expenses[${index}].amount`),
+      date: asDate(expense.date, `expenses[${index}].date`, RESTORE_DEFAULT_DATE),
+    });
+  }
+  const transactionsByBook = new Map<number, Array<{ index: number; transaction: JsonRecord }>>();
+  const linkedIncomeTransactions = new Map<number, number>();
+  const linkedExpenseTransactions = new Map<number, number>();
+  for (const [index, transaction] of cashTransactions.entries()) {
+    const bookId = asOptionalInt(transaction.cashBookId, `cashTransactions[${index}].cashBookId`);
+    const type = asOptionalString(transaction.type, `cashTransactions[${index}].type`, 32);
+    const amount = asOptionalFinite(transaction.amount, `cashTransactions[${index}].amount`);
+    const date = asDate(transaction.date, `cashTransactions[${index}].date`, RESTORE_DEFAULT_DATE);
+    if (bookId === null || !cashBookById.has(bookId)) continue;
+    if (transaction.date === undefined || transaction.date === null || transaction.date === '') {
+      addInvariantIssue(state, `cashTransactions[${index}].date`, 'Eine Kassenbuchung benötigt ein fachliches Buchungsdatum.');
+    }
+    if (!['EINNAHME', 'AUSGABE'].includes(type ?? '') || centsForRestore(amount) === null || (centsForRestore(amount) ?? 0) <= 0) {
+      addInvariantIssue(state, `cashTransactions[${index}]`, 'Die Kassenbuchung hat keinen gültigen Typ oder positiven Centbetrag.');
+    }
+    const incomeId = asOptionalInt(transaction.incomeId, `cashTransactions[${index}].incomeId`);
+    const expenseId = asOptionalInt(transaction.expenseId, `cashTransactions[${index}].expenseId`);
+    if (incomeId !== null) {
+      if (linkedIncomeTransactions.has(incomeId)) {
+        addInvariantIssue(state, `cashTransactions[${index}].incomeId`, 'Eine Einnahme darf nur mit einer Kassenbuchung verknüpft sein.');
+      }
+      linkedIncomeTransactions.set(incomeId, index);
+      const income = incomesById.get(incomeId);
+      if (type !== 'EINNAHME' || !income || centsForRestore(amount) !== centsForRestore(income.amount) || !date || !income.date || !sameBusinessDateForRestore(date, income.date)) {
+        addInvariantIssue(state, `cashTransactions[${index}]`, 'Die Kassenbuchung stimmt nicht mit der verknüpften Einnahme überein.');
+      }
+    }
+    if (expenseId !== null) {
+      if (linkedExpenseTransactions.has(expenseId)) {
+        addInvariantIssue(state, `cashTransactions[${index}].expenseId`, 'Eine Ausgabe darf nur mit einer Kassenbuchung verknüpft sein.');
+      }
+      linkedExpenseTransactions.set(expenseId, index);
+      const expense = expensesById.get(expenseId);
+      if (type !== 'AUSGABE' || !expense || centsForRestore(amount) !== centsForRestore(expense.amount) || !date || !expense.date || !sameBusinessDateForRestore(date, expense.date)) {
+        addInvariantIssue(state, `cashTransactions[${index}]`, 'Die Kassenbuchung stimmt nicht mit der verknüpften Ausgabe überein.');
+      }
+    }
+    const entries = transactionsByBook.get(bookId) ?? [];
+    entries.push({ index, transaction });
+    transactionsByBook.set(bookId, entries);
+  }
+  for (const [bookId, entries] of transactionsByBook.entries()) {
+    const book = cashBookById.get(bookId)!;
+    let balance = centsForRestore(book.initialBalance) ?? 0;
+    entries.sort(restoreCashTransactionOrder);
+    for (const entry of entries) {
+      const amount = centsForRestore(entry.transaction.amount);
+      if (amount === null || amount <= 0) continue;
+      balance += entry.transaction.type === 'EINNAHME' ? amount : -amount;
+      if (!Number.isSafeInteger(balance)) {
+        addInvariantIssue(state, `cashTransactions[${entry.index}].runningBalance`, 'Der Kassenbestand überschreitet den sicher berechenbaren Bereich.');
+        break;
+      }
+      if (balance < 0) {
+        addInvariantIssue(state, `cashTransactions[${entry.index}].runningBalance`, 'Die chronologische Kassenbuchung erzeugt einen negativen Kassenbestand.');
+        // One issue per book is enough; subsequent entries cannot add useful
+        // information and this keeps malformed input bounded.
+        break;
+      }
+    }
   }
 }
 
@@ -312,6 +517,15 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
 
   if (data.settings !== undefined && data.settings !== null) asRecord(data.settings, 'settings');
   validateBackupReferences(data, sets);
+  const invariantValidation: RestoreInvariantValidation = { issues: [], truncated: false };
+  validateRestoreInvariants(data, invariantValidation);
+  if (invariantValidation.issues.length > 0) {
+    throw new BackupValidationError(
+      invariantValidation.issues[0].message,
+      invariantValidation.issues,
+      invariantValidation.truncated,
+    );
+  }
   return { version, data, manifest, warnings };
 }
 
@@ -524,6 +738,10 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const reminders = asArray(data, 'reminders');
     const cashBooks = asArray(data, 'cashBooks');
     const cashTransactions = asArray(data, 'cashTransactions');
+    const orderedCashTransactions = cashTransactions
+      .map((transaction, index) => ({ transaction, index }))
+      .sort(restoreCashTransactionOrder)
+      .map(({ transaction }) => transaction);
     const documentations = asArray(data, 'documentations');
     const apiKeys = asArray(data, 'apiKeys');
     const auditLogs = asArray(data, 'auditLogs');
@@ -607,7 +825,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           category: asOptionalString(recurring.category, 'recurringExpense.category', 255),
           taxRelevant: asOptionalBoolean(recurring.taxRelevant, 'recurringExpense.taxRelevant') ?? true,
           taxDeductiblePercentage: asOptionalFinite(recurring.taxDeductiblePercentage, 'recurringExpense.taxDeductiblePercentage') ?? 100,
-          interval: asRequiredString(recurring.interval, 'recurringExpense.interval', 32),
+          interval: asRequiredString(recurring.interval, 'recurringExpense.interval', 32).toUpperCase(),
           dayOfMonth: asOptionalInt(recurring.dayOfMonth, 'recurringExpense.dayOfMonth') ?? 1,
           startDate: asDate(recurring.startDate, 'recurringExpense.startDate', new Date())!,
           endDate: asDate(recurring.endDate, 'recurringExpense.endDate'),
@@ -707,7 +925,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const created = await tx.expense.create({ data: {
           description: asRequiredString(expense.description, 'expense.description', 255),
           amount: asOptionalFinite(expense.amount, 'expense.amount') ?? 0,
-          date: asDate(expense.date, 'expense.date', new Date())!,
+          date: asDate(expense.date, 'expense.date', RESTORE_DEFAULT_DATE)!,
           category: asOptionalString(expense.category, 'expense.category', 255),
           receiptUrl: asOptionalString(expense.receiptUrl, 'expense.receiptUrl', 2_000),
           taxRelevant: asOptionalBoolean(expense.taxRelevant, 'expense.taxRelevant') ?? true,
@@ -734,7 +952,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const sourceId = asOptionalInt(income.id, 'income.id')!;
         const description = asRequiredString(income.description, 'income.description', 255);
         const amount = asOptionalFinite(income.amount, 'income.amount') ?? 0;
-        const date = asDate(income.date, 'income.date', new Date())!;
+        const date = asDate(income.date, 'income.date', RESTORE_DEFAULT_DATE)!;
         const customerId = relationMapValue(customerMap, income.customerId, 'income.customerId');
         const invoiceId = relationMapValue(invoiceMap, income.invoiceId, 'income.invoiceId');
         const taxRelevant = asOptionalBoolean(income.taxRelevant, 'income.taxRelevant') ?? true;
@@ -851,13 +1069,13 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         }
       }
 
-      for (const transaction of cashTransactions) {
+      for (const transaction of orderedCashTransactions) {
         const sourceId = asOptionalInt(transaction.id, 'cashTransaction.id');
         const cashBookId = relationMapValue(cashBookMap, transaction.cashBookId, 'cashTransaction.cashBookId');
         if (!cashBookId) throw new BackupValidationError('cashTransaction.cashBookId fehlt');
         const created = await tx.cashTransaction.create({ data: {
-          date: asDate(transaction.date, 'cashTransaction.date', new Date())!,
-          createdAt: asDate(transaction.createdAt, 'cashTransaction.createdAt', new Date())!,
+          date: asDate(transaction.date, 'cashTransaction.date', new Date(0))!,
+          createdAt: asDate(transaction.createdAt, 'cashTransaction.createdAt', new Date(0))!,
           updatedAt: asDate(transaction.updatedAt, 'cashTransaction.updatedAt', new Date())!,
           type: asRequiredString(transaction.type, 'cashTransaction.type', 32),
           description: asRequiredString(transaction.description, 'cashTransaction.description', 255),

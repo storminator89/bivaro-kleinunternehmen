@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { createBackupPreview } from '@/lib/backup-preview';
+import { BackupValidationError } from '@/lib/backup-restore';
 import { auditSecurityEvent } from '@/lib/audit-log';
 import { loadZipWithinLimits, readZipEntryWithinLimit } from '@/lib/zip-limits';
 import {
@@ -56,6 +57,9 @@ export async function POST(request: NextRequest) {
     }
     if (error instanceof RequestBodyLimitError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof BackupValidationError) {
+      return NextResponse.json({ error: error.message, issues: error.issues, truncated: error.truncated }, { status: error.status });
     }
 
     return NextResponse.json(

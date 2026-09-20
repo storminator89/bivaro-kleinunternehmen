@@ -24,11 +24,13 @@ import { authOptions } from "@/lib/auth";
 let database: ReturnType<typeof createTestDatabase>;
 
 beforeAll(() => {
+  process.env.BIVARO_SETUP_TOKEN = "test-bootstrap-token";
   database = createTestDatabase();
   state.client = database.client;
 }, 40_000);
 
 afterAll(async () => {
+  delete process.env.BIVARO_SETUP_TOKEN;
   await database?.cleanup();
 });
 
@@ -40,6 +42,7 @@ describe("authentication hardening", () => {
           email: `parallel-${index}@test.invalid`,
           name: `Parallel ${index}`,
           passwordHash: "precomputed-test-hash",
+          setupToken: "test-bootstrap-token",
         }),
       ),
     );

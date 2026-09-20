@@ -63,6 +63,7 @@ export type BackupManifestData = Record<string, unknown>;
 const COVERAGE = [
   { model: 'User', key: 'user', mode: 'metadata-only' as const, reason: 'Identity and password remain target-owned.' },
   { model: 'AppSettings', key: 'appSettings', mode: 'excluded' as const, reason: 'Host-wide bootstrap setting, not tenant data.' },
+  { model: 'SmtpSettings', key: 'smtpSettings', mode: 'excluded' as const, reason: 'Host-wide SMTP override and encrypted credential material are never backed up.' },
   { model: 'RateLimitBucket', key: 'rateLimitBuckets', mode: 'excluded' as const, reason: 'Operational runtime state is not restorable business data.' },
   { model: 'Customer', key: 'customers', mode: 'included' as const },
   { model: 'Expense', key: 'expenses', mode: 'included' as const },

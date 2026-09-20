@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { timingSafeEqual } from "node:crypto";
 import { inTransaction } from "@/lib/db-transaction";
 
 export const APP_SETTINGS_KEY = "global";
@@ -17,10 +18,18 @@ export class RegistrationEmailTakenError extends Error {
   }
 }
 
+export class BootstrapVerificationError extends Error {
+  constructor() {
+    super("Erstregistrierung erfordert einen gültigen Bootstrap-Nachweis");
+    this.name = "BootstrapVerificationError";
+  }
+}
+
 interface RegisterUserInput {
   email: string;
   name: string | null;
   passwordHash: string;
+  setupToken?: string;
 }
 
 export interface RegistrationResult {
@@ -37,6 +46,23 @@ export interface RegistrationResult {
 
 function isKnownPrismaError(error: unknown, code: string): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === code;
+}
+
+/**
+ * The setup token is process configuration only. Never expose it through a
+ * status response, database row, audit event, or error message.
+ */
+export function isBootstrapTokenConfigured(): boolean {
+  return typeof process.env.BIVARO_SETUP_TOKEN === "string" && process.env.BIVARO_SETUP_TOKEN.length > 0;
+}
+
+function hasValidBootstrapToken(candidate: string | undefined): boolean {
+  const configured = process.env.BIVARO_SETUP_TOKEN;
+  if (!configured || typeof candidate !== "string") return false;
+
+  const configuredBytes = Buffer.from(configured, "utf8");
+  const candidateBytes = Buffer.from(candidate, "utf8");
+  return configuredBytes.length === candidateBytes.length && timingSafeEqual(configuredBytes, candidateBytes);
 }
 
 /**
@@ -65,6 +91,29 @@ export async function registerUserAtomically(input: RegisterUserInput): Promise<
           throw new RegistrationClosedError();
         }
 
+        if (firstUser) {
+          if (!hasValidBootstrapToken(input.setupToken)) {
+            throw new BootstrapVerificationError();
+          }
+
+          // The conditional update is the durable, atomic consume operation.
+          // If another process consumed the marker first, this transaction
+          // must not create a second administrator.
+          const consumed = await tx.appSettings.updateMany({
+            where: {
+              id: appSettings.id,
+              bootstrapConsumedAt: null,
+            },
+            data: {
+              bootstrapConsumedAt: new Date(),
+              allowRegistration: false,
+            },
+          });
+          if (consumed.count !== 1) {
+            throw new BootstrapVerificationError();
+          }
+        }
+
         const existingUser = await tx.user.findUnique({
           where: { email: input.email },
           select: { id: true },
@@ -87,13 +136,6 @@ export async function registerUserAtomically(input: RegisterUserInput): Promise<
             createdAt: true,
           },
         });
-
-        if (firstUser) {
-          await tx.appSettings.update({
-            where: { id: appSettings.id },
-            data: { allowRegistration: false },
-          });
-        }
 
         return { user, firstUser };
       });

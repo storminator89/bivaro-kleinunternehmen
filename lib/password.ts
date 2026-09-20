@@ -1,8 +1,11 @@
 import bcrypt from "bcrypt";
+import { validatePassword } from "@/lib/password-policy";
 
 export const PASSWORD_HASH_COST = 12;
 
-export function hashPassword(password: string): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
+  const validation = validatePassword(password);
+  if (!validation.valid) throw new Error(validation.message);
   return bcrypt.hash(password, PASSWORD_HASH_COST);
 }
 

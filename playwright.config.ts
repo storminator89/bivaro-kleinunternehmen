@@ -22,6 +22,7 @@ export default defineConfig({
       DATABASE_URL: e2eDatabaseUrl,
       HOSTNAME: '127.0.0.1',
       NEXTAUTH_SECRET: 'e2e-secret-for-local-tests-only',
+      BIVARO_SETUP_TOKEN: 'e2e-bootstrap-token-for-isolated-fixtures-only',
       NEXTAUTH_URL: 'http://127.0.0.1:3100',
       PORT: '3100',
     },

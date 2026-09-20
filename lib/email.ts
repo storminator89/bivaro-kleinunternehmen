@@ -5,8 +5,17 @@ import { prisma } from '@/lib/prisma';
 import { createAuditLog, createFinancialAuditLog } from '@/lib/audit-log';
 import { inTransaction } from '@/lib/db-transaction';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
+import { recordDocumentDelivery } from '@/lib/email-delivery';
+import { getSmtpSettingsStatus, resolveSmtpConfiguration } from '@/lib/smtp-settings';
 
 export type EmailDocumentType = 'invoice' | 'quote' | 'reminder';
+
+export class EmailDeliveryRecordingError extends Error {
+  constructor(readonly messageId: string) {
+    super('Der SMTP-Server hat die Nachricht angenommen, aber die Versandprotokollierung ist fehlgeschlagen. Prüfen Sie den Versand, bevor Sie die Nachricht erneut senden.');
+    this.name = 'EmailDeliveryRecordingError';
+  }
+}
 
 export type ReminderEmailContext = {
   reminderLevel?: number;
@@ -116,7 +125,7 @@ export function normalizeSendEmailRequest(body: unknown): SendEmailRequest {
 
 export async function buildDocumentEmailDraft(userId: string, request: EmailDraftRequest): Promise<EmailDraft> {
   const loaded = await loadEmailDocument(userId, request);
-  const configuration = getEmailConfigurationStatus(loaded.settings.email);
+  const configuration = await getEmailConfigurationStatus(loaded.settings.email);
   const companyName = loaded.settings.companyName || 'Ihr Unternehmen';
   const recipient = loaded.customer?.email || '';
   const replyTo = loaded.settings.email || undefined;
@@ -214,7 +223,7 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
 
 export async function sendDocumentEmail(userId: string, request: SendEmailRequest) {
   const loaded = await loadEmailDocument(userId, request);
-  const configuration = getRequiredEmailConfiguration(loaded.settings.email);
+  const configuration = await getRequiredEmailConfiguration(loaded.settings.email);
   const attachment = await readFile(loaded.attachmentPath);
   const mail: SendMailOptions = {
     from: configuration.from,
@@ -238,7 +247,7 @@ export async function sendDocumentEmail(userId: string, request: SendEmailReques
     host: configuration.host,
     port: configuration.port,
     secure: configuration.secure,
-    requireTLS: !configuration.secure,
+    requireTLS: configuration.source === 'database' && configuration.secure === false,
     auth: configuration.auth,
     tls: {
       minVersion: 'TLSv1.2',
@@ -313,47 +322,16 @@ export async function sendDocumentEmail(userId: string, request: SendEmailReques
     return { messageId: info.messageId, reminder };
   }
 
-  if (loaded.invoice.status === 'DRAFT') {
-    await inTransaction(async tx => {
-      const current = await tx.invoice.findFirst({
-        where: { id: loaded.invoice.id, userId },
-        select: { status: true, issuanceState: true, invoiceNumber: true, fileName: true },
-      });
-      // Compare-and-set prevents a stale pre-SMTP read from overwriting a
-      // concurrent PAID transition with SENT.
-      if (!current || current.status !== 'DRAFT' || current.issuanceState !== 'ISSUED') return;
-      await tx.invoice.update({ where: { id: loaded.invoice.id, userId, status: 'DRAFT' }, data: { status: 'SENT' } });
-      await createFinancialAuditLog({
-        userId,
-        action: 'STATUS_CHANGED',
-        entityType: request.documentType === 'quote' ? 'Quote' : 'Invoice',
-        entityId: loaded.invoice.id,
-        entityName: current.invoiceNumber || current.fileName,
-        oldValues: { status: 'DRAFT', issuanceState: current.issuanceState },
-        newValues: { status: 'SENT', issuanceState: current.issuanceState },
-        metadata: {
-          actorId: userId,
-          tenantId: userId,
-          operation: 'invoice.issued',
-          originalReference: current.invoiceNumber ?? `invoice:${loaded.invoice.id}`,
-          reason: 'document email delivered',
-        },
-      }, tx);
+  try {
+    await recordDocumentDelivery({
+      userId, invoiceId: loaded.invoice.id, documentType: request.documentType,
+      expectedStatus: loaded.invoice.status, messageId: info.messageId,
     });
+  } catch {
+    // SMTP cannot be rolled back with the DB. Make this partial outcome
+    // explicit so clients do not mistake it for a safe-to-retry send failure.
+    throw new EmailDeliveryRecordingError(info.messageId);
   }
-
-  await createAuditLog({
-    userId,
-    action: 'EMAIL_SENT',
-    entityType: request.documentType === 'quote' ? 'Quote' : 'Invoice',
-    entityId: loaded.invoice.id,
-    entityName: loaded.invoice.invoiceNumber || loaded.invoice.fileName,
-    metadata: {
-      messageId: info.messageId,
-      to: splitEmailList(request.to),
-      attachmentFileName: loaded.attachmentFileName,
-    },
-  });
 
   return { messageId: info.messageId };
 }
@@ -441,47 +419,40 @@ function normalizeReminderContext(value: unknown): ReminderEmailContext {
   };
 }
 
-function getEmailConfigurationStatus(settingsEmail?: string | null) {
+async function getEmailConfigurationStatus(settingsEmail?: string | null) {
+  const configuration = await getSmtpSettingsStatus(settingsEmail);
   const missing: string[] = [];
-  const host = process.env.SMTP_HOST?.trim();
-  const from = process.env.EMAIL_FROM?.trim() || settingsEmail?.trim() || process.env.SMTP_USER?.trim() || '';
-
-  if (!host) missing.push('SMTP_HOST');
-  if (!from) missing.push('EMAIL_FROM oder Firmen-E-Mail');
-  if ((process.env.SMTP_USER && !process.env.SMTP_PASSWORD) || (!process.env.SMTP_USER && process.env.SMTP_PASSWORD)) {
+  if (!configuration.host) missing.push('SMTP_HOST');
+  if (!configuration.port) missing.push('SMTP_PORT');
+  if (!configuration.from) missing.push('EMAIL_FROM oder Firmen-E-Mail');
+  if (configuration.user && !configuration.passwordConfigured) {
+    missing.push('SMTP_USER und SMTP_PASSWORD müssen gemeinsam gesetzt sein');
+  }
+  if (!configuration.user && configuration.passwordConfigured) {
     missing.push('SMTP_USER und SMTP_PASSWORD müssen gemeinsam gesetzt sein');
   }
 
   return {
-    configured: missing.length === 0,
+    configured: configuration.configured && missing.length === 0,
     missing,
-    from,
+    from: configuration.from || '',
   };
 }
 
-function getRequiredEmailConfiguration(settingsEmail?: string | null) {
-  const status = getEmailConfigurationStatus(settingsEmail);
+async function getRequiredEmailConfiguration(settingsEmail?: string | null) {
+  const configuration = await resolveSmtpConfiguration(settingsEmail);
+  const status = await getEmailConfigurationStatus(settingsEmail);
   if (!status.configured) {
-    throw new Error(`E-Mail-Konfiguration unvollständig: ${status.missing.join(', ')}`);
+    throw new Error(`E-Mail-Konfiguration unvollständig: ${status.missing.join(', ') || 'SMTP-Einstellungen prüfen'}`);
   }
-
-  const port = Number(process.env.SMTP_PORT || '587');
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    throw new Error('SMTP_PORT ist ungültig');
-  }
-
-  const secure = process.env.SMTP_SECURE
-    ? process.env.SMTP_SECURE === 'true'
-    : port === 465;
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASSWORD;
 
   return {
-    host: process.env.SMTP_HOST as string,
-    port,
-    secure,
-    from: status.from,
-    auth: user && pass ? { user, pass } : undefined,
+    host: configuration.host as string,
+    port: configuration.port as number,
+    secure: configuration.secure as boolean,
+    source: configuration.source,
+    from: configuration.from as string,
+    auth: configuration.auth,
   };
 }
 

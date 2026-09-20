@@ -1,5 +1,11 @@
 # Welle 3 – Snapshot, Business-Date und Kassenatomizität
 
+Aktueller Abschlussstand: [Welle 7](WELLE-7.md) führt die zwölf ACs fort.
+BV-011, BV-025 und BV-030 sind dort mit jeweils 4/4 Kriterien technisch
+abgeschlossen. Die
+folgenden Tabellen und Prüfstände bewahren den historischen Startstand dieser
+Welle.
+
 Stand: 19.09.2026, 10:57:43 Europe/Berlin. Auditbasis:
 `85972ed9fe61d268b6640882ea2ddc6e616d1859`.
 

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createTestDatabase } from './helpers/database';
 
@@ -30,6 +30,10 @@ beforeAll(async () => {
   await database.client.user.create({ data: { id: 'income-date-user', email: 'income-date@test.invalid', password: 'unused' } });
 }, 40_000);
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 afterAll(async () => {
   await database?.cleanup();
 });
@@ -51,16 +55,31 @@ function apiRequest(body: object) {
 }
 
 describe('manual income business dates', () => {
-  it('uses the same strict date contract in Web and v1 and preserves year boundaries', async () => {
-    const webResponse = await postWebIncome(webRequest({ description: 'Web year boundary', amount: 0, date: '2026-12-31' }));
+  it('uses the same explicit calendar date in Web and v1 when saved in January', async () => {
+    // Freeze only Date so the request is evaluated in January while Prisma's
+    // timers and transaction timeouts remain real.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2027-01-15T10:00:00.000Z'));
+    const payload = { description: 'Year boundary', amount: 12, date: '2026-12-31' };
+    const webResponse = await postWebIncome(webRequest(payload));
     expect(webResponse.status).toBe(200);
     const webIncome = await webResponse.json();
     expect(new Date(webIncome.date).getTime()).toBe(Date.UTC(2026, 11, 31));
 
-    const apiResponse = await postApiIncome(apiRequest({ description: 'API year boundary', amount: 12, date: '2027-01-01' }));
+    const apiResponse = await postApiIncome(apiRequest(payload));
     expect(apiResponse.status).toBe(201);
     const apiBody = await apiResponse.json();
-    expect(new Date(apiBody.data.date).getTime()).toBe(Date.UTC(2027, 0, 1));
+    expect(new Date(apiBody.data.date).getTime()).toBe(Date.UTC(2026, 11, 31));
+
+    const stored = await database.client.income.findMany({
+      where: { userId: 'income-date-user', description: 'Year boundary' },
+      orderBy: { id: 'asc' },
+    });
+    expect(stored.map(income => income.date.getTime())).toEqual([
+      Date.UTC(2026, 11, 31),
+      Date.UTC(2026, 11, 31),
+    ]);
+    vi.useRealTimers();
 
     const audit = await database.client.auditLog.findMany({
       where: { userId: 'income-date-user', entityType: 'Income' },
@@ -78,8 +97,12 @@ describe('manual income business dates', () => {
     ]) {
       const webResponse = await postWebIncome(webRequest(body));
       expect(webResponse.status).toBe(400);
+      const webBody = await webResponse.json();
+      expect(webBody.field).toBe('date');
       const apiResponse = await postApiIncome(apiRequest(body));
       expect(apiResponse.status).toBe(400);
+      const apiBody = await apiResponse.json();
+      expect(apiBody.error.field).toBe('date');
     }
 
     expect(await database.client.income.count({ where: { userId: 'income-date-user', description: { in: ['missing', 'invalid leap day', 'ISO date'] } } })).toBe(0);
