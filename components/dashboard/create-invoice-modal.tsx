@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import QRCode from 'qrcode';
-import { generateZugferdXml, validateZugferdData, type ZugferdData } from "@/lib/zugferd-generator";
+import { generateZugferdXml, validateZugferdData, SMALL_BUSINESS_EXEMPTION_REASON, type ZugferdData } from "@/lib/zugferd-generator";
 import { calculateInvoiceAmounts } from "@/lib/invoice-calculation";
+import PriceHistory from "@/components/dashboard/price-history";
 import { ArrowLeft, Copy, Eye, EyeOff, FileText, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 interface CreateInvoiceModalProps {
@@ -37,6 +38,30 @@ interface InvoiceItem {
   taxRate: number;
   taxCategory?: 'S' | 'E' | 'Z';
   exemptionReason?: string;
+  billingNoteId?: number;
+}
+
+function stripBillingNoteAssociation(item: InvoiceItem): InvoiceItem {
+  return {
+    description: item.description,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    unit: item.unit,
+    taxRate: item.taxRate,
+    taxCategory: item.taxCategory,
+    exemptionReason: item.exemptionReason,
+  };
+}
+
+type NoteVisibility = 'EDITOR' | 'SEND' | 'BOTH';
+
+interface BillingNote {
+  id: number;
+  customerId: number;
+  serviceDate: string;
+  description: string;
+  quantity: number;
+  unit: string;
 }
 
 interface Settings {
@@ -59,6 +84,8 @@ interface Customer {
   zipCode?: string;
   city?: string;
   email?: string;
+  internalNote?: string | null;
+  noteVisibility?: NoteVisibility;
 }
 
 interface Template {
@@ -92,6 +119,11 @@ export function CreateInvoiceModal({
   const [settings, setSettings] = useState<Settings | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [billingNotes, setBillingNotes] = useState<BillingNote[]>([]);
+  const [isBillingNotesLoading, setIsBillingNotesLoading] = useState(false);
+  const [billingNotesError, setBillingNotesError] = useState<string | null>(null);
+  const [customerChangeMessage, setCustomerChangeMessage] = useState<string | null>(null);
   const [includeQRCode, setIncludeQRCode] = useState(false);
   const [invoiceNumberError, setInvoiceNumberError] = useState<string | null>(null);
   const [isCheckingNumber, setIsCheckingNumber] = useState(false);
@@ -99,6 +131,7 @@ export function CreateInvoiceModal({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
+  const [generatedRequestId, setGeneratedRequestId] = useState<string | null>(null);
   const [outputMode, setOutputMode] = useState<InvoiceOutputMode>('zugferd-pdf');
   const [taxMode, setTaxMode] = useState<'small-business' | 'standard'>('small-business');
   const [buyerReference, setBuyerReference] = useState('');
@@ -118,8 +151,68 @@ export function CreateInvoiceModal({
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previewUrlRef = useRef<string | null>(null);
   const previewGenerationRef = useRef(0);
+  const wasOpenRef = useRef(false);
+
+  const resetEditorState = useCallback(() => {
+    const today = new Date();
+    const in14Days = new Date(today);
+    in14Days.setDate(today.getDate() + 14);
+
+    setCustomerAddress("");
+    setInvoiceNumber("");
+    setDate(today.toISOString().split('T')[0]);
+    setDueDate(in14Days.toISOString().split('T')[0]);
+    setDeliveryDate(today.toISOString().split('T')[0]);
+    setNotes("");
+    setItems([{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
+    setSelectedCustomer(null);
+    setSelectedCustomerId(null);
+    setBillingNotes([]);
+    setIsBillingNotesLoading(false);
+    setBillingNotesError(null);
+    setCustomerChangeMessage(null);
+    setIncludeQRCode(false);
+    setInvoiceNumberError(null);
+    setIsCheckingNumber(false);
+    setSelectedTemplateId("");
+    setIsSaveTemplateOpen(false);
+    setNewTemplateName("");
+    setGeneratedRequestId(globalThis.crypto?.randomUUID?.() ?? null);
+    setOutputMode('zugferd-pdf');
+    setTaxMode('small-business');
+    setBuyerReference('');
+    setBuyerEmail('');
+    setBuyerCountry('DE');
+    setSellerCountry('DE');
+    setBuyerPostcode('');
+    setBuyerCity('');
+    setSellerPostcode('');
+    setSellerCity('');
+    setPaymentMeansCode('30');
+    setIsGenerating(false);
+    setShowPreview(false);
+    setIsGeneratingPreview(false);
+    if (previewTimeoutRef.current) {
+      clearTimeout(previewTimeoutRef.current);
+      previewTimeoutRef.current = null;
+    }
+    previewGenerationRef.current += 1;
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setPreviewUrl(null);
+  }, []);
 
   useEffect(() => {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    if (!wasOpenRef.current) resetEditorState();
+    wasOpenRef.current = true;
+
     if (isOpen) {
       // Set default due date to 14 days from now
       const today = new Date();
@@ -135,7 +228,17 @@ export function CreateInvoiceModal({
 
       fetch("/api/customers")
         .then(res => res.json())
-        .then(data => setCustomers(Array.isArray(data) ? data : []))
+        .then(data => {
+          const nextCustomers = Array.isArray(data) ? data : [];
+          setCustomers(nextCustomers);
+          if (fromQuote?.customerId) {
+            const quoteCustomer = nextCustomers.find((customer: Customer) => customer.id.toString() === fromQuote.customerId?.toString());
+            if (quoteCustomer) {
+              setSelectedCustomer(quoteCustomer);
+              setSelectedCustomerId(Number(quoteCustomer.id));
+            }
+          }
+        })
         .catch(err => console.error("Failed to load customers", err));
 
       fetch("/api/invoices/next-number")
@@ -149,14 +252,55 @@ export function CreateInvoiceModal({
 
       fetchTemplates();
     }
-  }, [isOpen]);
+  }, [fromQuote?.customerId, isOpen, resetEditorState]);
+
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setBillingNotes([]);
+      setBillingNotesError(null);
+      setIsBillingNotesLoading(false);
+      return;
+    }
+
+    let isActive = true;
+    setIsBillingNotesLoading(true);
+    setBillingNotesError(null);
+    fetch(`/api/billing-notes?customerId=${selectedCustomerId}`, { cache: 'no-store' })
+      .then(async response => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.error || 'Leistungsnotizen konnten nicht geladen werden.');
+        return Array.isArray(data) ? data : Array.isArray(data?.notes) ? data.notes : [];
+      })
+      .then(data => {
+        if (isActive) setBillingNotes(data);
+      })
+      .catch(error => {
+        if (isActive) {
+          setBillingNotes([]);
+          setBillingNotesError(error instanceof Error ? error.message : 'Leistungsnotizen konnten nicht geladen werden.');
+        }
+      })
+      .finally(() => {
+        if (isActive) setIsBillingNotesLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedCustomerId]);
 
   // Pre-fill from quote when converting
   useEffect(() => {
     if (isOpen && fromQuote) {
       const pd = fromQuote.parsedData;
       if (pd.items && pd.items.length > 0) {
-        setItems(pd.items);
+        // Quote/template data is not allowed to carry a billing-note claim
+        // into a new invoice. Associations are created only by this editor.
+        setItems(pd.items.map(item => stripBillingNoteAssociation({
+          ...item,
+          unit: item.unit || "Stück",
+          taxRate: item.taxRate ?? 0,
+        })));
         // Legacy quotes have no tax mode; taxable lines need the standard editor.
         setTaxMode(pd.items.some(item => item.taxRate > 0) ? 'standard' : 'small-business');
       }
@@ -187,7 +331,7 @@ export function CreateInvoiceModal({
     if (!newTemplateName.trim()) return;
 
     const templateData = {
-      items,
+      items: items.map(stripBillingNoteAssociation),
       notes,
       includeQRCode,
       taxMode,
@@ -224,7 +368,7 @@ export function CreateInvoiceModal({
       const data = template.data;
       if (data.items) {
         setItems(data.items.map((item: InvoiceItem) => ({
-          ...item,
+          ...stripBillingNoteAssociation(item),
           unit: item.unit || "Stück",
           taxRate: item.taxRate ?? 0
         })));
@@ -289,18 +433,41 @@ export function CreateInvoiceModal({
 
   const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const customerId = e.target.value;
-    if (!customerId) return;
-
     const customer = customers.find(c => c.id.toString() === customerId);
-    if (customer) {
-      setSelectedCustomer(customer);
-      setBuyerEmail(customer.email || '');
-      let addressBlock = customer.name;
-      if (customer.address) addressBlock += `\n${customer.address} `;
-      const cityLine = `${customer.zipCode || ''} ${customer.city || ''} `.trim();
-      if (cityLine) addressBlock += `\n${cityLine} `;
-      setCustomerAddress(addressBlock);
+    const hadSelectedBillingNotes = items.some(item => item.billingNoteId !== undefined);
+    if (hadSelectedBillingNotes) {
+      setItems(current => {
+        const manualItems = current.filter(item => item.billingNoteId === undefined);
+        return manualItems.length > 0
+          ? manualItems
+          : [{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }];
+      });
+      setCustomerChangeMessage('Der Kunde wurde geändert. Zugeordnete Leistungsnotizen wurden entfernt und müssen für den neuen Kunden erneut ausgewählt werden.');
+    } else {
+      setCustomerChangeMessage(null);
     }
+    setBillingNotes([]);
+    setBillingNotesError(null);
+
+    if (!customer) {
+      setSelectedCustomer(null);
+      setSelectedCustomerId(null);
+      setCustomerAddress('');
+      setBuyerEmail('');
+      setBuyerCountry('DE');
+      setBuyerPostcode('');
+      setBuyerCity('');
+      return;
+    }
+
+    setSelectedCustomer(customer);
+    setSelectedCustomerId(Number(customer.id));
+    setBuyerEmail(customer.email || '');
+    let addressBlock = customer.name;
+    if (customer.address) addressBlock += `\n${customer.address} `;
+    const cityLine = `${customer.zipCode || ''} ${customer.city || ''} `.trim();
+    if (cityLine) addressBlock += `\n${cityLine} `;
+    setCustomerAddress(addressBlock);
   };
 
   const addItem = () => {
@@ -325,8 +492,41 @@ export function CreateInvoiceModal({
   const duplicateItem = (index: number) => {
     const itemToDuplicate = items[index];
     const newItems = [...items];
-    newItems.splice(index + 1, 0, { ...itemToDuplicate });
+    // A billing note belongs to exactly one imported row. Duplicating a row
+    // creates a manual row so the note cannot be reserved twice.
+    newItems.splice(index + 1, 0, { ...itemToDuplicate, billingNoteId: undefined });
     setItems(newItems);
+  };
+
+  const isBillingNoteSelected = (noteId: number) => items.some(item => item.billingNoteId === noteId);
+
+  const toggleBillingNote = (note: BillingNote, checked: boolean) => {
+    if (checked) {
+      if (isBillingNoteSelected(note.id)) return;
+      const importedItem: InvoiceItem = {
+        description: note.description,
+        quantity: note.quantity,
+        unitPrice: 0,
+        unit: note.unit,
+        taxRate: 0,
+        billingNoteId: note.id,
+      };
+      setItems(current => {
+        const onlyBlankRow = current.length === 1
+          && current[0].billingNoteId === undefined
+          && !current[0].description.trim()
+          && current[0].unitPrice === 0;
+        return onlyBlankRow ? [importedItem] : [...current, importedItem];
+      });
+      return;
+    }
+
+    setItems(current => {
+      const remaining = current.filter(item => item.billingNoteId !== note.id);
+      return remaining.length > 0
+        ? remaining
+        : [{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }];
+    });
   };
 
   const formatCurrency = useCallback((amount: number) => {
@@ -1082,9 +1282,15 @@ export function CreateInvoiceModal({
         city: buyerCountry === 'DE' ? undefined : buyerCity.trim(),
         email: buyerEmail.trim() || undefined,
       },
+      // Keep editor-only billingNoteId out of the generated PDF/XML payload.
       items: items.map((item, index) => ({
-        ...item,
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        unit: item.unit,
+        taxRate: item.taxRate,
         taxCategory: taxMode === 'small-business' ? 'E' : item.taxCategory,
+        exemptionReason: item.exemptionReason,
         total: amounts.lines[index].netAmount,
       })),
       netAmount: amounts.netAmount,
@@ -1098,9 +1304,17 @@ export function CreateInvoiceModal({
     return `Rechnung_${safeNumber}.${extension}`;
   };
 
-  const uploadGeneratedInvoice = async (file: File): Promise<boolean> => {
+  const uploadGeneratedInvoice = async (file: File): Promise<{ invoiceId: number | null; replayed: boolean } | null> => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('selectedCustomerId', selectedCustomerId ? String(selectedCustomerId) : '');
+    const billingNoteIds = Array.from(new Set(
+      items
+        .map(item => item.billingNoteId)
+        .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0),
+    ));
+    formData.append('billingNoteIds', JSON.stringify(billingNoteIds));
+    if (generatedRequestId) formData.append('generatedRequestId', generatedRequestId);
     if (fromQuote) formData.append('fromQuoteId', String(fromQuote.id));
 
     let uploadRes: Response;
@@ -1112,21 +1326,26 @@ export function CreateInvoiceModal({
     } catch (e) {
       console.error("Auto-upload network error:", e);
       alert("Fehler beim automatischen Speichern der Rechnung.");
-      return false;
+      return null;
     }
 
     if (!uploadRes.ok) {
       const err = await uploadRes.json().catch(() => null);
       console.error("Auto-upload failed:", err);
       alert("Speichern fehlgeschlagen: " + (err?.error || "Unbekannter Fehler"));
-      return false;
+      return null;
     }
+
+    const savedInvoice = await uploadRes.json().catch(() => null) as { id?: unknown; idempotent?: unknown } | null;
 
     if (onInvoiceCreated) {
       onInvoiceCreated();
     }
 
-    return true;
+    return {
+      invoiceId: typeof savedInvoice?.id === 'number' && Number.isSafeInteger(savedInvoice.id) ? savedInvoice.id : null,
+      replayed: savedInvoice?.idempotent === true,
+    };
   };
 
   const downloadGeneratedFile = (blob: Blob, fileName: string) => {
@@ -1138,6 +1357,14 @@ export function CreateInvoiceModal({
     link.click();
     document.body.removeChild(link);
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const downloadStoredInvoice = async (invoiceId: number, fileName: string) => {
+    const response = await fetch(`/api/invoices/download?id=${invoiceId}&download=true`);
+    if (!response.ok) {
+      throw new Error('Die gespeicherte Rechnung konnte nicht heruntergeladen werden.');
+    }
+    downloadGeneratedFile(await response.blob(), fileName);
   };
 
   const convertToPdfA3 = async (basePdfBytes: Uint8Array, xmlContent: string) => {
@@ -1185,10 +1412,15 @@ export function CreateInvoiceModal({
         const fileName = buildInvoiceFileName('xml');
         const blob = new Blob([xmlContent], { type: 'application/xml' });
         const file = new File([blob], fileName, { type: 'application/xml' });
-        const uploadSuccess = await uploadGeneratedInvoice(file);
+        const uploadResult = await uploadGeneratedInvoice(file);
 
-        downloadGeneratedFile(blob, fileName);
-        if (uploadSuccess) {
+        if (uploadResult) {
+          if (uploadResult.replayed) {
+            if (!uploadResult.invoiceId) throw new Error('Die gespeicherte Rechnung konnte nicht zugeordnet werden.');
+            await downloadStoredInvoice(uploadResult.invoiceId, fileName);
+          } else {
+            downloadGeneratedFile(blob, fileName);
+          }
           onClose();
         }
         return;
@@ -1200,10 +1432,15 @@ export function CreateInvoiceModal({
       const blob = new Blob([finalPdfBytes as BlobPart], { type: 'application/pdf' });
       const fileName = buildInvoiceFileName('pdf');
       const file = new File([blob], fileName, { type: 'application/pdf' });
-      const uploadSuccess = await uploadGeneratedInvoice(file);
+      const uploadResult = await uploadGeneratedInvoice(file);
 
-      downloadGeneratedFile(blob, fileName);
-      if (uploadSuccess) {
+      if (uploadResult) {
+        if (uploadResult.replayed) {
+          if (!uploadResult.invoiceId) throw new Error('Die gespeicherte Rechnung konnte nicht zugeordnet werden.');
+          await downloadStoredInvoice(uploadResult.invoiceId, fileName);
+        } else {
+          downloadGeneratedFile(blob, fileName);
+        }
         onClose();
       }
     } catch (error) {
@@ -1430,13 +1667,21 @@ export function CreateInvoiceModal({
                   aria-label="Gespeicherten Kunden auswählen"
                   className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                   onChange={handleCustomerSelect}
-                  defaultValue=""
+                  value={selectedCustomerId?.toString() || ""}
                 >
-                  <option value="" disabled>Kunden auswählen …</option>
+                  <option value="">Kunden auswählen …</option>
                   {customers.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
+
+                {selectedCustomer?.internalNote && selectedCustomer.noteVisibility !== 'SEND' && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50/70 p-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20" role="note">
+                    <p className="font-medium text-amber-950 dark:text-amber-100">Interner Kundenhinweis</p>
+                    <p className="mt-1 whitespace-pre-wrap text-amber-900/80 dark:text-amber-200/80">{selectedCustomer.internalNote}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Wird nicht in PDF, XML oder E-Mail übernommen.</p>
+                  </div>
+                )}
 
                 <Textarea
                   id="customer"
@@ -1501,6 +1746,52 @@ export function CreateInvoiceModal({
                 </Label>
               </div>
             </div>
+
+            {customerChangeMessage && (
+              <p className="text-sm text-amber-700 dark:text-amber-300" role="status">{customerChangeMessage}</p>
+            )}
+
+            {/* Unreserved service notes */}
+            {selectedCustomerId && (
+              <section className="space-y-3 rounded-md border border-primary/20 bg-primary/5 p-3" aria-labelledby="billing-notes-title">
+                <div>
+                  <Label id="billing-notes-title" className="text-sm font-medium">Leistungsnotizen übernehmen</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Wählen Sie unreservierte Leistungen aus. Der Einzelpreis bleibt zunächst 0,00 € und wird von Ihnen festgelegt.
+                  </p>
+                </div>
+                {isBillingNotesLoading ? (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Leistungsnotizen werden geladen …
+                  </p>
+                ) : billingNotesError ? (
+                  <p className="text-sm text-destructive" role="alert">{billingNotesError}</p>
+                ) : billingNotes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine unreservierten Leistungsnotizen vorhanden.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {billingNotes.map(note => (
+                      <label key={note.id} className="flex min-w-0 cursor-pointer items-start gap-3 rounded-md border bg-background p-3 text-sm hover:bg-muted/50">
+                        <input
+                          type="checkbox"
+                          checked={isBillingNoteSelected(note.id)}
+                          onChange={event => toggleBillingNote(note, event.target.checked)}
+                          className="mt-1 h-4 w-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          aria-label={`Leistungsnotiz ${note.description} übernehmen`}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{note.description}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {new Date(`${note.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString('de-DE')} · {note.quantity} {note.unit}
+                          </span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-xs text-muted-foreground">0,00 € / Einheit</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* Items Table */}
             <div className="space-y-2">
@@ -1612,6 +1903,20 @@ export function CreateInvoiceModal({
                               <Input id={`invoice-item-exemption-${index}`} className="mt-1" value={item.exemptionReason || ''} onChange={e => updateItem(index, 'exemptionReason', e.target.value)} />
                             </div>
                           )}
+                        </div>
+                      )}
+                      {selectedCustomerId && (
+                        <div className="col-span-2 min-w-0 md:col-span-6">
+                          <PriceHistory
+                            customerId={selectedCustomerId}
+                            description={item.description}
+                            unit={item.unit}
+                            taxRate={item.taxRate}
+                            taxCategory={taxMode === 'small-business' ? 'E' : item.taxCategory}
+                            exemptionReason={taxMode === 'small-business' ? SMALL_BUSINESS_EXEMPTION_REASON : item.exemptionReason}
+                            currentPrice={item.unitPrice}
+                            onApply={price => updateItem(index, 'unitPrice', price)}
+                          />
                         </div>
                       )}
                     </div>

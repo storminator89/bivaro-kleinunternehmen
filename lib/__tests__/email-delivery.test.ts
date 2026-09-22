@@ -45,6 +45,31 @@ const acknowledgement = (id: number, messageId: string) => ({
   userId: 'mail-owner', invoiceId: id, documentType: 'invoice' as const, expectedStatus: 'DRAFT', messageId,
 });
 
+it('keeps customer context out of outgoing mail and respects its visibility and owner', async () => {
+  const note = 'INTERNAL_ONLY: Bestellnummer vor Versand prüfen';
+  const customer = await database.client.customer.create({ data: {
+    userId: 'mail-owner', name: 'Context fixture', email: 'context@example.test',
+    internalNote: note, noteVisibility: 'BOTH',
+  } });
+  const source = await invoice();
+  await database.client.invoice.update({ where: { id: source.id }, data: { customerId: customer.id } });
+  const request = { id: source.id, documentType: 'invoice' as const };
+  const draft = await buildDocumentEmailDraft('mail-owner', request);
+  expect(draft.internalCustomerNote).toBe(note);
+  expect(draft.text).not.toContain(note);
+  expect(draft.subject).not.toContain(note);
+  state.send.mockResolvedValueOnce({ messageId: 'internal-context-test' });
+  await sendDocumentEmail('mail-owner', { ...request, to: draft.to, subject: draft.subject, text: draft.text });
+  expect(JSON.stringify(state.send.mock.calls.at(-1))).not.toContain(note);
+  await database.client.customer.update({ where: { id: customer.id }, data: { noteVisibility: 'EDITOR' } });
+  expect((await buildDocumentEmailDraft('mail-owner', request)).internalCustomerNote).toBeNull();
+  // Even malformed legacy relations must not disclose another tenant's note.
+  await database.client.customer.update({ where: { id: customer.id }, data: { userId: 'other-owner', noteVisibility: 'BOTH' } });
+  const foreignDraft = await buildDocumentEmailDraft('mail-owner', request);
+  expect(foreignDraft.internalCustomerNote).toBeNull();
+  expect(foreignDraft.to).toBe('');
+});
+
 it('uses saved SMTP settings for the preview and transport with required STARTTLS', async () => {
   vi.stubEnv('NEXTAUTH_SECRET', 'synthetic-key-for-smtp-integration');
   await saveSmtpSettings({ host: 'configured.example.test', port: 587, secure: false,

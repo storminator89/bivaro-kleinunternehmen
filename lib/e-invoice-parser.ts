@@ -41,6 +41,10 @@ export type ParsedEInvoiceLineItem = {
   baseUnit: string | null;
   amount: number | null;
   taxRate: number | null;
+  /** EN 16931 VAT category. Older stored data may not have this field. */
+  taxCategory: 'S' | 'E' | 'Z' | null;
+  /** Exemption reason when supplied on the line. */
+  exemptionReason: string | null;
   charges: ParsedEInvoiceAdjustment[];
   allowances: ParsedEInvoiceAdjustment[];
 };
@@ -263,6 +267,35 @@ function parseAdjustment(node: unknown, fallbackKind: 'CHARGE' | 'ALLOWANCE'): P
   };
 }
 
+function parseTaxCategory(value: string | null): 'S' | 'E' | 'Z' | null {
+  const category = value?.trim().toUpperCase();
+  return category === 'S' || category === 'E' || category === 'Z' ? category : null;
+}
+
+type TaxExemptionReasons = Map<string, string | null>;
+
+function taxGroupKey(category: 'S' | 'E' | 'Z' | null, rate: number | null): string | null {
+  return category && rate !== null ? `${category}:${rate.toFixed(6)}` : null;
+}
+
+function collectTaxExemptionReasons(groups: unknown[], paths: {
+  category: string[];
+  rate: string[];
+  reason: string[];
+}): TaxExemptionReasons {
+  const reasons: TaxExemptionReasons = new Map();
+  for (const group of groups) {
+    const category = parseTaxCategory(firstText(group, paths.category));
+    const rate = firstNumber(group, paths.rate);
+    const key = taxGroupKey(category, rate);
+    if (!key) continue;
+    const reason = firstText(group, paths.reason);
+    if (!reasons.has(key)) reasons.set(key, reason);
+    else if (reasons.get(key) !== reason) reasons.set(key, null);
+  }
+  return reasons;
+}
+
 function parseDocumentType(code: string | null, rootType?: 'Invoice' | 'CreditNote'): EInvoiceDocumentType {
   if (code !== null) {
     if (code === '383') return 'DEBIT_NOTE';
@@ -319,11 +352,18 @@ function parseUblParty(party: unknown): ParsedEInvoiceParty {
   };
 }
 
-function parseCiiLineItem(item: unknown): ParsedEInvoiceLineItem {
+function parseCiiLineItem(item: unknown, exemptionReasons: TaxExemptionReasons): ParsedEInvoiceLineItem {
   const quantityNode = getPath(item, 'SpecifiedLineTradeDelivery.BilledQuantity');
   const baseQuantityNode = getPath(item, 'SpecifiedLineTradeAgreement.NetPriceProductTradePrice.BasisQuantity');
   const adjustments = getDescendantNodes(getPath(item, 'SpecifiedLineTradeAgreement'), 'AppliedTradeAllowanceCharge')
     .map(node => parseAdjustment(node, 'ALLOWANCE'));
+
+  const taxRate = getNumber(item, 'SpecifiedLineTradeSettlement.ApplicableTradeTax.RateApplicablePercent');
+  const taxCategory = parseTaxCategory(getText(item, 'SpecifiedLineTradeSettlement.ApplicableTradeTax.CategoryCode'));
+  const directExemptionReason = getText(item, 'SpecifiedLineTradeSettlement.ApplicableTradeTax.ExemptionReason');
+  const headerExemptionReason = taxGroupKey(taxCategory, taxRate)
+    ? exemptionReasons.get(taxGroupKey(taxCategory, taxRate)!) ?? null
+    : null;
 
   return {
     positionNumber: getText(item, 'AssociatedDocumentLineDocument.LineID'),
@@ -338,17 +378,35 @@ function parseCiiLineItem(item: unknown): ParsedEInvoiceLineItem {
     baseQuantity: asNumber(baseQuantityNode),
     baseUnit: getAttribute(baseQuantityNode, 'unitCode'),
     amount: getNumber(item, 'SpecifiedLineTradeSettlement.SpecifiedTradeSettlementLineMonetarySummation.LineTotalAmount'),
-    taxRate: getNumber(item, 'SpecifiedLineTradeSettlement.ApplicableTradeTax.RateApplicablePercent'),
+    taxRate,
+    taxCategory,
+    exemptionReason: directExemptionReason ?? headerExemptionReason,
     charges: adjustments.filter(adjustment => adjustment.kind === 'CHARGE'),
     allowances: adjustments.filter(adjustment => adjustment.kind === 'ALLOWANCE'),
   };
 }
 
-function parseUblLineItem(item: unknown): ParsedEInvoiceLineItem {
+function parseUblLineItem(item: unknown, exemptionReasons: TaxExemptionReasons): ParsedEInvoiceLineItem {
   const quantityNode = getPath(item, 'InvoicedQuantity');
   const creditQuantityNode = quantityNode ?? getPath(item, 'CreditedQuantity');
   const baseQuantityNode = getPath(item, 'Price.BaseQuantity');
   const adjustments = toArray(getPath(item, 'AllowanceCharge')).map(node => parseAdjustment(node, 'ALLOWANCE'));
+
+  const taxRate = firstNumber(item, [
+    'Item.ClassifiedTaxCategory.Percent',
+    'TaxTotal.TaxSubtotal.TaxCategory.Percent',
+  ]);
+  const taxCategory = parseTaxCategory(firstText(item, [
+    'Item.ClassifiedTaxCategory.ID',
+    'TaxTotal.TaxSubtotal.TaxCategory.ID',
+  ]));
+  const directExemptionReason = firstText(item, [
+    'Item.ClassifiedTaxCategory.TaxExemptionReason',
+    'TaxTotal.TaxSubtotal.TaxCategory.TaxExemptionReason',
+  ]);
+  const headerExemptionReason = taxGroupKey(taxCategory, taxRate)
+    ? exemptionReasons.get(taxGroupKey(taxCategory, taxRate)!) ?? null
+    : null;
 
   return {
     positionNumber: getText(item, 'ID'),
@@ -363,10 +421,9 @@ function parseUblLineItem(item: unknown): ParsedEInvoiceLineItem {
     baseQuantity: asNumber(baseQuantityNode),
     baseUnit: getAttribute(baseQuantityNode, 'unitCode'),
     amount: getNumber(item, 'LineExtensionAmount'),
-    taxRate: firstNumber(item, [
-      'Item.ClassifiedTaxCategory.Percent',
-      'TaxTotal.TaxSubtotal.TaxCategory.Percent',
-    ]),
+    taxRate,
+    taxCategory,
+    exemptionReason: directExemptionReason ?? headerExemptionReason,
     charges: adjustments.filter(adjustment => adjustment.kind === 'CHARGE'),
     allowances: adjustments.filter(adjustment => adjustment.kind === 'ALLOWANCE'),
   };
@@ -386,6 +443,14 @@ function parseCiiInvoice(root: unknown, rawXml: string): ParsedEInvoice {
   const prepaidAmount = firstNumber(summation, ['TotalPrepaidAmount']);
   const roundingAmount = firstNumber(summation, ['RoundingAmount']);
   const dueAmount = firstNumber(summation, ['DuePayableAmount']);
+  const exemptionReasons = collectTaxExemptionReasons(
+    toArray(getPath(settlement, 'ApplicableTradeTax')),
+    {
+      category: ['CategoryCode'],
+      rate: ['RateApplicablePercent'],
+      reason: ['ExemptionReason'],
+    },
+  );
   const currency = normalizeCurrency(
     firstText(settlement, ['InvoiceCurrencyCode'])
       || getCurrencyFromAmount(getPath(summation, 'GrandTotalAmount'))
@@ -415,7 +480,7 @@ function parseCiiInvoice(root: unknown, rawXml: string): ParsedEInvoice {
     customerName: buyerInfo.name,
     lineItems: toArray(getPath(tradeTransaction, 'IncludedSupplyChainTradeLineItem'))
       .filter(Boolean)
-      .map(parseCiiLineItem),
+      .map(item => parseCiiLineItem(item, exemptionReasons)),
     buyerInfo,
     sellerInfo,
     rawXml,
@@ -427,6 +492,14 @@ function parseUblInvoice(root: unknown, rawXml: string, rootType: 'Invoice' | 'C
   const sellerInfo = parseUblParty(getPath(root, 'AccountingSupplierParty.Party'));
   const summation = getPath(root, 'LegalMonetaryTotal');
   const documentTypeCode = firstText(root, ['InvoiceTypeCode', 'CreditNoteTypeCode']);
+  const exemptionReasons = collectTaxExemptionReasons(
+    toArray(getPath(root, 'TaxTotal.TaxSubtotal')),
+    {
+      category: ['TaxCategory.ID'],
+      rate: ['TaxCategory.Percent'],
+      reason: ['TaxCategory.TaxExemptionReason'],
+    },
+  );
   const grossAmount = firstNumber(summation, ['TaxInclusiveAmount']);
   const prepaidAmount = firstNumber(summation, ['PrepaidAmount']);
   const roundingAmount = firstNumber(summation, ['PayableRoundingAmount']);
@@ -460,7 +533,7 @@ function parseUblInvoice(root: unknown, rawXml: string, rootType: 'Invoice' | 'C
     customerName: buyerInfo.name,
     lineItems: toArray(getPath(root, rootType === 'CreditNote' ? 'CreditNoteLine' : 'InvoiceLine'))
       .filter(Boolean)
-      .map(parseUblLineItem),
+      .map(item => parseUblLineItem(item, exemptionReasons)),
     buyerInfo,
     sellerInfo,
     rawXml,

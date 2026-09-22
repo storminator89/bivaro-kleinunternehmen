@@ -65,6 +65,7 @@ export const PRISMA_MONEY_COLUMNS: readonly MoneyColumn[] = [
 
 /** Float fields intentionally excluded from the EUR money inventory. */
 export const PRISMA_MONEY_FLOAT_EXCLUSIONS = [
+  { model: 'BillingNote', field: 'quantity', reason: 'service quantity, not a currency amount' },
   { model: 'Expense', field: 'taxDeductiblePercentage', reason: 'percentage, not a currency amount' },
   { model: 'RecurringExpense', field: 'taxDeductiblePercentage', reason: 'percentage, not a currency amount' },
 ] as const;

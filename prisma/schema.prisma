@@ -61,6 +61,7 @@ model User {
   cashBooks CashBook[]
   cashTransactions CashTransaction[]
   documentations Documentation[]
+  billingNotes BillingNote[]
 }
 
 // Shared, bounded rate-limit state for authentication and other API surfaces.
@@ -142,6 +143,7 @@ model Invoice {
   convertedInvoice Invoice? @relation("QuoteConversion")
   customerId    Int?
   income        Income?
+  billingNotes  BillingNote[]
   reminders     Reminder[]
   customer      Customer? @relation(fields: [customerId], references: [id])
   userId        String
@@ -162,11 +164,35 @@ model Customer {
   zipCode         String?
   city            String?
   taxNumber       String?
+  internalNote    String?
+  noteVisibility  String    @default("BOTH") // EDITOR, SEND, BOTH
   createdAt       DateTime  @default(now())
   invoices        Invoice[]
   incomes         Income[]
+  billingNotes    BillingNote[]
   userId          String
   user            User      @relation(fields: [userId], references: [id])
+}
+
+// A reusable customer service line. An invoice claims a note only once it
+// has been matched to a parsed invoice line inside the invoice transaction.
+model BillingNote {
+  id          Int       @id @default(autoincrement())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId  Int
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  serviceDate DateTime
+  description String
+  quantity    Float     @default(1)
+  unit        String    @default("Stunde")
+  invoiceId   Int?
+  invoice     Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, customerId, invoiceId])
+  @@index([userId, serviceDate])
 }
 
 model Settings {

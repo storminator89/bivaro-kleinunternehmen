@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
-export const CURRENT_SCHEMA_VERSION = '20260919100000_invoice_issuance_state';
+export const CURRENT_SCHEMA_VERSION = '20260922100000_add_billing_notes';
+/** v3 manifests produced before BillingNote was introduced remain importable. */
+export const PRE_BILLING_NOTES_SCHEMA_VERSION = '20260919100000_invoice_issuance_state';
 
 export type BackupCoverageMode = 'included' | 'metadata-only' | 'excluded';
 
@@ -73,6 +75,7 @@ const COVERAGE = [
   { model: 'InvoiceTemplate', key: 'templates', mode: 'included' as const },
   { model: 'RecurringExpense', key: 'recurringExpenses', mode: 'included' as const },
   { model: 'Reminder', key: 'reminders', mode: 'included' as const },
+  { model: 'BillingNote', key: 'billingNotes', mode: 'included' as const },
   { model: 'ApiKey', key: 'apiKeys', mode: 'metadata-only' as const, reason: 'Hash and usable secret are deliberately excluded; re-key required.' },
   { model: 'ApiLog', key: 'apiLogs', mode: 'excluded' as const, reason: 'Operational API telemetry is not tenant business state.' },
   { model: 'AuditLog', key: 'auditLogs', mode: 'included' as const, reason: 'Appended as a provenance-preserving audit segment.' },
@@ -201,14 +204,20 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (value.format !== 'bivaro-backup' || value.version !== CURRENT_BACKUP_VERSION) {
     throw new Error('Nicht unterstützte Backup-Manifest-Version');
   }
-  if (value.schemaVersion !== CURRENT_SCHEMA_VERSION || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
+  if ((value.schemaVersion !== CURRENT_SCHEMA_VERSION && value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
     throw new Error('Backup-Manifest enthält keine gültige Herkunft');
   }
   if (value.excludesSecrets !== true || !Array.isArray(value.excludedSecretFields) || !value.excludedSecretFields.includes('User.password') || !value.excludedSecretFields.includes('ApiKey.keyHash') || !value.excludedSecretFields.includes('ApiKey.secret') || !Array.isArray(value.rekeyRequired) || !value.rekeyRequired.includes('ApiKey')) {
     throw new Error('Backup-Manifest weist den Secret-Ausschluss nicht nach');
   }
   if (!Array.isArray(value.modelCoverage)) throw new Error('Backup-Manifest enthält keine Modellabdeckung');
-  const expectedModels = new Set<string>(COVERAGE.map((entry) => entry.model));
+  const expectedCoverage = value.schemaVersion === PRE_BILLING_NOTES_SCHEMA_VERSION
+    ? COVERAGE.filter((entry) => entry.model !== 'BillingNote')
+    : COVERAGE;
+  if (value.schemaVersion === PRE_BILLING_NOTES_SCHEMA_VERSION && coverageCount(data, 'billingNotes') > 0) {
+    throw new Error('Ein altes Backup-Manifest darf keine ungebundenen BillingNotes enthalten');
+  }
+  const expectedModels = new Set<string>(expectedCoverage.map((entry) => entry.model));
   const seenModels = new Set<string>();
   for (const item of value.modelCoverage) {
     if (!item || typeof item !== 'object') throw new Error('Backup-Manifest enthält einen ungültigen Modelleintag');
@@ -218,12 +227,12 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
     }
     seenModels.add(entry.model);
     if (!Number.isSafeInteger(entry.count) || entry.count < 0) throw new Error(`Backup-Manifest count für ${entry.model} ist ungültig`);
-    const definition = COVERAGE.find((candidate) => candidate.model === entry.model)!;
+    const definition = expectedCoverage.find((candidate) => candidate.model === entry.model)!;
     if (entry.key !== definition.key || entry.mode !== definition.mode) throw new Error(`Backup-Manifest Abdeckung für ${entry.model} stimmt nicht mit dem Vertrag überein`);
     if (entry.mode !== 'excluded' && entry.count !== coverageCount(data, entry.key)) throw new Error(`Backup-Manifest count für ${entry.model} stimmt nicht mit den Daten überein`);
     if (entry.mode !== 'excluded' && entry.sha256 !== coverageHash(data, entry.key)) throw new Error(`Backup-Manifest Hash für ${entry.model} stimmt nicht mit den Daten überein`);
   }
-  if (seenModels.size !== COVERAGE.length) throw new Error('Backup-Manifest ist nicht vollständig');
+  if (seenModels.size !== expectedCoverage.length) throw new Error('Backup-Manifest ist nicht vollständig');
   if (!value.auditSegment || value.auditSegment.count !== coverageCount(data, 'auditLogs') || value.auditSegment.sha256 !== coverageHash(data, 'auditLogs')) {
     throw new Error('Backup-Manifest Auditsegment stimmt nicht mit den Daten überein');
   }

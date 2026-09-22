@@ -19,6 +19,7 @@ export async function GET() {
       incomesCount: count('incomes'),
       invoicesCount: count('invoices'),
       customersCount: count('customers'),
+      billingNotesCount: count('billingNotes'),
       recurringExpensesCount: count('recurringExpenses'),
       remindersCount: count('reminders'),
       cashBooksCount: count('cashBooks'),
@@ -35,6 +36,7 @@ export async function GET() {
         incomesCount: count('incomes'),
         invoicesCount: count('invoices'),
         customersCount: count('customers'),
+        billingNotesCount: count('billingNotes'),
       },
     });
 
@@ -51,6 +53,7 @@ export async function GET() {
         incomes: count('incomes'),
         invoices: count('invoices'),
         customers: count('customers'),
+        billingNotes: count('billingNotes'),
         templates: count('templates'),
         recurringExpenses: count('recurringExpenses'),
         reminders: count('reminders'),
