@@ -267,7 +267,7 @@ export async function POST(request: NextRequest) {
         const extracted = await getInvoiceXmlContent(fileKind, buffer);
         if (!extracted) return { extracted, parsed: null };
         return { extracted, parsed: await parseEInvoiceXml(extracted) };
-      });
+      }, generatedRequestId ?? undefined);
       xmlContent = parsed.extracted;
       if (!parsed.parsed) {
         const message = fileKind === 'pdf'

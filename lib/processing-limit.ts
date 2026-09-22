@@ -5,18 +5,31 @@ export class ProcessingCapacityError extends Error {
 }
 
 let activeJobs = 0;
-const activeUsers = new Set<string>();
+const activeUsers = new Map<string, { idempotencyKey?: string; finished: Promise<void> }>();
 const MAX_PROCESSING_JOBS = 2;
 
 /** Per-process safety limit. Multiple replicas each have their own capacity. */
-export async function withProcessingSlot<T>(userId: string | undefined, work: () => Promise<T>): Promise<T> {
-  if (activeJobs >= MAX_PROCESSING_JOBS || (userId && activeUsers.has(userId))) throw new ProcessingCapacityError();
+export async function withProcessingSlot<T>(
+  userId: string | undefined,
+  work: () => Promise<T>,
+  idempotencyKey?: string,
+): Promise<T> {
+  while (userId && activeUsers.has(userId)) {
+    const active = activeUsers.get(userId)!;
+    if (!idempotencyKey || active.idempotencyKey !== idempotencyKey) throw new ProcessingCapacityError();
+    await active.finished;
+  }
+  if (activeJobs >= MAX_PROCESSING_JOBS) throw new ProcessingCapacityError();
+
   activeJobs++;
-  if (userId) activeUsers.add(userId);
+  let finish!: () => void;
+  const finished = new Promise<void>(resolve => { finish = resolve; });
+  if (userId) activeUsers.set(userId, { idempotencyKey, finished });
   try {
     return await work();
   } finally {
     activeJobs--;
-    if (userId) activeUsers.delete(userId);
+    if (userId && activeUsers.get(userId)?.finished === finished) activeUsers.delete(userId);
+    finish();
   }
 }
