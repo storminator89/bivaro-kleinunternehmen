@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
         backupType: 'json',
         overwriteMode: overwrite,
         importedCustomers: results.customers.imported,
+        importedBillingNotes: results.billingNotes.imported,
         importedExpenses: results.expenses.imported,
         importedIncomes: results.incomes.imported,
         importedInvoices: results.invoices.imported,

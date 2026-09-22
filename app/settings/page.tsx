@@ -33,6 +33,7 @@ type RestorePreview = {
     warnings: string[];
     counts: {
       customers: number;
+      billingNotes: number;
       expenses: number;
       incomes: number;
       invoices: number;
@@ -842,6 +843,7 @@ export default function SettingsPage() {
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                       <span>Kunden: {restorePreview.preview.counts.customers}</span>
+                      <span>Leistungsnotizen: {restorePreview.preview.counts.billingNotes}</span>
                       <span>Ausgaben: {restorePreview.preview.counts.expenses}</span>
                       <span>Einnahmen: {restorePreview.preview.counts.incomes}</span>
                       <span>Rechnungen: {restorePreview.preview.counts.invoices}</span>

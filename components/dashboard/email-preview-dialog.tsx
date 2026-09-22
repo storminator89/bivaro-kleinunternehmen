@@ -40,6 +40,7 @@ type EmailDraft = {
   documentLabel: string;
   emailConfigured: boolean;
   missingConfiguration: string[];
+  internalCustomerNote: string | null;
 };
 
 type EmailPreviewDialogProps = {
@@ -244,6 +245,17 @@ export function EmailPreviewDialog({
                           SMTP-Einstellungen öffnen
                         </Link>{" "}(Änderung nur durch Administratoren)
                       </span>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {draft.internalCustomerNote && (
+                  <Alert className="border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20">
+                    <AlertCircle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                    <AlertTitle>Interner Kundenhinweis</AlertTitle>
+                    <AlertDescription>
+                      <span className="whitespace-pre-wrap text-amber-900/80 dark:text-amber-200/80">{draft.internalCustomerNote}</span>
+                      <span className="mt-2 block text-xs text-muted-foreground">Nur für Ihr Team. Dieser Hinweis wird nicht in den E-Mail-Text oder PDF-Anhang übernommen.</span>
                     </AlertDescription>
                   </Alert>
                 )}

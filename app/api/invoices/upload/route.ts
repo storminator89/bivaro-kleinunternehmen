@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
@@ -21,6 +22,14 @@ import {
   parseEInvoiceXml,
   type ParsedEInvoice,
 } from '@/lib/e-invoice-parser';
+import {
+  BillingNoteClaimError,
+  BillingNoteInputError,
+  MAX_BILLING_NOTES_PER_REQUEST,
+  claimBillingNotesForInvoice,
+  customerNameMatchesInvoiceBuyer,
+  parsePositiveId,
+} from '@/lib/billing-notes';
 
 type SupportedInvoiceFileKind = 'pdf' | 'xml';
 
@@ -28,6 +37,15 @@ class QuoteConversionError extends Error {
   constructor(message: string, public readonly status: number) {
     super(message);
     this.name = 'QuoteConversionError';
+  }
+}
+
+class UploadIdempotencyConflictError extends Error {
+  readonly status = 409;
+
+  constructor() {
+    super('Diese Upload-Anfrage wurde bereits mit anderen Rechnungsdaten verarbeitet.');
+    this.name = 'UploadIdempotencyConflictError';
   }
 }
 
@@ -45,6 +63,87 @@ function getSupportedFileKind(file: File): SupportedInvoiceFileKind | null {
   if (mimeType === 'application/pdf' || lowerName.endsWith('.pdf')) return 'pdf';
   if (XML_MIME_TYPES.has(mimeType) || lowerName.endsWith('.xml')) return 'xml';
   return null;
+}
+
+function parseBillingNoteIds(value: FormDataEntryValue | null): number[] {
+  if (value === null || value === '') return [];
+  if (typeof value !== 'string') throw new BillingNoteInputError('Ungültige Leistungsnotizen');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new BillingNoteInputError('billingNoteIds muss ein JSON-Array sein');
+  }
+  if (!Array.isArray(parsed) || parsed.length > MAX_BILLING_NOTES_PER_REQUEST) {
+    throw new BillingNoteInputError('Ungültige Leistungsnotizen');
+  }
+  return parsed.map(item => parsePositiveId(item, 'Leistungsnotiz-ID'));
+}
+
+function parseSelectedCustomerId(value: FormDataEntryValue | null): number | null {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string') throw new BillingNoteInputError('Ungültige Kunden-ID');
+  return parsePositiveId(value, 'Kunden-ID');
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+function parseGeneratedRequestId(value: FormDataEntryValue | null): string | null {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
+    throw new BillingNoteInputError('Ungültige Upload-Anfrage-ID');
+  }
+  return value.toLowerCase();
+}
+
+/** Stable identity for a retry of one generated upload request. */
+function buildInvoiceUploadFingerprint(
+  rawXml: string,
+  customerId: number | null,
+  billingNoteIds: number[],
+  fromQuoteId: number | null,
+): string {
+  return createHash('sha256')
+    .update(rawXml)
+    .update('\0')
+    .update(String(customerId ?? ''))
+    .update('\0')
+    .update(JSON.stringify([...billingNoteIds].sort((a, b) => a - b)))
+    .update('\0')
+    .update(String(fromQuoteId ?? ''))
+    .digest('hex');
+}
+
+type UploadRequestMetadata = { requestId: string; fingerprint: string };
+
+function getUploadRequestMetadata(value: unknown): UploadRequestMetadata | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const metadata = (value as Record<string, unknown>)._uploadRequest;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const requestId = (metadata as Record<string, unknown>).requestId;
+  const fingerprint = (metadata as Record<string, unknown>).fingerprint;
+  if (typeof requestId !== 'string' || typeof fingerprint !== 'string') return null;
+  return { requestId, fingerprint };
+}
+
+async function findUploadRequestInvoice(
+  db: Pick<Prisma.TransactionClient, 'invoice' | '$queryRaw'>,
+  userId: string,
+  requestId: string,
+) {
+  // Keep this lookup bounded by the tenant and request marker. SQLite's JSON1
+  // function is available in the deployed SQLite runtime, while Prisma's
+  // SQLite JSON path filter support is version-dependent.
+  const matches = await db.$queryRaw<Array<{ id: number }>>(Prisma.sql`
+    SELECT "id" FROM "Invoice"
+    WHERE "userId" = ${userId}
+      AND "type" = 'INVOICE'
+      AND json_extract("parsedData", '$._uploadRequest.requestId') = ${requestId}
+    LIMIT 1
+  `);
+  const match = matches[0];
+  if (!match) return null;
+  return db.invoice.findUnique({ where: { id: match.id }, include: { income: true } });
 }
 
 function decodeStandaloneXml(buffer: Buffer): string | null {
@@ -85,7 +184,7 @@ async function findOrCreateCustomer(
   });
 }
 
-function toStoredParsedData(parsedInvoice: ParsedEInvoice) {
+function toStoredParsedData(parsedInvoice: ParsedEInvoice, uploadRequest?: UploadRequestMetadata) {
   return {
     extractionStatus: parsedInvoice.extractionStatus,
     validationStatus: parsedInvoice.validationStatus,
@@ -111,6 +210,7 @@ function toStoredParsedData(parsedInvoice: ParsedEInvoice) {
     sellerInfo: parsedInvoice.sellerInfo,
     rawXml: parsedInvoice.rawXml,
     eInvoiceFormat: parsedInvoice.format,
+    ...(uploadRequest ? { _uploadRequest: uploadRequest } : {}),
   };
 }
 
@@ -126,6 +226,23 @@ export async function POST(request: NextRequest) {
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 });
+    }
+
+    let selectedCustomerId: number | null;
+    let billingNoteIds: number[];
+    let generatedRequestId: string | null;
+    try {
+      selectedCustomerId = parseSelectedCustomerId(formData.get('selectedCustomerId'));
+      billingNoteIds = parseBillingNoteIds(formData.get('billingNoteIds'));
+      generatedRequestId = parseGeneratedRequestId(formData.get('generatedRequestId'));
+    } catch (error) {
+      if (error instanceof BillingNoteInputError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
+    if (billingNoteIds.length > 0 && selectedCustomerId === null) {
+      return NextResponse.json({ error: 'Leistungsnotizen benötigen einen ausgewählten Kunden' }, { status: 400 });
     }
 
     const fileKind = getSupportedFileKind(file);
@@ -150,7 +267,7 @@ export async function POST(request: NextRequest) {
         const extracted = await getInvoiceXmlContent(fileKind, buffer);
         if (!extracted) return { extracted, parsed: null };
         return { extracted, parsed: await parseEInvoiceXml(extracted) };
-      });
+      }, generatedRequestId ?? undefined);
       xmlContent = parsed.extracted;
       if (!parsed.parsed) {
         const message = fileKind === 'pdf'
@@ -208,6 +325,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const invoiceDate = parsedInvoice.invoiceDate || new Date();
+    if (Number.isNaN(invoiceDate.getTime()) || (parsedInvoice.dueDate && Number.isNaN(parsedInvoice.dueDate.getTime()))) {
+      return NextResponse.json({ error: 'Ungültiges Rechnungsdatum' }, { status: 400 });
+    }
+    if (parsedInvoice.totalAmount !== null && !Number.isFinite(parsedInvoice.totalAmount)) {
+      return NextResponse.json({ error: 'Ungültiger Rechnungsbetrag' }, { status: 400 });
+    }
+
+    let selectedCustomer: { id: number; name: string } | null = null;
+    if (selectedCustomerId !== null) {
+      selectedCustomer = await prisma.customer.findFirst({
+        where: { id: selectedCustomerId, userId },
+        select: { id: true, name: true },
+      });
+      if (!selectedCustomer) return NextResponse.json({ error: 'Kunde nicht gefunden' }, { status: 404 });
+      if (!customerNameMatchesInvoiceBuyer(selectedCustomer.name, parsedInvoice.customerName)) {
+        return NextResponse.json({ error: 'Der ausgewählte Kunde entspricht nicht dem Rechnungsempfänger' }, { status: 409 });
+      }
+    }
+
+    // An omitted selectedCustomerId remains null for both the first request
+    // and its retry, even if findOrCreateCustomer creates a row meanwhile.
+    const fingerprintCustomerId = selectedCustomerId;
+    const uploadFingerprint = generatedRequestId
+      ? buildInvoiceUploadFingerprint(parsedInvoice.rawXml, fingerprintCustomerId, billingNoteIds, fromQuoteId)
+      : null;
+    if (generatedRequestId && uploadFingerprint) {
+      const existing = await findUploadRequestInvoice(prisma, userId, generatedRequestId);
+      if (existing) {
+        const metadata = getUploadRequestMetadata(existing.parsedData);
+        if (!metadata || metadata.fingerprint !== uploadFingerprint) throw new UploadIdempotencyConflictError();
+        return NextResponse.json({ ...existing, idempotent: true });
+      }
+    }
+
     if (parsedInvoice.invoiceNumber) {
       const existingInvoice = await prisma.invoice.findFirst({
         where: { invoiceNumber: parsedInvoice.invoiceNumber, userId },
@@ -219,14 +371,6 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
-    }
-
-    const invoiceDate = parsedInvoice.invoiceDate || new Date();
-    if (Number.isNaN(invoiceDate.getTime()) || (parsedInvoice.dueDate && Number.isNaN(parsedInvoice.dueDate.getTime()))) {
-      return NextResponse.json({ error: 'Ungültiges Rechnungsdatum' }, { status: 400 });
-    }
-    if (parsedInvoice.totalAmount !== null && !Number.isFinite(parsedInvoice.totalAmount)) {
-      return NextResponse.json({ error: 'Ungültiger Rechnungsbetrag' }, { status: 400 });
     }
 
     let storedFileName: string | null = null;
@@ -255,6 +399,15 @@ export async function POST(request: NextRequest) {
           });
           if (existing) return { invoice: existing, idempotent: true };
           throw new QuoteConversionError('Die Angebotsumwandlung ist inkonsistent', 409);
+        }
+
+        if (generatedRequestId && uploadFingerprint) {
+          const existing = await findUploadRequestInvoice(tx, userId, generatedRequestId);
+          if (existing) {
+            const metadata = getUploadRequestMetadata(existing.parsedData);
+            if (!metadata || metadata.fingerprint !== uploadFingerprint) throw new UploadIdempotencyConflictError();
+            return { invoice: existing, idempotent: true };
+          }
         }
 
         const conversionQuoteId = currentQuote?.id ?? null;
@@ -288,7 +441,12 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const customerRecord = await findOrCreateCustomer(parsedInvoice, userId, tx);
+        const customerRecord = selectedCustomer
+          ? await tx.customer.findFirst({ where: { id: selectedCustomer.id, userId } })
+          : await findOrCreateCustomer(parsedInvoice, userId, tx);
+        if (selectedCustomer && (!customerRecord || !customerNameMatchesInvoiceBuyer(customerRecord.name, parsedInvoice.customerName))) {
+          throw new BillingNoteClaimError('Der ausgewählte Kunde entspricht nicht dem Rechnungsempfänger', 409);
+        }
         const invoiceNumber = parsedInvoice.invoiceNumber || await getNextDocumentNumber(tx, userId, 'INVOICE', invoiceDate.getFullYear());
         const created = await tx.invoice.create({
           data: {
@@ -299,7 +457,9 @@ export async function POST(request: NextRequest) {
             invoiceDate,
             dueDate: parsedInvoice.dueDate,
             totalAmount: parsedInvoice.totalAmount ?? undefined,
-            parsedData: toStoredParsedData(parsedInvoice),
+            parsedData: toStoredParsedData(parsedInvoice, generatedRequestId && uploadFingerprint
+              ? { requestId: generatedRequestId, fingerprint: uploadFingerprint }
+              : undefined),
             customerId: customerRecord?.id,
             // Uploaded/imported documents have no trusted never-issued proof.
             issuanceState: 'UNKNOWN',
@@ -307,13 +467,27 @@ export async function POST(request: NextRequest) {
             ...(conversionQuoteId ? { convertedFromQuoteId: conversionQuoteId } : {}),
           },
         });
+        if (billingNoteIds.length > 0) {
+          await claimBillingNotesForInvoice(tx, {
+            userId,
+            customerId: customerRecord!.id,
+            invoiceId: created.id,
+            billingNoteIds,
+            lineItems: parsedInvoice.lineItems,
+          });
+        }
         await createFinancialAuditLog({
           userId,
           action: 'CREATE',
           entityType: 'Invoice',
           entityId: created.id,
           entityName: created.invoiceNumber || created.fileName,
-          newValues: { status: created.status, issuanceState: created.issuanceState, invoiceNumber: created.invoiceNumber },
+          newValues: {
+            status: created.status,
+            issuanceState: created.issuanceState,
+            invoiceNumber: created.invoiceNumber,
+            billingNoteIds: billingNoteIds.length > 0 ? billingNoteIds : undefined,
+          },
           metadata: {
             actorId: userId,
             tenantId: userId,
@@ -341,6 +515,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ ...existing, idempotent: true });
         }
       }
+      if (generatedRequestId && uploadFingerprint && (error as { code?: string }).code === 'P2002') {
+        const existing = await findUploadRequestInvoice(prisma, userId, generatedRequestId);
+        if (existing) {
+          const metadata = getUploadRequestMetadata(existing.parsedData);
+          if (!metadata || metadata.fingerprint !== uploadFingerprint) throw new UploadIdempotencyConflictError();
+          if (storedFileName) {
+            try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort cleanup */ }
+          }
+          return NextResponse.json({ ...existing, idempotent: true });
+        }
+      }
       if (storedFileName) {
         try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort cleanup */ }
       }
@@ -354,6 +539,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     if (error instanceof QuoteConversionError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof BillingNoteClaimError || error instanceof BillingNoteInputError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof UploadIdempotencyConflictError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     if ((error as { code?: string }).code === 'P2002') {

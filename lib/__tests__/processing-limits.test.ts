@@ -18,6 +18,24 @@ describe('document processing budgets', () => {
     await expect(withProcessingSlot('alice', async () => 'available')).resolves.toBe('available');
   });
 
+  it('serializes retries with the same idempotency key', async () => {
+    let release!: () => void;
+    let secondStarted = false;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const first = withProcessingSlot('alice', () => held, 'request-1');
+    const second = withProcessingSlot('alice', async () => {
+      secondStarted = true;
+      return 'retried';
+    }, 'request-1');
+
+    await Promise.resolve();
+    expect(secondStarted).toBe(false);
+    release();
+    await first;
+    await expect(second).resolves.toBe('retried');
+    expect(secondStarted).toBe(true);
+  });
+
   it('rejects oversized XML before parsing and bounds embedded XML decompression', async () => {
     const xml = '<Invoice>' + ' '.repeat(MAX_XML_INPUT_BYTES) + '</Invoice>';
     await expect(parseEInvoiceXml(xml)).rejects.toBeInstanceOf(RequestBodyLimitError);

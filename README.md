@@ -41,6 +41,8 @@ Bivaro ist eine moderne, webbasierte Buchhaltungsanwendung, die speziell für Kl
 - **Angebotsverwaltung**: Angebote erstellen und direkt in Rechnungen umwandeln.
 - **Mahnsystem**: Automatische Fälligkeitserinnerungen.
 - **Kundenverwaltung**: Empfänger aus der Datenbank auswählen oder manuell eingeben.
+- **Kundenhinweise**: Interne Hinweise können getrennt für Rechnungserstellung und E-Mail-Versand sichtbar gemacht werden.
+- **Leistungsnotizen**: Wiederverwendbare Leistungszeilen mit Leistungsdatum, Menge und Einheit lassen sich einem Kunden und optional einer Rechnung zuordnen.
 - **Individuelle Vorlagen**: Logo, Adresse und Fußzeile aus den Einstellungen.
 
 ### 💰 Einnahmen & Ausgaben
@@ -472,6 +474,7 @@ Daten können unter *Einstellungen → Backup* gesichert und wiederhergestellt w
 
 - **JSON-Backup**: Exportiert alle Daten als strukturierte JSON-Datei.
 - **ZIP-Backup**: Exportiert Daten + alle hochgeladenen Dateien (Belege, Logos) in einem ZIP-Archiv.
+- Kundenhinweise und Leistungsnotizen werden in JSON- und ZIP-Backups mit ihren Kunden-/Rechnungszuordnungen übernommen.
 
 ### Backup wiederherstellen
 

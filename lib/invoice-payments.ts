@@ -57,7 +57,13 @@ export async function updateInvoiceStatus(
     throw new InvoicePaymentError('Ungültiges Zahlungsdatum');
   }
   const result = await inTransaction(async tx => {
-    const old = await tx.invoice.findFirst({ where: { id, userId }, include: { income: { include: { cashTransaction: true } } } });
+    const old = await tx.invoice.findFirst({
+      where: { id, userId },
+      include: {
+        income: { include: { cashTransaction: true } },
+        billingNotes: { select: { id: true } },
+      },
+    });
     if (!old) throw new InvoicePaymentError('Rechnung nicht gefunden', 404);
     if (old.type !== 'INVOICE' || old.status === 'CANCELLED') {
       throw new InvoicePaymentError('Dieser Beleg kann nicht als Rechnung geändert werden', 409);
@@ -85,6 +91,9 @@ export async function updateInvoiceStatus(
     const paidDateChanged = nextStatus === 'PAID'
       && (old.paidAt?.getTime() ?? null) !== (paymentDate?.getTime() ?? null);
     const customerChanged = customerId !== undefined && customerId !== old.customerId;
+    if (customerChanged && old.billingNotes.length > 0) {
+      throw new InvoicePaymentError('Der Kunde einer Rechnung mit Leistungsnotizen kann nicht geändert werden.', 409);
+    }
     const statusChanged = nextStatus !== old.status;
     const changed = statusChanged || paidDateChanged || customerChanged;
     if (old.income && changed) {

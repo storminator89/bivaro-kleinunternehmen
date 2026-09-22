@@ -43,6 +43,8 @@ export type EmailDraft = {
   documentLabel: string;
   emailConfigured: boolean;
   missingConfiguration: string[];
+  /** Internal UI context only. Never copied into subject, body or attachments. */
+  internalCustomerNote: string | null;
 };
 
 export type SendEmailRequest = EmailDraftRequest & {
@@ -129,6 +131,14 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
   const companyName = loaded.settings.companyName || 'Ihr Unternehmen';
   const recipient = loaded.customer?.email || '';
   const replyTo = loaded.settings.email || undefined;
+  // Scope again: legacy document relations are not proof of customer ownership.
+  const customerContext = loaded.customer ? await prisma.customer.findFirst({
+    where: { id: loaded.customer.id, userId },
+    select: { internalNote: true, noteVisibility: true },
+  }) : null;
+  const internalCustomerNote = customerContext
+    && ['SEND', 'BOTH'].includes(customerContext.noteVisibility)
+    ? customerContext.internalNote : null;
 
   if (request.documentType === 'quote') {
     const quoteNumber = loaded.invoice.invoiceNumber || loaded.invoice.fileName;
@@ -155,6 +165,7 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
       documentLabel: `Angebot ${quoteNumber}`,
       emailConfigured: configuration.configured,
       missingConfiguration: configuration.missing,
+      internalCustomerNote,
     };
   }
 
@@ -191,6 +202,7 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
       documentLabel: `${levelLabel} zu Rechnung ${invoiceNumber}`,
       emailConfigured: configuration.configured,
       missingConfiguration: configuration.missing,
+      internalCustomerNote,
     };
   }
 
@@ -218,6 +230,7 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
     documentLabel: `Rechnung ${invoiceNumber}`,
     emailConfigured: configuration.configured,
     missingConfiguration: configuration.missing,
+    internalCustomerNote,
   };
 }
 
@@ -352,7 +365,11 @@ async function loadEmailDocument(userId: string, request: EmailDraftRequest): Pr
     throw new Error('Datei nicht gefunden');
   }
 
-  const customer = invoice.customer || invoice.income?.customer || null;
+  const linkedCustomer = invoice.customer || invoice.income?.customer || null;
+  const customer = linkedCustomer ? await prisma.customer.findFirst({
+    where: { id: linkedCustomer.id, userId },
+    select: { id: true, name: true, email: true },
+  }) : null;
   const attachmentUrl = invoice.type === 'QUOTE'
     ? `/api/quotes/download?id=${invoice.id}`
     : `/api/invoices/download?id=${invoice.id}`;

@@ -63,6 +63,7 @@ type RestoreResult = {
   overwriteMode: boolean;
   deleted?: string;
   customers: { imported: number; skipped: number };
+  billingNotes: { imported: number; skipped: number };
   expenses: { imported: number; skipped: number };
   incomes: { imported: number; skipped: number };
   invoices: { imported: number; skipped: number };
@@ -88,7 +89,7 @@ type ValidatedBackup = {
 
 const ARRAY_KEYS = [
   'customers', 'expenses', 'incomes', 'invoices', 'templates',
-  'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
+  'billingNotes', 'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
   'documentations', 'apiKeys', 'auditLogs',
 ] as const;
 
@@ -133,6 +134,27 @@ function asOptionalFinite(value: unknown, label: string): number | null {
   if (value === undefined || value === null || value === '') return null;
   const result = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(result)) throw new BackupValidationError(`${label} ist ungültig`);
+  return result;
+}
+
+function asBillingQuantity(value: unknown, label: string): number {
+  if (value === undefined || value === null || value === '') return 1;
+  if (typeof value !== 'number' && !(typeof value === 'string' && value.trim())) {
+    throw new BackupValidationError(`${label} ist ungültig`);
+  }
+  const result = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(result) || result <= 0 || result > Number.MAX_SAFE_INTEGER) {
+    throw new BackupValidationError(`${label} muss eine endliche Zahl größer als 0 sein`);
+  }
+  return result;
+}
+
+function asBusinessDate(value: unknown, label: string): Date {
+  const result = asDate(value, label);
+  if (!result) throw new BackupValidationError(`${label} fehlt`);
+  if (result.getUTCHours() !== 0 || result.getUTCMinutes() !== 0 || result.getUTCSeconds() !== 0 || result.getUTCMilliseconds() !== 0) {
+    throw new BackupValidationError(`${label} muss auf UTC-Mitternacht liegen`);
+  }
   return result;
 }
 
@@ -217,6 +239,24 @@ function validateBackupReferences(data: JsonRecord, sets: Record<string, Set<num
     check(transaction.cashBookId, 'cashBooks', `cashTransactions[${index}].cashBookId`);
     check(transaction.expenseId, 'expenses', `cashTransactions[${index}].expenseId`);
     check(transaction.incomeId, 'incomes', `cashTransactions[${index}].incomeId`);
+  }
+
+  for (const [index, note] of asArray(data, 'billingNotes').entries()) {
+    check(note.customerId, 'customers', `billingNotes[${index}].customerId`);
+    check(note.invoiceId, 'invoices', `billingNotes[${index}].invoiceId`);
+    const customerId = asOptionalInt(note.customerId, `billingNotes[${index}].customerId`);
+    if (customerId === null) throw new BackupValidationError(`billingNotes[${index}].customerId fehlt`);
+    const invoiceId = asOptionalInt(note.invoiceId, `billingNotes[${index}].invoiceId`);
+    if (customerId !== null && invoiceId !== null) {
+      const invoice = asArray(data, 'invoices').find((candidate) => asOptionalInt(candidate.id, 'invoice.id') === invoiceId);
+      const invoiceCustomerId = invoice ? asOptionalInt(invoice.customerId, `invoices[?].customerId`) : null;
+      if (invoiceCustomerId !== customerId) {
+        throw new BackupValidationError(`billingNotes[${index}].invoiceId muss zur angegebenen Kunden-ID gehören`);
+      }
+      if (invoice?.type !== undefined && invoice.type !== 'INVOICE') {
+        throw new BackupValidationError(`billingNotes[${index}].invoiceId muss eine Rechnung referenzieren`);
+      }
+    }
   }
 }
 
@@ -455,6 +495,15 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   validateDateFields(arrays.cashBooks, 'cashBooks', ['createdAt', 'updatedAt']);
   validateDateFields(arrays.cashTransactions, 'cashTransactions', ['date', 'createdAt', 'updatedAt']);
   validateDateFields(arrays.documentations, 'documentations', ['createdAt', 'updatedAt']);
+  validateDateFields(arrays.billingNotes, 'billingNotes', ['serviceDate', 'createdAt', 'updatedAt']);
+
+  arrays.customers.forEach((customer, index) => {
+    asRequiredString(customer.name, `customers[${index}].name`, 255);
+    asOptionalString(customer.internalNote, `customers[${index}].internalNote`, 5_000);
+    if (customer.noteVisibility !== undefined && !['EDITOR', 'SEND', 'BOTH'].includes(String(customer.noteVisibility))) {
+      throw new BackupValidationError(`customers[${index}].noteVisibility ist ungültig`);
+    }
+  });
 
   arrays.invoices.forEach((invoice, index) => {
     asRequiredString(invoice.fileName, `invoices[${index}].fileName`, 255);
@@ -490,6 +539,13 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   arrays.documentations.forEach((doc, index) => {
     asRequiredString(doc.version, `documentations[${index}].version`, 64);
     asRequiredString(doc.content, `documentations[${index}].content`, 2_000_000);
+  });
+  arrays.billingNotes.forEach((note, index) => {
+    asBusinessDate(note.serviceDate, `billingNotes[${index}].serviceDate`);
+    asRequiredString(note.description, `billingNotes[${index}].description`, 500);
+    asBillingQuantity(note.quantity, `billingNotes[${index}].quantity`);
+    const unit = asOptionalString(note.unit, `billingNotes[${index}].unit`, 100);
+    if (unit !== null && unit.length === 0) throw new BackupValidationError(`billingNotes[${index}].unit darf nicht leer sein`);
   });
   arrays.auditLogs.forEach((audit, index) => {
     asOptionalInt(audit.id, `auditLogs[${index}].id`);
@@ -534,6 +590,7 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     overwriteMode: overwrite,
     deleted: overwrite ? 'Alle bestehenden Daten wurden gelöscht' : undefined,
     customers: { imported: 0, skipped: 0 },
+    billingNotes: { imported: 0, skipped: 0 },
     expenses: { imported: 0, skipped: 0 },
     incomes: { imported: 0, skipped: 0 },
     invoices: { imported: 0, skipped: 0 },
@@ -599,6 +656,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   userId: string;
   sourceUserId?: string;
   customers: Map<number, number>;
+  billingNotes: Map<number, number>;
   expenses: Map<number, number>;
   incomes: Map<number, number>;
   invoices: Map<number, number>;
@@ -616,6 +674,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   }
   const mapByType: Record<string, Map<number, number> | undefined> = {
     Customer: maps.customers,
+    BillingNote: maps.billingNotes,
     Expense: maps.expenses,
     Income: maps.incomes,
     Invoice: maps.invoices,
@@ -639,6 +698,10 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
 function auditImportKey(backupId: string, sourceUserId: string | undefined, sourceAuditId: number | null, index: number): string {
   if (sourceAuditId !== null) return `${sourceUserId ?? 'unknown-source'}:audit:${sourceAuditId}`;
   return `${backupId}:index-${index}`;
+}
+
+function billingNoteImportKey(sourceUserId: string | undefined, sourceNoteId: number): string {
+  return `${sourceUserId ?? 'unknown-source'}:billing-note:${sourceNoteId}`;
 }
 
 function parseObject(value: unknown): Record<string, unknown> | null {
@@ -682,6 +745,7 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
   await tx.apiLog.deleteMany({ where: { userId } });
   await tx.apiKey.deleteMany({ where: { userId } });
   await tx.invoiceTemplate.deleteMany({ where: { userId } });
+  await tx.billingNote.deleteMany({ where: { userId } });
   await tx.invoice.deleteMany({ where: { userId } });
   await tx.customer.deleteMany({ where: { userId } });
   await tx.settings.deleteMany({ where: { userId } });
@@ -736,6 +800,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const templates = asArray(data, 'templates');
     const recurringExpenses = asArray(data, 'recurringExpenses');
     const reminders = asArray(data, 'reminders');
+    const billingNotes = asArray(data, 'billingNotes');
     const cashBooks = asArray(data, 'cashBooks');
     const cashTransactions = asArray(data, 'cashTransactions');
     const orderedCashTransactions = cashTransactions
@@ -748,6 +813,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const invoiceNumberCounters = asArray(data, 'invoiceNumberCounters');
     const paidInvoiceIds = new Set(incomes.map((income) => asOptionalInt(income.invoiceId, 'income.invoiceId')).filter((id): id is number => id !== null));
     const settings = data.settings === null || data.settings === undefined ? null : asRecord(data.settings, 'settings');
+    const sourceUserId = manifest?.sourceUserId
+      ?? (isRecord(data.user) && typeof data.user.id === 'string' ? data.user.id : undefined);
+    const backupId = manifest?.backupId ?? 'legacy-v2';
     if (apiKeys.length > 0) {
       result.warnings.push(`${apiKeys.length} API-Schlüssel wurden nicht übernommen; aus Sicherheitsgründen müssen neue Schlüssel erstellt werden.`);
     }
@@ -794,10 +862,28 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const incomeMap = new Map<number, number>();
       const templateMap = new Map<number, number>();
       const reminderMap = new Map<number, number>();
+      const billingNoteMap = new Map<number, number>();
       const cashTransactionMap = new Map<number, number>();
       const documentationMap = new Map<number, number>();
       const settingsMap = new Map<number, number>();
       const createdInvoiceIds = new Set<number>();
+      const existingAuditImportRows = new Map<string, { id: number; entityId: string | null; metadata: string | null }>();
+      const existingBillingNoteImports = new Map<string, { id: number; entityId: string | null; metadata: string | null }>();
+      const existingAuditRows = await tx.auditLog.findMany({ where: { userId }, select: { id: true, action: true, entityType: true, entityId: true, metadata: true } });
+      for (const row of existingAuditRows) {
+        const metadata = parseObject(row.metadata);
+        const key = metadata?.backupImport && typeof metadata.backupImport === 'object'
+          ? (metadata.backupImport as Record<string, unknown>).importKey
+          : null;
+        if (typeof key === 'string') existingAuditImportRows.set(key, row);
+        const provenance = metadata?.backupImport;
+        if (row.action === 'RESTORE' && row.entityType === 'BillingNote'
+          && typeof provenance === 'object' && provenance !== null
+          && (provenance as Record<string, unknown>).sourceEntityType === 'BillingNote'
+          && typeof (provenance as Record<string, unknown>).importKey === 'string') {
+          existingBillingNoteImports.set((provenance as Record<string, unknown>).importKey as string, row);
+        }
+      }
 
       // In merge mode only records that existed before this restore are
       // deduplicated by name. Two same-named records in one backup remain
@@ -857,6 +943,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
             zipCode: asOptionalString(customer.zipCode, 'customer.zipCode', 32),
             city: asOptionalString(customer.city, 'customer.city', 255),
             taxNumber: asOptionalString(customer.taxNumber, 'customer.taxNumber', 128),
+            internalNote: asOptionalString(customer.internalNote, 'customer.internalNote', 5_000),
+            noteVisibility: asOptionalString(customer.noteVisibility, 'customer.noteVisibility', 16) ?? 'BOTH',
             createdAt: asDate(customer.createdAt, 'customer.createdAt', new Date())!,
             userId,
           } });
@@ -903,6 +991,68 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         invoiceMap.set(sourceId, created.id);
         createdInvoiceIds.add(sourceId);
         result.invoices.imported += 1;
+      }
+
+      for (const note of billingNotes) {
+        const sourceId = asOptionalInt(note.id, 'billingNote.id')!;
+        const importKey = billingNoteImportKey(sourceUserId, sourceId);
+        const existingImported = overwrite ? undefined : existingBillingNoteImports.get(importKey);
+        if (existingImported?.entityId) {
+          const existingId = asOptionalInt(existingImported.entityId, `billingNotes[${sourceId}].targetId`);
+          const existingNote = existingId === null
+            ? null
+            : await tx.billingNote.findFirst({ where: { id: existingId, userId }, select: { id: true } });
+          if (existingNote) {
+            billingNoteMap.set(sourceId, existingNote.id);
+            result.billingNotes.skipped += 1;
+            continue;
+          }
+        }
+        const customerId = relationMapValue(customerMap, note.customerId, 'billingNote.customerId');
+        if (!customerId) throw new BackupValidationError('billingNote.customerId fehlt');
+        const invoiceId = relationMapValue(invoiceMap, note.invoiceId, 'billingNote.invoiceId');
+        if (invoiceId !== null) {
+          const targetInvoice = await tx.invoice.findFirst({ where: { id: invoiceId, userId, type: 'INVOICE' }, select: { customerId: true } });
+          if (!targetInvoice || targetInvoice.customerId !== customerId) {
+            throw new BackupValidationError('billingNote.invoiceId muss zur angegebenen Kunden-ID gehören');
+          }
+        }
+        const created = await tx.billingNote.create({ data: {
+          customerId,
+          serviceDate: asBusinessDate(note.serviceDate, 'billingNote.serviceDate'),
+          description: asRequiredString(note.description, 'billingNote.description', 500),
+          quantity: asBillingQuantity(note.quantity, 'billingNote.quantity'),
+          unit: asOptionalString(note.unit, 'billingNote.unit', 100) ?? 'Stunde',
+          invoiceId,
+          createdAt: asDate(note.createdAt, 'billingNote.createdAt', new Date())!,
+          updatedAt: asDate(note.updatedAt, 'billingNote.updatedAt', new Date())!,
+          userId,
+        } });
+        billingNoteMap.set(sourceId, created.id);
+        result.billingNotes.imported += 1;
+        const provenance = JSON.stringify({ backupImport: {
+          importKey,
+          backupId,
+          sourceUserId: sourceUserId ?? null,
+          sourceActorId: sourceUserId ?? null,
+          sourceTenantId: sourceUserId ?? null,
+          targetTenantId: userId,
+          targetUserId: userId,
+          sourceNoteId: sourceId,
+          sourceEntityType: 'BillingNote',
+          sourceEntityId: String(sourceId),
+          entityMapping: 'mapped',
+        } });
+        await tx.auditLog.create({ data: {
+          userId,
+          action: 'RESTORE',
+          entityType: 'BillingNote',
+          entityId: String(created.id),
+          entityName: asOptionalString(note.description, 'billingNote.description', 500),
+          metadata: provenance,
+        } });
+        existingAuditImportRows.set(importKey, { id: -1, entityId: String(created.id), metadata: provenance });
+        existingBillingNoteImports.set(importKey, { id: -1, entityId: String(created.id), metadata: provenance });
       }
 
       // Self-relations are restored after all invoice IDs are mapped.
@@ -1150,11 +1300,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         else if (importedCounterKeys.has(key)) result.invoiceNumberCounters.skipped += 1;
       }
 
-      const sourceUserId = manifest?.sourceUserId;
       const auditMaps = {
         userId,
         sourceUserId,
         customers: customerMap,
+        billingNotes: billingNoteMap,
         expenses: expenseMap,
         incomes: incomeMap,
         invoices: invoiceMap,
@@ -1166,16 +1316,6 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         documentations: documentationMap,
         settings: settingsMap,
       };
-      const existingAuditRows = await tx.auditLog.findMany({ where: { userId }, select: { id: true, entityId: true, metadata: true } });
-      const existingAuditImportRows = new Map<string, { id: number; entityId: string | null; metadata: string | null }>();
-      for (const row of existingAuditRows) {
-        const metadata = parseObject(row.metadata);
-        const key = metadata?.backupImport && typeof metadata.backupImport === 'object'
-          ? (metadata.backupImport as Record<string, unknown>).importKey
-          : null;
-        if (typeof key === 'string') existingAuditImportRows.set(key, row);
-      }
-      const backupId = manifest?.backupId ?? 'legacy-v2';
       for (const [index, audit] of auditLogs.entries()) {
         const sanitizedAudit = redactAuditLog({ ...audit });
         const sourceAuditId = asOptionalInt(sanitizedAudit.id, `auditLogs[${index}].id`);

@@ -420,6 +420,134 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.screenshot({ path: testInfo.outputPath('eur-working-paper.png'), fullPage: true });
   });
 
+  test('remembers customer context, reserves services and offers the previous price without leaking internal notes', async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
+    await page.goto('/login');
+    await page.getByLabel('E-Mail').fill(testUser.email);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+    await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+
+    const privateNote = 'INTERN: Bestellnummer vor Versand prüfen';
+    const customerName = 'E2E Billing Assistant';
+    await page.goto('/customers');
+    await page.getByRole('button', { name: 'Neuen Kunden anlegen' }).click();
+    await page.locator('#name').fill(customerName);
+    await page.locator('#email').fill('billing@example.test');
+    await page.locator('#address').fill('Kundenweg 2');
+    await page.locator('#zipCode').fill('10115');
+    await page.locator('#city').fill('Berlin');
+    await page.locator('#internalNote').fill(privateNote);
+    await page.locator('#noteVisibility').selectOption('BOTH');
+    const customerSaved = page.waitForResponse(r => r.url().endsWith('/api/customers') && r.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Kunden anlegen', exact: true }).click();
+    const customerResponse = await customerSaved;
+    expect(customerResponse.ok()).toBe(true);
+    const customer = await customerResponse.json();
+
+    await page.getByRole('button', { name: `Leistungsnotizen für ${customerName}` }).click();
+    await page.locator('#billing-note-date').fill('2026-09-22');
+    await page.locator('#billing-note-description').fill('Serverwartung');
+    await page.locator('#billing-note-quantity').fill('2');
+    await page.locator('#billing-note-unit').selectOption('Stunde');
+    const noteSaved = page.waitForResponse(r => r.url().endsWith('/api/billing-notes') && r.request().method() === 'POST');
+    await page.getByRole('button', { name: /Leistungsnotiz hinzufügen/ }).click();
+    expect((await noteSaved).status()).toBe(201);
+    await expect(page.getByText('Serverwartung', { exact: true })).toBeVisible();
+    await page.getByRole('dialog').screenshot({ path: testInfo.outputPath('billing-notes.png') });
+
+    await page.goto('/dashboard/invoices/new');
+    await page.getByRole('combobox', { name: 'Gespeicherten Kunden auswählen' }).selectOption(String(customer.id));
+    await expect(page.getByText(privateNote, { exact: true })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Gespeicherten Kunden auswählen' }).selectOption('');
+    await expect(page.locator('#customer')).toHaveValue('');
+    await expect(page.locator('#invoice-buyer-email')).toHaveValue('');
+    await expect(page.getByText(privateNote, { exact: true })).toHaveCount(0);
+    await page.getByRole('combobox', { name: 'Gespeicherten Kunden auswählen' }).selectOption(String(customer.id));
+    await page.getByRole('checkbox', { name: 'Leistungsnotiz Serverwartung übernehmen' }).check();
+    await expect(page.locator('#invoice-item-description-0')).toHaveValue('Serverwartung');
+    await expect(page.locator('#invoice-item-quantity-0')).toHaveValue('2');
+    await page.locator('#invoice-item-price-0').fill('95');
+    await page.getByRole('combobox', { name: 'Ausgabeformat', exact: true }).selectOption('xml-only');
+    await page.getByLabel('Käuferreferenz / Leitweg-ID', { exact: false }).fill('E2E-ORDER');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: testInfo.outputPath('billing-assistant-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: testInfo.outputPath('billing-assistant-mobile.png'), fullPage: true });
+
+    let failedSaveDownloads = 0;
+    const countDownload = () => { failedSaveDownloads += 1; };
+    page.on('download', countDownload);
+    await page.route('**/api/invoices/upload', route => route.fulfill({
+      status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Synthetischer Speicherkonflikt' }),
+    }), { times: 1 });
+    const failureDialog = page.waitForEvent('dialog').then(async dialog => {
+      expect(dialog.message()).toContain('Synthetischer Speicherkonflikt');
+      await dialog.accept();
+    });
+    await page.getByRole('button', { name: 'XML erstellen', exact: true }).click();
+    await failureDialog;
+    await expect(page.getByRole('button', { name: 'XML erstellen', exact: true })).toBeEnabled();
+    expect(failedSaveDownloads).toBe(0);
+    page.off('download', countDownload);
+    await expect(page.locator('#invoice-item-price-0')).toHaveValue('95');
+    expect(await (await page.request.get(`/api/billing-notes?customerId=${customer.id}`)).json()).toHaveLength(1);
+
+    // The server commits, but its response never reaches the browser. Retrying
+    // must recover that same invoice and preserve its single note reservation.
+    await page.route('**/api/invoices/upload', async route => {
+      const committed = await route.fetch();
+      expect(committed.ok(), await committed.text()).toBe(true);
+      await route.abort('failed');
+    }, { times: 1 });
+    const lostResponseDialog = page.waitForEvent('dialog').then(dialog => dialog.accept());
+    await page.getByRole('button', { name: 'XML erstellen', exact: true }).click();
+    await lostResponseDialog;
+    await expect(page.getByRole('button', { name: 'XML erstellen', exact: true })).toBeEnabled();
+    expect(await (await page.request.get(`/api/billing-notes?customerId=${customer.id}`)).json()).toEqual([]);
+
+    const downloaded = page.waitForEvent('download');
+    const uploaded = page.waitForResponse(r => r.url().endsWith('/api/invoices/upload') && r.request().method() === 'POST');
+    await page.getByRole('button', { name: 'XML erstellen', exact: true }).click();
+    const response = await uploaded;
+    expect(response.ok(), await response.text()).toBe(true);
+    const invoice = await response.json();
+    const download = await downloaded;
+    const xml = await readFile((await download.path())!, 'utf8');
+    expect(xml).toContain('Serverwartung');
+    expect(xml).not.toContain(privateNote);
+    expect(await (await page.request.get(`/api/billing-notes?customerId=${customer.id}`)).json()).toEqual([]);
+    const reserved = await (await page.request.get(`/api/billing-notes?customerId=${customer.id}&includeLinked=true`)).json();
+    expect(reserved[0].invoiceId).toBe(invoice.id);
+    const draftResponse = await page.request.post('/api/email/preview', { data: { documentType: 'invoice', id: invoice.id } });
+    expect(draftResponse.ok()).toBe(true);
+    const draft = await draftResponse.json();
+    expect(draft.internalCustomerNote).toBe(privateNote);
+    expect(draft.text).not.toContain(privateNote);
+    expect(draft.subject).not.toContain(privateNote);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/customers');
+    await page.getByRole('button', { name: `Leistungsnotizen für ${customerName}` }).click();
+    await expect(page.getByText('Rechnung zugeordnet', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Leistungsnotiz Serverwartung löschen' })).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('dialog').screenshot({ path: testInfo.outputPath('billing-notes-reserved.png') });
+
+    expect((await page.request.put('/api/invoices', { data: { id: invoice.id, status: 'SENT' } })).ok()).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/dashboard/invoices/new');
+    await page.getByRole('combobox', { name: 'Gespeicherten Kunden auswählen' }).selectOption(String(customer.id));
+    await page.locator('#invoice-item-description-0').fill('Serverwartung');
+    await page.locator('#invoice-item-unit-0').selectOption('Stunde');
+    await expect(page.locator('#invoice-item-price-0')).toHaveValue('0');
+    await page.getByRole('button', { name: /Preis übernehmen/ }).click();
+    await expect(page.locator('#invoice-item-price-0')).toHaveValue('95');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: testInfo.outputPath('price-memory.png'), fullPage: true });
+  });
+
   test('blocks anonymous data access and revokes an existing cookie after a password reset', async ({ page, request }) => {
     expect((await request.get('/api/users')).status()).toBe(401);
     expect((await request.get('/api/incomes')).status()).toBe(401);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { generateZugferdXml, type ZugferdData } from '../zugferd-generator'
+import { generateZugferdXml, SMALL_BUSINESS_EXEMPTION_REASON, type ZugferdData } from '../zugferd-generator'
 import { getEInvoiceImportRejection, getRawEInvoiceXml, parseEInvoiceXml } from '../e-invoice-parser'
 
 function createZugferdData(overrides: Partial<ZugferdData> = {}): ZugferdData {
@@ -146,6 +146,8 @@ describe('parseEInvoiceXml', () => {
                 unitPrice: 150,
                 amount: 300,
                 taxRate: 0,
+                taxCategory: 'E',
+                exemptionReason: SMALL_BUSINESS_EXEMPTION_REASON,
             }),
         ])
         expect(parsed.rawXml).toContain('<rsm:CrossIndustryInvoice')
