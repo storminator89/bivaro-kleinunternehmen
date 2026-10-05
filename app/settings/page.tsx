@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SettingsSectionNavigation } from "@/components/settings/section-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle, Key, ChevronRight, History, FileText } from "lucide-react";
@@ -423,15 +424,17 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="settings-workspace space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Einstellungen</h1>
+        <p className="app-section-label mb-2">System</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Einstellungen</h1>
         <p className="text-muted-foreground">
           Verwalten Sie Ihre Firmendaten und Rechnungseinstellungen.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <div className="settings-layout"><SettingsSectionNavigation isAdmin={isAdmin} /><div className="settings-content space-y-6">
+      <form id="company-settings" onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
             <CardTitle>Rechnungsdaten</CardTitle>
@@ -624,7 +627,7 @@ export default function SettingsPage() {
         </Card>
       </form>
 
-      {isAdmin && <SmtpSettings />}
+      {isAdmin && <div id="email-settings"><SmtpSettings /></div>}
 
       {isAdmin && (
         <Card className="mt-6">
@@ -657,7 +660,7 @@ export default function SettingsPage() {
       )}
 
       {/* Backup & Restore */}
-      <Card className="mt-6">
+      <Card className="mt-6" id="backup-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Database className="h-5 w-5" />
@@ -901,7 +904,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* API Keys */}
-      <Card className="mt-6">
+      <Card className="mt-6" id="access-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Key className="h-5 w-5" />
@@ -963,7 +966,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* GoBD Verfahrensdokumentation */}
-      <Card className="mt-6">
+      <Card className="mt-6" id="procedure-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -992,6 +995,7 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      </div></div>
     </div>
   );
 }

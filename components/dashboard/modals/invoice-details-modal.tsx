@@ -53,7 +53,7 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetails
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="flex max-h-[min(90dvh,52rem)] flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-xl sm:max-w-2xl"
+        className="flex max-h-[min(90dvh,52rem)] flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-xl sm:max-w-3xl"
       >
         <DialogHeader className="relative border-b px-6 pb-5 pt-6 pr-16 text-left sm:px-8 sm:pb-6 sm:pt-8">
           <DialogClose asChild>
@@ -71,37 +71,17 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetails
             Rechnungsdetails
           </DialogTitle>
           <DialogDescription className="max-w-prose text-base leading-6">
-            Detaillierte Informationen zur Rechnung
+            Rechnung {invoice.invoiceNumber || invoice.id}{invoice.customer?.name ? ` · ${invoice.customer.name}` : ""}
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 min-w-0 flex-1 space-y-6 overflow-x-clip overflow-y-auto px-6 py-6 sm:px-8 sm:py-7">
-          <dl className="grid min-w-0 gap-x-8 gap-y-6 sm:grid-cols-2">
-            <DetailItem label="Rechnungsnummer">
-              {invoice.invoiceNumber || "Nicht verfügbar"}
-            </DetailItem>
-            <DetailItem label="Status">
-              <span className="inline-flex max-w-full">
-                <StatusBadge status={invoice.status} />
-              </span>
-            </DetailItem>
-            <DetailItem label="Rechnungsdatum">
-              {invoice.invoiceDate
-                ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE')
-                : "Nicht verfügbar"}
-            </DetailItem>
-            <DetailItem label="Fälligkeitsdatum">
-              {invoice.dueDate
-                ? new Date(invoice.dueDate).toLocaleDateString('de-DE')
-                : "Nicht verfügbar"}
-            </DetailItem>
-            <DetailItem label="Betrag" emphasis>
-              {invoice.totalAmount
-                ? new Intl.NumberFormat('de-DE', {
-                    style: 'currency',
-                    currency: 'EUR'
-                  }).format(invoice.totalAmount)
-                : "Nicht verfügbar"}
-            </DetailItem>
+          <section className="invoice-detail-summary" aria-label="Rechnungsbetrag und Zahlungsstatus">
+            <div><p className="text-xs text-muted-foreground">Rechnungsbetrag</p><p className="invoice-detail-amount">{invoice.totalAmount != null ? new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(invoice.totalAmount) : 'Nicht verfügbar'}</p></div>
+            <StatusBadge status={invoice.status} />
+          </section>
+          <dl className="invoice-detail-dates grid min-w-0 grid-cols-2 gap-4">
+            <DetailItem label="Rechnungsdatum">{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE') : 'Nicht verfügbar'}</DetailItem>
+            <DetailItem label="Fälligkeitsdatum">{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('de-DE') : 'Nicht verfügbar'}</DetailItem>
           </dl>
           <dl className="grid min-w-0 gap-6 border-t border-border pt-6 sm:grid-cols-2">
             <DetailItem label="Dateiname">
@@ -118,7 +98,7 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetails
             </DetailItem>
           </dl>
         </div>
-        <DialogFooter className="!flex-col gap-3 border-t border-border px-6 pb-6 pt-4 sm:px-8 sm:pb-8">
+        <DialogFooter className="!flex-col gap-3 border-t border-border bg-secondary/40 px-6 pb-6 pt-4 sm:px-8 sm:pb-8">
           <div className="grid w-full min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2">
             <Button
               type="button"
@@ -129,7 +109,7 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetails
               }}
             >
               <Eye aria-hidden="true" />
-              PDF
+              PDF öffnen
             </Button>
             {invoice.hasEInvoiceXml && (
               <Button
@@ -159,7 +139,9 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetails
             )}
             <Button
               type="button"
+              variant="outline"
               className="w-full"
+              disabled={invoice.hasPdfFile === false}
               onClick={() => {
                 window.open(`/api/invoices/download?id=${invoice.id}&download=true`, '_blank');
               }}
@@ -168,7 +150,7 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetails
               Download
             </Button>
           </div>
-          <Button type="button" variant="outline" className="w-full" onClick={onClose}>
+          <Button type="button" variant="ghost" className="w-full" onClick={onClose}>
             Schließen
           </Button>
         </DialogFooter>

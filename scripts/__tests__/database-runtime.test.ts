@@ -147,18 +147,23 @@ function runUpgrade(url: string, schema: string, backupDirectory: string) {
   });
 }
 
-function runStartupSentinel(fixture: { directory: string; url: string }) {
+function runStartupSentinel(
+  fixture: { directory: string; url: string },
+  schema = schemaPath,
+  mode = 'auto',
+) {
   const runtimeDirectory = path.join(fixture.directory, 'runtime');
-  fs.mkdirSync(path.join(runtimeDirectory, 'scripts'), { recursive: true });
-  fs.copyFileSync(path.join(repositoryRoot, 'scripts', 'database-runtime.mjs'), path.join(runtimeDirectory, 'scripts', 'database-runtime.mjs'));
+  fs.mkdirSync(runtimeDirectory, { recursive: true });
   fs.writeFileSync(path.join(runtimeDirectory, 'server.js'), "console.log('startup-sentinel');\n");
   return spawnSync('sh', [entrypoint], {
     cwd: runtimeDirectory,
     env: {
       ...process.env,
-      APP_ROOT: runtimeDirectory,
+      APP_ROOT: repositoryRoot,
+      DATABASE_MIGRATION_MODE: mode,
+      DATABASE_BACKUP_DIR: path.join(fixture.directory, 'data', 'backups'),
       DATABASE_URL: fixture.url,
-      PRISMA_SCHEMA: schemaPath,
+      PRISMA_SCHEMA: schema,
       PRISMA_CLI: prismaCli,
     },
     encoding: 'utf8',
@@ -167,6 +172,56 @@ function runStartupSentinel(fixture: { directory: string; url: string }) {
 }
 
 describe('database runtime safety boundary', () => {
+  it('initializes a fresh database automatically and skips upgrades on a normal restart', () => {
+    const directory = createFixtureDirectory();
+    const fixture = { directory, url: databaseUrl(directory) };
+    const first = runStartupSentinel(fixture);
+    expect(first.status, `${first.stdout}\n${first.stderr}`).toBe(0);
+    expect(first.stdout).toContain('startup-sentinel');
+    const second = runStartupSentinel(fixture);
+    expect(second.status, `${second.stdout}\n${second.stderr}`).toBe(0);
+    expect(second.stdout).not.toContain('[database-upgrade]');
+    expect(fs.existsSync(path.join(directory, 'data', 'backups'))).toBe(false);
+  }, 60_000);
+
+  it('automatically upgrades a populated database before starting the server', () => {
+    const fixture = createMigratedFixture();
+    seedFixture(fixture.url);
+    const before = summary(fixture.url);
+    const schema = createReleaseSchema(fixture.directory, 'ALTER TABLE "User" ADD COLUMN "syntheticUpgradeMarker" TEXT;');
+    const result = runStartupSentinel(fixture, schema);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('populated canary passed');
+    expect(result.stdout.indexOf('populated canary passed')).toBeLessThan(result.stdout.indexOf('startup-sentinel'));
+    expect(result.stdout).toContain('startup-sentinel');
+    expect(summary(fixture.url)).toEqual(before);
+    expect(userColumns(fixture.url)).toContain('syntheticUpgradeMarker');
+    expect(fs.readdirSync(path.join(fixture.directory, 'data', 'backups'))).toHaveLength(1);
+  }, 60_000);
+
+  it('blocks server startup and preserves the database when automatic migration fails', () => {
+    const fixture = createMigratedFixture();
+    seedFixture(fixture.url);
+    const schema = createReleaseSchema(fixture.directory, 'ALTER TABLE "MissingTable" ADD COLUMN "syntheticUpgradeMarker" TEXT;');
+    const before = fs.readFileSync(fixture.databasePath);
+    const result = runStartupSentinel(fixture, schema);
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).not.toContain('startup-sentinel');
+    expect(result.stderr).toContain('database upgrade aborted');
+    expect(fs.readFileSync(fixture.databasePath)).toEqual(before);
+  }, 60_000);
+
+  it('keeps manual mode non-mutating when migrations are pending', () => {
+    const fixture = createMigratedFixture();
+    const schema = createReleaseSchema(fixture.directory, 'ALTER TABLE "User" ADD COLUMN "syntheticUpgradeMarker" TEXT;');
+    const before = fs.readFileSync(fixture.databasePath);
+    const result = runStartupSentinel(fixture, schema, 'manual');
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).not.toContain('startup-sentinel');
+    expect(fs.readFileSync(fixture.databasePath)).toEqual(before);
+    expect(fs.existsSync(path.join(fixture.directory, 'data', 'backups'))).toBe(false);
+  }, 60_000);
+
   it('accepts only absolute persistent SQLite URLs and does not echo credentials', () => {
     const fixture = createFixtureDirectory();
     const absolute = databaseUrl(fixture);

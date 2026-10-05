@@ -2,11 +2,8 @@
 #
 # Bivaro runtime entrypoint.
 #
-# Database upgrades are an explicit, operator-run step:
-#   node scripts/upgrade-database.mjs
-#
-# Startup intentionally performs only non-mutating target and migration-status
-# checks. It never creates, links, deletes, or synchronises a database.
+# Pending migrations use the backed-up, canary-tested upgrade workflow before
+# the server starts. DATABASE_MIGRATION_MODE=manual keeps upgrades operator-run.
 
 set -eu
 
@@ -22,11 +19,23 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 echo "Starting Bivaro application startup checks..."
-node "$APP_ROOT/scripts/database-runtime.mjs" --mode startup
+case "${DATABASE_MIGRATION_MODE:-auto}" in
+  auto) TARGET_MODE=upgrade ;;
+  manual) TARGET_MODE=startup ;;
+  *) echo "ERROR: DATABASE_MIGRATION_MODE must be auto or manual." >&2; exit 1 ;;
+esac
+node "$APP_ROOT/scripts/database-runtime.mjs" --mode "$TARGET_MODE"
 
 if [ ! -f "$PRISMA_CLI" ]; then
   echo "ERROR: Prisma CLI not found at $PRISMA_CLI; refusing to start without a schema check." >&2
   exit 1
+fi
+
+if [ "${DATABASE_MIGRATION_MODE:-auto}" = auto ]; then
+  if ! node "$PRISMA_CLI" migrate status --schema="$SCHEMA"; then
+    echo "Database needs an upgrade; running backup and canary checks before migration..."
+    node "$APP_ROOT/scripts/upgrade-database.mjs"
+  fi
 fi
 
 echo "Checking physical schema compatibility without changing the database..."

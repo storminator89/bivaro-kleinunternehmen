@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { Plus, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -174,6 +175,8 @@ export function DashboardContent() {
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [expenseEntryOpen, setExpenseEntryOpen] = useState(false);
+  const [incomeEntryOpen, setIncomeEntryOpen] = useState(false);
   const [expenseReceipt, setExpenseReceipt] = useState<File | null>(null);
 
   const {
@@ -204,6 +207,8 @@ export function DashboardContent() {
     invoicesPageSize,
     invoicesTotal,
     invoicesTotalPages,
+    invoicesIsFetching,
+    invoicesIsError,
     quotesPage,
     quotesPageSize,
     quotesTotal,
@@ -799,32 +804,29 @@ export function DashboardContent() {
 
   // Hauptkomponente rendern
   return (
-    <div className="space-y-8">
-        <header className="flex flex-col gap-7 border-b border-border/80 pb-8 lg:flex-row lg:items-end lg:justify-between">
+    <div className="dashboard-workbench space-y-6">
+        <header className="workbench-header flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p className="app-section-label text-primary">Arbeitsbereich</p>
+              <p className="app-section-label">{!tabParam ? "Übersicht" : activeTab === "invoices" || activeTab === "quotes" ? "Verkauf" : activeTab === "eur" || activeTab === "gwg" ? "Auswertungen" : "Buchhaltung"}</p>
               <time className="hidden text-xs text-muted-foreground sm:inline" dateTime={new Date().toISOString().split('T')[0]}>
                 {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
               </time>
             </div>
-            <h1 className="min-w-0 [overflow-wrap:anywhere] text-4xl font-semibold tracking-[-0.04em] text-foreground md:text-5xl">
-              Buchhaltung
+            <h1 className="min-w-0 [overflow-wrap:anywhere] text-3xl font-semibold tracking-[-0.035em] text-foreground md:text-4xl">
+              {tabParam ? ({ expenses: "Ausgaben", incomes: "Einnahmen", invoices: "Rechnungen", quotes: "Angebote", eur: "Einnahmenüberschussrechnung", gwg: "GWG-Verzeichnis" }[activeTab]) : "Buchhaltung"}
             </h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
-              Belege erfassen, Angebote versenden und offene Rechnungen im Blick behalten.
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {tabParam ? ({ expenses: "Belege erfassen, Ausgaben zuordnen und Zahlungen nachvollziehen.", incomes: "Zahlungseingänge erfassen und Einnahmen im Blick behalten.", invoices: "Rechnungen verwalten, Zahlungsstatus prüfen und Originalbelege öffnen.", quotes: "Angebote vorbereiten und direkt in Rechnungen übernehmen.", eur: "Einnahmen und Ausgaben für Ihren Berichtszeitraum auswerten.", gwg: "Geringwertige Wirtschaftsgüter und Abschreibungen verwalten." }[activeTab]) : "Belege erfassen, Angebote versenden und offene Rechnungen im Blick behalten."}
             </p>
-            <div className="mt-6 flex flex-wrap gap-2" aria-label="Schnellaktionen">
-              <Button type="button" variant="ghost" onClick={() => handleTabChange('expenses')}>
-                Ausgabe erfassen
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => handleTabChange('incomes')}>
-                Einnahme erfassen
-              </Button>
-              <Button type="button" onClick={() => router.push('/dashboard/invoices/new')}>
-                Rechnung erstellen
-              </Button>
-            </div>
+          </div>
+          <div className="workbench-actions flex flex-wrap items-center gap-2" aria-label="Schnellaktionen">
+            {(!tabParam || activeTab === 'expenses' || activeTab === 'incomes') && <>
+              <Button type="button" variant={tabParam && activeTab === 'expenses' ? 'default' : 'outline'} onClick={() => { setExpenseEntryOpen(true); handleTabChange('expenses'); }}><ArrowUpRight aria-hidden="true" />Ausgabe erfassen</Button>
+              <Button type="button" variant={tabParam && activeTab === 'incomes' ? 'default' : 'outline'} onClick={() => { setIncomeEntryOpen(true); handleTabChange('incomes'); }}><ArrowDownLeft aria-hidden="true" />Einnahme erfassen</Button>
+            </>}
+            {(!tabParam || activeTab === 'invoices') && <Button type="button" onClick={() => router.push('/dashboard/invoices/new')}><Plus aria-hidden="true" />Rechnung erstellen</Button>}
+            {activeTab === 'quotes' && tabParam && <Button type="button" onClick={() => router.push('/dashboard/quotes/new')}><Plus aria-hidden="true" />Angebot erstellen</Button>}
           </div>
           {(activeTab === 'eur' || activeTab === 'gwg') && (
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
@@ -885,25 +887,11 @@ export function DashboardContent() {
           <DashboardClient />
         ) : (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
-          <div className="lg:hidden">
-            <label htmlFor="mobile-work-area" className="mb-2 block text-sm font-medium">Arbeitsbereich</label>
-            <select
-              id="mobile-work-area"
-              value={activeTab}
-              onChange={(event) => handleTabChange(event.target.value)}
-              className="min-h-11 w-full rounded-md border border-input bg-card px-3 text-base"
-            >
-              <option value="expenses">Ausgaben</option>
-              <option value="incomes">Einnahmen</option>
-              <option value="invoices">Rechnungen</option>
-              <option value="quotes">Angebote</option>
-              <option value="eur">EÜR</option>
-              <option value="gwg">GWG-Verzeichnis</option>
-            </select>
-          </div>
           {/* Ausgaben Tab */}
           <TabsContent value="expenses" className="space-y-6">
             <ExpensesTab
+              entryOpen={expenseEntryOpen}
+              onEntryOpenChange={setExpenseEntryOpen}
               newExpense={newExpense}
               setNewExpense={setNewExpense}
               expenseReceipt={expenseReceipt}
@@ -935,6 +923,8 @@ export function DashboardContent() {
           {/* Einnahmen Tab */}
           <TabsContent value="incomes" className="space-y-6">
             <IncomesTab
+              entryOpen={incomeEntryOpen}
+              onEntryOpenChange={setIncomeEntryOpen}
               newIncome={newIncome}
               setNewIncome={setNewIncome}
               onSubmit={handleIncomeSubmit}
@@ -975,6 +965,8 @@ export function DashboardContent() {
               invoices={filteredInvoices}
               page={invoicesPage}
               pageSize={invoicesPageSize}
+              isLoading={invoicesIsFetching}
+              isError={invoicesIsError}
               total={invoicesTotal}
               totalPages={invoicesTotalPages}
               onPageChange={setInvoicesPage}

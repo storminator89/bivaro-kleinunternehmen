@@ -52,13 +52,18 @@ function ChartBar({ month, lastYearMonth, thisYearHeight, lastYearHeight, isFutu
 
   return (
     <div
-      className="flex-1 flex flex-col items-center gap-1 relative"
+      className="year-chart-column flex-1 flex flex-col items-center gap-1 relative"
+      tabIndex={0}
+      role="img"
+      aria-label={`${month.monthName}: ${currentYear} ${formatCurrency(month.revenue)}, ${lastYear} ${formatCurrency(lastYearMonth.revenue)}`}
+      onFocus={() => setShowTooltip(true)}
+      onBlur={() => setShowTooltip(false)}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
       {/* Tooltip */}
       {showTooltip && (
-        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 bg-popover border rounded-lg shadow-lg p-3 min-w-[180px] text-sm">
+        <div className="year-chart-tooltip absolute bottom-full mb-2 z-50 bg-popover border rounded-lg shadow-lg p-3 min-w-[180px] text-sm">
           <div className="font-semibold mb-2 text-center border-b pb-1">{month.monthName}</div>
           <div className="space-y-1">
             <div className="flex justify-between">
@@ -82,7 +87,7 @@ function ChartBar({ month, lastYearMonth, thisYearHeight, lastYearHeight, isFutu
           <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-popover" />
         </div>
       )}
-      <div className="flex gap-0.5 items-end h-24 w-full cursor-pointer">
+      <div className="flex gap-1 items-end h-32 w-full">
         {/* Vorjahr */}
         <div
           className="flex-1 rounded-t bg-muted transition-colors hover:bg-muted/80"
@@ -100,7 +105,7 @@ function ChartBar({ month, lastYearMonth, thisYearHeight, lastYearHeight, isFutu
 }
 
 export function YearComparison({ data }: YearComparisonProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
@@ -127,7 +132,7 @@ export function YearComparison({ data }: YearComparisonProps) {
   const currentMonth = new Date().getMonth();
 
   return (
-    <Card className="overflow-hidden rounded-xl border-border/80 bg-card">
+    <Card className="year-analysis overflow-hidden rounded-xl border-border/80 bg-card">
       <button
         type="button"
         className="flex min-h-14 w-full items-center justify-between gap-3 border-b border-transparent p-4 text-left transition-colors hover:bg-secondary/40"
@@ -158,7 +163,7 @@ export function YearComparison({ data }: YearComparisonProps) {
 
             <TabsContent value="overview" className="space-y-4">
               {/* KPI Karten */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="year-summary-grid grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <ComparisonCard
                   title="Einnahmen"
                   currentValue={data.revenueThisYearToDate}
@@ -194,7 +199,7 @@ export function YearComparison({ data }: YearComparisonProps) {
               {/* Mini-Chart Übersicht */}
               <div className="mt-6">
                 <h4 className="text-sm font-medium text-muted-foreground mb-3">Monatlicher Verlauf</h4>
-                <div className="flex items-end gap-1 h-32">
+                <div className="year-chart flex items-end gap-1 h-40">
                   {data.monthlyDataThisYear.map((month, idx) => {
                     const lastYearMonth = data.monthlyDataLastYear[idx];
                     const thisYearHeight = (month.revenue / maxRevenue) * 100;
@@ -278,10 +283,10 @@ function ComparisonCard({ title, currentValue, previousValue, change, currentYea
   const isGood = positiveIsGood ? isPositive : !isPositive;
 
   return (
-    <div className="rounded-lg border border-border/80 bg-card/70 p-4">
+    <div className="year-comparison-stat">
       <div className="text-sm font-medium text-muted-foreground">{title}</div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className="text-2xl font-bold">{formatCurrency(currentValue)}</span>
+      <div className="mt-2 flex flex-wrap items-baseline gap-2">
+        <span className="text-lg font-semibold tabular-nums">{formatCurrency(currentValue)}</span>
         <span className={`flex items-center gap-1 text-sm font-medium ${isGood ? 'text-positive' : 'text-critical'}`}>
           {isPositive ? (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown, Plus } from "lucide-react";
 import React, { useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { AfaTableDialog } from "@/components/afa-table-dialog";
 import { Expense, FilterState } from "@/types/dashboard";
+import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
 import { formatCurrency } from "@/lib/dashboard-utils";
 import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
 
@@ -36,6 +38,9 @@ type NewExpense = {
 };
 
 type ExpensesTabProps = {
+  entryOpen: boolean;
+  onEntryOpenChange: (open: boolean) => void;
+
   // Form state
   newExpense: NewExpense;
   setNewExpense: (expense: NewExpense) => void;
@@ -77,6 +82,8 @@ type ExpensesTabProps = {
 };
 
 export function ExpensesTab({
+  entryOpen,
+  onEntryOpenChange,
   newExpense,
   setNewExpense,
   expenseReceipt,
@@ -139,46 +146,13 @@ export function ExpensesTab({
 
   return (
     <div className="space-y-6">
-      {/* New Expense Form */}
-      <div className="overflow-hidden rounded-xl border bg-card">
-        <div className="border-b bg-muted/20 px-6 pb-4 pt-6">
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-            <div>
-              <h2 className="text-xl font-semibold mb-1 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5 text-critical" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Neue Ausgabe erfassen
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Erfassen Sie hier Ihre geschäftlichen Ausgaben
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {onOpenRecurringExpenses && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onOpenRecurringExpenses}
-                  className="flex items-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Wiederkehrende Ausgaben
-                </Button>
-              )}
-              <div className="flex items-center text-xs text-muted-foreground bg-muted rounded-lg px-3 py-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Steuerlich relevante Ausgaben werden in der EÜR berücksichtigt
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="p-6">
+      <details id="expense-entry" className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-6">
+          <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><Plus className="h-4 w-4" aria-hidden="true" /></span><span><span className="block text-sm font-semibold">Neue Ausgabe</span><span className="block text-xs text-muted-foreground">Geschäftlichen Vorgang erfassen</span></span></span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </summary>
+        <div className="border-t p-4 sm:p-6">
+          {onOpenRecurringExpenses && <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Steuerlich relevante Ausgaben werden in der EÜR berücksichtigt.</p><Button variant="outline" size="sm" onClick={onOpenRecurringExpenses}>Wiederkehrende Ausgaben</Button></div>}
           <form onSubmit={onSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -268,7 +242,7 @@ export function ExpensesTab({
                   <Label htmlFor="taxRelevant" className="ml-2 text-sm font-medium">Steuerlich relevant</Label>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="taxDeductiblePercentage" className="text-sm font-medium">Steuerlich ansetzbar (%)</Label>
                   <Input
@@ -286,7 +260,7 @@ export function ExpensesTab({
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label htmlFor="depreciationYears" className="text-sm font-medium">Abschreibung (Jahre)</Label>
                     <AfaTableDialog onSelect={(years) => setNewExpense({ ...newExpense, depreciationYears: years.toString() })} />
                   </div>
@@ -315,18 +289,17 @@ export function ExpensesTab({
             </div>
           </form>
         </div>
-      </div>
+      </details>
 
       {/* Expenses List */}
-      <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+      <div className="ledger-list bg-card rounded-xl border overflow-hidden">
         <div className="px-6 pt-6 pb-4 border-b">
-          <h2 className="text-xl font-semibold mb-2">Ihre Ausgaben</h2>
-          <p className="text-sm text-muted-foreground mb-4">Filtern Sie Ihre Ausgaben nach verschiedenen Kriterien.</p>
-          <div className="bg-muted/40 rounded-xl p-4 border">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <LedgerListHeading title="Ihre Ausgaben" total={total} amounts={expenses.map(item => item.amount)} />
+          <div className="ledger-filters">
+            <div className="ledger-filter-grid grid gap-4 md:grid-cols-5">
               {/* Category Filter */}
               <div>
-                <Label htmlFor="expense-category-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Kategorie</Label>
+                <Label htmlFor="expense-category-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Kategorie</Label>
                 <div className="relative">
                   <select
                     id="expense-category-filter"
@@ -349,7 +322,7 @@ export function ExpensesTab({
 
               {/* Date Range Filter */}
               <div>
-                <Label htmlFor="expense-date-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Zeitraum</Label>
+                <Label htmlFor="expense-date-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Zeitraum</Label>
                 <div className="relative">
                   <select
                     id="expense-date-filter"
@@ -372,7 +345,7 @@ export function ExpensesTab({
 
               {/* Tax Relevant Filter */}
               <div>
-                <Label htmlFor="expense-tax-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Steuerlich relevant</Label>
+                <Label htmlFor="expense-tax-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Steuerlich relevant</Label>
                 <div className="relative">
                   <select
                     id="expense-tax-filter"
@@ -394,7 +367,7 @@ export function ExpensesTab({
 
               {/* Has Receipt Filter */}
               <div>
-                <Label htmlFor="expense-receipt-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Beleg vorhanden</Label>
+                <Label htmlFor="expense-receipt-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Beleg vorhanden</Label>
                 <div className="relative">
                   <select
                     id="expense-receipt-filter"
@@ -416,7 +389,7 @@ export function ExpensesTab({
 
               {/* Search */}
               <div>
-                <Label htmlFor="expense-search" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Suche</Label>
+                <Label htmlFor="expense-search" className="text-xs font-medium block mb-1.5 text-muted-foreground">Suche</Label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -451,7 +424,7 @@ export function ExpensesTab({
             <div className="flex flex-col gap-3 mt-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">{expenses.length}</span> Ausgaben gefunden
+                  <span className="font-medium text-foreground">{expenses.length}</span> Ausgaben auf dieser Seite
                 </div>
                 {exportError && (
                   <p className="mt-1 text-xs text-critical">
@@ -463,6 +436,7 @@ export function ExpensesTab({
                 <Button
                   size="sm"
                   className="h-8 text-xs"
+                  variant="outline"
                   onClick={onExportReceipts}
                   disabled={isExportingReceipts}
                 >
@@ -507,9 +481,9 @@ export function ExpensesTab({
 
         {/* Expenses Table */}
         <div className="overflow-hidden">
-          <div className="divide-y lg:hidden" aria-label="Ausgabenliste">
+          <div className="divide-y xl:hidden" aria-label="Ausgabenliste">
             {expenses.length > 0 ? expenses.map((expense) => (
-              <article key={expense.id} className="space-y-3 p-4">
+              <article key={expense.id} className="ledger-record space-y-3 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <h3 className="truncate font-semibold">{expense.description}</h3>
@@ -532,7 +506,7 @@ export function ExpensesTab({
               <p className="p-6 text-center text-sm text-muted-foreground">Keine Ausgaben vorhanden. Erfassen Sie oben Ihre erste Ausgabe.</p>
             )}
           </div>
-          <div className="hidden overflow-x-auto p-6 lg:block">
+          <div className="hidden overflow-x-auto p-6 xl:block">
             <Table>
               <TableCaption>Alle erfassten Geschäftsausgaben</TableCaption>
               <TableHeader>

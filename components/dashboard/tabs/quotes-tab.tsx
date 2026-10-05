@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Eye, Download, Trash2, ArrowRightCircle, Loader2, FileText, Mail } from "lucide-react";
 import { EmailPreviewDialog } from "@/components/dashboard/email-preview-dialog";
+import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
 import { formatCurrency } from "@/lib/dashboard-utils";
 
 export type Quote = {
@@ -142,25 +143,9 @@ export function QuotesTab({
     return (
         <div className="space-y-6">
             {/* Header card */}
-            <div className="overflow-hidden rounded-xl border bg-card">
-                <div className="border-b bg-muted/20 px-6 pb-4 pt-6">
-                    <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                        <div>
-                            <h2 className="text-xl font-semibold mb-1 flex items-center">
-                                <FileText className="mr-2 h-5 w-5 text-positive" />
-                                Angebote
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                Erstellen und verwalten Sie Angebote – wandeln Sie diese mit einem Klick in Rechnungen um.
-                            </p>
-                        </div>
-                        <Button onClick={onOpenCreateModal} className="gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
-                            Angebot erstellen
-                        </Button>
-                    </div>
+            <div className="ledger-list overflow-hidden rounded-xl border bg-card">
+                <div className="border-b p-4 sm:p-6">
+                    <LedgerListHeading title="Ihre Angebote" total={total} amounts={quotes.map(quote => quote.totalAmount ?? 0)} />
                 </div>
 
                 {/* Filters */}
@@ -207,7 +192,7 @@ export function QuotesTab({
                     </div>
                 </div>
 
-                <div className="divide-y lg:hidden" aria-label="Angebotsliste">
+                <div className="divide-y xl:hidden" aria-label="Angebotsliste">
                     {quotes.length > 0 ? quotes.map((quote) => (
                         <article key={quote.id} className="space-y-3 p-4">
                             <div className="flex items-start justify-between gap-4">
@@ -229,12 +214,12 @@ export function QuotesTab({
                             </div>
                         </article>
                     )) : (
-                        <p className="p-6 text-center text-sm text-muted-foreground">Keine Angebote vorhanden. Erstellen Sie Ihr erstes Angebot.</p>
+                        <div className="ledger-empty"><FileText aria-hidden="true" /><h3>Ihr nächstes Angebot beginnt hier</h3><p>Bereiten Sie Leistungen und Preise vor und erstellen Sie daraus später eine Rechnung.</p><Button variant="outline" onClick={onOpenCreateModal}>Erstes Angebot erstellen</Button></div>
                     )}
                 </div>
 
                 {/* Table */}
-                <div className="hidden overflow-x-auto p-6 lg:block">
+                <div className="hidden overflow-x-auto p-6 xl:block">
                     <Table>
                         <TableCaption>
                             {isLoading ? 'Lade Angebote...' : `${total} Angebot${total !== 1 ? 'e' : ''}`}
@@ -376,7 +361,7 @@ export function QuotesTab({
                                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                                         <div className="flex flex-col items-center">
                                             <FileText className="h-12 w-12 opacity-20 mb-3" />
-                                            <span>Keine Angebote vorhanden. Erstellen Sie Ihr erstes Angebot.</span>
+                                            <span>Keine passenden Angebote vorhanden.</span><Button variant="outline" className="mt-4" onClick={onOpenCreateModal}>Angebot anlegen</Button>
                                         </div>
                                     </TableCell>
                                 </TableRow>

@@ -586,11 +586,12 @@ export default function CustomersPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+    <div className="customer-workspace">
+      <div className="space-y-6">
+        <header className="workbench-header flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
+            <p className="app-section-label mb-2">Verkauf</p>
+            <h1 className="text-3xl font-semibold tracking-tight mb-2">
               Kundenverwaltung
             </h1>
             <p className="text-muted-foreground">
@@ -598,8 +599,8 @@ export default function CustomersPage() {
             </p>
           </div>
           <div className="mt-4 md:mt-0 flex gap-3">
-            <div className="bg-card border rounded-lg px-4 py-2 shadow-sm hidden md:block">
-              <span className="text-foreground font-medium">
+            <div className="hidden items-center text-sm text-muted-foreground md:flex">
+              <span className="font-medium">
                 {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}
               </span>
             </div>
@@ -622,7 +623,8 @@ export default function CustomersPage() {
                 </svg>
               </div>
               <Input
-                placeholder="Suchen nach Name, Ansprechpartner, E-Mail, Telefon oder Stadt..."
+                aria-label="Kunden suchen"
+                placeholder="Name, Kontakt oder Ort suchen…"
                 className="pl-9 bg-background"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -633,9 +635,16 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          <Card className="shadow-sm border-none bg-card/50 backdrop-blur-sm">
+          <Card className="customer-directory overflow-hidden border bg-card shadow-none">
             <CardContent className="p-0">
-              <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+              <div className="customer-mobile-list xl:hidden" aria-label="Kundenliste">
+                {filteredCustomers.length ? filteredCustomers.map(customer => <article key={customer.id}>
+                  <div className="customer-record-heading"><span className="customer-monogram">{getInitials(customer.name)}</span><div><h2>{customer.name}</h2><p>{customer.contactPerson || 'Geschäftskontakt'}{customer.city ? ` · ${customer.city}` : ''}</p></div></div>
+                  <dl>{customer.email && <div><dt>E-Mail</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>}{customer.phone && <div><dt>Telefon</dt><dd><a href={`tel:${customer.phone}`}>{customer.phone}</a></dd></div>}</dl>
+                  <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openEditModal(customer)} aria-label={`${customer.name} bearbeiten`}>Bearbeiten</Button><Button variant="ghost" size="sm" onClick={() => setNotesCustomer(customer)} aria-label={`Leistungsnotizen für ${customer.name}`}>Leistungsnotizen</Button><Button variant="ghost" size="sm" className="text-destructive" disabled={isDeleting} onClick={() => handleDeleteCustomer(customer.id)} aria-label={`${customer.name} löschen`}>Löschen</Button></div>
+                </article>) : <div className="ledger-empty"><h2>Keine Kunden gefunden</h2><p>{searchTerm ? 'Ändern Sie Ihre Suche, um Kontakte zu finden.' : 'Legen Sie Ihren ersten Geschäftskontakt an.'}</p>{!searchTerm && <Button variant="outline" onClick={openAddModal}>Ersten Kunden anlegen</Button>}</div>}
+              </div>
+              <div className="hidden xl:block overflow-hidden bg-card">
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow>
@@ -727,7 +736,7 @@ export default function CustomersPage() {
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" onClick={() => openEditModal(customer)} className="h-8 w-8">
+                                    <Button variant="ghost" size="icon" aria-label={`${customer.name} bearbeiten`} onClick={() => openEditModal(customer)} className="h-8 w-8">
                                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                       </svg>
@@ -761,6 +770,7 @@ export default function CustomersPage() {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      aria-label={`${customer.name} löschen`}
                                       onClick={() => handleDeleteCustomer(customer.id)}
                                       disabled={isDeleting}
                                     >

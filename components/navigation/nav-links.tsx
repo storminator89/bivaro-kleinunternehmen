@@ -32,7 +32,7 @@ type NavSection = {
   items: NavItem[];
 };
 
-export function NavLinks() {
+export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?: boolean; onNavigate?: () => void }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -41,8 +41,8 @@ export function NavLinks() {
   // Load collapsed state from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed');
-    if (saved) {
-      setIsCollapsed(JSON.parse(saved));
+    if (saved === "true" || saved === "false") {
+      setIsCollapsed(saved === "true");
     }
 
     // Listen for sidebar toggle events
@@ -135,7 +135,7 @@ export function NavLinks() {
   ];
 
   // Collapsed view
-  if (isCollapsed) {
+  if (allowCollapse && isCollapsed) {
     return (
       <div className="flex h-full flex-col">
         <ul className="space-y-1 flex-1">
@@ -149,6 +149,7 @@ export function NavLinks() {
               return (
                 <li key={item.href}>
                   <Link
+                    onClick={onNavigate}
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     data-active={active}
@@ -208,7 +209,7 @@ export function NavLinks() {
   // Expanded view with sections
   return (
     <div className="flex h-full flex-col">
-      <div className="app-nav-scroll flex-1 space-y-6 overflow-y-auto pr-1">
+      <div className="app-nav-scroll flex-1 space-y-4 overflow-y-auto pr-1">
         {navSections.map((section) => {
           const visibleItems = section.items.filter(item =>
             item.auth !== "authenticated" || status === "authenticated"
@@ -229,6 +230,7 @@ export function NavLinks() {
                   return (
                     <li key={item.href}>
                       <Link
+                        onClick={onNavigate}
                         href={item.href}
                         aria-current={active ? "page" : undefined}
                         data-active={active}
@@ -262,6 +264,7 @@ export function NavLinks() {
                 return (
                   <li key={item.href}>
                     <Link
+                      onClick={onNavigate}
                       href={item.href}
                       aria-current={active ? "page" : undefined}
                       data-active={active}

@@ -8,7 +8,7 @@ export function CollapseButton() {
   // Set initial sidebar width based on localStorage
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed');
-    if (saved) {
+    if (saved === "true" || saved === "false") {
       const isCollapsed = JSON.parse(saved);
       const sidebar = document.querySelector('aside');
       if (sidebar) {
@@ -32,8 +32,7 @@ export function CollapseButton() {
     }
 
     const handleToggle = (e: Event) => {
-      // @ts-ignore
-      const state = e.detail as boolean;
+      const state = (e as CustomEvent<boolean>).detail;
       setCollapsed(state);
     };
     window.addEventListener('sidebar-toggle', handleToggle as EventListener);
@@ -64,6 +63,9 @@ export function CollapseButton() {
 
   return (
     <button 
+      type="button"
+      aria-label={collapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
+      aria-expanded={!collapsed}
       onClick={toggleCollapse}
       className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       title={collapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}

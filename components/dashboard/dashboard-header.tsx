@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CollapsibleKpiCard } from "./collapsible-kpi-card";
-import { DollarSign, CreditCard, Banknote, TrendingUp, TrendingDown, PieChart, ChevronDown, ChevronUp, Activity } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { CollapsibleKpiCard } from "./collapsible-kpi-card";
+import { DollarSign, CreditCard, Banknote, ChevronDown, ChevronUp, ArrowUpRight } from "lucide-react";
 
 interface Activity {
   id: number | string;
@@ -43,13 +43,6 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
     setIsExpanded(savedExpandedState !== null ? savedExpandedState === 'true' : true);
   }, []);
 
-  // Speichere den Zustand im localStorage, wenn er sich ändert
-  useEffect(() => {
-    if (isExpanded !== undefined) {
-      localStorage.setItem('dashboardExpanded', isExpanded.toString());
-    }
-  }, [isExpanded]);
-
   // Berechne zusätzliche Metriken
   const profit = data.totalRevenue - data.totalExpenses;
   const profitMargin = data.totalRevenue > 0 ? (profit / data.totalRevenue) * 100 : 0;
@@ -75,8 +68,12 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
       <section aria-labelledby="dashboard-overview-title">
         <button
           type="button"
-          className="flex min-h-12 w-full items-center justify-between border-b border-border/80 py-3 text-left"
-          onClick={() => setIsExpanded(!isExpanded)}
+          className="finance-overview-toggle flex min-h-12 w-full items-center justify-between border-b border-border/80 py-3 text-left"
+          onClick={() => {
+            const next = !isExpanded;
+            setIsExpanded(next);
+            localStorage.setItem("dashboardExpanded", String(next));
+          }}
           aria-expanded={isExpanded}
           aria-controls="dashboard-overview-content"
         >
@@ -89,11 +86,79 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
 
         {isExpanded && (
           <div id="dashboard-overview-content" className="space-y-6 pt-6">
+            <div className="dashboard-top-grid">
+            <section className="finance-hero" aria-label="Finanzübersicht Gesamtzeitraum">
+              <div className="finance-hero-primary">
+                <p className="finance-eyebrow">Finanzübersicht · Gesamtzeitraum</p>
+                <div className="mt-5 flex items-start justify-between gap-4"><div><h2 className="text-sm font-medium">Gewinn</h2><p className="finance-hero-value">{formatCurrency(profit)}</p></div><ArrowUpRight className="h-8 w-8" aria-hidden="true" /></div>
+                <p className="finance-hero-note">Einnahmen minus Ausgaben <span>· {profitMargin.toLocaleString('de-DE', { maximumFractionDigits: 1 })} % Marge</span></p>
+              </div>
+              <dl className="finance-hero-accounts">
+                <div><dt><span className="finance-dot" />Gesamtumsatz</dt><dd>{formatCurrency(data.totalRevenue)}</dd></div>
+                <div><dt><span className="finance-dot finance-dot-expense" />Gesamtausgaben</dt><dd>{formatCurrency(data.totalExpenses)}</dd></div>
+              </dl>
+            </section>
+            <div className="dashboard-month-metrics grid gap-4">
+              <CollapsibleKpiCard
+                title="Umsatz diesen Monat"
+                value={formatCurrency(data.revenueThisMonth)}
+                icon={<DollarSign className="h-5 w-5 text-positive" />}
+              >
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Letzter Monat</span>
+                    <span className="text-sm font-medium">-</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Prognose</span>
+                    <span className="text-sm font-medium">-</span>
+                  </div>
+                </div>
+              </CollapsibleKpiCard>
+
+              <CollapsibleKpiCard
+                title="Ausgaben diesen Monat"
+                value={formatCurrency(data.expensesThisMonth)}
+                icon={<CreditCard className="h-5 w-5 text-critical" />}
+              >
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Letzter Monat</span>
+                    <span className="text-sm font-medium">-</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Budget</span>
+                    <span className="text-sm font-medium">-</span>
+                  </div>
+                </div>
+              </CollapsibleKpiCard>
+
+              <CollapsibleKpiCard
+                title="Offene Forderungen"
+                value={formatCurrency(data.openInvoices)}
+                icon={<Banknote className="h-5 w-5 text-notice" />}
+              >
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Fällig in 7 Tagen</span>
+                    <span className="text-sm font-medium">-</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Überfällig</span>
+                    <span className="text-sm font-medium">-</span>
+                  </div>
+                </div>
+              </CollapsibleKpiCard>
+            </div>
+
+            </div>
             {/* Kleinunternehmer-Status Tracker (Neue Regelung ab 2025) */}
-            <div className="rounded-xl border border-border/80 bg-card p-5">
+            <details className="limit-disclosure rounded-xl border bg-card" open={isCloseToYearlyLimit || isOverHardLimit ? true : undefined}>
+              <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4"><span className="text-sm font-semibold">Kleinunternehmer · Umsatzgrenzen</span><span className="flex items-center gap-2 text-xs text-muted-foreground">{isOverHardLimit ? 'Grenze überschritten' : isCloseToYearlyLimit ? 'Prüfung empfohlen' : 'Im Rahmen'}<ChevronDown className="h-4 w-4" aria-hidden="true" /></span></summary>
+              <div className="border-t p-5">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-sm">Kleinunternehmer-Status 2025</span>
+                  <span className="font-medium text-sm">Kleinunternehmer-Status</span>
                   <Badge
                     variant={isOverHardLimit ? "destructive" : isOverPreviousYearLimit ? "destructive" : isCloseToYearlyLimit ? "secondary" : "outline"}
                     className="text-xs"
@@ -157,147 +222,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
                   </>
                 )}
               </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-              <CollapsibleKpiCard
-                title="Umsatz diesen Monat"
-                value={formatCurrency(data.revenueThisMonth)}
-                icon={<DollarSign className="h-5 w-5 text-positive" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Letzter Monat</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Prognose</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-
-              <CollapsibleKpiCard
-                title="Ausgaben diesen Monat"
-                value={formatCurrency(data.expensesThisMonth)}
-                icon={<CreditCard className="h-5 w-5 text-critical" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Letzter Monat</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Budget</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-
-              <CollapsibleKpiCard
-                title="Offene Forderungen"
-                value={formatCurrency(data.openInvoices)}
-                icon={<Banknote className="h-5 w-5 text-notice" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Fällig in 7 Tagen</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Überfällig</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-
-              <CollapsibleKpiCard
-                title="Gesamtumsatz"
-                value={formatCurrency(data.totalRevenue)}
-                icon={<TrendingUp className="h-5 w-5 text-positive" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Dieses Jahr</span>
-                    <span className="text-sm font-medium">{formatCurrency(data.totalRevenue)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Letztes Jahr</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-
-              <CollapsibleKpiCard
-                title="Gesamtausgaben"
-                value={formatCurrency(data.totalExpenses)}
-                icon={<TrendingDown className="h-5 w-5 text-critical" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Dieses Jahr</span>
-                    <span className="text-sm font-medium">{formatCurrency(data.totalExpenses)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Letztes Jahr</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-
-              <CollapsibleKpiCard
-                title="Gewinn"
-                value={formatCurrency(profit)}
-                icon={<PieChart className="h-5 w-5 text-notice" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Marge</span>
-                    <span className={`text-sm font-medium ${profit >= 0 ? 'text-positive' : 'text-critical'}`}>
-                      {profitMargin.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Vorjahr</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-            </div>
-
-            {/* Letzte Aktivitäten im Übersichtsbereich */}
-            <div className="overflow-hidden rounded-xl border border-border/80 bg-card">
-              <div className="border-b border-border/80 p-5">
-                <h3 className="font-semibold flex items-center">
-                  <Activity className="h-5 w-5 mr-2 text-muted-foreground" />
-                  Letzte Aktivitäten
-                </h3>
               </div>
-              <div>
-                <div className="space-y-0">
-                  {data.recentActivities.length > 0 ? (
-                    data.recentActivities.slice(0, 5).map((activity) => (
-                      <div key={`${activity.type}-${activity.id}`} className="flex flex-wrap items-center gap-3 border-b border-border/70 p-4 transition-colors last:border-b-0 hover:bg-secondary/40">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium leading-none">{activity.description}</p>
-                          <p className="text-sm text-muted-foreground">{new Date(activity.date).toLocaleDateString('de-DE')}</p>
-                        </div>
-                        <div className={`ml-auto text-right font-medium tabular-nums ${activity.type === 'income' ? 'text-positive' : 'text-critical'}`}>
-                          {formatCurrency(activity.amount)}
-                        </div>
-                        <Badge variant={activity.type === 'income' ? 'default' : 'destructive'} className="ml-4">
-                          {activity.type === 'income' ? 'Einnahme' : 'Ausgabe'}
-                        </Badge>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-8 text-center text-muted-foreground">
-                      <p>Keine Aktivitäten vorhanden</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+            </details>
+
           </div>
         )}
       </section>

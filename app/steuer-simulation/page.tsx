@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowRightLeft,
   Calculator,
   CircleHelp,
   Factory,
@@ -17,8 +16,9 @@ import {
   RefreshCw,
   ShieldCheck,
   ThumbsUp,
-  TrendingUp,
   Briefcase,
+  ChevronDown,
+  ArrowUpRight,
 } from "lucide-react";
 type TimeRange = "all" | "last3Months" | "last6Months" | "thisYear" | "lastYear";
 
@@ -155,6 +155,7 @@ export default function SteuerSimulationPage() {
 
   const totalIncome = summary?.totalIncome ?? 0;
   const totalExpenses = summary?.totalExpenses ?? 0;
+  const expenseCoverage = totalIncome > 0 ? totalExpenses / totalIncome : 0;
   const partialDeductionShortfall = summary?.partialDeductionShortfall ?? 0;
   const nonTaxRelevantExpenseCount = summary?.nonTaxRelevantExpenseCount ?? 0;
   const nonTaxRelevantExpenseAmount = summary?.nonTaxRelevantExpenseAmount ?? 0;
@@ -241,7 +242,6 @@ export default function SteuerSimulationPage() {
 
   // Für UI-Anzeige
   const deductionsApplied = totalDeductions;
-  const expenseCoverage = totalIncome > 0 ? totalExpenses / totalIncome : 0;
 
   const formatCurrency = useCallback((value: number) =>
     new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value), []);
@@ -408,15 +408,15 @@ export default function SteuerSimulationPage() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-10">
-        <header className="flex flex-col gap-6 border-b border-border pb-8 lg:flex-row lg:items-end lg:justify-between">
+      <div className="tax-studio space-y-6">
+        <header className="workbench-header flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0 space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
               <Calculator className="h-4 w-4" />
-              <span>Auswertung / Steuer-Simulation</span>
+              <span>Auswertungen</span>
             </div>
             <div className="max-w-2xl space-y-2">
-              <h1 className="text-4xl font-semibold tracking-tight text-foreground">Steuer-Simulation</h1>
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">Steuer-Simulation</h1>
               <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
                 Spielen Sie Szenarien mit Ihren steuerrelevanten EÜR-Daten durch und sehen Sie direkt, wie sich Ihre Steuerlast verändert.
               </p>
@@ -470,70 +470,24 @@ export default function SteuerSimulationPage() {
             {error}
           </div>
         )}
-        {summary?.warnings.map((warning) => (
-          <div key={warning} role="status" className="rounded-[var(--radius-input)] border border-amber-300/60 bg-amber-100/40 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-            {warning}
-          </div>
-        ))}
+        {Boolean(summary?.warnings.length) && <details className="tax-method-notes" open={!taxCalculationSupported}>
+          <summary>Datenbasis und Grenzen<ChevronDown aria-hidden="true" /></summary>
+          <div>{summary?.warnings.map(warning => <p key={warning}>{warning}</p>)}</div>
+        </details>}
         {!taxCalculationSupported && summary && (
           <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             Für diesen Datenstand wird keine endgültige Steuerlast angezeigt. Die Simulation unterstützt nur vollständige Jahreszeiträume ohne Verlust, Verlustvortrag oder Verlustrücktrag.
           </div>
         )}
 
-        <section aria-labelledby="overview-heading" className="grid gap-0 overflow-hidden rounded-[var(--radius-card)] border border-border bg-card lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]">
-          <div className="space-y-8 border-b border-border p-6 sm:p-8 lg:border-b-0 lg:border-r">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Überblick</p>
-                <h2 id="overview-heading" className="mt-2 text-xl font-semibold">Gewinn laut EÜR</h2>
-              </div>
-              <TrendingUp className="h-5 w-5 text-primary" aria-hidden="true" />
-            </div>
-            <div className="flex flex-wrap items-end justify-between gap-5">
-              <p className={`text-5xl font-semibold tracking-tight tabular-nums ${profit >= 0 ? "text-primary" : "text-destructive"}`}>
-                {formatCurrency(profit)}
-              </p>
-              <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Vor Steuern · nur steuerrelevante Einnahmen und Ausgaben
-              </p>
-            </div>
-            <div className="space-y-2" aria-label="Verhältnis von Einnahmen und Ausgaben">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Einnahmen zu Ausgaben</span>
-                <span className="tabular-nums">{totalIncome > 0 ? `${(expenseCoverage * 100).toFixed(0)} % Ausgabenanteil` : "Keine Einnahmen"}</span>
-              </div>
-              <div className="flex h-2 overflow-hidden rounded-full bg-secondary">
-                <div className="bg-primary transition-[width] duration-300" style={{ width: `${Math.min(100, Math.max(0, expenseCoverage * 100))}%` }} />
-              </div>
-            </div>
-          </div>
-          <div className="space-y-6 bg-muted/25 p-6 sm:p-8">
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <ArrowRightLeft className="h-4 w-4 text-primary" aria-hidden="true" />
-              Datenbasis
-            </div>
-            <dl className="divide-y divide-border">
-              <div className="flex items-center justify-between gap-4 py-3 first:pt-0">
-                <dt className="text-sm text-muted-foreground">Betriebseinnahmen</dt>
-                <dd className="text-right text-sm font-medium tabular-nums">{formatCurrency(totalIncome)}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-4 py-3">
-                <dt className="text-sm text-muted-foreground">Betriebsausgaben</dt>
-                <dd className="text-right text-sm font-medium tabular-nums">{formatCurrency(totalExpenses)}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-4 py-3 last:pb-0">
-                <dt className="text-sm text-muted-foreground">Buchungen</dt>
-                <dd className="text-right text-sm font-medium tabular-nums">{summary?.sourceCount ?? 0}</dd>
-              </div>
-            </dl>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Zeitraum: {selectedTimeRange === "thisYear" ? `Steuerjahr ${taxYear}` : selectedTimeRange === "lastYear" ? `Steuerjahr ${taxYear - 1}` : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}
-            </p>
-          </div>
+        <section className="tax-source-context" aria-labelledby="overview-heading">
+          <div className="tax-source-profit"><span className="tax-source-label">Datenbasis · EÜR</span><h2 id="overview-heading">Gewinn laut EÜR</h2><strong>{loading ? '—' : formatCurrency(profit)}</strong><p>Vor Steuern · steuerrelevante Buchungen</p></div>
+          <dl><div><dt>Betriebseinnahmen</dt><dd>{loading ? '—' : formatCurrency(totalIncome)}</dd></div><div><dt>Betriebsausgaben</dt><dd>{loading ? '—' : formatCurrency(totalExpenses)}</dd></div><div><dt>Buchungen</dt><dd>{loading ? '—' : summary?.sourceCount ?? 0}</dd></div></dl>
+          <p className="tax-source-period">Zeitraum: {selectedTimeRange === "thisYear" ? `Steuerjahr ${taxYear}` : selectedTimeRange === "lastYear" ? `Steuerjahr ${taxYear - 1}` : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}</p>
         </section>
-
-        <section aria-labelledby="parameters-heading" className="rounded-[var(--radius-card)] border border-border bg-card">
+        <div className="tax-mobile-result"><span>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}<strong>{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</strong></span><a href="#simulation-result">Zum Ergebnis<ArrowUpRight aria-hidden="true" /></a></div>
+        <div className="tax-workspace">
+        <section aria-labelledby="parameters-heading" className="tax-parameters rounded-[var(--radius-card)] border border-border bg-card">
           <div className="flex flex-col gap-4 border-b border-border p-6 sm:flex-row sm:items-start sm:justify-between sm:p-8">
             <div className="space-y-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Annahmen</p>
@@ -544,8 +498,8 @@ export default function SteuerSimulationPage() {
               Standardwerte
             </Button>
           </div>
-            <div className="space-y-8 p-6 sm:p-8">
-            <div className="rounded-[var(--radius-input)] border border-border bg-muted/25 p-5">
+            <div className="tax-parameter-body space-y-8 p-6 sm:p-8">
+            <div className="tax-parameter-group">
               <ParameterLabel
                 htmlFor="businessType"
                 label="Tätigkeitsart"
@@ -562,7 +516,7 @@ export default function SteuerSimulationPage() {
               </select>
               <p className="mt-2 text-xs text-muted-foreground">Bei freiberuflicher Tätigkeit wird keine Gewerbesteuer angesetzt. Die Einordnung muss fachlich zutreffen.</p>
             </div>
-            <div className="rounded-[var(--radius-input)] border border-border bg-muted/25 p-5">
+            <div className="tax-parameter-group">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <Label className="text-base font-semibold">Beschäftigungsverhältnis</Label>
@@ -683,7 +637,7 @@ export default function SteuerSimulationPage() {
                 <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
                 <h3 className="font-semibold">Vorsorge und Abzüge</h3>
               </div>
-              <div className="grid gap-5 border-t border-border pt-5 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-5 border-t border-border pt-5 md:grid-cols-2 xl:grid-cols-2">
               <div>
                 <ParameterLabel
                   htmlFor="healthInsurance"
@@ -828,22 +782,18 @@ export default function SteuerSimulationPage() {
           </div>
         </section>
 
-        <section aria-labelledby="result-heading" className="rounded-[var(--radius-card)] border border-border bg-card">
-          <div className="border-b border-border p-6 sm:p-8">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Prognose</p>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 id="result-heading" className="text-2xl font-semibold tracking-tight">Ergebnis der Simulation</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Vor- und nachsteuerliche Werte auf Basis Ihrer aktuellen Annahmen.</p>
-              </div>
-              <div className="text-left sm:text-right">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}</p>
-                <p className="mt-1 text-3xl font-semibold tabular-nums text-primary">{formatSimulationValue(netProfitAfterTax)}</p>
-              </div>
-            </div>
+        <aside className="tax-result-rail">
+        <section id="simulation-result" aria-labelledby="result-heading" className="tax-result rounded-[var(--radius-card)] border border-border bg-card">
+          <div className="tax-result-hero">
+            <span className="tax-result-kicker"><span aria-hidden="true" />Live-Simulation · {taxYear}</span>
+            <h2 id="result-heading">Ergebnis der Simulation</h2>
+            <p className="tax-result-amount" aria-live="polite">{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</p>
+            <p>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"} · auf Basis Ihrer Annahmen</p>
           </div>
           <div className="space-y-6 p-6 sm:p-8">
-            <div className="grid gap-6 lg:grid-cols-2">
+            <dl className="tax-result-metrics"><div><dt>Steuerlast {employmentType === 'side-business' ? 'auf Gewerbe' : 'gesamt'}</dt><dd>{loading ? '—' : formatSimulationValue(marginalTax)}</dd></div><div><dt>Effektive Belastung</dt><dd>{loading ? '—' : taxCalculationSupported && profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : 'nicht berechnet'}</dd></div></dl>
+            <details className="tax-calculation"><summary>Berechnungsweg anzeigen<ChevronDown aria-hidden="true" /></summary><div className="tax-calculation-body">
+            <div className="grid gap-6">
               <div>
                 <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
                   <h3 className="font-semibold">Einkommen</h3>
@@ -904,7 +854,7 @@ export default function SteuerSimulationPage() {
                 </dl>
               </div>
             </div>
-            <div className="grid gap-px overflow-hidden rounded-[var(--radius-input)] border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-px overflow-hidden rounded-[var(--radius-input)] border border-border bg-border sm:grid-cols-2">
               {[['Einkommensteuer', finalIncomeTax], ['Solidaritätszuschlag', solidaritySurcharge], ['Kirchensteuer', churchTax], ['Gewerbesteuer', tradeTax]].map(([label, value]) => (
                 <div key={label} className="bg-background px-4 py-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
@@ -912,6 +862,7 @@ export default function SteuerSimulationPage() {
                 </div>
               ))}
             </div>
+            </div></details>
             {profit < 0 && (
               <div className="rounded-[var(--radius-input)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
                 Sie weisen aktuell einen Verlust aus. Nutzen Sie die Simulation, um zu prüfen, ab welchem Gewinn eine Steuerlast entsteht.
@@ -923,7 +874,7 @@ export default function SteuerSimulationPage() {
           </div>
         </section>
 
-        <section aria-labelledby="recommendations-heading" className="rounded-[var(--radius-card)] border border-border bg-card">
+        <section aria-labelledby="recommendations-heading" className="tax-recommendations rounded-[var(--radius-card)] border border-border bg-card">
           <div className="border-b border-border p-6 sm:p-8">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nächste Schritte</p>
             <h2 id="recommendations-heading" className="mt-2 text-2xl font-semibold tracking-tight">Empfehlungen zur Steueroptimierung</h2>
@@ -951,6 +902,7 @@ export default function SteuerSimulationPage() {
             </ul>
           </div>
         </section>
+        </aside></div>
       </div>
     </TooltipProvider>
   );

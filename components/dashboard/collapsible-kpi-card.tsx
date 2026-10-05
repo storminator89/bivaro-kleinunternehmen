@@ -14,7 +14,7 @@ export function CollapsibleKpiCard({ title, value, icon, children }: Collapsible
   const detailsId = useId();
 
   return (
-    <Card className="overflow-hidden rounded-xl border-border/80 bg-card/80">
+    <Card className="metric-tile overflow-hidden rounded-xl border-border bg-card shadow-none">
       <CardHeader className="space-y-0 p-0">
         <button
           type="button"
@@ -24,7 +24,7 @@ export function CollapsibleKpiCard({ title, value, icon, children }: Collapsible
           onClick={() => setIsOpen((value) => !value)}
         >
           <span className="flex items-center gap-3">
-            {icon && <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</span>}
+            {icon && <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-muted-foreground">{icon}</span>}
             <CardTitle className="text-sm font-semibold">{title}</CardTitle>
           </span>
           {isOpen ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
@@ -32,7 +32,7 @@ export function CollapsibleKpiCard({ title, value, icon, children }: Collapsible
       </CardHeader>
       <CardContent className="p-0">
         <div className="px-4 py-4">
-          <div className="text-2xl font-semibold tracking-[-0.03em] tabular-nums">{value}</div>
+          <div className="text-3xl font-semibold tracking-[-0.035em] tabular-nums">{value}</div>
         </div>
         {isOpen && children && (
           <div id={detailsId} className="border-t border-border/70 bg-secondary/30 px-4 pb-4">

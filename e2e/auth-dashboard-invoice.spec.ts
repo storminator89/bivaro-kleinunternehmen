@@ -38,10 +38,17 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
 
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByRole('heading', { name: 'Buchhaltung', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Jahresvergleich', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Letzte Aktivitäten', exact: true })).toBeVisible();
+    for (const width of [1440, 320, 375, 414, 768]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath('dashboard-workspace-' + width + '.png'), fullPage: true });
+    }
     await expect(page.getByRole('button', { name: 'Rechnung erstellen' })).toBeVisible();
   });
 
-  test('opens the invoice creation flow from the dashboard', async ({ page }) => {
+  test('opens the invoice creation flow from the dashboard', async ({ page }, testInfo) => {
     await page.goto('/login');
     await page.getByLabel('E-Mail').fill(testUser.email);
     await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
@@ -52,6 +59,79 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
 
     await expect(page).toHaveURL(/\/dashboard\/invoices\/new/);
     await expect(page.getByRole('heading', { name: 'Rechnung erstellen', level: 1 })).toBeVisible();
+    await page.locator('#invoice-item-description-0').fill('Designprüfung');
+    await page.locator('#invoice-item-quantity-0').fill('2');
+    await page.locator('#invoice-item-price-0').fill('125.50');
+    const summary = page.getByRole('complementary', { name: 'Rechnungsübersicht' });
+    await expect(summary).toContainText('251,00');
+    await page.getByRole('button', { name: 'Position 1 duplizieren', exact: true }).click();
+    await expect(summary).toContainText('502,00');
+    await page.getByRole('button', { name: 'Position 2 entfernen', exact: true }).click();
+    for (const width of [1440, 320, 375, 414, 768]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath('invoice-studio-' + width + '.png'), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByText('Rechnungsvorlagen', { exact: true }).click();
+    await expect(page.getByLabel('Rechnungsvorlage auswählen')).toBeVisible();
+    await page.getByRole('button', { name: 'Live-Vorschau', exact: true }).click();
+    await expect(page.getByRole('complementary', { name: 'Rechnungsvorschau' })).toBeVisible();
+  });
+
+  test('keeps invoice filters and navigation usable at compact widths', async ({ page }, testInfo) => {
+    await page.goto('/login');
+    await page.getByLabel('E-Mail').fill(testUser.email);
+    await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+    await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto('/dashboard?tab=invoices');
+    await expect(page.getByRole('heading', { name: 'Rechnungen', exact: true, level: 1 })).toBeVisible();
+    await page.getByRole('button', { name: 'Offen', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Offen', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Filter zurücksetzen', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Alle', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#invoiceFile')).not.toBeVisible();
+    await page.getByText('E-Rechnung importieren', { exact: true }).click();
+    await expect(page.getByLabel('Rechnungsdatei auswählen')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Rechnung hochladen', exact: true })).toBeDisabled();
+    await page.getByText('E-Rechnung importieren', { exact: true }).click();
+    await page.getByLabel('Suche', { exact: true }).fill('Keine-Treffer-UI-Test');
+    await expect(page.getByRole('button', { name: 'Filter zurücksetzen' })).toBeVisible();
+    await page.getByRole('button', { name: 'Filter zurücksetzen' }).click();
+    await expect(page.getByLabel('Suche', { exact: true })).toHaveValue('');
+    for (const width of [1440, 320, 375, 414, 768]) {
+      await page.setViewportSize({ width, height: 960 });
+      await expect(page.getByRole('heading', { name: 'Rechnungen', exact: true, level: 1 })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath('invoices-' + width + '.png'), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await page.getByRole('button', { name: 'Sidebar einklappen', exact: true }).click();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.getByRole('button', { name: 'Menü öffnen', exact: true }).click();
+    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile Hauptnavigation' });
+    await expect(mobileNavigation.getByText('Ausgaben', { exact: true })).toBeVisible();
+    await mobileNavigation.getByRole('link', { name: 'Ausgaben', exact: true }).click();
+    await expect(mobileNavigation).not.toBeVisible();
+    for (const tab of ['expenses', 'incomes', 'quotes']) {
+      await page.setViewportSize({ width: 320, height: 960 });
+      await page.goto('/dashboard?tab=' + tab);
+      await expect(page.locator('#mobile-work-area')).toHaveCount(0);
+      await expect(page.getByText('Summe dieser Seite', { exact: true })).toBeVisible();
+      if (tab === 'quotes') await expect(page.getByRole('button', { name: 'Angebot erstellen', exact: true })).toHaveCount(1);
+      if (tab === 'expenses' || tab === 'incomes') {
+        await expect(page.locator(tab === 'expenses' ? '#description' : '#incomeDescription')).not.toBeVisible();
+        await page.getByRole('button', { name: tab === 'expenses' ? 'Ausgabe erfassen' : 'Einnahme erfassen', exact: true }).click();
+        await expect(page.locator(tab === 'expenses' ? '#description' : '#incomeDescription')).toBeVisible();
+      }
+      const clippedButtons = await page.getByRole('main').locator('button').evaluateAll(buttons => buttons.filter(button => {
+        const rect = button.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && (rect.left < 0 || rect.right > window.innerWidth + 1);
+      }).map(button => button.textContent));
+      expect(clippedButtons).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath(tab + '-320.png'), fullPage: true });
+    }
   });
 
   test('lets an admin maintain SMTP without exposing the stored password', async ({ page }, testInfo) => {
@@ -64,6 +144,12 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
     await expect(page).toHaveURL(/\/dashboard/);
     await page.goto('/settings');
+    for (const width of [1440, 320, 375, 414, 768]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath('settings-workspace-' + width + '.png'), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.locator('#smtp-host').fill('smtp.example.test');
     await page.locator('#smtp-port').fill('587');
     await page.locator('#smtp-from').fill('rechnung@example.test');
@@ -268,6 +354,16 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(card.getByRole('button', { name: 'Löschen', exact: true })).toBeDisabled();
     await expect(card.getByText('Löschen ist nur für nachweislich unausgestellte Entwürfe ohne Zahlung möglich.')).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('protected-invoice-mobile.png'), fullPage: true, animations: 'disabled' });
+    await card.getByRole('button', { name: 'Details', exact: true }).click();
+    const details = page.getByRole('dialog');
+    await expect(details.getByRole('button', { name: 'PDF öffnen', exact: true })).toBeVisible();
+    await expect(details.getByText('Rechnungsbetrag', { exact: true })).toBeVisible();
+    for (const width of [320, 375, 414, 768]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await details.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath('invoice-details-' + width + '.png'), fullPage: true });
+    }
+    await details.getByRole('button', { name: 'Schließen', exact: true }).click();
   });
 
   test('keeps a backdated manual income on the entered calendar day across browser timezones', async ({ browser }, testInfo) => {
@@ -403,6 +499,16 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByRole('heading', { name: 'Gewinn laut EÜR' })).toBeVisible();
     await expect(page.getByText('Zeitraum: Steuerjahr 2025', { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('tax-annual.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Nebenberuflich', exact: true }).click();
+    await page.getByLabel('Bruttojahresgehalt (EUR)', { exact: true }).fill('65000');
+    await page.getByText('Berechnungsweg anzeigen', { exact: true }).click();
+    await expect(page.getByText('Einkünfte aus Anstellung', { exact: true })).toBeVisible();
+    for (const width of [1440, 320, 375, 414, 768]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath('tax-studio-' + width + '.png'), fullPage: true });
+    }
+    await page.getByRole('button', { name: 'Standardwerte', exact: true }).click();
     await page.getByLabel('Analysezeitraum').selectOption('last3Months');
     await expect(page.getByRole('alert').filter({ hasText: 'keine endgültige Steuerlast' })).toBeVisible();
     await expect(page.getByText('nicht berechnet', { exact: true }).first()).toBeVisible();
@@ -445,6 +551,11 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect(customerResponse.ok()).toBe(true);
     const customer = await customerResponse.json();
 
+    for (const width of [320, 375, 414, 768, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath('customers-workspace-' + width + '.png'), fullPage: true });
+    }
     await page.getByRole('button', { name: `Leistungsnotizen für ${customerName}` }).click();
     await page.locator('#billing-note-date').fill('2026-09-22');
     await page.locator('#billing-note-description').fill('Serverwartung');

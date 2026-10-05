@@ -338,6 +338,8 @@ export function useDashboardData({
     invoicesPageSize,
     invoicesTotal,
     invoicesTotalPages,
+    invoicesIsFetching: invoicesQuery.isFetching,
+    invoicesIsError: invoicesQuery.isError,
     quotesPage,
     quotesPageSize,
     quotesTotal,

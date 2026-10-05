@@ -1453,15 +1453,22 @@ export function CreateInvoiceModal({
   };
 
   let displayedNetAmount = '–';
+  let displayedTaxAmount = '–';
+  let displayedGrossAmount = '–';
+  let displayedLines: string[] = [];
   try {
-    displayedNetAmount = formatCurrency(calculateInvoiceAmounts(items).netAmount);
+    const amounts = calculateInvoiceAmounts(items);
+    displayedNetAmount = formatCurrency(amounts.netAmount);
+    displayedTaxAmount = formatCurrency(amounts.taxAmount);
+    displayedGrossAmount = formatCurrency(amounts.grossAmount);
+    displayedLines = amounts.lines.map(line => formatCurrency(line.netAmount));
   } catch {
-    // Incomplete/invalid numerical input is explained by export validation.
+    // Export validation explains incomplete numerical input.
   }
   const isPage = presentation === "page";
   const editorContent = (
     <>
-        <DialogHeader className="pb-2 text-left">
+        <DialogHeader className="invoice-editor-header pb-2 text-left">
           {isPage && (
             <Button
               type="button"
@@ -1476,7 +1483,7 @@ export function CreateInvoiceModal({
           <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-2">
               {isPage ? (
-                <h1 className="[overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
+                <h1 className="[overflow-wrap:anywhere] text-2xl font-semibold tracking-tight sm:text-3xl">
                   Rechnung erstellen
                 </h1>
               ) : (
@@ -1515,11 +1522,10 @@ export function CreateInvoiceModal({
           </div>
         </DialogHeader>
 
-        <div className={`grid min-w-0 gap-8 ${showPreview ? (isPage ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.85fr)]' : 'lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.85fr)]') : 'grid-cols-1'}`}>
-          {/* Form Section */}
-          <div className={isPage ? "min-w-0 space-y-8 py-4" : "min-w-0 space-y-6 py-4"}>
-            {/* Template Section */}
-            <section className={isPage ? "space-y-3 border-b border-border pb-8" : "mb-2 rounded-md border bg-muted/30 p-3"} aria-labelledby="invoice-template-title">
+        <div className="invoice-editor-grid">
+          <div className="invoice-editor-main">
+            <details className="invoice-template-drawer"><summary>Rechnungsvorlagen</summary>            {/* Template Section */}
+            <section className={isPage ? "invoice-template space-y-3" : "mb-2 rounded-md border bg-muted/30 p-3"} aria-labelledby="invoice-template-title">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Label id="invoice-template-title" className="text-sm font-medium">Vorlage laden oder speichern</Label>
                 <Button
@@ -1575,89 +1581,9 @@ export function CreateInvoiceModal({
               )}
             </section>
 
-            <section className={isPage ? "space-y-2 border-b border-border pb-8" : "rounded-md border border-primary/20 bg-primary/5 p-3"} aria-labelledby="invoice-output-title">
-              <Label id="invoice-output-title" htmlFor="invoice-output-mode" className="text-sm font-medium">Ausgabeformat</Label>
-              <select
-                id="invoice-output-mode"
-                className="mt-2 flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
-                value={outputMode}
-                onChange={(e) => setOutputMode(e.target.value as InvoiceOutputMode)}
-              >
-                <option value="zugferd-pdf">ZUGFeRD-PDF mit eingebetteter XML</option>
-                <option value="xml-only">Nur XRechnung-XML (ohne PDF)</option>
-              </select>
-              <p className="text-xs text-muted-foreground mt-2">
-                {outputMode === 'xml-only'
-                  ? 'Erstellt eine eigenständige XRechnung-CII-XML-Datei. Sie wird gespeichert, heruntergeladen und kann danach mit dem E-Rechnungs-Viewer angesehen werden.'
-                  : 'Erstellt eine PDF-Rechnung mit eingebetteter strukturierter XML-Datei für ZUGFeRD/Factur-X.'}
-              </p>
-            </section>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="invoice-tax-mode">Umsatzsteuerbehandlung</Label>
-                <select
-                  id="invoice-tax-mode"
-                  className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={taxMode}
-                  onChange={e => {
-                    const mode = e.target.value as typeof taxMode;
-                    setTaxMode(mode);
-                    if (mode === 'small-business') {
-                      setItems(current => current.map(item => ({ ...item, taxRate: 0, taxCategory: 'E', exemptionReason: undefined })));
-                    } else {
-                      setItems(current => current.map(item => ({ ...item, taxCategory: undefined, exemptionReason: undefined })));
-                    }
-                  }}
-                >
-                  <option value="small-business">Kleinunternehmer (§ 19 UStG)</option>
-                  <option value="standard">Steuer je Position festlegen</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invoice-buyer-reference">Käuferreferenz / Leitweg-ID{outputMode === 'xml-only' ? ' (Pflichtfeld)' : ''}</Label>
-                <Input id="invoice-buyer-reference" value={buyerReference} onChange={e => setBuyerReference(e.target.value)} placeholder="Vom Rechnungsempfänger vorgegebene Referenz" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invoice-seller-country">Land des Rechnungsausstellers (ISO-Code)</Label>
-                <Input id="invoice-seller-country" value={sellerCountry} maxLength={2} onChange={e => setSellerCountry(e.target.value.toUpperCase())} placeholder="DE" />
-                {sellerCountry !== 'DE' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><Label htmlFor="invoice-seller-postcode">PLZ des Ausstellers</Label><Input id="invoice-seller-postcode" value={sellerPostcode} onChange={e => setSellerPostcode(e.target.value)} /></div>
-                    <div><Label htmlFor="invoice-seller-city">Ort des Ausstellers</Label><Input id="invoice-seller-city" value={sellerCity} onChange={e => setSellerCity(e.target.value)} /></div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Top Row: Invoice Details */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="invoice-number">Rechnungsnummer</Label>
-                <Input
-                  id="invoice-number"
-                  value={invoiceNumber}
-                  onChange={(e) => setInvoiceNumber(e.target.value)}
-                  placeholder="RE-2024-001"
-                  aria-invalid={Boolean(invoiceNumberError)}
-                  aria-describedby={invoiceNumberError ? "invoice-number-error" : undefined}
-                  className={invoiceNumberError ? "border-destructive outline-destructive" : ""}
-                />
-                {invoiceNumberError && (
-                  <p id="invoice-number-error" className="min-h-[1lh] text-xs font-medium text-destructive">{invoiceNumberError}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="date">Rechnungsdatum</Label>
-                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="delivery-date">Leistungsdatum</Label>
-                <Input id="delivery-date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            </details>
+            <section className="invoice-section" aria-labelledby="invoice-recipient-title"><header className="invoice-section-heading"><div><p>Rechnung an</p><h2 id="invoice-recipient-title">Empfänger</h2></div></header>
+            <div className="invoice-recipient-fields grid grid-cols-1 gap-6">
               {/* Left: Customer */}
               <div className="space-y-2">
                 <Label htmlFor="customer">Empfänger (Name & Anschrift)</Label>
@@ -1690,6 +1616,8 @@ export function CreateInvoiceModal({
                   placeholder="Musterfirma GmbH&#10;Musterstraße 1&#10;12345 Musterstadt"
                   className="min-h-[100px]"
                 />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="invoice-buyer-email">E-Mail des Empfängers{outputMode === 'xml-only' ? ' (Pflichtfeld)' : ''}</Label>
                 <Input id="invoice-buyer-email" type="email" value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)} placeholder="rechnung@kunde.de" />
                 <Label htmlFor="invoice-buyer-country">Land des Empfängers (ISO-Code)</Label>
@@ -1702,51 +1630,37 @@ export function CreateInvoiceModal({
                 )}
               </div>
 
-              {/* Right: Payment Terms */}
+            </div>
+            </section>
+            <section className="invoice-section" aria-labelledby="invoice-dates-title"><header className="invoice-section-heading"><div><p>Belegdaten</p><h2 id="invoice-dates-title">Nummer und Termine</h2></div></header>
+            {/* Top Row: Invoice Details */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="due-date">Fälligkeitsdatum</Label>
-                <Input id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                <Label htmlFor="invoice-payment-means">Zahlungsart</Label>
-                <select
-                  id="invoice-payment-means"
-                  className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={paymentMeansCode}
-                  onChange={e => {
-                    const code = e.target.value as typeof paymentMeansCode;
-                    setPaymentMeansCode(code);
-                    if (code === '10') setIncludeQRCode(false);
-                  }}
-                >
-                  <option value="30">Überweisung (IBAN in den Einstellungen erforderlich)</option>
-                  <option value="10">Barzahlung</option>
-                </select>
-                <Label htmlFor="notes" className="mt-2 block">Anmerkungen (Optional)</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Vielen Dank für Ihren Auftrag!"
-                  className="min-h-[60px]"
+                <Label htmlFor="invoice-number">Rechnungsnummer</Label>
+                <Input
+                  id="invoice-number"
+                  value={invoiceNumber}
+                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                  placeholder="RE-2024-001"
+                  aria-invalid={Boolean(invoiceNumberError)}
+                  aria-describedby={invoiceNumberError ? "invoice-number-error" : undefined}
+                  className={invoiceNumberError ? "border-destructive outline-destructive" : ""}
                 />
-
-                <Label htmlFor="includeQRCode" className="mt-4 flex min-h-11 cursor-pointer items-center gap-1 text-sm font-medium leading-tight has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-70">
-                  <span className="grid size-11 shrink-0 place-items-center">
-                    <input
-                      type="checkbox"
-                      id="includeQRCode"
-                      checked={includeQRCode}
-                      onChange={(e) => setIncludeQRCode(e.target.checked)}
-                      disabled={outputMode === 'xml-only' || paymentMeansCode === '10'}
-                      className="h-5 w-5 rounded border-input accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed"
-                    />
-                  </span>
-                  <span>
-                    GiroCode (QR-Code) für Banking-Apps hinzufügen{outputMode === 'xml-only' ? ' (nur PDF)' : ''}
-                  </span>
-                </Label>
+                {invoiceNumberError && (
+                  <p id="invoice-number-error" className="min-h-[1lh] text-xs font-medium text-destructive">{invoiceNumberError}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="date">Rechnungsdatum</Label>
+                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="delivery-date">Leistungsdatum</Label>
+                <Input id="delivery-date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
               </div>
             </div>
 
+            </section>
             {customerChangeMessage && (
               <p className="text-sm text-amber-700 dark:text-amber-300" role="status">{customerChangeMessage}</p>
             )}
@@ -1794,22 +1708,14 @@ export function CreateInvoiceModal({
             )}
 
             {/* Items Table */}
-            <div className="space-y-2">
-              <Label>Positionen</Label>
-              <div className="border rounded-md overflow-hidden">
-                <div className="hidden grid-cols-[minmax(0,1fr)_70px_90px_100px_70px_90px] items-center gap-2 bg-muted p-2 text-sm font-medium md:grid">
-                  <div className="pl-2">Beschreibung</div>
-                  <div className="text-center">Menge</div>
-                  <div className="text-center">Einheit</div>
-                  <div className="text-center">Einzelpreis</div>
-                  <div className="text-center">Steuer</div>
-                  <div></div>
-                </div>
+            <section className="invoice-section invoice-positions" aria-labelledby="invoice-positions-title">
+              <header className="invoice-section-heading"><div><p>Leistungen</p><h2 id="invoice-positions-title">Positionen</h2></div><span>{items.length} {items.length === 1 ? "Position" : "Positionen"}</span></header>
+              <div className="invoice-line-list">
                 <div className="divide-y">
                   {items.map((item, index) => (
-                    <div key={index} className="grid min-w-0 grid-cols-2 items-start gap-3 p-4 md:grid-cols-[minmax(0,1fr)_70px_90px_100px_70px_90px] md:gap-2 md:p-2">
-                      <div className="col-span-2 min-w-0 md:col-span-1">
-                        <Label htmlFor={`invoice-item-description-${index}`} className="mb-1 block md:sr-only">Beschreibung</Label>
+                    <div key={index} className="invoice-line grid min-w-0 grid-cols-2 items-start gap-3 sm:grid-cols-4">
+                      <div className="col-span-2 min-w-0 sm:col-span-4">
+                        <Label htmlFor={`invoice-item-description-${index}`} className="mb-1 block text-xs text-muted-foreground">Beschreibung</Label>
                         <Input
                           id={`invoice-item-description-${index}`}
                           value={item.description}
@@ -1818,7 +1724,7 @@ export function CreateInvoiceModal({
                         />
                       </div>
                       <div>
-                        <Label htmlFor={`invoice-item-quantity-${index}`} className="mb-1 block md:sr-only">Menge</Label>
+                        <Label htmlFor={`invoice-item-quantity-${index}`} className="mb-1 block text-xs text-muted-foreground">Menge</Label>
                         <Input
                           id={`invoice-item-quantity-${index}`}
                           type="number"
@@ -1830,7 +1736,7 @@ export function CreateInvoiceModal({
                         />
                       </div>
                       <div>
-                        <Label htmlFor={`invoice-item-unit-${index}`} className="mb-1 block md:sr-only">Einheit</Label>
+                        <Label htmlFor={`invoice-item-unit-${index}`} className="mb-1 block text-xs text-muted-foreground">Einheit</Label>
                         <select
                           id={`invoice-item-unit-${index}`}
                           className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring"
@@ -1844,7 +1750,7 @@ export function CreateInvoiceModal({
                         </select>
                       </div>
                       <div>
-                        <Label htmlFor={`invoice-item-price-${index}`} className="mb-1 block md:sr-only">Einzelpreis</Label>
+                        <Label htmlFor={`invoice-item-price-${index}`} className="mb-1 block text-xs text-muted-foreground">Einzelpreis</Label>
                         <Input
                           id={`invoice-item-price-${index}`}
                           type="number"
@@ -1856,7 +1762,7 @@ export function CreateInvoiceModal({
                         />
                       </div>
                       <div className="relative">
-                        <Label htmlFor={`invoice-item-tax-${index}`} className="mb-1 block md:sr-only">Steuer</Label>
+                        <Label htmlFor={`invoice-item-tax-${index}`} className="mb-1 block text-xs text-muted-foreground">Steuer</Label>
                         <Input
                           id={`invoice-item-tax-${index}`}
                           type="number"
@@ -1869,7 +1775,8 @@ export function CreateInvoiceModal({
                         />
                         <span className="pointer-events-none absolute right-2 bottom-3 text-sm text-muted-foreground">%</span>
                       </div>
-                      <div className="col-span-2 flex justify-end gap-1 md:col-span-1">
+                      <div className="col-span-2 flex items-center justify-end gap-1 sm:col-span-4">
+                        <span className="mr-auto text-xs text-muted-foreground">Position {index + 1} · Netto <strong className="text-foreground tabular-nums">{displayedLines[index] ?? "–"}</strong></span>
                         <Button type="button" variant="ghost" size="icon" onClick={() => duplicateItem(index)} title="Zeile duplizieren" aria-label={`Position ${index + 1} duplizieren`} className="text-muted-foreground hover:text-foreground">
                           <Copy className="h-4 w-4" aria-hidden="true" />
                         </Button>
@@ -1878,7 +1785,7 @@ export function CreateInvoiceModal({
                         </Button>
                       </div>
                       {taxMode === 'standard' && (
-                        <div className="col-span-2 grid gap-2 md:col-span-6 md:grid-cols-2">
+                        <div className="col-span-2 grid gap-2 sm:col-span-4 md:grid-cols-2">
                           <div>
                             <Label htmlFor={`invoice-item-tax-category-${index}`}>Steuerart für Position {index + 1}</Label>
                             <select
@@ -1906,7 +1813,7 @@ export function CreateInvoiceModal({
                         </div>
                       )}
                       {selectedCustomerId && (
-                        <div className="col-span-2 min-w-0 md:col-span-6">
+                        <div className="col-span-2 min-w-0 sm:col-span-4">
                           <PriceHistory
                             customerId={selectedCustomerId}
                             description={item.description}
@@ -1932,12 +1839,132 @@ export function CreateInvoiceModal({
                   Netto: {displayedNetAmount}
                 </div>
               </div>
-            </div>
-          </div>
+            </section>
 
+            <section className="invoice-section" aria-labelledby="invoice-payment-title"><header className="invoice-section-heading"><div><p>Abschluss</p><h2 id="invoice-payment-title">Zahlung und Hinweise</h2></div></header>
+            <div className="grid grid-cols-1 gap-6">
+              {/* Right: Payment Terms */}
+              <div className="space-y-2">
+                <Label htmlFor="due-date">Fälligkeitsdatum</Label>
+                <Input id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                <Label htmlFor="invoice-payment-means">Zahlungsart</Label>
+                <select
+                  id="invoice-payment-means"
+                  className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={paymentMeansCode}
+                  onChange={e => {
+                    const code = e.target.value as typeof paymentMeansCode;
+                    setPaymentMeansCode(code);
+                    if (code === '10') setIncludeQRCode(false);
+                  }}
+                >
+                  <option value="30">Überweisung (IBAN in den Einstellungen erforderlich)</option>
+                  <option value="10">Barzahlung</option>
+                </select>
+                <Label htmlFor="notes" className="mt-2 block">Anmerkungen (Optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Vielen Dank für Ihren Auftrag!"
+                  className="min-h-[60px]"
+                />
+
+                <Label htmlFor="includeQRCode" className="mt-4 flex min-h-11 cursor-pointer items-center gap-1 text-sm font-medium leading-tight has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-70">
+                  <span className="grid size-11 shrink-0 place-items-center">
+                    <input
+                      type="checkbox"
+                      id="includeQRCode"
+                      checked={includeQRCode}
+                      onChange={(e) => setIncludeQRCode(e.target.checked)}
+                      disabled={outputMode === 'xml-only' || paymentMeansCode === '10'}
+                      className="h-5 w-5 rounded border-input accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed"
+                    />
+                  </span>
+                  <span>
+                    GiroCode (QR-Code) für Banking-Apps hinzufügen{outputMode === 'xml-only' ? ' (nur PDF)' : ''}
+                  </span>
+                </Label>
+              </div>
+            </div>
+
+            </section>
+            <section className="invoice-section" aria-labelledby="invoice-format-details"><header className="invoice-section-heading"><div><p>Elektronische Rechnung</p><h2 id="invoice-format-details">Steuer und Referenzen</h2></div></header>            <div className="invoice-export-fields grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="invoice-tax-mode">Umsatzsteuerbehandlung</Label>
+                <select
+                  id="invoice-tax-mode"
+                  className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={taxMode}
+                  onChange={e => {
+                    const mode = e.target.value as typeof taxMode;
+                    setTaxMode(mode);
+                    if (mode === 'small-business') {
+                      setItems(current => current.map(item => ({ ...item, taxRate: 0, taxCategory: 'E', exemptionReason: undefined })));
+                    } else {
+                      setItems(current => current.map(item => ({ ...item, taxCategory: undefined, exemptionReason: undefined })));
+                    }
+                  }}
+                >
+                  <option value="small-business">Kleinunternehmer (§ 19 UStG)</option>
+                  <option value="standard">Steuer je Position festlegen</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoice-buyer-reference">Käuferreferenz / Leitweg-ID{outputMode === 'xml-only' ? ' (Pflichtfeld)' : ''}</Label>
+                <Input id="invoice-buyer-reference" value={buyerReference} onChange={e => setBuyerReference(e.target.value)} placeholder="Vom Rechnungsempfänger vorgegebene Referenz" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoice-seller-country">Land des Rechnungsausstellers (ISO-Code)</Label>
+                <Input id="invoice-seller-country" value={sellerCountry} maxLength={2} onChange={e => setSellerCountry(e.target.value.toUpperCase())} placeholder="DE" />
+                {sellerCountry !== 'DE' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><Label htmlFor="invoice-seller-postcode">PLZ des Ausstellers</Label><Input id="invoice-seller-postcode" value={sellerPostcode} onChange={e => setSellerPostcode(e.target.value)} /></div>
+                    <div><Label htmlFor="invoice-seller-city">Ort des Ausstellers</Label><Input id="invoice-seller-city" value={sellerCity} onChange={e => setSellerCity(e.target.value)} /></div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            </section>
+          </div>
+          <aside className="invoice-summary-rail" aria-label="Rechnungsübersicht">
+            <section className="invoice-create-summary" aria-labelledby="invoice-total-title">
+              <div className="invoice-total-hero"><p>Rechnungsübersicht · EUR</p><h2 id="invoice-total-title">Gesamtbetrag</h2><div aria-live="polite">{displayedGrossAmount}</div><span>{items.length} {items.length === 1 ? 'Position' : 'Positionen'} · {taxMode === 'small-business' ? 'Kleinunternehmer' : 'Umsatzsteuer je Position'}</span></div>
+              <div className="invoice-summary-body"><dl><div><dt>Nettobetrag</dt><dd>{displayedNetAmount}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayedTaxAmount}</dd></div></dl>
+                {taxMode === 'small-business' && <p className="text-xs text-muted-foreground">Keine Umsatzsteuer gemäß § 19 UStG.</p>}
+            <section className={isPage ? "invoice-output space-y-2" : "rounded-md border border-primary/20 bg-primary/5 p-3"} aria-labelledby="invoice-output-title">
+              <Label id="invoice-output-title" htmlFor="invoice-output-mode" className="text-sm font-medium">Ausgabeformat</Label>
+              <select
+                id="invoice-output-mode"
+                className="mt-2 flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+                value={outputMode}
+                onChange={(e) => setOutputMode(e.target.value as InvoiceOutputMode)}
+              >
+                <option value="zugferd-pdf">ZUGFeRD-PDF mit eingebetteter XML</option>
+                <option value="xml-only">Nur XRechnung-XML (ohne PDF)</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-2">
+                {outputMode === 'xml-only'
+                  ? 'Erstellt eine eigenständige XRechnung-CII-XML-Datei. Sie wird gespeichert, heruntergeladen und kann danach mit dem E-Rechnungs-Viewer angesehen werden.'
+                  : 'Erstellt eine PDF-Rechnung mit eingebetteter strukturierter XML-Datei für ZUGFeRD/Factur-X.'}
+              </p>
+            </section>
+
+        <DialogFooter className={isPage ? "invoice-create-actions" : undefined}>
+          <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
+          <Button type="button" onClick={createInvoiceFile} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
+            {isGenerating
+              ? (outputMode === 'xml-only' ? "Erstelle XML …" : "Erstelle PDF …")
+              : (outputMode === 'xml-only' ? "XML erstellen" : "PDF erstellen")}
+          </Button>
+        </DialogFooter>
+                <p className="text-xs text-muted-foreground">Die Rechnung wird gespeichert und heruntergeladen. Die E-Rechnungsdaten werden vorab geprüft.</p>
+              </div>
+            </section>
           {/* Preview Section */}
           {showPreview && (
-            <aside className={isPage ? "flex min-h-[36rem] min-w-0 flex-col border-t border-border pt-6 xl:sticky xl:top-24 xl:h-[calc(100dvh-8rem)] xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0" : "flex min-h-[28rem] min-w-0 flex-col border-t border-border pt-4 lg:h-[calc(90vh-180px)] lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0"} aria-label="Rechnungsvorschau">
+            <aside className={isPage ? "invoice-preview flex min-h-[28rem] min-w-0 flex-col" : "flex min-h-[28rem] min-w-0 flex-col border-t border-border pt-4 lg:h-[calc(90vh-180px)] lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0"} aria-label="Rechnungsvorschau">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-muted-foreground" />
@@ -1999,22 +2026,14 @@ export function CreateInvoiceModal({
               </p>
             </aside>
           )}
+          </aside>
         </div>
-
-        <DialogFooter className={isPage ? "mt-8 border-t border-border pt-4" : undefined}>
-          <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
-          <Button type="button" onClick={createInvoiceFile} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
-            {isGenerating
-              ? (outputMode === 'xml-only' ? "Erstelle XML …" : "Erstelle PDF …")
-              : (outputMode === 'xml-only' ? "XML erstellen" : "PDF erstellen")}
-          </Button>
-        </DialogFooter>
     </>
   );
 
   if (isPage) {
     return (
-      <section className="min-w-0" aria-label="Neue Rechnung">
+      <section className="invoice-studio min-w-0" aria-label="Neue Rechnung">
         {editorContent}
       </section>
     );

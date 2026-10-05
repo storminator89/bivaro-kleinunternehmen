@@ -1,12 +1,12 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { NavLinks } from "@/components/navigation/nav-links";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { CollapseButton } from "@/components/sidebar-collapse-button";
@@ -17,12 +17,13 @@ import { usePageTitle } from "@/hooks/use-page-title";
 
 function PageHeading() {
   const title = usePageTitle();
-  return <p className="app-page-title truncate text-foreground">{title}</p>;
+  return <p className="app-page-title flex min-w-0 items-center gap-3 text-foreground"><span className="hidden text-muted-foreground sm:inline">Bivaro</span><span aria-hidden="true" className="hidden text-muted-foreground/50 sm:inline">/</span><span className="truncate">{title}</span></p>;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Öffentliche Seiten ohne Sidebar
   const publicPaths = ['/', '/login', '/register'];
@@ -50,7 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </a>
         <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center">
+            <div className="flex w-full min-w-0 items-center justify-between gap-3">
               <Link href="/" className="flex items-center">
                 <Image
                   src="/Bivaro_Logo.png"
@@ -102,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Eingeloggter Benutzer mit Sidebar
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen app-workspace">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
@@ -115,7 +116,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Suspense>
 
       {/* Sidebar for desktop */}
-      <aside aria-label="Anwendungsnavigation" className="sticky top-0 hidden h-dvh w-64 flex-col border-r border-border/80 bg-card/70 lg:flex">
+      <aside aria-label="Anwendungsnavigation" className="app-sidebar sticky top-0 hidden h-dvh shrink-0 w-64 flex-col border-r border-border/80 bg-card/70 lg:flex">
         <div className="sidebar-header relative flex items-center border-b border-border/80 px-5 py-4">
           <Link href="/dashboard" className="brand-link text-xl font-bold text-foreground">
             <Image
@@ -166,14 +167,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-2">
-              <Sheet>
+              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" aria-label="Menü öffnen">
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[min(20rem,calc(100vw-2rem))] p-0">
-                  <div className="flex h-full flex-col bg-card">
+                <SheetContent aria-describedby={undefined} side="left" className="nav-sheet w-[min(20rem,calc(100vw-2rem))] p-0">
+                  <SheetTitle className="sr-only">Bivaro Navigation</SheetTitle>
+                  <div className="app-sidebar nav-drawer flex h-full flex-col">
                     <div className="border-b border-border/80 p-5 pb-4">
                       <Link href="/dashboard" className="flex items-center text-2xl font-bold text-foreground">
                         <Image
@@ -187,7 +189,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       </Link>
                     </div>
                     <nav aria-label="Mobile Hauptnavigation" className="flex-1 overflow-y-auto px-3 py-4">
-                      <NavLinks />
+                      <NavLinks allowCollapse={false} onNavigate={() => setMobileNavOpen(false)} />
                     </nav>
                   </div>
                 </SheetContent>
@@ -204,7 +206,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <main id="main-content" tabIndex={-1} className="flex-grow bg-background outline-none">
-          <div className="mx-auto w-full max-w-[90rem] px-4 py-6 sm:px-6 sm:py-8 xl:px-10">
+          <div className="mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6 sm:py-8 xl:px-8">
             {children}
           </div>
         </main>

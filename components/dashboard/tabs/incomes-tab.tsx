@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Income, Customer, FilterState } from "@/types/dashboard";
+import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
 import { formatCurrency } from "@/lib/dashboard-utils";
 import { formatBusinessDateDisplay } from "@/lib/business-date";
 
@@ -33,6 +35,9 @@ type NewIncome = {
 };
 
 type IncomesTabProps = {
+  entryOpen: boolean;
+  onEntryOpenChange: (open: boolean) => void;
+
   // Form state
   newIncome: NewIncome;
   setNewIncome: React.Dispatch<React.SetStateAction<NewIncome>>;
@@ -71,6 +76,8 @@ type IncomesTabProps = {
 };
 
 export function IncomesTab({
+  entryOpen,
+  onEntryOpenChange,
   newIncome,
   setNewIncome,
   onSubmit,
@@ -98,24 +105,12 @@ export function IncomesTab({
 }: IncomesTabProps) {
   return (
     <div className="space-y-6">
-      {/* New Income Form */}
-      <div className="overflow-hidden rounded-xl border bg-card">
-        <div className="border-b bg-muted/20 px-6 pb-4 pt-6">
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-            <div>
-              <h2 className="text-xl font-semibold mb-1 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 h-5 w-5 text-positive" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Neue Einnahme erfassen
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Erfassen Sie hier Ihre geschäftlichen Einnahmen
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="p-6">
+      <details id="income-entry" className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-6">
+          <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><Plus className="h-4 w-4" aria-hidden="true" /></span><span><span className="block text-sm font-semibold">Neue Einnahme</span><span className="block text-xs text-muted-foreground">Geschäftlichen Vorgang erfassen</span></span></span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </summary>
+        <div className="border-t p-4 sm:p-6">
           <form onSubmit={onSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -201,18 +196,17 @@ export function IncomesTab({
             </p>
           )}
         </div>
-      </div>
+      </details>
 
       {/* Incomes List */}
-      <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
+      <div className="ledger-list bg-card rounded-xl border overflow-hidden">
         <div className="px-6 pt-6 pb-4 border-b">
-          <h2 className="text-xl font-semibold mb-2">Ihre Einnahmen</h2>
-          <p className="text-sm text-muted-foreground mb-4">Filtern Sie Ihre Einnahmen nach verschiedenen Kriterien.</p>
-          <div className="bg-muted/40 rounded-xl p-4 border">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <LedgerListHeading title="Ihre Einnahmen" total={total} amounts={incomes.map(item => item.amount)} />
+          <div className="ledger-filters">
+            <div className="ledger-filter-grid grid gap-4 md:grid-cols-4">
               {/* Customer Filter */}
               <div>
-                <Label htmlFor="income-customer-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Kunde</Label>
+                <Label htmlFor="income-customer-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Kunde</Label>
                 <div className="relative">
                   <select
                     id="income-customer-filter"
@@ -235,7 +229,7 @@ export function IncomesTab({
 
               {/* Date Range Filter */}
               <div>
-                <Label htmlFor="income-date-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Zeitraum</Label>
+                <Label htmlFor="income-date-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Zeitraum</Label>
                 <div className="relative">
                   <select
                     id="income-date-filter"
@@ -258,7 +252,7 @@ export function IncomesTab({
 
               {/* Tax Relevant Filter */}
               <div>
-                <Label htmlFor="income-tax-filter" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Steuerlich relevant</Label>
+                <Label htmlFor="income-tax-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Steuerlich relevant</Label>
                 <div className="relative">
                   <select
                     id="income-tax-filter"
@@ -280,7 +274,7 @@ export function IncomesTab({
 
               {/* Search */}
               <div>
-                <Label htmlFor="income-search" className="text-xs font-medium uppercase tracking-wide block mb-1.5 text-muted-foreground">Suche</Label>
+                <Label htmlFor="income-search" className="text-xs font-medium block mb-1.5 text-muted-foreground">Suche</Label>
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -315,7 +309,7 @@ export function IncomesTab({
             <div className="flex flex-col gap-3 mt-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">{incomes.length}</span> Einnahmen gefunden
+                  <span className="font-medium text-foreground">{incomes.length}</span> Einnahmen auf dieser Seite
                 </div>
                 {exportError && (
                   <p className="mt-1 text-xs text-critical">
@@ -328,6 +322,7 @@ export function IncomesTab({
                 <Button
                   size="sm"
                   className="h-8 text-xs"
+                  variant="outline"
                   onClick={onExportDocuments}
                   disabled={isExportingDocuments}
                 >
@@ -371,9 +366,9 @@ export function IncomesTab({
 
         {/* Incomes Table */}
         <div className="overflow-hidden">
-          <div className="divide-y lg:hidden" aria-label="Einnahmenliste">
+          <div className="divide-y xl:hidden" aria-label="Einnahmenliste">
             {incomes.length > 0 ? incomes.map((income) => (
-              <article key={income.id} className="space-y-3 p-4">
+              <article key={income.id} className="ledger-record space-y-3 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <h3 className="truncate font-semibold">{income.description}</h3>
@@ -394,7 +389,7 @@ export function IncomesTab({
               <p className="p-6 text-center text-sm text-muted-foreground">Keine Einnahmen vorhanden. Erfassen Sie oben Ihre erste Einnahme.</p>
             )}
           </div>
-          <div className="hidden overflow-x-auto p-6 lg:block">
+          <div className="hidden overflow-x-auto p-6 xl:block">
             <Table>
               <TableCaption>Alle erfassten Geschäftseinnahmen</TableCaption>
               <TableHeader>

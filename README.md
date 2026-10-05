@@ -240,7 +240,7 @@ Der E-Mail-Versand nutzt SMTP als Standardschnittstelle. Vor dem Versand öffnet
 
 Administratoren können die globale SMTP-Konfiguration unter *Einstellungen → SMTP-Versand* pflegen. Die API `/api/settings/smtp` ist ausschließlich für Administratoren verfügbar. Ein gespeichertes SMTP-Passwort wird mit AES-GCM und einem aus `NEXTAUTH_SECRET` abgeleiteten Schlüssel verschlüsselt und weder angezeigt noch in die Benutzer-Backupexporte übernommen. Ohne Datenbank-Override verwendet der Versand die `SMTP_*`-/`EMAIL_FROM`-Umgebungsvariablen. Bei einem gespeicherten Override erzwingt `secure=false` STARTTLS; die ENV-Konfiguration behält das bisherige Transportverhalten.
 
-Nach einer Änderung von `NEXTAUTH_SECRET` muss das SMTP-Passwort erneut eingegeben werden. Ein leeres Passwortfeld behält das bestehende Passwort bei; ein leerer Benutzername entfernt die Anmeldung. Speichern prüft die Konfiguration, baut aber keine Verbindung auf und versendet keine Testmail. Beim Upgrade ist vor der Nutzung der neuen Oberfläche `npm run db:migrate` auf der vorgesehenen Anwendungsdatenbank auszuführen.
+Nach einer Änderung von `NEXTAUTH_SECRET` muss das SMTP-Passwort erneut eingegeben werden. Ein leeres Passwortfeld behält das bestehende Passwort bei; ein leerer Benutzername entfernt die Anmeldung. Speichern prüft die Konfiguration, baut aber keine Verbindung auf und versendet keine Testmail. Docker führt ausstehende Migrationen beim Start mit Sicherung und Test auf einer Kopie aus. Für manuell verwaltete Installationen ist der unten beschriebene Upgrade-Job erforderlich.
 
 ---
 
@@ -346,16 +346,13 @@ cp .env.example .env
 # 2. Image bauen
 npm run docker:build
 
-# 3. Vorhandene App stoppen; während des Upgrades keine weiteren DB-Schreiber betreiben
+# 3. Vorhandene App stoppen; keine weiteren DB-Schreiber betreiben
 docker compose stop buchhaltung
 
-# 4. Expliziten Upgrade-Job im selben Image ausführen
-docker compose run --rm --no-deps buchhaltung node scripts/upgrade-database.mjs
-
-# 5. Nur nach erfolgreichem Upgrade starten
+# 4. Starten: ausstehende Migrationen laufen vor dem Webserver
 npm run docker:up
 
-# 6. Logs prüfen
+# 5. Logs prüfen
 npm run docker:logs
 ```
 
@@ -368,15 +365,46 @@ Die App ist dann unter `http://localhost:3000` erreichbar (Port über `PORT`-Var
 **Produktionsbetrieb:**
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml stop buchhaltung
-docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps buchhaltung node scripts/upgrade-database.mjs
-# Nur fortfahren, wenn der Upgrade-Job erfolgreich beendet wurde:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-Der Containerstart prüft das vorhandene Datenbankziel und den Migrationsstand.
-Die Datenbank wird ausschließlich durch den expliziten Upgrade-Job initialisiert
-oder migriert. Bei einem Fehler bleibt die Anwendung gestoppt; Schemaabweichungen
-müssen geprüft und über versionierte Migrationen behoben werden.
+**Docker-Hub-Image aktualisieren:**
+```bash
+docker compose -f docker-compose.hub.yml pull bivaro
+docker compose -f docker-compose.hub.yml stop bivaro
+docker compose -f docker-compose.hub.yml up -d bivaro
+docker compose -f docker-compose.hub.yml logs --tail=100 bivaro
+```
+
+Verwenden Sie dabei immer dieselbe Compose-Datei und denselben Projektnamen wie
+bei der Installation, damit die bestehenden Volumes eingebunden bleiben.
+
+Standardmäßig gilt `DATABASE_MIGRATION_MODE=auto`, auch für bestehende
+Compose-Dateien ohne diese Variable. Vor dem Webserverstart prüft der Container
+den Migrationsstand. Bei ausstehenden Migrationen startet er den Upgrade-Job:
+vorhandene Datenbank sichern, Migrationen auf einer Kopie testen, anschließend
+das konfigurierte Ziel migrieren und Schema sowie Integrität prüfen. Eine neue
+Datenbank wird über die versionierten Migrationen initialisiert. Ein normaler
+Neustart bei aktuellem Migrationsstand erzeugt keine zusätzliche Sicherung.
+Bei fehlgeschlagener Migration oder unerklärter Schemaabweichung startet der
+Webserver nicht; es gibt keine automatische destruktive Schemareparatur.
+
+Betreiben Sie nur einen App-Container pro SQLite-Datenbank. Während eines Updates
+müssen weitere DB-Schreiber gestoppt sein; parallele Starts oder überlappende
+Deployments auf demselben Volume werden nicht unterstützt. Große Datenbanken
+benötigen ausreichend freien Platz für Sicherung und Testkopie und entsprechend
+Zeit beim Start. Die Sicherungen bleiben standardmäßig unter `/app/data/backups`
+im Datenvolume erhalten; berücksichtigen Sie sie bei Ihrer Aufbewahrungsplanung.
+
+Für einen getrennten Wartungsschritt setzen Sie `DATABASE_MIGRATION_MODE=manual`
+in der Compose-Umgebung (bei den mitgelieferten Compose-Dateien über `.env`).
+Dann bleibt der Start rein prüfend und Sie führen vorab explizit aus:
+```bash
+docker compose -f docker-compose.hub.yml stop bivaro
+docker compose -f docker-compose.hub.yml run --rm --no-deps bivaro node scripts/upgrade-database.mjs
+# Nur nach erfolgreichem Upgrade:
+docker compose -f docker-compose.hub.yml up -d bivaro
+```
 
 Für diese Containerpfade muss `DATABASE_URL` eine absolute lokale SQLite-Datei
 bezeichnen, standardmäßig `file:/app/data/prod.db`. Relative Ziele werden abgelehnt,

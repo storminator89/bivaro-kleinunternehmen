@@ -1,4 +1,4 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: Mineral · enrichment: none · nav: N3 · footer: Ft2 · designed-as-app */
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: Bivaro Ledger · enrichment: none · nav: N3 · footer: Ft2 · designed-as-app */
 /* Hallmark · pre-emit critique: P5 H5 E4 S4 R5 V4 */
 
 /*
@@ -10,21 +10,32 @@
 :root {
   color-scheme: light;
 
-  --color-paper: oklch(98.2% 0.012 86);
-  --color-paper-2: oklch(95.4% 0.018 86);
-  --color-paper-3: oklch(91.8% 0.025 86);
-  --color-ink: oklch(22% 0.035 174);
-  --color-ink-2: oklch(36% 0.04 174);
-  --color-rule: oklch(86% 0.028 88);
-  --color-rule-2: oklch(68% 0.05 88);
+  --color-paper: oklch(100% 0 0);
+  --color-paper-2: oklch(96.8% 0.006 240);
+  --color-paper-3: oklch(93.5% 0.010 240);
+  --color-ink: oklch(23% 0.022 248);
+  --color-ink-2: oklch(36% 0.025 248);
+  --color-rule: oklch(89.5% 0.009 240);
+  --color-rule-2: oklch(70% 0.018 240);
   /* Stable aliases avoid collisions with shadcn's utility-level accent/muted. */
-  --bivaro-color-muted: oklch(49% 0.035 88);
-  --bivaro-color-accent: oklch(43% 0.12 166);
+  --bivaro-color-muted: oklch(49% 0.025 248);
+  --bivaro-color-accent: oklch(43% 0.12 162);
   --color-muted: var(--bivaro-color-muted);
   --color-accent: var(--bivaro-color-accent);
-  --color-accent-hover: oklch(36% 0.115 166);
-  --color-accent-ink: oklch(98.2% 0.012 86);
+  --color-accent-hover: oklch(37% 0.11 162);
+  --color-accent-ink: oklch(100% 0 0);
   --color-brand-teal: oklch(68% 0.12 174);
+  --color-nav-surface: oklch(22% 0.028 190);
+  --color-nav-hover: oklch(28% 0.034 190);
+  --color-nav-text: oklch(96% 0.012 180);
+  --color-nav-muted: oklch(76% 0.023 190);
+  --color-nav-rule: oklch(33% 0.028 190);
+  --color-nav-active: oklch(83% 0.14 155);
+  --color-nav-active-ink: oklch(25% 0.05 166);
+  --color-feature-surface: oklch(25% 0.047 174);
+  --color-feature-ink: oklch(98% 0.008 174);
+  --color-feature-muted: oklch(80% 0.035 174);
+  --color-feature-rule: oklch(40% 0.035 174);
   --color-focus: oklch(48% 0.16 166);
   --color-chart-cyan: oklch(57% 0.11 205);
   --color-chart-magenta: oklch(61% 0.13 335);
@@ -89,7 +100,7 @@
   --dur-short: 180ms;
   --dur-long: 300ms;
 
-  --radius-card: 0.75rem;
+  --radius-card: 1rem;
   --radius-input: 0.5rem;
   --radius-pill: 999px;
   --shadow-card: 0 1px 2px color-mix(in oklch, var(--color-ink) 7%, transparent);
@@ -99,14 +110,14 @@
 .dark {
   color-scheme: dark;
 
-  --color-paper: oklch(17% 0.024 174);
-  --color-paper-2: oklch(21% 0.028 174);
-  --color-paper-3: oklch(26% 0.034 174);
-  --color-ink: oklch(95% 0.015 86);
-  --color-ink-2: oklch(80% 0.025 86);
-  --color-rule: oklch(31% 0.03 174);
+  --color-paper: oklch(18% 0.015 240);
+  --color-paper-2: oklch(14.5% 0.012 240);
+  --color-paper-3: oklch(25% 0.018 240);
+  --color-ink: oklch(95% 0.008 240);
+  --color-ink-2: oklch(80% 0.015 240);
+  --color-rule: oklch(31% 0.018 240);
   --color-rule-2: oklch(50% 0.04 174);
-  --bivaro-color-muted: oklch(70% 0.025 86);
+  --bivaro-color-muted: oklch(72% 0.020 240);
   --bivaro-color-accent: oklch(70% 0.13 166);
   --color-muted: var(--bivaro-color-muted);
   --color-accent: var(--bivaro-color-accent);

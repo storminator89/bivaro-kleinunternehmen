@@ -1,5 +1,45 @@
 [
   {
+    "date": "2026-10-05",
+    "scope": "invoice creation editor",
+    "macrostructure": "Recipient-led document editor / labelled position rows / sticky creation and totals rail",
+    "theme": "custom Bivaro Ledger",
+    "enrichment": "shared invoice calculation only",
+    "brief": "Rework invoice creation layout, line editing, totals, template disclosure and preview while retaining invoice export and billing-note flows."
+  },
+  {
+    "date": "2026-10-05",
+    "scope": "product detail overhaul and expanded dashboard",
+    "macrostructure": "Compact financial overview / annual analysis and booking feed / split tax studio / anchored settings / responsive customer directory",
+    "theme": "custom Bivaro Ledger",
+    "enrichment": "actual accounting data only",
+    "brief": "Improve daily workflows and information density; 376 unit tests and 14 browser tests passed, responsive verification at five widths."
+  },
+  {
+    "date": "2026-10-05",
+    "macrostructure": "Ledger workspace / uniform record lists / document detail focus",
+    "theme": "custom Bivaro Ledger",
+    "enrichment": "real page-scoped document totals",
+    "brief": "Refine accounting lists, quiet filters, mobile density, customer context and invoice detail hierarchy; remove duplicated navigation and quote action."
+  },
+  {
+    "date": "2026-10-05",
+    "scope": "app radical redesign",
+    "macrostructure": "Ledger workspace / dark navigation / split task toolbar / featured financial balance",
+    "theme": "custom Bivaro Ledger",
+    "theme_axes": "cool white / evergreen navigation / Geist sans",
+    "enrichment": "real financial data",
+    "brief": "Replace warm porcelain with crisp data surfaces, mint navigation selection, profit-led overview, segmented invoice filters and on-demand bookkeeping forms. Verified 320px mobile through 1440px desktop, live authenticated browser, light and dark modes."
+  },
+  {
+    "date": "2026-10-05",
+    "scope": "app",
+    "macrostructure": "Workbench / compact task header / responsive data surfaces",
+    "theme": "custom Bivaro Mineral",
+    "enrichment": "none",
+    "brief": "Compact invoice import, contextual actions, accessible mobile navigation, financial overview hierarchy and responsive bookkeeping forms"
+  },
+  {
     "date": "2026-09-19",
     "scope": "app redesign",
     "macrostructure": "Workbench / task-first header / left side rail",
