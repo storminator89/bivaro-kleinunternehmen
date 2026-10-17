@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
+import { BivaroBrand } from "@/components/brand/bivaro-brand";
 import { NavLinks } from "@/components/navigation/nav-links";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -53,14 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
             <div className="flex w-full min-w-0 items-center justify-between gap-3">
               <Link href="/" className="flex items-center">
-                <Image
-                  src="/Bivaro_Logo.png"
-                  alt="Bivaro Logo"
-                  width={106}
-                  height={40}
-                  className="h-9 w-auto dark:brightness-0 dark:invert"
-                  unoptimized
-                />
+                <BivaroBrand className="brand-full" />
               </Link>
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <ThemeToggle />
@@ -119,22 +112,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside aria-label="Anwendungsnavigation" className="app-sidebar sticky top-0 hidden h-dvh shrink-0 w-64 flex-col border-r border-border/80 bg-card/70 lg:flex">
         <div className="sidebar-header relative flex items-center border-b border-border/80 px-5 py-4">
           <Link href="/dashboard" className="brand-link text-xl font-bold text-foreground">
-            <Image
-              src="/Bivaro_Logo.png"
-              alt="Bivaro Logo"
-              width={127}
-              height={48}
-              className="brand-full h-10 w-auto max-w-full object-contain dark:brightness-0 dark:invert"
-              unoptimized
-            />
-            <Image
-              src="/Bivaro_Logo.png"
-              alt="Bivaro Logo kompakt"
-              width={85}
-              height={32}
-              className="brand-compact h-8 w-auto max-w-full object-contain dark:brightness-0 dark:invert"
-              unoptimized
-            />
+            <BivaroBrand surface="sidebar" className="brand-full" />
+            <BivaroBrand surface="sidebar" compact className="brand-compact" />
           </Link>
           <div className="absolute right-3 top-3">
             <CollapseButton />
@@ -148,8 +127,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         {/* Desktop top bar */}
-        <header className="sticky top-0 z-30 hidden border-b border-border/80 bg-background/90 backdrop-blur-xl lg:block">
-          <div className="flex min-h-16 items-center justify-between gap-6 px-6 py-3 xl:px-10">
+        <header className="app-topbar sticky top-0 z-30 hidden border-b border-border bg-card lg:block">
+          <div className="flex h-16 items-center justify-between gap-6 px-6 xl:px-10">
             <Suspense fallback={<div className="h-6 w-32 animate-pulse rounded bg-muted/60" />}>
               <PageHeading />
             </Suspense>
@@ -164,8 +143,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-xl lg:hidden">
-          <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <header className="app-topbar sticky top-0 z-40 border-b border-border bg-card lg:hidden">
+          <div className="flex h-16 items-center justify-between gap-2 px-4">
             <div className="flex items-center gap-2">
               <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                 <SheetTrigger asChild>
@@ -178,14 +157,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <div className="app-sidebar nav-drawer flex h-full flex-col">
                     <div className="border-b border-border/80 p-5 pb-4">
                       <Link href="/dashboard" className="flex items-center text-2xl font-bold text-foreground">
-                        <Image
-                          src="/Bivaro_Logo.png"
-                          alt="Bivaro Logo"
-                          width={127}
-                          height={48}
-                          className="h-10 w-auto dark:brightness-0 dark:invert"
-                          unoptimized
-                        />
+                        <BivaroBrand surface="sidebar" className="brand-full" />
                       </Link>
                     </div>
                     <nav aria-label="Mobile Hauptnavigation" className="flex-1 overflow-y-auto px-3 py-4">
@@ -199,6 +171,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Suspense>
             </div>
             <div className="flex items-center gap-1">
+              <Suspense fallback={null}><CommandPaletteTrigger className="size-11 justify-center p-0 [&>span]:hidden [&>kbd]:hidden" /></Suspense>
               <ThemeToggle />
               <UserMenu />
             </div>
@@ -206,7 +179,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <main id="main-content" tabIndex={-1} className="flex-grow bg-background outline-none">
-          <div className="mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6 sm:py-8 xl:px-8">
+          <div className="app-content mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6 sm:py-8 xl:px-10">
             {children}
           </div>
         </main>

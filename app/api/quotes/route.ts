@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -57,7 +58,7 @@ export async function GET(request: Request) {
     }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
     try {
         const userId = await requireUserId();
         const body = await readRequestBodyWithinLimit(request, MAX_JSON_REQUEST_BYTES);
@@ -173,7 +174,7 @@ export async function POST(request: Request) {
     }
 }
 
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
     try {
         const userId = await requireUserId();
         const { id, status } = await request.json();
@@ -217,7 +218,7 @@ export async function PUT(request: Request) {
     }
 }
 
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
     try {
         const userId = await requireUserId();
         const url = new URL(request.url);
@@ -249,3 +250,7 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: 'Angebot nicht gefunden' }, { status: 404 });
     }
 }
+
+export const POST = protectMutation(postHandler);
+export const PUT = protectMutation(putHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);

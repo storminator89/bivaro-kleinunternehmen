@@ -79,7 +79,7 @@ describe("SMTP settings", () => {
     state.admin = false;
     expect((await GET()).status).toBe(403);
     expect((await PUT(request(validSettings))).status).toBe(403);
-    expect((await DELETE()).status).toBe(403);
+    expect((await DELETE(new Request('http://localhost/api/settings/smtp', { method: 'DELETE' }))).status).toBe(403);
   });
 
   it("validates host, port, sender headers and authentication input", async () => {
@@ -134,7 +134,7 @@ describe("SMTP settings", () => {
     vi.stubEnv("EMAIL_FROM", "env@example.test");
     await PUT(request({ ...validSettings, password: "db-password-fixture" }));
 
-    const response = await DELETE();
+    const response = await DELETE(new Request('http://localhost/api/settings/smtp', { method: 'DELETE' }));
     const body = await response.json();
     expect(body).toMatchObject({ source: "environment", host: "env.smtp.example.test", port: 465, secure: true, from: "env@example.test", user: "env-user", passwordConfigured: true });
     expect(body).not.toHaveProperty("password");

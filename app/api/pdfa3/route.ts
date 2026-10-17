@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -24,7 +25,7 @@ async function readRequiredFile(formData: FormData, fieldName: string): Promise<
   return value instanceof File ? value : null;
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || !['ADMIN', 'USER'].includes(session.user.role)) {
     return jsonError('Unauthorized', 401);
@@ -102,3 +103,5 @@ export async function POST(request: Request) {
     return jsonError('PDF/A-3-Konvertierung fehlgeschlagen. Bitte pruefen Sie die Serverinstallation von Ghostscript.', 500);
   }
 }
+
+export const POST = protectMutation(postHandler);

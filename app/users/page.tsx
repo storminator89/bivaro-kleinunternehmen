@@ -1,5 +1,8 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
+import styles from "@/components/settings/admin-workspace.module.css";
+
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -189,22 +192,16 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Benutzerverwaltung</h1>
-          <p className="text-muted-foreground">
-            Verwalten Sie die Benutzerzugriffe für die Anwendung.
-          </p>
-        </div>
-        <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+    <div className={`${styles.workspace} space-y-6`}>
+      <PageHeader title="Benutzerverwaltung" description="Verwalten Sie die Benutzerzugriffe für die Anwendung." section="System" actions={<>
+<Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
           <DialogTrigger asChild>
             <Button>
               <UserPlus className="mr-2 h-4 w-4" />
               Benutzer hinzufügen
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className={styles.dialog}>
             <DialogHeader>
               <DialogTitle>Neuen Benutzer hinzufügen</DialogTitle>
               <DialogDescription>
@@ -269,7 +266,7 @@ export default function UsersPage() {
         </Dialog>
 
         <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
-          <DialogContent>
+          <DialogContent className={styles.dialog}>
             <DialogHeader>
               <DialogTitle>Benutzer bearbeiten</DialogTitle>
               <DialogDescription>
@@ -332,17 +329,17 @@ export default function UsersPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+</>} />
 
-      <Card>
+      <Card className={styles.surface}>
         <CardHeader>
           <CardTitle>Benutzer</CardTitle>
           <CardDescription>
-            Eine Liste aller registrierten Benutzer.
+            {users.length} {users.length === 1 ? "registrierter Zugang" : "registrierte Zugänge"}. Rollen und Zugriffsstatus im Überblick.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className={styles.recordTable}>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
@@ -356,21 +353,21 @@ export default function UsersPage() {
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.name || "-"}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Name" className="font-medium"><div className={styles.identity}><span className={styles.avatar} aria-hidden="true">{(user.name || user.email).slice(0, 2).toUpperCase()}</span><div>{user.name || "-"}{session?.user?.id === user.id && <p className={styles.self}>Ihr Zugang</p>}</div></div></TableCell>
+                  <TableCell data-label="E-Mail">{user.email}</TableCell>
+                  <TableCell data-label="Rolle">
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${user.role === 'ADMIN'
-                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                      : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-muted text-muted-foreground'
                       }`}>
                       {user.role === 'ADMIN' ? 'Administrator' : 'Benutzer'}
                     </span>
                   </TableCell>
-                  <TableCell>{user.deactivatedAt ? "Deaktiviert" : "Aktiv"}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Zugang">{user.deactivatedAt ? "Deaktiviert" : "Aktiv"}</TableCell>
+                  <TableCell data-label="Erstellt am">
                     {new Date(user.createdAt).toLocaleDateString("de-DE")}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell data-label="Aktionen" className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="ghost"
@@ -378,6 +375,7 @@ export default function UsersPage() {
                         onClick={() => handleEditClick(user)}
                         disabled={!!user.deactivatedAt}
                         title="Bearbeiten"
+                        aria-label={`${user.name || user.email} bearbeiten`}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>

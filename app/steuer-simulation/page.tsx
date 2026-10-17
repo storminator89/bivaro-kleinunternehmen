@@ -1,13 +1,15 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import styles from "@/components/public-accounting/accounting-workspaces.module.css";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { LucideIcon } from "lucide-react";
 import {
-  Calculator,
   CircleHelp,
   Factory,
   AlertTriangle,
@@ -63,7 +65,7 @@ function ParameterLabel({ htmlFor, label, tooltip }: ParameterLabelProps) {
         <TooltipTrigger asChild>
           <button
             type="button"
-            className="text-muted-foreground/80 hover:text-foreground transition-colors"
+            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
             aria-label={`${label} - Hilfe`}
           >
             <CircleHelp className="h-4 w-4" />
@@ -407,22 +409,10 @@ export default function SteuerSimulationPage() {
   };
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="tax-studio space-y-6">
-        <header className="workbench-header flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0 space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-primary">
-              <Calculator className="h-4 w-4" />
-              <span>Auswertungen</span>
-            </div>
-            <div className="max-w-2xl space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground">Steuer-Simulation</h1>
-              <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
-                Spielen Sie Szenarien mit Ihren steuerrelevanten EÜR-Daten durch und sehen Sie direkt, wie sich Ihre Steuerlast verändert.
-              </p>
-            </div>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64 sm:flex-row sm:items-end">
+    <TooltipProvider delayDuration={800}>
+      <div className={`${styles.taxWorkspace} tax-studio space-y-6`}>
+        <PageHeader title="Steuer-Simulation" description="Spielen Sie Szenarien mit Ihren steuerrelevanten EÜR-Daten durch und sehen Sie direkt, wie sich Ihre Steuerlast verändert." section="Auswertungen" actions={<>
+<div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1 space-y-2 sm:min-w-32">
               <Label htmlFor="taxYear" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Steuerjahr
@@ -464,7 +454,10 @@ export default function SteuerSimulationPage() {
               <span className="sm:sr-only">{loading ? "Aktualisiere" : "Neu laden"}</span>
             </Button>
           </div>
-        </header>
+</>} />
+        <nav className={styles.taxRouteLinks} aria-label="Simulation und Datenbasis">
+          <a href="#overview-heading">Datenbasis</a><a href="#parameters-heading">Annahmen anpassen</a><a href="#simulation-result">Ergebnis prüfen</a><Link href="/dashboard?tab=eur">Zur EÜR<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link>
+        </nav>
         {error && (
           <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
@@ -490,7 +483,6 @@ export default function SteuerSimulationPage() {
         <section aria-labelledby="parameters-heading" className="tax-parameters rounded-[var(--radius-card)] border border-border bg-card">
           <div className="flex flex-col gap-4 border-b border-border p-6 sm:flex-row sm:items-start sm:justify-between sm:p-8">
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Annahmen</p>
               <h2 id="parameters-heading" className="text-2xl font-semibold tracking-tight">Parameter für die Simulation</h2>
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Passen Sie Vorsorge, Beschäftigungsverhältnis und Steuersätze an. Das Ergebnis aktualisiert sich sofort.</p>
             </div>
@@ -500,6 +492,7 @@ export default function SteuerSimulationPage() {
           </div>
             <div className="tax-parameter-body space-y-8 p-6 sm:p-8">
             <div className="tax-parameter-group">
+              <h3>Tätigkeit und Einordnung</h3>
               <ParameterLabel
                 htmlFor="businessType"
                 label="Tätigkeitsart"
@@ -602,7 +595,7 @@ export default function SteuerSimulationPage() {
                     </Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <CircleHelp className="h-4 w-4 text-muted-foreground" />
+                        <button type="button" aria-label="Sozialversicherungs-Näherung - Hilfe" className="inline-flex min-h-11 min-w-11 items-center justify-center text-muted-foreground"><CircleHelp className="h-4 w-4" aria-hidden="true" /></button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
                         Näherung mit den Beitragsbemessungsgrenzen des Steuerjahres und vereinfachten Arbeitnehmeranteilen. Zusatzbeiträge, Sachsenregel und persönliche Besonderheiten bitte prüfen; die Felder bleiben überschreibbar.
@@ -709,6 +702,8 @@ export default function SteuerSimulationPage() {
                   className="mt-2"
                 />
               </div>
+              </div>
+              <div className="mt-8 border-t border-border pt-6"><h3 className="mb-5 font-semibold">Steuern und Zuschläge</h3><div className="grid gap-5 md:grid-cols-2">
               <div>
                 <ParameterLabel
                   htmlFor="tradeTaxHebesatz"
@@ -774,7 +769,8 @@ export default function SteuerSimulationPage() {
               </div>
               </div>
             </div>
-            <div className="flex flex-col gap-3 rounded-[var(--radius-input)] border border-dashed border-border px-4 py-3 sm:flex-row sm:items-center">
+            </div>
+            <div className={styles.taxAssumptionNote}>
               <p className="text-sm text-muted-foreground">
                 Einkommensteuertarif {taxYear} · Grundfreibetrag {taxYear === 2025 ? "12.096" : "12.348"} € berücksichtigt.
               </p>
@@ -790,6 +786,7 @@ export default function SteuerSimulationPage() {
             <p className="tax-result-amount" aria-live="polite">{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</p>
             <p>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"} · auf Basis Ihrer Annahmen</p>
           </div>
+          <div className={styles.taxActiveAssumptions} aria-label="Aktive Simulationsannahmen"><span>{businessType === "gewerblich" ? "Gewerbebetrieb" : "Freiberufliche Tätigkeit"}</span><span>{employmentType === "side-business" ? "Nebenberuflich" : "Hauptberuflich"}</span><span>Abzüge {formatCurrency(totalDeductions)}</span></div>
           <div className="space-y-6 p-6 sm:p-8">
             <dl className="tax-result-metrics"><div><dt>Steuerlast {employmentType === 'side-business' ? 'auf Gewerbe' : 'gesamt'}</dt><dd>{loading ? '—' : formatSimulationValue(marginalTax)}</dd></div><div><dt>Effektive Belastung</dt><dd>{loading ? '—' : taxCalculationSupported && profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : 'nicht berechnet'}</dd></div></dl>
             <details className="tax-calculation"><summary>Berechnungsweg anzeigen<ChevronDown aria-hidden="true" /></summary><div className="tax-calculation-body">
@@ -876,7 +873,6 @@ export default function SteuerSimulationPage() {
 
         <section aria-labelledby="recommendations-heading" className="tax-recommendations rounded-[var(--radius-card)] border border-border bg-card">
           <div className="border-b border-border p-6 sm:p-8">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nächste Schritte</p>
             <h2 id="recommendations-heading" className="mt-2 text-2xl font-semibold tracking-tight">Empfehlungen zur Steueroptimierung</h2>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">Konkrete Ansatzpunkte aus Ihren aktuellen EÜR-Daten und Simulationseinstellungen.</p>
           </div>

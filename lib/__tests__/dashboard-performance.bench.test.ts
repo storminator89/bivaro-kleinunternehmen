@@ -99,7 +99,7 @@ async function explainIncomePage() {
   return rows.map((row) => row.detail);
 }
 
-async function measureKpi(): Promise<Measurement> {
+async function measureKpi(expectedRows: number): Promise<Measurement> {
   if (!database) throw new Error("Benchmark database is not ready");
   selectQueryCount = 0;
   const rssBefore = process.memoryUsage().rss;
@@ -108,6 +108,8 @@ async function measureKpi(): Promise<Measurement> {
   const body = await response.text();
   const elapsed = performance.now() - started;
   const rssAfter = process.memoryUsage().rss;
+  expect(response.status).toBe(200);
+  expect(JSON.parse(body)).toMatchObject({ totalRevenue: expectedRows, totalExpenses: expectedRows });
   return {
     milliseconds: round(elapsed),
     responseBytes: Buffer.byteLength(body, "utf8"),
@@ -134,11 +136,12 @@ benchmark("dashboard KPI performance baseline (opt-in)", () => {
         await seed(size);
         // Warm up the route once; only the following seven calls are reported.
         const warmup = await getKpis();
-        await warmup.text();
+        expect(warmup.status).toBe(200);
+        expect(await warmup.json()).toMatchObject({ totalRevenue: size, totalExpenses: size });
 
         const measurements: Measurement[] = [];
         for (let run = 0; run < RUNS; run += 1) {
-          measurements.push(await measureKpi());
+          measurements.push(await measureKpi(size));
         }
 
         const explain = await explainIncomePage();
@@ -163,7 +166,7 @@ benchmark("dashboard KPI performance baseline (opt-in)", () => {
     }
 
     expect(results).toHaveLength(SIZES.length);
-    expect(results.every((result) => result.queryCounts.every((count) => count <= 10))).toBe(true);
+    expect(results.every((result) => result.queryCounts.every((count) => count > 0 && count <= 10))).toBe(true);
     expect(results.every((result) => result.explain.some((detail) => detail.includes("Income_userId_date_idx")))).toBe(true);
     console.warn(JSON.stringify({ rowsPerTable: SIZES, runs: RUNS, results }, null, 2));
   }, 240_000);

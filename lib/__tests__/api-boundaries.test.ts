@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
 
 const state = vi.hoisted(() => ({ client: null as unknown }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
 import { generateApiKey, handleCors, withApiAuth } from '@/lib/api-auth';
+import { hashRateLimitKey } from '@/lib/rate-limit';
 import { POST, PUT, DELETE } from '@/app/api/v1/customers/route';
 import { POST as createIncome, PUT as updateIncome, DELETE as deleteIncome } from '@/app/api/v1/incomes/route';
 import { POST as createExpense, PUT as updateExpense, DELETE as deleteExpense } from '@/app/api/v1/expenses/route';
@@ -27,7 +29,83 @@ function request(path: string, method: string, body?: object, origin = 'https://
   });
 }
 
+async function createLimitedApiKey() {
+  const generated = generateApiKey();
+  const record = await database.client.apiKey.create({ data: {
+    userId: 'api-fixture', name: 'rate-limit fixture', keyHash: generated.keyHash,
+    keyPrefix: generated.keyPrefix, scopes: JSON.stringify(['read']),
+  } });
+  return {
+    id: record.id,
+    bucketKey: hashRateLimitKey(`api:${record.id}`),
+    request: () => new NextRequest('http://localhost/api/v1/customers', {
+      headers: { authorization: `Bearer ${generated.key}` },
+    }),
+  };
+}
+
 describe('external API boundaries', () => {
+  it('counts real authenticated requests and isolates each API key', async () => {
+    const firstKey = await createLimitedApiKey();
+    const secondKey = await createLimitedApiKey();
+    const handler = vi.fn(async () => new Response('ok'));
+
+    for (let used = 1; used <= 3; used += 1) {
+      const response = await withApiAuth(firstKey.request(), handler);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('x-ratelimit-limit')).toBe('100');
+      expect(response.headers.get('x-ratelimit-remaining')).toBe(String(100 - used));
+    }
+    const independent = await withApiAuth(secondKey.request(), handler);
+    expect(independent.headers.get('x-ratelimit-remaining')).toBe('99');
+    expect(await database.client.rateLimitBucket.findUniqueOrThrow({ where: { key: firstKey.bucketKey } })).toMatchObject({ count: 3 });
+    expect(await database.client.rateLimitBucket.findUniqueOrThrow({ where: { key: secondKey.bucketKey } })).toMatchObject({ count: 1 });
+  });
+
+  it('allows request 100 and rejects request 101 across database clients without touching last-used', async () => {
+    const apiKey = await createLimitedApiKey();
+    const handler = vi.fn(async () => new Response('ok'));
+    for (let used = 1; used <= 100; used += 1) {
+      const response = await withApiAuth(apiKey.request(), handler);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('x-ratelimit-remaining')).toBe(String(100 - used));
+    }
+
+    const previousLastUsed = new Date('2020-01-01T00:00:00Z');
+    await database.client.apiKey.update({ where: { id: apiKey.id }, data: { lastUsedAt: previousLastUsed } });
+    // A fresh connection observes the same exhausted bucket, as another worker would.
+    // eslint-disable-next-line no-restricted-syntax
+    const secondClient = new PrismaClient({ datasources: { db: { url: database.url } } });
+    state.client = secondClient;
+    try {
+      const blocked = await withApiAuth(apiKey.request(), handler);
+      expect(blocked.status).toBe(429);
+      expect((await blocked.json()).error.code).toBe('RATE_LIMIT_EXCEEDED');
+      expect(blocked.headers.get('x-ratelimit-remaining')).toBe('0');
+      expect(Number(blocked.headers.get('x-ratelimit-reset'))).toBeGreaterThan(Math.floor(Date.now() / 1000));
+      expect(handler).toHaveBeenCalledTimes(100);
+      expect((await secondClient.apiKey.findUniqueOrThrow({ where: { id: apiKey.id } })).lastUsedAt).toEqual(previousLastUsed);
+    } finally {
+      state.client = database.client;
+      await secondClient.$disconnect();
+    }
+  }, 20_000);
+
+  it('resets real API buckets after their window and blocking period expire', async () => {
+    const apiKey = await createLimitedApiKey();
+    const handler = vi.fn(async () => new Response('ok'));
+    await withApiAuth(apiKey.request(), handler);
+    const expired = new Date(Date.now() - 120_000).toISOString();
+    for (const blockedUntil of [null, expired]) {
+      // The limiter stores ISO timestamps through raw SQL; seed the same representation.
+      await database.client.$executeRaw`UPDATE "RateLimitBucket" SET "count" = 100, "windowStartedAt" = ${expired}, "blockedUntil" = ${blockedUntil} WHERE "key" = ${apiKey.bucketKey}`;
+      const response = await withApiAuth(apiKey.request(), handler);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('x-ratelimit-remaining')).toBe('99');
+      expect(await database.client.rateLimitBucket.findUniqueOrThrow({ where: { key: apiKey.bucketKey } })).toMatchObject({ count: 1, blockedUntil: null });
+    }
+  });
+
   it('supports unauthenticated preflight but blocks an unapproved origin before mutation', async () => {
     const preflight = handleCors(new NextRequest('http://localhost/api/v1/customers', {
       method: 'OPTIONS', headers: { origin: 'https://approved.example', 'access-control-request-method': 'POST', 'access-control-request-headers': 'authorization, content-type' },

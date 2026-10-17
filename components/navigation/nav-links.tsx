@@ -3,27 +3,13 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import {
-  LayoutDashboard,
-  Users,
-  LogIn,
-  UserPlus,
-  LogOut,
-  Calculator,
-  Settings,
-  UserCog,
-  TrendingUp,
-  TrendingDown,
-  FileText,
-  AlertCircle,
-  Wallet
-} from "lucide-react";
+import { BivaroIcon, type BivaroIconName } from "@/components/brand/bivaro-icon";
 import { useState, useEffect } from "react";
 
 type NavItem = {
   href: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: BivaroIconName;
   auth: "all" | "authenticated" | "unauthenticated";
 };
 
@@ -64,6 +50,8 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
     if (pathname.startsWith('/dashboard/invoices/') && href === '/dashboard?tab=invoices') return true;
     if (pathname.startsWith('/dashboard/quotes/') && href === '/dashboard?tab=quotes') return true;
 
+    if (href === '/settings' && pathname.startsWith('/settings/')) return true;
+
     // Exakter Pfad-Match (für Unterseiten wie /dashboard/reminders)
     if (pathname === path && !query) {
       return !searchParams.get('tab');
@@ -92,46 +80,46 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
     {
       title: "Übersicht",
       items: [
-        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, auth: "authenticated" },
+        { href: "/dashboard", label: "Dashboard", icon: "nav-dashboard", auth: "authenticated" },
       ]
     },
     {
       title: "Verkauf",
       items: [
-        { href: "/dashboard?tab=invoices", label: "Rechnungen", icon: FileText, auth: "authenticated" },
-        { href: "/dashboard?tab=quotes", label: "Angebote", icon: FileText, auth: "authenticated" },
-        { href: "/dashboard/reminders", label: "Mahnwesen", icon: AlertCircle, auth: "authenticated" },
-        { href: "/customers", label: "Kunden", icon: Users, auth: "authenticated" },
+        { href: "/dashboard?tab=invoices", label: "Rechnungen", icon: "nav-invoices", auth: "authenticated" },
+        { href: "/dashboard?tab=quotes", label: "Angebote", icon: "nav-quotes", auth: "authenticated" },
+        { href: "/dashboard/reminders", label: "Mahnwesen", icon: "nav-reminders", auth: "authenticated" },
+        { href: "/customers", label: "Kunden", icon: "nav-customers", auth: "authenticated" },
       ]
     },
     {
       title: "Buchhaltung",
       items: [
-        { href: "/dashboard?tab=incomes", label: "Einnahmen", icon: TrendingUp, auth: "authenticated" },
-        { href: "/dashboard?tab=expenses", label: "Ausgaben", icon: TrendingDown, auth: "authenticated" },
-        { href: "/cashbook", label: "Kassenbuch", icon: Wallet, auth: "authenticated" },
+        { href: "/dashboard?tab=incomes", label: "Einnahmen", icon: "nav-incomes", auth: "authenticated" },
+        { href: "/dashboard?tab=expenses", label: "Ausgaben", icon: "nav-expenses", auth: "authenticated" },
+        { href: "/cashbook", label: "Kassenbuch", icon: "nav-cashbook", auth: "authenticated" },
       ]
     },
     {
       title: "Auswertungen",
       items: [
-        { href: "/dashboard?tab=eur", label: "EÜR", icon: Calculator, auth: "authenticated" },
-        { href: "/dashboard?tab=gwg", label: "GWG-Verzeichnis", icon: Calculator, auth: "authenticated" },
-        { href: "/steuer-simulation", label: "Steuer-Simulation", icon: Calculator, auth: "authenticated" },
+        { href: "/dashboard?tab=eur", label: "EÜR", icon: "nav-eur", auth: "authenticated" },
+        { href: "/dashboard?tab=gwg", label: "GWG-Verzeichnis", icon: "nav-assets", auth: "authenticated" },
+        { href: "/steuer-simulation", label: "Steuer-Simulation", icon: "nav-tax", auth: "authenticated" },
       ]
     },
     {
       title: "System",
       items: [
-        { href: "/settings", label: "Einstellungen", icon: Settings, auth: "authenticated" },
-        ...(isAdmin ? [{ href: "/users", label: "Benutzer", icon: UserCog, auth: "authenticated" as const }] : []),
+        { href: "/settings", label: "Einstellungen", icon: "nav-settings", auth: "authenticated" },
+        ...(isAdmin ? [{ href: "/users", label: "Benutzer", icon: "nav-users" as const, auth: "authenticated" as const }] : []),
       ]
     }
   ];
 
   const authNavItems: NavItem[] = [
-    { href: "/login", label: "Anmelden", icon: LogIn, auth: "unauthenticated" },
-    { href: "/register", label: "Registrieren", icon: UserPlus, auth: "unauthenticated" }
+    { href: "/login", label: "Anmelden", icon: "nav-users", auth: "unauthenticated" },
+    { href: "/register", label: "Registrieren", icon: "nav-customers", auth: "unauthenticated" }
   ];
 
   // Collapsed view
@@ -143,7 +131,6 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
             section.items.map((item) => {
               if (item.auth === "authenticated" && status !== "authenticated") return null;
 
-              const Icon = item.icon;
               const active = isActive(item.href);
 
               return (
@@ -159,7 +146,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
                       }`}
                     title={item.label}
                   >
-                    <Icon className="h-5 w-5" />
+                    <BivaroIcon name={item.icon} className="nav-artwork" size={28} />
                   </Link>
                 </li>
               );
@@ -168,7 +155,6 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
 
           {/* Auth items when collapsed */}
           {status === "unauthenticated" && authNavItems.map((item) => {
-            const Icon = item.icon;
             const active = isActive(item.href);
 
             return (
@@ -183,7 +169,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
                     }`}
                   title={item.label}
                 >
-                  <Icon className="h-5 w-5" />
+                  <BivaroIcon name={item.icon} className="nav-artwork" size={28} />
                 </Link>
               </li>
             );
@@ -198,7 +184,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
               className="flex min-h-11 w-full cursor-pointer items-center justify-center rounded-md p-3 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
               title="Abmelden"
             >
-              <LogOut className="h-5 w-5" />
+              <BivaroIcon name="nav-logout" className="nav-artwork" size={28} />
             </button>
           )}
         </div>
@@ -224,8 +210,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
               </h3>
               <ul className="space-y-1">
                 {visibleItems.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item.href);
+                      const active = isActive(item.href);
 
                   return (
                     <li key={item.href}>
@@ -234,12 +219,12 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
                         href={item.href}
                         aria-current={active ? "page" : undefined}
                         data-active={active}
-                        className={`app-nav-link flex items-center px-3 py-2 ${active
+                        className={`app-nav-link flex items-center gap-3 px-3 py-2 ${active
                           ? 'bg-primary/10 text-primary'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                           }`}
                       >
-                        <Icon className="h-4 w-4 mr-3" />
+                        <BivaroIcon name={item.icon} className="nav-artwork" size={28} />
                         <span className="text-sm font-medium">{item.label}</span>
                       </Link>
                     </li>
@@ -258,8 +243,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
             </h3>
             <ul className="space-y-1">
               {authNavItems.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.href);
+                  const active = isActive(item.href);
 
                 return (
                   <li key={item.href}>
@@ -268,12 +252,12 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
                       href={item.href}
                       aria-current={active ? "page" : undefined}
                       data-active={active}
-                      className={`app-nav-link flex min-h-11 items-center px-3 py-2 ${active
+                      className={`app-nav-link flex min-h-11 items-center gap-3 px-3 py-2 ${active
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                         }`}
                     >
-                      <Icon className="h-4 w-4 mr-3" />
+                      <BivaroIcon name={item.icon} className="nav-artwork" size={28} />
                       <span className="text-sm font-medium">{item.label}</span>
                     </Link>
                   </li>
@@ -289,9 +273,9 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
         {status === "authenticated" && (
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
-            className="flex min-h-11 w-full cursor-pointer items-center rounded-md px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
+            className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
           >
-            <LogOut className="h-4 w-4 mr-3" />
+            <BivaroIcon name="nav-logout" className="nav-artwork" size={28} />
             <span className="text-sm font-medium">Abmelden</span>
           </button>
         )}

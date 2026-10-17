@@ -1,8 +1,9 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
-export async function DELETE(
+async function deleteHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -28,3 +29,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete template' }, { status: 500 });
   }
 }
+
+export const DELETE = protectMutation(deleteHandler);

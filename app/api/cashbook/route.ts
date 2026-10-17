@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
  * API Route: /api/cashbook
  * CRUD operations for CashBook (Kassenbuch)
@@ -74,7 +75,7 @@ export async function GET(_request: Request) {
 }
 
 // POST: Neues Kassenbuch erstellen
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
     try {
         const userId = await getUserId();
         if (!userId) {
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
 }
 
 // PUT: Kassenbuch aktualisieren
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
     try {
         const userId = await getUserId();
         if (!userId) {
@@ -173,7 +174,7 @@ export async function PUT(request: NextRequest) {
 }
 
 // DELETE: Kassenbuch löschen
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
     try {
         const userId = await getUserId();
         if (!userId) {
@@ -218,3 +219,7 @@ export async function DELETE(request: NextRequest) {
         );
     }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const PUT = protectMutation(putHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);

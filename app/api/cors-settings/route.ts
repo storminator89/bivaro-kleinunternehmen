@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
  * CORS Settings API
  * 
@@ -79,7 +80,7 @@ export async function GET() {
 }
 
 // PUT - Erlaubte Origins aktualisieren
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -164,7 +165,7 @@ export async function PUT(request: NextRequest) {
 }
 
 // POST - Einzelne Origin hinzufügen
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -259,7 +260,7 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE - Einzelne Origin entfernen
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -325,3 +326,7 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+
+export const PUT = protectMutation(putHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);

@@ -1,0 +1,97 @@
+{
+  "tool": "built-in image_gen",
+  "transparent_background": true,
+  "assets": [
+    {
+      "name": "bivaro-sidebar-flat",
+      "prompt": "Use case: logo-brand. EDIT TARGET: the referenced BIVARO app emblem. Keep the exact recognizable geometric B outer silhouette, proportions, stacked ledger leaves and diagonal cut. Make a sidebar-specific FLAT light logo for a deep forest-green (#06251F) sidebar. Replace all dark forest faces with a single solid warm white #F2F7F4 and make the diagonal stripe a single flat muted sage #9EBEAF. Remove all 3D depth, bevels, gradients, lighting, material texture and gloss. The mark must be clean, minimal, modern, fully flat vector-style geometry with crisp edges, readable at 28 pixels. Genuine transparent alpha outside the mark and in the cut gaps; do not add a backdrop or badge. Only ONE isolated mark, no words, no shadow, no border, no watermark.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-66622317-39ae-4161-990b-adeb110179a7.png",
+      "original": "assets/brand/bivaro-icons/flat/bivaro-sidebar-flat.png",
+      "web": "public/brand/icons/bivaro-sidebar-flat.webp"
+    },
+    {
+      "name": "flat-incomes",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: one simple arrow diagonally upward-right, with a short L-shaped baseline below it, incoming revenue.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-84f3e97f-0d50-4539-bd5a-2ccf3697461e.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-incomes.png",
+      "web": "public/brand/icons/flat/incomes.webp"
+    },
+    {
+      "name": "flat-expenses",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: one simple arrow diagonally downward-right, with a short horizontal payment baseline below it, outgoing expenses.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-85ea8d2f-ec2c-4966-9ac7-2fea989f1086.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-expenses.png",
+      "web": "public/brand/icons/flat/expenses.webp"
+    },
+    {
+      "name": "flat-profit",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: three narrow rising outline columns sharing one baseline, financial profit, no arrow or coin.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-c40a0808-1e6c-4214-96d1-f2b0605b094e.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-profit.png",
+      "web": "public/brand/icons/flat/profit.webp"
+    },
+    {
+      "name": "flat-open-invoices",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: one outline invoice sheet with folded upper corner, a small outline clock integrated at lower-right, only two short internal ledger lines.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-d768dab7-282d-4493-95b6-3442b0d91b95.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-open-invoices.png",
+      "web": "public/brand/icons/flat/open-invoices.webp"
+    },
+    {
+      "name": "flat-year-comparison",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: two adjacent pairs of simple upright chart bars, one short and one tall bar per pair, sharing one thin horizontal baseline.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-1088f516-e239-46d2-ae9b-4f67598f87c7.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-year-comparison.png",
+      "web": "public/brand/icons/flat/year-comparison.webp"
+    },
+    {
+      "name": "flat-activity",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: a simple open circular clock with two hands and one counterclockwise history arrow built into the upper-left part of the circle.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-31557b44-5a5b-423a-9942-df1ccde19c7a.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-activity.png",
+      "web": "public/brand/icons/flat/activity.webp"
+    },
+    {
+      "name": "flat-limits",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: a single semicircular gauge outline with one short needle pointing upper-middle, two small internal tick marks, one color.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-63047583-683a-4048-abc5-734b8eaae419.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-limits.png",
+      "web": "public/brand/icons/flat/limits.webp"
+    },
+    {
+      "name": "flat-import",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: one downward arrow entering a simple shallow U-shaped receiving tray, document import, no document or additional badge.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-37421386-885f-4129-83ee-740f89e508a0.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-import.png",
+      "web": "public/brand/icons/flat/import.webp"
+    },
+    {
+      "name": "flat-document",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: one upright outline invoice sheet with a neatly folded upper-right corner and two short horizontal ledger lines.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-edb07edb-50a6-4887-a117-f28720557be2.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-document.png",
+      "web": "public/brand/icons/flat/document.webp"
+    },
+    {
+      "name": "flat-proposal",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: one simple outline proposal document with a minimal diagonal pen at its lower-right corner, very few large strokes.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-555ce29e-9121-4e67-8643-dd9f447465b1.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-proposal.png",
+      "web": "public/brand/icons/flat/proposal.webp"
+    },
+    {
+      "name": "flat-inventory",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: a simple outline archive box with one top lid seam and one small centered rectangular label opening.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-a8200f2a-68a9-41e5-bfe6-9603ecb7522c.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-inventory.png",
+      "web": "public/brand/icons/flat/inventory.webp"
+    },
+    {
+      "name": "flat-ledger",
+      "prompt": "Use case: logo-brand. Asset type: a single transparent dashboard UI icon for BIVARO. Pure flat vector-style line pictogram, modern understated editorial software design. Use exactly ONE solid muted evergreen ink color #456F62, uniform medium-bold strokes, rounded line caps and carefully aligned geometry. Strokes roughly 6% of the symbol width. No filled background or tile. Front view in a square canvas, icon centered and occupies 76% of width/height, generous clean negative space. Simple legible geometry at 24 pixels. Genuine transparent alpha everywhere outside the strokes. Absolutely no 3D, no extrusion, no bevel, no perspective, no shading, no gradient, no gloss, no shadows, no texture, no multicolor accents, no currency letters, no wording, no watermark, no checkerboard. Only ONE pictogram, not a sheet. Subject: a minimal open accounting book outline, two broad pages divided by a central spine, one short ledger line per page.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-88fcaef7-14b5-4200-b0e9-b5dd3e1745c7.png",
+      "original": "assets/brand/bivaro-icons/flat/flat-ledger.png",
+      "web": "public/brand/icons/flat/ledger.webp"
+    }
+  ]
+}

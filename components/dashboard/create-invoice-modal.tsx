@@ -1,5 +1,6 @@
 "use client";
 
+import salesStyles from "@/components/dashboard/sales-workspace.module.css";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -401,8 +402,11 @@ export function CreateInvoiceModal({
     }
   };
 
-  // Check for duplicate invoice number
+  // Keep creation disabled during the debounce as well as the request.
+  // Otherwise a late duplicate check can disable retry after a successful save
+  // whose response was lost.
   useEffect(() => {
+    setIsCheckingNumber(Boolean(invoiceNumber));
     const checkInvoiceNumber = async () => {
       if (!invoiceNumber) {
         setInvoiceNumberError(null);
@@ -1716,8 +1720,9 @@ export function CreateInvoiceModal({
                     <div key={index} className="invoice-line grid min-w-0 grid-cols-2 items-start gap-3 sm:grid-cols-4">
                       <div className="col-span-2 min-w-0 sm:col-span-4">
                         <Label htmlFor={`invoice-item-description-${index}`} className="mb-1 block text-xs text-muted-foreground">Beschreibung</Label>
-                        <Input
+                        <Textarea
                           id={`invoice-item-description-${index}`}
+                          className="min-h-20 resize-y"
                           value={item.description}
                           onChange={(e) => updateItem(index, 'description', e.target.value)}
                           placeholder="Leistung / Produkt"
@@ -2033,7 +2038,7 @@ export function CreateInvoiceModal({
 
   if (isPage) {
     return (
-      <section className="invoice-studio min-w-0" aria-label="Neue Rechnung">
+      <section className={`invoice-studio min-w-0 ${salesStyles.invoiceEditor}`} aria-label="Neue Rechnung">
         {editorContent}
       </section>
     );

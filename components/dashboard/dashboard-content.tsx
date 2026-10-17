@@ -1,5 +1,7 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
+import { toast } from 'sonner';
 import React, { useEffect, useState } from 'react';
 import { Plus, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -121,12 +123,16 @@ export function DashboardContent() {
       taxRelevant: 'all',
       hasReceipt: 'all',
       searchTerm: '',
+      sortBy: 'date',
+      sortOrder: 'desc',
     },
     incomes: {
       customer: '',
       dateRange: 'all',
       taxRelevant: 'all',
       searchTerm: '',
+      sortBy: 'date',
+      sortOrder: 'desc',
     },
     invoices: {
       paidStatus: 'all',
@@ -199,10 +205,14 @@ export function DashboardContent() {
     expensesPageSize,
     expensesTotal,
     expensesTotalPages,
+    expensesIsFetching,
+    expensesIsError,
     incomesPage,
     incomesPageSize,
     incomesTotal,
     incomesTotalPages,
+    incomesIsFetching,
+    incomesIsError,
     invoicesPage,
     invoicesPageSize,
     invoicesTotal,
@@ -213,6 +223,8 @@ export function DashboardContent() {
     quotesPageSize,
     quotesTotal,
     quotesTotalPages,
+    quotesIsFetching,
+    quotesIsError,
     setExpensesPage,
     setExpensesPageSize,
     setIncomesPage,
@@ -410,9 +422,13 @@ export function DashboardContent() {
           depreciationYears: ''
         });
         setExpenseReceipt(null);
+      } else {
+        const failure = await response.json().catch(() => null);
+        toast.error(failure?.error || 'Die Ausgabe konnte nicht gespeichert werden.');
       }
     } catch (error) {
       console.error('Error creating expense:', error);
+      toast.error('Die Ausgabe konnte nicht gespeichert werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.');
     }
   };
 
@@ -537,11 +553,11 @@ export function DashboardContent() {
       } else {
         const errorData = await response.json();
         console.error(`Error ${method}ing ${editType}:`, errorData);
-        alert(`Fehler beim Speichern: ${errorData.error || 'Unbekannter Fehler'}`);
+        toast.error(`Fehler beim Speichern: ${errorData.error || 'Unbekannter Fehler'}`);
       }
     } catch (error) {
       console.error(`Error ${editType}:`, error);
-      alert(`Ein unerwarteter Fehler ist aufgetreten: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`Ein unerwarteter Fehler ist aufgetreten: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -613,10 +629,11 @@ export function DashboardContent() {
         await loadIncomes(incomesPage, incomesPageSize);
       } else {
         const errorBody = await response.json().catch(() => null);
-        alert(errorBody?.error || 'Die Rechnung konnte nicht hochgeladen werden.');
+        toast.error(errorBody?.error || 'Die Rechnung konnte nicht hochgeladen werden.');
       }
     } catch (error) {
       console.error('Error uploading invoice:', error);
+      toast.error('Die Rechnung konnte nicht hochgeladen werden. Versuchen Sie es erneut.');
     } finally {
       setIsUploading(false);
     }
@@ -654,8 +671,12 @@ export function DashboardContent() {
       if (response.ok) {
         await loadInvoices(invoicesPage, invoicesPageSize);
         await loadIncomes(incomesPage, incomesPageSize);
+      } else {
+        const failure = await response.json().catch(() => null);
+        toast.error(failure?.error || 'Der Zahlungsstatus konnte nicht geändert werden.');
       }
     } catch (error) {
+      toast.error('Der Zahlungsstatus konnte nicht geändert werden. Versuchen Sie es erneut.');
       console.error('Error updating invoice status:', error);
     }
   };
@@ -805,29 +826,18 @@ export function DashboardContent() {
   // Hauptkomponente rendern
   return (
     <div className="dashboard-workbench space-y-6">
-        <header className="workbench-header flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p className="app-section-label">{!tabParam ? "Übersicht" : activeTab === "invoices" || activeTab === "quotes" ? "Verkauf" : activeTab === "eur" || activeTab === "gwg" ? "Auswertungen" : "Buchhaltung"}</p>
-              <time className="hidden text-xs text-muted-foreground sm:inline" dateTime={new Date().toISOString().split('T')[0]}>
-                {new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-              </time>
-            </div>
-            <h1 className="min-w-0 [overflow-wrap:anywhere] text-3xl font-semibold tracking-[-0.035em] text-foreground md:text-4xl">
-              {tabParam ? ({ expenses: "Ausgaben", incomes: "Einnahmen", invoices: "Rechnungen", quotes: "Angebote", eur: "Einnahmenüberschussrechnung", gwg: "GWG-Verzeichnis" }[activeTab]) : "Buchhaltung"}
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {tabParam ? ({ expenses: "Belege erfassen, Ausgaben zuordnen und Zahlungen nachvollziehen.", incomes: "Zahlungseingänge erfassen und Einnahmen im Blick behalten.", invoices: "Rechnungen verwalten, Zahlungsstatus prüfen und Originalbelege öffnen.", quotes: "Angebote vorbereiten und direkt in Rechnungen übernehmen.", eur: "Einnahmen und Ausgaben für Ihren Berichtszeitraum auswerten.", gwg: "Geringwertige Wirtschaftsgüter und Abschreibungen verwalten." }[activeTab]) : "Belege erfassen, Angebote versenden und offene Rechnungen im Blick behalten."}
-            </p>
-          </div>
-          <div className="workbench-actions flex flex-wrap items-center gap-2" aria-label="Schnellaktionen">
+        <PageHeader
+          title={tabParam ? ({ expenses: "Ausgaben", incomes: "Einnahmen", invoices: "Rechnungen", quotes: "Angebote", eur: "Einnahmenüberschussrechnung", gwg: "GWG-Verzeichnis" }[activeTab] ?? "Buchhaltung") : "Buchhaltung"}
+          description={tabParam ? ({ expenses: "Belege erfassen, Ausgaben zuordnen und Zahlungen nachvollziehen.", incomes: "Zahlungseingänge erfassen und Einnahmen im Blick behalten.", invoices: "Rechnungen verwalten, Zahlungsstatus prüfen und Originalbelege öffnen.", quotes: "Angebote vorbereiten und direkt in Rechnungen übernehmen.", eur: "Einnahmen und Ausgaben für Ihren Berichtszeitraum auswerten.", gwg: "Geringwertige Wirtschaftsgüter und Abschreibungen verwalten." }[activeTab] ?? "") : "Belege erfassen, Angebote versenden und offene Rechnungen im Blick behalten."}
+          section={!tabParam ? "Übersicht" : activeTab === "invoices" || activeTab === "quotes" ? "Verkauf" : activeTab === "eur" || activeTab === "gwg" ? "Auswertungen" : "Buchhaltung"}
+          date={<time dateTime={formatLocalBusinessDate(new Date())}>{new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</time>}
+          actions={<>
             {(!tabParam || activeTab === 'expenses' || activeTab === 'incomes') && <>
               <Button type="button" variant={tabParam && activeTab === 'expenses' ? 'default' : 'outline'} onClick={() => { setExpenseEntryOpen(true); handleTabChange('expenses'); }}><ArrowUpRight aria-hidden="true" />Ausgabe erfassen</Button>
               <Button type="button" variant={tabParam && activeTab === 'incomes' ? 'default' : 'outline'} onClick={() => { setIncomeEntryOpen(true); handleTabChange('incomes'); }}><ArrowDownLeft aria-hidden="true" />Einnahme erfassen</Button>
             </>}
             {(!tabParam || activeTab === 'invoices') && <Button type="button" onClick={() => router.push('/dashboard/invoices/new')}><Plus aria-hidden="true" />Rechnung erstellen</Button>}
             {activeTab === 'quotes' && tabParam && <Button type="button" onClick={() => router.push('/dashboard/quotes/new')}><Plus aria-hidden="true" />Angebot erstellen</Button>}
-          </div>
           {(activeTab === 'eur' || activeTab === 'gwg') && (
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
             <div className="flex min-h-11 flex-1 items-center gap-1 rounded-md border border-border/80 bg-card sm:flex-none" aria-label="Berichtszeitraum">
@@ -881,7 +891,8 @@ export function DashboardContent() {
             </div>
           </div>
           )}
-        </header>
+          </>}
+        />
 
         {!tabParam ? (
           <DashboardClient />
@@ -890,6 +901,8 @@ export function DashboardContent() {
           {/* Ausgaben Tab */}
           <TabsContent value="expenses" className="space-y-6">
             <ExpensesTab
+              isLoading={expensesIsFetching}
+              isError={expensesIsError}
               entryOpen={expenseEntryOpen}
               onEntryOpenChange={setExpenseEntryOpen}
               newExpense={newExpense}
@@ -923,6 +936,8 @@ export function DashboardContent() {
           {/* Einnahmen Tab */}
           <TabsContent value="incomes" className="space-y-6">
             <IncomesTab
+              isLoading={incomesIsFetching}
+              isError={incomesIsError}
               entryOpen={incomeEntryOpen}
               onEntryOpenChange={setIncomeEntryOpen}
               newIncome={newIncome}
@@ -1026,6 +1041,8 @@ export function DashboardContent() {
           {/* Angebote Tab */}
           <TabsContent value="quotes" className="space-y-6">
             <QuotesTab
+              isLoading={quotesIsFetching}
+              isError={quotesIsError}
               quotes={quotes}
               total={quotesTotal}
               page={quotesPage}

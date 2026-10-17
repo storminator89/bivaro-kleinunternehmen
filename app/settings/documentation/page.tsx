@@ -1,5 +1,8 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
+import styles from "@/components/settings/admin-workspace.module.css";
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +22,6 @@ import {
     Download,
     ChevronDown,
     ChevronRight,
-    Shield,
     Building2,
     RefreshCw,
     CheckCircle2,
@@ -212,32 +214,20 @@ export default function DocumentationPage() {
     }
 
     return (
-        <div className="min-h-screen bg-background print:bg-white">
-            <div className="max-w-4xl mx-auto px-4 py-8 print:max-w-none print:px-8">
+        <div className={`${styles.workspace} print:bg-white`}>
+            <div className={`${styles.page} print:max-w-none print:px-8`}>
                 {/* Back Link - hide in print */}
                 <Link
                     href="/settings"
-                    className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6 print:hidden"
+                    className={`${styles.back} print:hidden`}
                 >
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Zurück zu Einstellungen
                 </Link>
 
                 {/* Header */}
-                <header className="mb-8">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-primary/10 rounded-lg print:hidden">
-                                <Shield className="h-8 w-8 text-primary" />
-                            </div>
-                            <div>
-                                <h1 className="text-3xl font-bold tracking-tight">GoBD Verfahrensdokumentation</h1>
-                                <p className="text-muted-foreground">
-                                    Dokumentation des Buchführungsverfahrens gemäß GoBD
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2 print:hidden">
+                <PageHeader title="GoBD Verfahrensdokumentation" description="Dokumentation des Buchführungsverfahrens gemäß GoBD." section="System" actions={<>
+<div className={`${styles.headerActions} print:hidden`}>
                             <Button variant="outline" onClick={exportAsPDF}>
                                 <Download className="h-4 w-4 mr-2" />
                                 Drucken/PDF
@@ -253,11 +243,13 @@ export default function DocumentationPage() {
                                 {saveSuccess ? 'Gespeichert' : 'Speichern'}
                             </Button>
                         </div>
-                    </div>
+</>} />
+
+
 
                     {/* Status Info */}
                     {data && (
-                        <div className="flex flex-wrap gap-2 print:hidden">
+                        <div className="flex w-full flex-wrap gap-2 print:hidden">
                             <Badge variant="outline" className="gap-1">
                                 <Server className="h-3 w-3" />
                                 Version {data.version}
@@ -286,12 +278,20 @@ export default function DocumentationPage() {
                             {error}
                         </div>
                     )}
-                </header>
+
 
                 {data && (
-                    <div className="space-y-6">
+                    <div className={styles.documentLayout}>
+                        <nav className={`${styles.toc} print:hidden`} aria-label="Dokumentationsabschnitte">
+                            <a href="#gobd-company">Unternehmensdaten</a>
+                            <a href="#gobd-system">System-Information</a>
+                            {data.content.sections.map((section) => (
+                                <a key={section.id} href={`#gobd-${section.id}`} aria-label={section.title} title={section.title} onClick={() => setExpandedSections((previous) => new Set([...previous, section.id]))}>{section.title.replace(/^\d+\.\s*/, "").replace("Allgemeine Beschreibung", "Überblick").replace("Anwenderdokumentation", "Anwendung").replace("Technische Systemdokumentation", "Technik").replace("Betriebsdokumentation", "Betrieb")}</a>
+                            ))}
+                        </nav>
+                        <div className={`${styles.documentContent} ${styles.docSections}`}>
                         {/* Company Information Card */}
-                        <Card className="print:shadow-none print:border-none">
+                        <Card id="gobd-company" className={`${styles.surface} print:shadow-none print:border-none`}>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <Building2 className="h-5 w-5" />
@@ -346,7 +346,7 @@ export default function DocumentationPage() {
                         </Card>
 
                         {/* System Info Card */}
-                        <Card className="print:shadow-none print:border-none">
+                        <Card id="gobd-system" className={`${styles.surface} print:shadow-none print:border-none`}>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <Server className="h-5 w-5" />
@@ -386,12 +386,12 @@ export default function DocumentationPage() {
 
                         {/* Documentation Sections */}
                         {data.content.sections.map((section) => (
-                            <Card key={section.id} className="print:shadow-none print:border-none print:break-inside-avoid">
+                            <Card key={section.id} id={`gobd-${section.id}`} className="print:shadow-none print:border-none print:break-inside-avoid">
                                 <Collapsible
                                     open={expandedSections.has(section.id)}
                                     onOpenChange={() => toggleSection(section.id)}
                                 >
-                                    <CollapsibleTrigger asChild>
+                                    <CollapsibleTrigger className="block w-full text-left print:pointer-events-none">
                                         <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors print:cursor-default">
                                             <CardTitle className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
@@ -429,6 +429,7 @@ export default function DocumentationPage() {
                                                 <>
                                                     {/* Edit mode - hidden in print */}
                                                     <Textarea
+                                                        aria-label={`${section.title} bearbeiten`}
                                                         value={section.content}
                                                         onChange={(e) => updateSectionContent(section.id, e.target.value)}
                                                         className="min-h-[300px] font-mono text-sm print:hidden"
@@ -451,6 +452,7 @@ export default function DocumentationPage() {
                         <div className="text-center text-sm text-muted-foreground py-4 print:py-8 print:border-t">
                             <p>Erstellt mit {data.content.systemInfo?.softwareName || 'Bivaro Buchhaltung'} v{data.version}</p>
                             <p>Stand: {format(new Date(), 'dd. MMMM yyyy, HH:mm \'Uhr\'', { locale: de })}</p>
+                        </div>
                         </div>
                     </div>
                 )}

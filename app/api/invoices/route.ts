@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -19,7 +20,7 @@ function isPdfFile(fileName: string): boolean {
   return fileName.toLowerCase().endsWith('.pdf');
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const body = await readRequestBodyWithinLimit(request, MAX_JSON_REQUEST_BYTES);
@@ -254,7 +255,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
@@ -277,7 +278,7 @@ export async function DELETE(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const body = await readRequestBodyWithinLimit(request, MAX_JSON_REQUEST_BYTES);
@@ -324,3 +325,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
   }
 }
+
+export const POST = protectMutation(postHandler);
+export const DELETE = protectMutation(deleteHandler);
+export const PUT = protectMutation(putHandler);

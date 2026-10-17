@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 /**
  * API v1 - Invoice Upload Endpoint
  *
@@ -124,7 +125,7 @@ function toStoredParsedData(parsedInvoice: ParsedEInvoice) {
 }
 
 // POST /api/v1/invoices/upload
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   return withApiAuth(request, async ({ userId }) => {
     const contentType = request.headers.get('content-type') || '';
 
@@ -299,3 +300,5 @@ export async function POST(request: NextRequest) {
     });
   }, { requiredScopes: ['write'] });
 }
+
+export const POST = protectMutation(postHandler, { bearer: true });

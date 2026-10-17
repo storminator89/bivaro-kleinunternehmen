@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
@@ -73,7 +74,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const input = await readCustomerBody(request);
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const input = await readCustomerBody(request);
@@ -153,7 +154,7 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
@@ -201,3 +202,7 @@ export async function DELETE(request: Request) {
     );
   }
 }
+
+export const POST = protectMutation(postHandler);
+export const PUT = protectMutation(putHandler);
+export const DELETE = protectMutation(deleteHandler);

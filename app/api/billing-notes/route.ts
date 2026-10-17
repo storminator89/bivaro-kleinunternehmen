@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const body = await readRequestBodyWithinLimit(request, MAX_BILLING_NOTE_REQUEST_BYTES);
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const idValue = new URL(request.url).searchParams.get('id');
@@ -97,3 +98,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Leistungsnotiz konnte nicht gelöscht werden' }, { status: 500 });
   }
 }
+
+export const POST = protectMutation(postHandler);
+export const DELETE = protectMutation(deleteHandler);

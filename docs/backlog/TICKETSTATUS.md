@@ -7,6 +7,41 @@ Git-Basis zum Dokumentationsstand: `0208c62f26ff60cf855dfef21e74e0ff6466e7c9` (`
 
 Diese Übersicht enthält alle 160 Backlog-Tickets. Der Status ist der aktuelle Arbeitsstand dieser Welle und ersetzt weder die im Backlog offenen ACs noch fachliche, rechtliche oder produktive Freigaben. „Vorgeschlagen“ bedeutet ausdrücklich, dass in dieser Welle keine Umsetzung vorliegt. Architektur-Discovery ist separat von Produktimplementierung ausgewiesen.
 
+## Test-/Legacy-Audit vom 17.10.2026
+
+Der [Test-/Legacy-Auditbericht](../testing/legacy-code-audit-2026-10-17.md)
+dokumentiert den abgeschlossenen, uncommitted Wartungsscope auf Git-Basis
+`4b293ff3081455bd7e21f08dbc928e5ffe4cd051`; die vorgefundenen 113 geänderten
+Dateien und 28 untracked Einträge bleiben als Ausgangszustand abgegrenzt.
+Entfernt wurden zwölf bewiesen ungenutzte Frontendmodule samt einem toten
+Barrelexport (1.191 Quellzeilen), sechs direkte Abhängigkeiten sowie tote
+Helper-/Testzweige. Aktive Kompatibilität bleibt erhalten; neue bzw. stärkere
+API-Quota-, Upload- und Rendererprüfungen sichern den tatsächlich verwendeten
+Code. Isolierte Upload-Fixtures, belastbare Benchmark-Orakel, temporäre
+E2E-Datenbanken, konfigurierbarer Port, Signalweitergabe und Cleanup beheben
+reale Test-/Prozessfehler. Browser-Body-Stalls und eine versteckte
+Issuer-Fixture-Abhängigkeit sind ohne Abschwächung der fachlichen Assertions
+behoben; ein Produktverhaltensfehler wurde nicht nachgewiesen.
+
+Der gemeinsame Vitest-Endlauf mit aktiviertem Benchmark bestand: **58 Dateien,
+424 Tests und 0 Skips in 41,73 s**, einschließlich Ghostscript-Konvertierung.
+Der reguläre Browser-Endlauf bestand **20/20 in 1,1 min** ohne Retry/Skip auf
+Port 3117; der separate Security-Browserlauf bestand **1/1 in 12,6 s** auf
+Port 3101. Beide nutzten neue temporäre Datenbanken und Productionbuilds.
+Build, Lint ohne Warnungen, Typecheck, Skriptsyntax, Diff-Whitespace und
+Manifest-/Lock-Abgleich sind grün. Zehn Runner-/Fixture-Regressionen sind
+bereits in den 424 Tests enthalten. Keine blockierenden Prüffehler verbleiben.
+
+Nichtblockierende Grenzen stehen im Bericht: unbewiesene Maintenance-/Money-/
+EÜR-Löschkandidaten bleiben erhalten; der gemeinsame DB-Helfer kann bei einem
+Setupfehler ein temporäres Verzeichnis hinterlassen; der CI-Build verwendet
+weiter eine relative Dummy-URL und `.mjs` fällt außerhalb der konfigurierten
+ESLint-Dateimuster. Die beiden früheren [Prüfvorfälle](PRUEFVORFALL-2026-09-19.md)
+bleiben zur Betreiberbewertung dokumentiert. Dieser Audit ändert weder die 160
+Ticketobjekte noch die Summen 3 abgeschlossen/21 teilumgesetzt/4 Discovery/132
+vorgeschlagen oder deren Restkriterien; neue AC-, Remote-CI- oder
+Produktivfreigaben werden nicht behauptet.
+
 ## Prüfvorfall in der Arbeitswelle
 
 Am 19.09.2026 wurde aus der Agentenkoordination ein Prüfvorfall dokumentiert:

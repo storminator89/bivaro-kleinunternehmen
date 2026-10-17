@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { getRawEInvoiceXml } from '@/lib/e-invoice-parser';
 import { buildEInvoiceViewerHtml } from '@/lib/e-invoice-viewer';
+import { DOCUMENT_CONTENT_SECURITY_POLICY } from '@/lib/content-security-policy';
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,6 +50,8 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'X-Frame-Options': 'SAMEORIGIN',
+        'Content-Security-Policy': `${DOCUMENT_CONTENT_SECURITY_POLICY}; sandbox allow-same-origin`,
+        'Cache-Control': 'private, no-store',
       },
     });
   } catch (error) {

@@ -1,3 +1,5 @@
+import { protectMutation } from '@/lib/request-security';
+import { parseLedgerSort, LedgerSortError } from '@/lib/ledger-sort';
 import { NextResponse, NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -15,7 +17,7 @@ import {
   MAX_JSON_REQUEST_BYTES,
 } from '@/lib/resource-limits';
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
     if (!isRequestBodyWithinLimit(request, MAX_RECEIPT_UPLOAD_BYTES + 128 * 1024)) {
@@ -245,6 +247,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
     const skip = (page - 1) * pageSize;
+    const sort = parseLedgerSort(url.searchParams);
 
     // Filters
     const search = url.searchParams.get('search') || '';
@@ -296,7 +299,7 @@ export async function GET(request: NextRequest) {
     const [items, total] = await Promise.all([
       prisma.expense.findMany({
         where,
-        orderBy: { date: 'desc' },
+        orderBy: [{ [sort.sortBy]: sort.sortOrder }, { id: sort.sortOrder }],
         skip,
         take: pageSize,
       }),
@@ -305,6 +308,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items, total, page, pageSize });
   } catch (_error: unknown) {
+    if (_error instanceof LedgerSortError) {
+      return NextResponse.json({ error: _error.message }, { status: 400 });
+    }
     if (_error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
@@ -313,7 +319,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Neue Methode zum Aktualisieren einer Ausgabe
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const jsonBody = await readRequestBodyWithinLimit(request, MAX_JSON_REQUEST_BYTES);
@@ -426,7 +432,7 @@ export async function PUT(request: Request) {
 }
 
 // Neue Methode zum Löschen einer Ausgabe
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
@@ -478,3 +484,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Fehler beim Löschen der Ausgabe' }, { status: 500 });
   }
 }
+
+export const POST = protectMutation(postHandler);
+export const PUT = protectMutation(putHandler);
+export const DELETE = protectMutation(deleteHandler);

@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { ClipboardList, Download, Info } from "lucide-react";
+import { DashboardIcon } from "@/components/brand/dashboard-icon";
+import { Download, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -49,12 +50,12 @@ export function GWGTab({ expensesAll, selectedTimeRange, onExport }: GWGTabProps
   const totalAmount = gwgExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   return (
-    <div className="min-w-0 space-y-6">
+    <div className="report-workspace min-w-0 space-y-6">
       <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <ClipboardList aria-hidden="true" className="h-5 w-5 shrink-0 text-caution" />
-            <span className="[overflow-wrap:anywhere]">GWG-Verzeichnis</span>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <DashboardIcon name="nav-assets" size={32} />
+            <span className="[overflow-wrap:anywhere]">Anschaffungen</span>
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Steuerrelevante Wirtschaftsgüter über 250 € bis einschließlich 1.000 € netto.
@@ -66,9 +67,9 @@ export function GWGTab({ expensesAll, selectedTimeRange, onExport }: GWGTabProps
         </Button>
       </header>
 
-      <section aria-labelledby="gwg-summary" className="overflow-hidden rounded-lg border">
+      <section aria-labelledby="gwg-summary" className="overflow-clip rounded-xl border bg-card">
         <div className="border-b bg-muted/30 px-4 py-3 sm:px-6">
-          <h3 id="gwg-summary" className="font-semibold">Verzeichnisübersicht</h3>
+          <h3 id="gwg-summary" className="flex items-center gap-3 font-semibold"><DashboardIcon name="nav-assets" size={36} />Anschaffungen im Überblick</h3>
         </div>
         <dl className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <div className="px-4 py-4 sm:px-6">
@@ -81,14 +82,14 @@ export function GWGTab({ expensesAll, selectedTimeRange, onExport }: GWGTabProps
           </div>
           <div className="px-4 py-4 sm:px-6">
             <dt className="text-sm text-muted-foreground">Nettosumme</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">{formatCurrency(totalAmount)}</dd>
+            <dd className="mt-1 text-2xl font-semibold tabular-nums">{formatCurrency(totalAmount)}</dd>
           </div>
         </dl>
       </section>
 
-      <section aria-labelledby="gwg-list-heading" className="overflow-hidden rounded-lg border">
+      <section aria-labelledby="gwg-list-heading" className="overflow-clip rounded-xl border bg-card">
         <div className="border-b px-4 py-4 sm:px-6">
-          <h3 id="gwg-list-heading" className="font-semibold">Erfasste Wirtschaftsgüter</h3>
+          <h3 id="gwg-list-heading" className="flex items-center gap-3 font-semibold"><DashboardIcon name="nav-cashbook" size={32} />Erfasste Wirtschaftsgüter</h3>
         </div>
 
         {gwgExpenses.length > 0 ? (
@@ -142,7 +143,7 @@ export function GWGTab({ expensesAll, selectedTimeRange, onExport }: GWGTabProps
           </>
         ) : (
           <div className="flex flex-col items-start gap-3 px-4 py-8 sm:px-6">
-            <ClipboardList aria-hidden="true" className="h-6 w-6 text-muted-foreground" />
+            <DashboardIcon name="nav-assets" size={40} />
             <div>
               <p className="font-medium">Keine GWG-Anschaffungen gefunden</p>
               <p className="mt-1 text-sm text-muted-foreground">Im gewählten Zeitraum gibt es keine steuerrelevanten Ausgaben innerhalb der GWG-Grenzen.</p>

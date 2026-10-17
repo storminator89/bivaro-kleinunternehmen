@@ -1,0 +1,10 @@
+{
+  "image": "bivaro:design-icons-20261017",
+  "database": "isolated snapshot",
+  "health": "healthy",
+  "database_check": "up",
+  "migrationsUnchanged": true,
+  "migrationCount": 28,
+  "assetRoutes": 6,
+  "fixture": "/opt/bivaro/releases/20261017-icons/preflight-s82w_1ns"
+}

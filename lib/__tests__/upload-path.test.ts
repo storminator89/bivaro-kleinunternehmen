@@ -1,82 +1,88 @@
-import { describe, it, expect } from 'vitest'
-import {
-    deleteTenantFile,
-    getTenantUploadPath,
-    getUploadPath,
-    isPathWithinUploadDir,
-    readTenantFile,
-    UPLOAD_BASE_DIR,
-    writeTenantFile,
-} from '../upload-path'
-import path from 'path'
+import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
-describe('UPLOAD_BASE_DIR', () => {
-    it('should be in data/uploads directory', () => {
-        expect(UPLOAD_BASE_DIR).toContain('data')
-        expect(UPLOAD_BASE_DIR).toContain('uploads')
-    })
+let directory: string
+let storage: typeof import('../upload-path')
+const storedName = '00000000-0000-4000-8000-000000000000.pdf'
 
-    it('should NOT be in public folder (security)', () => {
-        expect(UPLOAD_BASE_DIR).not.toContain(path.join('public', 'uploads'))
-    })
+beforeAll(async () => {
+  directory = await mkdtemp(path.join(tmpdir(), 'bivaro-upload-path-'))
+  const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory)
+  try {
+    storage = await import('../upload-path')
+  } finally {
+    cwd.mockRestore()
+  }
 })
 
-describe('getUploadPath', () => {
-    it('should return full path for filename', () => {
-        const result = getUploadPath('document.pdf')
-        expect(result).toBe(path.join(UPLOAD_BASE_DIR, 'document.pdf'))
-    })
-
-    it('should sanitize path traversal attempts', () => {
-        expect(() => getUploadPath('../../../etc/passwd')).toThrow()
-    })
-
-    it('should extract basename from nested paths', () => {
-        expect(() => getUploadPath('subdir/nested/file.pdf')).toThrow()
-    })
-
-    it('should handle filenames with special characters', () => {
-        expect(() => getUploadPath('file with spaces.pdf')).toThrow()
-    })
+afterAll(async () => {
+  if (directory) await rm(directory, { recursive: true, force: true })
 })
 
-describe('isPathWithinUploadDir', () => {
-    it('should return true for paths within upload directory', () => {
-        const validPath = path.join(UPLOAD_BASE_DIR, 'document.pdf')
-        expect(isPathWithinUploadDir(validPath)).toBe(true)
-    })
+describe('private upload root', () => {
+  it('resolves data/uploads under the isolated fixture, outside public', () => {
+    expect(storage.UPLOAD_BASE_DIR).toBe(path.join(directory, 'data', 'uploads'))
+    expect(storage.UPLOAD_BASE_DIR).not.toContain(path.join('public', 'uploads'))
+  })
+})
 
-    it('should return true for nested paths within upload directory', () => {
-        const nestedPath = path.join(UPLOAD_BASE_DIR, 'subdir', 'file.pdf')
-        expect(isPathWithinUploadDir(nestedPath)).toBe(true)
-    })
+describe('active legacy upload resolution', () => {
+  it('resolves existing safe legacy files for backwards-compatible reads', async () => {
+    await mkdir(storage.UPLOAD_BASE_DIR, { recursive: true })
+    const filePath = storage.getLegacyUploadPath('document.pdf')
+    expect(filePath).toBe(path.join(storage.UPLOAD_BASE_DIR, 'document.pdf'))
+    await writeFile(filePath, 'legacy fixture')
+    expect(storage.findUploadedFile('document.pdf')).toBe(filePath)
+    expect(await readFile(filePath, 'utf8')).toBe('legacy fixture')
+  })
 
-    it('should return false for paths outside upload directory', () => {
-        const outsidePath = path.join(process.cwd(), 'etc', 'passwd')
-        expect(isPathWithinUploadDir(outsidePath)).toBe(false)
-    })
+  it.each(['../../../etc/passwd', '/etc/passwd', 'subdir/nested/file.pdf', 'subdir\\file.pdf', '.env', 'file with spaces.pdf', 'file\0.pdf'])(
+    'rejects unsafe legacy reference %s',
+    filename => {
+      expect(() => storage.getLegacyUploadPath(filename)).toThrow()
+      expect(storage.findUploadedFile(filename)).toBeNull()
+    },
+  )
+})
 
-    it('should return false for path traversal attempts', () => {
-        const traversalPath = path.join(UPLOAD_BASE_DIR, '..', '..', 'etc', 'passwd')
-        expect(isPathWithinUploadDir(traversalPath)).toBe(false)
-    })
+describe('active tenant upload resolution', () => {
+  it('resolves opaque names below the specified tenant only', () => {
+    expect(storage.getTenantUploadPath('tenant-a', storedName)).toBe(
+      path.join(storage.UPLOAD_BASE_DIR, 'tenant-a', storedName),
+    )
+  })
 
-    it('should return true for the upload directory itself', () => {
-        expect(isPathWithinUploadDir(UPLOAD_BASE_DIR)).toBe(true)
-    })
+  it.each(['', '../tenant-a', '/tmp', 'tenant/a', 'tenant\\a'])(
+    'rejects unsafe tenant ID %s',
+    userId => expect(() => storage.getTenantUploadPath(userId, storedName)).toThrow(),
+  )
+
+  it.each(['../../../etc/passwd', '/etc/passwd', `nested/${storedName}`, `nested\\${storedName}`, '.env', 'document.pdf', `${storedName}\0`])(
+    'rejects non-opaque stored reference %s',
+    filename => expect(() => storage.getTenantUploadPath('tenant-a', filename)).toThrow(),
+  )
 })
 
 describe('tenant file storage', () => {
-    it('keeps equal original names in separate private tenant directories', async () => {
-        const first = await writeTenantFile('tenant-a', '../../same.pdf', new Uint8Array([1, 2, 3]));
-        const second = await writeTenantFile('tenant-b', '../../same.pdf', new Uint8Array([4, 5, 6]));
+  it('keeps equal original names in separate private tenant directories', async () => {
+    const first = await storage.writeTenantFile('tenant-a', '../../same.pdf', new Uint8Array([1, 2, 3]))
+    const second = await storage.writeTenantFile('tenant-b', '../../same.pdf', new Uint8Array([4, 5, 6]))
 
-        expect(first).not.toBe(second);
-        expect(getTenantUploadPath('tenant-a', first)).not.toBe(getTenantUploadPath('tenant-b', second));
-        await expect(readTenantFile('tenant-a', first)).resolves.toEqual(Buffer.from([1, 2, 3]));
-        await expect(readTenantFile('tenant-b', second)).resolves.toEqual(Buffer.from([4, 5, 6]));
+    expect(first).not.toBe(second)
+    expect(storage.isSafeStoredFileName(first)).toBe(true)
+    expect(storage.isSafeStoredFileName(second)).toBe(true)
+    const firstPath = storage.getTenantUploadPath('tenant-a', first)
+    const secondPath = storage.getTenantUploadPath('tenant-b', second)
+    expect(firstPath).not.toBe(secondPath)
+    expect(storage.findUploadedFile(first, 'tenant-a')).toBe(firstPath)
+    expect(storage.findUploadedFile(first, 'tenant-b')).toBeNull()
+    await expect(readFile(firstPath)).resolves.toEqual(Buffer.from([1, 2, 3]))
+    await expect(readFile(secondPath)).resolves.toEqual(Buffer.from([4, 5, 6]))
 
-        await deleteTenantFile('tenant-a', first);
-        await deleteTenantFile('tenant-b', second);
-    });
-});
+    await storage.deleteTenantFile('tenant-a', first)
+    await storage.deleteTenantFile('tenant-b', second)
+    expect(storage.findUploadedFile(first, 'tenant-a')).toBeNull()
+  })
+})

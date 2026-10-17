@@ -56,8 +56,8 @@ describe('buildEInvoiceViewerHtml', () => {
             totalAmount: null,
             parsedData: {
                 rawXml: '<Invoice />',
-                buyerInfo: { name: '<img src=x onerror=alert(1)>' },
-                lineItems: [{ description: '<b>Position</b>' }],
+                buyerInfo: { name: '<img src=x onerror=alert(1)>', address: 'A & B "quoted" <street>' },
+                lineItems: [{ description: '<b>Position</b>', details: "Customer's <terms> & conditions" }],
             },
         })
 
@@ -67,5 +67,7 @@ describe('buildEInvoiceViewerHtml', () => {
         expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
         expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
         expect(html).toContain('&lt;b&gt;Position&lt;/b&gt;')
+        expect(html).toContain('A &amp; B &quot;quoted&quot; &lt;street&gt;')
+        expect(html).toContain('Customer&#39;s &lt;terms&gt; &amp; conditions')
     })
 })

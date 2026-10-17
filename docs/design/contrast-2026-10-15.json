@@ -1,0 +1,100 @@
+[
+  {
+    "mode": "light",
+    "foreground": "--color-ink",
+    "background": "--color-paper",
+    "ratio": 16.87,
+    "passes_body": true
+  },
+  {
+    "mode": "light",
+    "foreground": "--bivaro-color-muted",
+    "background": "--color-paper",
+    "ratio": 6.24,
+    "passes_body": true
+  },
+  {
+    "mode": "light",
+    "foreground": "--color-feature-muted",
+    "background": "--color-feature-surface",
+    "ratio": 8.55,
+    "passes_body": true
+  },
+  {
+    "mode": "light",
+    "foreground": "--color-feature-ink",
+    "background": "--color-feature-surface",
+    "ratio": 14.89,
+    "passes_body": true
+  },
+  {
+    "mode": "light",
+    "foreground": "--color-nav-muted",
+    "background": "--color-nav-surface",
+    "ratio": 8.08,
+    "passes_body": true
+  },
+  {
+    "mode": "light",
+    "foreground": "--color-nav-active-ink",
+    "background": "--color-nav-active",
+    "ratio": 9.82,
+    "passes_body": true
+  },
+  {
+    "mode": "light",
+    "foreground": "--color-accent-ink",
+    "background": "--bivaro-color-accent",
+    "ratio": 7.39,
+    "passes_body": true
+  },
+  {
+    "mode": "dark",
+    "foreground": "--color-ink",
+    "background": "--color-paper",
+    "ratio": 16.25,
+    "passes_body": true
+  },
+  {
+    "mode": "dark",
+    "foreground": "--bivaro-color-muted",
+    "background": "--color-paper",
+    "ratio": 7.6,
+    "passes_body": true
+  },
+  {
+    "mode": "dark",
+    "foreground": "--color-feature-muted",
+    "background": "--color-feature-surface",
+    "ratio": 8.55,
+    "passes_body": true
+  },
+  {
+    "mode": "dark",
+    "foreground": "--color-feature-ink",
+    "background": "--color-feature-surface",
+    "ratio": 14.89,
+    "passes_body": true
+  },
+  {
+    "mode": "dark",
+    "foreground": "--color-nav-muted",
+    "background": "--color-nav-surface",
+    "ratio": 8.08,
+    "passes_body": true
+  },
+  {
+    "mode": "dark",
+    "foreground": "--color-nav-active-ink",
+    "background": "--color-nav-active",
+    "ratio": 9.82,
+    "passes_body": true
+  },
+  {
+    "mode": "dark",
+    "foreground": "--color-accent-ink",
+    "background": "--bivaro-color-accent",
+    "ratio": 7.43,
+    "passes_body": true
+  }
+]

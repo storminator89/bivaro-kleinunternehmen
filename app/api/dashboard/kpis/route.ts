@@ -187,12 +187,18 @@ function buildRecentExpenseQuery(userId: string) {
   `;
 }
 
-export async function GET() {
+export async function GET(request?: Request) {
   try {
     const userId = await requireUserId();
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth();
+    const yearParam = request ? new URL(request.url).searchParams.get('year') : null;
+    const selectedYear = yearParam === null ? currentYear : Number(yearParam);
+    if (yearParam !== null && (!/^\d{4}$/.test(yearParam) || !Number.isInteger(selectedYear) || selectedYear < 1900 || selectedYear > currentYear)) {
+      return NextResponse.json({ error: `Das Vergleichsjahr muss zwischen 1900 und ${currentYear} liegen.` }, { status: 400 });
+    }
+    const isCurrentYear = selectedYear === currentYear;
     const firstDayOfYear = new Date(currentYear, 0, 1);
     const firstDayOfLastYear = new Date(currentYear - 1, 0, 1);
     const sameDayLastYear = new Date(
@@ -258,9 +264,6 @@ export async function GET() {
     const revenueThisMonth = monthTotal(incomeRows, currentYear, currentMonth + 1);
     const expensesThisMonth = monthTotal(expenseRows, currentYear, currentMonth + 1);
     const revenueThisYearTotal = sumRows(incomeRows, currentYear);
-    const revenueLastYearTotal = sumRows(incomeRows, currentYear - 1);
-    const expensesThisYearTotal = sumRows(expenseRows, currentYear);
-    const expensesLastYearTotal = sumRows(expenseRows, currentYear - 1);
     const revenueThisYearToDate = sumToDate(incomeRows, "currentYearToDate");
     const revenueLastYearToDate = sumToDate(incomeRows, "lastYearToDate");
     const expensesThisYearToDate = sumToDate(expenseRows, "currentYearToDate");
@@ -277,18 +280,23 @@ export async function GET() {
       totalExpenses,
       recentActivities,
       yearComparison: {
-        currentYear,
-        lastYear: currentYear - 1,
-        revenueThisYearTotal,
-        revenueLastYearTotal,
-        expensesThisYearTotal,
-        expensesLastYearTotal,
-        revenueThisYearToDate,
-        revenueLastYearToDate,
-        expensesThisYearToDate,
-        expensesLastYearToDate,
-        monthlyDataThisYear: buildMonthlyData(currentYear, incomeRows, expenseRows),
-        monthlyDataLastYear: buildMonthlyData(currentYear - 1, incomeRows, expenseRows),
+        currentYear: selectedYear,
+        lastYear: selectedYear - 1,
+        period: isCurrentYear ? 'toDate' : 'fullYear',
+        comparisonThroughMonth: isCurrentYear ? currentMonth : 11,
+        availableYears: [...new Set([currentYear, ...incomeRows.map(row => Number(row.year)), ...expenseRows.map(row => Number(row.year))])]
+          .filter(year => Number.isInteger(year) && year >= 1900 && year <= currentYear)
+          .sort((a, b) => b - a),
+        revenueThisYearTotal: sumRows(incomeRows, selectedYear),
+        revenueLastYearTotal: sumRows(incomeRows, selectedYear - 1),
+        expensesThisYearTotal: sumRows(expenseRows, selectedYear),
+        expensesLastYearTotal: sumRows(expenseRows, selectedYear - 1),
+        revenueThisYearToDate: isCurrentYear ? revenueThisYearToDate : sumRows(incomeRows, selectedYear),
+        revenueLastYearToDate: isCurrentYear ? revenueLastYearToDate : sumRows(incomeRows, selectedYear - 1),
+        expensesThisYearToDate: isCurrentYear ? expensesThisYearToDate : sumRows(expenseRows, selectedYear),
+        expensesLastYearToDate: isCurrentYear ? expensesLastYearToDate : sumRows(expenseRows, selectedYear - 1),
+        monthlyDataThisYear: buildMonthlyData(selectedYear, incomeRows, expenseRows),
+        monthlyDataLastYear: buildMonthlyData(selectedYear - 1, incomeRows, expenseRows),
       },
     });
   } catch (error) {

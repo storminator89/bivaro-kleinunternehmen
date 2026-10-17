@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auditSecurityEvent, createAuditLog } from "@/lib/audit-log";
@@ -35,7 +36,7 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   try {
     const { user: actor } = await requireAdminSession();
     const body = await request.json();
@@ -84,3 +85,5 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
   }
 }
+
+export const PUT = protectMutation(putHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });

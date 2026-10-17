@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { createBackupPreview } from '@/lib/backup-preview';
@@ -5,7 +6,7 @@ import { BackupValidationError } from '@/lib/backup-restore';
 import { auditSecurityEvent } from '@/lib/audit-log';
 import { MAX_JSON_BACKUP_BYTES, readRequestBodyWithinLimit, RequestBodyLimitError } from '@/lib/resource-limits';
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = await readRequestBodyWithinLimit(request, MAX_JSON_BACKUP_BYTES);
@@ -46,3 +47,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = protectMutation(postHandler);

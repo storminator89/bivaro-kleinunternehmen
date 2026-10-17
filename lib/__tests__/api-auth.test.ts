@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
     hashApiKey,
     generateApiKey,
-    checkRateLimit,
     extractApiKey,
 } from '../api-auth'
 import { NextRequest } from 'next/server'
@@ -51,53 +50,6 @@ describe('generateApiKey', () => {
         const key2 = generateApiKey()
         expect(key1.key).not.toBe(key2.key)
         expect(key1.keyHash).not.toBe(key2.keyHash)
-    })
-})
-
-describe('checkRateLimit', () => {
-    beforeEach(() => {
-        // Reset time mocking
-        vi.useFakeTimers()
-    })
-
-    it('should allow first request', () => {
-        const result = checkRateLimit(999) // Use unique ID to avoid conflicts
-        expect(result.allowed).toBe(true)
-        expect(result.remaining).toBe(99) // 100 - 1
-    })
-
-    it('should track multiple requests', () => {
-        const apiKeyId = 1000
-        checkRateLimit(apiKeyId)
-        checkRateLimit(apiKeyId)
-        const third = checkRateLimit(apiKeyId)
-        expect(third.remaining).toBe(97) // 100 - 3
-    })
-
-    it('should block after limit exceeded', () => {
-        const apiKeyId = 1001
-        // Exhaust the limit
-        for (let i = 0; i < 100; i++) {
-            checkRateLimit(apiKeyId)
-        }
-        const result = checkRateLimit(apiKeyId)
-        expect(result.allowed).toBe(false)
-        expect(result.remaining).toBe(0)
-    })
-
-    it('should reset after window expires', () => {
-        const apiKeyId = 1002
-        // Use up some requests
-        for (let i = 0; i < 50; i++) {
-            checkRateLimit(apiKeyId)
-        }
-
-        // Advance time past the window (1 minute + 1 second)
-        vi.advanceTimersByTime(61 * 1000)
-
-        const result = checkRateLimit(apiKeyId)
-        expect(result.allowed).toBe(true)
-        expect(result.remaining).toBe(99) // Reset to fresh window
     })
 })
 

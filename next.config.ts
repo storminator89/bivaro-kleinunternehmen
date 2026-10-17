@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { DOCUMENT_CONTENT_SECURITY_POLICY } from './lib/content-security-policy';
 
 /**
  * Baseline security headers applied to every response.
@@ -28,6 +29,7 @@ const IFRAME_ALLOWED_HEADERS = BASE_SECURITY_HEADERS.map((h) =>
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  poweredByHeader: false,
   async headers() {
     // Next.js evaluates rules in declaration order and later rules override
     // earlier ones for the same header key on overlapping paths. Therefore
@@ -36,6 +38,13 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: BASE_SECURITY_HEADERS,
+      },
+      {
+        source: "/api/:path*",
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Content-Security-Policy', value: DOCUMENT_CONTENT_SECURITY_POLICY },
+        ],
       },
       {
         source: "/api/invoices/download",

@@ -1,0 +1,84 @@
+{
+  "count": 13,
+  "webBytes": 56428,
+  "assets": [
+    {
+      "name": "bivaro-sidebar-flat",
+      "file": "public/brand/icons/bivaro-sidebar-flat.webp",
+      "bytes": 6530,
+      "alpha": true
+    },
+    {
+      "name": "flat-incomes",
+      "file": "public/brand/icons/flat/incomes.webp",
+      "bytes": 2886,
+      "alpha": true
+    },
+    {
+      "name": "flat-expenses",
+      "file": "public/brand/icons/flat/expenses.webp",
+      "bytes": 2482,
+      "alpha": true
+    },
+    {
+      "name": "flat-profit",
+      "file": "public/brand/icons/flat/profit.webp",
+      "bytes": 3376,
+      "alpha": true
+    },
+    {
+      "name": "flat-open-invoices",
+      "file": "public/brand/icons/flat/open-invoices.webp",
+      "bytes": 6490,
+      "alpha": true
+    },
+    {
+      "name": "flat-year-comparison",
+      "file": "public/brand/icons/flat/year-comparison.webp",
+      "bytes": 3282,
+      "alpha": true
+    },
+    {
+      "name": "flat-activity",
+      "file": "public/brand/icons/flat/activity.webp",
+      "bytes": 6544,
+      "alpha": true
+    },
+    {
+      "name": "flat-limits",
+      "file": "public/brand/icons/flat/limits.webp",
+      "bytes": 4114,
+      "alpha": true
+    },
+    {
+      "name": "flat-import",
+      "file": "public/brand/icons/flat/import.webp",
+      "bytes": 3232,
+      "alpha": true
+    },
+    {
+      "name": "flat-document",
+      "file": "public/brand/icons/flat/document.webp",
+      "bytes": 3300,
+      "alpha": true
+    },
+    {
+      "name": "flat-proposal",
+      "file": "public/brand/icons/flat/proposal.webp",
+      "bytes": 5484,
+      "alpha": true
+    },
+    {
+      "name": "flat-inventory",
+      "file": "public/brand/icons/flat/inventory.webp",
+      "bytes": 3634,
+      "alpha": true
+    },
+    {
+      "name": "flat-ledger",
+      "file": "public/brand/icons/flat/ledger.webp",
+      "bytes": 5074,
+      "alpha": true
+    }
+  ]
+}

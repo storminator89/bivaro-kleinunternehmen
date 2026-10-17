@@ -1,5 +1,22 @@
 [
   {
+    "date": "2026-10-17",
+    "scope": "app",
+    "macrostructure": "Ledger Workbench / four financial metrics / tabular management / grouped editors",
+    "theme": "BIVARO Design System 2.0",
+    "theme_axes": "cool canvas / Inter product UI / evergreen and mint",
+    "enrichment": "none",
+    "brief": "Apply the supplied BIVARO dashboard, invoices and income mockups through shared tokens, headers, financial metrics and existing primitives."
+  },
+  {
+    "date": "2026-10-15",
+    "scope": "whole product, 22 routes and views",
+    "macrostructure": "Ledger workspace / document studios / responsive records / long document navigation / focused authentication",
+    "theme": "custom Bivaro Ledger",
+    "enrichment": "existing product screenshot and real accounting data",
+    "brief": "Three delegated page-family redesigns integrated with shared report and bookkeeping refinements. All-route five-width smoke, PDF/XML and quote creation verified; 376 unit tests and 16 browser tests pass."
+  },
+  {
     "date": "2026-10-05",
     "scope": "invoice creation editor",
     "macrostructure": "Recipient-led document editor / labelled position rows / sticky creation and totals rail",

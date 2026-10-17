@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
  * API Route: /api/cashbook/daily-balance
  * Daily balance reporting and cash count (Kassensturz)
@@ -131,7 +132,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST: Kassensturz durchführen (Zählprotokoll)
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
     try {
         const userId = await getUserId();
         if (!userId) {
@@ -218,3 +219,5 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });

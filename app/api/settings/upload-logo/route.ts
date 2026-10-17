@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextResponse, NextRequest } from 'next/server';
 import path from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
@@ -13,7 +14,7 @@ import {
 // Maximum file size: 10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     // Authentication check
     const userId = await requireUserId();
@@ -80,3 +81,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = protectMutation(postHandler);

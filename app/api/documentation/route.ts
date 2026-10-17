@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
  * API Route: /api/documentation
  * Manage GoBD Verfahrensdokumentation
@@ -50,7 +51,7 @@ export async function GET(_request: Request) {
 }
 
 // POST: Save documentation
-export async function POST(_request: Request) {
+async function postHandler(_request: Request) {
     try {
         const userId = await requireUserId();
         const body = await _request.json();
@@ -115,7 +116,7 @@ export async function POST(_request: Request) {
 }
 
 // GET /api/documentation/history - Get version history
-export async function PUT(_request: NextRequest) {
+async function putHandler(_request: NextRequest) {
     try {
         const userId = await requireUserId();
 
@@ -141,3 +142,6 @@ export async function PUT(_request: NextRequest) {
         return NextResponse.json({ error: 'Fehler beim Laden des Versionsverlaufs' }, { status: 500 });
     }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const PUT = protectMutation(putHandler);

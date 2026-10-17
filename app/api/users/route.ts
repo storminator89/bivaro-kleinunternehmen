@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -49,7 +50,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+async function postHandler(req: Request) {
   try {
     const { user: actor } = await requireAdminSession();
     const body = await req.json();
@@ -110,3 +111,5 @@ export async function POST(req: Request) {
     return new NextResponse("Internal Error", { status: 500 });
   }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });

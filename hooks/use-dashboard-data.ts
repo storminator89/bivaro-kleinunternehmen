@@ -124,6 +124,8 @@ export function useDashboardData({
     taxRelevant: filters.expenses.taxRelevant !== "all" ? filters.expenses.taxRelevant : undefined,
     hasReceipt: filters.expenses.hasReceipt !== "all" ? filters.expenses.hasReceipt : undefined,
     search: expenseSearch || undefined,
+    sortBy: filters.expenses.sortBy ?? "date",
+    sortOrder: filters.expenses.sortOrder ?? "desc",
   });
   const incomesQueryString = toQuery({
     page: incomesPage,
@@ -132,6 +134,8 @@ export function useDashboardData({
     dateRange: filters.incomes.dateRange !== "all" ? filters.incomes.dateRange : undefined,
     taxRelevant: filters.incomes.taxRelevant !== "all" ? filters.incomes.taxRelevant : undefined,
     search: incomeSearch || undefined,
+    sortBy: filters.incomes.sortBy ?? "date",
+    sortOrder: filters.incomes.sortOrder ?? "desc",
   });
   const invoicesQueryString = toQuery({
     page: invoicesPage,
@@ -242,6 +246,8 @@ export function useDashboardData({
     filters.expenses.taxRelevant,
     filters.expenses.hasReceipt,
     filters.expenses.searchTerm,
+    filters.expenses.sortBy,
+    filters.expenses.sortOrder,
   ]);
 
   useEffect(() => {
@@ -251,6 +257,8 @@ export function useDashboardData({
     filters.incomes.dateRange,
     filters.incomes.taxRelevant,
     filters.incomes.searchTerm,
+    filters.incomes.sortBy,
+    filters.incomes.sortOrder,
   ]);
 
   useEffect(() => {
@@ -272,6 +280,7 @@ export function useDashboardData({
     if (resource === "expenses" || resource === "incomes" || resource === "invoices") {
       invalidations.push(queryClient.invalidateQueries({ queryKey: ["dashboard", "summary"] }));
       invalidations.push(queryClient.invalidateQueries({ queryKey: ["dashboard", "assets"] }));
+      invalidations.push(queryClient.invalidateQueries({ queryKey: ["dashboard", "year-comparison"] }));
     }
     if (resource === "expenses" || resource === "incomes") {
       invalidations.push(queryClient.invalidateQueries({ queryKey: ["dashboard", "filter-options"] }));
@@ -330,10 +339,14 @@ export function useDashboardData({
     expensesPageSize,
     expensesTotal,
     expensesTotalPages,
+    expensesIsFetching: expensesQuery.isFetching,
+    expensesIsError: expensesQuery.isError,
     incomesPage,
     incomesPageSize,
     incomesTotal,
     incomesTotalPages,
+    incomesIsFetching: incomesQuery.isFetching,
+    incomesIsError: incomesQuery.isError,
     invoicesPage,
     invoicesPageSize,
     invoicesTotal,
@@ -344,6 +357,8 @@ export function useDashboardData({
     quotesPageSize,
     quotesTotal,
     quotesTotalPages,
+    quotesIsFetching: quotesQuery.isFetching,
+    quotesIsError: quotesQuery.isError,
     setExpensesPage,
     setExpensesPageSize,
     setIncomesPage,

@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-17",
+  "timezone": "Europe/Berlin",
+  "state": "uncommitted; builds on existing BIVARO 2.0 working tree",
+  "scope": [
+    "free year comparison selector",
+    "server-side ordering of filtered income and expense lists"
+  ],
+  "checks": {
+    "unit": {
+      "command": "npm run test",
+      "passed": 401,
+      "skipped": 1,
+      "filesPassed": 53,
+      "skipReason": "optional opt-in dashboard performance benchmark"
+    },
+    "focusedIntegration": {
+      "command": "npx vitest run lib/__tests__/dashboard-year-and-ledger-sort.test.ts lib/__tests__/dashboard-accounting.test.ts",
+      "passed": 29,
+      "newTestCases": 25,
+      "fixture": "new temporary SQLite directory; explicit DATABASE_URL"
+    },
+    "lint": {
+      "command": "npm run lint",
+      "result": "passed",
+      "warnings": 0
+    },
+    "build": {
+      "command": "DATABASE_URL=file:<temporary-fixture>/visual.db npm run build",
+      "result": "passed",
+      "includes": "TypeScript and standalone build"
+    },
+    "e2e": {
+      "command": "npx playwright test --config <temporary-fixture>/playwright.config.mjs",
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 50.01,
+      "browser": "Chromium",
+      "port": 3102,
+      "fixture": "fresh temporary migrated SQLite database outside repository",
+      "testSourceDifference": "only port 3100 -> 3102 in the temporary copy"
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "result": "passed"
+    }
+  },
+  "coverage": [
+    "historical January and December in full calendar years",
+    "current-year default unchanged",
+    "current KPI values independent of selected comparison year",
+    "payment-year recognition, private income and unpaid invoices",
+    "tenant isolation and authentication before parameter validation",
+    "invalid year and sort input rejection",
+    "numeric amounts across page boundaries",
+    "stable ordering for equal values",
+    "search, period, tax, customer and category filters combined with sorting",
+    "pagination reset after ordering changes",
+    "desktop column buttons and synchronized mobile select",
+    "year comparison loading and error retry",
+    "tab preservation across year changes",
+    "empty historical year",
+    "keyboard scrolling within the mobile month table",
+    "comparison refresh after saving an income"
+  ],
+  "responsive": {
+    "allWorkspaceWidths": [
+      320,
+      375,
+      414,
+      768,
+      1440
+    ],
+    "newYearControlWidths": [
+      320,
+      375,
+      768,
+      1440
+    ],
+    "orderingWidths": [
+      375,
+      1440
+    ],
+    "pageOverflow": false
+  },
+  "screenshots": [
+    "expenses-ordered-1440.png",
+    "expenses-ordered-375.png",
+    "incomes-ordered-1440.png",
+    "incomes-ordered-375.png",
+    "year-selector-1440.png",
+    "year-selector-320.png",
+    "year-selector-375.png",
+    "year-selector-768.png"
+  ],
+  "databaseImpact": "No schema, index, migration or production data changes; existing read endpoints get optional validated parameters",
+  "unchanged": [
+    "existing accounting write rules",
+    "default current-year comparison",
+    "default date-descending income/expense order",
+    "authentication and role checks",
+    "v1 API",
+    "existing invoice ordering"
+  ],
+  "reviewNotes": [
+    "The mobile month table has a relative scroll container so positioned screen-reader text cannot enlarge the document.",
+    "Historical comparison caches are invalidated when incomes, expenses or invoices are reloaded after changes.",
+    "Earlier ambiguous empty-state test lookup now checks both hidden responsive variants."
+  ]
+}

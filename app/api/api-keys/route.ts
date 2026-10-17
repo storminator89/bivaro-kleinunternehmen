@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
  * API Keys Management Endpoint
  * 
@@ -49,7 +50,7 @@ export async function GET(_request: Request) {
 }
 
 // POST - Create new API key
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
 
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE - Revoke/delete an API key
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
@@ -192,7 +193,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 // PUT - Update API key (enable/disable, rename)
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
 
@@ -248,3 +249,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update API key' }, { status: 500 });
   }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);
+export const PUT = protectMutation(putHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });

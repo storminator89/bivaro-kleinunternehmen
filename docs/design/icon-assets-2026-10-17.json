@@ -1,0 +1,231 @@
+{
+  "tool": "built-in image_gen",
+  "count": 24,
+  "totalWebBytes": 145300,
+  "faviconSizes": [
+    16,
+    32,
+    48,
+    64,
+    128,
+    256
+  ],
+  "assets": [
+    {
+      "name": "bivaro-app",
+      "original": "assets/brand/bivaro-icons/bivaro-app.png",
+      "web": "public/brand/icons/bivaro-app.webp",
+      "width": 192,
+      "height": 192,
+      "bytes": 7026,
+      "alpha": true
+    },
+    {
+      "name": "nav-dashboard",
+      "original": "assets/brand/bivaro-icons/nav-dashboard.png",
+      "web": "public/brand/icons/nav-dashboard.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5316,
+      "alpha": true
+    },
+    {
+      "name": "nav-invoices",
+      "original": "assets/brand/bivaro-icons/nav-invoices.png",
+      "web": "public/brand/icons/nav-invoices.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5176,
+      "alpha": true
+    },
+    {
+      "name": "nav-quotes",
+      "original": "assets/brand/bivaro-icons/nav-quotes.png",
+      "web": "public/brand/icons/nav-quotes.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 6398,
+      "alpha": true
+    },
+    {
+      "name": "nav-reminders",
+      "original": "assets/brand/bivaro-icons/nav-reminders.png",
+      "web": "public/brand/icons/nav-reminders.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 6494,
+      "alpha": true
+    },
+    {
+      "name": "nav-customers",
+      "original": "assets/brand/bivaro-icons/nav-customers.png",
+      "web": "public/brand/icons/nav-customers.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 6034,
+      "alpha": true
+    },
+    {
+      "name": "nav-incomes",
+      "original": "assets/brand/bivaro-icons/nav-incomes.png",
+      "web": "public/brand/icons/nav-incomes.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5416,
+      "alpha": true
+    },
+    {
+      "name": "nav-expenses",
+      "original": "assets/brand/bivaro-icons/nav-expenses.png",
+      "web": "public/brand/icons/nav-expenses.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5476,
+      "alpha": true
+    },
+    {
+      "name": "nav-cashbook",
+      "original": "assets/brand/bivaro-icons/nav-cashbook.png",
+      "web": "public/brand/icons/nav-cashbook.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 6784,
+      "alpha": true
+    },
+    {
+      "name": "nav-eur",
+      "original": "assets/brand/bivaro-icons/nav-eur.png",
+      "web": "public/brand/icons/nav-eur.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 7886,
+      "alpha": true
+    },
+    {
+      "name": "nav-assets",
+      "original": "assets/brand/bivaro-icons/nav-assets.png",
+      "web": "public/brand/icons/nav-assets.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 4678,
+      "alpha": true
+    },
+    {
+      "name": "nav-tax",
+      "original": "assets/brand/bivaro-icons/nav-tax.png",
+      "web": "public/brand/icons/nav-tax.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 6246,
+      "alpha": true
+    },
+    {
+      "name": "nav-settings",
+      "original": "assets/brand/bivaro-icons/nav-settings.png",
+      "web": "public/brand/icons/nav-settings.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 7274,
+      "alpha": true
+    },
+    {
+      "name": "nav-users",
+      "original": "assets/brand/bivaro-icons/nav-users.png",
+      "web": "public/brand/icons/nav-users.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5574,
+      "alpha": true
+    },
+    {
+      "name": "nav-logout",
+      "original": "assets/brand/bivaro-icons/nav-logout.png",
+      "web": "public/brand/icons/nav-logout.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5176,
+      "alpha": true
+    },
+    {
+      "name": "tile-incomes",
+      "original": "assets/brand/bivaro-icons/tile-incomes.png",
+      "web": "public/brand/icons/tile-incomes.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5410,
+      "alpha": true
+    },
+    {
+      "name": "tile-expenses",
+      "original": "assets/brand/bivaro-icons/tile-expenses.png",
+      "web": "public/brand/icons/tile-expenses.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5106,
+      "alpha": true
+    },
+    {
+      "name": "tile-profit",
+      "original": "assets/brand/bivaro-icons/tile-profit.png",
+      "web": "public/brand/icons/tile-profit.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5696,
+      "alpha": true
+    },
+    {
+      "name": "tile-open-invoices",
+      "original": "assets/brand/bivaro-icons/tile-open-invoices.png",
+      "web": "public/brand/icons/tile-open-invoices.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 7356,
+      "alpha": true
+    },
+    {
+      "name": "tile-year-comparison",
+      "original": "assets/brand/bivaro-icons/tile-year-comparison.png",
+      "web": "public/brand/icons/tile-year-comparison.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 5244,
+      "alpha": true
+    },
+    {
+      "name": "tile-activity",
+      "original": "assets/brand/bivaro-icons/tile-activity.png",
+      "web": "public/brand/icons/tile-activity.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 8536,
+      "alpha": true
+    },
+    {
+      "name": "tile-limits",
+      "original": "assets/brand/bivaro-icons/tile-limits.png",
+      "web": "public/brand/icons/tile-limits.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 6250,
+      "alpha": true
+    },
+    {
+      "name": "invoice-import",
+      "original": "assets/brand/bivaro-icons/invoice-import.png",
+      "web": "public/brand/icons/invoice-import.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 6064,
+      "alpha": true
+    },
+    {
+      "name": "invoice-document",
+      "original": "assets/brand/bivaro-icons/invoice-document.png",
+      "web": "public/brand/icons/invoice-document.webp",
+      "width": 128,
+      "height": 128,
+      "bytes": 4684,
+      "alpha": true
+    }
+  ]
+}

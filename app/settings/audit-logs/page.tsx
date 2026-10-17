@@ -1,5 +1,8 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
+import styles from "@/components/settings/admin-workspace.module.css";
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -224,34 +227,22 @@ export default function AuditLogsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className={styles.workspace}>
+      <div className={styles.page}>
         {/* Back Link */}
         <Link
           href="/settings"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6"
+          className={styles.back}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Zurück zu Einstellungen
         </Link>
 
         {/* Header */}
-        <header className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <History className="h-8 w-8 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Audit-Log</h1>
-              <p className="text-muted-foreground">
-                Protokoll aller Änderungen und Aktivitäten
-              </p>
-            </div>
-          </div>
-        </header>
+        <PageHeader title="Audit-Log" description="Protokoll aller Änderungen und Aktivitäten." section="System" />
 
         {/* Filters */}
-        <Card className="mb-6">
+        <Card className={`${styles.surface} ${styles.filterSurface}`}>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Filter className="h-5 w-5" />
@@ -259,7 +250,7 @@ export default function AuditLogsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className={styles.filterGrid}>
               <div>
                 <Label htmlFor="entityType">Bereich</Label>
                 <Select value={entityType} onValueChange={setEntityType}>
@@ -325,7 +316,7 @@ export default function AuditLogsPage() {
                   <Search className="h-4 w-4 mr-2" />
                   Suchen
                 </Button>
-                <Button variant="outline" onClick={handleReset}>
+                <Button variant="outline" onClick={handleReset} aria-label="Filter zurücksetzen">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
@@ -334,7 +325,7 @@ export default function AuditLogsPage() {
         </Card>
 
         {/* Logs Table */}
-        <Card>
+        <Card className={styles.surface}>
           <CardHeader>
             <CardTitle>Aktivitäten</CardTitle>
             <CardDescription>
@@ -357,7 +348,7 @@ export default function AuditLogsPage() {
               </div>
             ) : (
               <>
-                <Table>
+                <Table className={styles.recordTable}>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[180px]">Zeitpunkt</TableHead>
@@ -378,7 +369,7 @@ export default function AuditLogsPage() {
 
                       return (
                         <TableRow key={log.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedLog(log)}>
-                          <TableCell>
+                          <TableCell data-label="Zeitpunkt">
                             <div className="text-sm font-medium">
                               {formatDate(log.createdAt)}
                             </div>
@@ -386,7 +377,7 @@ export default function AuditLogsPage() {
                               {formatRelativeDate(log.createdAt)}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Benutzer">
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4 text-muted-foreground" />
                               <div>
@@ -401,13 +392,13 @@ export default function AuditLogsPage() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Aktion">
                             <Badge className={`${actionInfo.color} gap-1`}>
                               {actionInfo.icon}
                               {actionInfo.label}
                             </Badge>
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Bereich">
                             <div className="flex items-center gap-2">
                               {ENTITY_ICONS[log.entityType] || <FileText className="h-4 w-4" />}
                               <span className="text-sm">
@@ -415,7 +406,7 @@ export default function AuditLogsPage() {
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Details">
                             <div className="max-w-[250px]">
                               {log.entityName && (
                                 <div className="text-sm font-medium truncate">
@@ -425,10 +416,11 @@ export default function AuditLogsPage() {
                               {renderChangedFields(log)}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Aktionen">
                             <Button
                               variant="ghost"
                               size="icon"
+                              aria-label={`Details zu ${log.entityName || ENTITY_LABELS[log.entityType] || log.entityType} öffnen`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedLog(log);
@@ -445,7 +437,7 @@ export default function AuditLogsPage() {
 
                 {/* Pagination */}
                 {pagination && pagination.totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <div className={styles.pager}>
                     <div className="text-sm text-muted-foreground">
                       Seite {pagination.page} von {pagination.totalPages}
                     </div>
@@ -478,7 +470,7 @@ export default function AuditLogsPage() {
 
         {/* Detail Dialog */}
         <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className={`${styles.dialog} max-w-2xl max-h-[80vh] overflow-y-auto`}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 {selectedLog && ENTITY_ICONS[selectedLog.entityType]}
@@ -492,7 +484,7 @@ export default function AuditLogsPage() {
             {selectedLog && (
               <div className="space-y-4">
                 {/* Basic Info */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-muted-foreground">Benutzer</Label>
                     <p className="font-medium">{selectedLog.user.name || selectedLog.user.email}</p>

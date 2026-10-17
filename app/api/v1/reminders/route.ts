@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { auditCreate, auditDelete } from '@/lib/audit-log';
 /**
  * API v1 - Reminders Endpoint
@@ -146,7 +147,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/v1/reminders
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   return withApiAuth(request, async ({ userId }) => {
     let body;
     try {
@@ -245,7 +246,7 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE /api/v1/reminders?id=<id>
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
   return withApiAuth(request, async ({ userId }) => {
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
@@ -275,3 +276,6 @@ export async function DELETE(request: NextRequest) {
     return response;
   }, { requiredScopes: ['delete'] });
 }
+
+export const POST = protectMutation(postHandler, { bearer: true, maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler, { bearer: true });

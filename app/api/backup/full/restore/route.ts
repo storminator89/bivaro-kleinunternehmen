@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
@@ -13,7 +14,7 @@ import {
 } from '@/lib/resource-limits';
 
 /** Restore a full ZIP backup with bounded decompression and atomic DB import. */
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
     const { searchParams } = new URL(request.url);
@@ -120,3 +121,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = protectMutation(postHandler);

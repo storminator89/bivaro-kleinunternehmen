@@ -1,5 +1,10 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
+import { copyAdminText } from "@/components/settings/copy-admin-text";
+
+import styles from "@/components/settings/admin-workspace.module.css";
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,6 +80,7 @@ export default function ApiKeysPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newKeyResult, setNewKeyResult] = useState<NewApiKey | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState("");
   const [showKey, setShowKey] = useState(false);
   
   // Form states
@@ -200,10 +206,15 @@ export default function ApiKeysPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = async (text: string) => {
+    setCopyError("");
+    try {
+      await copyAdminText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyError("Kopieren nicht möglich. Markieren und kopieren Sie den Schlüssel manuell.");
+    }
   };
 
   const toggleScope = (scope: string) => {
@@ -278,43 +289,39 @@ export default function ApiKeysPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className={styles.workspace}>
+      <div className={styles.page}>
         {/* Back Link */}
         <Link 
           href="/settings" 
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6"
+          className={styles.back}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Zurück zu Einstellungen
         </Link>
 
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight mb-2 flex items-center gap-3">
-              <Key className="h-8 w-8" />
-              API-Schlüssel
-            </h1>
-            <p className="text-muted-foreground">
-              Verwalten Sie API-Schlüssel für den Zugriff auf die REST-API
-            </p>
-          </div>
-          <div className="flex gap-2 mt-4 md:mt-0">
-            <Link href="/settings/api-keys/docs">
-              <Button variant="outline">
+        <PageHeader title="API-Schlüssel" description="Verwalten Sie API-Schlüssel für den Zugriff auf die REST-API." section="System" actions={<>
+<div className={styles.headerActions}>
+            <Button variant="outline" asChild>
+              <Link href="/settings/api-keys/docs">
                 <BookOpen className="h-4 w-4 mr-2" />
                 API-Dokumentation
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             <Button onClick={() => setIsCreateModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Neuen API-Key erstellen
             </Button>
           </div>
-        </header>
+</>} />
+
+        <dl className={styles.summary} aria-label="API-Zugänge im Überblick">
+          <div><dt>Gespeicherte Schlüssel</dt><dd>{isLoading ? "—" : apiKeys.length}</dd></div>
+          <div><dt>Aktiv und nicht abgelaufen</dt><dd>{isLoading ? "—" : apiKeys.filter((key) => key.isActive && !isExpired(key.expiresAt)).length}</dd></div>
+        </dl>
 
         {/* Info Card */}
-        <Card className="mb-6 border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20">
+        <Card className={styles.note}>
           <CardContent className="pt-6">
             <div className="flex gap-4">
               <Shield className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />
@@ -344,7 +351,7 @@ export default function ApiKeysPage() {
         </Card>
 
         {/* API Keys Table */}
-        <Card>
+        <Card className={styles.surface}>
           <CardHeader>
             <CardTitle>Aktive API-Schlüssel</CardTitle>
             <CardDescription>
@@ -367,7 +374,7 @@ export default function ApiKeysPage() {
                 </Button>
               </div>
             ) : (
-              <Table>
+              <Table className={styles.recordTable}>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
@@ -382,11 +389,11 @@ export default function ApiKeysPage() {
                 <TableBody>
                   {apiKeys.map((key) => (
                     <TableRow key={key.id} className={!key.isActive || isExpired(key.expiresAt) ? "opacity-60" : ""}>
-                      <TableCell className="font-medium">{key.name}</TableCell>
-                      <TableCell>
+                      <TableCell data-label="Name" className="font-medium">{key.name}</TableCell>
+                      <TableCell data-label="Key">
                         <code className="text-xs bg-muted px-2 py-1 rounded">{key.keyPrefix}</code>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Berechtigungen">
                         <div className="flex gap-1 flex-wrap">
                           {key.scopes.map((scope) => (
                             <span 
@@ -404,7 +411,7 @@ export default function ApiKeysPage() {
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Status">
                         {isExpired(key.expiresAt) ? (
                           <span className="inline-flex items-center gap-1 text-xs text-red-600">
                             <Clock className="h-3 w-3" />
@@ -421,13 +428,13 @@ export default function ApiKeysPage() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell data-label="Zuletzt verwendet" className="text-sm text-muted-foreground">
                         {formatDate(key.lastUsedAt)}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell data-label="Läuft ab" className="text-sm text-muted-foreground">
                         {key.expiresAt ? formatDate(key.expiresAt) : "Nie"}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell data-label="Aktionen" className="text-right">
                         <div className="flex justify-end gap-1">
                           <TooltipProvider>
                             <Tooltip>
@@ -435,7 +442,8 @@ export default function ApiKeysPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-11 w-11"
+                                  aria-label={`${key.name} ${key.isActive ? "deaktivieren" : "aktivieren"}`}
                                   onClick={() => handleToggleActive(key)}
                                 >
                                   {key.isActive ? (
@@ -457,7 +465,8 @@ export default function ApiKeysPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  className="h-11 w-11 text-destructive hover:text-destructive"
+                                  aria-label={`${key.name} löschen`}
                                   onClick={() => handleDeleteKey(key.id)}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -477,7 +486,7 @@ export default function ApiKeysPage() {
         </Card>
 
         {/* CORS Settings Card */}
-        <Card className="mt-6">
+        <Card className={`${styles.surface} mt-6`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5" />
@@ -517,7 +526,7 @@ export default function ApiKeysPage() {
                     {defaultOrigins.map((origin) => (
                       <span
                         key={origin}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-muted text-muted-foreground text-sm rounded-full"
+                        className="inline-flex max-w-full break-all items-center gap-1 px-3 py-1 bg-muted text-muted-foreground text-sm rounded-full"
                       >
                         <Globe className="h-3 w-3" />
                         {origin}
@@ -541,12 +550,13 @@ export default function ApiKeysPage() {
                       {corsOrigins.map((origin) => (
                         <span
                           key={origin}
-                          className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary text-sm rounded-full group"
+                          className="inline-flex max-w-full break-all items-center gap-1 px-3 py-1 bg-primary/10 text-primary text-sm rounded-full group"
                         >
                           <Globe className="h-3 w-3" />
                           {origin}
                           <button
                             onClick={() => handleRemoveOrigin(origin)}
+                            aria-label={`Origin ${origin} entfernen`}
                             className="ml-1 p-0.5 hover:bg-primary/20 rounded-full transition-colors"
                             title="Entfernen"
                           >
@@ -559,8 +569,9 @@ export default function ApiKeysPage() {
                 </div>
 
                 {/* Add Origin Form */}
-                <div className="flex gap-2">
+                <div className={styles.inlineForm}>
                   <Input
+                    aria-label="Neue erlaubte Origin"
                     placeholder="https://ihre-app.example.com"
                     value={newOrigin}
                     onChange={(e) => setNewOrigin(e.target.value)}
@@ -599,7 +610,7 @@ export default function ApiKeysPage() {
 
         {/* Create Modal */}
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogContent>
+          <DialogContent className={styles.dialog}>
             <DialogHeader>
               <DialogTitle>Neuen API-Schlüssel erstellen</DialogTitle>
               <DialogDescription>
@@ -674,7 +685,7 @@ export default function ApiKeysPage() {
 
         {/* New Key Result Modal */}
         <Dialog open={!!newKeyResult} onOpenChange={() => setNewKeyResult(null)}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className={`${styles.dialog} sm:max-w-lg`}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Check className="h-5 w-5 text-green-600" />
@@ -710,6 +721,7 @@ export default function ApiKeysPage() {
                     variant="outline"
                     size="icon"
                     onClick={() => setShowKey(!showKey)}
+                    aria-label={showKey ? "API-Schlüssel verbergen" : "API-Schlüssel anzeigen"}
                   >
                     {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
@@ -717,13 +729,15 @@ export default function ApiKeysPage() {
                     variant="outline"
                     size="icon"
                     onClick={() => copyToClipboard(newKeyResult?.key || "")}
+                    aria-label={copied ? "API-Schlüssel kopiert" : "API-Schlüssel kopieren"}
                   >
                     {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <p role="status" className={styles.copyFeedback}>{copyError || (copied ? "API-Schlüssel kopiert." : "")}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Name:</span>
                   <p className="font-medium">{newKeyResult?.name}</p>

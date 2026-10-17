@@ -1,9 +1,10 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { POST as uploadInvoice } from '@/app/api/invoices/upload/route';
 
 // A conversion must supply the newly generated invoice, never reuse the quote PDF.
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function postHandler(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireUserId();
     const { id } = await params;
@@ -23,3 +24,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Umwandlung fehlgeschlagen' }, { status: 400 });
   }
 }
+
+export const POST = protectMutation(postHandler);

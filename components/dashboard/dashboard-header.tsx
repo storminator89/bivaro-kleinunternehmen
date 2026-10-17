@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { CollapsibleKpiCard } from "./collapsible-kpi-card";
-import { DollarSign, CreditCard, Banknote, ChevronDown, ChevronUp, ArrowUpRight } from "lucide-react";
+import { DashboardIcon } from "@/components/brand/dashboard-icon";
+import { MetricCard } from "./metric-card";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 interface Activity {
   id: number | string;
@@ -21,6 +22,14 @@ interface KpiData {
   totalRevenue: number;
   totalExpenses: number;
   recentActivities: Activity[];
+  yearComparison?: {
+    currentYear: number;
+    revenueThisYearToDate: number;
+    expensesThisYearToDate: number;
+    revenueLastYearToDate: number;
+    expensesLastYearToDate: number;
+    monthlyDataThisYear: { revenue: number; expenses: number; profit: number }[];
+  };
 }
 
 interface DashboardHeaderProps {
@@ -45,7 +54,10 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
 
   // Berechne zusätzliche Metriken
   const profit = data.totalRevenue - data.totalExpenses;
-  const profitMargin = data.totalRevenue > 0 ? (profit / data.totalRevenue) * 100 : 0;
+  const comparison = data.yearComparison;
+  const revenue = comparison?.revenueThisYearToDate ?? data.totalRevenue;
+  const expenses = comparison?.expensesThisYearToDate ?? data.totalExpenses;
+  const period = comparison ? `${comparison.currentYear} bis heute` : 'Gesamtzeitraum';
 
   // Kleinunternehmer-Limit Logik (Neue Regelung ab 01.01.2025)
   // Vorjahresgrenze: 25.000 € (war 22.000 €)
@@ -63,95 +75,28 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
   const isOverHardLimit = data.revenueThisYear > currentYearLimit; // Sofortige Steuerpflicht!
 
   return (
-    <div className="space-y-4">
-      {/* Hauptüberschrift mit Ausklappfunktion */}
-      <section aria-labelledby="dashboard-overview-title">
-        <button
-          type="button"
-          className="finance-overview-toggle flex min-h-12 w-full items-center justify-between border-b border-border/80 py-3 text-left"
-          onClick={() => {
-            const next = !isExpanded;
-            setIsExpanded(next);
-            localStorage.setItem("dashboardExpanded", String(next));
-          }}
-          aria-expanded={isExpanded}
-          aria-controls="dashboard-overview-content"
-        >
-          <span>
-            <span id="dashboard-overview-title" className="block text-lg font-semibold">Finanzlage</span>
-            <span className="mt-0.5 block text-sm font-normal text-muted-foreground">Kennzahlen, Grenzstatus und letzte Buchungen</span>
-          </span>
-          {isExpanded ? <ChevronUp className="h-5 w-5" aria-hidden="true" /> : <ChevronDown className="h-5 w-5" aria-hidden="true" />}
+    <div className="dashboard-summary">
+      <div className="dashboard-metrics" aria-label="Finanzkennzahlen">
+        <MetricCard title="Einnahmen" amount={revenue} icon="tile-incomes" period={period} previous={comparison?.revenueLastYearToDate} href="/dashboard?tab=incomes" series={comparison?.monthlyDataThisYear.map(month => month.revenue)} />
+        <MetricCard title="Ausgaben" amount={expenses} icon="tile-expenses" tone="critical" period={period} previous={comparison?.expensesLastYearToDate} positiveIsGood={false} href="/dashboard?tab=expenses" series={comparison?.monthlyDataThisYear.map(month => month.expenses)} />
+        <MetricCard title="Gewinn" amount={revenue - expenses} icon="tile-profit" period={period} previous={comparison ? comparison.revenueLastYearToDate - comparison.expensesLastYearToDate : undefined} href="/dashboard?tab=eur" />
+        <MetricCard title="Offene Rechnungen" amount={data.openInvoices} icon="tile-open-invoices" tone="notice" period="Aktuell ausstehender Betrag" href="/dashboard?tab=invoices" />
+      </div>
+      <section className="dashboard-context" aria-labelledby="dashboard-overview-title">
+        <button type="button" className="dashboard-context-toggle" onClick={() => {
+          const next = !isExpanded;
+          setIsExpanded(next);
+          localStorage.setItem('dashboardExpanded', String(next));
+        }} aria-expanded={isExpanded} aria-controls="dashboard-overview-content">
+          <span id="dashboard-overview-title" className="flex items-center gap-3"><DashboardIcon name="tile-limits" size={32} />Weitere Kennzahlen & Umsatzgrenzen</span>
+          {isExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
         </button>
-
-        {isExpanded && (
-          <div id="dashboard-overview-content" className="space-y-6 pt-6">
-            <div className="dashboard-top-grid">
-            <section className="finance-hero" aria-label="Finanzübersicht Gesamtzeitraum">
-              <div className="finance-hero-primary">
-                <p className="finance-eyebrow">Finanzübersicht · Gesamtzeitraum</p>
-                <div className="mt-5 flex items-start justify-between gap-4"><div><h2 className="text-sm font-medium">Gewinn</h2><p className="finance-hero-value">{formatCurrency(profit)}</p></div><ArrowUpRight className="h-8 w-8" aria-hidden="true" /></div>
-                <p className="finance-hero-note">Einnahmen minus Ausgaben <span>· {profitMargin.toLocaleString('de-DE', { maximumFractionDigits: 1 })} % Marge</span></p>
-              </div>
-              <dl className="finance-hero-accounts">
-                <div><dt><span className="finance-dot" />Gesamtumsatz</dt><dd>{formatCurrency(data.totalRevenue)}</dd></div>
-                <div><dt><span className="finance-dot finance-dot-expense" />Gesamtausgaben</dt><dd>{formatCurrency(data.totalExpenses)}</dd></div>
-              </dl>
-            </section>
-            <div className="dashboard-month-metrics grid gap-4">
-              <CollapsibleKpiCard
-                title="Umsatz diesen Monat"
-                value={formatCurrency(data.revenueThisMonth)}
-                icon={<DollarSign className="h-5 w-5 text-positive" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Letzter Monat</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Prognose</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-
-              <CollapsibleKpiCard
-                title="Ausgaben diesen Monat"
-                value={formatCurrency(data.expensesThisMonth)}
-                icon={<CreditCard className="h-5 w-5 text-critical" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Letzter Monat</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Budget</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-
-              <CollapsibleKpiCard
-                title="Offene Forderungen"
-                value={formatCurrency(data.openInvoices)}
-                icon={<Banknote className="h-5 w-5 text-notice" />}
-              >
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Fällig in 7 Tagen</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Überfällig</span>
-                    <span className="text-sm font-medium">-</span>
-                  </div>
-                </div>
-              </CollapsibleKpiCard>
-            </div>
-
-            </div>
+        {isExpanded && <div id="dashboard-overview-content" className="space-y-4">
+          <dl className="dashboard-context-values">
+            <div><DashboardIcon name="tile-incomes" className="context-artwork" size={32} /><dt>Einnahmen diesen Monat</dt><dd>{formatCurrency(data.revenueThisMonth)}</dd></div>
+            <div><DashboardIcon name="tile-expenses" className="context-artwork" size={32} /><dt>Ausgaben diesen Monat</dt><dd>{formatCurrency(data.expensesThisMonth)}</dd></div>
+            <div><DashboardIcon name="tile-profit" className="context-artwork" size={32} /><dt>Gewinn · Gesamtzeitraum</dt><dd>{formatCurrency(profit)}</dd></div>
+          </dl>
             {/* Kleinunternehmer-Status Tracker (Neue Regelung ab 2025) */}
             <details className="limit-disclosure rounded-xl border bg-card" open={isCloseToYearlyLimit || isOverHardLimit ? true : undefined}>
               <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4"><span className="text-sm font-semibold">Kleinunternehmer · Umsatzgrenzen</span><span className="flex items-center gap-2 text-xs text-muted-foreground">{isOverHardLimit ? 'Grenze überschritten' : isCloseToYearlyLimit ? 'Prüfung empfohlen' : 'Im Rahmen'}<ChevronDown className="h-4 w-4" aria-hidden="true" /></span></summary>
@@ -226,7 +171,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
             </details>
 
           </div>
-        )}
+        }
       </section>
     </div>
   );

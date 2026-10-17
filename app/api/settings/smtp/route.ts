@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from "next/server";
 import { auditSecurityEvent } from "@/lib/audit-log";
 import {
@@ -33,7 +34,7 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   try {
     const { user: actor } = await requireAdminSession();
     const body = await request.json();
@@ -84,7 +85,7 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function DELETE() {
+async function deleteHandler() {
   try {
     const { user: actor } = await requireAdminSession();
     const status = await deleteSmtpSettings();
@@ -102,3 +103,6 @@ export async function DELETE() {
     return NextResponse.json({ error: "SMTP-Datenbankoverride konnte nicht entfernt werden" }, { status: 500 });
   }
 }
+
+export const PUT = protectMutation(putHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);

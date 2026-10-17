@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
 }
 
 // POST: Neue Mahnung erstellen
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const { invoiceId, reminderLevel, fee, notes, dueDays } = await request.json();
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
 }
 
 // DELETE: Mahnung löschen
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
@@ -181,3 +182,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Mahnung nicht gefunden' }, { status: 404 });
   }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);

@@ -238,9 +238,19 @@ Alle Einstellungen erfolgen über die `.env`-Datei (Kopie von `.env.example`):
 
 Der E-Mail-Versand nutzt SMTP als Standardschnittstelle. Vor dem Versand öffnet die App eine Vorschau mit editierbarem Empfänger, Betreff, Text und PDF-Anhang-Viewer; ohne vollständige SMTP-Konfiguration ist nur die Vorschau verfügbar.
 
-Administratoren können die globale SMTP-Konfiguration unter *Einstellungen → SMTP-Versand* pflegen. Die API `/api/settings/smtp` ist ausschließlich für Administratoren verfügbar. Ein gespeichertes SMTP-Passwort wird mit AES-GCM und einem aus `NEXTAUTH_SECRET` abgeleiteten Schlüssel verschlüsselt und weder angezeigt noch in die Benutzer-Backupexporte übernommen. Ohne Datenbank-Override verwendet der Versand die `SMTP_*`-/`EMAIL_FROM`-Umgebungsvariablen. Bei einem gespeicherten Override erzwingt `secure=false` STARTTLS; die ENV-Konfiguration behält das bisherige Transportverhalten.
+Administratoren können die globale SMTP-Konfiguration unter *Einstellungen → SMTP-Versand* pflegen. Die API `/api/settings/smtp` ist ausschließlich für Administratoren verfügbar. Ein gespeichertes SMTP-Passwort wird mit AES-GCM und einem aus `NEXTAUTH_SECRET` abgeleiteten Schlüssel verschlüsselt und weder angezeigt noch in die Benutzer-Backupexporte übernommen. Ohne Datenbank-Override verwendet der Versand die `SMTP_*`-/`EMAIL_FROM`-Umgebungsvariablen. Bei beiden Konfigurationsquellen erzwingt `secure=false` STARTTLS. Reine Klartext-Relays werden abgewiesen; `secure=true` verwendet implizites TLS.
 
 Nach einer Änderung von `NEXTAUTH_SECRET` muss das SMTP-Passwort erneut eingegeben werden. Ein leeres Passwortfeld behält das bestehende Passwort bei; ein leerer Benutzername entfernt die Anmeldung. Speichern prüft die Konfiguration, baut aber keine Verbindung auf und versendet keine Testmail. Docker führt ausstehende Migrationen beim Start mit Sicherung und Test auf einer Kopie aus. Für manuell verwaltete Installationen ist der unten beschriebene Upgrade-Job erforderlich.
+
+### Sicherheitsbetrieb
+
+- Öffentlich erreichbare Installationen über HTTPS betreiben und `NEXTAUTH_URL` auf den exakten Browser-Ursprung setzen (Schema, Host und Port). Schreibende Browser-Anfragen aus anderen Ursprüngen, auch von Geschwister-Subdomains, werden abgewiesen. Reine HTTP-Clients ohne Browser-Metadaten benötigen weiterhin die normale Authentifizierung; für Integrationen ist die getrennte Bearer-API unter `/api/v1` vorgesehen.
+- Alle neuen schreibenden API-Handler mit `protectMutation` aus `lib/request-security.ts` exportieren. Nur die explizite Bearer-API und NextAuths eigene CSRF-geschützten Aktionen nutzen die jeweiligen Ausnahmen. Auth-Bodies sind auf 16 KiB begrenzt, gewöhnliche JSON-Bodies auf 1 MiB; bestehende Dokument- und Backup-Routen behalten ihre eigenen Byte-Limits. Die Limits zählen tatsächliche Stream-Bytes, nicht nur `Content-Length`.
+- Seiten verwenden pro Antwort eine zufällige CSP-Nonce und werden dynamisch gerendert. Inline-Skripte ohne Nonce und Inline-Eventhandler sind gesperrt; Inline-Stile bleiben für die UI erlaubt. Personenbezogene API-Antworten sollen `private, no-store` verwenden. XML wird als Download ausgeliefert; HTML/XML-Vorschauen erhalten eine Sandbox, PDF-Vorschauen bleiben im Browser nutzbar.
+- `npm run audit:security` prüft die Produktionsabhängigkeiten und läuft zusätzlich in CI. `npm audit` umfasst auch Entwicklungswerkzeuge. Stand 17.10.2026 verbleiben dort fünf hohe Meldungen in der ESLint-/`braces`-Abhängigkeitskette; die Registry bietet für `braces` noch keine korrigierte Version. Linting nicht auf ungeprüften fremden Dateimustern als öffentlichen Dienst anbieten. Kein erzwungenes Framework-Downgrade zur bloßen Bereinigung des Audit-Ergebnisses verwenden.
+- `npm run test:e2e:security` erstellt eine neue temporäre SQLite-Datenbank, baut den Produktionsserver auf Port 3101 und prüft Registrierung, Anmeldung, Herkunftsprüfung, Größenlimits, CSP und Dokumentausgabe. Die Testdatenbank wird danach entfernt. Laufende Entwicklungs- oder Produktionsdatenbanken werden dafür nicht verwendet.
+
+Die Härtung erfordert keine Datenbankmigration. Sie ersetzt keine Prüfung der tatsächlichen HTTPS-/Proxy-Konfiguration, Betriebssystem- und Ghostscript-Updates oder der Wiederherstellbarkeit von Sicherungen. Neue private Uploads liegen unter `data/uploads` und damit im Docker-Datenvolume; das separate `public/uploads`-Volume dient nur der Legacy-Kompatibilität.
 
 ---
 
@@ -265,7 +275,6 @@ npm run lint         # ESLint ausführen (schlägt bei Warnungen fehl)
 # Tests
 npm run test         # Alle Vitest Unit-Tests einmalig ausführen
 npm run test:watch   # Unit-Tests im Watch-Modus (reagiert auf Dateiänderungen)
-npm run e2e:prepare  # Isolierte E2E-Testdatenbank erstellen/zurücksetzen
 npm run test:e2e     # Playwright E2E-Tests ausführen (baut vorher automatisch)
 
 # Docker
@@ -290,9 +299,9 @@ npm run test         # Tests einmalig ausführen
 npm run test:watch   # Automatisch bei Dateiänderungen erneut ausführen
 ```
 
-Testdateien liegen direkt neben dem getesteten Code in `lib/__tests__/`.
+Testdateien liegen in `lib/__tests__/` und `scripts/__tests__/`.
 
-**Aktueller Stand:** 166 Tests in 7 Dateien, alle grün ✅
+Verifizierte Ergebnisse und verbleibende Einschränkungen stehen im [Testaudit vom 17.10.2026](docs/testing/legacy-code-audit-2026-10-17.md).
 
 ### End-to-End-Tests (Playwright)
 
@@ -300,13 +309,15 @@ E2E-Tests simulieren einen echten Browser und testen komplette Nutzerflüsse:
 
 - Erste Admin-Registrierung
 - Anmeldung und Dashboard-Aufruf
-- Rechnungserstellungs-Dialog
+- Arbeitsbereiche, Rechnungs- und Angebotserstellung sowie Buchhaltungsabläufe
 
 ```bash
 npm run test:e2e
 ```
 
-**Wie funktioniert das?** Playwright baut die App automatisch, startet einen isolierten Test-Server auf Port 3100 mit einer leeren Testdatenbank (`prisma/e2e.db`) und führt dann die Tests im Browser aus. Ihre Entwicklungsdatenbank wird dabei **nicht** berührt.
+**Wie funktioniert das?** Der Runner erstellt für jeden Aufruf ein neues temporäres Verzeichnis. Playwright migriert die dortige leere Testdatenbank, baut die App und startet den isolierten Test-Server auf Port 3100. Anschließend wird die temporäre Datenbank entfernt. `e2e:prepare` ist ein interner Schritt, der nur dieses Fixture akzeptiert und keine vorhandene Datenbank überschreibt.
+
+Falls Port 3100 bereits belegt ist, kann ein freier Testport gewählt werden: `BIVARO_E2E_PORT=3117 npm run test:e2e`. Ein laufender Server wird nicht wiederverwendet.
 
 > **Einmaliger Setup:** Playwright-Browser müssen einmalig installiert werden:
 > ```bash

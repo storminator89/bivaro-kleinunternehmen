@@ -1,6 +1,9 @@
 "use client";
 
+import { DashboardIcon } from "@/components/brand/dashboard-icon";
+import { QueryFeedback } from '@/components/dashboard/query-feedback';
 import React, { useState } from 'react';
+import styles from "@/components/dashboard/sales-workspace.module.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +19,7 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Eye, Download, Trash2, ArrowRightCircle, Loader2, FileText, Mail } from "lucide-react";
+import { Eye, Download, Trash2, ArrowRightCircle, Loader2, Mail, Search, X } from "lucide-react";
 import { EmailPreviewDialog } from "@/components/dashboard/email-preview-dialog";
 import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
 import { formatCurrency } from "@/lib/dashboard-utils";
@@ -48,6 +51,7 @@ type QuotesTabProps = {
     statusFilter: string;
     searchTerm: string;
     isLoading?: boolean;
+    isError?: boolean;
     onPageChange: (page: number) => void;
     onPageSizeChange: (size: number) => void;
     onStatusFilterChange: (status: string) => void;
@@ -80,7 +84,7 @@ const STATUS_COLORS: Record<string, string> = {
 function QuoteStatusBadge({ status, onStatusChange }: { status: string; onStatusChange: (s: string) => void }) {
     return (
         <Select value={status} onValueChange={onStatusChange}>
-            <SelectTrigger className={`h-auto w-auto px-2.5 py-0.5 rounded-full text-xs font-medium border-0 focus:ring-1 focus:ring-primary/40 gap-1 ${STATUS_COLORS[status] || 'bg-muted text-muted-foreground'}`}>
+            <SelectTrigger aria-label={`Angebotsstatus: ${STATUS_LABELS[status] || status}`} className={`min-h-11 w-auto rounded-md border-0 px-2.5 text-xs font-medium gap-1 ${STATUS_COLORS[status] || 'bg-muted text-muted-foreground'}`}>
                 <SelectValue />
             </SelectTrigger>
             <SelectContent align="center">
@@ -101,7 +105,8 @@ export function QuotesTab({
     totalPages,
     statusFilter,
     searchTerm,
-    isLoading,
+    isLoading = false,
+    isError = false,
     onPageChange,
     onPageSizeChange,
     onStatusFilterChange,
@@ -141,21 +146,22 @@ export function QuotesTab({
     };
 
     return (
-        <div className="space-y-6">
+        <div className={`space-y-6 ${styles.records}`}>
             {/* Header card */}
             <div className="ledger-list overflow-hidden rounded-xl border bg-card">
-                <div className="border-b p-4 sm:p-6">
-                    <LedgerListHeading title="Ihre Angebote" total={total} amounts={quotes.map(quote => quote.totalAmount ?? 0)} />
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4 sm:p-6">
+                    <LedgerListHeading icon="nav-quotes" title="Ihre Angebote" isLoading={isLoading} isError={isError} total={total} amounts={isLoading || isError ? [] : quotes.map(quote => quote.totalAmount ?? 0)} />
+                    {(searchTerm || statusFilter !== 'all') && <Button variant="ghost" size="sm" onClick={() => { onSearchChange(''); onStatusFilterChange('all'); }}><X className="mr-1.5 h-4 w-4" aria-hidden="true" />Filter zurücksetzen</Button>}
                 </div>
 
                 {/* Filters */}
-                <div className="px-6 py-4 border-b">
+                <div className={styles.recordToolbar}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="quote-status-filter" className="text-sm">Status</Label>
                             <select
                                 id="quote-status-filter"
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                 value={statusFilter}
                                 onChange={(e) => onStatusFilterChange(e.target.value)}
                             >
@@ -168,9 +174,11 @@ export function QuotesTab({
                         <div className="space-y-2">
                             <Label htmlFor="quote-search" className="text-sm">Suche</Label>
                             <div className="relative">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                                 <Input
                                     id="quote-search"
                                     type="text"
+                                    className="pl-9 pr-11"
                                     placeholder="Angebotsnummer suchen..."
                                     value={searchTerm}
                                     onChange={(e) => onSearchChange(e.target.value)}
@@ -179,7 +187,7 @@ export function QuotesTab({
                                     <button
                                         type="button"
                                         aria-label="Suche leeren"
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
                                         onClick={() => onSearchChange('')}
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -192,9 +200,11 @@ export function QuotesTab({
                     </div>
                 </div>
 
+                {isError && <QueryFeedback noun="Angebote" isError onRetry={() => loadQuotes(page, pageSize)} />}
+                <div hidden={isError}>
                 <div className="divide-y xl:hidden" aria-label="Angebotsliste">
-                    {quotes.length > 0 ? quotes.map((quote) => (
-                        <article key={quote.id} className="space-y-3 p-4">
+                    {isLoading ? <div role="status" className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Angebote werden geladen…</div> : quotes.length > 0 ? quotes.map((quote) => (
+                        <article key={quote.id} className={`space-y-3 ${styles.mobileRecord}`}>
                             <div className="flex items-start justify-between gap-4">
                                 <div className="min-w-0">
                                     <h3 className="truncate font-semibold">{quote.invoiceNumber || 'Angebot ohne Nummer'}</h3>
@@ -202,19 +212,22 @@ export function QuotesTab({
                                         {quote.customer?.name || 'Kein Kunde'} · {quote.invoiceDate ? new Date(quote.invoiceDate).toLocaleDateString('de-DE') : new Date(quote.uploadedAt).toLocaleDateString('de-DE')}
                                     </p>
                                 </div>
-                                <p className="shrink-0 font-semibold tabular-nums">{quote.totalAmount ? formatCurrency(quote.totalAmount) : '–'}</p>
+                                <p className="shrink-0 font-semibold tabular-nums">{quote.totalAmount != null ? formatCurrency(quote.totalAmount) : '–'}</p>
                             </div>
+                            {quote.validUntil && <p className="text-xs text-muted-foreground">Gültig bis {new Date(quote.validUntil).toLocaleDateString('de-DE')}</p>}
                             <QuoteStatusBadge status={quote.status} onStatusChange={(newStatus) => onStatusChange(quote.id, newStatus)} />
                             <div className="flex flex-wrap gap-2">
                                 <Button variant="outline" size="sm" className="min-h-11" onClick={() => window.open(`/api/quotes/download?id=${quote.id}`, '_blank')}><Eye className="h-4 w-4" />Ansehen</Button>
                                 {quote.status !== 'ACCEPTED' && quote.status !== 'REJECTED' && quote.status !== 'EXPIRED' && (
                                     <Button variant="outline" size="sm" className="min-h-11" disabled={convertingId === quote.id} onClick={() => setConfirmConvert(quote)}>In Rechnung</Button>
                                 )}
+                                <Button variant="outline" size="sm" disabled={quote.status === 'REJECTED' || quote.status === 'EXPIRED'} onClick={() => setEmailQuote(quote)}><Mail className="h-4 w-4" aria-hidden="true" />E-Mail</Button>
+                                <Button variant="ghost" size="sm" onClick={() => window.open(`/api/quotes/download?id=${quote.id}&download=true`, '_blank')}><Download className="h-4 w-4" aria-hidden="true" />PDF</Button>
                                 <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={deletingId === quote.id} onClick={() => setConfirmDelete(quote)}>Löschen</Button>
                             </div>
                         </article>
                     )) : (
-                        <div className="ledger-empty"><FileText aria-hidden="true" /><h3>Ihr nächstes Angebot beginnt hier</h3><p>Bereiten Sie Leistungen und Preise vor und erstellen Sie daraus später eine Rechnung.</p><Button variant="outline" onClick={onOpenCreateModal}>Erstes Angebot erstellen</Button></div>
+                        <div className="ledger-empty"><DashboardIcon name="nav-quotes" size={48} /><h3>{searchTerm || statusFilter !== 'all' ? 'Keine passenden Angebote' : 'Ihr nächstes Angebot beginnt hier'}</h3><p>{searchTerm || statusFilter !== 'all' ? 'Ändern Sie Ihre Suche oder setzen Sie die Filter zurück.' : 'Bereiten Sie Leistungen und Preise vor und erstellen Sie daraus später eine Rechnung.'}</p>{!searchTerm && statusFilter === 'all' && <Button variant="outline" onClick={onOpenCreateModal}>Erstes Angebot erstellen</Button>}</div>
                     )}
                 </div>
 
@@ -236,7 +249,7 @@ export function QuotesTab({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {quotes.length > 0 ? (
+                            {isLoading ? <TableRow><TableCell colSpan={7}><div role="status" className="flex items-center justify-center gap-2 py-12 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Angebote werden geladen…</div></TableCell></TableRow> : quotes.length > 0 ? (
                                 quotes.map((quote) => (
                                     <TableRow key={quote.id} className="hover:bg-muted/50 transition-colors">
                                         <TableCell className="text-muted-foreground">
@@ -256,7 +269,7 @@ export function QuotesTab({
                                                 : <span className="italic text-xs">–</span>}
                                         </TableCell>
                                         <TableCell className="text-right font-medium">
-                                            {quote.totalAmount
+                                            {quote.totalAmount != null
                                                 ? formatCurrency(quote.totalAmount)
                                                 : <span className="text-muted-foreground italic text-xs">–</span>}
                                         </TableCell>
@@ -360,7 +373,7 @@ export function QuotesTab({
                                 <TableRow>
                                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                                         <div className="flex flex-col items-center">
-                                            <FileText className="h-12 w-12 opacity-20 mb-3" />
+                                            <DashboardIcon name="nav-quotes" size={48} className="mb-3" />
                                             <span>Keine passenden Angebote vorhanden.</span><Button variant="outline" className="mt-4" onClick={onOpenCreateModal}>Angebot anlegen</Button>
                                         </div>
                                     </TableCell>
@@ -370,12 +383,13 @@ export function QuotesTab({
                     </Table>
                 </div>
 
+                </div>
                 {/* Pagination */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 pb-6">
                     <div className="text-sm text-muted-foreground">
-                        Seite {page} von {totalPages} · {total} Einträge
+                        {total === 0 ? 'Keine Einträge' : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} von ${total} Angeboten · Seite ${page} von ${Math.max(1, totalPages)}`}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-center gap-2">
                         <Label htmlFor="quotes-page-size" className="text-sm">Pro Seite</Label>
                         <select
                             id="quotes-page-size"
@@ -386,7 +400,7 @@ export function QuotesTab({
                                 onPageChange(1);
                                 await loadQuotes(1, size);
                             }}
-                            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                            className="min-h-11 rounded-md border border-input bg-background px-2 text-sm"
                         >
                             <option value={10}>10</option>
                             <option value={20}>20</option>

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
 import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,8 +33,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import styles from "@/components/public-accounting/accounting-workspaces.module.css";
 import {
-    Wallet,
     Plus,
     ArrowUpCircle,
     ArrowDownCircle,
@@ -47,7 +48,6 @@ import {
     CheckCircle,
     Loader2,
     BookOpen,
-    PiggyBank
 } from "lucide-react";
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -122,7 +122,7 @@ export default function CashBookPage() {
     const [transactions, setTransactions] = useState<CashTransaction[]>([]);
     const [dailyBalance, setDailyBalance] = useState<DailyBalance | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [_error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     // Modal States
     const [showNewCashBookModal, setShowNewCashBookModal] = useState(false);
@@ -441,26 +441,17 @@ export default function CashBookPage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[400px]">
+            <div role="status" aria-label="Kassenbuch wird geladen" className="flex items-center justify-center min-h-[400px]">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
+        <div className={`${styles.cashWorkspace} space-y-6`}>
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold flex items-center gap-3">
-                        <Wallet className="h-8 w-8 text-primary" />
-                        Kassenbuch
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Bargeldbuchführung gemäß § 146 AO
-                    </p>
-                </div>
-                <div className="flex gap-2">
+            <PageHeader title="Kassenbuch" description="Bargeldbuchführung gemäß § 146 AO." section="Buchhaltung" actions={<>
+<div className="flex flex-wrap gap-2">
                     <Button
                         onClick={() => setShowNewCashBookModal(true)}
                         variant="outline"
@@ -479,13 +470,14 @@ export default function CashBookPage() {
                         </>
                     )}
                 </div>
-            </div>
+</>} />
 
+            {error && <div role="alert" className={styles.errorNotice}>{error}</div>}
             {/* No cash book message */}
             {cashBooks.length === 0 && (
                 <Card className="bg-muted/50">
                     <CardContent className="flex flex-col items-center justify-center py-12">
-                        <BookOpen className="h-16 w-16 text-muted-foreground mb-4" />
+                        <BookOpen className="h-8 w-8 text-muted-foreground mb-4" aria-hidden="true" />
                         <h3 className="text-xl font-semibold mb-2">Kein Kassenbuch vorhanden</h3>
                         <p className="text-muted-foreground mb-4 text-center max-w-md">
                             Erstellen Sie Ihr erstes Kassenbuch, um Bareinnahmen und -ausgaben
@@ -501,88 +493,34 @@ export default function CashBookPage() {
 
             {/* Cash Book Selector & Summary */}
             {cashBooks.length > 0 && (
-                <div className="grid gap-4 md:grid-cols-4">
-                    {/* Cash Book Selector */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">
-                                Aktive Kasse
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <Select
-                                value={selectedCashBook?.id.toString() || ''}
-                                onValueChange={(value) => {
-                                    const cb = cashBooks.find(c => c.id.toString() === value);
-                                    setSelectedCashBook(cb || null);
-                                }}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Kasse wählen" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {cashBooks.map((cb) => (
-                                        <SelectItem key={cb.id} value={cb.id.toString()}>
-                                            {cb.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
+                <section className={styles.cashOverview} aria-label="Kassenübersicht">
+                    <div className={styles.cashBalance}>
+                        <div className={styles.cashSelection}>
+                            <Label htmlFor="cashbook-selector">Aktive Kasse</Label>
+                            <Select value={selectedCashBook?.id.toString() || ''} onValueChange={(value) => {
+                                const cb = cashBooks.find(c => c.id.toString() === value);
+                                setSelectedCashBook(cb || null);
+                            }}>
+                                <SelectTrigger id="cashbook-selector"><SelectValue placeholder="Kasse wählen" /></SelectTrigger>
+                                <SelectContent>{cashBooks.map(cb => <SelectItem key={cb.id} value={cb.id.toString()}>{cb.name}</SelectItem>)}</SelectContent>
                             </Select>
-                        </CardContent>
-                    </Card>
-
-                    {/* Current Balance */}
-                    <Card className="border-positive/40 bg-positive-surface">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                <PiggyBank className="h-4 w-4" />
-                                Kassenbestand
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-green-700 dark:text-green-400">
-                                {formatCurrency(selectedCashBook?.currentBalance || 0)}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Today's Income */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                <ArrowUpCircle className="h-4 w-4 text-green-500" />
-                                Einnahmen heute
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-green-600">
-                                {formatCurrency(dailyBalance?.totalIncome || 0)}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Today's Expense */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                <ArrowDownCircle className="h-4 w-4 text-red-500" />
-                                Ausgaben heute
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-red-600">
-                                {formatCurrency(dailyBalance?.totalExpense || 0)}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                        </div>
+                        <div><h2>Kassenbestand</h2><p>{formatCurrency(selectedCashBook?.currentBalance || 0)}</p></div>
+                        <span>{selectedCashBook?.transactionCount ?? 0} Buchungen insgesamt · Anfangsbestand {formatCurrency(selectedCashBook?.initialBalance || 0)}</span>
+                    </div>
+                    <div className={styles.cashDaySummary}>
+                        <div><h2>{dateFilter ? `Bewegungen am ${format(new Date(`${dateFilter}T12:00:00`), 'dd.MM.yyyy', { locale: de })}` : 'Bewegungen im ausgewählten Tageszeitraum'}</h2><p>Für die ausgewählte Kasse</p></div>
+                        <dl><div><dt><ArrowUpCircle aria-hidden="true" />Einnahmen</dt><dd>{formatCurrency(dailyBalance?.totalIncome || 0)}</dd></div><div><dt><ArrowDownCircle aria-hidden="true" />Ausgaben</dt><dd>{formatCurrency(dailyBalance?.totalExpense || 0)}</dd></div></dl>
+                        <button type="button" onClick={() => setActiveTab('tagesabschluss')}>Tagesübersicht öffnen<span aria-hidden="true">→</span></button>
+                    </div>
+                </section>
             )}
 
             {/* Main Content Tabs */}
             {selectedCashBook && (
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                        <TabsList>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className={styles.cashTabs}>
+                    <div className={styles.cashToolbar}>
+                        <TabsList className={styles.cashTabList}>
                             <TabsTrigger value="buchungen">Buchungen</TabsTrigger>
                             <TabsTrigger value="tagesabschluss">Tagesübersicht</TabsTrigger>
                             <TabsTrigger value="kassensturz">Kassensturz</TabsTrigger>
@@ -607,7 +545,7 @@ export default function CashBookPage() {
 
                     {/* Buchungen Tab */}
                     <TabsContent value="buchungen" className="space-y-4">
-                        <Card>
+                        <Card className={styles.journalPanel}>
                             <CardHeader>
                                 <CardTitle>Kassenbuchungen</CardTitle>
                                 <CardDescription>
@@ -615,7 +553,7 @@ export default function CashBookPage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="rounded-md border">
+                                <div className={styles.desktopJournal}>
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
@@ -673,6 +611,7 @@ export default function CashBookPage() {
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"
+                                                                    aria-label={`${tx.description} bearbeiten`}
                                                                     onClick={() => {
                                                                         setEditTransaction(tx);
                                                                         setShowEditTransactionModal(true);
@@ -683,6 +622,7 @@ export default function CashBookPage() {
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"
+                                                                    aria-label={`${tx.description} löschen`}
                                                                     onClick={() => {
                                                                         setDeleteTarget({ type: 'transaction', id: tx.id });
                                                                         setShowDeleteModal(true);
@@ -697,6 +637,20 @@ export default function CashBookPage() {
                                             )}
                                         </TableBody>
                                     </Table>
+                                </div>
+
+                                <div className={styles.mobileJournal}>
+                                    {transactions.length === 0 ? <p className={styles.journalEmpty}>Keine Buchungen vorhanden</p> : transactions.map(tx => (
+                                        <article key={tx.id} className={styles.mobileTransaction}>
+                                            <div className={styles.transactionMeta}><span>{format(new Date(tx.date), 'dd.MM.yyyy', { locale: de })} · {tx.type === 'EINNAHME' ? 'Einnahme' : 'Ausgabe'}</span><span>{tx.receiptNumber || 'Ohne Belegnummer'}</span></div>
+                                            <h3>{tx.description}</h3>
+                                            <div className={styles.transactionAmount}><strong>{tx.type === 'EINNAHME' ? '+' : '−'} {formatCurrency(tx.amount)}</strong><span>Saldo {formatCurrency(tx.runningBalance)}</span></div>
+                                            <div className={styles.transactionFooter}><span>{tx.category || 'Ohne Kategorie'}{tx.taxRelevant ? ' · steuerrelevant' : ''}</span><div>
+                                                <Button variant="ghost" size="icon" aria-label={`${tx.description} bearbeiten`} onClick={() => { setEditTransaction(tx); setShowEditTransactionModal(true); }}><Edit className="h-4 w-4" /></Button>
+                                                <Button variant="ghost" size="icon" aria-label={`${tx.description} löschen`} onClick={() => { setDeleteTarget({ type: 'transaction', id: tx.id }); setShowDeleteModal(true); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                            </div></div>
+                                        </article>
+                                    ))}
                                 </div>
 
                                 {/* Pagination */}
@@ -731,7 +685,7 @@ export default function CashBookPage() {
                     <TabsContent value="tagesabschluss" className="space-y-4">
                         <Card>
                             <CardHeader>
-                                <div className="flex justify-between items-center">
+                                <div className={styles.dailyHeader}>
                                     <div>
                                         <CardTitle>Tagesübersicht</CardTitle>
                                         <CardDescription>
@@ -751,6 +705,7 @@ export default function CashBookPage() {
                                             variant="outline"
                                             size="icon"
                                             onClick={() => setDateFilter(format(new Date(), 'yyyy-MM-dd'))}
+                                            aria-label="Heutiges Datum auswählen"
                                         >
                                             <Calendar className="h-4 w-4" />
                                         </Button>
@@ -761,7 +716,7 @@ export default function CashBookPage() {
                                 {dailyBalance && (
                                     <div className="space-y-6">
                                         {/* Summary Cards */}
-                                        <div className="grid gap-4 md:grid-cols-4">
+                                        <div className={styles.dailyMetrics}>
                                             <Card className="bg-muted/50">
                                                 <CardContent className="pt-6">
                                                     <div className="text-sm text-muted-foreground">Anfangsbestand</div>
@@ -864,7 +819,7 @@ export default function CashBookPage() {
                     </TabsContent>
 
                     {/* Kassensturz Tab */}
-                    <TabsContent value="kassensturz" className="space-y-4">
+                    <TabsContent value="kassensturz" className={`${styles.cashCount} space-y-4`}>
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
@@ -875,7 +830,7 @@ export default function CashBookPage() {
                                     Vergleichen Sie den gezählten Bargeldbestand mit dem Sollbestand im System
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className={styles.cashCountContent}>
                                 <div className="space-y-6">
                                     {/* System balance info */}
                                     <div className="p-4 bg-muted rounded-lg">
@@ -929,7 +884,7 @@ export default function CashBookPage() {
 
                                     {/* Result */}
                                     {cashCountResult && (
-                                        <div className={`p-6 rounded-lg border-2 ${cashCountResult.status === 'OK'
+                                        <div role="status" className={`p-6 rounded-lg border-2 ${cashCountResult.status === 'OK'
                                             ? 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'
                                             : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800'
                                             }`}>

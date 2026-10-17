@@ -1,3 +1,4 @@
+import type { LedgerSortBy, LedgerSortOrder } from '@/lib/ledger-sort';
 // Typdefinitionen für das Dashboard
 
 export type Expense = {
@@ -76,6 +77,8 @@ export type Quote = {
 
 export type FilterState = {
   expenses: {
+    sortBy?: LedgerSortBy;
+    sortOrder?: LedgerSortOrder;
     category: string;
     dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
     taxRelevant: 'all' | 'yes' | 'no';
@@ -83,6 +86,8 @@ export type FilterState = {
     searchTerm: string;
   };
   incomes: {
+    sortBy?: LedgerSortBy;
+    sortOrder?: LedgerSortOrder;
     customer: string;
     dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
     taxRelevant: 'all' | 'yes' | 'no';
@@ -113,3 +118,29 @@ export type DepreciationDetail = {
   remainingAmount: number;
   calculationExplanation: string;
 };
+
+export interface DashboardMonthlyData {
+  month: number;
+  monthName: string;
+  revenue: number;
+  expenses: number;
+  profit: number;
+}
+
+export interface YearComparisonData {
+  currentYear: number;
+  lastYear: number;
+  period?: 'toDate' | 'fullYear';
+  comparisonThroughMonth?: number;
+  availableYears?: number[];
+  revenueThisYearTotal: number;
+  revenueLastYearTotal: number;
+  expensesThisYearTotal: number;
+  expensesLastYearTotal: number;
+  revenueThisYearToDate: number;
+  revenueLastYearToDate: number;
+  expensesThisYearToDate: number;
+  expensesLastYearToDate: number;
+  monthlyDataThisYear: DashboardMonthlyData[];
+  monthlyDataLastYear: DashboardMonthlyData[];
+}

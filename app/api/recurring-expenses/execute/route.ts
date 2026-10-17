@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { executeRecurringExpenses } from '@/lib/recurring-expenses-service';
@@ -5,7 +6,7 @@ import { calculateNextExecution, endOfDay } from '@/lib/recurring-schedule';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 
 // POST: Fällige wiederkehrende Ausgaben ausführen
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const body = await request.json();
@@ -75,3 +76,5 @@ export async function GET() {
     return NextResponse.json({ error: 'Fehler beim Laden der fälligen wiederkehrenden Ausgaben' }, { status: 500 });
   }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });

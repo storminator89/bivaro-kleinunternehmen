@@ -73,3 +73,6 @@ AGENTS.md
 .cache
 tmp
 temp
+
+# High-resolution design originals; runtime uses public/brand/icons.
+assets/brand/bivaro-icons

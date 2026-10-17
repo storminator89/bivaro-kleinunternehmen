@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
  * API v1 - Invoices Endpoint
  * 
@@ -103,7 +104,7 @@ export async function GET(request: NextRequest) {
 }
 
 // PUT /api/v1/invoices?id=<id> - Update invoice status
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
   return withApiAuth(request, async ({ userId }) => {
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
@@ -163,7 +164,7 @@ export async function PUT(request: NextRequest) {
 }
 
 // DELETE /api/v1/invoices?id=<id>
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
   return withApiAuth(request, async ({ userId }) => {
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
@@ -185,3 +186,6 @@ export async function DELETE(request: NextRequest) {
     return response;
   }, { requiredScopes: ['delete'] });
 }
+
+export const PUT = protectMutation(putHandler, { bearer: true, maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler, { bearer: true });

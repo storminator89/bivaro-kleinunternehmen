@@ -1,9 +1,11 @@
 "use client";
 
 import React from 'react';
+import styles from "@/components/dashboard/sales-workspace.module.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DashboardIcon } from "@/components/brand/dashboard-icon";
 import { Download, Eye, FileCode2, FileText, FileX, Mail, MoreHorizontal, Trash2, Upload, ChevronDown, Search, X, Loader2, CheckCheck, Clock3 } from "lucide-react";
 import {
   DropdownMenu,
@@ -107,19 +109,98 @@ export function InvoicesTab({
   const paidCount = invoices.filter(invoice => invoice.status === 'PAID').length;
   const openCount = invoices.filter(invoice => invoice.status === 'SENT' || invoice.status === 'DRAFT').length;
 
+  const renderInvoiceActions = (invoice: Invoice) => (
+<DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-2"
+                                aria-label={`Weitere Aktionen fuer Rechnung ${invoice.invoiceNumber || invoice.id}`}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span>Mehr</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuItem
+                                disabled={invoice.hasPdfFile === false}
+                                onSelect={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}
+                              >
+                                <FileText className="h-4 w-4" />
+                                PDF anzeigen
+                              </DropdownMenuItem>
+                              {invoice.hasEInvoiceXml && (
+                                <DropdownMenuItem onSelect={() => onViewReceipt(`/api/invoices/viewer?id=${invoice.id}`)}>
+                                  <FileCode2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                                  E-Rechnung ansehen
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                disabled={invoice.status === 'CANCELLED'}
+                                onSelect={() => setEmailInvoice(invoice)}
+                              >
+                                <Mail className="h-4 w-4 text-notice" />
+                                Per E-Mail senden
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                disabled={invoice.hasPdfFile === false}
+                                onSelect={() => {
+                                  window.open(`/api/invoices/download?id=${invoice.id}&download=true`, 'Rechnung Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
+                                }}
+                              >
+                                <Download className="h-4 w-4" />
+                                PDF herunterladen
+                              </DropdownMenuItem>
+                              {invoice.hasEInvoiceXml && (
+                                <DropdownMenuItem
+                                  onSelect={() => {
+                                    window.open(`/api/invoices/download?id=${invoice.id}&format=xml&download=true`, 'E-Rechnung XML Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
+                                  }}
+                                >
+                                  <FileCode2 className="h-4 w-4 text-positive" />
+                                  XML herunterladen
+                                </DropdownMenuItem>
+                              )}
+                              {(invoice.status !== 'CANCELLED' && invoice.type !== 'CREDIT_NOTE') && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onSelect={() => onCancel(invoice)}>
+                                    <FileX className="h-4 w-4 text-caution" />
+                                    Rechnung stornieren
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                disabled={isDeleting || !canDeleteDraft(invoice)}
+                                onSelect={() => onDelete(invoice.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Rechnung löschen
+                              </DropdownMenuItem>
+                              {!canDeleteDraft(invoice) && (
+                                <p className="px-2 py-1.5 text-xs text-muted-foreground">Nur nachweislich unausgestellte Entwürfe ohne Zahlung sind löschbar.</p>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+  );
+
   return (
-    <div className="invoice-workspace space-y-5">
+    <div className={`invoice-workspace space-y-5 ${styles.records}`}>
       <section className="invoice-summary" aria-label="Rechnungsübersicht">
-        <div className="invoice-summary-intro"><span className="summary-symbol"><FileText aria-hidden="true" /></span><div><p className="text-sm font-medium">Ihr Rechnungsbestand</p><p className="mt-1 text-xs text-muted-foreground">Alle Treffer · Zahlungsstatus der aktuellen Seite</p></div></div>
+        <div className="invoice-summary-intro"><span className="summary-symbol"><DashboardIcon name="nav-invoices" size={52} /></span><div><p className="text-sm font-medium">Ihr Rechnungsbestand</p><p className="mt-1 text-xs text-muted-foreground">Alle Treffer · Zahlungsstatus der aktuellen Seite</p></div></div>
         <dl className="invoice-summary-values">
-          <div><dt>Rechnungen im Ergebnis</dt><dd>{isLoading ? '—' : total}</dd></div>
-          <div><dt><CheckCheck aria-hidden="true" />Bezahlt auf dieser Seite</dt><dd className="text-positive">{isLoading ? '—' : paidCount}</dd></div>
-          <div><dt><Clock3 aria-hidden="true" />Offen auf dieser Seite</dt><dd>{isLoading ? '—' : openCount}</dd></div>
+          <div><dt>Rechnungen im Ergebnis</dt><dd>{isLoading || isError ? '—' : total}</dd></div>
+          <div><dt><CheckCheck aria-hidden="true" />Bezahlt auf dieser Seite</dt><dd className="text-positive">{isLoading || isError ? '—' : paidCount}</dd></div>
+          <div><dt><Clock3 aria-hidden="true" />Offen auf dieser Seite</dt><dd>{isLoading || isError ? '—' : openCount}</dd></div>
         </dl>
       </section>
       <details className="invoice-import group rounded-xl border border-dashed bg-card" open={selectedFile ? true : undefined}>
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-notice-surface text-notice"><Upload className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-notice-surface text-notice"><DashboardIcon name="invoice-import" size={40} /></span>
           <span className="min-w-0 flex-1">
             <span className="block font-semibold"><span className="sm:hidden">E-Rechnung</span><span className="hidden sm:inline">E-Rechnung importieren</span></span>
             <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">ZUGFeRD, Factur-X oder XRechnung · PDF / XML</span>
@@ -143,7 +224,7 @@ export function InvoicesTab({
       <div className="invoice-ledger bg-card rounded-xl border overflow-hidden">
         <div className="px-4 pt-5 pb-4 border-b sm:px-6">
           <div className="invoice-list-title flex flex-wrap items-center justify-between gap-3">
-            <LedgerListHeading title="Ihre Rechnungen" isLoading={isLoading} total={total} amounts={isLoading || isError ? [] : invoices.map(invoice => invoice.totalAmount ?? 0)} />
+            <LedgerListHeading icon="nav-invoices" title="Ihre Rechnungen" isLoading={isLoading} isError={isError} total={total} amounts={isLoading || isError ? [] : invoices.map(invoice => invoice.totalAmount ?? 0)} />
             {(filters.searchTerm || filters.paidStatus !== 'all' || filters.dateRange !== 'all') && (
               <Button variant="ghost" size="sm" onClick={() => setFilters({ ...filters, searchTerm: '', paidStatus: 'all', dateRange: 'all' })}><X className="mr-1.5 h-4 w-4" aria-hidden="true" />Filter zurücksetzen</Button>
             )}
@@ -209,15 +290,16 @@ export function InvoicesTab({
         <div className="overflow-hidden">
           <div className="divide-y xl:hidden" aria-label="Rechnungsliste">
             {isLoading ? <div role="status" className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Rechnungen werden geladen…</div> : isError ? null : invoices.length > 0 ? invoices.map((invoice) => (
-              <article key={invoice.id} className="invoice-record space-y-3 p-4">
+              <article key={invoice.id} className={`invoice-record space-y-3 ${styles.mobileRecord}`}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h3 className="truncate font-semibold">{invoice.invoiceNumber || invoice.fileName}</h3>
+                    <h3 className="font-semibold">{invoice.invoiceNumber || invoice.fileName}</h3>
+                    {invoice.customer?.name && <p className="mt-1 text-sm">{invoice.customer.name}</p>}
                     <p className="mt-1 text-sm text-muted-foreground">
                       {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE') : new Date(invoice.uploadedAt).toLocaleDateString('de-DE')}
                     </p>
                   </div>
-                  <p className="shrink-0 font-semibold tabular-nums">{invoice.totalAmount ? formatCurrency(invoice.totalAmount) : '–'}</p>
+                  <p className="shrink-0 font-semibold tabular-nums">{invoice.totalAmount != null ? formatCurrency(invoice.totalAmount) : '–'}</p>
                 </div>
                 <StatusBadge status={invoice.status} availableStatuses={availableInvoiceStatuses(invoice)} onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)} />
                 <div className="flex flex-wrap gap-2">
@@ -225,11 +307,8 @@ export function InvoicesTab({
                   {invoice.hasPdfFile !== false && (
                     <Button variant="outline" size="sm" className="min-h-11" onClick={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}><FileText className="h-4 w-4" />PDF</Button>
                   )}
-                  <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={isDeleting || !canDeleteDraft(invoice)} onClick={() => onDelete(invoice.id)}>Löschen</Button>
+                  {renderInvoiceActions(invoice)}
                 </div>
-                {!canDeleteDraft(invoice) && (
-                  <p className="text-xs text-muted-foreground">Löschen ist nur für nachweislich unausgestellte Entwürfe ohne Zahlung möglich.</p>
-                )}
               </article>
             )) : (
               <p className="p-6 text-center text-sm text-muted-foreground">{filters.searchTerm || filters.paidStatus !== 'all' || filters.dateRange !== 'all' ? 'Keine passenden Rechnungen. Ändern Sie die Suche oder setzen Sie die Filter zurück.' : 'Noch keine Rechnungen. Erstellen Sie Ihre erste Rechnung oder importieren Sie eine E-Rechnung.'}</p>
@@ -304,7 +383,7 @@ export function InvoicesTab({
                       </TableCell>
                       <TableCell>
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className="invoice-file-symbol"><FileText className="h-4 w-4" aria-hidden="true" /></span>
+                          <span className="invoice-file-symbol"><DashboardIcon name="invoice-document" size={36} /></span>
                           <div className="min-w-0">
                             <button type="button" className="min-h-11 text-left font-semibold hover:text-primary hover:underline" onClick={() => onOpenDetails(invoice)} aria-label={`Details zu Rechnung ${invoice.invoiceNumber || invoice.id}`}>{invoice.invoiceNumber || 'Ohne Rechnungsnummer'}</button>
                             {invoice.customer?.name && <p className="text-xs font-medium text-foreground">{invoice.customer.name}</p>}
@@ -313,7 +392,7 @@ export function InvoicesTab({
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {invoice.totalAmount
+                        {invoice.totalAmount != null
                           ? formatCurrency(invoice.totalAmount)
                           : <span className="text-muted-foreground italic text-xs">Nicht verfügbar</span>}
                       </TableCell>
@@ -335,82 +414,7 @@ export function InvoicesTab({
                             <Eye className="h-4 w-4" />
                             Details
                           </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-2"
-                                aria-label={`Weitere Aktionen fuer Rechnung ${invoice.invoiceNumber || invoice.id}`}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="hidden xl:inline">Mehr</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-64">
-                              <DropdownMenuItem
-                                disabled={invoice.hasPdfFile === false}
-                                onSelect={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}
-                              >
-                                <FileText className="h-4 w-4" />
-                                PDF anzeigen
-                              </DropdownMenuItem>
-                              {invoice.hasEInvoiceXml && (
-                                <DropdownMenuItem onSelect={() => onViewReceipt(`/api/invoices/viewer?id=${invoice.id}`)}>
-                                  <FileCode2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                                  E-Rechnung ansehen
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem
-                                disabled={invoice.status === 'CANCELLED'}
-                                onSelect={() => setEmailInvoice(invoice)}
-                              >
-                                <Mail className="h-4 w-4 text-notice" />
-                                Per E-Mail senden
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                disabled={invoice.hasPdfFile === false}
-                                onSelect={() => {
-                                  window.open(`/api/invoices/download?id=${invoice.id}&download=true`, 'Rechnung Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
-                                }}
-                              >
-                                <Download className="h-4 w-4" />
-                                PDF herunterladen
-                              </DropdownMenuItem>
-                              {invoice.hasEInvoiceXml && (
-                                <DropdownMenuItem
-                                  onSelect={() => {
-                                    window.open(`/api/invoices/download?id=${invoice.id}&format=xml&download=true`, 'E-Rechnung XML Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
-                                  }}
-                                >
-                                  <FileCode2 className="h-4 w-4 text-positive" />
-                                  XML herunterladen
-                                </DropdownMenuItem>
-                              )}
-                              {(invoice.status !== 'CANCELLED' && invoice.type !== 'CREDIT_NOTE') && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onSelect={() => onCancel(invoice)}>
-                                    <FileX className="h-4 w-4 text-caution" />
-                                    Rechnung stornieren
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant="destructive"
-                                disabled={isDeleting || !canDeleteDraft(invoice)}
-                                onSelect={() => onDelete(invoice.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Rechnung löschen
-                              </DropdownMenuItem>
-                              {!canDeleteDraft(invoice) && (
-                                <p className="px-2 py-1.5 text-xs text-muted-foreground">Nur nachweislich unausgestellte Entwürfe ohne Zahlung sind löschbar.</p>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {renderInvoiceActions(invoice)}
                         </div>
                       </TableCell>
                     </TableRow>

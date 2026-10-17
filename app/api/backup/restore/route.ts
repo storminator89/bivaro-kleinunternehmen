@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
@@ -9,7 +10,7 @@ import {
 } from '@/lib/resource-limits';
 
 /** Restore a JSON backup atomically after complete validation. */
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = await readRequestBodyWithinLimit(request, MAX_JSON_BACKUP_BYTES);
@@ -68,3 +69,5 @@ function isRecordWithBoolean(value: unknown, key: string): boolean {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     && (value as Record<string, unknown>)[key] === true;
 }
+
+export const POST = protectMutation(postHandler);

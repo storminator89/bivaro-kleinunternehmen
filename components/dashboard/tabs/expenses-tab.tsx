@@ -1,7 +1,10 @@
 "use client";
 
-import { ChevronDown, Plus } from "lucide-react";
+import { LedgerSortControl, SortableLedgerHead } from '@/components/dashboard/ledger-sort-control';
+import { DashboardIcon } from "@/components/brand/dashboard-icon";
+import { ChevronDown } from "lucide-react";
 import React, { useMemo } from 'react';
+import { QueryFeedback } from '@/components/dashboard/query-feedback';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +41,8 @@ type NewExpense = {
 };
 
 type ExpensesTabProps = {
+  isLoading?: boolean;
+  isError?: boolean;
   entryOpen: boolean;
   onEntryOpenChange: (open: boolean) => void;
 
@@ -82,6 +87,8 @@ type ExpensesTabProps = {
 };
 
 export function ExpensesTab({
+  isLoading = false,
+  isError = false,
   entryOpen,
   onEntryOpenChange,
   newExpense,
@@ -144,11 +151,13 @@ export function ExpensesTab({
     return Array.from(combined).sort((a, b) => a.localeCompare(b, 'de'));
   }, [uniqueCategories]);
 
+  const sort = { sortBy: filters.sortBy ?? 'date', sortOrder: filters.sortOrder ?? 'desc' };
+  const hasFilters = Boolean(filters.searchTerm || filters.dateRange !== 'all' || filters.taxRelevant !== 'all' || filters.category || filters.hasReceipt !== 'all');
   return (
-    <div className="space-y-6">
+    <div className="bookkeeping-workspace space-y-6">
       <details id="expense-entry" className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-6">
-          <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><Plus className="h-4 w-4" aria-hidden="true" /></span><span><span className="block text-sm font-semibold">Neue Ausgabe</span><span className="block text-xs text-muted-foreground">Geschäftlichen Vorgang erfassen</span></span></span>
+          <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><DashboardIcon name="tile-expenses" size={44} /></span><span><span className="block text-sm font-semibold">Neue Ausgabe</span><span className="block text-xs text-muted-foreground">Geschäftlichen Vorgang erfassen</span></span></span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         </summary>
         <div className="border-t p-4 sm:p-6">
@@ -294,7 +303,7 @@ export function ExpensesTab({
       {/* Expenses List */}
       <div className="ledger-list bg-card rounded-xl border overflow-hidden">
         <div className="px-6 pt-6 pb-4 border-b">
-          <LedgerListHeading title="Ihre Ausgaben" total={total} amounts={expenses.map(item => item.amount)} />
+          <LedgerListHeading icon="nav-expenses" isLoading={isLoading} isError={isError} title="Ihre Ausgaben" total={total} amounts={isError || isLoading ? [] : expenses.map(item => item.amount)} />
           <div className="ledger-filters">
             <div className="ledger-filter-grid grid gap-4 md:grid-cols-5">
               {/* Category Filter */}
@@ -422,10 +431,11 @@ export function ExpensesTab({
 
             {/* Filter Actions */}
             <div className="flex flex-col gap-3 mt-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+              <div className="ledger-result-summary">
                 <div className="text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">{expenses.length}</span> Ausgaben auf dieser Seite
                 </div>
+                <LedgerSortControl id="expenses-sort" sort={sort} onChange={next => setFilters({ ...filters, ...next })} />
                 {exportError && (
                   <p className="mt-1 text-xs text-critical">
                     {exportError}
@@ -467,6 +477,8 @@ export function ExpensesTab({
                     taxRelevant: 'all',
                     hasReceipt: 'all',
                     searchTerm: '',
+                    sortBy: 'date',
+                    sortOrder: 'desc',
                   })}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -481,6 +493,8 @@ export function ExpensesTab({
 
         {/* Expenses Table */}
         <div className="overflow-hidden">
+          {(isLoading || isError) && <QueryFeedback noun="Ausgaben" isError={isError} onRetry={() => loadExpenses(page, pageSize)} />}
+          <div hidden={isLoading || isError}>
           <div className="divide-y xl:hidden" aria-label="Ausgabenliste">
             {expenses.length > 0 ? expenses.map((expense) => (
               <article key={expense.id} className="ledger-record space-y-3 p-4">
@@ -508,13 +522,13 @@ export function ExpensesTab({
           </div>
           <div className="hidden overflow-x-auto p-6 xl:block">
             <Table>
-              <TableCaption>Alle erfassten Geschäftsausgaben</TableCaption>
+              <TableCaption className="sr-only">Ausgaben passend zu den ausgewählten Filtern</TableCaption>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="font-medium">Datum</TableHead>
-                  <TableHead className="font-medium">Beschreibung</TableHead>
+                  <SortableLedgerHead field="date" label="Datum" sort={sort} onChange={next => setFilters({ ...filters, ...next })} />
+                  <SortableLedgerHead field="description" label="Beschreibung" sort={sort} onChange={next => setFilters({ ...filters, ...next })} />
                   <TableHead className="font-medium">Kategorie</TableHead>
-                  <TableHead className="text-right font-medium">Betrag</TableHead>
+                  <SortableLedgerHead field="amount" label="Betrag" sort={sort} onChange={next => setFilters({ ...filters, ...next })} numeric />
                   <TableHead className="text-center font-medium">Steuerrelevant</TableHead>
                   <TableHead className="text-right font-medium"></TableHead>
                 </TableRow>
@@ -655,7 +669,7 @@ export function ExpensesTab({
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-muted-foreground/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 00-2-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <span>Keine Ausgaben vorhanden. Erfassen Sie Ihre erste Ausgabe oben.</span>
+                        <span>{hasFilters ? 'Keine passenden Ausgaben. Ändern Sie die Suche oder setzen Sie die Filter zurück.' : 'Keine Ausgaben vorhanden. Erfassen Sie Ihre erste Ausgabe oben.'}</span>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -664,6 +678,7 @@ export function ExpensesTab({
             </Table>
           </div>
 
+          </div>
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 pb-6">
             <div className="text-sm text-muted-foreground">

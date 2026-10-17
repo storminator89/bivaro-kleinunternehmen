@@ -1,0 +1,291 @@
+{
+  "date": "2026-10-17",
+  "timezone": "Europe/Berlin",
+  "state": "uncommitted; builds on pre-existing working tree changes",
+  "checks": {
+    "lint": {
+      "command": "npm run lint",
+      "result": "passed",
+      "warnings": 0
+    },
+    "build": {
+      "command": "DATABASE_URL=file:<new-temporary-fixture>/visual.db npm run build",
+      "result": "passed",
+      "includes": "TypeScript and standalone production build"
+    },
+    "unit": {
+      "command": "npm run test",
+      "result": "passed",
+      "filesPassed": 52,
+      "filesSkipped": 1,
+      "testsPassed": 376,
+      "testsSkipped": 1,
+      "skip": "opt-in dashboard performance benchmark"
+    },
+    "e2e": {
+      "command": "npx playwright test --config <temporary-fixture>/playwright.config.mjs",
+      "result": "passed",
+      "testsPassed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 42.25,
+      "browser": "Chromium",
+      "database": "new temporary SQLite fixture outside repository, with explicit DATABASE_URL",
+      "port": 3102,
+      "productionDataUsed": false,
+      "testSourceDifference": "only test URL port 3100 -> 3102 in the temporary test copy"
+    },
+    "responsive": {
+      "views": 22,
+      "widths": [
+        320,
+        375,
+        414,
+        768,
+        1440
+      ],
+      "horizontalPageOverflow": false
+    },
+    "font": {
+      "computed": "Inter, \"Inter Fallback\", ui-sans-serif, system-ui, sans-serif",
+      "assertion": "computed heading font contains Inter"
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "result": "passed"
+    },
+    "contrasts": [
+      {
+        "mode": "light",
+        "foreground": "--color-ink",
+        "background": "--color-paper",
+        "ratio": 16.55,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "light",
+        "foreground": "--bivaro-color-muted",
+        "background": "--color-paper-2",
+        "ratio": 4.69,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "light",
+        "foreground": "--color-accent-ink",
+        "background": "--bivaro-color-accent",
+        "ratio": 6.58,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "light",
+        "foreground": "--color-success-ink",
+        "background": "--color-success-surface",
+        "ratio": 6.6,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "light",
+        "foreground": "--color-danger-ink",
+        "background": "--color-danger-surface",
+        "ratio": 6.35,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "light",
+        "foreground": "--color-nav-muted",
+        "background": "--color-nav-surface",
+        "ratio": 10.02,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "light",
+        "foreground": "--color-nav-active-ink",
+        "background": "--color-nav-active",
+        "ratio": 10.19,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "light",
+        "foreground": "--color-rule-2",
+        "background": "--color-paper-2",
+        "ratio": 3.16,
+        "minimum": 3,
+        "pass": true
+      },
+      {
+        "mode": "dark",
+        "foreground": "--color-ink",
+        "background": "--color-paper",
+        "ratio": 16.17,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "dark",
+        "foreground": "--bivaro-color-muted",
+        "background": "--color-paper-2",
+        "ratio": 8.03,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "dark",
+        "foreground": "--color-accent-ink",
+        "background": "--bivaro-color-accent",
+        "ratio": 7.47,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "dark",
+        "foreground": "--color-success-ink",
+        "background": "--color-success-surface",
+        "ratio": 10.88,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "dark",
+        "foreground": "--color-danger-ink",
+        "background": "--color-danger-surface",
+        "ratio": 11.24,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "dark",
+        "foreground": "--color-nav-muted",
+        "background": "--color-nav-surface",
+        "ratio": 10.02,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "dark",
+        "foreground": "--color-nav-active-ink",
+        "background": "--color-nav-active",
+        "ratio": 10.19,
+        "minimum": 4.5,
+        "pass": true
+      },
+      {
+        "mode": "dark",
+        "foreground": "--color-rule-2",
+        "background": "--color-paper-2",
+        "ratio": 3.36,
+        "minimum": 3,
+        "pass": true
+      }
+    ],
+    "captures": [
+      {
+        "page": "dashboard",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "page": "dashboard",
+        "width": 768,
+        "overflow": false
+      },
+      {
+        "page": "dashboard",
+        "width": 375,
+        "overflow": false
+      },
+      {
+        "page": "invoices",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "page": "invoices",
+        "width": 768,
+        "overflow": false
+      },
+      {
+        "page": "invoices",
+        "width": 375,
+        "overflow": false
+      },
+      {
+        "page": "incomes",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "page": "incomes",
+        "width": 768,
+        "overflow": false
+      },
+      {
+        "page": "incomes",
+        "width": 375,
+        "overflow": false
+      }
+    ]
+  },
+  "e2eCoverage": [
+    "first-admin registration and login",
+    "all workspaces and public auth views",
+    "invoice and quote editors",
+    "rounded XML and PDF exports",
+    "invoice filters and import disclosure",
+    "protected paid invoice actions",
+    "income calendar date across timezones",
+    "cash overdraft error",
+    "user deactivation and session revocation",
+    "customer services and price memory",
+    "settings and SMTP",
+    "backup validation",
+    "shared typography and navigation color",
+    "positive assessment of falling expenses",
+    "desktop shortcut and mobile command navigation",
+    "failed income query and retry"
+  ],
+  "visualReview": {
+    "screenshots": [
+      "command-palette-375.png",
+      "dashboard-1440.png",
+      "dashboard-375.png",
+      "dashboard-768.png",
+      "dashboard-dark-1440.png",
+      "dashboard-empty-1440.png",
+      "financial-trends-fixture.png",
+      "income-query-error.png",
+      "incomes-1440.png",
+      "incomes-375.png",
+      "incomes-768.png",
+      "invoices-1440.png",
+      "invoices-375.png",
+      "invoices-768.png"
+    ],
+    "manuallyInspected": [
+      "dashboard desktop populated and empty",
+      "income desktop populated",
+      "invoice mobile populated",
+      "dashboard dark mode",
+      "mobile command palette",
+      "settings mobile"
+    ],
+    "limitations": [
+      "Chromium verification, no Safari/Firefox visual audit",
+      "token contrast checks are not a complete external WCAG audit"
+    ]
+  },
+  "databaseImpact": "No schema, migration, accounting API or production database changes",
+  "notes": [
+    "Original 16-test suite passed before adding two regression tests.",
+    "The new command-navigation test exposed the old zero-size dialog wrapper; the corrected cmdk/Radix composition passed.",
+    "The new query-state test was scoped to main to exclude the Next.js route announcer.",
+    "Missing liquidity, deadline and notification sources were not fabricated.",
+    "The reference muted color was adjusted for 4.5:1 small-text contrast on the canvas."
+  ]
+}

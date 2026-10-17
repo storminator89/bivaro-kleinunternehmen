@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 /**
  * API Route: /api/cashbook/transactions
  * CRUD operations for CashTransaction (Kassenbuch-Buchungen)
@@ -121,6 +122,10 @@ async function mutate(request: NextRequest, method: 'POST' | 'PUT' | 'DELETE') {
   }
 }
 
-export async function POST(request: NextRequest) { return mutate(request, 'POST'); }
-export async function PUT(request: NextRequest) { return mutate(request, 'PUT'); }
-export async function DELETE(request: NextRequest) { return mutate(request, 'DELETE'); }
+async function postHandler(request: NextRequest) { return mutate(request, 'POST'); }
+async function putHandler(request: NextRequest) { return mutate(request, 'PUT'); }
+async function deleteHandler(request: NextRequest) { return mutate(request, 'DELETE'); }
+
+export const POST = protectMutation(postHandler);
+export const PUT = protectMutation(putHandler);
+export const DELETE = protectMutation(deleteHandler);

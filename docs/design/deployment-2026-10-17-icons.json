@@ -1,0 +1,16 @@
+{
+  "deployedAt": "2026-10-17T18:25:59.644109+00:00",
+  "url": "http://192.168.0.126:7689/",
+  "container": "bivaro-app",
+  "image": "bivaro:design-icons-20261017",
+  "imageId": "sha256:beac2f3bf4d9643d916312eb8d52708676a0a2d1eb9f5d8eabce00a517677891",
+  "previousImageId": "sha256:58a3a4773a450a3955bab92ec9e3de82a124988b2deb243948955d4e824bb08d",
+  "rollbackImage": "bivaro:rollback-before-design-icons-20261017",
+  "backup": "/opt/bivaro/releases/20261017-icons/backup-before-deploy/persistent-volumes.tar.gz",
+  "backupDatabaseSha256": "4dd377a5e616374d56ada4ef9b82551afdb545717db9388fdd84e6c3f27bfd62",
+  "health": "healthy",
+  "databaseStatus": "up",
+  "persistentVolumesUnchanged": true,
+  "migrationsUnchanged": true,
+  "migrationCount": 28
+}

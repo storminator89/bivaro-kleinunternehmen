@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -39,7 +40,7 @@ const userSelect = {
   deactivatedAt: true,
 } as const;
 
-export async function PATCH(
+async function patchHandler(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -182,7 +183,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function deleteHandler(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -246,3 +247,6 @@ export async function DELETE(
     return new NextResponse("Internal Error", { status: 500 });
   }
 }
+
+export const PATCH = protectMutation(patchHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);

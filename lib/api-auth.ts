@@ -14,9 +14,6 @@ import { consumeRateLimit } from '@/lib/rate-limit';
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 100; // max requests per window
 
-// Compatibility helper for callers of checkRateLimit; authenticated requests use the shared database limiter.
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
 /**
  * Hash an API key using SHA-256
  */
@@ -92,51 +89,6 @@ export async function validateApiKey(apiKey: string): Promise<{
     console.error('Error validating API key:', error);
     return { valid: false, error: 'Internal validation error' };
   }
-}
-
-/**
- * Check rate limit for an API key
- */
-export function checkRateLimit(apiKeyId: number): {
-  allowed: boolean;
-  remaining: number;
-  resetTime: number;
-} {
-  const now = Date.now();
-  const key = `api_key_${apiKeyId}`;
-  if (rateLimitStore.size >= 10000) {
-    for (const [storedKey, value] of rateLimitStore) if (value.resetTime <= now) rateLimitStore.delete(storedKey);
-    if (rateLimitStore.size >= 10000 && !rateLimitStore.has(key)) return { allowed: false, remaining: 0, resetTime: now + RATE_LIMIT_WINDOW_MS };
-  }
-  const record = rateLimitStore.get(key);
-
-  if (!record || now > record.resetTime) {
-    // Reset or initialize
-    rateLimitStore.set(key, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW_MS,
-    });
-    return {
-      allowed: true,
-      remaining: RATE_LIMIT_MAX_REQUESTS - 1,
-      resetTime: now + RATE_LIMIT_WINDOW_MS,
-    };
-  }
-
-  if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return {
-      allowed: false,
-      remaining: 0,
-      resetTime: record.resetTime,
-    };
-  }
-
-  record.count++;
-  return {
-    allowed: true,
-    remaining: RATE_LIMIT_MAX_REQUESTS - record.count,
-    resetTime: record.resetTime,
-  };
 }
 
 /**

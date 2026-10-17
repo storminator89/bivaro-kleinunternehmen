@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { privateLogoUrl } from '@/lib/upload-path';
 /**
  * API v1 - Settings Endpoint (Read-Only)
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST/PUT/DELETE are not allowed - settings should only be modified via web UI
-export async function POST() {
+async function postHandler() {
   const response = apiError(
     'Settings can only be modified via the web interface for security reasons',
     405,
@@ -90,7 +91,7 @@ export async function POST() {
   return response;
 }
 
-export async function PUT() {
+async function putHandler() {
   const response = apiError(
     'Settings can only be modified via the web interface for security reasons',
     405,
@@ -103,7 +104,7 @@ export async function PUT() {
   return response;
 }
 
-export async function DELETE() {
+async function deleteHandler() {
   const response = apiError(
     'Settings cannot be deleted via API',
     405,
@@ -115,3 +116,7 @@ export async function DELETE() {
   });
   return response;
 }
+
+export const POST = protectMutation(postHandler, { bearer: true });
+export const PUT = protectMutation(putHandler, { bearer: true });
+export const DELETE = protectMutation(deleteHandler, { bearer: true });

@@ -55,7 +55,7 @@ export function StatusBadge({ status, onStatusChange, availableStatuses }: Statu
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label={`Zahlungsstatus: ${label}`} className={`inline-flex min-h-11 items-center rounded-md px-2.5 text-xs font-medium transition-colors hover:brightness-95 ${surface}`}>
+        <button type="button" aria-label={`Zahlungsstatus: ${label}`} className={`inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium transition-colors hover:brightness-95 ${surface}`}>
           <span className={`w-2 h-2 rounded-full mr-2 ${color}`}></span>
           {label}
         </button>

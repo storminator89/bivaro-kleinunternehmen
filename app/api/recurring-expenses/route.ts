@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 import { prisma } from '@/lib/prisma';
@@ -26,7 +27,7 @@ export async function GET() {
 }
 
 // POST: Neue wiederkehrende Ausgabe erstellen
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const body = await request.json();
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
 }
 
 // PUT: Wiederkehrende Ausgabe aktualisieren
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const body = await request.json();
@@ -163,7 +164,7 @@ export async function PUT(request: Request) {
 }
 
 // DELETE: Wiederkehrende Ausgabe löschen
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
@@ -196,3 +197,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Fehler beim Löschen der wiederkehrenden Ausgabe' }, { status: 500 });
   }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const PUT = protectMutation(putHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);

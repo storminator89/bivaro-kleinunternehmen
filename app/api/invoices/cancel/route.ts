@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
@@ -13,7 +14,7 @@ class CancellationUnsupportedError extends Error {
 }
 
 // POST: Cancel an invoice by creating a credit note
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
     let stagedFile: string | null = null;
     let owner: string | null = null;
     try {
@@ -316,3 +317,5 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Stornierung nicht möglich. Bitte Beleg prüfen und gegebenenfalls erneut versuchen.' }, { status: 409 });
     }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });

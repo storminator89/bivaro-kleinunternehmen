@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-17",
+  "implementation": "uncommitted working tree",
+  "imageGeneration": "built-in image_gen; one call per asset",
+  "assetCount": 24,
+  "realAlpha": true,
+  "webBytes": 145300,
+  "lint": "passed; zero warnings",
+  "productionBuild": "passed including TypeScript",
+  "e2e": {
+    "startTime": "2026-10-17T18:22:46.837Z",
+    "duration": 49801.522999999994,
+    "expected": 20,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "responsiveWidths": [
+    320,
+    375,
+    414,
+    768,
+    1440
+  ],
+  "collapsedBrandOverlapsToggle": false,
+  "deployment": {
+    "report": "deployment-2026-10-17-icons.json",
+    "health": "healthy",
+    "database": "up",
+    "httpIconHashesMatch": 27,
+    "productionLoginWidths": [
+      1440,
+      375,
+      320
+    ]
+  },
+  "screenshots": "screenshots-2026-10-17-icons/"
+}

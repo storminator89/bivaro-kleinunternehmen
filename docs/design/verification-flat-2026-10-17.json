@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-17",
+  "lint": "passed; zero warnings",
+  "build": "passed including TypeScript",
+  "e2e": {
+    "startTime": "2026-10-17T18:44:10.707Z",
+    "duration": 50900.577000000005,
+    "expected": 20,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "sidebarArtwork": "unchanged",
+  "sidebarBrand": "flat light variant",
+  "dashboardStyle": "generated flat silhouettes, one muted ink color, 32px maximum",
+  "alphaValidated": 13,
+  "screenshots": "screenshots-2026-10-17-flat/",
+  "deployment": {
+    "image": "bivaro:flat-icons-20261017",
+    "health": "healthy",
+    "database": "up",
+    "newAssetHashesMatch": 13,
+    "persistentVolumesUnchanged": true,
+    "migrationsUnchanged": true
+  }
+}

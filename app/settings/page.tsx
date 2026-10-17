@@ -1,5 +1,8 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
+import styles from "@/components/settings/admin-workspace.module.css";
+
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
@@ -424,18 +427,12 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="settings-workspace space-y-6">
-      <div>
-        <p className="app-section-label mb-2">System</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Einstellungen</h1>
-        <p className="text-muted-foreground">
-          Verwalten Sie Ihre Firmendaten und Rechnungseinstellungen.
-        </p>
-      </div>
+    <div className={`${styles.workspace} space-y-6`}>
+      <PageHeader title="Einstellungen" description="Verwalten Sie Ihre Firmendaten und Rechnungseinstellungen." section="System" />
 
-      <div className="settings-layout"><SettingsSectionNavigation isAdmin={isAdmin} /><div className="settings-content space-y-6">
+      <div className={styles.settingsLayout}><SettingsSectionNavigation isAdmin={isAdmin} /><div className={styles.settingsContent}>
       <form id="company-settings" onSubmit={handleSubmit}>
-        <Card>
+        <Card className={styles.surface}>
           <CardHeader>
             <CardTitle>Rechnungsdaten</CardTitle>
             <CardDescription>
@@ -443,6 +440,7 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <fieldset className={styles.fieldGroup}><legend>Unternehmen & Kontakt</legend>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="companyName">Firmenname</Label>
@@ -502,8 +500,9 @@ export default function SettingsPage() {
               />
             </div>
 
+            </fieldset>
+            <fieldset className={styles.fieldGroup}><legend>Bankverbindung</legend>
             <div className="space-y-2">
-              <Label>Bankverbindung</Label>
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="bankName" className="text-xs text-muted-foreground">Bankname</Label>
@@ -543,6 +542,8 @@ export default function SettingsPage() {
               </p>
             </div>
 
+            </fieldset>
+            <fieldset className={styles.fieldGroup}><legend>Darstellung auf Belegen</legend>
             <div className="space-y-2">
               <Label htmlFor="footerText">Fußzeile (Optional)</Label>
               <Input
@@ -556,7 +557,7 @@ export default function SettingsPage() {
 
             <div className="space-y-2">
               <Label>Firmenlogo (Optional)</Label>
-              <div className="flex items-start gap-4">
+              <div className={styles.logoRow}>
                 {formData.logoUrl ? (
                   <div className="relative border rounded-md p-2 bg-muted/10">
                     <Image
@@ -570,6 +571,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={removeLogo}
+                      aria-label="Firmenlogo entfernen"
                       className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90"
                     >
                       <X className="h-3 w-3" />
@@ -608,7 +610,8 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="pt-4">
+            </fieldset>
+            <div className={styles.formActions}>
               <Button type="submit" disabled={saving}>
                 {saving ? (
                   <>
@@ -627,10 +630,10 @@ export default function SettingsPage() {
         </Card>
       </form>
 
-      {isAdmin && <div id="email-settings"><SmtpSettings /></div>}
+      {isAdmin && <div id="email-settings" className={styles.smtpPanel}><SmtpSettings /></div>}
 
       {isAdmin && (
-        <Card className="mt-6">
+        <Card className={styles.surface} id="registration-settings">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -641,7 +644,7 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className={styles.registration}>
               <div className="space-y-0.5">
                 <Label htmlFor="allow-registration">Benutzerregistrierung erlauben</Label>
                 <p className="text-sm text-muted-foreground">
@@ -660,7 +663,7 @@ export default function SettingsPage() {
       )}
 
       {/* Backup & Restore */}
-      <Card className="mt-6" id="backup-settings">
+      <Card className={`${styles.surface} mt-6`} id="backup-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Database className="h-5 w-5" />
@@ -904,7 +907,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* API Keys */}
-      <Card className="mt-6" id="access-settings">
+      <Card className={`${styles.surface} ${styles.destination}`} id="access-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Key className="h-5 w-5" />
@@ -924,18 +927,18 @@ export default function SettingsPage() {
                 Endpoints: /api/v1/customers, /api/v1/expenses, /api/v1/incomes, /api/v1/invoices
               </p>
             </div>
-            <Link href="/settings/api-keys">
-              <Button variant="outline">
+            <Button variant="outline" asChild>
+              <Link href="/settings/api-keys">
                 API-Keys verwalten
                 <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Audit Log */}
-      <Card className="mt-6">
+      <Card className={`${styles.surface} ${styles.destination}`} id="audit-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <History className="h-5 w-5" />
@@ -955,18 +958,18 @@ export default function SettingsPage() {
                 Kunden, Rechnungen, Ausgaben, Einnahmen, Einstellungen und mehr
               </p>
             </div>
-            <Link href="/settings/audit-logs">
-              <Button variant="outline">
+            <Button variant="outline" asChild>
+              <Link href="/settings/audit-logs">
                 Audit-Log anzeigen
                 <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* GoBD Verfahrensdokumentation */}
-      <Card className="mt-6" id="procedure-settings">
+      <Card className={`${styles.surface} ${styles.destination}`} id="procedure-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -986,12 +989,12 @@ export default function SettingsPage() {
                 Inkl. PDF-Export und Versionsverlauf
               </p>
             </div>
-            <Link href="/settings/documentation">
-              <Button variant="outline">
+            <Button variant="outline" asChild>
+              <Link href="/settings/documentation">
                 Dokumentation öffnen
                 <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

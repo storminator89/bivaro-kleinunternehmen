@@ -35,10 +35,10 @@ export function UserMenu() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Benutzermenü öffnen"
         >
-          <Avatar className="size-8">
+          <Avatar className="size-10">
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
         </button>
@@ -54,7 +54,7 @@ export function UserMenu() {
             </span>
           )}
           {role && (
-            <span className="mt-1 inline-flex w-fit items-center rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="mt-1 inline-flex w-fit items-center rounded-full border border-border bg-muted px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {role === "ADMIN" ? "Administrator" : "Benutzer"}
             </span>
           )}

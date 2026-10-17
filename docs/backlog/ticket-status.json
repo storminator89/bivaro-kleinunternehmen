@@ -1886,5 +1886,49 @@
         "Bivaro_Agent_Backlog.json"
       ]
     }
+  ],
+  "maintenanceAudits": [
+    {
+      "id": "LEGACY-TEST-AUDIT-2026-10-17",
+      "date": "2026-10-17",
+      "status": "complete",
+      "gitBase": "4b293ff3081455bd7e21f08dbc928e5ffe4cd051",
+      "worktree": "Uncommitted; pre-existing dirty baseline preserved (113 modified tracked files, 28 untracked entries at audit observation).",
+      "ticketStatusChanges": [],
+      "implementedScope": [
+        "12 unreachable frontend files and one dead barrel export removed (1191 source lines).",
+        "Six unused direct dependencies removed after import/configuration checks.",
+        "Dead generic security, in-memory rate-limit, and upload wrappers removed; obsolete implementation-only tests replaced with checks of live renderer, persisted quota, and upload behavior.",
+        "Upload tests isolated from repository storage; benchmark now verifies HTTP status, seeded totals, and nonzero bounded query counts.",
+        "Regular E2E changed to guarded fresh temporary database fixtures; validated alternate port and baseURL portability added.",
+        "Both E2E runners now forward SIGINT/SIGTERM, await child shutdown, and clean temporary fixtures; six process regressions verify normal and interrupted lifecycle.",
+        "Browser response-inspection stalls fixed using real upstream/persisted data; explicit shared issuer fixture removes hidden billing test-order dependency without weakening assertions."
+      ],
+      "remainingAcceptanceCriteria": "No new backlog acceptance-criterion completion claimed; all 160 ticket states and prior remaining criteria retained. This maintenance audit has no blocking checks; uncertain obsolete candidates and historical operator-review items remain documented.",
+      "tests": [
+        "Full Vitest with benchmark enabled: 58 files/424 tests passed, zero skipped, 41.73 s; Ghostscript conversion executed.",
+        "Main browser suite: BIVARO_E2E_PORT=3117 npm run test:e2e -- --trace=retain-on-failure; 20 passed, zero retries/skips, 1.1 min, fresh temporary database and production build.",
+        "Separate security browser suite: npm run test:e2e:security; 1 passed, 12.6 s, dedicated temporary database and port 3101.",
+        "Production build, full lint with zero warnings, TypeScript, changed-script node --check, git diff --check, and manifest/lock dependency equality passed.",
+        "Lifecycle and fixture regressions: 2 files/10 tests passed, included in final 424; fake CLI only, no real database or server.",
+        "Strengthened opt-in benchmark independently passed 1 file/1 test in 11.50 s; focused date 2/2 and complete customer/billing 2/2 reruns passed.",
+        "All 160 ticket objects and every pre-existing top-level JSON field equal HEAD; all local documentation evidence links resolve."
+      ],
+      "evidence": [
+        "docs/testing/legacy-code-audit-2026-10-17.md"
+      ],
+      "knownIncidentReferences": [
+        "PRUEFVORFALL-2026-09-19",
+        "PRUEFVORFALL-2026-09-19-COMPOSE-DIAGNOSE"
+      ],
+      "blockingFailures": [],
+      "remainingNonblockingLimitations": [
+        "Unproven maintenance, Money and EÜR cleanup candidates retained until supported-consumer contracts are established.",
+        "Shared database helper can leak its temporary directory if migration setup throws before returning cleanup.",
+        "CI build uses file:./dev.db as a dummy URL; no migration/write evidenced from that build.",
+        "Configured ESLint source patterns omit .mjs; changed runners passed syntax and process tests.",
+        "Historical operator-review incidents remain documented; remote CI, deployment and backlog AC acceptance are outside this audit."
+      ]
+    }
   ]
 }

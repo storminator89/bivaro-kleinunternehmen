@@ -1,3 +1,4 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
 /**
  * API v1 - Documentation Endpoint
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/v1/documentation
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
     return withApiAuth(request, async ({ userId }) => {
         let body;
         try {
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
 }
 
 // PUT /api/v1/documentation?id=<id>
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
     return withApiAuth(request, async ({ userId }) => {
         const url = new URL(request.url);
         const id = url.searchParams.get('id');
@@ -154,7 +155,7 @@ export async function PUT(request: NextRequest) {
 }
 
 // DELETE /api/v1/documentation?id=<id>
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
     return withApiAuth(request, async ({ userId }) => {
         const url = new URL(request.url);
         const id = url.searchParams.get('id');
@@ -184,3 +185,7 @@ export async function DELETE(request: NextRequest) {
         return response;
     }, { requiredScopes: ['delete'] });
 }
+
+export const POST = protectMutation(postHandler, { bearer: true, maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const PUT = protectMutation(putHandler, { bearer: true, maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler, { bearer: true });

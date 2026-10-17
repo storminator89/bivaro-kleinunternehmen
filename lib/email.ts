@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises';
 import { basename, extname } from 'path';
-import nodemailer, { type SendMailOptions } from 'nodemailer';
+import type { SendMailOptions } from 'nodemailer';
+import { createDocumentMailTransport } from '@/lib/smtp-transport';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog, createFinancialAuditLog } from '@/lib/audit-log';
 import { inTransaction } from '@/lib/db-transaction';
@@ -256,16 +257,7 @@ export async function sendDocumentEmail(userId: string, request: SendEmailReques
     ],
   };
 
-  const transport = nodemailer.createTransport({
-    host: configuration.host,
-    port: configuration.port,
-    secure: configuration.secure,
-    requireTLS: configuration.source === 'database' && configuration.secure === false,
-    auth: configuration.auth,
-    tls: {
-      minVersion: 'TLSv1.2',
-    },
-  });
+  const transport = createDocumentMailTransport(configuration);
 
   // Reserve issuance before contacting SMTP.  If SMTP succeeds but the
   // follow-up status write fails, the marker still keeps the draft locked

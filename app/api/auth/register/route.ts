@@ -1,3 +1,4 @@
+import { protectMutation, MAX_AUTH_BODY_BYTES } from '@/lib/request-security';
 import { NextRequest, NextResponse } from "next/server";
 import { validatePassword, isValidEmail, sanitizeString } from "@/lib/security";
 import { hashPassword } from "@/lib/password";
@@ -16,7 +17,7 @@ const REGISTRATION_RATE_LIMIT = {
   blockMs: 30 * 60 * 1000,
 };
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const clientIp = getTrustedClientIp(request.headers);
     const rateLimit = await consumeRateLimit(
@@ -124,3 +125,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_AUTH_BODY_BYTES });

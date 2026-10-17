@@ -58,6 +58,32 @@ function jsonRequest(url: string, body: object) {
 }
 
 describe('file and restore security integration', () => {
+  it('forces raw XML downloads and sandboxes the HTML viewer', async () => {
+    state.userId = 'alice';
+    const rawXml = '<Invoice><ID>XML-FIXTURE</ID></Invoice>';
+    const storedFileName = await storage.writeTenantFile('alice', 'fixture.xml', Buffer.from(rawXml));
+    const invoice = await database.client.invoice.create({ data: {
+      userId: 'alice', fileName: 'fixture.xml', storedFileName, parsedData: { rawXml },
+    } });
+    for (const suffix of ['', '&format=xml']) {
+      const response = await download.GET(new NextRequest(`http://localhost/api/invoices/download?id=${invoice.id}${suffix}`));
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-disposition')).toContain('attachment');
+      expect(response.headers.get('content-security-policy')).toContain('sandbox');
+      // The raw-file branch receives no-store from next.config.ts at HTTP
+      // dispatch; this direct-handler test covers the explicit XML export.
+      if (suffix) expect(response.headers.get('cache-control')).toContain('no-store');
+      expect(await response.text()).toBe(rawXml);
+    }
+    const viewer = await import('@/app/api/invoices/viewer/route');
+    const preview = await viewer.GET(new NextRequest(`http://localhost/api/invoices/viewer?id=${invoice.id}`));
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get('content-security-policy')).toContain("script-src 'none'");
+    expect(preview.headers.get('content-security-policy')).toContain('sandbox allow-same-origin');
+    expect(preview.headers.get('content-security-policy')).not.toContain('allow-scripts');
+    expect(preview.headers.get('cache-control')).toContain('no-store');
+  });
+
   it('stores traversal filenames only as metadata and rejects a foreign customer', async () => {
     state.userId = 'alice';
     const marker = path.join(directory, 'marker.pdf'); await writeFile(marker, 'unchanged');

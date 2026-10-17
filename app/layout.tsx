@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono, Newsreader } from "next/font/google";
+import { headers } from 'next/headers';
+import { Inter, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import AuthProvider from "@/components/auth/auth-provider";
@@ -8,8 +9,8 @@ import { AppShell } from "@/components/app-shell";
 import { Toaster } from "@/components/ui/toaster";
 import { RouteProgress } from "@/components/route-progress";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -30,18 +31,20 @@ export const metadata: Metadata = {
   description: "Eine einfache Buchhaltungsanwendung für Kleinunternehmer",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
-    <html lang="de" suppressHydrationWarning>
+    <html lang="de" className={`${inter.variable} ${geistMono.variable} ${newsreader.variable}`} suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} min-h-screen bg-background antialiased`}
+        className="min-h-screen bg-background antialiased"
       >
         <AuthProvider>
           <ThemeProvider
+            nonce={nonce}
             attribute="class"
             defaultTheme="system"
             enableSystem

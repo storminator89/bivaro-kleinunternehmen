@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -214,7 +215,7 @@ function toStoredParsedData(parsedInvoice: ParsedEInvoice, uploadRequest?: Uploa
   };
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
     if (!isRequestBodyWithinLimit(request, MAX_INVOICE_UPLOAD_BYTES + 128 * 1024)) {
@@ -557,3 +558,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = protectMutation(postHandler);

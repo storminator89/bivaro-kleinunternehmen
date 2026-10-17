@@ -1,6 +1,8 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import styles from "@/components/dashboard/sales-workspace.module.css";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,16 +69,6 @@ const getInitials = (name: string) => {
     .slice(0, 2)
     .join('')
     .toUpperCase();
-};
-
-// Helper to generate a consistent color based on string
-const stringToColor = (str: string) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-  return '#' + '00000'.substring(0, 6 - c.length) + c;
 };
 
 type CustomerModalProps = {
@@ -483,18 +475,25 @@ export default function CustomersPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [notesCustomer, setNotesCustomer] = useState<Customer | null>(null);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchCustomers = async () => {
+    setIsLoadingCustomers(true);
+    setLoadError(null);
     try {
       const response = await fetch('/api/customers');
       if (response.ok) {
         const data = await response.json();
         setCustomers(data);
       } else {
-        console.error('Failed to fetch customers');
+        setLoadError('Kunden konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
+      setLoadError('Kunden konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
+    } finally {
+      setIsLoadingCustomers(false);
     }
   };
 
@@ -586,19 +585,10 @@ export default function CustomersPage() {
   );
 
   return (
-    <div className="customer-workspace">
+    <div className={`customer-workspace ${styles.directory}`}>
       <div className="space-y-6">
-        <header className="workbench-header flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="app-section-label mb-2">Verkauf</p>
-            <h1 className="text-3xl font-semibold tracking-tight mb-2">
-              Kundenverwaltung
-            </h1>
-            <p className="text-muted-foreground">
-              Verwalten Sie Ihre Geschäftskontakte und Kundenstammdaten
-            </p>
-          </div>
-          <div className="mt-4 md:mt-0 flex gap-3">
+        <PageHeader title="Kundenverwaltung" description="Kontakte, Anschriften und offene Leistungen an einem Ort." section="Verkauf" actions={<>
+<div className="mt-4 md:mt-0 flex gap-3">
             <div className="hidden items-center text-sm text-muted-foreground md:flex">
               <span className="font-medium">
                 {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}
@@ -611,11 +601,11 @@ export default function CustomersPage() {
               Neuen Kunden anlegen
             </Button>
           </div>
-        </header>
+</>} />
 
         <div className="grid gap-6">
-          {/* Search and Filter Bar */}
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-card p-4 rounded-xl border shadow-sm">
+          <Card className="customer-directory overflow-hidden border bg-card shadow-none">
+          <div className={styles.directoryToolbar}>
             <div className="relative w-full sm:w-96">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -635,16 +625,17 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          <Card className="customer-directory overflow-hidden border bg-card shadow-none">
             <CardContent className="p-0">
-              <div className="customer-mobile-list xl:hidden" aria-label="Kundenliste">
+              {isLoadingCustomers && <div role="status" className="flex items-center gap-2 border-b p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Kunden werden geladen …</div>}
+              {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b p-4 text-sm text-destructive"><p>{loadError}</p><Button variant="outline" onClick={fetchCustomers}>Erneut laden</Button></div>}
+              <div className={`customer-mobile-list xl:hidden ${isLoadingCustomers || loadError ? "hidden" : ""}`} aria-label="Kundenliste">
                 {filteredCustomers.length ? filteredCustomers.map(customer => <article key={customer.id}>
                   <div className="customer-record-heading"><span className="customer-monogram">{getInitials(customer.name)}</span><div><h2>{customer.name}</h2><p>{customer.contactPerson || 'Geschäftskontakt'}{customer.city ? ` · ${customer.city}` : ''}</p></div></div>
                   <dl>{customer.email && <div><dt>E-Mail</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>}{customer.phone && <div><dt>Telefon</dt><dd><a href={`tel:${customer.phone}`}>{customer.phone}</a></dd></div>}</dl>
                   <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openEditModal(customer)} aria-label={`${customer.name} bearbeiten`}>Bearbeiten</Button><Button variant="ghost" size="sm" onClick={() => setNotesCustomer(customer)} aria-label={`Leistungsnotizen für ${customer.name}`}>Leistungsnotizen</Button><Button variant="ghost" size="sm" className="text-destructive" disabled={isDeleting} onClick={() => handleDeleteCustomer(customer.id)} aria-label={`${customer.name} löschen`}>Löschen</Button></div>
                 </article>) : <div className="ledger-empty"><h2>Keine Kunden gefunden</h2><p>{searchTerm ? 'Ändern Sie Ihre Suche, um Kontakte zu finden.' : 'Legen Sie Ihren ersten Geschäftskontakt an.'}</p>{!searchTerm && <Button variant="outline" onClick={openAddModal}>Ersten Kunden anlegen</Button>}</div>}
               </div>
-              <div className="hidden xl:block overflow-hidden bg-card">
+              <div className={`hidden ${isLoadingCustomers || loadError ? "" : "xl:block"} overflow-hidden bg-card`}>
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow>
@@ -663,8 +654,7 @@ export default function CustomersPage() {
                         <TableRow key={customer.id} className="hover:bg-muted/50 transition-colors group">
                           <TableCell>
                             <div
-                              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm"
-                              style={{ backgroundColor: stringToColor(customer.name) }}
+                              className={styles.avatar}
                             >
                               {getInitials(customer.name)}
                             </div>

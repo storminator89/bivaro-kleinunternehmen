@@ -1,5 +1,9 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
+import { CodeExample as CodeBlock } from "@/components/settings/code-example";
+import styles from "@/components/settings/admin-workspace.module.css";
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,12 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
-  Copy,
-  Check,
   Key,
   Shield,
   Zap,
-  Code2,
   FileJson,
   Users,
   Receipt,
@@ -32,34 +33,6 @@ import Link from "next/link";
 
 export default function ApiDocsPage() {
   const [_language] = useState<"de" | "en">("de");
-
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-
-  const copyCode = (code: string, id: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(id);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const CodeBlock = ({ code, id }: { code: string; id: string }) => (
-    <div className="relative group">
-      <pre className="bg-zinc-950 text-zinc-100 p-4 rounded-lg overflow-x-auto text-sm font-mono">
-        <code>{code}</code>
-      </pre>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 hover:bg-zinc-700"
-        onClick={() => copyCode(code, id)}
-      >
-        {copiedCode === id ? (
-          <Check className="h-4 w-4 text-green-400" />
-        ) : (
-          <Copy className="h-4 w-4 text-zinc-400" />
-        )}
-      </Button>
-    </div>
-  );
 
   const endpoints = [
     {
@@ -388,31 +361,20 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className={styles.workspace}>
+      <div className={styles.page}>
         {/* Back Link */}
         <Link
           href="/settings/api-keys"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6"
+          className={styles.back}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Zurück zu API-Schlüssel
         </Link>
 
         {/* Header */}
-        <header className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Code2 className="h-8 w-8 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">API-Dokumentation</h1>
-              <p className="text-muted-foreground">
-                REST API v1 für die Integration externer Systeme
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2 mt-4">
+        <PageHeader title="API-Dokumentation" description="REST API v1 für die Integration externer Systeme." section="System" actions={<>
+<div className={styles.headerActions}>
             <Badge variant="outline" className="gap-1">
               <Zap className="h-3 w-3" />
               REST API
@@ -426,10 +388,18 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
               API-Key Auth
             </Badge>
           </div>
-        </header>
+</>} />
 
+        <div className={styles.documentLayout}>
+          <nav className={styles.toc} aria-label="API-Dokumentationsbereiche">
+            <a href="#api-quickstart">Schnellstart</a><a href="#api-auth">Authentifizierung</a>
+            <a href="#api-limits">Rate Limiting</a><a href="#api-cors">CORS</a>
+            <a href="#api-response">Antwortformat</a><a href="#api-status">Statuscodes</a>
+            <a href="#api-endpoints">Endpunkte</a><a href="#api-query">Query-Parameter</a><a href="#api-openapi">OpenAPI</a>
+          </nav>
+          <div className={styles.documentContent}>
         {/* Quick Start */}
-        <Card className="mb-8 border-primary/20 bg-primary/5">
+        <Card id="api-quickstart" className={`${styles.surface} mb-8 border-border bg-card`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Zap className="h-5 w-5 text-primary" />
@@ -482,7 +452,7 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
         </Card>
 
         {/* Authentication */}
-        <Card className="mb-8">
+        <Card id="api-auth" className={`${styles.surface} mb-8`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Key className="h-5 w-5" />
@@ -530,7 +500,7 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
         </Card>
 
         {/* Rate Limiting */}
-        <Card className="mb-8">
+        <Card id="api-limits" className={`${styles.surface} mb-8`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
@@ -569,7 +539,7 @@ X-RateLimit-Reset: 1732738800`}
         </Card>
 
         {/* CORS Configuration */}
-        <Card className="mb-8">
+        <Card id="api-cors" className={`${styles.surface} mb-8`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5" />
@@ -585,7 +555,7 @@ X-RateLimit-Reset: 1732738800`}
               müssen Sie die Domain Ihrer Anwendung als erlaubte Origin konfigurieren.
             </p>
 
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className={styles.inlineNote}>
               <div className="flex gap-3">
                 <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                 <div className="text-sm">
@@ -655,7 +625,7 @@ Access-Control-Max-Age: 86400`}
         </Card>
 
         {/* Response Format */}
-        <Card className="mb-8">
+        <Card id="api-response" className={`${styles.surface} mb-8`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileJson className="h-5 w-5" />
@@ -718,7 +688,7 @@ Access-Control-Max-Age: 86400`}
         </Card>
 
         {/* HTTP Status Codes */}
-        <Card className="mb-8">
+        <Card id="api-status" className={`${styles.surface} mb-8`}>
           <CardHeader>
             <CardTitle>HTTP Status Codes</CardTitle>
           </CardHeader>
@@ -726,11 +696,11 @@ Access-Control-Max-Age: 86400`}
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
-                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">200</Badge>
+                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-inherit">200</Badge>
                   <span className="text-sm">Erfolgreiche Anfrage</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">201</Badge>
+                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-inherit">201</Badge>
                   <span className="text-sm">Ressource erstellt</span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -756,18 +726,19 @@ Access-Control-Max-Age: 86400`}
           </CardContent>
         </Card>
 
+        <div id="api-endpoints">
         {/* Endpoints */}
         <h2 className="text-2xl font-bold mb-4">Endpunkte</h2>
 
         <div className="space-y-6">
           {endpoints.map((endpoint) => (
-            <Card key={endpoint.path} id={endpoint.name.toLowerCase()}>
+            <Card key={endpoint.path} id={endpoint.name.toLowerCase()} className={styles.surface}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <endpoint.icon className="h-5 w-5" />
                   {endpoint.name}
                 </CardTitle>
-                <CardDescription className="flex items-center gap-2">
+                <CardDescription className="flex flex-wrap items-center gap-2">
                   <code className="text-sm bg-muted px-2 py-0.5 rounded">{endpoint.path}</code>
                   <span>—</span>
                   <span>{endpoint.description}</span>
@@ -820,8 +791,9 @@ Access-Control-Max-Age: 86400`}
           ))}
         </div>
 
+        </div>
         {/* Query Parameters */}
-        <Card className="mt-8">
+        <Card id="api-query" className={`${styles.surface} mt-8`}>
           <CardHeader>
             <CardTitle>Allgemeine Query-Parameter</CardTitle>
             <CardDescription>
@@ -877,10 +849,10 @@ Access-Control-Max-Age: 86400`}
         </Card>
 
         {/* OpenAPI */}
-        <Card className="mt-8 border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20">
+        <Card id="api-openapi" className={styles.note}>
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex min-w-0 flex-1 gap-4">
                 <FileJson className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-blue-900 dark:text-blue-100">OpenAPI 3.0 Spezifikation</p>
@@ -907,6 +879,8 @@ Access-Control-Max-Age: 86400`}
               Einstellungen → API-Keys
             </Link>
           </p>
+        </div>
+          </div>
         </div>
       </div>
     </div>

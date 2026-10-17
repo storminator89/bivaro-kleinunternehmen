@@ -1,3 +1,5 @@
+import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
+import { parseLedgerSort, LedgerSortError } from '@/lib/ledger-sort';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -57,7 +59,7 @@ function parseIncomeTaxRelevant(value: unknown, present: boolean): boolean | und
   return value;
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const body = await request.json();
@@ -105,6 +107,7 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
     const skip = (page - 1) * pageSize;
+    const sort = parseLedgerSort(url.searchParams);
 
     // Filters
     const search = url.searchParams.get('search') || '';
@@ -151,7 +154,7 @@ export async function GET(request: Request) {
     const [incomes, total] = await Promise.all([
       prisma.income.findMany({
         where,
-        orderBy: { date: 'desc' },
+        orderBy: [{ [sort.sortBy]: sort.sortOrder }, { id: sort.sortOrder }],
         include: {
           invoice: {
             select: {
@@ -179,6 +182,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ items, total, page, pageSize });
   } catch (error) {
+    if (error instanceof LedgerSortError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
@@ -187,7 +193,7 @@ export async function GET(request: Request) {
 }
 
 // Neue Methode zum Aktualisieren einer Einnahme
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const body = await request.json();
@@ -232,7 +238,7 @@ export async function PUT(request: Request) {
 }
 
 // Neue Methode zum Löschen einer Einnahme
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
@@ -252,3 +258,7 @@ export async function DELETE(request: Request) {
     throw error;
   }
 }
+
+export const POST = protectMutation(postHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const PUT = protectMutation(putHandler, { maxBodyBytes: MAX_API_JSON_BODY_BYTES });
+export const DELETE = protectMutation(deleteHandler);

@@ -14,7 +14,7 @@
   - `lib/audit-log.ts` – `createAuditLog` helper and `auditSecurityEvent` for structured security events.
   - `lib/backup-preview.ts` – validates backup shape and returns preview counts/warnings before a restore.
 - `prisma/` keeps `schema.prisma`, migrations, and the dev SQLite database (`dev.db`); never commit production data.
-  - `prisma/e2e.db` is the isolated E2E test database – created fresh by `npm run e2e:prepare`.
+  - E2E databases live in fresh temporary fixture directories created by `npm run test:e2e`; repository databases are never reset by the runner.
 - `e2e/` – Playwright end-to-end tests (`auth-dashboard-invoice.spec.ts`).
 - `public/` serves static assets including `public/screenshot/dashboard.png`.
 - `proxy.ts` guards protected routes; update it when adding secure areas.
@@ -26,7 +26,7 @@
 - `npm run lint` runs ESLint with `--max-warnings 0`; zero warnings allowed.
 - `npm run test` runs all Vitest unit tests once.
 - `npm run test:watch` runs Vitest in watch mode.
-- `npm run e2e:prepare` drops and recreates `prisma/e2e.db` with all migrations applied.
+- `npm run e2e:prepare` is the runner's internal migration step; it requires `BIVARO_E2E_TEST_DIR` and refuses to overwrite an existing database.
 - `npm run test:e2e` runs the full Playwright suite (builds the app and starts an isolated server on port 3100).
 - `npm run db:migrate` applies pending Prisma migrations to the production database.
 - `npm run db:studio` opens Prisma Studio (browser GUI for the local database).
@@ -40,10 +40,10 @@
 - Never store secrets in source code; use `.env` (listed in `.gitignore`).
 
 ## Testing Guidelines
-- Unit tests live in `lib/__tests__/` named `<module>.test.ts`. Currently 166 tests across 7 files.
-- Playwright E2E tests live in `e2e/`. Currently tests: first-admin registration, login, dashboard render, invoice dialog.
-- Vitest is configured in `vitest.config.ts` with `exclude: ['node_modules/**', '.next/**']` – keep this to prevent build artifacts from being collected.
-- Playwright config uses an absolute path for `DATABASE_URL` (`process.cwd()/prisma/e2e.db`) so the standalone server resolves it correctly from `.next/standalone/`.
+- Unit and integration tests live in `lib/__tests__/` and `scripts/__tests__/` named `<module>.test.ts`; the audit report in `docs/testing/` records verified counts.
+- Playwright E2E tests live in `e2e/` and cover registration, authentication, workspace navigation, invoices, quotes, accounting and security boundaries.
+- Vitest is configured in `vitest.config.mts` with `exclude: ['node_modules/**', '.next/**']` – keep this to prevent build artifacts from being collected.
+- Run browser tests through `npm run test:e2e`; its runner passes an absolute temporary `DATABASE_URL` so the standalone server resolves the same fixture from `.next/standalone/` and removes it afterwards.
 - `reuseExistingServer: false` is intentional – E2E tests always spin up a fresh isolated server on port 3100.
 - Run `npx playwright install chromium` once to install the browser binary.
 
@@ -79,3 +79,13 @@
   cp -R .next/static .next/standalone/.next/static
   ```
   This is automated in `npm run test:e2e`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

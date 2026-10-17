@@ -1,7 +1,9 @@
 "use client";
 
+import { PageHeader } from "@/components/page-header";
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import styles from "@/components/dashboard/sales-workspace.module.css";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -228,6 +230,7 @@ export default function RemindersPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreateReminder, setShowCreateReminder] = useState(false);
   const [reminderFee, setReminderFee] = useState('0');
@@ -244,6 +247,7 @@ export default function RemindersPage() {
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const [remindersRes, settingsRes] = await Promise.all([
         fetch('/api/reminders?includeAll=true'),
@@ -254,6 +258,8 @@ export default function RemindersPage() {
         const data = await remindersRes.json();
         setInvoices(data.invoices);
         setStats(data.stats);
+      } else {
+        setLoadError("Mahnwesen konnte nicht geladen werden. Bitte versuchen Sie es erneut.");
       }
 
       if (settingsRes.ok) {
@@ -262,6 +268,7 @@ export default function RemindersPage() {
       }
     } catch (error) {
       console.error('Error loading reminders:', error);
+      setLoadError('Mahnwesen konnte nicht geladen werden. Bitte versuchen Sie es erneut.');
     } finally {
       setIsLoading(false);
     }
@@ -347,6 +354,17 @@ export default function RemindersPage() {
   const upcomingInvoices = filteredInvoices.filter(i => !i.isOverdue && i.dueDate);
 
   const renderInvoiceTable = (invoiceList: Invoice[], showOverdue: boolean) => (
+    <div>
+      <div className={styles.reminderMobile}>
+        {invoiceList.length === 0 ? <div className="ledger-empty"><CheckCircle aria-hidden="true" /><p>{showOverdue ? 'Keine überfälligen Rechnungen' : 'Keine bald fälligen Rechnungen'}</p></div> : invoiceList.map(invoice => <article key={invoice.id} className={styles.reminderRecord}>
+          <div className={styles.reminderRecordHeader}><h3>{invoice.invoiceNumber || invoice.fileName}</h3><strong>{invoice.totalAmount != null ? formatCurrency(invoice.totalAmount) : '–'}</strong></div>
+          <p>{invoice.customer?.name || 'Unbekannter Kunde'}</p>
+          <div className={styles.recordMeta}><Badge variant={REMINDER_LEVEL_VARIANTS[invoice.currentReminderLevel]}>{REMINDER_LEVEL_LABELS[invoice.currentReminderLevel]}</Badge><span>{showOverdue ? `${invoice.daysOverdue} Tage überfällig` : `Fällig am ${formatDate(invoice.dueDate)}`}</span>{invoice.totalFees > 0 && <span>Gebühren: {formatCurrency(invoice.totalFees)}</span>}</div>
+          <div className={styles.reminderActions}>{invoice.currentReminderLevel < 4 && <Button variant="outline" size="sm" onClick={() => { setSelectedInvoice(invoice); setShowCreateReminder(true); }}><Mail className="mr-1 h-4 w-4" aria-hidden="true" />{invoice.nextReminderLevelLabel}</Button>}<Button variant="ghost" size="sm" onClick={() => handleMarkAsPaid(invoice.id)}><Check className="mr-1 h-4 w-4" aria-hidden="true" />Als bezahlt markieren</Button></div>
+          {invoice.reminders.length > 0 && <details className={styles.reminderHistory}><summary>Mahnungshistorie ({invoice.reminders.length})</summary>{invoice.reminders.map(reminder => <article key={reminder.id}><strong className="text-sm">{REMINDER_LEVEL_LABELS[reminder.reminderLevel]}</strong><p>Gesendet: {formatDate(reminder.sentAt)} · Fällig: {formatDate(reminder.dueDate)}</p>{reminder.notes && <p>{reminder.notes}</p>}<div className="flex items-center justify-between gap-2"><span className="text-sm tabular-nums">{formatCurrency(reminder.fee)}</span><Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteReminder(reminder.id)} aria-label="Mahnung löschen"><Trash2 className="h-4 w-4" aria-hidden="true" /></Button></div></article>)}</details>}
+        </article>)}
+      </div>
+      <div className={styles.reminderDesktop}>
     <Table>
       <TableHeader>
         <TableRow>
@@ -441,6 +459,7 @@ export default function RemindersPage() {
                         handleMarkAsPaid(invoice.id);
                       }}
                       title="Als bezahlt markieren"
+                      aria-label="Als bezahlt markieren"
                     >
                       <Check className="h-4 w-4" />
                     </Button>
@@ -453,6 +472,7 @@ export default function RemindersPage() {
                           setExpandedInvoiceId(expandedInvoiceId === invoice.id ? null : invoice.id);
                         }}
                         title="Historie anzeigen"
+                        aria-label="Historie anzeigen"
                       >
                         {expandedInvoiceId === invoice.id ? (
                           <ChevronUp className="h-4 w-4" />
@@ -508,6 +528,7 @@ export default function RemindersPage() {
                                   handleDeleteReminder(reminder.id);
                                 }}
                                 title="Mahnung löschen"
+                                aria-label="Mahnung löschen"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -524,24 +545,121 @@ export default function RemindersPage() {
         )}
       </TableBody>
     </Table>
+      </div>
+    </div>
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className={styles.collections}>
+      <div className="space-y-6">
         {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Mahnwesen</h1>
-          <p className="text-muted-foreground">
-            Verwalten Sie überfällige Rechnungen und erstellen Sie Zahlungserinnerungen
-          </p>
-        </header>
+        <PageHeader title="Mahnwesen" description="Fälligkeiten im Blick behalten und den nächsten Zahlungsschritt vorbereiten." section="Verkauf" />
+
+        {stats && <dl className={styles.collectionSummary} aria-label="Forderungsübersicht"><div><dt>Ausstehender Betrag</dt><dd>{formatCurrency(stats.totalAmount)}</dd></div><div><dt>Überfällige Rechnungen</dt><dd>{stats.totalOverdue}</dd></div><div><dt>Mahngebühren</dt><dd>{formatCurrency(stats.totalFees)}</dd></div><div><dt>Offene Rechnungen</dt><dd>{invoices.length}</dd></div></dl>}
+        {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm text-destructive"><p>{loadError}</p><Button variant="outline" onClick={loadData}>Erneut laden</Button></div>}
+
+        {/* Filter */}
+        <Card className={styles.collectionFilter}>
+          <CardHeader className="pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <CardTitle className="text-lg">Filter</CardTitle>
+              <div className="flex min-w-0 flex-wrap items-center gap-4">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Label htmlFor="filter-level" className="text-sm whitespace-nowrap">Mahnstufe:</Label>
+                  <Select value={filterLevel} onValueChange={setFilterLevel}>
+                    <SelectTrigger id="filter-level" className="w-[180px]">
+                      <SelectValue placeholder="Alle Stufen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Alle Stufen</SelectItem>
+                      <SelectItem value="0">Keine Mahnung</SelectItem>
+                      <SelectItem value="1">Zahlungserinnerung</SelectItem>
+                      <SelectItem value="2">1. Mahnung</SelectItem>
+                      <SelectItem value="3">2. Mahnung</SelectItem>
+                      <SelectItem value="4">Letzte Mahnung</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(REMINDER_LEVEL_LABELS).map(([level, label]) => (
+                <Badge
+                  key={level}
+                  variant={REMINDER_LEVEL_VARIANTS[parseInt(level)]}
+                  className="cursor-default"
+                >
+                  {label}: {stats?.byLevel[parseInt(level) as keyof typeof stats.byLevel] ?? 0}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {isLoading ? (
+          <div className="flex justify-center py-16">
+            <svg className="animate-spin h-10 w-10 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Überfällige Rechnungen */}
+            <Collapsible open={overdueOpen} onOpenChange={setOverdueOpen}>
+              <Card>
+                <CollapsibleTrigger asChild>
+                  <button type="button" className="w-full p-6 text-left cursor-pointer hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="h-5 w-5 text-destructive" />
+                        <CardTitle>Überfällige Rechnungen ({overdueInvoices.length})</CardTitle>
+                      </div>
+                      {overdueOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                    </div>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    {renderInvoiceTable(overdueInvoices, true)}
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+
+            {/* Bald fällige Rechnungen */}
+            {upcomingInvoices.length > 0 && (
+              <Collapsible open={upcomingOpen} onOpenChange={setUpcomingOpen}>
+                <Card>
+                  <CollapsibleTrigger asChild>
+                    <button type="button" className="w-full p-6 text-left cursor-pointer hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Clock className="h-5 w-5 text-muted-foreground" />
+                          <CardTitle>Bald fällige Rechnungen ({upcomingInvoices.length})</CardTitle>
+                        </div>
+                        {upcomingOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                      </div>
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="pt-0">
+                      {renderInvoiceTable(upcomingInvoices, false)}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            )}
+          </div>
+        )}
 
         {/* Info-Card: Mahnstufen Erklärung */}
         <Collapsible open={showInfoOpen} onOpenChange={setShowInfoOpen} className="mb-6">
           <Card>
             <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-4">
+              <button type="button" className="w-full p-6 text-left cursor-pointer hover:bg-muted/50 transition-colors py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <HelpCircle className="h-5 w-5 text-primary" />
@@ -549,7 +667,7 @@ export default function RemindersPage() {
                   </div>
                   {showInfoOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </div>
-              </CardHeader>
+              </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="pt-0">
@@ -646,142 +764,6 @@ export default function RemindersPage() {
           </Card>
         </Collapsible>
 
-        {/* Statistik-Karten */}
-        {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Überfällige Rechnungen</CardDescription>
-                <CardTitle className="text-3xl flex items-center gap-2">
-                  <AlertCircle className="h-6 w-6 text-destructive" />
-                  {stats.totalOverdue}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Ausstehender Betrag</CardDescription>
-                <CardTitle className="text-3xl">
-                  {formatCurrency(stats.totalAmount)}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Mahngebühren</CardDescription>
-                <CardTitle className="text-3xl">
-                  {formatCurrency(stats.totalFees)}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Offene Rechnungen</CardDescription>
-                <CardTitle className="text-3xl flex items-center gap-2">
-                  <Clock className="h-6 w-6 text-muted-foreground" />
-                  {invoices.length}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-          </div>
-        )}
-
-        {/* Filter */}
-        <Card className="mb-6">
-          <CardHeader className="pb-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <CardTitle className="text-lg">Filter</CardTitle>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="filter-level" className="text-sm whitespace-nowrap">Mahnstufe:</Label>
-                  <Select value={filterLevel} onValueChange={setFilterLevel}>
-                    <SelectTrigger id="filter-level" className="w-[180px]">
-                      <SelectValue placeholder="Alle Stufen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Alle Stufen</SelectItem>
-                      <SelectItem value="0">Keine Mahnung</SelectItem>
-                      <SelectItem value="1">Zahlungserinnerung</SelectItem>
-                      <SelectItem value="2">1. Mahnung</SelectItem>
-                      <SelectItem value="3">2. Mahnung</SelectItem>
-                      <SelectItem value="4">Letzte Mahnung</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(REMINDER_LEVEL_LABELS).map(([level, label]) => (
-                <Badge
-                  key={level}
-                  variant={REMINDER_LEVEL_VARIANTS[parseInt(level)]}
-                  className="cursor-default"
-                >
-                  {label}: {stats?.byLevel[parseInt(level) as keyof typeof stats.byLevel] ?? 0}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {isLoading ? (
-          <div className="flex justify-center py-16">
-            <svg className="animate-spin h-10 w-10 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Überfällige Rechnungen */}
-            <Collapsible open={overdueOpen} onOpenChange={setOverdueOpen}>
-              <Card>
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <AlertCircle className="h-5 w-5 text-destructive" />
-                        <CardTitle>Überfällige Rechnungen ({overdueInvoices.length})</CardTitle>
-                      </div>
-                      {overdueOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                    </div>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="pt-0">
-                    {renderInvoiceTable(overdueInvoices, true)}
-                  </CardContent>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
-
-            {/* Bald fällige Rechnungen */}
-            {upcomingInvoices.length > 0 && (
-              <Collapsible open={upcomingOpen} onOpenChange={setUpcomingOpen}>
-                <Card>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Clock className="h-5 w-5 text-muted-foreground" />
-                          <CardTitle>Bald fällige Rechnungen ({upcomingInvoices.length})</CardTitle>
-                        </div>
-                        {upcomingOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                      </div>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="pt-0">
-                      {renderInvoiceTable(upcomingInvoices, false)}
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            )}
-          </div>
-        )}
 
         {/* Mahnung erstellen Dialog */}
         <Dialog open={showCreateReminder && !!selectedInvoice} onOpenChange={(open) => {

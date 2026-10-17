@@ -1,5 +1,5 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: custom Bivaro
- * tone: utilitarian · anchor hue: cool blue · enrichment: none
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: Bivaro Ledger
+ * tone: utilitarian · anchor hue: evergreen · enrichment: none
  * pre-emit critique: P5 H5 E4 S5 R5 V4 · contrast: pass (40–41)
  * honest: pass (46) · chrome: pass (47) · tokens: pass (48) · mobile: pass (34, 49–57)
  */
@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
-import { ArrowLeft, Copy, Eye, EyeOff, FileText, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, EyeOff, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import styles from "@/components/dashboard/sales-workspace.module.css";
 
 interface QuoteEditorProps {
     onCancel: () => void;
@@ -271,19 +272,22 @@ export function QuoteEditor({
             taxTotal += lineTax;
 
             const maxDescWidth = colX.qty - colX.desc - 10;
-            const words = (item.description || 'Position').split(' ');
             const descLines: string[] = [];
-            let currentLine = words[0] || '';
-            for (let i = 1; i < words.length; i++) {
-                const testLine = currentLine + " " + words[i];
-                if (font.widthOfTextAtSize(testLine, 10) < maxDescWidth) {
-                    currentLine = testLine;
-                } else {
-                    descLines.push(currentLine);
-                    currentLine = words[i];
+            // Preserve the explicit line breaks supported by the description editor.
+            for (const paragraph of (item.description || 'Position').split(/\r?\n/)) {
+                const words = paragraph.split(' ');
+                let currentLine = words[0] || '';
+                for (let i = 1; i < words.length; i++) {
+                    const testLine = currentLine + " " + words[i];
+                    if (font.widthOfTextAtSize(testLine, 10) < maxDescWidth) {
+                        currentLine = testLine;
+                    } else {
+                        descLines.push(currentLine);
+                        currentLine = words[i];
+                    }
                 }
+                descLines.push(currentLine);
             }
-            descLines.push(currentLine);
 
             const lineHeight = 12;
             const itemHeight = Math.max(20, descLines.length * lineHeight + 8);
@@ -500,231 +504,81 @@ export function QuoteEditor({
         }
     };
 
+    // Mirror the existing PDF/save arithmetic so the displayed and saved quote agree.
     const netTotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const taxTotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice * (item.taxRate / 100), 0);
+    const displayAmount = (amount: number) => Number.isFinite(amount) ? formatCurrency(amount) : '–';
 
     return (
-        <section
-            aria-labelledby="quote-editor-title"
-            className={cn(
-                "min-w-0",
-                variant === "dialog" && "flex max-h-[calc(90vh-3rem)] flex-col overflow-hidden",
-            )}
-        >
-                <header className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                        <Button variant="ghost" className="-ml-3 mb-2 gap-2" onClick={onCancel}>
-                            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                            Zurück zu Angeboten
-                        </Button>
-                        {variant === "page" ? (
-                            <h1 id="quote-editor-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                                Neues Angebot
-                            </h1>
-                        ) : (
-                            <h2 id="quote-editor-title" className="text-xl font-semibold tracking-tight">
-                                Angebot erstellen
-                            </h2>
-                        )}
-                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                            Empfänger, Leistungen und Laufzeit erfassen. Das fertige PDF wird gespeichert und heruntergeladen.
-                        </p>
-                    </div>
-                        <Button
-                            variant={showPreview ? "default" : "outline"}
-                            onClick={() => setShowPreview(!showPreview)}
-                            className="shrink-0 gap-2"
-                            aria-pressed={showPreview}
-                        >
-                            {showPreview ? (
-                                <><EyeOff className="h-4 w-4" /> Vorschau ausblenden</>
-                            ) : (
-                                <><Eye className="h-4 w-4" /> Live-Vorschau</>
-                            )}
-                        </Button>
-                </header>
-
-                <div className={cn("grid min-w-0 gap-6", showPreview && "xl:grid-cols-[minmax(0,1fr)_minmax(26rem,0.85fr)]")}>
-                    {/* Form */}
-                    <div className={cn("min-w-0 space-y-8 py-6", variant === "dialog" && "overflow-y-auto pr-1")}>
-                        {/* Header row */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="quote-number">Angebotsnummer</Label>
-                                <Input
-                                    id="quote-number"
-                                    value={quoteNumber}
-                                    onChange={(e) => setQuoteNumber(e.target.value)}
-                                    placeholder="AN-2026-01"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="quote-date">Angebotsdatum</Label>
-                                <Input id="quote-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="valid-until">Gültig bis</Label>
-                                <Input id="valid-until" type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Customer */}
-                            <div className="space-y-2">
-                                <Label htmlFor="customer">Empfänger (Name & Anschrift)</Label>
-                                <select
-                                    className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                    onChange={handleCustomerSelect}
-                                    defaultValue=""
-                                    aria-label="Gespeicherten Kunden auswählen"
-                                >
-                                    <option value="" disabled>Kunden auswählen...</option>
-                                    {customers.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                                <Textarea
-                                    id="customer"
-                                    value={customerAddress}
-                                    onChange={(e) => setCustomerAddress(e.target.value)}
-                                    placeholder={"Musterfirma GmbH\nMusterstraße 1\n12345 Musterstadt"}
-                                    className="min-h-[100px]"
-                                />
-                            </div>
-
-                            {/* Notes */}
-                            <div className="space-y-2">
-                                <Label htmlFor="notes">Anmerkungen (Optional)</Label>
-                                <Textarea
-                                    id="notes"
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Vielen Dank für Ihre Anfrage! Dieses Angebot ist freibleibend."
-                                    className="min-h-[100px]"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Items Table */}
-                        <fieldset className="min-w-0 space-y-3">
-                            <legend className="text-sm font-medium">Positionen</legend>
-                            <div className="overflow-hidden rounded-lg border border-border">
-                                <div className="hidden grid-cols-[minmax(12rem,1fr)_5rem_7rem_7rem_5rem_5.75rem] items-center gap-2 bg-muted p-3 text-sm font-medium lg:grid">
-                                    <div className="pl-2">Beschreibung</div>
-                                    <div className="text-center">Menge</div>
-                                    <div className="text-center">Einheit</div>
-                                    <div className="text-center">Einzelpreis</div>
-                                    <div className="text-center">Steuer</div>
-                                    <div></div>
-                                </div>
-                                <div className="divide-y">
-                                    {items.map((item, index) => (
-                                        <div key={index} className="grid min-w-0 grid-cols-2 gap-3 p-4 lg:grid-cols-[minmax(12rem,1fr)_5rem_7rem_7rem_5rem_5.75rem] lg:items-start lg:gap-2 lg:p-3">
-                                            <div className="col-span-2 min-w-0 lg:col-span-1">
-                                                <Label htmlFor={`quote-item-${index}-description`} className="mb-1.5 block lg:sr-only">Beschreibung</Label>
-                                                <Input id={`quote-item-${index}-description`} value={item.description} onChange={(e) => updateItem(index, 'description', e.target.value)} placeholder="Leistung / Produkt" />
-                                            </div>
-                                            <div>
-                                                <Label htmlFor={`quote-item-${index}-quantity`} className="mb-1.5 block lg:sr-only">Menge</Label>
-                                                <Input id={`quote-item-${index}-quantity`} type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="text-right tabular-nums" />
-                                            </div>
-                                            <div>
-                                                <Label htmlFor={`quote-item-${index}-unit`} className="mb-1.5 block lg:sr-only">Einheit</Label>
-                                                <select id={`quote-item-${index}-unit`} className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={item.unit} onChange={(e) => updateItem(index, 'unit', e.target.value)}>
-                                                    <option value="Stück">Stück</option>
-                                                    <option value="Stunde">Stunde</option>
-                                                    <option value="Tag">Tag</option>
-                                                    <option value="Pauschal">Pauschal</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <Label htmlFor={`quote-item-${index}-unit-price`} className="mb-1.5 block lg:sr-only">Einzelpreis</Label>
-                                                <Input id={`quote-item-${index}-unit-price`} type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateItem(index, 'unitPrice', e.target.value)} className="text-right tabular-nums" />
-                                            </div>
-                                            <div>
-                                                <Label htmlFor={`quote-item-${index}-tax`} className="mb-1.5 block lg:sr-only">Steuer</Label>
-                                                <div className="relative">
-                                                    <Input id={`quote-item-${index}-tax`} type="number" min="0" step="1" value={item.taxRate} onChange={(e) => updateItem(index, 'taxRate', e.target.value)} className="pr-7 text-right tabular-nums" />
-                                                    <span className="pointer-events-none absolute right-2 top-3 text-sm text-muted-foreground">%</span>
-                                                </div>
-                                            </div>
-                                            <div className="col-span-2 flex justify-end gap-1 lg:col-span-1">
-                                                <Button variant="ghost" size="icon" onClick={() => duplicateItem(index)} aria-label={`Position ${index + 1} duplizieren`} className="text-muted-foreground hover:text-foreground">
-                                                    <Copy className="h-4 w-4" aria-hidden="true" />
-                                                </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label={`Position ${index + 1} entfernen`} className="text-destructive hover:text-destructive">
-                                                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                <Button type="button" variant="outline" onClick={addItem} className="gap-2">
-                                    <Plus className="h-4 w-4" aria-hidden="true" /> Position hinzufügen
-                                </Button>
-                                <div className="text-right text-lg font-semibold tabular-nums">
-                                    Gesamt: {netTotal.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                                </div>
-                            </div>
-                        </fieldset>
-                    </div>
-
-                    {/* Preview */}
-                    {showPreview && (
-                        <div className="flex h-[min(46rem,70vh)] min-h-[28rem] min-w-0 flex-col border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-6">
-                            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm font-medium">Angebots-Vorschau</span>
-                                </div>
-                                <Button variant="ghost" onClick={generatePreview} disabled={isGeneratingPreview} className="gap-2">
-                                    {isGeneratingPreview ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                                    Aktualisieren
-                                </Button>
-                            </div>
-                            <div className="flex-1 rounded-lg border bg-muted/30 overflow-hidden relative">
-                                {isGeneratingPreview && !previewUrl && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                            <span className="text-sm text-muted-foreground">Vorschau wird generiert...</span>
-                                        </div>
-                                    </div>
-                                )}
-                                {previewUrl ? (
-                                    <iframe src={previewUrl} className="w-full h-full border-0" title="Angebotsvorschau" />
-                                ) : !isGeneratingPreview && (
-                                    <div className="flex items-center justify-center h-full">
-                                        <div className="text-center text-muted-foreground">
-                                            <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                                            <p className="text-sm">Füllen Sie das Formular aus,</p>
-                                            <p className="text-sm">um die Vorschau zu sehen.</p>
-                                        </div>
-                                    </div>
-                                )}
-                                {isGeneratingPreview && previewUrl && (
-                                    <div className="absolute top-2 right-2 bg-background/90 rounded-md px-2 py-1 text-xs text-muted-foreground flex items-center gap-1">
-                                        <Loader2 className="h-3 w-3 animate-spin" /> Aktualisiere...
-                                    </div>
-                                )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">
-                                Die Vorschau aktualisiert sich automatisch bei Änderungen.
-                            </p>
-                        </div>
-                    )}
-                </div>
-
-                <footer className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-border bg-background py-4 sm:flex-row sm:items-center sm:justify-end">
-                    <Button variant="outline" onClick={onCancel}>Abbrechen</Button>
-                    <Button
-                        onClick={handleGenerateAndSave}
-                        disabled={isGenerating || !customerAddress || !quoteNumber}
-                    >
-                        {isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}
+        <section aria-labelledby="quote-editor-title" className={cn(styles.editor, variant === "dialog" && styles.dialogEditor)}>
+            <header className={styles.editorHeader}>
+                <div>
+                    <Button variant="ghost" className="mb-2 gap-2 px-0 text-muted-foreground" onClick={onCancel}>
+                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />Zurück zu Angeboten
                     </Button>
-                </footer>
+                    {variant === "page" ? <h1 id="quote-editor-title">Neues Angebot</h1> : <h2 id="quote-editor-title">Angebot erstellen</h2>}
+                    <p>Leistungen anbieten, Konditionen festhalten und als PDF versenden.</p>
+                </div>
+                <Button variant="outline" onClick={() => setShowPreview(!showPreview)} aria-pressed={showPreview} className="gap-2">
+                    {showPreview ? <><EyeOff className="h-4 w-4" aria-hidden="true" />Vorschau ausblenden</> : <><Eye className="h-4 w-4" aria-hidden="true" />Live-Vorschau</>}
+                </Button>
+            </header>
+            <div className={styles.editorGrid}>
+                <div className={styles.editorMain}>
+                    <section className={styles.section} aria-labelledby="quote-recipient-title">
+                        <div className={styles.sectionHeading}><div><h2 id="quote-recipient-title">Empfänger</h2><p>Vorhandenen Kontakt übernehmen oder Anschrift direkt eingeben.</p></div></div>
+                        <div className="space-y-3">
+                            <Label htmlFor="quote-customer-select">Gespeicherter Kunde</Label>
+                            <select id="quote-customer-select" className={styles.select} onChange={handleCustomerSelect} defaultValue="" aria-label="Gespeicherten Kunden auswählen">
+                                <option value="" disabled>Kunden auswählen...</option>
+                                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <Label htmlFor="customer">Empfänger (Name & Anschrift)</Label>
+                            <Textarea id="customer" value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} placeholder={"Musterfirma GmbH\nMusterstraße 1\n12345 Musterstadt"} className="min-h-28" />
+                        </div>
+                    </section>
+                    <section className={styles.section} aria-labelledby="quote-document-title">
+                        <div className={styles.sectionHeading}><h2 id="quote-document-title">Angebotsdaten</h2></div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-2 sm:col-span-2"><Label htmlFor="quote-number">Angebotsnummer</Label><Input id="quote-number" value={quoteNumber} onChange={e => setQuoteNumber(e.target.value)} placeholder="AN-2026-01" /></div>
+                            <div className="space-y-2"><Label htmlFor="quote-date">Angebotsdatum</Label><Input id="quote-date" type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+                            <div className="space-y-2"><Label htmlFor="valid-until">Gültig bis</Label><Input id="valid-until" type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
+                        </div>
+                    </section>
+                    <section className={styles.section} aria-labelledby="quote-items-title">
+                        <div className={styles.sectionHeading}><div><h2 id="quote-items-title">Positionen</h2><p>Preise verstehen sich als Nettobeträge.</p></div><span>{items.length} {items.length === 1 ? "Position" : "Positionen"}</span></div>
+                        <div className={styles.lines}>
+                            {items.map((item, index) => <fieldset key={index} className={styles.line}>
+                                <legend className="sr-only">Position {index + 1}</legend>
+                                <div className={styles.lineTop}><strong>Position {index + 1}</strong><div className="flex gap-1"><Button variant="ghost" size="icon" onClick={() => duplicateItem(index)} aria-label={`Position ${index + 1} duplizieren`}><Copy className="h-4 w-4" aria-hidden="true" /></Button><Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={items.length === 1} aria-label={`Position ${index + 1} entfernen`} className="text-destructive"><Trash2 className="h-4 w-4" aria-hidden="true" /></Button></div></div>
+                                <div className="space-y-2"><Label htmlFor={`quote-item-${index}-description`}>Beschreibung</Label><Textarea id={`quote-item-${index}-description`} value={item.description} onChange={e => updateItem(index, 'description', e.target.value)} placeholder="Leistung / Produkt" className="min-h-20" /></div>
+                                <div className={styles.lineFields}>
+                                    <div className="space-y-2"><Label htmlFor={`quote-item-${index}-quantity`}>Menge</Label><Input id={`quote-item-${index}-quantity`} type="number" min="0" step="0.01" value={item.quantity} onChange={e => updateItem(index, 'quantity', e.target.value)} className="text-right tabular-nums" /></div>
+                                    <div className="space-y-2"><Label htmlFor={`quote-item-${index}-unit`}>Einheit</Label><select id={`quote-item-${index}-unit`} className={styles.select} value={item.unit} onChange={e => updateItem(index, 'unit', e.target.value)}><option value="Stück">Stück</option><option value="Stunde">Stunde</option><option value="Tag">Tag</option><option value="Pauschal">Pauschal</option></select></div>
+                                    <div className="space-y-2"><Label htmlFor={`quote-item-${index}-unit-price`}>Einzelpreis</Label><Input id={`quote-item-${index}-unit-price`} type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateItem(index, 'unitPrice', e.target.value)} className="text-right tabular-nums" /></div>
+                                    <div className="space-y-2"><Label htmlFor={`quote-item-${index}-tax`}>Steuer (%)</Label><Input id={`quote-item-${index}-tax`} type="number" min="0" step="1" value={item.taxRate} onChange={e => updateItem(index, 'taxRate', e.target.value)} className="text-right tabular-nums" /></div>
+                                </div>
+                                <div className={styles.lineAmount}><span>Positionsbetrag · Netto</span><strong>{displayAmount(item.quantity * item.unitPrice)}</strong></div>
+                            </fieldset>)}
+                        </div>
+                        <Button type="button" variant="outline" onClick={addItem} className="mt-4 gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Position hinzufügen</Button>
+                    </section>
+                    <section className={styles.section} aria-labelledby="quote-notes-title"><div className={styles.sectionHeading}><h2 id="quote-notes-title">Hinweise und Konditionen</h2></div><Label htmlFor="notes">Anmerkungen (Optional)</Label><Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Vielen Dank für Ihre Anfrage! Dieses Angebot ist freibleibend." className="mt-2 min-h-28" /></section>
+                </div>
+                <aside className={styles.editorRail} aria-label="Angebotsübersicht">
+                    <section className={styles.totalPanel} aria-labelledby="quote-total-title">
+                        <div className={styles.totalHero}><h2 id="quote-total-title">Angebotssumme</h2><div aria-live="polite">{displayAmount(netTotal + taxTotal)}</div><p>{items.length} {items.length === 1 ? "Position" : "Positionen"} · EUR</p></div>
+                        <div className={styles.totalBody}>
+                            <dl className={styles.totals}><div><dt>Nettobetrag</dt><dd>{displayAmount(netTotal)}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayAmount(taxTotal)}</dd></div></dl>
+                            {validUntil && <p className={styles.railNote}>Gültig bis {new Date(`${validUntil}T12:00:00`).toLocaleDateString('de-DE')}</p>}
+                            <Button className="w-full" onClick={handleGenerateAndSave} disabled={isGenerating || !customerAddress || !quoteNumber} aria-busy={isGenerating} aria-label={isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}>{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isGenerating ? "Erstelle Angebot..." : <><span className="sm:hidden">Angebot erstellen</span><span className="hidden sm:inline">Angebot erstellen & speichern</span></>}</Button>
+                            <p className={styles.railNote}>Das fertige PDF wird gespeichert und heruntergeladen.</p>
+                            <Button variant="ghost" className="w-full" onClick={onCancel}>Abbrechen</Button>
+                        </div>
+                    </section>
+                    {showPreview && <section className={styles.preview} aria-label="Angebots-Vorschau"><div className={styles.sectionHeading}><h2>PDF-Vorschau</h2><Button variant="ghost" onClick={generatePreview} disabled={isGeneratingPreview} aria-label="Vorschau aktualisieren">{isGeneratingPreview ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}</Button></div><div className={styles.previewFrame}>{previewUrl ? <iframe src={previewUrl} title="Angebotsvorschau" /> : <div role="status">{isGeneratingPreview ? "Vorschau wird generiert..." : "Füllen Sie das Formular aus, um die Vorschau zu sehen."}</div>}</div><p className={styles.railNote}>Aktualisiert sich automatisch bei Änderungen.</p></section>}
+                </aside>
+            </div>
         </section>
     );
 }

@@ -1,5 +1,5 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: custom Bivaro
- * tone: utilitarian · anchor hue: cool blue · enrichment: none
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: Bivaro Ledger
+ * tone: utilitarian · anchor hue: evergreen · enrichment: none
  * pre-emit critique: P5 H5 E4 S5 R5 V4 · contrast: pass (40–41)
  * honest: pass (46) · chrome: pass (47) · tokens: pass (48) · mobile: pass (34, 49–57)
  */

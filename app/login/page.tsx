@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, Eye, EyeOff, Loader2, Lock } from "lucide-react";
+import styles from "@/components/public-accounting/public-accounting.module.css";
+import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { toast } from "@/components/ui/toaster";
 
 export default function LoginPage() {
@@ -53,29 +54,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mx-auto grid min-h-[calc(100dvh-9rem)] w-full max-w-5xl items-center gap-10 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] lg:gap-20">
-      <div className="hidden max-w-md lg:block">
-        <p className="app-section-label">Bivaro</p>
-        <h1 className="mt-4 min-w-0 [overflow-wrap:anywhere] font-marketing text-5xl font-medium leading-[0.94] tracking-[-0.04em] text-foreground xl:text-6xl">
+    <div className={styles.authLayout}>
+      <div className={styles.authStory}>
+        <h2 className="min-w-0 [overflow-wrap:anywhere]">
           Buchhaltung, die den nächsten Schritt zeigt.
-        </h1>
+        </h2>
         <p className="mt-6 max-w-sm text-lg leading-8 text-muted-foreground">
           Rechnungen, Belege und Auswertungen bleiben in einem klaren Arbeitsablauf verbunden.
         </p>
-        <div className="mt-10 grid grid-cols-3 gap-3 border-y border-border py-4 text-sm">
-          <span>Rechnungen</span>
-          <span>Belege</span>
-          <span>EÜR</span>
-        </div>
+        <dl><div><dt>Erfassen</dt><dd>Belege und Geschäftsvorgänge direkt zuordnen.</dd></div><div><dt>Überblicken</dt><dd>Offene Rechnungen und Ergebnisse im Blick behalten.</dd></div><div><dt>Weiterarbeiten</dt><dd>Mit Ihren vorhandenen Daten dort fortfahren, wo Sie aufgehört haben.</dd></div></dl>
       </div>
 
-      <Card className="w-full rounded-2xl border-border/80 bg-card/90">
+      <Card className={styles.authCard}>
         <CardHeader className="space-y-4 pb-5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Lock className="h-5 w-5" />
-          </div>
           <div>
-            <CardTitle className="text-3xl tracking-[-0.03em]">Willkommen zurück</CardTitle>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em]">Willkommen zurück</h1>
             <CardDescription className="mt-2">Melden Sie sich mit Ihren Zugangsdaten an.</CardDescription>
           </div>
         </CardHeader>
@@ -118,14 +111,14 @@ export default function LoginPage() {
                   onKeyUp={(e) => setCapsLock(e.getModifierState && e.getModifierState("CapsLock"))}
                   aria-invalid={!!error || undefined}
                   required
-                  className="pr-10"
+                  className="pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
+                  className={styles.passwordButton}
                   aria-label={showPassword ? "Passwort verbergen" : "Passwort anzeigen"}
+                  aria-pressed={showPassword}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

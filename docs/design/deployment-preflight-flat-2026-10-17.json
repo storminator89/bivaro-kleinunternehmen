@@ -1,0 +1,10 @@
+{
+  "image": "bivaro:flat-icons-20261017",
+  "database": "isolated snapshot",
+  "health": "healthy",
+  "database_check": "up",
+  "migrationsUnchanged": true,
+  "migrationCount": 28,
+  "assetRoutes": 7,
+  "fixture": "/opt/bivaro/releases/20261017-flat/preflight-vjv98qvy"
+}

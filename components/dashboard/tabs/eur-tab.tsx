@@ -5,10 +5,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Legend,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
   XAxis,
@@ -18,12 +15,9 @@ import {
   Download,
   FileText,
   Info,
-  Lock,
-  Minus,
-  Plus,
-  Scale,
 } from "lucide-react";
 
+import { DashboardIcon } from "@/components/brand/dashboard-icon";
 import { EURElsterExportDialog } from "@/components/dashboard/eur-elster-export-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,14 +33,6 @@ import { formatCurrency } from "@/lib/dashboard-utils";
 import { DepreciationDetail, TimeRange } from "@/types/dashboard";
 
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
-
-const CHART_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
 
 type MonthlyChartData = {
   name: string;
@@ -91,24 +77,24 @@ export function EURTab({
   const privateBalance = privateDeposits - privateWithdrawals;
 
   return (
-    <div className="min-w-0 space-y-6">
+    <div className="report-workspace min-w-0 space-y-6">
       <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h2 className="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-            Einnahmen-Überschuss-Rechnung
+          <h2 className="text-lg font-semibold tracking-tight [overflow-wrap:anywhere]">
+            Bericht und Export
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Finanzielle Übersicht und steuerliche Auswertung.
+            Betriebliches Ergebnis aus steuerrelevanten Buchungen im gewählten Zeitraum.
           </p>
         </div>
-        <div className="grid w-full grid-cols-1 gap-2 min-[370px]:grid-cols-2 sm:w-auto">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Button variant="outline" onClick={onExport} className="min-h-11 whitespace-nowrap">
             <Download aria-hidden="true" className="mr-2 h-4 w-4" />
             CSV exportieren
           </Button>
-          <Button onClick={() => setShowElsterDialog(true)} className="min-h-11 whitespace-nowrap">
+          <Button onClick={() => setShowElsterDialog(true)} aria-label="EÜR-Übertragungshilfe öffnen" className="min-h-11 whitespace-nowrap">
             <FileText aria-hidden="true" className="mr-2 h-4 w-4" />
-            EÜR-Übertragungshilfe öffnen
+            Übertragungshilfe
           </Button>
         </div>
       </header>
@@ -118,87 +104,19 @@ export function EURTab({
         onClose={() => setShowElsterDialog(false)}
       />
 
-      <section aria-labelledby="eur-summary-mobile" className="overflow-hidden rounded-lg border lg:hidden">
-        <div className="border-b bg-muted/30 px-4 py-3">
-          <h3 id="eur-summary-mobile" className="font-semibold">Ergebnisübersicht</h3>
-          <p className="text-sm text-muted-foreground">Gewählter Berichtszeitraum</p>
-        </div>
-        <dl className="divide-y">
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
-            <dt className="flex min-w-0 items-center gap-2 text-sm">
-              <Plus aria-hidden="true" className="h-4 w-4 shrink-0 text-positive" />
-              <span>Einnahmen</span>
-            </dt>
-            <dd className="shrink-0 font-semibold tabular-nums text-positive">{formatCurrency(totalIncome)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
-            <dt className="flex min-w-0 items-center gap-2 text-sm">
-              <Minus aria-hidden="true" className="h-4 w-4 shrink-0 text-critical" />
-              <span>Ausgaben</span>
-            </dt>
-            <dd className="shrink-0 font-semibold tabular-nums text-critical">{formatCurrency(totalExpense)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4 bg-muted/20 px-4 py-4">
-            <dt className="flex min-w-0 items-center gap-2 font-medium">
-              <Scale aria-hidden="true" className="h-4 w-4 shrink-0" />
-              <span>{profit >= 0 ? "Gewinn" : "Verlust"}</span>
-            </dt>
-            <dd className={`shrink-0 text-lg font-semibold tabular-nums ${profit >= 0 ? "text-positive" : "text-critical"}`}>
-              {formatCurrency(profit)}
-            </dd>
-          </div>
-        </dl>
+      <section className="report-balance" aria-label="Ergebnisübersicht">
+        <div className="report-balance-result"><DashboardIcon name="tile-profit" size={48} className="mb-3" /><p>Gewählter Berichtszeitraum</p><h3>{profit >= 0 ? 'Gewinn' : 'Verlust'}</h3><strong>{formatCurrency(profit)}</strong><span>Vorläufiges Ergebnis · vor Steuern</span></div>
+        <dl><div><dt>Gesamteinnahmen</dt><dd>{formatCurrency(totalIncome)}</dd></div><div><dt>Gesamtausgaben</dt><dd>{formatCurrency(totalExpense)}</dd></div></dl>
       </section>
 
-      <div className="hidden gap-4 lg:grid lg:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-sm font-medium">
-              Gesamteinnahmen
-              <Plus aria-hidden="true" className="h-4 w-4 text-positive" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold tabular-nums text-positive">{formatCurrency(totalIncome)}</p>
-            <p className="text-xs text-muted-foreground">Im gewählten Zeitraum</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-sm font-medium">
-              Gesamtausgaben
-              <Minus aria-hidden="true" className="h-4 w-4 text-critical" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold tabular-nums text-critical">{formatCurrency(totalExpense)}</p>
-            <p className="text-xs text-muted-foreground">Im gewählten Zeitraum</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-sm font-medium">
-              Gewinn / Verlust
-              <Scale aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-2xl font-semibold tabular-nums ${profit >= 0 ? "text-positive" : "text-critical"}`}>
-              {formatCurrency(profit)}
-            </p>
-            <p className="text-xs text-muted-foreground">Vorläufiges Ergebnis</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="hidden gap-4 lg:grid lg:grid-cols-2 xl:grid-cols-7">
-        <Card className="lg:col-span-1 xl:col-span-4">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-7">
+        <Card className="min-w-0 xl:col-span-4">
           <CardHeader>
-            <CardTitle>Einnahmen und Ausgaben</CardTitle>
+            <CardTitle className="flex items-center gap-3"><DashboardIcon name="tile-year-comparison" size={36} />Einnahmen und Ausgaben</CardTitle>
             <CardDescription>Monatlicher Cashflow</CardDescription>
           </CardHeader>
           <CardContent className="pl-2">
-            <div className="h-[300px] w-full">
+            <div className="h-[260px] min-w-0 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyChartData}>
                   <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -212,32 +130,20 @@ export function EURTab({
                     }}
                   />
                   <Legend />
-                  <Bar dataKey="Einnahmen" fill="var(--color-success)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Ausgaben" fill="var(--color-danger)" radius={[4, 4, 0, 0]} />
+                  <Bar isAnimationActive={false} dataKey="Einnahmen" fill="var(--color-success)" radius={[4, 4, 0, 0]} />
+                  <Bar isAnimationActive={false} dataKey="Ausgaben" fill="var(--color-danger)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
-        <Card className="lg:col-span-1 xl:col-span-3">
+        <Card className="min-w-0 xl:col-span-3">
           <CardHeader>
-            <CardTitle>Ausgaben nach Kategorie</CardTitle>
+            <CardTitle className="flex items-center gap-3"><DashboardIcon name="tile-expenses" size={36} />Ausgaben nach Kategorie</CardTitle>
             <CardDescription>Verteilung der Kosten</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={categoryChartData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                    {categoryChartData.map((entry, index) => (
-                      <Cell key={`${entry.name}-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {categoryChartData.length ? <ul className="report-category-list">{categoryChartData.map(entry => <li key={entry.name}><div><span>{entry.name}</span><strong>{formatCurrency(entry.value)}</strong></div><div className="report-category-track" aria-hidden="true"><span style={{width: `${totalExpense > 0 ? Math.min(100, Math.max(0, entry.value / totalExpense * 100)) : 0}%`}} /></div></li>)}</ul> : <p className="report-empty">Noch keine Kostenverteilung. Steuerrelevante Ausgaben erscheinen hier nach der Erfassung.</p>}
           </CardContent>
         </Card>
       </div>
@@ -245,7 +151,7 @@ export function EURTab({
       <div className="space-y-4 lg:hidden">
         <section aria-labelledby="income-breakdown-mobile" className="overflow-hidden rounded-lg border">
           <div className="flex flex-col items-start gap-1 border-b bg-positive-surface px-4 py-3 text-positive-foreground sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <h3 id="income-breakdown-mobile" className="font-semibold">Betriebseinnahmen</h3>
+            <h3 id="income-breakdown-mobile" className="flex items-center gap-3 font-semibold"><DashboardIcon name="tile-incomes" size={32} />Betriebseinnahmen</h3>
             <span className="shrink-0 font-semibold tabular-nums">{formatCurrency(totalIncome)}</span>
           </div>
           <dl>
@@ -258,7 +164,7 @@ export function EURTab({
 
         <section aria-labelledby="expense-breakdown-mobile" className="overflow-hidden rounded-lg border">
           <div className="flex flex-col items-start gap-1 border-b bg-critical-surface px-4 py-3 text-critical-foreground sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <h3 id="expense-breakdown-mobile" className="font-semibold">Betriebsausgaben</h3>
+            <h3 id="expense-breakdown-mobile" className="flex items-center gap-3 font-semibold"><DashboardIcon name="tile-expenses" size={32} />Betriebsausgaben</h3>
             <span className="shrink-0 font-semibold tabular-nums">{formatCurrency(totalExpense)}</span>
           </div>
           {expenseCategories.length > 0 ? (
@@ -280,7 +186,7 @@ export function EURTab({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-positive">
-              <Plus aria-hidden="true" className="h-5 w-5" />
+              <DashboardIcon name="tile-incomes" size={32} />
               Betriebseinnahmen
             </CardTitle>
           </CardHeader>
@@ -297,7 +203,7 @@ export function EURTab({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-critical">
-              <Minus aria-hidden="true" className="h-5 w-5" />
+              <DashboardIcon name="tile-expenses" size={32} />
               Betriebsausgaben
             </CardTitle>
           </CardHeader>
@@ -319,7 +225,7 @@ export function EURTab({
         <section aria-labelledby="private-flows-heading" className="overflow-hidden rounded-lg border border-caution/40 bg-caution-surface text-caution-foreground">
           <div className="border-b border-caution/30 px-4 py-4 sm:px-6">
             <h3 id="private-flows-heading" className="flex items-center gap-2 font-semibold">
-              <Lock aria-hidden="true" className="h-5 w-5 shrink-0" />
+              <DashboardIcon name="nav-cashbook" size={32} />
               Privatentnahmen und Privateinlagen
             </h3>
             <p className="mt-1 text-sm">Nicht steuerrelevante Bewegungen zwischen Privat- und Betriebsvermögen</p>
@@ -340,7 +246,7 @@ export function EURTab({
         <section aria-labelledby="afa-heading" className="overflow-hidden rounded-lg border">
           <div className="border-b px-4 py-4 sm:px-6">
             <h3 id="afa-heading" className="flex items-center gap-2 font-semibold">
-              <Info aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />
+              <DashboardIcon name="nav-assets" size={32} />
               Details zu Abschreibungen (AfA)
             </h3>
           </div>

@@ -1,0 +1,174 @@
+{
+  "tool": "built-in image_gen",
+  "transparent_background": true,
+  "assets": [
+    {
+      "name": "bivaro-app",
+      "prompt": "Use case: logo-brand. Asset type: BIVARO accounting app icon and favicon. Create ONE distinctive premium app emblem: a bold geometric capital B formed by two stacked ledger-book leaves and one rising mint diagonal cut, visually simple and legible at 16 pixels. Front-facing orthographic sculpted enamel, very restrained bevels, broad shapes, precise rounded corners. Deep forest green #063B2D body, luminous mint #79E1AB inlay, tiny ivory edge highlights. Compact square silhouette, fills 84% of square canvas, centered. This is an actual software brand mark, confident and refined, no finance clipart. Genuine transparent alpha around the emblem, no background, no ground shadow, no checkerboard, no wordmark, no extra letters, no watermark. Output only this single isolated icon.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-10f3c6a8-a9e6-4287-a78e-00a4876f84f2.png",
+      "original": "assets/brand/bivaro-icons/bivaro-app.png",
+      "web": "public/brand/icons/bivaro-app.webp"
+    },
+    {
+      "name": "nav-dashboard",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: four rounded architectural blocks arranged as an asymmetric dashboard grid, one tall mint column.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-e941114f-915e-4e4a-ba3e-ccc2c19bef07.png",
+      "original": "assets/brand/bivaro-icons/nav-dashboard.png",
+      "web": "public/brand/icons/nav-dashboard.webp"
+    },
+    {
+      "name": "nav-invoices",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: one upright mint invoice sheet with folded top corner, two broad forest ledger lines and a small round payment seal.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-c64f4f9c-f2d8-4a02-87ac-4c0bca63949d.png",
+      "original": "assets/brand/bivaro-icons/nav-invoices.png",
+      "web": "public/brand/icons/nav-invoices.webp"
+    },
+    {
+      "name": "nav-quotes",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: one mint proposal document with an elegantly integrated fountain pen nib crossing its lower right corner, no currency signs.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-35e3f3c9-504a-4a14-a9a0-d387abcd01a6.png",
+      "original": "assets/brand/bivaro-icons/nav-quotes.png",
+      "web": "public/brand/icons/nav-quotes.webp"
+    },
+    {
+      "name": "nav-reminders",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: one sculpted mint notification bell with a small amber circular alert accent at its upper right.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-89900226-519d-42a6-ba3e-47648f901f22.png",
+      "original": "assets/brand/bivaro-icons/nav-reminders.png",
+      "web": "public/brand/icons/nav-reminders.webp"
+    },
+    {
+      "name": "nav-customers",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: two stylized sculpted human busts, larger mint figure in front and smaller ivory-green figure behind.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-ff64952a-e23d-44d7-af63-8eab544e73e5.png",
+      "original": "assets/brand/bivaro-icons/nav-customers.png",
+      "web": "public/brand/icons/nav-customers.webp"
+    },
+    {
+      "name": "nav-incomes",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a broad mint arrow pointing diagonally upward and right, rising out of a shallow emerald receiving tray.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-2a79d80c-84c2-4df8-9e79-543acb678d0c.png",
+      "original": "assets/brand/bivaro-icons/nav-incomes.png",
+      "web": "public/brand/icons/nav-incomes.webp"
+    },
+    {
+      "name": "nav-expenses",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a broad mint arrow pointing diagonally downward and right, leaving a shallow emerald payment tray; small restrained coral inlay on arrow tip.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-b9282929-091f-4977-bd12-ca34ae73c35e.png",
+      "original": "assets/brand/bivaro-icons/nav-expenses.png",
+      "web": "public/brand/icons/nav-expenses.webp"
+    },
+    {
+      "name": "nav-cashbook",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a mint bound accounting ledger book open just enough to show two ivory pages and a dark emerald clasp.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-7ca9d311-3cdf-45fe-a3d8-0ce99159c2ca.png",
+      "original": "assets/brand/bivaro-icons/nav-cashbook.png",
+      "web": "public/brand/icons/nav-cashbook.webp"
+    },
+    {
+      "name": "nav-eur",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a sculptural mint balance scale, two broad geometric pans balanced on a deep forest central pillar, distinct readable silhouette.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-ba03f92c-d7d2-495c-bf9b-067dec7abe56.png",
+      "original": "assets/brand/bivaro-icons/nav-eur.png",
+      "web": "public/brand/icons/nav-eur.webp"
+    },
+    {
+      "name": "nav-assets",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: one mint archive storage box with an ivory inventory tag attached at upper right, broad forest slot.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-046ac000-7089-428f-8945-19d1cd68b24c.png",
+      "original": "assets/brand/bivaro-icons/nav-assets.png",
+      "web": "public/brand/icons/nav-assets.webp"
+    },
+    {
+      "name": "nav-tax",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a compact mint calculator with four large square keys, one ivory display and one tiny amber key.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-6eaafb8f-e27e-446b-a020-e575f29450e4.png",
+      "original": "assets/brand/bivaro-icons/nav-tax.png",
+      "web": "public/brand/icons/nav-tax.webp"
+    },
+    {
+      "name": "nav-settings",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a single sculpted mint six-tooth cog with a large forest central opening, minimal strong shape.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-d93d9feb-b4ee-400e-b4af-9fef5d444dd7.png",
+      "original": "assets/brand/bivaro-icons/nav-settings.png",
+      "web": "public/brand/icons/nav-settings.webp"
+    },
+    {
+      "name": "nav-users",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: one sculpted mint user bust, accompanied by a small emerald shield with ivory inset, account administration.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-99a7928e-8c09-46d7-b99c-e39bb18a8ba6.png",
+      "original": "assets/brand/bivaro-icons/nav-users.png",
+      "web": "public/brand/icons/nav-users.webp"
+    },
+    {
+      "name": "nav-logout",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a mint open doorway with one bold emerald and ivory arrow pointing right through it, clear exit silhouette.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-735bc09e-6256-4400-981b-3b2de9298198.png",
+      "original": "assets/brand/bivaro-icons/nav-logout.png",
+      "web": "public/brand/icons/nav-logout.webp"
+    },
+    {
+      "name": "tile-incomes",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a mint coin stack with one large upward forest arrow growing diagonally above it, income received.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-7d4741af-34d7-4403-9174-7c289277b9b5.png",
+      "original": "assets/brand/bivaro-icons/tile-incomes.png",
+      "web": "public/brand/icons/tile-incomes.webp"
+    },
+    {
+      "name": "tile-expenses",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a folded mint payment receipt paired with a broad outgoing diagonal arrow with restrained warm coral face, expenses.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-941632be-8645-4ca5-807f-5b6f63761831.png",
+      "original": "assets/brand/bivaro-icons/tile-expenses.png",
+      "web": "public/brand/icons/tile-expenses.webp"
+    },
+    {
+      "name": "tile-profit",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: three rising mint and emerald solid columns with a confident ascending ivory-mint ribbon above them, financial profit.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-d013f901-9381-44a6-8626-430232d9fa6c.png",
+      "original": "assets/brand/bivaro-icons/tile-profit.png",
+      "web": "public/brand/icons/tile-profit.webp"
+    },
+    {
+      "name": "tile-open-invoices",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: two overlapping mint invoice sheets with an ivory clock disc and forest clock hands on the lower right, awaiting payment.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-bda1c18b-8afd-4a21-a925-63655a3c11d4.png",
+      "original": "assets/brand/bivaro-icons/tile-open-invoices.png",
+      "web": "public/brand/icons/tile-open-invoices.webp"
+    },
+    {
+      "name": "tile-year-comparison",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: two adjacent pairs of sculpted mint and emerald columns on a simple baseline, an ivory curved comparison arc above, annual comparison.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-4a5cea89-67e2-46fc-ac44-33a4841c9afc.png",
+      "original": "assets/brand/bivaro-icons/tile-year-comparison.png",
+      "web": "public/brand/icons/tile-year-comparison.webp"
+    },
+    {
+      "name": "tile-activity",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: one mint circular clock with bold forest hands and a short clockwise mint history arrow partly wrapping its outside.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-0c47f068-7b49-4126-a048-f795c8d055a7.png",
+      "original": "assets/brand/bivaro-icons/tile-activity.png",
+      "web": "public/brand/icons/tile-activity.webp"
+    },
+    {
+      "name": "tile-limits",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: a mint semicircular financial gauge, broad forest needle pointing safely inside the middle range, one small amber endpoint.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-9e3567b5-a15a-41e8-ad8a-2af207f8231d.png",
+      "original": "assets/brand/bivaro-icons/tile-limits.png",
+      "web": "public/brand/icons/tile-limits.webp"
+    },
+    {
+      "name": "invoice-import",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: one mint invoice sheet with folded corner and a bold emerald upward arrow entering a receiving slot, document import.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-a380c501-ea20-4ac2-8235-7254e5ef97bc.png",
+      "original": "assets/brand/bivaro-icons/invoice-import.png",
+      "web": "public/brand/icons/invoice-import.webp"
+    },
+    {
+      "name": "invoice-document",
+      "prompt": "Use case: logo-brand. Asset type: one custom pictogram for BIVARO accounting software. Design one isolated premium sculpted-enamel icon, front-facing orthographic, bold simple silhouette recognizable at 24px. Consistent family: deep forest #063B2D contour and sides, large mint #79E1AB faces, ivory #F4FFF8 small highlights, subtle precise bevels. Crisp chunky geometry, rounded corners, restrained depth, no tiny details. Centered, fills 84% square canvas. Genuine transparent alpha, absolutely no background, no enclosing badge, no ground shadow, no checkerboard, no text, no letters, no watermark. Only ONE icon, never a sheet. Subject: one beautifully sculpted mint document sheet with folded corner and two broad forest inset ledger lines, no seal.",
+      "source": "/home/pmeyhoefer/.codex/generated_images/01a14aee-3009-7bf2-9713-28fb18ef8675/exec-8e6fb55e-5513-4a51-812f-59e8abd7b00e.png",
+      "original": "assets/brand/bivaro-icons/invoice-document.png",
+      "web": "public/brand/icons/invoice-document.webp"
+    }
+  ]
+}

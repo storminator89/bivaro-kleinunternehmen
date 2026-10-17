@@ -7,7 +7,7 @@
 
 import crypto from 'crypto';
 import fs from 'fs';
-import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
+import { mkdir, unlink, writeFile } from 'fs/promises';
 import path from 'path';
 
 /** Base directory is deliberately outside `public/`. */
@@ -84,13 +84,6 @@ export function tenantUploadDir(userId: string): string {
 export async function ensureTenantUploadDir(userId: string): Promise<string> {
   const directory = tenantUploadDir(userId);
   await mkdir(directory, { recursive: true });
-  return directory;
-}
-
-/** Synchronous counterpart for synchronous route code. */
-export function ensureTenantUploadDirSync(userId: string): string {
-  const directory = tenantUploadDir(userId);
-  fs.mkdirSync(directory, { recursive: true });
   return directory;
 }
 
@@ -176,30 +169,6 @@ export async function writeTenantFile(
   throw new Error('Datei konnte nicht gespeichert werden');
 }
 
-export async function readTenantFile(userId: string, storedName: string): Promise<Buffer> {
-  return readFile(getTenantUploadPath(userId, storedName));
-}
-
 export async function deleteTenantFile(userId: string, storedName: string): Promise<void> {
   await unlink(getTenantUploadPath(userId, storedName));
-}
-
-/** Strict root helper retained for compatibility with old callers. */
-export function getUploadPath(filename: string): string {
-  return getLegacyUploadPath(filename, UPLOAD_BASE_DIR);
-}
-
-/** Validate a resolved path against the private upload root. */
-export function isPathWithinUploadDir(filePath: string): boolean {
-  try {
-    assertWithinRoot(filePath, UPLOAD_BASE_DIR);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Synchronous root directory helper retained for existing callers. */
-export function ensureUploadDirExists(): void {
-  fs.mkdirSync(UPLOAD_BASE_DIR, { recursive: true });
 }

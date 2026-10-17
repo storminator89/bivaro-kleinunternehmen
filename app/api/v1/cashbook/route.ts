@@ -1,3 +1,4 @@
+import { protectMutation } from '@/lib/request-security';
 /**
  * API v1 - Cash Book Endpoint
  * 
@@ -126,6 +127,10 @@ async function mutate(request: NextRequest, method: 'POST' | 'PUT' | 'DELETE') {
     }
   }, { requiredScopes: [method === 'DELETE' ? 'delete' : 'write'] });
 }
-export async function POST(request: NextRequest) { return mutate(request, 'POST'); }
-export async function PUT(request: NextRequest) { return mutate(request, 'PUT'); }
-export async function DELETE(request: NextRequest) { return mutate(request, 'DELETE'); }
+async function postHandler(request: NextRequest) { return mutate(request, 'POST'); }
+async function putHandler(request: NextRequest) { return mutate(request, 'PUT'); }
+async function deleteHandler(request: NextRequest) { return mutate(request, 'DELETE'); }
+
+export const POST = protectMutation(postHandler, { bearer: true });
+export const PUT = protectMutation(putHandler, { bearer: true });
+export const DELETE = protectMutation(deleteHandler, { bearer: true });

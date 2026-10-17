@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
+import { randomBytes } from 'node:crypto';
+import { pageContentSecurityPolicy } from '@/lib/content-security-policy';
 
 /**
  * Public, unauthenticated page routes.
@@ -86,7 +88,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  const nonce = randomBytes(18).toString('base64');
+  const policy = pageContentSecurityPolicy(nonce, process.env.NODE_ENV === 'development');
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', policy);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('Content-Security-Policy', policy);
+  response.headers.set('Cache-Control', 'private, no-store');
+  return response;
 }
 
 export const config = {

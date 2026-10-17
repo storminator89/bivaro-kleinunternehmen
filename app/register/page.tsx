@@ -3,10 +3,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import styles from "@/components/public-accounting/public-accounting.module.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { validatePassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
@@ -109,24 +110,24 @@ export default function RegisterPage() {
 
   if (checkingStatus) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className={styles.authStatus}>
+        <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" /><h1 className="sr-only">Registrierung wird vorbereitet</h1>
       </div>
     );
   }
 
   if (!registrationAllowed) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className={styles.authStatus}>
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="text-2xl">
+            <h1 className="text-2xl font-semibold tracking-tight">
               {isFirstUser
                 ? bootstrapConsumed
                   ? "Erstregistrierung abgeschlossen"
                   : "Erstregistrierung deaktiviert"
                 : "Registrierung deaktiviert"}
-            </CardTitle>
+            </h1>
             <CardDescription>
               {isFirstUser
                 ? bootstrapConsumed
@@ -155,31 +156,23 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto grid min-h-[calc(100dvh-9rem)] w-full max-w-5xl items-center gap-10 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] lg:gap-20">
-      <div className="hidden max-w-md lg:block">
-        <p className="app-section-label">Bivaro</p>
-        <h1 className="mt-4 min-w-0 [overflow-wrap:anywhere] font-marketing text-5xl font-medium leading-[0.94] tracking-[-0.04em] text-foreground xl:text-6xl">
+    <div className={styles.authLayout}>
+      <div className={styles.authStory}>
+        <h2 className="min-w-0 [overflow-wrap:anywhere]">
           Ein klarer Start für Ihre Buchhaltung.
-        </h1>
+        </h2>
         <p className="mt-6 max-w-sm text-lg leading-8 text-muted-foreground">
           Erstellen Sie Ihr Konto und halten Sie Geschäftsvorgänge, Kunden und Auswertungen an einem Ort zusammen.
         </p>
-        <div className="mt-10 grid grid-cols-3 gap-3 border-y border-border py-4 text-sm">
-          <span>Erfassen</span>
-          <span>Ordnen</span>
-          <span>Prüfen</span>
-        </div>
+        <dl><div><dt>Ihr Konto</dt><dd>Persönlicher Zugang zu dieser Bivaro-Instanz.</dd></div><div><dt>Ihre Arbeit</dt><dd>Rechnungen, Belege und Kunden gemeinsam verwalten.</dd></div></dl>
       </div>
 
-      <Card className="w-full rounded-2xl border-border/80 bg-card/90">
+      <Card className={styles.authCard}>
         <CardHeader className="space-y-4 pb-5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Shield className="h-5 w-5" />
-          </div>
           <div>
-            <CardTitle className="text-3xl tracking-[-0.03em]">
+            <h1 className="text-3xl font-semibold tracking-[-0.03em]">
               {isFirstUser ? "Admin-Konto erstellen" : "Konto erstellen"}
-            </CardTitle>
+            </h1>
             <CardDescription className="mt-2">
               {isFirstUser
                 ? "Erstellen Sie das erste Administrator-Konto für diese Instanz."
@@ -252,20 +245,20 @@ export default function RegisterPage() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="mind. 6 Zeichen"
+                  placeholder="Sicheres Passwort wählen"
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="pr-10"
+                  className="pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
+                  className={styles.passwordButton}
                   aria-label={showPassword ? "Passwort verbergen" : "Passwort anzeigen"}
+                  aria-pressed={showPassword}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -302,14 +295,14 @@ export default function RegisterPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   aria-invalid={passwordsMismatch || undefined}
                   required
-                  className="pr-10"
+                  className="pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirm((v) => !v)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
+                  className={styles.passwordButton}
                   aria-label={showConfirm ? "Passwort verbergen" : "Passwort anzeigen"}
+                  aria-pressed={showConfirm}
                 >
                   {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

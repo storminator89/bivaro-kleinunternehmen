@@ -91,6 +91,23 @@ it('uses saved SMTP settings for the preview and transport with required STARTTL
   }
 });
 
+it.each([false, true])('enforces encrypted environment SMTP with implicit TLS=%s', async secure => {
+  vi.stubEnv('SMTP_SECURE', String(secure));
+  vi.stubEnv('SMTP_PORT', secure ? '465' : '587');
+  try {
+    const source = await invoice();
+    state.send.mockResolvedValueOnce({ messageId: `environment-tls-${secure}` });
+    await sendDocumentEmail('mail-owner', { id: source.id, documentType: 'invoice',
+      to: 'recipient@test.invalid', subject: 'Test', text: 'Synthetic test' });
+    expect(state.transport).toHaveBeenLastCalledWith(expect.objectContaining({
+      host: 'smtp.invalid', secure, requireTLS: !secure, tls: { minVersion: 'TLSv1.2' },
+    }));
+  } finally {
+    vi.stubEnv('SMTP_SECURE', 'false');
+    vi.stubEnv('SMTP_PORT', '587');
+  }
+});
+
 it.each(['PAID', 'CANCELLED'])('keeps %s when it changes while SMTP is pending and records the conflict', async status => {
   const source = await invoice();
   let entered!: () => void;

@@ -5,6 +5,7 @@ import { basename, extname } from 'path';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import { getRawEInvoiceXml } from '@/lib/e-invoice-parser';
+import { DOCUMENT_CONTENT_SECURITY_POLICY } from '@/lib/content-security-policy';
 
 function sanitizeDownloadName(value: string | null | undefined): string {
   return basename(value || 'rechnung').replace(/\s+/g, '_').replace(/[^A-Za-z0-9._-]/g, '_') || 'rechnung';
@@ -53,6 +54,8 @@ export async function GET(request: NextRequest) {
       const headers: HeadersInit = {
         'Content-Type': 'application/xml; charset=utf-8',
         'Content-Disposition': `attachment; filename="${baseName}.xml"`,
+        'Content-Security-Policy': `${DOCUMENT_CONTENT_SECURITY_POLICY}; sandbox`,
+        'Cache-Control': 'private, no-store',
       };
 
       return new NextResponse(rawXml, {
@@ -78,10 +81,13 @@ export async function GET(request: NextRequest) {
       'X-Frame-Options': 'SAMEORIGIN',
     };
 
-    if (download) {
+    if (download || contentType.startsWith('application/xml')) {
       headers['Content-Disposition'] = `attachment; filename="${sanitizeDownloadName(invoice.fileName)}"`;
     } else {
       headers['Content-Disposition'] = `inline; filename="${sanitizeDownloadName(invoice.fileName)}"`;
+    }
+    if (contentType.startsWith('application/xml')) {
+      headers['Content-Security-Policy'] = `${DOCUMENT_CONTENT_SECURITY_POLICY}; sandbox`;
     }
 
     return new NextResponse(new Uint8Array(fileBuffer), {
