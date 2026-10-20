@@ -68,7 +68,7 @@ afterAll(async () => { vi.useRealTimers(); await database?.cleanup(); });
 
 describe('year comparison API', () => {
   it('preserves current-year defaults and keeps current KPIs unchanged when selecting a historical year', async () => {
-    const baseline = await (await getKpis()).json();
+    const baseline = await (await getKpis(new Request('http://localhost/api/dashboard/kpis'))).json();
     const selected = await (await getKpis(request('dashboard/kpis', 'year=2024'))).json();
     expect(baseline.yearComparison).toMatchObject({ currentYear: 2026, period: 'toDate', comparisonThroughMonth: 8 });
     expect(selected.yearComparison).toMatchObject({ currentYear: 2024, lastYear: 2023, period: 'fullYear', comparisonThroughMonth: 11, revenueThisYearToDate: 275, revenueLastYearToDate: 50, expensesThisYearToDate: 100, expensesLastYearToDate: 10 });

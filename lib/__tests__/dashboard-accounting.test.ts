@@ -183,7 +183,7 @@ describe("dashboard accounting routes", () => {
     const rawQuery = vi.spyOn(database.client, "$queryRaw");
     const invoiceAggregate = vi.spyOn(database.client.invoice, "aggregate");
     selectQueryCount = 0;
-    const response = await getKpis();
+    const response = await getKpis(new Request('http://localhost/api/dashboard/kpis'));
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.totalRevenue).toBe(1067);
