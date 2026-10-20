@@ -49,6 +49,7 @@ describe('pilot fiscal profile backup compatibility', () => {
   it('accepts pre-profile v3 and legacy v2 settings as UNSET rather than inferring or retaining an unrelated confirmed declaration', async () => {
     const old = backup({ id: 99, companyName: 'Legacy company' });
     old.manifest.schemaVersion = PRE_FISCAL_PROFILE_SCHEMA_VERSION;
+    old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry) => entry.model !== 'PurchaseDocument');
     expect(() => validateBackupForRestore(old)).not.toThrow();
     await database.client.settings.create({ data: {
       userId: 'fiscal-backup-legacy-target', fiscalTaxRegime: 'STANDARD', fiscalEffectiveFrom: '2025-01-01', fiscalConfirmedAt: new Date(),

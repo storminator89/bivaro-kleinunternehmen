@@ -46,6 +46,7 @@ export type AuditAction =
 export type AuditEntityType =
   | 'Customer'
   | 'Invoice'
+  | 'PurchaseDocument'
   | 'Expense'
   | 'Income'
   | 'Settings'

@@ -3,6 +3,9 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { readFile } from 'fs/promises';
+import { readPurchaseOriginal } from '@/lib/purchase-documents/original';
+import { getBackupFileVersion } from '@/lib/backup-snapshot';
+import { MAX_INVOICE_UPLOAD_BYTES, MAX_XML_INPUT_BYTES } from '@/lib/resource-limits';
 import { CashbookError, recalculateCashBalances } from '@/lib/cashbook-service';
 import { documentNumberPrefix, maximumDocumentSequence, type DocumentType } from '@/lib/invoice-numbers';
 import { validateRecurringValues } from '@/lib/recurring-schedule';
@@ -10,6 +13,8 @@ import {
   CURRENT_BACKUP_VERSION,
   LEGACY_BACKUP_VERSION,
   manifestWarning,
+  hashBytes,
+  hashJson,
   redactAuditLog,
   validateBackupManifest,
   type BackupManifest,
@@ -18,13 +23,14 @@ import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import {
   deleteTenantFile,
   createTenantStoredName,
+  getTenantUploadPath,
   isSafeLegacyFileName,
   isSafeStoredFileName,
   writeTenantFile,
 } from '@/lib/upload-path';
 
 type JsonRecord = Record<string, unknown>;
-type FileKind = 'invoice' | 'receipt' | 'logo';
+type FileKind = 'invoice' | 'receipt' | 'logo' | 'purchase-document';
 // Optional legacy dates need a stable value so dry-run ordering and persisted
 // ordering cannot diverge while importing the same source graph.
 const RESTORE_DEFAULT_DATE = new Date(0);
@@ -68,6 +74,7 @@ type RestoreResult = {
   expenses: { imported: number; skipped: number };
   incomes: { imported: number; skipped: number };
   invoices: { imported: number; skipped: number };
+  purchaseDocuments: { imported: number; skipped: number };
   templates: { imported: number; skipped: number };
   files: { imported: number; skipped: number };
   settings: { imported: boolean };
@@ -89,7 +96,7 @@ type ValidatedBackup = {
 };
 
 const ARRAY_KEYS = [
-  'customers', 'expenses', 'incomes', 'invoices', 'templates',
+  'customers', 'expenses', 'incomes', 'invoices', 'purchaseDocuments', 'templates',
   'billingNotes', 'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
   'documentations', 'apiKeys', 'auditLogs',
 ] as const;
@@ -477,6 +484,135 @@ function fiscalProfileForRestore(settings: JsonRecord) {
   return { ...selection, fiscalConfirmedAt: confirmedAt };
 }
 
+const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+
+/** Unlike legacy date imports, new source metadata is strict and never defaulted. */
+function sourceDate(value: unknown, label: string, required = false): Date | null {
+  if ((value === undefined || value === null) && !required) return null;
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)) {
+    throw new BackupValidationError(`${label} ist ungültig`);
+  }
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) throw new BackupValidationError(`${label} ist ungültig`);
+  return parsed;
+}
+
+function validateSourceDecimal(value: unknown, label: string): void {
+  if (value === undefined || value === null) return;
+  if (typeof value !== 'string' || value.length > 100 || !/^-?\d+(?:\.\d+)?$/u.test(value) || !Number.isFinite(Number(value))) throw new BackupValidationError(`${label} ist ungültig`);
+}
+
+function validatePurchaseDocuments(data: JsonRecord, manifest?: BackupManifest, full = false): void {
+  const documents = asArray(data, 'purchaseDocuments');
+  const hashes = new Set<string>();
+  const storedNames = new Set<string>();
+  const requestIds = new Set<string>();
+  const expenseIds = new Set<number>();
+  const expenses = new Map(asArray(data, 'expenses').map((expense) => [asOptionalInt(expense.id, 'expense.id'), expense]));
+  const sourceUserId = manifest?.sourceUserId ?? (isRecord(data.user) ? data.user.id : undefined);
+  for (const [index, document] of documents.entries()) {
+    const label = `purchaseDocuments[${index}]`;
+    if (document.userId !== undefined && document.userId !== sourceUserId) throw new BackupValidationError(`${label}.userId gehört nicht zum Quellmandanten`);
+    const originalFileName = asRequiredString(document.originalFileName, `${label}.originalFileName`, 240);
+    if (/[\u0000-\u001f\u007f]/u.test(originalFileName)) throw new BackupValidationError(`${label}.originalFileName enthält Steuerzeichen`);
+    if (!isSafeStoredFileName(document.storedFileName) || storedNames.has(document.storedFileName)) throw new BackupValidationError(`${label}.storedFileName enthält keine eindeutige private Dateireferenz`);
+    storedNames.add(document.storedFileName);
+    const hash = asRequiredString(document.originalSha256, `${label}.originalSha256`, 64);
+    const requestId = asRequiredString(document.uploadRequestId, `${label}.uploadRequestId`, 36);
+    if (!SHA256_PATTERN.test(hash) || hashes.has(hash)) throw new BackupValidationError(`${label}.originalSha256 ist ungültig oder doppelt`);
+    if (!UUID_PATTERN.test(requestId) || requestId !== requestId.toLowerCase() || requestIds.has(requestId)) throw new BackupValidationError(`${label}.uploadRequestId ist ungültig oder doppelt`);
+    if (full && manifest) {
+      const originalEntry = manifest.fileManifest.find((entry) => entry.kind === 'purchase-document' && entry.sourceName === document.storedFileName);
+      if (!originalEntry || originalEntry.sha256 !== hash || originalEntry.bytes !== document.originalByteCount) throw new BackupValidationError(`${label} ist nicht an das Original-Dateimanifest gebunden`);
+    }
+    hashes.add(hash);
+    requestIds.add(requestId);
+    const media = asRequiredString(document.mediaType, `${label}.mediaType`, 64);
+    if (!['application/pdf', 'application/xml'].includes(media)) throw new BackupValidationError(`${label}.mediaType ist ungültig`);
+    if (!(document.storedFileName as string).endsWith(media === 'application/pdf' ? '.pdf' : '.xml')) throw new BackupValidationError(`${label}.storedFileName entspricht nicht dem Medientyp`);
+    const bytes = asOptionalInt(document.originalByteCount, `${label}.originalByteCount`);
+    if (typeof document.originalByteCount !== 'number' || bytes === null || bytes <= 0 || bytes > (media === 'application/pdf' ? MAX_INVOICE_UPLOAD_BYTES : MAX_XML_INPUT_BYTES)) {
+      throw new BackupValidationError(`${label}.originalByteCount ist ungültig`);
+    }
+    sourceDate(document.uploadedAt, `${label}.uploadedAt`, true);
+    sourceDate(document.updatedAt, `${label}.updatedAt`, true);
+    const invoiceDate = sourceDate(document.invoiceDate, `${label}.invoiceDate`);
+    if (invoiceDate && (invoiceDate.getUTCHours() || invoiceDate.getUTCMinutes() || invoiceDate.getUTCSeconds() || invoiceDate.getUTCMilliseconds())) {
+      throw new BackupValidationError(`${label}.invoiceDate muss auf UTC-Mitternacht liegen`);
+    }
+    if (!['PENDING', 'PARSED', 'FAILED'].includes(String(document.parseStatus))) throw new BackupValidationError(`${label}.parseStatus ist ungültig`);
+    if (!['REVIEW', 'BOOKED', 'DISMISSED'].includes(String(document.reviewStatus))) throw new BackupValidationError(`${label}.reviewStatus ist ungültig`);
+    const revision = asOptionalInt(document.revision, `${label}.revision`);
+    if (typeof document.revision !== 'number' || revision === null || revision < 0) throw new BackupValidationError(`${label}.revision ist ungültig`);
+    asOptionalString(document.parserVersion, `${label}.parserVersion`, 128);
+    const parseErrorCode = asOptionalString(document.parseErrorCode, `${label}.parseErrorCode`, 128);
+    if (document.parseStatus === 'FAILED' ? !parseErrorCode || !/^[A-Z][A-Z0-9_]{0,127}$/u.test(parseErrorCode) : parseErrorCode !== null) throw new BackupValidationError(`${label}.parseErrorCode entspricht nicht dem Extraktionsstatus`);
+    if (document.parseStatus !== 'PARSED' && document.parsedData !== null && document.parsedData !== undefined) throw new BackupValidationError(`${label}.parsedData darf ohne erfolgreiche Extraktion nicht gesetzt sein`);
+    asOptionalString(document.supplierName, `${label}.supplierName`, 1_000);
+    asOptionalString(document.invoiceNumber, `${label}.invoiceNumber`, 255);
+    const currency = asOptionalString(document.currency, `${label}.currency`, 3);
+    if (currency !== null && !/^[A-Z]{3}$/u.test(currency)) throw new BackupValidationError(`${label}.currency ist ungültig`);
+    if (document.totalAmount !== null && document.totalAmount !== undefined && (typeof document.totalAmount !== 'number' || !Number.isFinite(document.totalAmount))) {
+      throw new BackupValidationError(`${label}.totalAmount ist ungültig`);
+    }
+    if (document.parsedData !== null && document.parsedData !== undefined) {
+      const parsed = asRecord(document.parsedData, `${label}.parsedData`);
+      const previewFields = new Set(['extractionStatus', 'validationStatus', 'format', 'documentType', 'documentTypeCode', 'currency', 'invoiceNumber', 'invoiceDate', 'dueDate', 'grossAmount', 'dueAmount', 'prepaidAmount', 'roundingAmount', 'netAmount', 'taxAmount', 'sellerInfo', 'buyerInfo', 'lineItems', 'parserWarnings', 'approvalSupported']);
+      if (Object.keys(parsed).some((field) => !previewFields.has(field))) throw new BackupValidationError(`${label}.parsedData enthält nicht unterstützte Vorschaufelder`);
+      if (parsed.validationStatus !== 'NOT_VALIDATED' || parsed.extractionStatus !== 'PARSED') throw new BackupValidationError(`${label}.parsedData enthält keinen gültigen Extraktionsstatus`);
+      if (!['INVOICE', 'CREDIT_NOTE', 'DEBIT_NOTE', 'UNKNOWN'].includes(String(parsed.documentType))) throw new BackupValidationError(`${label}.parsedData.documentType ist ungültig`);
+      for (const partyName of ['sellerInfo', 'buyerInfo']) {
+        const party = asRecord(parsed[partyName], `${label}.parsedData.${partyName}`);
+        for (const field of ['name', 'email', 'address', 'zipCode', 'city', 'country']) asOptionalString(party[field], `${label}.parsedData.${partyName}.${field}`, 10_000);
+        if (party.addressLines !== undefined && (!Array.isArray(party.addressLines) || party.addressLines.length > 100 || party.addressLines.some((line) => typeof line !== 'string' || line.length > 10_000))) throw new BackupValidationError(`${label}.parsedData.${partyName}.addressLines ist ungültig`);
+      }
+      if (!['CII', 'UBL'].includes(String(parsed.format)) || typeof parsed.approvalSupported !== 'boolean') throw new BackupValidationError(`${label}.parsedData enthält kein unterstütztes Vorschauformat`);
+      for (const field of ['grossAmount', 'prepaidAmount', 'roundingAmount', 'dueAmount', 'netAmount', 'taxAmount']) {
+        validateSourceDecimal(parsed[field], `${label}.parsedData.${field}`);
+      }
+      if (!Array.isArray(parsed.lineItems) || parsed.lineItems.length > 1_000) throw new BackupValidationError(`${label}.parsedData.lineItems ist ungültig`);
+      for (const [lineIndex, value] of parsed.lineItems.entries()) {
+        const line = asRecord(value, `${label}.parsedData.lineItems[${lineIndex}]`);
+        for (const field of ['description', 'unit']) asOptionalString(line[field], `${label}.parsedData.lineItems[${lineIndex}].${field}`, 10_000);
+        for (const field of ['quantity', 'unitPrice', 'amount', 'taxRate']) validateSourceDecimal(line[field], `${label}.parsedData.lineItems[${lineIndex}].${field}`);
+      }
+      if (!Array.isArray(parsed.parserWarnings) || parsed.parserWarnings.length > 100) throw new BackupValidationError(`${label}.parsedData.parserWarnings ist ungültig`);
+      for (const warning of parsed.parserWarnings) {
+        const record = asRecord(warning, `${label}.parsedData.parserWarnings`);
+        asRequiredString(record.code, `${label}.parsedData.parserWarnings.code`, 128);
+        asRequiredString(record.message, `${label}.parsedData.parserWarnings.message`, 2_000);
+      }
+      for (const field of ['invoiceDate', 'dueDate']) sourceDate(parsed[field], `${label}.parsedData.${field}`);
+      asJson(parsed, `${label}.parsedData`);
+    } else if (document.parseStatus === 'PARSED') {
+      throw new BackupValidationError(`${label}.parsedData fehlt`);
+    }
+    const expenseId = asOptionalInt(document.expenseId, `${label}.expenseId`);
+    const approvedAt = sourceDate(document.approvedAt, `${label}.approvedAt`);
+    const approvalRequestId = asOptionalString(document.approvalRequestId, `${label}.approvalRequestId`, 36);
+    const approvalFingerprint = asOptionalString(document.approvalFingerprint, `${label}.approvalFingerprint`, 64);
+    const dismissedAt = sourceDate(document.dismissedAt, `${label}.dismissedAt`);
+    const dismissalReason = asOptionalString(document.dismissalReason, `${label}.dismissalReason`, 2_000);
+    if (document.reviewStatus === 'BOOKED') {
+      if (expenseId === null || !approvedAt || !approvalRequestId || !UUID_PATTERN.test(approvalRequestId) || !approvalFingerprint || !SHA256_PATTERN.test(approvalFingerprint) || document.parseStatus !== 'PARSED' || dismissedAt || dismissalReason) throw new BackupValidationError(`${label} enthält einen inkonsistenten Buchungszustand`);
+      const expense = expenses.get(expenseId);
+      if (!expense || expenseIds.has(expenseId) || expense.storedReceiptFileName !== document.storedFileName || (expense.userId !== undefined && expense.userId !== sourceUserId)) throw new BackupValidationError(`${label}.expenseId enthält keinen eindeutigen Originalbezug`);
+      if (full && manifest) {
+        const originalEntry = manifest.fileManifest.find((entry) => entry.kind === 'purchase-document' && entry.sourceName === document.storedFileName);
+        const receiptEntry = manifest.fileManifest.find((entry) => entry.kind === 'receipt' && entry.sourceName === document.storedFileName);
+        if (!receiptEntry || receiptEntry.sha256 !== hash || receiptEntry.bytes !== bytes || (receiptEntry.zipPath && originalEntry?.zipPath && receiptEntry.zipPath !== originalEntry.zipPath)) throw new BackupValidationError(`${label}.expenseId enthält keinen übereinstimmenden Dateimanifest-Bezug`);
+      }
+      expenseIds.add(expenseId);
+    } else if (expenseId !== null || approvedAt || approvalRequestId || approvalFingerprint) {
+      throw new BackupValidationError(`${label} darf ohne Buchung keine Ausgabe oder Freigabemetadaten referenzieren`);
+    }
+    if (document.reviewStatus === 'DISMISSED' && (!dismissedAt || !dismissalReason?.trim())) throw new BackupValidationError(`${label} benötigt Ablehnungsgrund und Zeitpunkt`);
+    if (document.reviewStatus === 'REVIEW' && (dismissedAt || dismissalReason)) throw new BackupValidationError(`${label} enthält einen inkonsistenten Prüfzustand`);
+  }
+}
+
 /** Validate shape, scalar values, IDs and all relations before any mutation. */
 export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   const root = asRecord(backup, 'Backup');
@@ -506,6 +642,7 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   }
 
   const arrays = Object.fromEntries(ARRAY_KEYS.map((key) => [key, asArray(data, key)]));
+  if (version === LEGACY_BACKUP_VERSION && arrays.purchaseDocuments.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine ungebundenen Eingangsbelege enthalten');
   const sets: Record<string, Set<number>> = {};
   for (const key of ARRAY_KEYS) {
     if (key !== 'apiKeys') sets[key] = validateIds(arrays[key], key);
@@ -599,6 +736,7 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
 
   if (data.settings !== undefined && data.settings !== null) fiscalProfileForRestore(asRecord(data.settings, 'settings'));
   validateBackupReferences(data, sets);
+  validatePurchaseDocuments(data, manifest, root.type === 'full');
   const invariantValidation: RestoreInvariantValidation = { issues: [], truncated: false };
   validateRestoreInvariants(data, invariantValidation);
   if (invariantValidation.issues.length > 0) {
@@ -620,6 +758,7 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     expenses: { imported: 0, skipped: 0 },
     incomes: { imported: 0, skipped: 0 },
     invoices: { imported: 0, skipped: 0 },
+    purchaseDocuments: { imported: 0, skipped: 0 },
     templates: { imported: 0, skipped: 0 },
     files: { imported: 0, skipped: 0 },
     settings: { imported: false },
@@ -686,6 +825,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   expenses: Map<number, number>;
   incomes: Map<number, number>;
   invoices: Map<number, number>;
+  purchaseDocuments: Map<number, number>;
   recurringExpenses: Map<number, number>;
   reminders: Map<number, number>;
   cashBooks: Map<number, number>;
@@ -704,6 +844,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
     Expense: maps.expenses,
     Income: maps.incomes,
     Invoice: maps.invoices,
+    PurchaseDocument: maps.purchaseDocuments,
     Quote: maps.invoices,
     CreditNote: maps.invoices,
     RecurringExpense: maps.recurringExpenses,
@@ -764,6 +905,7 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
   await tx.reminder.deleteMany({ where: { userId } });
   await tx.invoice.updateMany({ where: { userId }, data: { originalInvoiceId: null, convertedFromQuoteId: null } });
   await tx.income.deleteMany({ where: { userId } });
+  await tx.purchaseDocument.deleteMany({ where: { userId } });
   await tx.expense.deleteMany({ where: { userId } });
   await tx.cashBook.deleteMany({ where: { userId } });
   await tx.documentation.deleteMany({ where: { userId } });
@@ -778,17 +920,49 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
   // AuditLog is intentionally preserved as an immutable restore trail.
 }
 
+function purchaseOriginalIdentity(record: JsonRecord): string {
+  return hashJson(Object.fromEntries(['id', 'userId', 'storedFileName', 'originalSha256', 'originalByteCount', 'mediaType'].map((field) => [field, record[field]])));
+}
+
+function purchaseSourceFingerprint(record: JsonRecord): string {
+  const dateFields = ['uploadedAt', 'invoiceDate', 'approvedAt', 'dismissedAt'];
+  const fields = ['originalFileName', 'originalSha256', 'originalByteCount', 'mediaType', 'uploadRequestId', 'parsedData', 'parseStatus', 'parserVersion', 'parseErrorCode', 'supplierName', 'invoiceNumber', 'currency', 'totalAmount', 'reviewStatus', 'revision', 'approvalRequestId', 'approvalFingerprint', 'dismissalReason'];
+  return hashJson({
+    ...Object.fromEntries(fields.map((field) => [field, record[field] ?? null])),
+    ...Object.fromEntries(dateFields.map((field) => [field, sourceDate(record[field], field)?.toISOString() ?? null])),
+    linked: record.expenseId !== null && record.expenseId !== undefined,
+  });
+}
+
+function purchaseExpenseFingerprint(record: JsonRecord): string {
+  // Recurrence cannot be silently rematched by an original hash.
+  if (record.recurringExpenseId !== null && record.recurringExpenseId !== undefined) throw new BackupValidationError('Eingangsbeleg-Kollision mit wiederkehrender Ausgabe erfordert gesonderte Prüfung');
+  const fields = ['description', 'category', 'receiptUrl', 'receiptFileName', 'depreciationYears', 'taxDeductiblePercentage'];
+  return hashJson({
+    ...Object.fromEntries(fields.map((field) => [field, record[field] ?? null])),
+    amount: centsForRestore(record.amount),
+    date: asDate(record.date, 'expense.date', RESTORE_DEFAULT_DATE)?.toISOString(),
+    taxRelevant: record.taxRelevant ?? true,
+    scheduledDate: asDate(record.scheduledDate, 'expense.scheduledDate')?.toISOString() ?? null,
+  });
+}
+
 export async function restoreBackupData(options: RestoreOptions): Promise<RestoreResult> {
   const { userId, overwrite, resolveFile } = options;
   const { data, manifest, warnings: validationWarnings } = validateBackupForRestore(options.backup);
   const result = resultTemplate(overwrite);
   result.warnings.push(...validationWarnings);
+  const documents = asArray(data, 'purchaseDocuments');
+  if (documents.length > 0 && !resolveFile) {
+    throw new BackupValidationError('Eingangsbeleg-Originale erfordern ein vollständiges ZIP-Backup; JSON-Metadaten allein sind nicht wiederherstellbar.');
+  }
   const stagedFiles = new Set<string>();
   const usedFiles = new Set<string>();
   const fileMap = new Map<string, string>();
   const missingFiles = new Set<string>();
+  const verifiedExistingOriginals = new Map<number, { identity: string; path: string; version: string }>();
 
-  const stageFile = async (kind: FileKind, sourceName: string, originalName: string): Promise<string> => {
+  const stageFile = async (kind: FileKind, sourceName: string, originalName: string, expected?: { sha256: string; bytes: number }): Promise<string> => {
     const key = `${kind}:${sourceName}`;
     const known = fileMap.get(key);
     if (known) return known;
@@ -803,6 +977,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (resolveFile && bytes === null) {
       throw new BackupValidationError(`Datei ${sourceName} fehlt im Backup`);
     }
+    if (expected && (!bytes || bytes.byteLength !== expected.bytes || hashBytes(bytes) !== expected.sha256)) {
+      throw new BackupValidationError('Integritätsprüfung eines Eingangsbeleg-Originals fehlgeschlagen');
+    }
     const missing = bytes === null;
     const storedName = missing
       ? createTenantStoredName(originalName)
@@ -816,6 +993,16 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       result.files.imported += 1;
     }
     return storedName;
+  };
+
+  const removeUnreferencedStage = async (storedName: string): Promise<void> => {
+    const references = await Promise.all([
+      prisma.purchaseDocument.count({ where: { userId, storedFileName: storedName } }),
+      prisma.expense.count({ where: { userId, storedReceiptFileName: storedName } }),
+      prisma.invoice.count({ where: { userId, storedFileName: storedName } }),
+      prisma.settings.count({ where: { userId, logoUrl: `/api/files/logo?file=${encodeURIComponent(storedName)}` } }),
+    ]);
+    if (references.every((count) => count === 0)) await deleteTenantFile(userId, storedName);
   };
 
   try {
@@ -846,6 +1033,26 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       result.warnings.push(`${apiKeys.length} API-Schlüssel wurden nicht übernommen; aus Sicherheitsgründen müssen neue Schlüssel erstellt werden.`);
     }
 
+    // A merge may keep an existing component only if its original is still
+    // usable. Metadata equality alone must not preserve a missing/tampered file.
+    if (!overwrite && documents.length > 0) {
+      const sourceHashes = new Set(documents.map((document) => document.originalSha256 as string));
+      const candidates = await prisma.purchaseDocument.findMany({ where: { userId } });
+      for (const existing of candidates) {
+        if (!sourceHashes.has(existing.originalSha256)) continue;
+        try {
+          const originalPath = getTenantUploadPath(userId, existing.storedFileName);
+          const before = await getBackupFileVersion(originalPath);
+          await readPurchaseOriginal(existing);
+          const after = await getBackupFileVersion(originalPath);
+          if (!before || before !== after) throw new Error('original-version-drift');
+          verifiedExistingOriginals.set(existing.id, { identity: purchaseOriginalIdentity(existing as unknown as JsonRecord), path: originalPath, version: after! });
+        } catch {
+          throw new BackupValidationError('Bestehendes Eingangsbeleg-Original fehlt oder ist verändert; Zusammenführen ohne geprüfte Originalwiederherstellung ist nicht möglich.');
+        }
+      }
+    }
+
     // Stage all referenced files before touching the database. JSON backups do
     // not contain bytes; those references stay opaque and are reported as
     // missing instead of creating a corrupt empty PDF/receipt.
@@ -853,6 +1060,14 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const sourceName = validateStoredName(invoice.storedFileName, 'invoice.storedFileName')
         ?? `invoice-${String(invoice.id)}`;
       await stageFile('invoice', sourceName, asRequiredString(invoice.fileName, 'invoice.fileName', 255));
+    }
+    for (const document of documents) {
+      const sourceName = document.storedFileName as string;
+      const targetName = await stageFile('purchase-document', sourceName, document.mediaType === 'application/pdf' ? 'original.pdf' : 'original.xml', {
+        sha256: document.originalSha256 as string, bytes: document.originalByteCount as number,
+      });
+      // A booked expense and its source retain the exact same private file.
+      fileMap.set(`receipt:${sourceName}`, targetName);
     }
     for (const expense of expenses) {
       const sourceName = validateStoredName(expense.storedReceiptFileName, 'expense.storedReceiptFileName');
@@ -882,10 +1097,12 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
       const customerMap = new Map<number, number>();
       const invoiceMap = new Map<number, number>();
+      const purchaseDocumentMap = new Map<number, number>();
       const cashBookMap = new Map<number, number>();
       const recurringMap = new Map<number, number>();
       const expenseMap = new Map<number, number>();
       const incomeMap = new Map<number, number>();
+      const skippedSourceExpenses = new Set<number>();
       const templateMap = new Map<number, number>();
       const reminderMap = new Map<number, number>();
       const billingNoteMap = new Map<number, number>();
@@ -926,6 +1143,34 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         for (const existing of existingCustomers) existingCustomersByName.set(existing.name, existing.id);
         for (const existing of existingCashBooks) existingCashBooksByName.set(existing.name, existing.id);
         for (const existing of existingTemplates) existingTemplatesByName.set(existing.name, existing.id);
+      }
+
+      // Resolve exact-source collisions as a whole linked component before
+      // importing expenses. Never create an orphan financial row then skip its source.
+      if (!overwrite && documents.length > 0) {
+        const existingDocuments = await tx.purchaseDocument.findMany({ where: { userId }, include: { expense: { include: { cashTransaction: true } } } });
+        for (const source of documents) {
+          const requestMatch = existingDocuments.find((item) => item.uploadRequestId === source.uploadRequestId);
+          if (requestMatch && requestMatch.originalSha256 !== source.originalSha256) throw new BackupValidationError('Upload-Anfrage eines Eingangsbelegs kollidiert mit anderen Originalbytes');
+          const existing = existingDocuments.find((item) => item.originalSha256 === source.originalSha256);
+          if (!existing) continue;
+          const verified = verifiedExistingOriginals.get(existing.id);
+          if (!verified || verified.identity !== purchaseOriginalIdentity(existing as unknown as JsonRecord) || await getBackupFileVersion(verified.path) !== verified.version) throw new BackupValidationError('Bestehendes Eingangsbeleg-Original wurde während der Wiederherstellung verändert; bitte erneut prüfen.');
+          if (purchaseSourceFingerprint(source) !== purchaseSourceFingerprint(existing as unknown as JsonRecord)) throw new BackupValidationError('Eingangsbeleg-Kollision: Prüfzustand oder Originalmetadaten unterscheiden sich');
+          const sourceExpenseId = asOptionalInt(source.expenseId, 'purchaseDocument.expenseId');
+          if (sourceExpenseId !== null) {
+            const sourceExpense = expenses.find((expense) => expense.id === sourceExpenseId);
+            if (!sourceExpense || !existing.expense || existing.expense.userId !== userId
+              || purchaseExpenseFingerprint(sourceExpense) !== purchaseExpenseFingerprint(existing.expense as unknown as JsonRecord)) throw new BackupValidationError('Eingangsbeleg-Kollision: verknüpfte Ausgaben unterscheiden sich');
+            // The first source-approval slice has no cash semantics. Existing cash
+            // components need a separately reviewed merge rather than duplicate links.
+            if (existing.expense.cashTransaction || cashTransactions.some((entry) => entry.expenseId === sourceExpenseId)) throw new BackupValidationError('Eingangsbeleg-Kollision mit verknüpfter Kassenbuchung erfordert gesonderte Prüfung');
+            expenseMap.set(sourceExpenseId, existing.expense.id);
+            skippedSourceExpenses.add(sourceExpenseId);
+          }
+          purchaseDocumentMap.set(source.id as number, existing.id);
+          result.purchaseDocuments.skipped += 1;
+        }
       }
 
       // Recurring expenses must precede expenses so execution keys survive.
@@ -1098,6 +1343,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
       for (const expense of expenses) {
         const sourceId = asOptionalInt(expense.id, 'expense.id')!;
+        if (skippedSourceExpenses.has(sourceId)) { result.expenses.skipped += 1; continue; }
         const created = await tx.expense.create({ data: {
           description: asRequiredString(expense.description, 'expense.description', 255),
           amount: asOptionalFinite(expense.amount, 'expense.amount') ?? 0,
@@ -1122,6 +1368,43 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         if (expenseSourceName) usedFiles.add(fileMap.get(`receipt:${expenseSourceName}`)!);
         expenseMap.set(sourceId, created.id);
         result.expenses.imported += 1;
+      }
+
+      for (const document of documents) {
+        const sourceId = document.id as number;
+        if (purchaseDocumentMap.has(sourceId)) continue;
+        const storedFileName = fileMap.get(`purchase-document:${document.storedFileName}`)!;
+        const created = await tx.purchaseDocument.create({ data: {
+          userId,
+          originalFileName: document.originalFileName as string,
+          storedFileName,
+          originalSha256: document.originalSha256 as string,
+          originalByteCount: document.originalByteCount as number,
+          mediaType: document.mediaType as string,
+          uploadedAt: sourceDate(document.uploadedAt, 'purchaseDocument.uploadedAt', true)!,
+          uploadRequestId: document.uploadRequestId as string,
+          parsedData: document.parsedData === null || document.parsedData === undefined ? Prisma.DbNull : asJson(document.parsedData, 'purchaseDocument.parsedData'),
+          parseStatus: document.parseStatus as string,
+          parserVersion: asOptionalString(document.parserVersion, 'purchaseDocument.parserVersion', 128),
+          parseErrorCode: asOptionalString(document.parseErrorCode, 'purchaseDocument.parseErrorCode', 128),
+          supplierName: asOptionalString(document.supplierName, 'purchaseDocument.supplierName', 1_000),
+          invoiceNumber: asOptionalString(document.invoiceNumber, 'purchaseDocument.invoiceNumber', 255),
+          invoiceDate: sourceDate(document.invoiceDate, 'purchaseDocument.invoiceDate'),
+          currency: asOptionalString(document.currency, 'purchaseDocument.currency', 3),
+          totalAmount: asOptionalFinite(document.totalAmount, 'purchaseDocument.totalAmount'),
+          reviewStatus: document.reviewStatus as string,
+          revision: document.revision as number,
+          expenseId: relationMapValue(expenseMap, document.expenseId, 'purchaseDocument.expenseId'),
+          approvalRequestId: asOptionalString(document.approvalRequestId, 'purchaseDocument.approvalRequestId', 36),
+          approvalFingerprint: asOptionalString(document.approvalFingerprint, 'purchaseDocument.approvalFingerprint', 64),
+          approvedAt: sourceDate(document.approvedAt, 'purchaseDocument.approvedAt'),
+          dismissedAt: sourceDate(document.dismissedAt, 'purchaseDocument.dismissedAt'),
+          dismissalReason: asOptionalString(document.dismissalReason, 'purchaseDocument.dismissalReason', 2_000),
+          updatedAt: sourceDate(document.updatedAt, 'purchaseDocument.updatedAt', true)!,
+        } });
+        purchaseDocumentMap.set(sourceId, created.id);
+        usedFiles.add(storedFileName);
+        result.purchaseDocuments.imported += 1;
       }
 
       for (const income of incomes) {
@@ -1335,6 +1618,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         expenses: expenseMap,
         incomes: incomeMap,
         invoices: invoiceMap,
+        purchaseDocuments: purchaseDocumentMap,
         recurringExpenses: recurringMap,
         reminders: reminderMap,
         cashBooks: cashBookMap,
@@ -1457,7 +1741,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
     for (const storedName of stagedFiles) {
       if (!usedFiles.has(storedName)) {
-        try { await deleteTenantFile(userId, storedName); } catch { /* already absent */ }
+        try { await removeUnreferencedStage(storedName); } catch { /* leave safe orphan on an uncertain reference check */ }
         result.files.imported = Math.max(0, result.files.imported - 1);
         result.files.skipped += 1;
       }
@@ -1465,7 +1749,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     return result;
   } catch (error) {
     for (const storedName of stagedFiles) {
-      try { await deleteTenantFile(userId, storedName); } catch { /* rollback is best effort */ }
+      try { await removeUnreferencedStage(storedName); } catch { /* rollback cleanup is best effort; never remove a referenced file */ }
     }
     throw error;
   }

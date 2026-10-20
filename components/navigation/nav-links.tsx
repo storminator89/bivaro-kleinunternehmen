@@ -96,6 +96,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
       title: "Buchhaltung",
       items: [
         { href: "/dashboard?tab=incomes", label: "Einnahmen", icon: "nav-incomes", auth: "authenticated" },
+        { href: "/purchases", label: "Belegeingang", icon: "nav-expenses", auth: "authenticated" },
         { href: "/dashboard?tab=expenses", label: "Ausgaben", icon: "nav-expenses", auth: "authenticated" },
         { href: "/cashbook", label: "Kassenbuch", icon: "nav-cashbook", auth: "authenticated" },
       ]

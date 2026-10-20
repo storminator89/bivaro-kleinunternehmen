@@ -35,6 +35,7 @@ export async function GET() {
         expensesCount: count('expenses'),
         incomesCount: count('incomes'),
         invoicesCount: count('invoices'),
+        purchaseDocumentsCount: count('purchaseDocuments'),
         customersCount: count('customers'),
         billingNotesCount: count('billingNotes'),
       },
@@ -44,6 +45,9 @@ export async function GET() {
     const backup = {
       version: CURRENT_BACKUP_VERSION,
       type: 'json',
+      warnings: count('purchaseDocuments') > 0
+        ? ['Eingangsbeleg-Originale sind nicht eingebettet; zur Wiederherstellung ist ein vollständiges ZIP-Backup erforderlich.']
+        : [],
       exportedAt,
       manifest: createBackupManifest({ sourceUserId: userId, generatedAt: exportedAt, data, snapshot: snapshot.info }),
       user: data.user,
@@ -52,6 +56,7 @@ export async function GET() {
         expenses: count('expenses'),
         incomes: count('incomes'),
         invoices: count('invoices'),
+        purchaseDocuments: count('purchaseDocuments'),
         customers: count('customers'),
         billingNotes: count('billingNotes'),
         templates: count('templates'),

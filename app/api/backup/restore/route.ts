@@ -40,6 +40,7 @@ async function postHandler(request: NextRequest) {
         importedExpenses: results.expenses.imported,
         importedIncomes: results.incomes.imported,
         importedInvoices: results.invoices.imported,
+        importedPurchaseDocuments: results.purchaseDocuments.imported,
       },
     });
 

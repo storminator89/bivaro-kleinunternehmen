@@ -62,6 +62,7 @@ model User {
   cashTransactions CashTransaction[]
   documentations Documentation[]
   billingNotes BillingNote[]
+  purchaseDocuments PurchaseDocument[]
 }
 
 // Shared, bounded rate-limit state for authentication and other API surfaces.
@@ -95,6 +96,7 @@ model Expense {
   userId                String
   user                  User     @relation(fields: [userId], references: [id])
   cashTransaction       CashTransaction?
+  purchaseDocument      PurchaseDocument?
 
   @@unique([recurringExpenseId, scheduledDate])
   @@index([userId, date])
@@ -395,4 +397,42 @@ model InvoiceNumberCounter {
   value Int
 
   @@id([userId, type, year])
+}
+
+// Incoming originals are source records, never sales invoices or automatic ledger entries.
+model PurchaseDocument {
+  id                  Int       @id @default(autoincrement())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id])
+  originalFileName    String
+  storedFileName      String
+  originalSha256      String
+  originalByteCount   Int
+  mediaType           String
+  uploadedAt          DateTime  @default(now())
+  uploadRequestId     String
+  parsedData          Json?
+  parseStatus         String    @default("PENDING") // PENDING, PARSED, FAILED
+  parserVersion       String?
+  parseErrorCode      String?
+  supplierName        String?
+  invoiceNumber       String?
+  invoiceDate         DateTime?
+  currency            String?
+  totalAmount         Float?
+  reviewStatus        String    @default("REVIEW") // REVIEW, BOOKED, DISMISSED
+  revision            Int       @default(0)
+  expenseId           Int?      @unique
+  expense             Expense?  @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  approvalRequestId   String?
+  approvalFingerprint String?
+  approvedAt          DateTime?
+  dismissedAt         DateTime?
+  dismissalReason     String?
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([userId, originalSha256])
+  @@unique([userId, uploadRequestId])
+  @@index([userId, reviewStatus, uploadedAt])
+  @@index([userId, supplierName, invoiceNumber])
 }

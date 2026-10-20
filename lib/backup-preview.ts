@@ -21,6 +21,7 @@ export type BackupPreview = {
     expenses: number;
     incomes: number;
     invoices: number;
+    purchaseDocuments: number;
     templates: number;
     recurringExpenses: number;
     reminders: number;
@@ -75,6 +76,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     expenses: countArray(data, 'expenses'),
     incomes: countArray(data, 'incomes'),
     invoices: countArray(data, 'invoices'),
+    purchaseDocuments: countArray(data, 'purchaseDocuments'),
     templates: countArray(data, 'templates'),
     recurringExpenses: countArray(data, 'recurringExpenses'),
     reminders: countArray(data, 'reminders'),
@@ -94,6 +96,9 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     warnings.push(manifestWarning(LEGACY_BACKUP_VERSION)!);
   } else {
     warnings.push(`Backup-Version ${candidate.version} kann inkompatibel sein.`);
+  }
+  if (counts.purchaseDocuments > 0 && candidate.type !== 'full') {
+    warnings.push('Eingangsbeleg-Originale sind im JSON-Backup nicht eingebettet. Zum Wiederherstellen ist ein vollständiges ZIP-Backup erforderlich.');
   }
   if (counts.apiKeys > 0) {
     warnings.push('API-Schlüssel werden aus Sicherheitsgründen ohne geheime Schlüssel wiederhergestellt und müssen neu erstellt werden.');

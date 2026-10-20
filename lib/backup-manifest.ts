@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
-export const CURRENT_SCHEMA_VERSION = '20261020213000_add_fiscal_profile';
+export const CURRENT_SCHEMA_VERSION = '20261020220000_add_purchase_documents';
+/** Incoming originals are additive; pre-inbox v3 manifests contain no sources. */
+export const PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION = '20261020213000_add_fiscal_profile';
 /** Fiscal profiles are additive; existing v3 backups remain importable. */
 export const PRE_FISCAL_PROFILE_SCHEMA_VERSION = '20260922100000_add_billing_notes';
 /** v3 manifests produced before BillingNote was introduced remain importable. */
@@ -20,7 +22,7 @@ export type BackupCoverageEntry = {
 };
 
 export type BackupFileManifestEntry = {
-  kind: 'invoice' | 'receipt' | 'logo';
+  kind: 'invoice' | 'receipt' | 'logo' | 'purchase-document';
   sourceName: string;
   zipPath?: string;
   bytes: number;
@@ -73,6 +75,7 @@ const COVERAGE = [
   { model: 'Expense', key: 'expenses', mode: 'included' as const },
   { model: 'Income', key: 'incomes', mode: 'included' as const },
   { model: 'Invoice', key: 'invoices', mode: 'included' as const },
+  { model: 'PurchaseDocument', key: 'purchaseDocuments', mode: 'included' as const },
   { model: 'Settings', key: 'settings', mode: 'included' as const },
   { model: 'InvoiceTemplate', key: 'templates', mode: 'included' as const },
   { model: 'RecurringExpense', key: 'recurringExpenses', mode: 'included' as const },
@@ -206,16 +209,19 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (value.format !== 'bivaro-backup' || value.version !== CURRENT_BACKUP_VERSION) {
     throw new Error('Nicht unterstützte Backup-Manifest-Version');
   }
-  if ((value.schemaVersion !== CURRENT_SCHEMA_VERSION && value.schemaVersion !== PRE_FISCAL_PROFILE_SCHEMA_VERSION && value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
+  if ((value.schemaVersion !== CURRENT_SCHEMA_VERSION && value.schemaVersion !== PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION && value.schemaVersion !== PRE_FISCAL_PROFILE_SCHEMA_VERSION && value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
     throw new Error('Backup-Manifest enthält keine gültige Herkunft');
   }
   if (value.excludesSecrets !== true || !Array.isArray(value.excludedSecretFields) || !value.excludedSecretFields.includes('User.password') || !value.excludedSecretFields.includes('ApiKey.keyHash') || !value.excludedSecretFields.includes('ApiKey.secret') || !Array.isArray(value.rekeyRequired) || !value.rekeyRequired.includes('ApiKey')) {
     throw new Error('Backup-Manifest weist den Secret-Ausschluss nicht nach');
   }
   if (!Array.isArray(value.modelCoverage)) throw new Error('Backup-Manifest enthält keine Modellabdeckung');
-  const expectedCoverage = value.schemaVersion === PRE_BILLING_NOTES_SCHEMA_VERSION
-    ? COVERAGE.filter((entry) => entry.model !== 'BillingNote')
-    : COVERAGE;
+  const expectedCoverage = COVERAGE.filter((entry) =>
+    (value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION || entry.model !== 'BillingNote')
+    && (value.schemaVersion === CURRENT_SCHEMA_VERSION || entry.model !== 'PurchaseDocument'));
+  if (value.schemaVersion !== CURRENT_SCHEMA_VERSION && coverageCount(data, 'purchaseDocuments') > 0) {
+    throw new Error('Ein altes Backup-Manifest darf keine ungebundenen Eingangsbelege enthalten');
+  }
   if (value.schemaVersion === PRE_BILLING_NOTES_SCHEMA_VERSION && coverageCount(data, 'billingNotes') > 0) {
     throw new Error('Ein altes Backup-Manifest darf keine ungebundenen BillingNotes enthalten');
   }
@@ -246,13 +252,13 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   for (const item of value.fileManifest) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('Backup-Manifest enthält einen ungültigen Dateieintrag');
     const file = item as BackupFileManifestEntry;
-    if (!['invoice', 'receipt', 'logo'].includes(file.kind) || typeof file.sourceName !== 'string' || file.sourceName.length === 0) {
+    if (!['invoice', 'receipt', 'logo', 'purchase-document'].includes(file.kind) || typeof file.sourceName !== 'string' || file.sourceName.length === 0) {
       throw new Error('Backup-Manifest Dateieintrag enthält keine gültige Quelle');
     }
     if (!Number.isSafeInteger(file.bytes) || file.bytes < 0 || !/^[a-f0-9]{64}$/iu.test(file.sha256)) {
       throw new Error(`Backup-Manifest Dateieintrag für ${file.sourceName} ist ungültig`);
     }
-    if (file.zipPath !== undefined && (typeof file.zipPath !== 'string' || file.zipPath.length === 0)) {
+    if (file.zipPath !== undefined && (typeof file.zipPath !== 'string' || !/^(?:invoices|receipts|logos|purchase-documents)\/[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(file.zipPath))) {
       throw new Error(`Backup-Manifest Dateipfad für ${file.sourceName} ist ungültig`);
     }
     if (file.sourceVersion !== undefined && (typeof file.sourceVersion !== 'string' || file.sourceVersion.length === 0)) {

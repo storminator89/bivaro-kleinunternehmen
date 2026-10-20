@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import JSZip from 'jszip';
+import { readPurchaseOriginal } from '@/lib/purchase-documents/original';
+import { PurchaseDocumentError } from '@/lib/purchase-documents/errors';
 import { loadZipWithinLimits, ZipResourceLimitError } from '@/lib/zip-limits';
 import { MAX_BACKUP_ZIP_ENTRIES, MAX_BACKUP_ZIP_ENTRY_BYTES, MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES } from '@/lib/resource-limits';
-import { isSafeLegacyFileName, isSafeStoredFileName } from '@/lib/upload-path';
+import { findTenantUploadedFile, isSafeLegacyFileName, isSafeStoredFileName } from '@/lib/upload-path';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import { auditSecurityEvent } from '@/lib/audit-log';
 import { createBackupManifest, CURRENT_BACKUP_VERSION } from '@/lib/backup-manifest';
@@ -19,6 +21,8 @@ export async function GET() {
     const count = (key: string) => Array.isArray(data[key]) ? data[key].length : 0;
     const invoices = Array.isArray(data.invoices) ? data.invoices as Array<{ storedFileName?: string | null }> : [];
     const expenses = Array.isArray(data.expenses) ? data.expenses as Array<{ storedReceiptFileName?: string | null }> : [];
+    const purchaseDocuments = Array.isArray(data.purchaseDocuments)
+      ? data.purchaseDocuments as Array<{ storedFileName: string; originalSha256: string; originalByteCount: number; mediaType: string }> : [];
     const settings = data.settings as { logoUrl?: string | null } | null;
     const exportedAt = snapshot.info.endedAt;
 
@@ -32,36 +36,57 @@ export async function GET() {
     const fileManifest: import('@/lib/backup-manifest').BackupFileManifestEntry[] = [];
     const packedFiles: Array<{ path: string; sourceVersion: string; sourceName: string }> = [];
 
-    const addOwnedFile = async (kind: 'invoices' | 'receipts' | 'logos', storedName: string | null | undefined) => {
+    const addOwnedFile = async (kind: 'invoices' | 'receipts' | 'logos' | 'purchase-documents', storedName: string | null | undefined, original?: { originalSha256: string; originalByteCount: number; mediaType: string }) => {
       if (!storedName || !(isSafeStoredFileName(storedName) || isSafeLegacyFileName(storedName))) {
         missingFiles.push(`${kind}/${storedName || '(leer)'}`);
         return;
       }
-      if (zip.file(`${kind}/${storedName}`)) return;
-      const filePath = await findOwnedUploadedFile(userId, storedName);
+      if (zip.file(`${kind}/${storedName}`)) {
+        if (original) {
+          const packed = fileManifest.find((entry) => entry.kind === 'purchase-document' && entry.sourceName === storedName);
+          if (!packed || packed.sha256 !== original.originalSha256 || packed.bytes !== original.originalByteCount) throw new BackupFileConsistencyError('Mehrdeutige Originalreferenz eines Eingangsbelegs');
+        }
+        return;
+      }
+      // Incoming originals never consult an unowned legacy shared directory.
+      const filePath = kind === 'purchase-documents'
+        ? findTenantUploadedFile(userId, storedName)
+        : await findOwnedUploadedFile(userId, storedName);
       if (!filePath) {
         missingFiles.push(`${kind}/${storedName}`);
         return;
       }
       try {
-        if (fileCount + 4 > MAX_BACKUP_ZIP_ENTRIES) throw new ZipResourceLimitError('Der Datenbestand überschreitet die Größenlimits des vollständigen Backups');
-        const stable = await readStableBackupFile(filePath, Math.min(MAX_BACKUP_ZIP_ENTRY_BYTES, MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES - totalBytes));
+        if (fileCount + 5 > MAX_BACKUP_ZIP_ENTRIES) throw new ZipResourceLimitError('Der Datenbestand überschreitet die Größenlimits des vollständigen Backups');
+        const maxBytes = Math.min(MAX_BACKUP_ZIP_ENTRY_BYTES, MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES - totalBytes);
+        const stable = original ? await (async () => {
+          if (original.originalByteCount > maxBytes) throw new BackupFileSizeError();
+          const before = await getBackupFileVersion(filePath);
+          const bytes = await readPurchaseOriginal({ ...original, userId, storedFileName: storedName });
+          const after = await getBackupFileVersion(filePath);
+          if (!before || before !== after) throw new BackupFileConsistencyError();
+          return { bytes, sha256: original.originalSha256, sourceVersion: after! };
+        })() : await readStableBackupFile(filePath, maxBytes);
         if (!stable) {
           missingFiles.push(`${kind}/${storedName}`);
           return;
         }
         const size = stable.bytes.byteLength;
-        // Reserve room for the three directory entries JSZip adds automatically.
+        if (original && (stable.sha256 !== original.originalSha256 || size !== original.originalByteCount)) {
+          throw new BackupFileConsistencyError('Integritätsprüfung eines Eingangsbeleg-Originals fehlgeschlagen');
+        }
+        // Reserve room for the four directory entries JSZip adds automatically.
         if (size > MAX_BACKUP_ZIP_ENTRY_BYTES || totalBytes + size > MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES) {
           throw new ZipResourceLimitError('Der Datenbestand überschreitet die Größenlimits des vollständigen Backups');
         }
         totalBytes += size;
         fileCount++;
         zip.file(`${kind}/${storedName}`, stable.bytes);
-        const manifestKind = kind === 'invoices' ? 'invoice' : kind === 'receipts' ? 'receipt' : 'logo';
+        const manifestKind = kind === 'invoices' ? 'invoice' : kind === 'receipts' ? 'receipt' : kind === 'purchase-documents' ? 'purchase-document' : 'logo';
         fileManifest.push({ kind: manifestKind, sourceName: storedName, zipPath: `${kind}/${storedName}`, bytes: stable.bytes.byteLength, sha256: stable.sha256, sourceVersion: stable.sourceVersion });
         packedFiles.push({ path: filePath, sourceVersion: stable.sourceVersion, sourceName: storedName });
       } catch (error) {
+        if (error instanceof PurchaseDocumentError) throw new BackupFileConsistencyError('Integritätsprüfung eines Eingangsbeleg-Originals fehlgeschlagen');
         if (error instanceof ZipResourceLimitError) throw error;
         if (error instanceof BackupFileConsistencyError) throw error;
         if (error instanceof BackupFileSizeError) throw new ZipResourceLimitError(error.message);
@@ -76,9 +101,22 @@ export async function GET() {
       await addOwnedFile('invoices', invoice.storedFileName);
     }
 
+    // Include every archived incoming source, even FAILED and DISMISSED.
+    for (const document of purchaseDocuments) {
+      await addOwnedFile('purchase-documents', document.storedFileName, document);
+    }
+
     // Add expense receipts
     for (const expense of expenses) {
-      if (expense.storedReceiptFileName) await addOwnedFile('receipts', expense.storedReceiptFileName);
+      if (expense.storedReceiptFileName) {
+        const sharedSource = fileManifest.find((entry) => entry.kind === 'purchase-document' && entry.sourceName === expense.storedReceiptFileName);
+        if (sharedSource) {
+          // One payload, two model references. Restore follows the validated archive path.
+          fileManifest.push({ ...sharedSource, kind: 'receipt' });
+        } else {
+          await addOwnedFile('receipts', expense.storedReceiptFileName);
+        }
+      }
     }
 
     // Add logo if exists
@@ -122,6 +160,7 @@ export async function GET() {
         expenses: count('expenses'),
         incomes: count('incomes'),
         invoices: count('invoices'),
+        purchaseDocuments: count('purchaseDocuments'),
         customers: count('customers'),
         billingNotes: count('billingNotes'),
         templates: count('templates'),
@@ -160,6 +199,7 @@ export async function GET() {
         expensesCount: count('expenses'),
         incomesCount: count('incomes'),
         invoicesCount: count('invoices'),
+        purchaseDocumentsCount: count('purchaseDocuments'),
         customersCount: count('customers'),
         billingNotesCount: count('billingNotes'),
       },

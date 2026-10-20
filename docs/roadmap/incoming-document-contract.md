@@ -18,7 +18,7 @@ Status: implementation contract for an additive pilot feature. This document des
 
 A separate `Supplier` table is not required for the first vertical slice. Keep supplier and buyer snapshots on the document; a future address book must not rewrite those historical snapshots.
 
-Proposed Prisma-level shape (field names are an API contract, not a checked-in migration):
+Initial additive Prisma model (migration `20261020220000_add_purchase_documents`; expense approval remains a separate implementation unit):
 
 ```prisma
 model PurchaseDocument {
@@ -178,7 +178,7 @@ The feature must not ship with source records that existing backup silently drop
 3. **Confirmed expense:** approval transaction, replay/conflict semantics, guards across every existing expense mutation and compatible receipt export/download. UI exposes one explicit confirm action with payment date/category/deductibility confirmation.
 4. **Release evidence:** build/type checks, isolated local functional and browser tests, and commit-bound GitHub CI. Do not confuse a passing local test or published container with verification of a live deployment. Review original bytes, tenant isolation, totals and backup round-trip before treating the slice as accepted.
 
-The page belongs under authenticated `/dashboard/purchase-documents`, labelled **Eingangsbelege**, separate from **Ausgangsrechnungen**. Provide list, original preview, supplier/recipient cards, parse/validation limits, duplicate warning and one review panel. A first upload does not alter dashboard financial totals. Rollout is additive and can hide the incoming UI if needed, but retaining/restoring newly created originals and financial links remains mandatory. Do not roll back by dropping populated tables.
+The page belongs under authenticated `/purchases`, labelled **Eingangsbelege**, separate from **Ausgangsrechnungen**. Provide list, original preview, supplier/recipient cards, parse/validation limits, duplicate warning and one review panel. A first upload does not alter dashboard financial totals. Rollout is additive and can hide the incoming UI if needed, but retaining/restoring newly created originals and financial links remains mandatory. Do not roll back by dropping populated tables.
 
 Legacy documents remain in their existing sales list with no guessed relabelling. Any future cleanup needs a separate explicit per-document user decision and review of existing Income/cash/audit links, not a bulk migration.
 
