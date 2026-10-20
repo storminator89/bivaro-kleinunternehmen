@@ -4,6 +4,7 @@ import styles from '@/components/settings/admin-workspace.module.css';
 export function SettingsSectionNavigation({ isAdmin }: { isAdmin: boolean }) {
   const items = [
     { id: 'company-settings', label: 'Firmendaten', Icon: Building2 },
+    { id: 'fiscal-profile', label: 'Steuerprofil', Icon: FileCheck },
     ...(isAdmin ? [
       { id: 'email-settings', label: 'E-Mail-Versand', Icon: Mail },
       { id: 'registration-settings', label: 'Registrierung', Icon: ShieldCheck },

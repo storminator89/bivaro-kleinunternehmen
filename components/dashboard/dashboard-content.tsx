@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
+import { GettingStarted } from "@/components/onboarding/getting-started";
 import { toast } from 'sonner';
 import React, { useEffect, useState } from 'react';
 import { Plus, ArrowDownLeft, ArrowUpRight } from "lucide-react";
@@ -876,7 +877,10 @@ export function DashboardContent() {
         />
 
         {!tabParam ? (
-          <DashboardClient />
+          <>
+            <GettingStarted />
+            <DashboardClient />
+          </>
         ) : (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
           {/* Ausgaben Tab */}

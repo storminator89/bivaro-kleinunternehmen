@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { PDFDocument } from 'pdf-lib';
 
@@ -12,7 +12,29 @@ const invoiceIssuer = {
   companyName: 'E2E Rechnungssteller', companyAddress: 'Testweg 1\n10115 Berlin',
   email: 'rechnung@example.test', telephone: '+49 301234567',
   taxNumber: '123/456/78901', iban: 'DE89370400440532013000',
+  // Legacy workflows explicitly declare the old §19 fixture; UNSET is tested below.
+  fiscalTaxRegime: 'SMALL_BUSINESS', fiscalEffectiveFrom: '2020-01-01',
 };
+
+async function signIn(page: Page) {
+  await page.goto('/login');
+  await page.getByLabel('E-Mail').fill(testUser.email);
+  await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+  await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
+  await expect(page).toHaveURL(/\/dashboard/);
+}
+
+async function saveFiscalProfile(page: Page, regime: 'STANDARD' | 'SMALL_BUSINESS', date: string) {
+  await page.goto('/settings#fiscal-profile');
+  const profile = page.locator('#fiscal-profile');
+  await profile.locator(`input[value="${regime}"]`).check();
+  await profile.getByLabel('Gültig ab', { exact: true }).fill(date);
+  await profile.getByRole('checkbox', { name: /Ich bestätige meine Auswahl/ }).check();
+  const saved = page.waitForResponse(response => response.url().endsWith('/api/settings') && response.request().method() === 'POST');
+  await profile.getByRole('button', { name: 'Steuerprofil speichern', exact: true }).click();
+  expect((await saved).ok()).toBe(true);
+  await expect(profile.getByText('Steuerprofil gespeichert. Bestehende Rechnungen bleiben unverändert.', { exact: true })).toBeVisible();
+}
 
 test.describe.serial('auth, dashboard and invoice flow', () => {
   test('registers the first admin user and opens the dashboard', async ({ page }, testInfo) => {
@@ -139,6 +161,106 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await anonymous.close();
   });
 
+  test('requires a conscious dated fiscal profile and persists the real settings UI selection', async ({ page }, testInfo) => {
+    await signIn(page);
+    expect(await (await page.request.get('/api/settings')).json()).toMatchObject({
+      fiscalTaxRegime: 'UNSET', fiscalEffectiveFrom: null, fiscalConfirmedAt: null,
+    });
+    await page.goto('/dashboard/invoices/new');
+    await expect(page.getByLabel('Umsatzsteuerbehandlung dieses Dokuments', { exact: true })).toHaveValue('');
+    await expect(page.getByText('Bivaro nimmt § 19 nicht automatisch an.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'PDF erstellen', exact: true })).toBeDisabled();
+    await expect(page.getByText('Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { exact: true })).toHaveCount(0);
+
+    await page.goto('/settings#fiscal-profile');
+    const profile = page.locator('#fiscal-profile');
+    await expect(profile.getByRole('radio', { name: /Noch nicht geklärt/ })).toBeChecked();
+    await profile.getByRole('radio', { name: /Regelbesteuerung/ }).check();
+    await profile.getByRole('button', { name: 'Steuerprofil speichern', exact: true }).click();
+    await expect(profile.locator('#fiscal-date-error')).toContainText('gültiges Kalenderdatum');
+    await expect(profile.getByText('Bitte bestätigen Sie Ihre bewusst gewählte Einordnung.', { exact: true })).toBeVisible();
+    await profile.getByLabel('Gültig ab', { exact: true }).fill('2026-01-01');
+    await profile.getByRole('button', { name: 'Steuerprofil speichern', exact: true }).click();
+    await expect(profile.getByText('Bitte bestätigen Sie Ihre bewusst gewählte Einordnung.', { exact: true })).toBeVisible();
+    // Validation must not silently create a confirmed profile.
+    expect(await (await page.request.get('/api/settings')).json()).toMatchObject({ fiscalTaxRegime: 'UNSET', fiscalConfirmedAt: null });
+    await profile.getByRole('checkbox', { name: /Ich bestätige meine Auswahl/ }).check();
+    const saved = page.waitForResponse(response => response.url().endsWith('/api/settings') && response.request().method() === 'POST');
+    await profile.getByRole('button', { name: 'Steuerprofil speichern', exact: true }).click();
+    expect((await saved).ok()).toBe(true);
+    await expect(profile.getByText('Steuerprofil gespeichert. Bestehende Rechnungen bleiben unverändert.', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(profile.getByRole('radio', { name: /Regelbesteuerung/ })).toBeChecked();
+    await expect(profile.getByLabel('Gültig ab', { exact: true })).toHaveValue('2026-01-01');
+    await expect(profile.getByRole('checkbox', { name: /Ich bestätige meine Auswahl/ })).not.toBeChecked();
+    await expect(profile.getByText('Gespeichert: Regelbesteuerung · gültig ab 01.01.2026.', { exact: false })).toBeVisible();
+    const stored = await (await page.request.get('/api/settings')).json();
+    expect(stored).toMatchObject({ fiscalTaxRegime: 'STANDARD', fiscalEffectiveFrom: '2026-01-01' });
+    expect(Number.isNaN(Date.parse(stored.fiscalConfirmedAt))).toBe(false);
+    await page.screenshot({ path: testInfo.outputPath('fiscal-profile-saved-reloaded.png'), fullPage: true });
+  });
+
+  test('defaults standard documents to 19 percent, requires pre-profile acknowledgement and preserves a 7 percent template', async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
+    await signIn(page);
+    await page.goto('/dashboard/invoices/new');
+    const taxMode = page.getByLabel('Umsatzsteuerbehandlung dieses Dokuments', { exact: true });
+    const create = page.getByRole('button', { name: 'PDF erstellen', exact: true });
+    await expect(taxMode).toHaveValue('standard');
+    await expect(page.locator('#invoice-item-tax-0')).toHaveValue('19');
+    await page.getByLabel('Empfänger (Name & Anschrift)', { exact: true }).fill('E2E Profilkunde\nKundenweg 2\n10115 Berlin');
+    await page.locator('#invoice-item-description-0').fill('Profilprüfung');
+    await page.locator('#invoice-item-price-0').fill('100');
+    await expect(page.getByRole('complementary', { name: 'Rechnungsübersicht' })).toContainText('119,00');
+    await page.getByLabel('Rechnungsdatum', { exact: true }).fill('2025-12-31');
+    await expect(taxMode).toHaveValue('');
+    await expect(page.getByText('Das Firmenprofil gilt erst ab 2026-01-01', { exact: false })).toBeVisible();
+    await taxMode.selectOption('standard');
+    const acknowledgement = page.getByRole('checkbox', { name: /Ich habe diese Steuerbehandlung für dieses Dokument geprüft/ });
+    await expect(acknowledgement).not.toBeChecked();
+    await expect(create).toBeDisabled();
+    await acknowledgement.check();
+    await expect(create).toBeEnabled();
+    await page.getByLabel('Steuerfall', { exact: true }).selectOption('reverse-charge');
+    await expect(create).toBeDisabled();
+    await expect(page.getByRole('alert').filter({ hasText: 'Dieser Steuerfall wird nicht unterstützt.' })).toBeVisible();
+    await page.getByLabel('Steuerfall', { exact: true }).selectOption('domestic');
+    await expect(create).toBeEnabled();
+    await page.locator('#invoice-item-tax-0').fill('7');
+    await expect(page.getByRole('complementary', { name: 'Rechnungsübersicht' })).toContainText('107,00');
+    await page.getByText('Rechnungsvorlagen', { exact: true }).click();
+    await page.getByRole('button', { name: 'Als Vorlage speichern', exact: true }).click();
+    await page.getByPlaceholder('Name der Vorlage', { exact: true }).fill('E2E Ermäßigter Satz 7 Prozent');
+    const templateSaved = page.waitForResponse(response => response.url().endsWith('/api/invoice-templates') && response.request().method() === 'POST');
+    const notice = page.waitForEvent('dialog').then(async dialog => {
+      expect(dialog.message()).toBe('Vorlage erfolgreich gespeichert.');
+      await dialog.accept();
+    });
+    await page.getByRole('button', { name: 'Vorlage speichern', exact: true }).click();
+    expect((await templateSaved).ok()).toBe(true);
+    await notice;
+    const templates = await (await page.request.get('/api/invoice-templates')).json() as Array<{ id: number; name: string; data: { taxMode: string; items: Array<{ taxRate: number }> } }>;
+    const template = templates.find(item => item.name === 'E2E Ermäßigter Satz 7 Prozent')!;
+    expect(template.data).toMatchObject({ taxMode: 'standard', items: [expect.objectContaining({ taxRate: 7 })] });
+
+    // A later explicit company choice must not rewrite the saved document decision.
+    await saveFiscalProfile(page, 'SMALL_BUSINESS', '2020-01-01');
+    await page.reload();
+    await expect(page.locator('#fiscal-profile').getByRole('radio', { name: /^Kleinunternehmerregelung/ })).toBeChecked();
+    await page.goto('/dashboard/invoices/new');
+    await expect(taxMode).toHaveValue('small-business');
+    await expect(page.locator('#invoice-item-tax-0')).toHaveValue('0');
+    await page.getByText('Rechnungsvorlagen', { exact: true }).click();
+    await page.getByLabel('Rechnungsvorlage auswählen', { exact: true }).selectOption(String(template.id));
+    await expect(taxMode).toHaveValue('standard');
+    await expect(page.locator('#invoice-item-tax-0')).toHaveValue('7');
+    await expect(page.getByText('Steuerangaben aus der Vorlage bleiben erhalten.', { exact: false })).toBeVisible();
+    await page.getByLabel('Rechnungsdatum', { exact: true }).fill('2026-02-01');
+    await expect(page.locator('#invoice-item-tax-0')).toHaveValue('7');
+    await expect(page.getByRole('complementary', { name: 'Rechnungsübersicht' })).toContainText('107,00');
+    await page.screenshot({ path: testInfo.outputPath('fiscal-template-7-preserved.png'), fullPage: true });
+  });
+
   test('opens the invoice creation flow from the dashboard', async ({ page }, testInfo) => {
     await page.goto('/login');
     await page.getByLabel('E-Mail').fill(testUser.email);
@@ -177,6 +299,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
     await expect(page).toHaveURL(/\/dashboard/);
     await page.goto('/dashboard/quotes/new');
+    await page.getByLabel('Umsatzsteuerbehandlung dieses Dokuments', { exact: true }).selectOption('standard');
+    await page.getByRole('checkbox', { name: /Ich habe diese Steuerbehandlung für dieses Dokument geprüft/ }).check();
     await page.getByLabel('Empfänger (Name & Anschrift)', { exact: true }).fill('Designfixture Kunde\nTestweg 1\n10115 Berlin');
     await page.getByLabel('Angebotsnummer', { exact: true }).fill('E2E-DESIGN-QUOTE');
     await page.locator('#quote-item-0-description').fill('Designprüfung\nMit mehrzeiliger Beschreibung');
@@ -356,6 +480,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
     await page.getByRole('combobox', { name: 'Ausgabeformat', exact: true }).selectOption('xml-only');
     await page.getByLabel('Umsatzsteuerbehandlung').selectOption('standard');
+    await page.getByRole('checkbox', { name: /Ich habe diese Steuerbehandlung für dieses Dokument geprüft/ }).check();
     await page.getByLabel('Empfänger (Name & Anschrift)').fill('E2E Kunde\nBuchhaltung\nKundenweg 2\n10115 Berlin');
     await page.getByLabel('E-Mail des Empfängers', { exact: false }).fill('kunde@example.test');
     await page.locator('#invoice-item-description-0').fill('Leistung 19 Prozent');
@@ -945,6 +1070,57 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await expect(page.getByLabel('Sortierung', { exact: true })).toHaveValue('date:desc');
       await expect(page.getByLabel('Suche', { exact: true })).toHaveValue('');
     }
+  });
+
+  test('keeps public help usable at 320 and 390 pixels and follows keyboard routes through login', async ({ browser, baseURL }, testInfo) => {
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    try {
+      for (const route of ['/', '/help']) {
+        await page.goto(route);
+        await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
+        await expect(page).not.toHaveURL(/\/login/);
+        for (const width of [320, 390]) {
+          await page.setViewportSize({ width, height: 844 });
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${route} overflows at ${width}`).toBe(true);
+          const clipped = await page.getByRole('main').locator('a, button').evaluateAll(elements => elements.filter(element => {
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && (rect.left < -1 || rect.right > window.innerWidth + 1);
+          }).map(element => element.textContent));
+          expect(clipped).toEqual([]);
+          await page.screenshot({ path: testInfo.outputPath(`${route === '/' ? 'home' : 'help'}-pilot-${width}.png`), fullPage: true });
+        }
+      }
+      await expect(page.locator('#steuerprofil')).toContainText('sind nicht dasselbe');
+      await expect(page.locator('#umfang')).toContainText('keine ELSTER-Einreichung');
+      await expect(page.locator('#zugang')).toContainText('kein öffentlicher Betreiber- oder Supportkontakt');
+      // Tab rather than click proves the first workflow link is keyboard reachable.
+      await page.goto('/');
+      const firstGuide = page.getByRole('link', { name: 'Den ersten Ablauf kennenlernen', exact: true });
+      for (let index = 0; index < 20 && !(await firstGuide.evaluate(element => element === document.activeElement)); index++) await page.keyboard.press('Tab');
+      await expect(firstGuide).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/\/help#erste-rechnung$/);
+      const protectedLink = page.getByRole('link', { name: 'Firmendaten öffnen', exact: true });
+      await protectedLink.focus();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/\/login\?callbackUrl=/);
+      expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe('/settings');
+      // A redirected document can expose its URL before the login form is ready.
+      await page.waitForLoadState('load');
+      await expect(page.getByRole('heading', { name: 'Willkommen zurück', exact: true })).toBeVisible();
+      await page.getByLabel('E-Mail').fill(testUser.email);
+      await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
+      const authenticated = page.waitForResponse(response => response.url().includes('/api/auth/callback/credentials') && response.request().method() === 'POST');
+      await page.getByLabel('Passwort', { exact: true }).press('Enter');
+      expect((await authenticated).status()).toBe(200);
+      expect(await (await page.request.get('/api/auth/session')).json()).toMatchObject({ user: { email: testUser.email } });
+      await expect(page).toHaveURL(/\/settings$/);
+      await expect(page.getByRole('heading', { name: 'Einstellungen', exact: true, level: 1 })).toBeVisible();
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
   });
 
   test('blocks anonymous data access and revokes an existing cookie after a password reset', async ({ page, request }) => {

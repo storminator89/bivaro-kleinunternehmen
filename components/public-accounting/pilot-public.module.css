@@ -1,0 +1,82 @@
+/* Public pilot surfaces only. Bivaro Ledger's existing light/dark tokens remain canonical. */
+.page { max-width: 86rem; margin-inline: auto; padding-inline: clamp(1rem, 4vw, 3.5rem); }
+.page h1, .page h2, .page h3, .page p { margin: 0; }
+.page p, .page li, .page dd { line-height: 1.7; }
+.page p, .page dd { color: var(--bivaro-color-muted); }
+/* Explicit style beats the UI primitive outline reset on public links/buttons. */
+.publicHeader a:focus-visible, .publicHeader button:focus-visible,
+.page a:focus-visible, .page button:focus-visible { outline-width: 2px; outline-style: solid; outline-color: var(--color-focus); outline-offset: 4px; }
+/* Next.js can scroll before :target updates. Apply the offset before navigation,
+   including on direct links and on mobile; keep it scoped to public content. */
+.page [id] { scroll-margin-top: calc(var(--layout-topbar) + var(--space-lg)); }
+.hero { padding-block: clamp(2.5rem, 6vw, 5.5rem) 3rem; border-bottom: 1px solid var(--color-rule); }
+.heroIntro { display: grid; gap: 2rem; align-items: end; }
+.intro { font-size: .875rem; font-weight: 600; margin-bottom: 1.25rem !important; }
+.hero h1, .helpHeader h1 { font: 500 clamp(2.75rem, 4.6vw, 4.75rem)/1.04 var(--font-display); letter-spacing: -.035em; max-width: 14ch; text-wrap: balance; }
+.heroCopy { max-width: 37rem; }
+.heroCopy > p:first-child { font-size: 1.125rem; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-block: 1.5rem; }
+.actions a { white-space: normal; height: auto; min-height: 44px; text-align: center; }
+.page .small { font-size: .875rem; max-width: 75ch; }
+.small a { color: var(--bivaro-color-accent); text-decoration: underline; text-underline-offset: 3px; }
+.productFrame { margin: 2.5rem 0 0; overflow: hidden; border: 1px solid var(--color-rule); border-radius: 1rem; background: var(--color-paper); }
+.productBar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1.5rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--color-rule); font-size: .875rem; color: var(--bivaro-color-muted); }
+.productBar strong { color: var(--color-ink); font-weight: 600; }
+.productFrame img { display: block; width: 100%; height: auto; max-height: 38rem; object-fit: cover; object-position: top; }
+.productFrame figcaption { border-top: 1px solid var(--color-rule); padding: .75rem 1.25rem; font-size: .75rem; color: var(--bivaro-color-muted); }
+.section { padding-block: clamp(2.5rem, 5vw, 4rem); }
+.sectionIntro { display: grid; gap: 1.25rem; margin-bottom: 2rem; }
+.page h2 { font: 500 clamp(1.9rem, 3vw, 2.75rem)/1.15 var(--font-display); letter-spacing: -.025em; text-wrap: balance; }
+.sectionIntro h2 { max-width: 22ch; }
+.sectionIntro p { max-width: 64ch; }
+.taskList { list-style: none; margin: 0; padding: 0; }
+.taskList > li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); align-items: start; column-gap: 1rem; row-gap: .5rem; padding-block: 1.5rem; border-top: 1px solid var(--color-rule); }
+.stepNumber { display: inline-grid; place-items: center; flex-shrink: 0; width: 2rem; height: 2rem; border: 1px solid var(--color-rule-2); border-radius: 50%; font-size: .875rem; font-weight: 600; color: var(--bivaro-color-accent); }
+.page h3 { font-size: 1.125rem; font-weight: 600; letter-spacing: -.015em; line-height: 1.4; }
+.taskList h3 a { color: var(--color-ink); text-decoration: none; }
+.taskList h3 a:hover { color: var(--bivaro-color-accent); text-decoration: underline; text-underline-offset: 4px; }
+.taskList p { margin-top: .35rem; font-size: .9375rem; }
+.textLink { display: inline-flex; align-items: center; min-height: 44px; color: var(--bivaro-color-accent); font-size: .875rem; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+.taskList > li > .textLink { grid-column: 2; }
+.scope { display: grid; gap: 2rem; padding: clamp(1.5rem, 4vw, 3rem); border: 1px solid var(--color-rule); border-radius: 1rem; background: var(--color-paper-2); }
+.scope h2 { max-width: 22ch; margin-bottom: 1.25rem; }
+.scope .textLink { margin-top: 1rem; }
+.scopeNotes { display: grid; align-content: center; gap: 1.5rem; border-left: 2px solid var(--bivaro-color-accent); padding-left: 1.5rem; }
+.scopeNotes strong { display: block; color: var(--color-ink); font-weight: 600; }
+.access { border-block: 1px solid var(--color-rule); padding-block: 1.5rem; margin-block: 1.5rem; }
+.access p { margin-top: .5rem; max-width: 70ch; }
+.access .actions { margin-bottom: 0; }
+.helpHeader { padding-block: clamp(2rem, 5vw, 4rem); border-bottom: 1px solid var(--color-rule); }
+.helpHeader h1 { max-width: 22ch; font-size: clamp(2.5rem, 4vw, 4rem); margin-top: 1.25rem; }
+.helpHeader > p { max-width: 66ch; margin-top: 1.5rem; font-size: 1.125rem; }
+.guideLayout { display: grid; gap: 2rem; padding-block: 2.5rem 4rem; }
+.guideIndex { align-self: start; padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-rule); }
+.guideIndex p { color: var(--color-ink); font-size: .875rem; font-weight: 600; margin-bottom: .75rem; }
+.guideIndex ol { padding-left: 1.25rem; margin: 0 0 .75rem; }
+.guideIndex a { display: flex; align-items: center; min-height: 44px; font-size: .875rem; color: var(--color-ink-2); text-decoration: underline; text-underline-offset: 4px; }
+.guideIndex a:hover { color: var(--bivaro-color-accent); }
+.guideBody { min-width: 0; max-width: 52rem; }
+.beforeStart { padding: 1.5rem; background: var(--color-paper-2); border-radius: .75rem; }
+.beforeStart h2 { font: 600 1.125rem/1.4 var(--font-body); letter-spacing: -.015em; }
+.beforeStart p { margin-top: .75rem; font-size: .9375rem; }
+.guideSection { padding-block: 2.75rem; border-bottom: 1px solid var(--color-rule); }
+.guideSection:last-child { border-bottom: 0; padding-bottom: 0; }
+.guideSection > p { margin-top: 1.25rem; }
+.guideSection h2 { font-size: clamp(1.75rem, 2.4vw, 2.25rem); }
+.guideSection > h3 { margin-top: 2rem; }
+.guideTitle { display: flex; gap: 1rem; align-items: start; }
+.guideTitle .stepNumber { margin-top: .15rem; }
+.guideTitle p { margin-top: .65rem; }
+.instructions, .checklist { padding-left: 1.5rem; margin-block: 1.5rem; }
+.instructions li, .checklist li { padding-left: .4rem; margin-block: 1rem; color: var(--color-ink-2); }
+.instructions li::marker { color: var(--bivaro-color-accent); font-weight: 600; }
+.caution { padding: 1rem 1.25rem; border-left: 3px solid var(--color-rule-2); background: var(--color-paper-2); }
+.caution p { font-size: .9375rem; color: var(--color-ink-2); }
+.contextLinks { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin-top: 1rem; }
+.contextLinks a { display: inline-flex; align-items: center; min-height: 44px; font-size: .875rem; font-weight: 600; color: var(--bivaro-color-accent); text-decoration: underline; text-underline-offset: 4px; }
+.boundaries { margin-top: 1.5rem; }
+.boundaries > div { padding-block: 1.25rem; border-top: 1px solid var(--color-rule); }
+.boundaries dt { font-weight: 600; margin-bottom: .4rem; }
+.boundaries dd { font-size: .9375rem; }
+@media (min-width: 768px) { .heroIntro { grid-template-columns: 1.05fr 1fr; gap: 3rem; } .sectionIntro { grid-template-columns: 1fr 1fr; gap: 3rem; } .taskList > li { grid-template-columns: 2rem minmax(0, 1fr) auto; align-items: center; gap: 1.5rem; } .taskList > li > .textLink { grid-column: auto; } .scope { grid-template-columns: 1.1fr 1fr; gap: 3rem; } .guideLayout { grid-template-columns: 14rem minmax(0, 1fr); gap: 3rem; } .guideIndex { position: sticky; top: 6rem; border-bottom: 0; } }
+@media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

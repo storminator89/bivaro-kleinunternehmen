@@ -207,6 +207,11 @@ model Settings {
   bic            String?
   footerText     String?
   logoUrl        String?
+  // Explicit user declaration, never inferred from turnover or invoice history.
+  // Existing settings remain unconfirmed until the user makes a selection.
+  fiscalTaxRegime     String    @default("UNSET") // UNSET, SMALL_BUSINESS, STANDARD
+  fiscalEffectiveFrom String?   // ISO calendar date (YYYY-MM-DD), not a timezone instant
+  fiscalConfirmedAt   DateTime? // Server time of the explicit declaration
   // API CORS-Konfiguration
   allowedOrigins String? // JSON-Array von erlaubten Origins, z.B. ["https://example.com", "https://app.example.com"]
   userId         String  @unique

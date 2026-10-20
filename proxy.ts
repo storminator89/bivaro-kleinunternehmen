@@ -12,7 +12,7 @@ import { pageContentSecurityPolicy } from '@/lib/content-security-policy';
  * per-request inside their handlers via `requireUserId()` / `getServerSession()`.
  * Security headers are applied globally via `next.config.ts`.
  */
-const PUBLIC_PATHS = new Set<string>(["/", "/login", "/register"]);
+const PUBLIC_PATHS = new Set<string>(["/", "/login", "/register", "/help"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

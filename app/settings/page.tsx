@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/alert";
 import Link from "next/link";
 import { SmtpSettings } from "@/components/settings/smtp-settings";
+import { FiscalProfileSettings } from "@/components/onboarding/fiscal-profile-settings";
+import { EMPTY_FISCAL_PROFILE, readFiscalProfile } from "@/lib/fiscal-profile";
+import type { FiscalProfile } from "@/lib/fiscal-profile";
 
 type RestorePreview = {
   kind: 'json' | 'full';
@@ -58,6 +61,10 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [fiscalProfile, setFiscalProfile] = useState<FiscalProfile>(EMPTY_FISCAL_PROFILE);
+  const [companyMessage, setCompanyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [savingAppSettings, setSavingAppSettings] = useState(false);
@@ -82,13 +89,39 @@ export default function SettingsPage() {
     logoUrl: "",
   });
 
+  const [savedCompanyData, setSavedCompanyData] = useState(formData);
+  const companyChanged = JSON.stringify(formData) !== JSON.stringify(savedCompanyData);
+
+  // The loading screen has no section targets. Fulfil an initial deep link only
+  // after the saved settings have rendered, without stealing later navigation.
+  useEffect(() => {
+    if (loading || loadError || !window.location.hash) return;
+    const hash = window.location.hash;
+    let targetId: string;
+    try { targetId = decodeURIComponent(hash.slice(1)); } catch { return; }
+    const frame = window.requestAnimationFrame(() => {
+      if (window.location.hash !== hash) return;
+      document.getElementById(targetId)?.scrollIntoView({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, loadError]);
+
+  useEffect(() => {
+    if (!companyChanged) return;
+    const warnBeforeReload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warnBeforeReload);
+    return () => window.removeEventListener('beforeunload', warnBeforeReload);
+  }, [companyChanged]);
+
   useEffect(() => {
     async function fetchSettings() {
+      setLoading(true);
+      setLoadError(false);
       try {
         const res = await fetch("/api/settings");
         if (res.ok) {
           const data = await res.json();
-          setFormData({
+          const companyData = {
             companyName: data.companyName || "",
             companyAddress: data.companyAddress || "",
             email: data.email || "",
@@ -99,16 +132,22 @@ export default function SettingsPage() {
             bic: data.bic || "",
             footerText: data.footerText || "",
             logoUrl: data.logoUrl || "",
-          });
+          };
+          setFormData(companyData);
+          setSavedCompanyData(companyData);
+          setFiscalProfile(readFiscalProfile(data));
+        } else {
+          setLoadError(true);
         }
       } catch (error) {
+        setLoadError(true);
         console.error("Failed to fetch settings", error);
       } finally {
         setLoading(false);
       }
     }
     fetchSettings();
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     async function fetchAppSettings() {
@@ -129,11 +168,14 @@ export default function SettingsPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setCompanyMessage(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     setSaving(true);
+    setCompanyMessage(null);
     try {
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -141,14 +183,14 @@ export default function SettingsPage() {
         body: JSON.stringify(formData),
       });
       if (res.ok) {
-        // Optional: Show success toast
-        alert("Einstellungen gespeichert!");
+        setSavedCompanyData(formData);
+        setCompanyMessage({ type: 'success', text: 'Firmendaten gespeichert. Ihr separat gespeichertes Steuerprofil bleibt unverändert.' });
       } else {
-        alert("Fehler beim Speichern.");
+        setCompanyMessage({ type: 'error', text: 'Die Firmendaten wurden nicht gespeichert. Bitte erneut versuchen. Ihre Eingaben bleiben erhalten.' });
       }
     } catch (error) {
       console.error("Failed to save settings", error);
-      alert("Fehler beim Speichern.");
+      setCompanyMessage({ type: 'error', text: 'Keine Verbindung zum Server. Ihre Eingaben bleiben erhalten; bitte erneut speichern.' });
     } finally {
       setSaving(false);
     }
@@ -420,10 +462,18 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="flex items-center justify-center h-screen" role="status" aria-label="Einstellungen werden geladen">
+        <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
       </div>
     );
+  }
+
+  if (loadError) {
+    return <div className={`${styles.workspace} space-y-6`}>
+      <PageHeader title="Einstellungen" description="Firmendaten und Steuerprofil verwalten." section="System" />
+      <Alert variant="destructive"><AlertTitle>Einstellungen nicht geladen</AlertTitle><AlertDescription>Ihre gespeicherten Angaben konnten nicht geladen werden. Laden Sie sie erneut, bevor Sie Änderungen vornehmen.</AlertDescription></Alert>
+      <Button type="button" onClick={() => setLoadAttempt(previous => previous + 1)}>Erneut laden</Button>
+    </div>;
   }
 
   return (
@@ -432,6 +482,7 @@ export default function SettingsPage() {
 
       <div className={styles.settingsLayout}><SettingsSectionNavigation isAdmin={isAdmin} /><div className={styles.settingsContent}>
       <form id="company-settings" onSubmit={handleSubmit}>
+        <fieldset disabled={saving} className="min-w-0">
         <Card className={styles.surface}>
           <CardHeader>
             <CardTitle>Rechnungsdaten</CardTitle>
@@ -611,8 +662,11 @@ export default function SettingsPage() {
             </div>
 
             </fieldset>
-            <div className={styles.formActions}>
-              <Button type="submit" disabled={saving}>
+            {companyMessage && <p role={companyMessage.type === 'error' ? 'alert' : 'status'} className={companyMessage.type === 'error' ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>{companyMessage.text}</p>}
+            <div className={`${styles.formActions} flex-wrap gap-3`}>
+              {companyChanged && <p className="mr-auto self-center text-sm text-muted-foreground">Ungespeicherte Firmendaten</p>}
+              <Button type="button" variant="outline" disabled={saving || uploading || !companyChanged} onClick={() => { setFormData(savedCompanyData); setCompanyMessage(null); }}>Verwerfen</Button>
+              <Button type="submit" disabled={saving || uploading}>
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -628,7 +682,10 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        </fieldset>
       </form>
+
+      <FiscalProfileSettings initialProfile={fiscalProfile} />
 
       {isAdmin && <div id="email-settings" className={styles.smtpPanel}><SmtpSettings /></div>}
 

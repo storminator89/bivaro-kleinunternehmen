@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
-export const CURRENT_SCHEMA_VERSION = '20260922100000_add_billing_notes';
+export const CURRENT_SCHEMA_VERSION = '20261020213000_add_fiscal_profile';
+/** Fiscal profiles are additive; existing v3 backups remain importable. */
+export const PRE_FISCAL_PROFILE_SCHEMA_VERSION = '20260922100000_add_billing_notes';
 /** v3 manifests produced before BillingNote was introduced remain importable. */
 export const PRE_BILLING_NOTES_SCHEMA_VERSION = '20260919100000_invoice_issuance_state';
 
@@ -204,7 +206,7 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (value.format !== 'bivaro-backup' || value.version !== CURRENT_BACKUP_VERSION) {
     throw new Error('Nicht unterstützte Backup-Manifest-Version');
   }
-  if ((value.schemaVersion !== CURRENT_SCHEMA_VERSION && value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
+  if ((value.schemaVersion !== CURRENT_SCHEMA_VERSION && value.schemaVersion !== PRE_FISCAL_PROFILE_SCHEMA_VERSION && value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
     throw new Error('Backup-Manifest enthält keine gültige Herkunft');
   }
   if (value.excludesSecrets !== true || !Array.isArray(value.excludedSecretFields) || !value.excludedSecretFields.includes('User.password') || !value.excludedSecretFields.includes('ApiKey.keyHash') || !value.excludedSecretFields.includes('ApiKey.secret') || !Array.isArray(value.rekeyRequired) || !value.rekeyRequired.includes('ApiKey')) {

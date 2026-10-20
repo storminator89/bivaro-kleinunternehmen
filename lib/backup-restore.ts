@@ -1,3 +1,4 @@
+import { EMPTY_FISCAL_PROFILE, validateFiscalProfileInput } from '@/lib/fiscal-profile';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createFinancialAuditLog } from '@/lib/audit-log';
@@ -451,6 +452,31 @@ function validateRestoreInvariants(
   }
 }
 
+/** Keep source declarations, never infer a status or invent confirmation on restore. */
+function fiscalProfileForRestore(settings: JsonRecord) {
+  const validation = validateFiscalProfileInput(settings);
+  if (!validation.ok) {
+    const [field, message] = Object.entries(validation.fieldErrors)[0];
+    throw new BackupValidationError(`settings.${field}: ${message}`);
+  }
+  const selection = validation.selection;
+  if (!selection || selection.fiscalTaxRegime === 'UNSET') {
+    if (settings.fiscalConfirmedAt !== undefined && settings.fiscalConfirmedAt !== null) {
+      throw new BackupValidationError('settings.fiscalConfirmedAt erfordert eine ausdrückliche steuerliche Einordnung');
+    }
+    return { ...EMPTY_FISCAL_PROFILE, fiscalConfirmedAt: null };
+  }
+  const value = settings.fiscalConfirmedAt;
+  if (!(value instanceof Date) && (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value))) {
+    throw new BackupValidationError('settings.fiscalConfirmedAt fehlt oder ist ungültig');
+  }
+  const confirmedAt = new Date(value);
+  if (!Number.isFinite(confirmedAt.getTime()) || (typeof value === 'string' && confirmedAt.toISOString() !== value)) {
+    throw new BackupValidationError('settings.fiscalConfirmedAt ist ungültig');
+  }
+  return { ...selection, fiscalConfirmedAt: confirmedAt };
+}
+
 /** Validate shape, scalar values, IDs and all relations before any mutation. */
 export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   const root = asRecord(backup, 'Backup');
@@ -571,7 +597,7 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
     counterKeys.add(key);
   }
 
-  if (data.settings !== undefined && data.settings !== null) asRecord(data.settings, 'settings');
+  if (data.settings !== undefined && data.settings !== null) fiscalProfileForRestore(asRecord(data.settings, 'settings'));
   validateBackupReferences(data, sets);
   const invariantValidation: RestoreInvariantValidation = { issues: [], truncated: false };
   validateRestoreInvariants(data, invariantValidation);
@@ -1138,6 +1164,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           ? fileMap.get(`logo:${sourceLogo}`)
           : null;
         const settingData = {
+          ...fiscalProfileForRestore(settings),
           companyName: asOptionalString(settings.companyName, 'settings.companyName', 255),
           companyAddress: asOptionalString(settings.companyAddress, 'settings.companyAddress', 2_000),
           email: asOptionalString(settings.email, 'settings.email', 320),

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import styles from "@/components/public-accounting/public-accounting.module.css";
 import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
@@ -14,7 +14,6 @@ import { toast } from "@/components/ui/toaster";
 import { getSafeLoginCallbackUrl } from "@/lib/login-callback";
 
 export default function LoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,7 +48,10 @@ export default function LoginPage() {
         return;
       }
 
-      router.replace(callbackUrl);
+      // A protected page may have been prefetched while anonymous. A fresh
+      // document request uses the new session cookie instead of a cached RSC
+      // login redirect; the destination has already been restricted to origin.
+      window.location.replace(callbackUrl);
     } catch {
       setError("Ein Fehler ist aufgetreten");
       setLoading(false);

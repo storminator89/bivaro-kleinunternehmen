@@ -367,6 +367,7 @@ export async function auditBackup(
 }
 
 export type SecurityEventName =
+  | 'ACCOUNTANT_HANDOFF_EXPORT'
   | 'BACKUP_EXPORT'
   | 'BACKUP_RESTORE_PREVIEW'
   | 'BACKUP_RESTORE'

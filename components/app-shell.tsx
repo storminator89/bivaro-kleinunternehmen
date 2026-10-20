@@ -14,6 +14,7 @@ import { CommandPalette, CommandPaletteTrigger } from "@/components/command-pale
 import { UserMenu } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-switch";
 import { usePageTitle } from "@/hooks/use-page-title";
+import publicStyles from "@/components/public-accounting/pilot-public.module.css";
 
 function PageHeading() {
   const title = usePageTitle();
@@ -26,10 +27,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Öffentliche Seiten ohne Sidebar
-  const publicPaths = ['/', '/login', '/register'];
+  const publicPaths = ['/', '/login', '/register', '/help'];
   const isPublicPage = publicPaths.includes(pathname);
 
-  if (status === "loading") {
+  // Public content must exist during the initial render so native hash links
+  // can resolve before session hydration. Protected workspaces still wait.
+  if (status === "loading" && !isPublicPage) {
     return (
       <div className="flex min-h-screen items-center justify-center" aria-busy="true">
         <div role="status" className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
@@ -49,15 +52,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           Zum Inhalt springen
         </a>
-        <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-xl">
+        <header className={`${publicStyles.publicHeader} sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-xl`}>
           <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
             <div className="flex w-full min-w-0 items-center justify-between gap-3">
-              <Link href="/" className="flex items-center">
+              <Link href="/" aria-label="Bivaro Startseite" className="flex min-h-11 min-w-11 items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring [&_.bivaro-wordmark]:hidden min-[400px]:[&_.bivaro-wordmark]:inline">
                 <BivaroBrand className="brand-full" />
               </Link>
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <ThemeToggle />
-                <nav aria-label="Öffentliche Navigation" className="flex items-center gap-1.5 sm:gap-2">
+                <nav aria-label="Öffentliche Navigation" className="flex items-center gap-1 sm:gap-2">
+                  <Button variant="ghost" asChild><Link href="/help" aria-current={pathname === "/help" ? "page" : undefined}>Hilfe</Link></Button>
                   {session ? (
                     <Button asChild>
                       <Link href="/dashboard">Dashboard</Link>
@@ -66,9 +70,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <>
                       <Button variant="ghost" asChild>
                         <Link href="/login">Anmelden</Link>
-                      </Button>
-                      <Button asChild>
-                        <Link href="/register">Registrieren</Link>
                       </Button>
                     </>
                   )}
@@ -83,11 +84,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
 
         <footer className="border-t border-border/80 bg-background py-5">
-          <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex w-full max-w-[90rem] flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             <p className="text-sm text-muted-foreground">
               &copy; {new Date().getFullYear()} Bivaro |
               Alle Beträge werden in Euro (€) angezeigt
             </p>
+            <nav aria-label="Weitere Informationen" className="flex flex-wrap gap-4 text-sm text-muted-foreground"><Link href="/help#umfang" className="underline underline-offset-4">Umfang und Grenzen</Link><Link href="/help#zugang" className="underline underline-offset-4">Zugang und Unterstützung</Link></nav>
           </div>
         </footer>
       </div>

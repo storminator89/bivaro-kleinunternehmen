@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
 import { ArrowLeft, Copy, Eye, EyeOff, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { DocumentTaxProfileFields } from "@/components/dashboard/document-tax-profile-fields";
+import { type DocumentFiscalSettings, type DocumentTaxMode, type DocumentTaxSelection, type DocumentTaxCase, resolveDocumentTaxState, isSupportedDocumentTaxCase } from "@/lib/document-tax-profile";
 import { cn } from "@/lib/utils";
 import styles from "@/components/dashboard/sales-workspace.module.css";
 
@@ -30,7 +32,7 @@ export interface QuoteItem {
     taxRate: number;
 }
 
-interface Settings {
+interface Settings extends DocumentFiscalSettings {
     companyName?: string;
     companyAddress?: string;
     taxNumber?: string;
@@ -69,12 +71,36 @@ export function QuoteEditor({
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
+    const [taxSelection, setTaxSelection] = useState<DocumentTaxSelection | null>(null);
+    const [taxAcknowledged, setTaxAcknowledged] = useState(false);
+    const [taxCase, setTaxCase] = useState<DocumentTaxCase>('domestic');
+    const taxState = resolveDocumentTaxState(settings, date, taxSelection, taxAcknowledged);
+    const taxMode = taxState.mode;
+    const taxReady = taxState.ready && isSupportedDocumentTaxCase(taxCase, false, false);
+
+    const handleTaxModeChange = (mode: DocumentTaxMode | '') => {
+        setTaxSelection({ mode, source: 'manual' });
+        setTaxAcknowledged(false);
+        if (mode === 'small-business') setItems(current => current.map(item => ({ ...item, taxRate: 0 })));
+        else if (mode === 'standard' && (taxMode === 'small-business' || !taxSelection)) {
+            setItems(current => current.map(item => item.taxRate === 0 ? { ...item, taxRate: 19 } : item));
+        }
+    };
+
+    useEffect(() => {
+        if (taxState.source !== 'profile') return;
+        setItems(current => current.map(item => taxMode === 'small-business'
+            ? { ...item, taxRate: 0 }
+            : item.taxRate === 0 ? { ...item, taxRate: 19 } : item));
+    }, [taxMode, taxState.source]);
+
     // Preview states
     const [showPreview, setShowPreview] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
     const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const previewUrlRef = useRef<string | null>(null);
+    const previewGenerationRef = useRef(0);
 
     useEffect(() => {
         const today = new Date();
@@ -83,9 +109,10 @@ export function QuoteEditor({
         setValidUntil(in30Days.toISOString().split('T')[0]);
         setDate(today.toISOString().split('T')[0]);
 
-        fetch("/api/settings")
-            .then(res => res.json())
-            .then(data => setSettings(data))
+        let active = true;
+        fetch("/api/settings", { cache: "no-store" })
+            .then(res => { if (!res.ok) throw new Error("Firmenprofil konnte nicht geladen werden"); return res.json(); })
+            .then(data => { if (active) setSettings(data); })
             .catch(err => console.error("Failed to load settings", err));
 
         fetch("/api/customers")
@@ -99,6 +126,7 @@ export function QuoteEditor({
                 if (data.nextQuoteNumber) setQuoteNumber(data.nextQuoteNumber);
             })
             .catch(err => console.error("Failed to load next quote number", err));
+        return () => { active = false; };
     }, []);
 
     useEffect(() => {
@@ -106,6 +134,7 @@ export function QuoteEditor({
     }, [onPreviewVisibilityChange, showPreview]);
 
     useEffect(() => () => {
+        previewGenerationRef.current += 1;
         if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current);
         if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     }, []);
@@ -124,7 +153,7 @@ export function QuoteEditor({
         }
     };
 
-    const addItem = () => setItems([...items, { description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
+    const addItem = () => setItems([...items, { description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: taxMode === 'standard' ? 19 : 0 }]);
 
     const updateItem = (index: number, field: keyof QuoteItem, value: string | number) => {
         const newItems = [...items];
@@ -149,6 +178,7 @@ export function QuoteEditor({
         []);
 
     const generatePDFBytes = useCallback(async (): Promise<Uint8Array> => {
+        if (!taxReady) throw new Error("Bitte zuerst Steuerbehandlung und unterstützten Steuerfall bestätigen.");
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage();
         const { width, height } = page.getSize();
@@ -352,7 +382,7 @@ export function QuoteEditor({
         }
 
         // Legal note for Kleinunternehmer
-        if (taxTotal === 0) {
+        if (taxMode === 'small-business') {
             page.drawText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { x: margin, y, size: 10, font });
             y -= 15;
         }
@@ -400,14 +430,16 @@ export function QuoteEditor({
         });
 
         return await pdfDoc.save();
-    }, [customerAddress, quoteNumber, date, validUntil, notes, items, settings, selectedCustomer, formatCurrency]);
+    }, [customerAddress, quoteNumber, date, validUntil, notes, items, settings, selectedCustomer, formatCurrency, taxMode, taxReady]);
 
     // Live preview
     const generatePreview = useCallback(async () => {
-        if (!showPreview) return;
+        if (!showPreview || !taxReady) return;
+        const generationId = ++previewGenerationRef.current;
         setIsGeneratingPreview(true);
         try {
             const pdfBytes = await generatePDFBytes();
+            if (previewGenerationRef.current !== generationId) return;
             const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
             if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
             const nextPreviewUrl = URL.createObjectURL(blob);
@@ -416,9 +448,9 @@ export function QuoteEditor({
         } catch (error) {
             console.error("Error generating preview:", error);
         } finally {
-            setIsGeneratingPreview(false);
+            if (previewGenerationRef.current === generationId) setIsGeneratingPreview(false);
         }
-    }, [showPreview, generatePDFBytes]);
+    }, [showPreview, generatePDFBytes, taxReady]);
 
     useEffect(() => {
         if (!showPreview) return;
@@ -427,7 +459,18 @@ export function QuoteEditor({
         return () => { if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current); };
     }, [showPreview, customerAddress, quoteNumber, date, validUntil, notes, items, settings, selectedCustomer, generatePreview]);
 
+    useEffect(() => {
+        if (showPreview && taxReady) return;
+        previewGenerationRef.current += 1;
+        if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current);
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+        setPreviewUrl(null);
+        setIsGeneratingPreview(false);
+    }, [showPreview, taxReady]);
+
     const handleGenerateAndSave = async () => {
+        if (!taxReady) return;
         setIsGenerating(true);
         try {
             const pdfBytes = await generatePDFBytes();
@@ -453,6 +496,8 @@ export function QuoteEditor({
             const totalAmount = netTotal + taxTotal;
 
             const parsedData = {
+                taxMode,
+                taxCase,
                 quoteNumber,
                 items,
                 notes,
@@ -525,6 +570,7 @@ export function QuoteEditor({
             </header>
             <div className={styles.editorGrid}>
                 <div className={styles.editorMain}>
+                    <DocumentTaxProfileFields id="quote" settings={settings} issueDate={date} selection={taxSelection} acknowledged={taxAcknowledged} onAcknowledged={setTaxAcknowledged} onModeChange={handleTaxModeChange} taxCase={taxCase} onTaxCaseChange={setTaxCase} />
                     <section className={styles.section} aria-labelledby="quote-recipient-title">
                         <div className={styles.sectionHeading}><div><h2 id="quote-recipient-title">Empfänger</h2><p>Vorhandenen Kontakt übernehmen oder Anschrift direkt eingeben.</p></div></div>
                         <div className="space-y-3">
@@ -556,7 +602,7 @@ export function QuoteEditor({
                                     <div className="space-y-2"><Label htmlFor={`quote-item-${index}-quantity`}>Menge</Label><Input id={`quote-item-${index}-quantity`} type="number" min="0" step="0.01" value={item.quantity} onChange={e => updateItem(index, 'quantity', e.target.value)} className="text-right tabular-nums" /></div>
                                     <div className="space-y-2"><Label htmlFor={`quote-item-${index}-unit`}>Einheit</Label><select id={`quote-item-${index}-unit`} className={styles.select} value={item.unit} onChange={e => updateItem(index, 'unit', e.target.value)}><option value="Stück">Stück</option><option value="Stunde">Stunde</option><option value="Tag">Tag</option><option value="Pauschal">Pauschal</option></select></div>
                                     <div className="space-y-2"><Label htmlFor={`quote-item-${index}-unit-price`}>Einzelpreis</Label><Input id={`quote-item-${index}-unit-price`} type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateItem(index, 'unitPrice', e.target.value)} className="text-right tabular-nums" /></div>
-                                    <div className="space-y-2"><Label htmlFor={`quote-item-${index}-tax`}>Steuer (%)</Label><Input id={`quote-item-${index}-tax`} type="number" min="0" step="1" value={item.taxRate} onChange={e => updateItem(index, 'taxRate', e.target.value)} className="text-right tabular-nums" /></div>
+                                    <div className="space-y-2"><Label htmlFor={`quote-item-${index}-tax`}>Steuer (%)</Label><Input id={`quote-item-${index}-tax`} type="number" min="0" step="1" disabled={!taxMode || taxMode === 'small-business'} value={item.taxRate} onChange={e => updateItem(index, 'taxRate', e.target.value)} className="text-right tabular-nums" /></div>
                                 </div>
                                 <div className={styles.lineAmount}><span>Positionsbetrag · Netto</span><strong>{displayAmount(item.quantity * item.unitPrice)}</strong></div>
                             </fieldset>)}
@@ -571,12 +617,13 @@ export function QuoteEditor({
                         <div className={styles.totalBody}>
                             <dl className={styles.totals}><div><dt>Nettobetrag</dt><dd>{displayAmount(netTotal)}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayAmount(taxTotal)}</dd></div></dl>
                             {validUntil && <p className={styles.railNote}>Gültig bis {new Date(`${validUntil}T12:00:00`).toLocaleDateString('de-DE')}</p>}
-                            <Button className="w-full" onClick={handleGenerateAndSave} disabled={isGenerating || !customerAddress || !quoteNumber} aria-busy={isGenerating} aria-label={isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}>{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isGenerating ? "Erstelle Angebot..." : <><span className="sm:hidden">Angebot erstellen</span><span className="hidden sm:inline">Angebot erstellen & speichern</span></>}</Button>
+                            {!taxReady && <p id="quote-tax-blocker" className={styles.railNote}><a href="#quote-tax-heading" className="underline underline-offset-4">Steuerbehandlung und unterstützten Steuerfall oben klären</a>, bevor Sie das Angebot erstellen.</p>}
+                            <Button className="w-full" onClick={handleGenerateAndSave} aria-describedby={!taxReady ? "quote-tax-blocker" : undefined} disabled={!taxReady || isGenerating || !customerAddress || !quoteNumber} aria-busy={isGenerating} aria-label={isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}>{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isGenerating ? "Erstelle Angebot..." : <><span className="sm:hidden">Angebot erstellen</span><span className="hidden sm:inline">Angebot erstellen & speichern</span></>}</Button>
                             <p className={styles.railNote}>Das fertige PDF wird gespeichert und heruntergeladen.</p>
                             <Button variant="ghost" className="w-full" onClick={onCancel}>Abbrechen</Button>
                         </div>
                     </section>
-                    {showPreview && <section className={styles.preview} aria-label="Angebots-Vorschau"><div className={styles.sectionHeading}><h2>PDF-Vorschau</h2><Button variant="ghost" onClick={generatePreview} disabled={isGeneratingPreview} aria-label="Vorschau aktualisieren">{isGeneratingPreview ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}</Button></div><div className={styles.previewFrame}>{previewUrl ? <iframe src={previewUrl} title="Angebotsvorschau" /> : <div role="status">{isGeneratingPreview ? "Vorschau wird generiert..." : "Füllen Sie das Formular aus, um die Vorschau zu sehen."}</div>}</div><p className={styles.railNote}>Aktualisiert sich automatisch bei Änderungen.</p></section>}
+                    {showPreview && <section className={styles.preview} aria-label="Angebots-Vorschau"><div className={styles.sectionHeading}><h2>PDF-Vorschau</h2><Button variant="ghost" onClick={generatePreview} disabled={isGeneratingPreview || !taxReady} aria-label="Vorschau aktualisieren">{isGeneratingPreview ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}</Button></div><div className={styles.previewFrame}>{previewUrl ? <iframe src={previewUrl} title="Angebotsvorschau" /> : <div role="status">{isGeneratingPreview ? "Vorschau wird generiert..." : !taxReady ? "Bitte zuerst Steuerbehandlung und Steuerfall bestätigen." : "Füllen Sie das Formular aus, um die Vorschau zu sehen."}</div>}</div><p className={styles.railNote}>Aktualisiert sich automatisch bei Änderungen.</p></section>}
                 </aside>
             </div>
         </section>

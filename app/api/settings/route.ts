@@ -1,3 +1,4 @@
+import { readFiscalProfile, validateFiscalProfileInput } from '@/lib/fiscal-profile';
 import { createAuditLog } from '@/lib/audit-log';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
@@ -12,7 +13,7 @@ export async function GET() {
     const settings = await prisma.settings.findUnique({
       where: { userId },
     });
-    return NextResponse.json(settings ? { ...settings, logoUrl: privateLogoUrl(settings.logoUrl) } : {});
+    return NextResponse.json({ ...settings, ...readFiscalProfile(settings), ...(settings ? { logoUrl: privateLogoUrl(settings.logoUrl) } : {}) });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
@@ -24,8 +25,30 @@ export async function GET() {
 async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
-    const body = await request.json();
-    const { companyName, companyAddress, email, telephone, taxNumber, bankName, iban, bic, footerText, logoUrl } = body;
+    let body: Record<string, unknown>;
+    try {
+      const parsed: unknown = await request.json();
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return NextResponse.json({ error: 'Ein JSON-Objekt mit Einstellungen ist erforderlich.' }, { status: 400 });
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'Ungültiges JSON.' }, { status: 400 });
+    }
+    const fiscalInput = validateFiscalProfileInput(body);
+    if (!fiscalInput.ok) {
+      return NextResponse.json({ error: 'Bitte das Steuerprofil prüfen.', fieldErrors: fiscalInput.fieldErrors }, { status: 400 });
+    }
+    const { logoUrl } = body;
+    const companyFields = ['companyName', 'companyAddress', 'email', 'telephone', 'taxNumber', 'bankName', 'iban', 'bic', 'footerText'] as const;
+    const companyData: Partial<Record<typeof companyFields[number], string | null>> = {};
+    for (const field of companyFields) {
+      const value = body[field];
+      if (value !== undefined && value !== null && typeof value !== 'string') {
+        return NextResponse.json({ error: `Ungültiger Wert für ${field}.`, fieldErrors: { [field]: 'Text oder null erforderlich.' } }, { status: 400 });
+      }
+      if (value !== undefined) companyData[field] = value;
+    }
 
     let ownedLogoUrl: string | null = null;
     if (logoUrl !== undefined && logoUrl !== null && logoUrl !== '') {
@@ -51,40 +74,35 @@ async function postHandler(request: Request) {
     }
 
     const previousSettings = await prisma.settings.findUnique({ where: { userId } });
+    const selection = fiscalInput.selection;
+    const previousFiscal = readFiscalProfile(previousSettings);
+    const fiscalData = selection ? {
+      ...selection,
+      fiscalConfirmedAt: selection.fiscalTaxRegime === 'UNSET' ? null :
+        previousFiscal.fiscalTaxRegime === selection.fiscalTaxRegime &&
+        previousFiscal.fiscalEffectiveFrom === selection.fiscalEffectiveFrom && previousFiscal.fiscalConfirmedAt
+          ? new Date(previousFiscal.fiscalConfirmedAt) : new Date(),
+    } : {};
     const settings = await prisma.settings.upsert({
       where: { userId },
       update: {
-        companyName,
-        companyAddress,
-        email,
-        telephone,
-        taxNumber,
-        bankName,
-        iban,
-        bic,
-        footerText,
-        logoUrl: ownedLogoUrl,
+        ...companyData,
+        ...fiscalData,
+        ...(logoUrl !== undefined ? { logoUrl: ownedLogoUrl } : {}),
       },
       create: {
         userId,
-        companyName,
-        companyAddress,
-        email,
-        telephone,
-        taxNumber,
-        bankName,
-        iban,
-        bic,
-        footerText,
-        logoUrl: ownedLogoUrl,
+        ...companyData,
+        ...fiscalData,
+        ...(logoUrl !== undefined ? { logoUrl: ownedLogoUrl } : {}),
       },
     });
 
     // Record field names only: even masked profile values would unnecessarily
     // retain addresses, contact details, bank data and free-form footer content.
-    const profileFields = ['companyName', 'companyAddress', 'email', 'telephone', 'taxNumber', 'bankName', 'iban', 'bic', 'footerText', 'logoUrl'] as const;
+    const profileFields = ['companyName', 'companyAddress', 'email', 'telephone', 'taxNumber', 'bankName', 'iban', 'bic', 'footerText', 'logoUrl', 'fiscalTaxRegime', 'fiscalEffectiveFrom', 'fiscalConfirmedAt'] as const;
     const changedFields = profileFields.filter(field =>
-      (previousSettings?.[field] ?? null) !== (settings[field] ?? null));
+      String(previousSettings?.[field] ?? null) !== String(settings[field] ?? null));
     if (changedFields.length > 0) {
       await createAuditLog({
         userId,
@@ -100,7 +118,7 @@ async function postHandler(request: Request) {
       });
     }
 
-    return NextResponse.json(settings);
+    return NextResponse.json({ ...settings, ...readFiscalProfile(settings), logoUrl: privateLogoUrl(settings.logoUrl) });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
