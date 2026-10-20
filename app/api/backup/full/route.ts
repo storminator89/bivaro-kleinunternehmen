@@ -121,6 +121,7 @@ export async function GET() {
       stats: {
         expenses: count('expenses'),
         incomes: count('incomes'),
+        paymentJournalEvents: count('paymentJournalEvents'),
         invoices: count('invoices'),
         customers: count('customers'),
         billingNotes: count('billingNotes'),
@@ -159,6 +160,7 @@ export async function GET() {
         backupType: 'full',
         expensesCount: count('expenses'),
         incomesCount: count('incomes'),
+        paymentJournalEventsCount: count('paymentJournalEvents'),
         invoicesCount: count('invoices'),
         customersCount: count('customers'),
         billingNotesCount: count('billingNotes'),

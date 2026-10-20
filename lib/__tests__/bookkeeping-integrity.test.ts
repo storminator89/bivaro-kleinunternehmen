@@ -170,7 +170,8 @@ describe('invoice numbers and payment lifecycle', () => {
       },
     });
 
-    await expect(updateInvoiceStatus('alice', invoice.id, 'PAID')).rejects.toThrow('währung');
+    // The compatibility payment path now requires an explicit actual date.
+    await expect(updateInvoiceStatus('alice', invoice.id, 'PAID', '2026-09-19')).rejects.toThrow('währung');
     expect(await database.client.income.findUnique({ where: { invoiceId: invoice.id } })).toBeNull();
   });
 });

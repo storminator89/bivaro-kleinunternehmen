@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
+import { FullPaymentDialog } from "@/components/dashboard/full-payment-dialog";
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from "@/components/dashboard/sales-workspace.module.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -232,6 +233,7 @@ export default function RemindersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [invoiceToPay, setInvoiceToPay] = useState<Invoice | null>(null);
   const [showCreateReminder, setShowCreateReminder] = useState(false);
   const [reminderFee, setReminderFee] = useState('0');
   const [reminderNotes, setReminderNotes] = useState('');
@@ -309,20 +311,17 @@ export default function RemindersPage() {
     }
   };
 
-  const handleMarkAsPaid = async (invoiceId: number) => {
-    try {
-      const res = await fetch('/api/invoices', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: invoiceId, status: 'PAID' })
-      });
+  const handleMarkAsPaid = (invoiceId: number) => {
+    const invoice = invoices.find(item => item.id === invoiceId);
+    if (invoice && invoice.status !== 'PAID') setInvoiceToPay(invoice);
+  };
 
-      if (res.ok) {
-        await loadData();
-      }
-    } catch (error) {
-      console.error('Error marking invoice as paid:', error);
-    }
+  const handlePaymentSuccess = async () => {
+    const response = await fetch('/api/reminders?includeAll=true', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Mahnwesen konnte nicht aktualisiert werden.');
+    const data = await response.json();
+    setInvoices(data.invoices);
+    setStats(data.stats);
   };
 
   const handleDeleteReminder = async (reminderId: number) => {
@@ -360,7 +359,7 @@ export default function RemindersPage() {
           <div className={styles.reminderRecordHeader}><h3>{invoice.invoiceNumber || invoice.fileName}</h3><strong>{invoice.totalAmount != null ? formatCurrency(invoice.totalAmount) : '–'}</strong></div>
           <p>{invoice.customer?.name || 'Unbekannter Kunde'}</p>
           <div className={styles.recordMeta}><Badge variant={REMINDER_LEVEL_VARIANTS[invoice.currentReminderLevel]}>{REMINDER_LEVEL_LABELS[invoice.currentReminderLevel]}</Badge><span>{showOverdue ? `${invoice.daysOverdue} Tage überfällig` : `Fällig am ${formatDate(invoice.dueDate)}`}</span>{invoice.totalFees > 0 && <span>Gebühren: {formatCurrency(invoice.totalFees)}</span>}</div>
-          <div className={styles.reminderActions}>{invoice.currentReminderLevel < 4 && <Button variant="outline" size="sm" onClick={() => { setSelectedInvoice(invoice); setShowCreateReminder(true); }}><Mail className="mr-1 h-4 w-4" aria-hidden="true" />{invoice.nextReminderLevelLabel}</Button>}<Button variant="ghost" size="sm" onClick={() => handleMarkAsPaid(invoice.id)}><Check className="mr-1 h-4 w-4" aria-hidden="true" />Als bezahlt markieren</Button></div>
+          <div className={styles.reminderActions}>{invoice.currentReminderLevel < 4 && <Button variant="outline" size="sm" onClick={() => { setSelectedInvoice(invoice); setShowCreateReminder(true); }}><Mail className="mr-1 h-4 w-4" aria-hidden="true" />{invoice.nextReminderLevelLabel}</Button>}<Button variant="ghost" size="sm" onClick={() => handleMarkAsPaid(invoice.id)}><Check className="mr-1 h-4 w-4" aria-hidden="true" />Zahlung erfassen</Button></div>
           {invoice.reminders.length > 0 && <details className={styles.reminderHistory}><summary>Mahnungshistorie ({invoice.reminders.length})</summary>{invoice.reminders.map(reminder => <article key={reminder.id}><strong className="text-sm">{REMINDER_LEVEL_LABELS[reminder.reminderLevel]}</strong><p>Erfasst: {formatDate(reminder.createdAt)} · Fällig: {formatDate(reminder.dueDate)}</p>{reminder.notes && <p>{reminder.notes}</p>}<div className="flex items-center justify-between gap-2"><span className="text-sm tabular-nums">{formatCurrency(reminder.fee)}</span><Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteReminder(reminder.id)} aria-label="Mahnung löschen"><Trash2 className="h-4 w-4" aria-hidden="true" /></Button></div></article>)}</details>}
         </article>)}
       </div>
@@ -458,8 +457,8 @@ export default function RemindersPage() {
                         e.stopPropagation();
                         handleMarkAsPaid(invoice.id);
                       }}
-                      title="Als bezahlt markieren"
-                      aria-label="Als bezahlt markieren"
+                      title="Vollständige Zahlung erfassen"
+                      aria-label={`Vollständige Zahlung für Rechnung ${invoice.invoiceNumber || invoice.fileName} erfassen`}
                     >
                       <Check className="h-4 w-4" />
                     </Button>
@@ -771,6 +770,7 @@ export default function RemindersPage() {
 
 
         {/* Mahnung erstellen Dialog */}
+        {invoiceToPay && <FullPaymentDialog key={invoiceToPay.id} invoice={invoiceToPay} onClose={() => setInvoiceToPay(null)} onSuccess={handlePaymentSuccess} />}
         <Dialog open={showCreateReminder && !!selectedInvoice} onOpenChange={(open) => {
           if (!open) {
             setShowCreateReminder(false);

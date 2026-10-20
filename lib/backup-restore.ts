@@ -1,3 +1,4 @@
+import { formatMoneyEUR, parseMoneyEUR } from '@/lib/money';
 import { EMPTY_FISCAL_PROFILE, validateFiscalProfileInput } from '@/lib/fiscal-profile';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -67,6 +68,7 @@ type RestoreResult = {
   billingNotes: { imported: number; skipped: number };
   expenses: { imported: number; skipped: number };
   incomes: { imported: number; skipped: number };
+  paymentJournalEvents: { imported: number; skipped: number };
   invoices: { imported: number; skipped: number };
   templates: { imported: number; skipped: number };
   files: { imported: number; skipped: number };
@@ -89,7 +91,7 @@ type ValidatedBackup = {
 };
 
 const ARRAY_KEYS = [
-  'customers', 'expenses', 'incomes', 'invoices', 'templates',
+  'customers', 'expenses', 'incomes', 'paymentJournalEvents', 'invoices', 'templates',
   'billingNotes', 'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
   'documentations', 'apiKeys', 'auditLogs',
 ] as const;
@@ -452,6 +454,104 @@ function validateRestoreInvariants(
   }
 }
 
+/** No payment date/Income is inferred while restoring immutable evidence. */
+function paymentEventValues(event: JsonRecord, label: string) {
+  const amountCents = asRequiredString(event.amountCents, `${label}.amountCents`, 16);
+  if (!/^[1-9][0-9]*$/u.test(amountCents) || BigInt(amountCents) > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new BackupValidationError(`${label}.amountCents muss ein positiver exakter Centbetrag sein`);
+  }
+  if (parseMoneyEUR(Number(formatMoneyEUR(BigInt(amountCents)))).toString() !== amountCents) {
+    throw new BackupValidationError(`${label}.amountCents kann nicht verlustfrei mit der bestehenden Einnahme verknüpft werden`);
+  }
+  if (event.currency !== 'EUR') throw new BackupValidationError(`${label}.currency muss EUR sein`);
+  const source = asRequiredString(event.source, `${label}.source`, 32);
+  const dateCertainty = asRequiredString(event.dateCertainty, `${label}.dateCertainty`, 32);
+  if (!['MANUAL', 'LEGACY_STATUS', 'LEGACY_IMPORT'].includes(source)
+    || !['ACTUAL', 'LEGACY_INCOME', 'LEGACY_INVOICE', 'UNKNOWN'].includes(dateCertainty)) {
+    throw new BackupValidationError(`${label}: Zahlungsquelle oder Datumsnachweis ist ungültig`);
+  }
+  const strictDate = (value: unknown, name: string, required: boolean) => {
+    if (value === null || value === undefined) {
+      if (required) throw new BackupValidationError(`${name} fehlt`);
+      return null;
+    }
+    if (!(value instanceof Date) && typeof value !== 'string') throw new BackupValidationError(`${name} ist ungültig`);
+    const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+    if (!Number.isFinite(date.getTime()) || (typeof value === 'string' && date.toISOString() !== value)) {
+      throw new BackupValidationError(`${name} muss ein vollständiges UTC-ISO-Datum sein`);
+    }
+    return date;
+  };
+  const paidAt = strictDate(event.paidAt, `${label}.paidAt`, dateCertainty !== 'UNKNOWN');
+  const createdAt = strictDate(event.createdAt, `${label}.createdAt`, true)!;
+  if ((dateCertainty === 'UNKNOWN' && paidAt !== null)
+    || (source !== 'LEGACY_IMPORT' && dateCertainty !== 'ACTUAL')
+    || (source === 'LEGACY_IMPORT' && dateCertainty === 'ACTUAL')) {
+    throw new BackupValidationError(`${label}: Zahlungsdatum und Herkunft widersprechen sich`);
+  }
+  return {
+    amountCents, currency: 'EUR', source, dateCertainty, paidAt, createdAt,
+    reference: asRequiredString(event.reference, `${label}.reference`, 255),
+    idempotencyKey: asRequiredString(event.idempotencyKey, `${label}.idempotencyKey`, 128),
+  };
+}
+
+function validatePaymentJournalBackup(data: JsonRecord, version: string): void {
+  const events = asArray(data, 'paymentJournalEvents');
+  if (version === LEGACY_BACKUP_VERSION && events.length) {
+    throw new BackupValidationError('Legacy-Backups ohne Manifest dürfen keine Zahlungsereignisse enthalten');
+  }
+  const invoices = new Map(asArray(data, 'invoices').map((row) => [asOptionalInt(row.id, 'invoice.id'), row]));
+  const incomes = new Map(asArray(data, 'incomes').map((row) => [asOptionalInt(row.id, 'income.id'), row]));
+  const invoiceIds = new Set<number>();
+  const incomeIds = new Set<number>();
+  const keys = new Set<string>();
+  for (const [index, event] of events.entries()) {
+    const label = `paymentJournalEvents[${index}]`;
+    const values = paymentEventValues(event, label);
+    const invoiceId = asOptionalInt(event.invoiceId, `${label}.invoiceId`);
+    const incomeId = asOptionalInt(event.incomeId, `${label}.incomeId`);
+    const invoice = invoiceId === null ? undefined : invoices.get(invoiceId);
+    const income = incomeId === null ? undefined : incomes.get(incomeId);
+    const invoiceIncome = [...incomes.values()].find((row) => asOptionalInt(row.invoiceId, 'income.invoiceId') === invoiceId);
+    if (invoiceIncome && asOptionalInt(invoiceIncome.id, 'income.id') !== incomeId) {
+      throw new BackupValidationError(`${label}: vorhandene Rechnungseinnahme muss mit dem Zahlungsereignis verknüpft sein`);
+    }
+    if (!invoice || invoiceId === null || invoiceIds.has(invoiceId) || keys.has(values.idempotencyKey)) {
+      throw new BackupValidationError(`${label}: Rechnungsbezug oder Idempotenzschlüssel fehlt oder ist doppelt`);
+    }
+    invoiceIds.add(invoiceId);
+    keys.add(values.idempotencyKey);
+    if (invoice.type !== 'INVOICE' || !['PAID', 'CANCELLED'].includes(String(invoice.status))) {
+      throw new BackupValidationError(`${label}: Zahlungsereignis erfordert eine bezahlte oder stornierte Rechnung`);
+    }
+    try {
+      if (parseMoneyEUR(asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount') ?? NaN).toString() !== values.amountCents) throw new Error('amount');
+      if (income && parseMoneyEUR(asOptionalFinite(income.amount, 'income.amount') ?? NaN).toString() !== values.amountCents) throw new Error('amount');
+    } catch { throw new BackupValidationError(`${label}: Zahlungsbetrag stimmt nicht mit Rechnung/Einnahme überein`); }
+    const parsed = isRecord(invoice.parsedData) ? invoice.parsedData : {};
+    if (parsed.currency !== undefined && parsed.currency !== null && parsed.currency !== 'EUR') {
+      throw new BackupValidationError(`${label}: Fremdwährungszahlungen werden nicht unterstützt`);
+    }
+    if (incomeId !== null && (!income || incomeIds.has(incomeId) || asOptionalInt(income.invoiceId, 'income.invoiceId') !== invoiceId)) {
+      throw new BackupValidationError(`${label}: Einnahmebezug fehlt, ist doppelt oder gehört zu einer anderen Rechnung`);
+    }
+    if (incomeId !== null) incomeIds.add(incomeId);
+    if ((values.source !== 'LEGACY_IMPORT' && !income)
+      || (values.dateCertainty === 'UNKNOWN' && income)
+      || (values.dateCertainty === 'LEGACY_INCOME' && !income)) {
+      throw new BackupValidationError(`${label}: Einnahme und historischer Datumsnachweis widersprechen sich`);
+    }
+    if (income && asDate(income.date, 'income.date')?.getTime() !== values.paidAt?.getTime()) {
+      throw new BackupValidationError(`${label}: Zahlungsdatum stimmt nicht mit der verknüpften Einnahme überein`);
+    }
+    if ((values.dateCertainty === 'ACTUAL' || values.dateCertainty === 'LEGACY_INVOICE')
+      && asDate(invoice.paidAt, 'invoice.paidAt')?.getTime() !== values.paidAt?.getTime()) {
+      throw new BackupValidationError(`${label}: Zahlungsdatum stimmt nicht mit dem Rechnungsnachweis überein`);
+    }
+  }
+}
+
 /** Keep source declarations, never infer a status or invent confirmation on restore. */
 function fiscalProfileForRestore(settings: JsonRecord) {
   const validation = validateFiscalProfileInput(settings);
@@ -599,6 +699,7 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
 
   if (data.settings !== undefined && data.settings !== null) fiscalProfileForRestore(asRecord(data.settings, 'settings'));
   validateBackupReferences(data, sets);
+  validatePaymentJournalBackup(data, version);
   const invariantValidation: RestoreInvariantValidation = { issues: [], truncated: false };
   validateRestoreInvariants(data, invariantValidation);
   if (invariantValidation.issues.length > 0) {
@@ -619,6 +720,7 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     billingNotes: { imported: 0, skipped: 0 },
     expenses: { imported: 0, skipped: 0 },
     incomes: { imported: 0, skipped: 0 },
+    paymentJournalEvents: { imported: 0, skipped: 0 },
     invoices: { imported: 0, skipped: 0 },
     templates: { imported: 0, skipped: 0 },
     files: { imported: 0, skipped: 0 },
@@ -685,6 +787,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   billingNotes: Map<number, number>;
   expenses: Map<number, number>;
   incomes: Map<number, number>;
+  paymentJournalEvents: Map<number, number>;
   invoices: Map<number, number>;
   recurringExpenses: Map<number, number>;
   reminders: Map<number, number>;
@@ -703,6 +806,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
     BillingNote: maps.billingNotes,
     Expense: maps.expenses,
     Income: maps.incomes,
+    PaymentJournalEvent: maps.paymentJournalEvents,
     Invoice: maps.invoices,
     Quote: maps.invoices,
     CreditNote: maps.invoices,
@@ -822,6 +926,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const customers = asArray(data, 'customers');
     const expenses = asArray(data, 'expenses');
     const incomes = asArray(data, 'incomes');
+    const paymentJournalEvents = asArray(data, 'paymentJournalEvents');
     const invoices = asArray(data, 'invoices');
     const templates = asArray(data, 'templates');
     const recurringExpenses = asArray(data, 'recurringExpenses');
@@ -878,7 +983,14 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         addCounterValue(preservedCounterValues, key.slice(0, separator), Number(key.slice(separator + 1)), value);
       }
 
+      if (overwrite && await tx.paymentJournalEvent.count({ where: { userId } }) > 0) {
+        throw new BackupValidationError('Überschreiben würde unveränderliche Zahlungsereignisse löschen. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
+      }
       if (overwrite) await deleteUserData(tx, userId);
+      const existingPaymentEvents = await tx.paymentJournalEvent.findMany({ where: { userId } });
+      const existingPaymentByKey = new Map(existingPaymentEvents.map((event) => [event.idempotencyKey, event]));
+      const existingPaymentByInvoice = new Map(existingPaymentEvents.map((event) => [event.invoiceId, event]));
+      const sourcePaymentByInvoice = new Map(paymentJournalEvents.map((event) => [asOptionalInt(event.invoiceId, 'payment.invoiceId'), event]));
 
       const customerMap = new Map<number, number>();
       const invoiceMap = new Map<number, number>();
@@ -886,6 +998,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const recurringMap = new Map<number, number>();
       const expenseMap = new Map<number, number>();
       const incomeMap = new Map<number, number>();
+      const paymentJournalMap = new Map<number, number>();
       const templateMap = new Map<number, number>();
       const reminderMap = new Map<number, number>();
       const billingNoteMap = new Map<number, number>();
@@ -982,9 +1095,19 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       for (const invoice of invoices) {
         const sourceId = asOptionalInt(invoice.id, 'invoice.id')!;
         const invoiceNumber = asOptionalString(invoice.invoiceNumber, 'invoice.invoiceNumber', 255);
-        const existing = invoiceNumber
-          ? await tx.invoice.findFirst({ where: { userId, invoiceNumber } })
-          : null;
+        const sourcePayment = sourcePaymentByInvoice.get(sourceId);
+        const existingPayment = sourcePayment && existingPaymentByKey.get(String(sourcePayment.idempotencyKey));
+        const existing = existingPayment
+          ? await tx.invoice.findFirst({ where: { id: existingPayment.invoiceId, userId } })
+          : invoiceNumber ? await tx.invoice.findFirst({ where: { userId, invoiceNumber } }) : null;
+        if (existing && sourcePayment && (existing.type !== invoice.type || existing.invoiceNumber !== invoiceNumber
+          || existing.totalAmount !== asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount')
+          || existing.status !== invoice.status
+          || existing.customerId !== relationMapValue(customerMap, invoice.customerId, 'invoice.customerId')
+          || (isRecord(existing.parsedData) && existing.parsedData.currency != null && existing.parsedData.currency !== 'EUR')
+          || existing.paidAt?.getTime() !== asDate(invoice.paidAt, 'invoice.paidAt')?.getTime())) {
+          throw new BackupValidationError('Die Zielrechnung weicht vom unveränderlichen Zahlungsnachweis ab.');
+        }
         if (existing) {
           const importedIssuanceState = restoredIssuanceState(invoice, manifest?.version ?? LEGACY_BACKUP_VERSION, paidInvoiceIds);
           if (issuanceStateRank(importedIssuanceState) > issuanceStateRank(existing.issuanceState)) {
@@ -1133,6 +1256,13 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const invoiceId = relationMapValue(invoiceMap, income.invoiceId, 'income.invoiceId');
         const taxRelevant = asOptionalBoolean(income.taxRelevant, 'income.taxRelevant') ?? true;
         const existing = invoiceId === null ? null : await tx.income.findUnique({ where: { invoiceId } });
+        const targetPayment = invoiceId === null ? undefined : existingPaymentByInvoice.get(invoiceId);
+        // An older backup may have Income but no source journal. The immutable
+        // target event still owns its projection contract: never manufacture a
+        // new orphan Income or silently attach one to historical null evidence.
+        if (targetPayment && (!existing || targetPayment.incomeId !== existing.id)) {
+          throw new BackupValidationError(`income.invoiceId ${invoiceId}: Die Zieleinnahme widerspricht dem unveränderlichen Zahlungsereignis. Bitte die historischen Zahlungsnachweise getrennt prüfen.`);
+        }
         if (existing) {
           const sameIncome = existing.description === description
             && existing.amount === amount
@@ -1157,6 +1287,43 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         } });
         incomeMap.set(sourceId, created.id);
         result.incomes.imported += 1;
+      }
+
+      for (const [index, event] of paymentJournalEvents.entries()) {
+        const label = `paymentJournalEvents[${index}]`;
+        const values = paymentEventValues(event, label);
+        const invoiceId = relationMapValue(invoiceMap, event.invoiceId, `${label}.invoiceId`)!;
+        const incomeId = relationMapValue(incomeMap, event.incomeId, `${label}.incomeId`);
+        const targetIncome = await tx.income.findUnique({ where: { invoiceId } });
+        if ((targetIncome?.id ?? null) !== incomeId) {
+          throw new BackupValidationError(`${label}: vorhandene Zieleinnahme stimmt nicht mit dem Zahlungsbezug überein`);
+        }
+        const existing = existingPaymentByKey.get(values.idempotencyKey)
+          ?? await tx.paymentJournalEvent.findFirst({ where: { userId, invoiceId } });
+        if (existing) {
+          if (existing.invoiceId !== invoiceId || existing.incomeId !== incomeId
+            || existing.idempotencyKey !== values.idempotencyKey || existing.amountCents !== values.amountCents
+            || existing.currency !== values.currency || existing.source !== values.source
+            || existing.dateCertainty !== values.dateCertainty || existing.reference !== values.reference
+            || existing.paidAt?.getTime() !== values.paidAt?.getTime()
+            || existing.createdAt.getTime() !== values.createdAt.getTime()) {
+            throw new BackupValidationError(`${label}: Kollision mit abweichendem unveränderlichem Zahlungsereignis`);
+          }
+          paymentJournalMap.set(asOptionalInt(event.id, `${label}.id`)!, existing.id);
+          result.paymentJournalEvents.skipped += 1;
+          continue;
+        }
+        const created = await tx.paymentJournalEvent.create({ data: { ...values, userId, invoiceId, incomeId } });
+        paymentJournalMap.set(asOptionalInt(event.id, `${label}.id`)!, created.id);
+        result.paymentJournalEvents.imported += 1;
+        await createFinancialAuditLog({
+          userId, action: 'RESTORE', entityType: 'Invoice', entityId: invoiceId,
+          newValues: { paymentJournalEventId: created.id, amountCents: created.amountCents, paidAt: created.paidAt,
+            dateCertainty: created.dateCertainty, incomeId: created.incomeId, sourceEventId: event.id },
+          metadata: { actorId: userId, tenantId: userId, operation: 'payment-journal.restore',
+            originalReference: `backup:${backupId}:payment:${String(event.id)}`,
+            reason: 'Unveränderliches Zahlungsereignis mit ursprünglichem Datumsnachweis wiederhergestellt.' },
+        }, tx);
       }
 
       if (settings) {
@@ -1334,6 +1501,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         billingNotes: billingNoteMap,
         expenses: expenseMap,
         incomes: incomeMap,
+        paymentJournalEvents: paymentJournalMap,
         invoices: invoiceMap,
         recurringExpenses: recurringMap,
         reminders: reminderMap,

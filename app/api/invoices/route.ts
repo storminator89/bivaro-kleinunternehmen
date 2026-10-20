@@ -14,6 +14,7 @@ import {
   MAX_INVOICE_UPLOAD_BYTES,
   MAX_JSON_REQUEST_BYTES,
 } from '@/lib/resource-limits';
+import { PaymentJournalError } from '@/lib/payment-journal/contract';
 import { deleteInvoice, InvoicePaymentError, updateInvoiceStatus } from '@/lib/invoice-payments';
 
 function isPdfFile(fileName: string): boolean {
@@ -319,8 +320,8 @@ async function putHandler(request: Request) {
     if (error instanceof RequestBodyLimitError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    if (error instanceof InvoicePaymentError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof InvoicePaymentError || error instanceof PaymentJournalError) {
+      return NextResponse.json({ error: error.message, ...(error instanceof PaymentJournalError ? { code: error.code } : {}) }, { status: error.status });
     }
     return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
   }

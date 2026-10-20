@@ -549,6 +549,192 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect((await readFile(path)).subarray(0, 5).toString()).toBe('%PDF-');
   });
 
+  for (const workspace of ['dashboard', 'reminders'] as const) {
+    test(`records one explicit backdated full payment from ${workspace}, retaining failures and retrying only reads after save`, async ({ page }, testInfo) => {
+      test.setTimeout(90_000);
+      await signIn(page);
+      const mobile = workspace === 'reminders';
+      await page.setViewportSize({ width: mobile ? 390 : 1440, height: mobile ? 844 : 1000 });
+      const invoiceNumber = `E2E-BPR010-${workspace.toUpperCase()}`;
+      const pdf = await PDFDocument.create();
+      pdf.addPage();
+      const created = await page.request.post('/api/invoices', { data: {
+        fileName: `${invoiceNumber}.pdf`, invoiceNumber, totalAmount: 123.45,
+        invoiceDate: '2024-12-01', dueDate: '2024-12-15', parsedData: { currency: 'EUR' },
+        pdfBytes: await pdf.saveAsBase64(),
+      } });
+      expect(created.ok()).toBe(true);
+      const invoice = await created.json();
+      const paymentPath = `/api/invoices/${invoice.id}/payments`;
+      const readInvoice = async () => {
+        const list = await (await page.request.get(`/api/invoices?search=${invoiceNumber}`)).json();
+        expect(list.items).toHaveLength(1);
+        return list.items[0];
+      };
+      const readPayment = async () => {
+        const response = await page.request.get(paymentPath);
+        expect(response.ok()).toBe(true);
+        return response.json();
+      };
+      const before = await readInvoice();
+      const preflight = await readPayment();
+      expect(preflight).toMatchObject({ currency: 'EUR', event: null, canRecordPayment: true,
+        summary: { totalCents: '12345', paidCents: '0', openCents: '12345', paid: false, paidAt: null } });
+      // The compatibility API must not silently guess today when an actual date is missing.
+      const undated = await page.request.put('/api/invoices', { data: { id: invoice.id, status: 'PAID' } });
+      expect(undated.status()).toBe(400);
+      expect((await undated.json()).code).toBe('PAYMENT_DETAILS_REQUIRED');
+      expect(await readInvoice()).toEqual(before);
+      await page.goto(workspace === 'dashboard' ? '/dashboard?tab=invoices' : '/dashboard/reminders');
+      const openPayment = async () => {
+        if (workspace === 'dashboard') {
+          const row = page.getByRole('row').filter({ hasText: invoiceNumber });
+          await row.getByRole('button', { name: 'Zahlungsstatus: Entwurf', exact: true }).click();
+          await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).click();
+        } else {
+          const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: invoiceNumber, exact: true }) });
+          await card.getByRole('button', { name: 'Zahlung erfassen', exact: true }).focus();
+          await page.keyboard.press('Enter');
+        }
+        const dialog = page.getByRole('dialog', { name: 'Vollständige Zahlung erfassen', exact: true });
+        await expect(dialog).toBeVisible();
+        await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toBeEnabled();
+        await expect(dialog).toContainText('123,45');
+        await expect(dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true })).toHaveValue('');
+        await expect(dialog.getByLabel('Zahlungsreferenz', { exact: true })).toHaveValue('');
+        return dialog;
+      };
+      let postCount = 0;
+      let failedOnce = false;
+      let blockRefresh = false;
+      let blockedReads = 0;
+      let refreshReads = 0;
+      let firstAttemptPayload: Record<string, unknown> | undefined;
+      let savedPayload: Record<string, unknown> | undefined;
+      let savedEvent: { id: number; incomeId: number } | undefined;
+      await page.route(`**${paymentPath}`, async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        postCount += 1;
+        const payload = route.request().postDataJSON();
+        // Exercise a real API rejection, not an invented success/error response.
+        const response = await route.fetch({ postData: JSON.stringify(!failedOnce ? { ...payload, paidAt: '2026-02-30' } : payload) });
+        const body = await response.body();
+        if (!failedOnce) {
+          expect(response.status()).toBe(400);
+          firstAttemptPayload = payload;
+          failedOnce = true;
+        } else if (response.ok()) {
+          savedPayload = payload;
+          savedEvent = JSON.parse(body.toString()).event;
+          blockRefresh = true;
+        }
+        await route.fulfill({ response, body });
+      });
+      await page.route(workspace === 'dashboard' ? '**/api/invoices?*' : '**/api/reminders?*', async route => {
+        if (route.request().method() !== 'GET') return route.continue();
+        refreshReads += 1;
+        if (blockRefresh) {
+          blockedReads += 1;
+          await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Isolated E2E list refresh failure' }) });
+        } else await route.continue();
+      });
+      const assertDialogFitsViewport = async () => {
+        const bounds = await page.getByRole('dialog').evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: innerWidth, height: innerHeight };
+        });
+        expect(bounds.left).toBeGreaterThanOrEqual(0);
+        expect(bounds.top).toBeGreaterThanOrEqual(0);
+        expect(bounds.right).toBeLessThanOrEqual(bounds.width);
+        expect(bounds.bottom).toBeLessThanOrEqual(bounds.height);
+      };
+      let dialog = await openPayment();
+      await assertDialogFitsViewport();
+      await page.screenshot({ path: testInfo.outputPath(`${workspace}-payment-open-blank.png`), fullPage: false, animations: 'disabled' });
+      await dialog.getByRole('button', { name: 'Abbrechen', exact: true }).click();
+      await expect(dialog).not.toBeVisible();
+      expect(postCount).toBe(0);
+      expect(await readInvoice()).toEqual(before);
+      expect(await readPayment()).toEqual(preflight);
+      dialog = await openPayment();
+      const date = dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true });
+      const reference = dialog.getByLabel('Zahlungsreferenz', { exact: true });
+      const submit = dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true });
+      await expect(date).toHaveAttribute('required', '');
+      await expect(reference).toHaveAttribute('required', '');
+      await submit.click();
+      expect(await date.evaluate(input => (input as HTMLInputElement).validity.valueMissing)).toBe(true);
+      expect(postCount).toBe(0);
+      await date.fill('2024-12-31');
+      await submit.click();
+      expect(await reference.evaluate(input => (input as HTMLInputElement).validity.valueMissing)).toBe(true);
+      expect(postCount).toBe(0);
+      await submit.focus();
+      await page.keyboard.press('Shift+Tab'); // Cancel, then the required reference.
+      await page.keyboard.press('Shift+Tab');
+      await expect(reference).toBeFocused();
+      await reference.pressSequentially(`Synthetic statement ${workspace} 2024-12-31`);
+      await submit.focus();
+      await page.keyboard.press('Enter');
+      await expect(dialog.getByRole('alert')).toContainText('Zahlungsdatum');
+      await expect(date).toHaveValue('2024-12-31');
+      await expect(reference).toHaveValue(`Synthetic statement ${workspace} 2024-12-31`);
+      expect(await readInvoice()).toEqual(before);
+      expect((await readPayment()).event).toBeNull();
+      await assertDialogFitsViewport();
+      await page.screenshot({ path: testInfo.outputPath(`${workspace}-payment-error-retains-input.png`), fullPage: false, animations: 'disabled' });
+      const saved = page.waitForResponse(response => response.url().endsWith(paymentPath) && response.request().method() === 'POST' && response.status() === 201);
+      await submit.focus();
+      await page.keyboard.press('Enter');
+      await saved;
+      await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
+      await expect(dialog.getByRole('alert')).toHaveText('Die Zahlung ist gespeichert, aber die Listen konnten nicht aktualisiert werden. Nicht erneut buchen.');
+      expect(blockedReads).toBeGreaterThan(0);
+      expect(postCount).toBe(2);
+      await expect(submit).toHaveCount(0);
+      await expect(dialog).toContainText('31.12.2024');
+      await expect(dialog.getByRole('status')).toBeFocused();
+      expect(savedPayload).toMatchObject({ amount: '123.45', currency: 'EUR', paidAt: '2024-12-31', source: 'MANUAL', reference: `Synthetic statement ${workspace} 2024-12-31` });
+      expect(savedPayload?.idempotencyKey).toMatch(/^[\da-f-]{36}$/iu);
+      expect(savedPayload).toEqual(firstAttemptPayload); // An unchanged retry keeps its request identity.
+      expect(savedEvent?.incomeId).toEqual(expect.any(Number));
+      await assertDialogFitsViewport();
+      await page.screenshot({ path: testInfo.outputPath(`${workspace}-payment-saved-refresh-warning.png`), fullPage: false, animations: 'disabled' });
+      const readsBeforeRetry = refreshReads;
+      blockRefresh = false;
+      await dialog.getByRole('button', { name: 'Listen aktualisieren', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toHaveCount(0);
+      expect(refreshReads).toBeGreaterThan(readsBeforeRetry);
+      expect(postCount).toBe(2); // Refresh recovery is GET-only, never another payment POST.
+      const assertSinglePayment = async () => {
+        const stored = await readPayment();
+        expect(stored).toMatchObject({ canRecordPayment: false, event: { id: savedEvent!.id, incomeId: savedEvent!.incomeId, amountCents: '12345', reference: savedPayload!.reference, dateCertainty: 'ACTUAL', paidAt: '2024-12-31T00:00:00.000Z' },
+          summary: { totalCents: '12345', paidCents: '12345', openCents: '0', paid: true } });
+        const record = await readInvoice();
+        expect(record).toMatchObject({ status: 'PAID', paidAt: '2024-12-31T00:00:00.000Z', issuanceState: 'ISSUED', income: { id: savedEvent!.incomeId, amount: 123.45, date: '2024-12-31T00:00:00.000Z' } });
+        const incomes = await (await page.request.get(`/api/incomes?search=${invoiceNumber}&pageSize=100`)).json();
+        expect(incomes.items).toHaveLength(1);
+        expect(incomes.items[0]).toMatchObject({ id: savedEvent!.incomeId, invoiceId: invoice.id, amount: 123.45 });
+      };
+      await assertSinglePayment();
+      const replay = await page.request.post(paymentPath, { data: savedPayload });
+      expect(replay.status()).toBe(200);
+      expect(await replay.json()).toMatchObject({ replayed: true, event: { id: savedEvent!.id, incomeId: savedEvent!.incomeId } });
+      await dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
+      await page.reload();
+      await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
+      await assertSinglePayment();
+      expect(postCount).toBe(2);
+      if (workspace === 'reminders') {
+        await expect(page.getByRole('article').filter({ hasText: invoiceNumber })).toHaveCount(0);
+      } else {
+        await expect(page.getByRole('row').filter({ hasText: invoiceNumber })).toContainText('Bezahlt');
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`${workspace}-payment-reloaded.png`), fullPage: false, animations: 'disabled' });
+    });
+  }
+
   test('preserves a paid invoice and hides destructive actions on desktop and mobile', async ({ page }, testInfo) => {
     await page.goto('/login');
     await page.getByLabel('E-Mail').fill(testUser.email);

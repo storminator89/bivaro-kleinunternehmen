@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
-export const CURRENT_SCHEMA_VERSION = '20261020213000_add_fiscal_profile';
+export const CURRENT_SCHEMA_VERSION = '20261020230000_add_payment_journal';
+/** Payment events are additive; prior snapshots contain no journal events. */
+export const PRE_PAYMENT_JOURNAL_SCHEMA_VERSION = '20261020213000_add_fiscal_profile';
 /** Fiscal profiles are additive; existing v3 backups remain importable. */
 export const PRE_FISCAL_PROFILE_SCHEMA_VERSION = '20260922100000_add_billing_notes';
 /** v3 manifests produced before BillingNote was introduced remain importable. */
@@ -72,6 +74,7 @@ const COVERAGE = [
   { model: 'Customer', key: 'customers', mode: 'included' as const },
   { model: 'Expense', key: 'expenses', mode: 'included' as const },
   { model: 'Income', key: 'incomes', mode: 'included' as const },
+  { model: 'PaymentJournalEvent', key: 'paymentJournalEvents', mode: 'included' as const },
   { model: 'Invoice', key: 'invoices', mode: 'included' as const },
   { model: 'Settings', key: 'settings', mode: 'included' as const },
   { model: 'InvoiceTemplate', key: 'templates', mode: 'included' as const },
@@ -206,16 +209,19 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (value.format !== 'bivaro-backup' || value.version !== CURRENT_BACKUP_VERSION) {
     throw new Error('Nicht unterstützte Backup-Manifest-Version');
   }
-  if ((value.schemaVersion !== CURRENT_SCHEMA_VERSION && value.schemaVersion !== PRE_FISCAL_PROFILE_SCHEMA_VERSION && value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
+  if ((value.schemaVersion !== CURRENT_SCHEMA_VERSION && value.schemaVersion !== PRE_PAYMENT_JOURNAL_SCHEMA_VERSION && value.schemaVersion !== PRE_FISCAL_PROFILE_SCHEMA_VERSION && value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
     throw new Error('Backup-Manifest enthält keine gültige Herkunft');
   }
   if (value.excludesSecrets !== true || !Array.isArray(value.excludedSecretFields) || !value.excludedSecretFields.includes('User.password') || !value.excludedSecretFields.includes('ApiKey.keyHash') || !value.excludedSecretFields.includes('ApiKey.secret') || !Array.isArray(value.rekeyRequired) || !value.rekeyRequired.includes('ApiKey')) {
     throw new Error('Backup-Manifest weist den Secret-Ausschluss nicht nach');
   }
   if (!Array.isArray(value.modelCoverage)) throw new Error('Backup-Manifest enthält keine Modellabdeckung');
-  const expectedCoverage = value.schemaVersion === PRE_BILLING_NOTES_SCHEMA_VERSION
-    ? COVERAGE.filter((entry) => entry.model !== 'BillingNote')
-    : COVERAGE;
+  const expectedCoverage = COVERAGE.filter((entry) =>
+    (value.schemaVersion === CURRENT_SCHEMA_VERSION || entry.model !== 'PaymentJournalEvent')
+    && (value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION || entry.model !== 'BillingNote'));
+  if (value.schemaVersion !== CURRENT_SCHEMA_VERSION && coverageCount(data, 'paymentJournalEvents') > 0) {
+    throw new Error('Ein altes Backup-Manifest darf keine ungebundenen Zahlungsereignisse enthalten');
+  }
   if (value.schemaVersion === PRE_BILLING_NOTES_SCHEMA_VERSION && coverageCount(data, 'billingNotes') > 0) {
     throw new Error('Ein altes Backup-Manifest darf keine ungebundenen BillingNotes enthalten');
   }

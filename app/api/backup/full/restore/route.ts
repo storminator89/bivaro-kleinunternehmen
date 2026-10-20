@@ -91,6 +91,7 @@ async function postHandler(request: NextRequest) {
         importedBillingNotes: results.billingNotes.imported,
         importedExpenses: results.expenses.imported,
         importedIncomes: results.incomes.imported,
+        importedPaymentJournalEvents: results.paymentJournalEvents.imported,
         importedInvoices: results.invoices.imported,
         importedFiles: results.files.imported,
       },

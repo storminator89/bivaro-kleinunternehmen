@@ -62,6 +62,7 @@ model User {
   cashTransactions CashTransaction[]
   documentations Documentation[]
   billingNotes BillingNote[]
+  paymentJournalEvents PaymentJournalEvent[]
 }
 
 // Shared, bounded rate-limit state for authentication and other API surfaces.
@@ -113,6 +114,7 @@ model Income {
   userId      String
   user        User     @relation(fields: [userId], references: [id])
   cashTransaction CashTransaction?
+  paymentJournalEvent PaymentJournalEvent?
 
   @@index([userId, date])
 }
@@ -143,6 +145,7 @@ model Invoice {
   convertedInvoice Invoice? @relation("QuoteConversion")
   customerId    Int?
   income        Income?
+  paymentJournalEvent PaymentJournalEvent?
   billingNotes  BillingNote[]
   reminders     Reminder[]
   customer      Customer? @relation(fields: [customerId], references: [id])
@@ -395,4 +398,28 @@ model InvoiceNumberCounter {
   value Int
 
   @@id([userId, type, year])
+}
+
+// BPR-010 deliberately supports exactly one full-payment event per invoice.
+// Multi-payment/refund support needs a separately reviewed additive migration.
+model PaymentJournalEvent {
+  id             Int      @id @default(autoincrement())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  invoiceId      Int      @unique
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  incomeId       Int?     @unique
+  income         Income?  @relation(fields: [incomeId], references: [id], onDelete: Restrict)
+  // Canonical positive integer cents, serialized without lossy JSON numbers.
+  amountCents    String
+  currency       String   @default("EUR")
+  paidAt         DateTime?
+  dateCertainty  String
+  source         String
+  reference      String
+  idempotencyKey String
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, paidAt])
 }
