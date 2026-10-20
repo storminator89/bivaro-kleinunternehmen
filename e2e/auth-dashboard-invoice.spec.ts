@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { PDFDocument } from 'pdf-lib';
+import JSZip from 'jszip';
+import { createHash } from 'node:crypto';
 
 const testUser = {
   name: 'E2E Admin',
@@ -1121,6 +1123,181 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await expect(page.getByRole('heading', { name: 'Einstellungen', exact: true, level: 1 })).toBeVisible();
       expect(errors).toEqual([]);
     } finally { await context.close(); }
+  });
+
+  test('discovers accountant handoff in settings and downloads the approved real archive exactly once', async ({ page }, testInfo) => {
+    await signIn(page);
+    // Dedicated future dates keep these synthetic records independent of earlier ledger cases.
+    const original = Buffer.from('%PDF-1.7\nSynthetic accountant handoff receipt\n%%EOF\n');
+    const attached = await page.request.post('/api/expenses', { multipart: {
+      description: 'HANDOFF original fixture', amount: '23.45', date: '2041-03-15',
+      category: 'Handoff fixture', taxRelevant: 'true',
+      receipt: { name: 'synthetic-handoff.pdf', mimeType: 'application/pdf', buffer: original },
+    } });
+    expect(attached.ok()).toBe(true);
+    const attachedExpense = await attached.json();
+    const absent = await page.request.post('/api/expenses', { data: {
+      description: 'HANDOFF absent original fixture', amount: 9.87, date: '2041-03-16',
+      category: 'Handoff fixture', taxRelevant: true,
+    } });
+    expect(absent.ok()).toBe(true);
+    const absentExpense = await absent.json();
+    await page.goto('/settings');
+    const entry = page.locator('#handoff-settings').getByRole('link', { name: 'Unterlagen übergeben', exact: true });
+    await entry.focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/handoff$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Unterlagen übergeben' })).toBeVisible();
+    await expect(page.getByText('Kein DATEV-Format oder zugesicherter DATEV-Import', { exact: false })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Kalenderjahr', exact: true }).fill('2041');
+    let downloadCount = 0;
+    page.on('download', () => downloadCount++);
+    const previewResponse = page.waitForResponse(response => response.url().includes('/api/accountant-export?') && response.url().includes('preview=1'));
+    await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
+    const preview = await (await previewResponse).json();
+    expect(preview.manifest).toMatchObject({
+      period: { from: '2041-01-01', to: '2041-12-31' },
+      counts: { expenses: 2 }, originalCounts: { included: 1, missing: 0, notAttached: 1 },
+    });
+    await expect(page.locator('#handoff-review-heading')).toBeFocused();
+    await expect(page.getByText('1 Original fehlt', { exact: true })).toBeVisible();
+    await page.getByText('Warnungen anzeigen', { exact: true }).click();
+    await expect(page.getByText('Kein Originalbeleg an der Ausgabe hinterlegt.', { exact: false })).toBeVisible();
+    const downloadButton = page.getByRole('button', { name: 'ZIP herunterladen', exact: true });
+    await expect(downloadButton).toBeDisabled();
+    expect(downloadCount).toBe(0);
+    await page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ }).check();
+    // Hold only the real ZIP request: repeated activation must not start a second request.
+    let zipRequests = 0;
+    let releaseZip!: () => void;
+    const zipGate = new Promise<void>(resolve => { releaseZip = resolve; });
+    await page.route('**/api/accountant-export?**', async route => {
+      if (!new URL(route.request().url()).searchParams.has('preview')) {
+        zipRequests++;
+        await zipGate;
+      }
+      await route.continue();
+    });
+    const downloaded = page.waitForEvent('download');
+    await downloadButton.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => zipRequests).toBe(1);
+    await expect(page.getByRole('button', { name: 'ZIP wird erstellt', exact: true })).toBeDisabled();
+    await page.keyboard.press('Enter');
+    releaseZip();
+    const download = await downloaded;
+    expect(download.suggestedFilename()).toBe('bivaro-uebergabepaket-2041-01-01-2041-12-31.zip');
+    const archivePath = testInfo.outputPath(download.suggestedFilename());
+    await download.saveAs(archivePath);
+    const bytes = await readFile(archivePath);
+    expect(bytes.subarray(0, 2).toString()).toBe('PK');
+    const zip = await JSZip.loadAsync(bytes);
+    const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+    expect(manifest.sourceFingerprint).toBe(preview.manifest.sourceFingerprint);
+    expect(manifest.scope).toMatchObject({ datevCertified: false, elsterSubmission: false, completeAuditExport: false, restorableBackup: false });
+    expect(manifest.warnings).toContainEqual(expect.objectContaining({ code: 'ORIGINAL_NOT_ATTACHED', recordId: absentExpense.id }));
+    const records = JSON.parse(await zip.file('records.json')!.async('string'));
+    expect(records.expenses.map((row: { id: number }) => row.id).sort()).toEqual([attachedExpense.id, absentExpense.id].sort());
+    expect(await zip.file(`originals/expense-${attachedExpense.id}.pdf`)!.async('nodebuffer')).toEqual(original);
+    expect(await zip.file('README.txt')!.async('string')).toContain('kein vollständiger GoBD-Prüfexport');
+    for (const entry of manifest.entries) {
+      const content = await zip.file(entry.zipPath)!.async('nodebuffer');
+      expect(content.byteLength).toBe(entry.bytes);
+      expect(createHash('sha256').update(content).digest('hex')).toBe(entry.sha256);
+    }
+    await expect(page.getByRole('status')).toContainText('Es wurde nichts an eine Kanzlei gesendet.');
+    expect(zipRequests).toBe(1);
+    expect(downloadCount).toBe(1);
+    await page.screenshot({ path: testInfo.outputPath('handoff-approved-archive.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Zeitraum ändern', exact: true }).click();
+    await expect(page.locator('#handoff-period-heading')).toBeFocused();
+    await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ })).not.toBeChecked();
+    await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Kalenderjahr', exact: true })).toHaveValue('2041');
+    await expect(page.locator('#handoff-review-heading')).toHaveCount(0);
+    expect(downloadCount).toBe(1);
+  });
+
+  test('opens handoff from help on mobile, validates dates and explains an empty package with keyboard focus', async ({ page }, testInfo) => {
+    await signIn(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/help#export');
+    const helpEntry = page.locator('#export').getByRole('link', { name: 'Unterlagen übergeben', exact: true });
+    await helpEntry.focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/handoff$/);
+    let exportRequests = 0;
+    page.on('request', request => { if (request.url().includes('/api/accountant-export?')) exportRequests++; });
+    await page.getByRole('radio', { name: 'Eigener Zeitraum', exact: true }).check();
+    const from = page.getByLabel('Von einschließlich', { exact: true });
+    const to = page.getByLabel('Bis einschließlich', { exact: true });
+    await from.fill('2042-12-31');
+    await to.fill('2042-01-01');
+    await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
+    expect(await to.evaluate(element => (element as HTMLInputElement).validity.rangeUnderflow)).toBe(true);
+    expect(exportRequests).toBe(0);
+    await from.fill('2042-01-01');
+    await to.fill('2043-01-02');
+    await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('höchstens 366 Tage');
+    expect(exportRequests).toBe(0);
+    await to.fill('2042-12-31');
+    await to.focus();
+    const loadPreview = page.getByRole('button', { name: 'Vorschau laden', exact: true });
+    // Native date fields may expose separate keyboard segments before the next control.
+    for (let index = 0; index < 6 && !(await loadPreview.evaluate(element => element === document.activeElement)); index++) await page.keyboard.press('Tab');
+    await expect(loadPreview).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#handoff-review-heading')).toBeFocused();
+    await expect(page.getByText('Keine Datensätze im gewählten Zeitraum.', { exact: false })).toBeVisible();
+    await expect(page.getByText('Keine technischen Warnungen in dieser Vorschau.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('handoff-mobile-empty-390.png'), fullPage: true });
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ })).toBeFocused();
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Tab');
+    const downloaded = page.waitForEvent('download');
+    await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    const download = await downloaded;
+    const archivePath = testInfo.outputPath('handoff-empty.zip');
+    await download.saveAs(archivePath);
+    const zip = await JSZip.loadAsync(await readFile(archivePath));
+    const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+    expect(Object.values(manifest.counts)).toEqual(expect.arrayContaining([0]));
+    expect(Object.values(manifest.counts).every(count => count === 0)).toBe(true);
+    expect(Object.keys(zip.files).some(path => path.startsWith('originals/'))).toBe(false);
+    expect(await zip.file('expenses.csv')!.async('string')).toContain('"description"');
+    await page.getByRole('button', { name: 'Zeitraum ändern', exact: true }).click();
+    await expect(page.locator('#handoff-period-heading')).toBeFocused();
+    await expect(from).toHaveValue('2042-01-01');
+    await expect(to).toHaveValue('2042-12-31');
+  });
+
+  test('requires fresh approval when accountant handoff data changes after preview', async ({ page }, testInfo) => {
+    await signIn(page);
+    await page.goto('/handoff?year=2043');
+    await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
+    await expect(page.locator('#handoff-review-heading')).toBeFocused();
+    await page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ }).check();
+    expect((await page.request.post('/api/incomes', { data: { description: 'HANDOFF changed after preview', amount: 7.89, date: '2043-01-02' } })).ok()).toBe(true);
+    let downloads = 0;
+    page.on('download', () => downloads++);
+    const conflict = page.waitForResponse(response => response.url().includes('/api/accountant-export?') && response.status() === 409);
+    await page.getByRole('button', { name: 'ZIP herunterladen', exact: true }).click();
+    await conflict;
+    await expect(page.locator('#handoff-period-heading')).toBeFocused();
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('Daten oder Originale haben sich seit der Vorschau geändert.');
+    await expect(page.getByRole('textbox', { name: 'Kalenderjahr', exact: true })).toHaveValue('2043');
+    expect(downloads).toBe(0);
+    await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ })).not.toBeChecked();
+    await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
+    await page.screenshot({ path: testInfo.outputPath('handoff-drift-new-approval.png'), fullPage: true });
   });
 
   test('blocks anonymous data access and revokes an existing cookie after a password reset', async ({ page, request }) => {

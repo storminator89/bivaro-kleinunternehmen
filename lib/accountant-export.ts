@@ -222,9 +222,12 @@ Limits (kein stilles Abschneiden): 10.000 Datensätze; 25 MiB je Original; 2 MiB
 Das Paket enthält vertrauliche Geschäfts-/Personendaten: nur über einen geeigneten sicheren Kanal weitergeben.
 `;
 
-export async function createAccountantExport(userId: string, period: AccountantExportPeriod) {
+/** Preview and download share all selection, original-file and resource checks.
+ * A preview hashes one original at a time but retains no ZIP or compressed bytes.
+ */
+async function buildAccountantExport(userId: string, period: AccountantExportPeriod, preview: boolean, expectedFingerprint?: string) {
   const snapshot = await readAccountantSnapshot(userId, period);
-  const zip = new JSZip();
+  const zip = preview ? null : new JSZip();
   const warnings: Warning[] = [];
   const entries: { zipPath: string; bytes: number; sha256: string; kind: 'original' | 'metadata' }[] = [];
   const originals: OriginalReference[] = [];
@@ -237,7 +240,7 @@ export async function createAccountantExport(userId: string, period: AccountantE
     if (totalBytes > ACCOUNTANT_EXPORT_LIMITS.maxTotalBytes || metadataBytes > ACCOUNTANT_EXPORT_LIMITS.maxMetadataBytes) {
       throw new AccountantExportError('Übergabepaket überschreitet das Größenlimit. Bitte einen kürzeren Zeitraum wählen.', 413);
     }
-    zip.file(zipPath, bytes, { createFolders: false });
+    zip?.file(zipPath, bytes, { createFolders: false });
     entries.push({ zipPath, bytes: bytes.byteLength, sha256: hashBytes(bytes), kind });
   };
   const addOriginal = async (recordType: 'invoice' | 'expense', recordId: number, storedName: string | null, originalFileName: string | null) => {
@@ -363,10 +366,25 @@ export async function createAccountantExport(userId: string, period: AccountantE
     snapshot: snapshot.info, moneyPolicy: MONEY_POLICY_VERSION, limits: ACCOUNTANT_EXPORT_LIMITS,
     counts: Object.fromEntries(Object.entries(tables).map(([key, rows]) => [key, rows.length])),
     originalCounts: { included: originals.filter(row => row.status === 'included').length, missing: originals.filter(row => row.status === 'missing').length, notAttached: originals.filter(row => row.status === 'not-attached').length },
-    warnings, warningCount: warnings.length, entries,
+    warnings, warningCount: warnings.length, entries: [...entries],
+    // Stable across previews; timestamps are deliberately not part of approval.
+    sourceFingerprint: hashJson({ period: { from: period.from, to: period.to }, snapshotId: snapshot.info.id, entries, warnings }),
   };
+  if (expectedFingerprint && manifest.sourceFingerprint !== expectedFingerprint) {
+    throw new AccountantExportError('Daten oder Originale haben sich seit der Vorschau geändert. Bitte die Vorschau erneut prüfen.', 409);
+  }
   // Manifest deliberately excludes itself from its hash list; its bytes still count against limits.
   addEntry('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'), 'metadata');
-  const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-  return { bytes, filename: `bivaro-uebergabepaket-${period.from}-${period.to}.zip`, warningCount: warnings.length, counts: manifest.counts };
+  const bytes = zip ? await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } }) : null;
+  return { manifest, bytes, filename: `bivaro-uebergabepaket-${period.from}-${period.to}.zip`, warningCount: warnings.length, counts: manifest.counts };
+}
+
+export async function createAccountantExport(userId: string, period: AccountantExportPeriod, expectedFingerprint?: string) {
+  const result = await buildAccountantExport(userId, period, false, expectedFingerprint);
+  return { ...result, bytes: result.bytes! };
+}
+
+export async function previewAccountantExport(userId: string, period: AccountantExportPeriod) {
+  const { bytes: _bytes, ...result } = await buildAccountantExport(userId, period, true);
+  return result;
 }

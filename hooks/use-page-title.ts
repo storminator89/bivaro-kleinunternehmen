@@ -10,6 +10,7 @@ const STATIC_TITLES: Record<string, string> = {
   "/cashbook": "Kassenbuch",
   "/customers": "Kunden",
   "/settings": "Einstellungen",
+  "/handoff": "Unterlagen übergeben",
   "/settings/api-keys": "API-Schlüssel",
   "/settings/api-keys/docs": "API-Dokumentation",
   "/settings/audit-logs": "Audit-Log",

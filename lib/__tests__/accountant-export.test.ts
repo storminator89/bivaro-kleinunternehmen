@@ -312,3 +312,79 @@ describe('download API failure and resource boundaries', () => {
     finally { spy.mockRestore(); }
   });
 });
+
+describe('guided handoff preview and approved-snapshot download', () => {
+  it('uses the same scope and warnings without constructing or compressing a ZIP', async () => {
+    const storedName = await storage.writeTenantFile('accountant-owner', 'preview.pdf', Buffer.from('UNCHANGED_ORIGINAL'));
+    await invoice({ storedFileName: storedName });
+    await database.client.expense.create({ data: { userId: 'accountant-owner', amount: 1, description: 'PRIVATE_DESCRIPTION_NOT_IN_PREVIEW', date: date('2026-01-01') } });
+    const compression = vi.spyOn(JSZip.prototype, 'generateAsync');
+    try {
+      const response = await route.GET(request('year=2026&preview=1'));
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(response.headers.get('content-disposition')).toBeNull();
+      const body = await response.json();
+      expect(body).not.toHaveProperty('bytes');
+      expect(body).not.toHaveProperty('records');
+      expect(JSON.stringify(body)).not.toContain('PRIVATE_DESCRIPTION_NOT_IN_PREVIEW');
+      expect(JSON.stringify(body)).not.toContain('UNCHANGED_ORIGINAL');
+      expect(body.manifest).toMatchObject({ formatVersion: 1, counts: { invoices: 1, expenses: 1 }, originalCounts: { included: 1, missing: 0, notAttached: 1 } });
+      expect(body.manifest.warnings.some((warning: { code: string }) => warning.code === 'ORIGINAL_NOT_ATTACHED')).toBe(true);
+      expect(body.manifest.sourceFingerprint).toMatch(/^[a-f0-9]{64}$/);
+      expect(body.manifest.entries.some((entry: { zipPath: string }) => entry.zipPath === 'manifest.json')).toBe(false);
+      expect(compression).not.toHaveBeenCalled();
+      expect(await database.client.auditLog.count()).toBe(0);
+      const second = await (await route.GET(request('year=2026&preview=1'))).json();
+      expect(second.manifest.sourceFingerprint).toBe(body.manifest.sourceFingerprint);
+      const download = await route.GET(request(`year=2026&expectedFingerprint=${body.manifest.sourceFingerprint}`));
+      expect(download.status).toBe(200);
+      const zip = await JSZip.loadAsync(await download.arrayBuffer());
+      const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+      expect(manifest.sourceFingerprint).toBe(body.manifest.sourceFingerprint);
+      expect(manifest.counts).toEqual(body.manifest.counts);
+      expect(manifest.warnings).toEqual(body.manifest.warnings);
+      expect(compression).toHaveBeenCalledTimes(1);
+      expect(await database.client.auditLog.count()).toBe(1);
+    } finally { compression.mockRestore(); }
+  });
+
+  it('rejects changed records before compression rather than downloading an unapproved snapshot', async () => {
+    const expense = await database.client.expense.create({ data: { userId: 'accountant-owner', amount: 1, description: 'before', date: date('2026-01-01') } });
+    const preview = await (await route.GET(request('year=2026&preview=1'))).json();
+    await database.client.expense.update({ where: { id: expense.id }, data: { description: 'after' } });
+    const compression = vi.spyOn(JSZip.prototype, 'generateAsync');
+    try {
+      const response = await route.GET(request(`year=2026&expectedFingerprint=${preview.manifest.sourceFingerprint}`));
+      expect(response.status).toBe(409);
+      expect((await response.json()).error).toContain('seit der Vorschau geändert');
+      expect(compression).not.toHaveBeenCalled();
+      expect(await database.client.auditLog.count()).toBe(0);
+    } finally { compression.mockRestore(); }
+  });
+
+  it('also detects changed original bytes with unchanged database records', async () => {
+    const storedName = await storage.writeTenantFile('accountant-owner', 'reviewed.pdf', Buffer.from('before'));
+    await invoice({ storedFileName: storedName });
+    const preview = await (await route.GET(request('year=2026&preview=1'))).json();
+    await writeFile(storage.getTenantUploadPath('accountant-owner', storedName), 'after');
+    const response = await route.GET(request(`year=2026&expectedFingerprint=${preview.manifest.sourceFingerprint}`));
+    expect(response.status).toBe(409);
+    const updated = await (await route.GET(request('year=2026&preview=1'))).json();
+    expect(updated.manifest.sourceFingerprint).not.toBe(preview.manifest.sourceFingerprint);
+  });
+
+  it('keeps authentication, period validation and file-size limits identical for previews', async () => {
+    state.actor = null;
+    expect((await route.GET(request('year=2026&preview=1'))).status).toBe(401);
+    state.actor = 'accountant-owner';
+    for (const query of ['year=2026&preview=0', 'year=2026&preview=1&preview=1', 'year=2026&expectedFingerprint=bad', `year=2026&preview=1&expectedFingerprint=${'a'.repeat(64)}`, 'year=2026&preview=1&userId=accountant-other', 'year=2026&year=2025&preview=1', 'from=2025-01-01&to=2026-01-02&preview=1']) {
+      expect((await route.GET(request(query))).status).toBe(400);
+    }
+    const storedName = await storage.writeTenantFile('accountant-owner', 'large-preview.pdf', Buffer.alloc(0));
+    await truncate(storage.getTenantUploadPath('accountant-owner', storedName), exporter.ACCOUNTANT_EXPORT_LIMITS.maxFileBytes + 1);
+    await invoice({ storedFileName: storedName });
+    expect((await route.GET(request('year=2026&preview=1'))).status).toBe(413);
+  });
+});
