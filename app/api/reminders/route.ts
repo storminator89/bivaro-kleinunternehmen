@@ -22,10 +22,11 @@ export async function GET(request: Request) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Offene Rechnungen laden (nicht bezahlt)
+    // Nur offene Rechnungen, keine Angebote, Gutschriften oder stornierten Belege.
     const whereClause: Prisma.InvoiceWhereInput = {
       userId,
-      status: { not: 'PAID' },
+      type: 'INVOICE',
+      status: { notIn: ['PAID', 'CANCELLED'] },
     };
 
     // Nur überfällige Rechnungen laden, wenn nicht alle angefordert
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: Neue Mahnung erstellen
+// POST: Mahnung intern erfassen (kein E-Mail-Versand)
 async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
@@ -123,6 +124,10 @@ async function postHandler(request: Request) {
 
     if (!invoice) {
       return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
+    }
+
+    if (invoice.type !== 'INVOICE' || ['PAID', 'CANCELLED'].includes(invoice.status)) {
+      return NextResponse.json({ error: 'Mahnungen können nur für offene Rechnungen erfasst werden' }, { status: 409 });
     }
 
     // Nächste Mahnstufe bestimmen

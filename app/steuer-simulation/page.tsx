@@ -1,7 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, type ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import styles from "@/components/public-accounting/accounting-workspaces.module.css";
@@ -33,6 +33,7 @@ import {
   getTaxRulePack,
 } from "@/lib/tax-calculator";
 import type { TaxSummary } from "@/lib/tax-summary";
+import { simulationInputErrors, simulationNumberError, simulationNumberRules, type SimulationNumberField } from "./validation";
 
 const defaultSettings = {
   healthInsurance: 4000,
@@ -79,6 +80,33 @@ function ParameterLabel({ htmlFor, label, tooltip }: ParameterLabelProps) {
   );
 }
 
+type SimulationNumberInputProps = Omit<ComponentProps<typeof Input>, "id" | "value"> & {
+  id: SimulationNumberField;
+  value: number;
+};
+
+function SimulationNumberInput({ id, value, disabled, ...props }: SimulationNumberInputProps) {
+  const error = disabled ? null : simulationNumberError(id, value);
+  const rules = simulationNumberRules[id];
+  return (
+    <>
+      <Input
+        {...props}
+        id={id}
+        value={Number.isFinite(value) ? value : ""}
+        min={rules.min}
+        max={"max" in rules ? rules.max : undefined}
+        step={rules.step}
+        required
+        disabled={disabled}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : undefined}
+      />
+      {error && <p id={`${id}-error`} className="mt-2 text-sm text-destructive" role="alert">{error}</p>}
+    </>
+  );
+}
+
 export default function SteuerSimulationPage() {
   const [summary, setSummary] = useState<TaxSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,7 +135,7 @@ export default function SteuerSimulationPage() {
   const [numberOfChildren, setNumberOfChildren] = useState<number>(0);
 
   useEffect(() => {
-    if (employmentType === "side-business" && autoCalcSocial) {
+    if (employmentType === "side-business" && autoCalcSocial && !simulationNumberError("grossSalary", grossSalary)) {
       // Versionierte Beitragsbemessungsgrenzen aus dem ausgewählten Jahr.
       const socialRules = getTaxRulePack(taxYear)?.socialSecurity;
       if (!socialRules) return;
@@ -166,24 +194,33 @@ export default function SteuerSimulationPage() {
   const profit = summary?.profit ?? 0;
   const profitFloor = Math.max(0, profit);
 
-  const taxCalculationSupported = Boolean(summary?.annualBasis && profit >= 0);
+  const inputErrors = simulationInputErrors({
+    healthInsurance, pensionInsurance, careInsurance, otherDeductions,
+    tradeTaxHebesatz, churchTaxRate, grossSalary, employeeExpenses,
+  }, { sideBusiness: employmentType === "side-business", includeChurchTax });
+  const simulationInputsValid = inputErrors.length === 0;
+  const taxDataSupported = Boolean(summary?.annualBasis && profit >= 0);
+  const taxCalculationSupported = taxDataSupported && simulationInputsValid;
+
 
   // 1. Gewerbesteuer
-  const tradeTaxDetails = calculateTradeTaxDetails(profitFloor, tradeTaxHebesatz);
+  const tradeTaxDetails = taxCalculationSupported
+    ? calculateTradeTaxDetails(profitFloor, tradeTaxHebesatz)
+    : { tradeTax: 0, tradeTaxBaseAmount: 0 };
   const tradeTax = taxCalculationSupported && businessType === "gewerblich" ? tradeTaxDetails.tradeTax : 0;
 
   // 2. Zu versteuerndes Einkommen (zvE)
-  const totalDeductions = healthInsurance + pensionInsurance + careInsurance + otherDeductions;
+  const totalDeductions = simulationInputsValid ? healthInsurance + pensionInsurance + careInsurance + otherDeductions : 0;
 
   let incomeFromEmployment = 0;
-  if (employmentType === "side-business") {
+  if (employmentType === "side-business" && simulationInputsValid) {
     incomeFromEmployment = Math.max(0, grossSalary - employeeExpenses);
   }
 
-  const taxableIncome = Math.max(0, profit + incomeFromEmployment - totalDeductions);
+  const taxableIncome = taxCalculationSupported ? Math.max(0, profit + incomeFromEmployment - totalDeductions) : 0;
 
   // 3. Tarifliche Einkommensteuer
-  const baseIncomeTax = calculateIncomeTax(taxableIncome, taxYear);
+  const baseIncomeTax = taxCalculationSupported ? calculateIncomeTax(taxableIncome, taxYear) : 0;
 
   // 4. Gewerbesteueranrechnung nach §35 EStG (vierfacher Messbetrag plus
   // tatsächlich gezahlte Gewerbesteuer und anteilige Höchstgrenze).
@@ -270,6 +307,7 @@ export default function SteuerSimulationPage() {
 
   const recommendations = useMemo<Recommendation[]>(() => {
     const recs: Recommendation[] = [];
+    if (!simulationInputsValid) return recs;
 
     if (profit < 0) {
       recs.push({
@@ -373,6 +411,7 @@ export default function SteuerSimulationPage() {
 
     return recs;
   }, [
+    simulationInputsValid,
     effectiveTaxRate,
     expenseCoverage,
     formatCurrency,
@@ -467,7 +506,7 @@ export default function SteuerSimulationPage() {
           <summary>Datenbasis und Grenzen<ChevronDown aria-hidden="true" /></summary>
           <div>{summary?.warnings.map(warning => <p key={warning}>{warning}</p>)}</div>
         </details>}
-        {!taxCalculationSupported && summary && (
+        {!taxDataSupported && summary && (
           <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             Für diesen Datenstand wird keine endgültige Steuerlast angezeigt. Die Simulation unterstützt nur vollständige Jahreszeiträume ohne Verlust, Verlustvortrag oder Verlustrücktrag.
           </div>
@@ -490,6 +529,11 @@ export default function SteuerSimulationPage() {
               Standardwerte
             </Button>
           </div>
+            {!simulationInputsValid && (
+              <div role="alert" className="m-6 rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                Bitte korrigieren Sie die markierten Eingaben. Bis dahin werden keine Simulationsergebnisse oder Empfehlungen berechnet.
+              </div>
+            )}
             <div className="tax-parameter-body space-y-8 p-6 sm:p-8">
             <div className="tax-parameter-group">
               <h3>Tätigkeit und Einordnung</h3>
@@ -549,14 +593,12 @@ export default function SteuerSimulationPage() {
                       label="Bruttojahresgehalt (EUR)"
                       tooltip="Ihr Bruttoarbeitslohn aus der nichtselbstständigen Hauptbeschäftigung."
                     />
-                    <Input
+                    <SimulationNumberInput
                       id="grossSalary"
                       type="number"
                       inputMode="decimal"
                       value={grossSalary}
-                      onChange={(event) => setGrossSalary(Number(event.target.value) || 0)}
-                      min={0}
-                      step={1000}
+                      onChange={(event) => setGrossSalary(event.target.valueAsNumber)}
                       className="mt-2 bg-background"
                     />
                   </div>
@@ -566,14 +608,12 @@ export default function SteuerSimulationPage() {
                       label="Werbungskosten (EUR)"
                       tooltip="Werbungskosten aus nichtselbstständiger Arbeit (Pauschbetrag 2024: 1.230 €)."
                     />
-                    <Input
+                    <SimulationNumberInput
                       id="employeeExpenses"
                       type="number"
                       inputMode="decimal"
                       value={employeeExpenses}
-                      onChange={(event) => setEmployeeExpenses(Number(event.target.value) || 0)}
-                      min={0}
-                      step={10}
+                      onChange={(event) => setEmployeeExpenses(event.target.valueAsNumber)}
                       className="mt-2 bg-background"
                     />
                   </div>
@@ -637,14 +677,12 @@ export default function SteuerSimulationPage() {
                   label="Krankenversicherung (EUR)"
                   tooltip="Jährliche Beiträge zur Krankenversicherung (Basisabsicherung)."
                 />
-                <Input
+                <SimulationNumberInput
                   id="healthInsurance"
                   type="number"
                   inputMode="decimal"
                   value={healthInsurance}
-                  onChange={(event) => setHealthInsurance(Number(event.target.value) || 0)}
-                  min={0}
-                  step={100}
+                  onChange={(event) => setHealthInsurance(event.target.valueAsNumber)}
                   className="mt-2"
                   disabled={employmentType === "side-business" && autoCalcSocial}
                 />
@@ -655,14 +693,12 @@ export default function SteuerSimulationPage() {
                   label="Rentenversicherung (EUR)"
                   tooltip="Jährliche Beiträge zur gesetzlichen oder privaten Rentenversicherung (Rürup)."
                 />
-                <Input
+                <SimulationNumberInput
                   id="pensionInsurance"
                   type="number"
                   inputMode="decimal"
                   value={pensionInsurance}
-                  onChange={(event) => setPensionInsurance(Number(event.target.value) || 0)}
-                  min={0}
-                  step={100}
+                  onChange={(event) => setPensionInsurance(event.target.valueAsNumber)}
                   className="mt-2"
                   disabled={employmentType === "side-business" && autoCalcSocial}
                 />
@@ -673,14 +709,12 @@ export default function SteuerSimulationPage() {
                   label="Pflegeversicherung (EUR)"
                   tooltip="Jährliche Beiträge zur Pflegeversicherung."
                 />
-                <Input
+                <SimulationNumberInput
                   id="careInsurance"
                   type="number"
                   inputMode="decimal"
                   value={careInsurance}
-                  onChange={(event) => setCareInsurance(Number(event.target.value) || 0)}
-                  min={0}
-                  step={50}
+                  onChange={(event) => setCareInsurance(event.target.valueAsNumber)}
                   className="mt-2"
                   disabled={employmentType === "side-business" && autoCalcSocial}
                 />
@@ -691,14 +725,12 @@ export default function SteuerSimulationPage() {
                   label="Sonstige Sonderausgaben (EUR)"
                   tooltip="Weitere abzugsfähige Beträge (z. B. Spenden, Kirchensteuer-Vorauszahlung)."
                 />
-                <Input
+                <SimulationNumberInput
                   id="otherDeductions"
                   type="number"
                   inputMode="decimal"
                   value={otherDeductions}
-                  onChange={(event) => setOtherDeductions(Number(event.target.value) || 0)}
-                  min={0}
-                  step={100}
+                  onChange={(event) => setOtherDeductions(event.target.valueAsNumber)}
                   className="mt-2"
                 />
               </div>
@@ -710,15 +742,12 @@ export default function SteuerSimulationPage() {
                   label="Gewerbesteuer-Hebesatz (%)"
                   tooltip="Kommunaler Hebesatz für die Gewerbesteuer (mind. 200%)."
                 />
-                <Input
+                <SimulationNumberInput
                   id="tradeTaxHebesatz"
                   type="number"
                   inputMode="decimal"
                   value={tradeTaxHebesatz}
-                  onChange={(event) => setTradeTaxHebesatz(Number(event.target.value) || 0)}
-                  min={0}
-                  max={1000}
-                  step={10}
+                  onChange={(event) => setTradeTaxHebesatz(event.target.valueAsNumber)}
                   className="mt-2"
                 />
               </div>
@@ -728,15 +757,12 @@ export default function SteuerSimulationPage() {
                   label="Kirchensteuer (%)"
                   tooltip="Vereinfachte Annahme: Prozentsatz auf die tarifliche Einkommensteuer nach §51a EStG (8% oder 9%). Landesrecht und persönliche Freibeträge werden nicht abgebildet."
                 />
-                <Input
+                <SimulationNumberInput
                   id="churchTaxRate"
                   type="number"
                   inputMode="decimal"
                   value={churchTaxRate}
-                  onChange={(event) => setChurchTaxRate(Number(event.target.value) || 0)}
-                  min={0}
-                  max={9}
-                  step={1}
+                  onChange={(event) => setChurchTaxRate(event.target.valueAsNumber)}
                   className="mt-2"
                   disabled={!includeChurchTax}
                 />
@@ -786,7 +812,7 @@ export default function SteuerSimulationPage() {
             <p className="tax-result-amount" aria-live="polite">{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</p>
             <p>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"} · auf Basis Ihrer Annahmen</p>
           </div>
-          <div className={styles.taxActiveAssumptions} aria-label="Aktive Simulationsannahmen"><span>{businessType === "gewerblich" ? "Gewerbebetrieb" : "Freiberufliche Tätigkeit"}</span><span>{employmentType === "side-business" ? "Nebenberuflich" : "Hauptberuflich"}</span><span>Abzüge {formatCurrency(totalDeductions)}</span></div>
+          <div className={styles.taxActiveAssumptions} aria-label="Aktive Simulationsannahmen"><span>{businessType === "gewerblich" ? "Gewerbebetrieb" : "Freiberufliche Tätigkeit"}</span><span>{employmentType === "side-business" ? "Nebenberuflich" : "Hauptberuflich"}</span><span>Abzüge {simulationInputsValid ? formatCurrency(totalDeductions) : "nicht berechnet"}</span></div>
           <div className="space-y-6 p-6 sm:p-8">
             <dl className="tax-result-metrics"><div><dt>Steuerlast {employmentType === 'side-business' ? 'auf Gewerbe' : 'gesamt'}</dt><dd>{loading ? '—' : formatSimulationValue(marginalTax)}</dd></div><div><dt>Effektive Belastung</dt><dd>{loading ? '—' : taxCalculationSupported && profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : 'nicht berechnet'}</dd></div></dl>
             <details className="tax-calculation"><summary>Berechnungsweg anzeigen<ChevronDown aria-hidden="true" /></summary><div className="tax-calculation-body">
@@ -804,16 +830,16 @@ export default function SteuerSimulationPage() {
                 {employmentType === "side-business" && (
                   <div className="flex items-center justify-between gap-4 py-3">
                     <span className="text-sm text-muted-foreground">Einkünfte aus Anstellung</span>
-                    <span className="text-sm font-medium tabular-nums">+ {formatCurrency(incomeFromEmployment)}</span>
+                    <span className="text-sm font-medium tabular-nums">+ {formatSimulationValue(incomeFromEmployment)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">Sonderausgaben (Vorsorge etc.)</span>
-                  <span className="text-sm font-medium tabular-nums">- {formatCurrency(deductionsApplied)}</span>
+                  <span className="text-sm font-medium tabular-nums">- {formatSimulationValue(deductionsApplied)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">Zu versteuerndes Einkommen</span>
-                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(taxableIncome)}</span>
+                  <span className="text-sm font-semibold tabular-nums">{formatSimulationValue(taxableIncome)}</span>
                 </div>
                 </dl>
               </div>
@@ -877,6 +903,7 @@ export default function SteuerSimulationPage() {
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">Konkrete Ansatzpunkte aus Ihren aktuellen EÜR-Daten und Simulationseinstellungen.</p>
           </div>
           <div className="p-6 sm:p-8">
+            {!simulationInputsValid && <p className="text-sm text-muted-foreground">Empfehlungen werden erst nach Korrektur der Eingaben angezeigt.</p>}
             <ul className="divide-y divide-border">
               {recommendations.map((rec, index) => {
                 const Icon = recommendationIconMap[rec.tone];

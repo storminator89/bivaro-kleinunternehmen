@@ -2,6 +2,9 @@ import { defineConfig } from 'vitest/config'
 import path from 'path'
 
 export default defineConfig({
+    // Component unit tests inspect behavior, not Tailwind output. Next's
+    // plugin-name PostCSS configuration is not a Vite PostCSS plugin list.
+    css: { postcss: { plugins: [] } },
     test: {
         environment: 'node',
         include: ['**/__tests__/**/*.test.ts'],

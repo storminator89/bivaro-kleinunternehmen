@@ -1,5 +1,6 @@
 "use client";
 
+import { AUDIT_ENTITY_LABELS, AUDIT_ACTION_LABELS } from '@/lib/audit-presentation';
 import { PageHeader } from "@/components/page-header";
 import styles from "@/components/settings/admin-workspace.module.css";
 
@@ -129,22 +130,17 @@ const ENTITY_ICONS: Record<string, React.ReactNode> = {
   InvoiceTemplate: <FileText className="h-4 w-4" />,
   Backup: <Database className="h-4 w-4" />,
   Session: <LogIn className="h-4 w-4" />,
+  Quote: <FileText className="h-4 w-4" />,
+  CashBook: <Database className="h-4 w-4" />,
+  CashTransaction: <CreditCard className="h-4 w-4" />,
+  CreditNote: <Receipt className="h-4 w-4" />,
+  EURExport: <Download className="h-4 w-4" />,
+  Documentation: <FileText className="h-4 w-4" />,
+  SecurityEvent: <Shield className="h-4 w-4" />,
 };
 
-const ENTITY_LABELS: Record<string, string> = {
-  Customer: 'Kunde',
-  Invoice: 'Rechnung',
-  Expense: 'Ausgabe',
-  Income: 'Einnahme',
-  Settings: 'Einstellungen',
-  User: 'Benutzer',
-  ApiKey: 'API-Key',
-  RecurringExpense: 'Wiederkehrende Ausgabe',
-  Reminder: 'Mahnung',
-  InvoiceTemplate: 'Rechnungsvorlage',
-  Backup: 'Datensicherung',
-  Session: 'Sitzung',
-};
+const ENTITY_LABELS: Record<string, string> = AUDIT_ENTITY_LABELS;
+const ACTION_NAMES: Record<string, string> = AUDIT_ACTION_LABELS;
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -239,7 +235,7 @@ export default function AuditLogsPage() {
         </Link>
 
         {/* Header */}
-        <PageHeader title="Audit-Log" description="Protokoll aller Änderungen und Aktivitäten." section="System" />
+        <PageHeader title="Audit-Log" description="Protokoll der erfassten Änderungen und Aktivitäten. Die Abdeckung ist begrenzt; einige Ereignisse werden bestmöglich protokolliert." section="System" />
 
         {/* Filters */}
         <Card className={`${styles.surface} ${styles.filterSurface}`}>
@@ -259,15 +255,9 @@ export default function AuditLogsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Alle Bereiche</SelectItem>
-                    <SelectItem value="Customer">Kunden</SelectItem>
-                    <SelectItem value="Invoice">Rechnungen</SelectItem>
-                    <SelectItem value="Expense">Ausgaben</SelectItem>
-                    <SelectItem value="Income">Einnahmen</SelectItem>
-                    <SelectItem value="Settings">Einstellungen</SelectItem>
-                    <SelectItem value="ApiKey">API-Keys</SelectItem>
-                    <SelectItem value="RecurringExpense">Wiederkehrende Ausgaben</SelectItem>
-                    <SelectItem value="Reminder">Mahnungen</SelectItem>
-                    <SelectItem value="Session">Sitzungen</SelectItem>
+                    {Object.entries(ENTITY_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -280,13 +270,9 @@ export default function AuditLogsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Alle Aktionen</SelectItem>
-                    <SelectItem value="CREATE">Erstellt</SelectItem>
-                    <SelectItem value="UPDATE">Geändert</SelectItem>
-                    <SelectItem value="DELETE">Gelöscht</SelectItem>
-                    <SelectItem value="LOGIN">Anmeldung</SelectItem>
-                    <SelectItem value="EXPORT">Export</SelectItem>
-                    <SelectItem value="BACKUP">Backup</SelectItem>
-                    <SelectItem value="REVIEW">Prüfhinweis</SelectItem>
+                    {Object.entries(ACTION_NAMES).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -362,7 +348,7 @@ export default function AuditLogsPage() {
                   <TableBody>
                     {logs.map((log) => {
                       const actionInfo = ACTION_LABELS[log.action] || {
-                        label: log.action,
+                        label: ACTION_NAMES[log.action] || log.action,
                         color: 'bg-gray-100 text-gray-700',
                         icon: <Clock className="h-3 w-3" />
                       };
@@ -395,7 +381,7 @@ export default function AuditLogsPage() {
                           <TableCell data-label="Aktion">
                             <Badge className={`${actionInfo.color} gap-1`}>
                               {actionInfo.icon}
-                              {actionInfo.label}
+                              {ACTION_NAMES[log.action] || actionInfo.label}
                             </Badge>
                           </TableCell>
                           <TableCell data-label="Bereich">
@@ -497,7 +483,7 @@ export default function AuditLogsPage() {
                     <Label className="text-muted-foreground">Aktion</Label>
                     <div className="mt-1">
                       <Badge className={ACTION_LABELS[selectedLog.action]?.color || 'bg-gray-100'}>
-                        {ACTION_LABELS[selectedLog.action]?.label || selectedLog.action}
+                        {ACTION_NAMES[selectedLog.action] || selectedLog.action}
                       </Badge>
                     </div>
                   </div>

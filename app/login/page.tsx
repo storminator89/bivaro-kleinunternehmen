@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { toast } from "@/components/ui/toaster";
+import { getSafeLoginCallbackUrl } from "@/lib/login-callback";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,19 +35,21 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      const callbackUrl = getSafeLoginCallbackUrl(searchParams.get("callbackUrl"));
       const result = await signIn("credentials", {
         redirect: false,
+        callbackUrl,
         email,
         password,
       });
 
-      if (result?.error) {
+      if (!result?.ok || result.error) {
         setError("Ungültige Anmeldedaten");
         setLoading(false);
         return;
       }
 
-      router.replace("/dashboard");
+      router.replace(callbackUrl);
     } catch {
       setError("Ein Fehler ist aufgetreten");
       setLoading(false);

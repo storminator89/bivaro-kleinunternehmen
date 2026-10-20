@@ -1,7 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,7 +118,12 @@ const CASH_CATEGORIES = [
 export default function CashBookPage() {
     // State
     const [cashBooks, setCashBooks] = useState<CashBook[]>([]);
-    const [selectedCashBook, setSelectedCashBook] = useState<CashBook | null>(null);
+    const [selectedCashBookId, setSelectedCashBookId] = useState<number | null>(null);
+    // Keep the selected summary canonical: refreshed balances/counts must never
+    // compete with a second, stale copy of the cash book object.
+    const selectedCashBook = cashBooks.find(book => book.id === selectedCashBookId) ?? null;
+    const [dataVersion, setDataVersion] = useState(0);
+    const cashBookRequest = useRef(0);
     const [transactions, setTransactions] = useState<CashTransaction[]>([]);
     const [dailyBalance, setDailyBalance] = useState<DailyBalance | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -169,72 +174,97 @@ export default function CashBookPage() {
         }).format(amount);
     };
 
-    // Load cash books
+    // Refresh summaries while preserving a valid current selection. Ignore an
+    // older response if another refresh was started after it.
     const loadCashBooks = useCallback(async () => {
+        const requestId = ++cashBookRequest.current;
         try {
             const res = await fetch('/api/cashbook');
-            if (res.ok) {
-                const data = await res.json();
-                setCashBooks(data);
-
-                // Auto-select first cash book if none selected
-                if (data.length > 0 && !selectedCashBook) {
-                    setSelectedCashBook(data[0]);
-                }
-            }
+            if (!res.ok) throw new Error('Cash book refresh failed');
+            const data: CashBook[] = await res.json();
+            if (requestId !== cashBookRequest.current) return;
+            setCashBooks(data);
+            setSelectedCashBookId(current =>
+                data.some(book => book.id === current) ? current : (data[0]?.id ?? null)
+            );
+            setError(null);
         } catch (err) {
+            if (requestId !== cashBookRequest.current) return;
             console.error('Error loading cash books:', err);
             setError('Fehler beim Laden der Kassenbücher');
         }
-    }, [selectedCashBook]);
+    }, []);
 
-    // Load transactions
-    const loadTransactions = useCallback(async () => {
-        if (!selectedCashBook) return;
-
-        try {
-            const res = await fetch(
-                `/api/cashbook/transactions?cashBookId=${selectedCashBook.id}&page=${page}&pageSize=${pageSize}`
-            );
-            if (res.ok) {
-                const data = await res.json();
-                setTransactions(data.items);
-                setTotalPages(data.totalPages);
-            }
-        } catch (err) {
-            console.error('Error loading transactions:', err);
-        }
-    }, [selectedCashBook, page, pageSize]);
-
-    // Load daily balance
-    const loadDailyBalance = useCallback(async () => {
-        if (!selectedCashBook) return;
-
-        try {
-            const res = await fetch(
-                `/api/cashbook/daily-balance?cashBookId=${selectedCashBook.id}&date=${dateFilter}`
-            );
-            if (res.ok) {
-                const data = await res.json();
-                setDailyBalance(data);
-            }
-        } catch (err) {
-            console.error('Error loading daily balance:', err);
-        }
-    }, [selectedCashBook, dateFilter]);
-
-    // Initial load
     useEffect(() => {
         loadCashBooks().finally(() => setIsLoading(false));
     }, [loadCashBooks]);
 
-    // Load data when cash book changes
+    // Separate cancellable reads prevent responses for a previous cash book,
+    // page or date from overwriting the currently displayed data.
     useEffect(() => {
-        if (selectedCashBook) {
-            loadTransactions();
-            loadDailyBalance();
-        }
-    }, [selectedCashBook, loadTransactions, loadDailyBalance]);
+        setTransactions([]);
+        setTotalPages(1);
+        if (selectedCashBookId === null) return;
+        let cancelled = false;
+        const controller = new AbortController();
+        const load = async () => {
+            try {
+                const res = await fetch(
+                    `/api/cashbook/transactions?cashBookId=${selectedCashBookId}&page=${page}&pageSize=${pageSize}`,
+                    { signal: controller.signal }
+                );
+                if (!res.ok) throw new Error('Transaction refresh failed');
+                const data = await res.json();
+                if (cancelled) return;
+                const lastPage = Math.max(1, data.totalPages);
+                if (page > lastPage) {
+                    setPage(lastPage);
+                    return;
+                }
+                setTransactions(data.items);
+                setTotalPages(lastPage);
+            } catch (err) {
+                if (!cancelled) {
+                    console.error('Error loading transactions:', err);
+                    setError('Fehler beim Laden der Buchungen');
+                }
+            }
+        };
+        void load();
+        return () => { cancelled = true; controller.abort(); };
+    }, [selectedCashBookId, page, pageSize, dataVersion]);
+
+    useEffect(() => {
+        setDailyBalance(null);
+        if (selectedCashBookId === null) return;
+        let cancelled = false;
+        const controller = new AbortController();
+        const load = async () => {
+            try {
+                const res = await fetch(
+                    `/api/cashbook/daily-balance?cashBookId=${selectedCashBookId}&date=${dateFilter}`,
+                    { signal: controller.signal }
+                );
+                if (!res.ok) throw new Error('Daily balance refresh failed');
+                const data = await res.json();
+                if (!cancelled) setDailyBalance(data);
+            } catch (err) {
+                if (!cancelled) {
+                    console.error('Error loading daily balance:', err);
+                    setError('Fehler beim Laden der Tagesübersicht');
+                }
+            }
+        };
+        void load();
+        return () => { cancelled = true; controller.abort(); };
+    }, [selectedCashBookId, dateFilter, dataVersion]);
+
+    const refreshAfterMutation = async () => {
+        // A previous count is historical after a booking changes the balance.
+        setCashCountResult(null);
+        setDataVersion(version => version + 1);
+        await loadCashBooks();
+    };
 
     // Create new cash book
     const handleCreateCashBook = async () => {
@@ -254,8 +284,12 @@ export default function CashBookPage() {
                 const created = await res.json();
                 setShowNewCashBookModal(false);
                 setNewCashBook({ name: '', description: '', initialBalance: '0' });
-                await loadCashBooks();
-                setSelectedCashBook(created);
+                // POST returns the persisted book without computed summary fields.
+                setCashBooks(books => [{ ...created, currentBalance: created.initialBalance, transactionCount: 0 }, ...books]);
+                setSelectedCashBookId(created.id);
+                setPage(1);
+                setCashCount({ countedAmount: '', notes: '' });
+                await refreshAfterMutation();
             } else {
                 const error = await res.json();
                 alert(error.error || 'Fehler beim Erstellen');
@@ -296,9 +330,7 @@ export default function CashBookPage() {
                     notes: '',
                     date: format(new Date(), 'yyyy-MM-dd')
                 });
-                await loadTransactions();
-                await loadDailyBalance();
-                await loadCashBooks(); // Update balance
+                await refreshAfterMutation();
             } else {
                 const error = await res.json();
                 alert(error.error || 'Fehler beim Erstellen');
@@ -326,9 +358,7 @@ export default function CashBookPage() {
             if (res.ok) {
                 setShowEditTransactionModal(false);
                 setEditTransaction(null);
-                await loadTransactions();
-                await loadDailyBalance();
-                await loadCashBooks();
+                await refreshAfterMutation();
             } else {
                 const error = await res.json();
                 alert(error.error || 'Fehler beim Aktualisieren');
@@ -358,12 +388,13 @@ export default function CashBookPage() {
                 setDeleteTarget(null);
 
                 if (deleteTarget.type === 'cashbook') {
-                    setSelectedCashBook(null);
-                    await loadCashBooks();
+                    setCashBooks(books => books.filter(book => book.id !== deleteTarget.id));
+                    setSelectedCashBookId(current => current === deleteTarget.id ? null : current);
+                    setPage(1);
+                    setCashCount({ countedAmount: '', notes: '' });
+                    await refreshAfterMutation();
                 } else {
-                    await loadTransactions();
-                    await loadDailyBalance();
-                    await loadCashBooks();
+                    await refreshAfterMutation();
                 }
             } else {
                 const error = await res.json();
@@ -497,9 +528,11 @@ export default function CashBookPage() {
                     <div className={styles.cashBalance}>
                         <div className={styles.cashSelection}>
                             <Label htmlFor="cashbook-selector">Aktive Kasse</Label>
-                            <Select value={selectedCashBook?.id.toString() || ''} onValueChange={(value) => {
-                                const cb = cashBooks.find(c => c.id.toString() === value);
-                                setSelectedCashBook(cb || null);
+                            <Select value={selectedCashBook?.id.toString() || ''} disabled={isSaving} onValueChange={(value) => {
+                                setSelectedCashBookId(Number(value));
+                                setPage(1);
+                                setCashCount({ countedAmount: '', notes: '' });
+                                setCashCountResult(null);
                             }}>
                                 <SelectTrigger id="cashbook-selector"><SelectValue placeholder="Kasse wählen" /></SelectTrigger>
                                 <SelectContent>{cashBooks.map(cb => <SelectItem key={cb.id} value={cb.id.toString()}>{cb.name}</SelectItem>)}</SelectContent>
@@ -1155,8 +1188,9 @@ export default function CashBookPage() {
                         <div className="space-y-4 py-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label>Datum</Label>
+                                    <Label htmlFor="edit-tx-date">Datum</Label>
                                     <Input
+                                        id="edit-tx-date"
                                         type="date"
                                         value={format(new Date(editTransaction.date), 'yyyy-MM-dd')}
                                         onChange={(e) => setEditTransaction({
@@ -1166,8 +1200,9 @@ export default function CashBookPage() {
                                     />
                                 </div>
                                 <div>
-                                    <Label>Betrag (€)</Label>
+                                    <Label htmlFor="edit-tx-amount">Betrag (€)</Label>
                                     <Input
+                                        id="edit-tx-amount"
                                         type="number"
                                         step="0.01"
                                         value={editTransaction.amount}
@@ -1179,8 +1214,9 @@ export default function CashBookPage() {
                                 </div>
                             </div>
                             <div>
-                                <Label>Beschreibung</Label>
+                                <Label htmlFor="edit-tx-description">Beschreibung</Label>
                                 <Input
+                                    id="edit-tx-description"
                                     value={editTransaction.description}
                                     onChange={(e) => setEditTransaction({
                                         ...editTransaction,
@@ -1190,7 +1226,7 @@ export default function CashBookPage() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label>Kategorie</Label>
+                                    <Label htmlFor="edit-tx-category">Kategorie</Label>
                                     <Select
                                         value={editTransaction.category || ''}
                                         onValueChange={(value) => setEditTransaction({
@@ -1198,7 +1234,7 @@ export default function CashBookPage() {
                                             category: value
                                         })}
                                     >
-                                        <SelectTrigger>
+                                        <SelectTrigger id="edit-tx-category">
                                             <SelectValue placeholder="Wählen..." />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1211,8 +1247,9 @@ export default function CashBookPage() {
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label>Belegnummer</Label>
+                                    <Label htmlFor="edit-tx-receipt">Belegnummer</Label>
                                     <Input
+                                        id="edit-tx-receipt"
                                         value={editTransaction.receiptNumber || ''}
                                         onChange={(e) => setEditTransaction({
                                             ...editTransaction,
@@ -1222,8 +1259,9 @@ export default function CashBookPage() {
                                 </div>
                             </div>
                             <div className="flex items-center justify-between">
-                                <Label>Steuerrelevant</Label>
+                                <Label htmlFor="edit-tx-tax">Steuerrelevant</Label>
                                 <Switch
+                                    id="edit-tx-tax"
                                     checked={editTransaction.taxRelevant}
                                     onCheckedChange={(checked) => setEditTransaction({
                                         ...editTransaction,
@@ -1232,8 +1270,9 @@ export default function CashBookPage() {
                                 />
                             </div>
                             <div>
-                                <Label>Notizen</Label>
+                                <Label htmlFor="edit-tx-notes">Notizen</Label>
                                 <Textarea
+                                    id="edit-tx-notes"
                                     value={editTransaction.notes || ''}
                                     onChange={(e) => setEditTransaction({
                                         ...editTransaction,

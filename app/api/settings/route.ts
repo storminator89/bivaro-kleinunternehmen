@@ -1,3 +1,4 @@
+import { createAuditLog } from '@/lib/audit-log';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -49,6 +50,7 @@ async function postHandler(request: Request) {
       ownedLogoUrl = `/api/files/logo?file=${encodeURIComponent(storedName)}`;
     }
 
+    const previousSettings = await prisma.settings.findUnique({ where: { userId } });
     const settings = await prisma.settings.upsert({
       where: { userId },
       update: {
@@ -77,6 +79,26 @@ async function postHandler(request: Request) {
         logoUrl: ownedLogoUrl,
       },
     });
+
+    // Record field names only: even masked profile values would unnecessarily
+    // retain addresses, contact details, bank data and free-form footer content.
+    const profileFields = ['companyName', 'companyAddress', 'email', 'telephone', 'taxNumber', 'bankName', 'iban', 'bic', 'footerText', 'logoUrl'] as const;
+    const changedFields = profileFields.filter(field =>
+      (previousSettings?.[field] ?? null) !== (settings[field] ?? null));
+    if (changedFields.length > 0) {
+      await createAuditLog({
+        userId,
+        action: 'SETTINGS_CHANGED',
+        entityType: 'Settings',
+        entityId: settings.id,
+        entityName: 'Firmenprofil',
+        metadata: {
+          operation: 'settings.company-profile.save',
+          created: previousSettings === null,
+          changedFields,
+        },
+      });
+    }
 
     return NextResponse.json(settings);
   } catch (error) {

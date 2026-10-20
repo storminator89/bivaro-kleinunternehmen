@@ -44,7 +44,8 @@ export async function GET(request: NextRequest) {
     // Build query
     const whereClause: Prisma.InvoiceWhereInput = {
       userId,
-      status: { not: 'PAID' },
+      type: 'INVOICE',
+      status: { notIn: ['PAID', 'CANCELLED'] },
     };
 
     // Filter by specific invoice
@@ -180,6 +181,10 @@ async function postHandler(request: NextRequest) {
 
     if (invoice.status === 'PAID') {
       return apiError('Cannot create reminder for paid invoice', 400, 'INVOICE_PAID');
+    }
+
+    if (invoice.type !== 'INVOICE' || invoice.status === 'CANCELLED') {
+      return apiError('Reminders can only be recorded for open invoices', 409, 'INVOICE_NOT_OPEN');
     }
 
     // Determine next reminder level

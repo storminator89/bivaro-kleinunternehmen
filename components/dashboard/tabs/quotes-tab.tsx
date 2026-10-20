@@ -33,6 +33,7 @@ export type Quote = {
     validUntil?: string;
     totalAmount?: number;
     status: string;
+    convertedInvoice?: { id: number } | null;
     customer?: { id: number; name: string } | null;
     parsedData?: {
         items?: Array<{ description: string; quantity: number; unitPrice: number; unit: string; taxRate: number }>;
@@ -218,7 +219,7 @@ export function QuotesTab({
                             <QuoteStatusBadge status={quote.status} onStatusChange={(newStatus) => onStatusChange(quote.id, newStatus)} />
                             <div className="flex flex-wrap gap-2">
                                 <Button variant="outline" size="sm" className="min-h-11" onClick={() => window.open(`/api/quotes/download?id=${quote.id}`, '_blank')}><Eye className="h-4 w-4" />Ansehen</Button>
-                                {quote.status !== 'ACCEPTED' && quote.status !== 'REJECTED' && quote.status !== 'EXPIRED' && (
+                                {!quote.convertedInvoice && !['REJECTED', 'EXPIRED', 'CANCELLED'].includes(quote.status) && (
                                     <Button variant="outline" size="sm" className="min-h-11" disabled={convertingId === quote.id} onClick={() => setConfirmConvert(quote)}>In Rechnung</Button>
                                 )}
                                 <Button variant="outline" size="sm" disabled={quote.status === 'REJECTED' || quote.status === 'EXPIRED'} onClick={() => setEmailQuote(quote)}><Mail className="h-4 w-4" aria-hidden="true" />E-Mail</Button>
@@ -326,7 +327,7 @@ export function QuotesTab({
                                                     </Tooltip>
 
                                                     {/* Convert to Invoice */}
-                                                    {quote.status !== 'ACCEPTED' && quote.status !== 'REJECTED' && quote.status !== 'EXPIRED' && (
+                                                    {!quote.convertedInvoice && !['REJECTED', 'EXPIRED', 'CANCELLED'].includes(quote.status) && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
                                                                 <Button

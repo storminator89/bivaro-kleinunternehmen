@@ -18,6 +18,7 @@ import { Customer, DashboardEditData } from "@/types/dashboard";
 import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
 import { isPrivateCategory } from "@/lib/private-categories";
 import { formatBusinessDate } from "@/lib/business-date";
+import { expensePercentageInput, parseExpensePercentage, EXPENSE_PERCENTAGE_ERROR } from "./expense-percentage";
 
 type EditModalProps = {
   isOpen: boolean;
@@ -31,6 +32,8 @@ type EditModalProps = {
 
 export function EditModal({ isOpen, onClose, onSave, data, type, customers = [], uniqueCategories = [] }: EditModalProps) {
   const [formData, setFormData] = useState(data);
+  const [percentageInput, setPercentageInput] = useState(() => expensePercentageInput(data.taxDeductiblePercentage));
+  const percentage = parseExpensePercentage(percentageInput);
 
   // Combine user's existing categories with EÜR-recommended categories
   // Filter out user categories that are synonyms (already mapped to EÜR lines)
@@ -66,6 +69,7 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
 
   useEffect(() => {
     setFormData(data);
+    setPercentageInput(expensePercentageInput(data.taxDeductiblePercentage));
   }, [data]);
 
   // Auto-set taxRelevant to false when private category is selected
@@ -78,7 +82,12 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    if (type === 'expense') {
+      if (percentage === null) return;
+      onSave({ ...formData, taxDeductiblePercentage: percentage });
+    } else {
+      onSave(formData);
+    }
   };
 
   return (
@@ -194,11 +203,15 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
                   min="0"
                   max="100"
                   step="1"
-                  value={formData.taxDeductiblePercentage || 100}
-                  onChange={(e) => setFormData({ ...formData, taxDeductiblePercentage: parseInt(e.target.value) || 100 })}
+                  value={percentageInput}
+                  onChange={(e) => setPercentageInput(e.target.value)}
+                  required
+                  aria-invalid={percentage === null}
+                  aria-describedby={percentage === null ? "edit-taxDeductiblePercentage-error" : undefined}
                   placeholder="100"
                   className="dark:bg-background dark:border-input"
                 />
+                {percentage === null && <p id="edit-taxDeductiblePercentage-error" role="alert" className="text-sm text-destructive">{EXPENSE_PERCENTAGE_ERROR}</p>}
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

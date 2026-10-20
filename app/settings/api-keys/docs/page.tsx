@@ -266,7 +266,7 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
       icon: Receipt,
       path: "/api/v1/cashbook",
       methods: ["GET", "POST", "PUT", "DELETE"],
-      description: "Kassenbücher und Kassenbuch-Transaktionen verwalten",
+      description: "Bestehende Kassen lesen und Buchungen verwalten; PUT ändert nur nichtfinanzielle Felder",
       examples: {
         get: `curl -X GET "https://ihre-domain.de/api/v1/cashbook?cashBookId=1&startDate=2025-01-01" \\
   -H "Authorization: Bearer biv_sk_IhrApiKey"`,
@@ -341,7 +341,7 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
   -H "Authorization: Bearer biv_sk_IhrApiKey"`,
         post: `# Hinweis: Einstellungen können aus Sicherheitsgründen 
 # nur über das Web-Interface geändert werden.
-# PUT und DELETE sind nicht verfügbar.`,
+# POST, PUT und DELETE sind nicht verfügbar.`,
         response: `{
   "success": true,
   "data": {
@@ -588,8 +588,7 @@ const response = await fetch('https://ihre-domain.de/api/v1/customers', {
   headers: {
     'Authorization': 'Bearer biv_sk_IhrApiKey',
     'Content-Type': 'application/json'
-  },
-  credentials: 'include' // Optional: für Cookies
+  }
 });
 
 const data = await response.json();`}
@@ -603,7 +602,6 @@ const data = await response.json();`}
                 code={`Access-Control-Allow-Origin: https://ihre-app.de
 Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key
-Access-Control-Allow-Credentials: true
 Access-Control-Max-Age: 86400`}
                 id="cors-headers"
               />
@@ -765,18 +763,18 @@ Access-Control-Max-Age: 86400`}
                 <Tabs defaultValue="request">
                   <TabsList>
                     <TabsTrigger value="request">Anfrage</TabsTrigger>
-                    <TabsTrigger value="create">Erstellen</TabsTrigger>
+                    <TabsTrigger value="create">{endpoint.methods.includes("POST") ? "Erstellen" : endpoint.methods.includes("PUT") ? "Ändern" : "Schreibzugriff"}</TabsTrigger>
                     <TabsTrigger value="response">Antwort</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="request" className="mt-4">
-                    <p className="text-sm text-muted-foreground mb-2">GET-Anfrage mit Filtern:</p>
+                    <p className="text-sm text-muted-foreground mb-2">{endpoint.methods.includes("GET") ? "GET-Anfrage mit Filtern:" : "POST-Anfrage (Datei-Upload):"}</p>
                     <CodeBlock code={endpoint.examples.get} id={`${endpoint.name}-get`} />
                   </TabsContent>
 
                   <TabsContent value="create" className="mt-4">
                     <p className="text-sm text-muted-foreground mb-2">
-                      {endpoint.methods.includes("POST") ? "POST" : "PUT"}-Anfrage:
+                      {endpoint.methods.includes("POST") ? "POST-Anfrage:" : endpoint.methods.includes("PUT") ? "PUT-Anfrage:" : "Nur lesbarer Endpunkt:"}
                     </p>
                     <CodeBlock code={endpoint.examples.post} id={`${endpoint.name}-post`} />
                   </TabsContent>

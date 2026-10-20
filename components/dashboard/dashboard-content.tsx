@@ -33,6 +33,7 @@ import { formatBusinessDate, formatLocalBusinessDate } from "@/lib/business-date
 import { EURTab, GWGTab, ExpensesTab, IncomesTab, InvoicesTab } from "@/components/dashboard/tabs";
 import { useDashboardData } from "@/hooks/use-dashboard-data";
 import type { DashboardTab } from "@/hooks/use-dashboard-data";
+import { useDashboardCreateAction } from "@/hooks/use-dashboard-create-action";
 
 export function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
@@ -60,32 +61,6 @@ export function DashboardContent() {
       setActiveTab(newTab);
     }
   }, [tabParam, activeTab]);
-
-  // Deep links from the command palette should execute the requested action,
-  // not only navigate to the corresponding work area.
-  useEffect(() => {
-    if (searchParams.get('new') !== '1') return;
-    const requestedTab = normalizeTab(tabParam);
-
-    if (requestedTab === 'invoices') {
-      router.replace('/dashboard/invoices/new');
-      return;
-    } else if (requestedTab === 'quotes') {
-      router.replace('/dashboard/quotes/new');
-      return;
-    } else {
-      const inputId = requestedTab === 'incomes' ? 'incomeDescription' : 'description';
-      window.setTimeout(() => {
-        const input = document.getElementById(inputId);
-        input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        input?.focus();
-      }, 0);
-    }
-
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.delete('new');
-    router.replace(`/dashboard?${nextParams.toString()}`, { scroll: false });
-  }, [router, searchParams, tabParam]);
 
   // Modal States
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -184,6 +159,11 @@ export function DashboardContent() {
   const [expenseEntryOpen, setExpenseEntryOpen] = useState(false);
   const [incomeEntryOpen, setIncomeEntryOpen] = useState(false);
   const [expenseReceipt, setExpenseReceipt] = useState<File | null>(null);
+
+  useDashboardCreateAction({
+    searchParams, requestedTab: normalizeTab(tabParam), activeTab, router,
+    expenseEntryOpen, incomeEntryOpen, setExpenseEntryOpen, setIncomeEntryOpen,
+  });
 
   const {
     expenses,
@@ -849,9 +829,10 @@ export function DashboardContent() {
                     setSelectedTimeRange('lastYear');
                   }
                 }}
-                className="min-h-11 min-w-11 rounded-l-lg px-2 transition-colors hover:bg-muted"
+                className="min-h-11 min-w-11 rounded-l-lg px-2 transition-colors hover:bg-muted disabled:opacity-50"
                 aria-label="Vorheriges Jahr anzeigen"
                 title="Vorheriges Jahr"
+                disabled={selectedTimeRange !== 'thisYear'}
               >
                 <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -882,7 +863,7 @@ export function DashboardContent() {
                 className="min-h-11 min-w-11 rounded-r-lg px-2 transition-colors hover:bg-muted disabled:opacity-50"
                 aria-label="Nächstes Jahr anzeigen"
                 title="Nächstes Jahr"
-                disabled={selectedTimeRange === 'thisYear' || selectedTimeRange === 'all'}
+                disabled={selectedTimeRange !== 'lastYear'}
               >
                 <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

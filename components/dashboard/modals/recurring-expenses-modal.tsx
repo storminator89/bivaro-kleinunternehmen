@@ -27,6 +27,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Combobox } from "@/components/ui/combobox";
+import { expensePercentageInput, parseExpensePercentage, EXPENSE_PERCENTAGE_ERROR } from "./expense-percentage";
 
 type RecurringExpense = {
   id: number;
@@ -159,6 +160,8 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const percentage = parseExpensePercentage(formData.taxDeductiblePercentage);
+    if (percentage === null) return;
     setIsLoading(true);
 
     try {
@@ -168,7 +171,7 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
         amount: parseFloat(formData.amount),
         category: formData.category || null,
         taxRelevant: formData.taxRelevant,
-        taxDeductiblePercentage: parseFloat(formData.taxDeductiblePercentage),
+        taxDeductiblePercentage: percentage,
         interval: formData.interval,
         dayOfMonth: parseInt(formData.dayOfMonth),
         startDate: formData.startDate,
@@ -201,7 +204,7 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
       amount: expense.amount.toString(),
       category: expense.category || '',
       taxRelevant: expense.taxRelevant,
-      taxDeductiblePercentage: (expense.taxDeductiblePercentage || 100).toString(),
+      taxDeductiblePercentage: expensePercentageInput(expense.taxDeductiblePercentage),
       interval: expense.interval,
       dayOfMonth: expense.dayOfMonth.toString(),
       startDate: new Date(expense.startDate).toISOString().split('T')[0],
@@ -368,9 +371,9 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="description">Beschreibung *</Label>
+                <Label htmlFor="recurring-description">Beschreibung *</Label>
                 <Input
-                  id="description"
+                  id="recurring-description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="z.B. Büromiete"
@@ -379,9 +382,9 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="amount">Betrag (€) *</Label>
+                <Label htmlFor="recurring-amount">Betrag (€) *</Label>
                 <Input
-                  id="amount"
+                  id="recurring-amount"
                   type="number"
                   step="0.01"
                   value={formData.amount}
@@ -392,9 +395,9 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="category">Kategorie</Label>
+                <Label htmlFor="recurring-category">Kategorie</Label>
                 <Combobox
-                  id="category"
+                  id="recurring-category"
                   value={formData.category}
                   onChange={(value) => setFormData({ ...formData, category: value })}
                   options={availableCategories}
@@ -404,9 +407,9 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="interval">Intervall *</Label>
+                <Label htmlFor="recurring-interval">Intervall *</Label>
                 <select
-                  id="interval"
+                  id="recurring-interval"
                   value={formData.interval}
                   onChange={(e) => setFormData({ ...formData, interval: e.target.value })}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -418,9 +421,9 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="dayOfMonth">Tag des Monats</Label>
+                <Label htmlFor="recurring-dayOfMonth">Tag des Monats</Label>
                 <Input
-                  id="dayOfMonth"
+                  id="recurring-dayOfMonth"
                   type="number"
                   min="1"
                   max="31"
@@ -430,21 +433,26 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="taxDeductiblePercentage">Steuerlich ansetzbar (%)</Label>
+                <Label htmlFor="recurring-taxDeductiblePercentage">Steuerlich ansetzbar (%)</Label>
                 <Input
-                  id="taxDeductiblePercentage"
+                  id="recurring-taxDeductiblePercentage"
                   type="number"
                   min="0"
                   max="100"
+                  step="1"
+                  required
+                  aria-invalid={parseExpensePercentage(formData.taxDeductiblePercentage) === null}
+                  aria-describedby={parseExpensePercentage(formData.taxDeductiblePercentage) === null ? "recurring-taxDeductiblePercentage-error" : undefined}
                   value={formData.taxDeductiblePercentage}
                   onChange={(e) => setFormData({ ...formData, taxDeductiblePercentage: e.target.value })}
                 />
+                {parseExpensePercentage(formData.taxDeductiblePercentage) === null && <p id="recurring-taxDeductiblePercentage-error" role="alert" className="text-sm text-destructive">{EXPENSE_PERCENTAGE_ERROR}</p>}
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="startDate">Startdatum</Label>
+                <Label htmlFor="recurring-startDate">Startdatum</Label>
                 <Input
-                  id="startDate"
+                  id="recurring-startDate"
                   type="date"
                   value={formData.startDate}
                   onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
@@ -452,9 +460,9 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="endDate">Enddatum (optional)</Label>
+                <Label htmlFor="recurring-endDate">Enddatum (optional)</Label>
                 <Input
-                  id="endDate"
+                  id="recurring-endDate"
                   type="date"
                   value={formData.endDate}
                   onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
@@ -465,12 +473,12 @@ export function RecurringExpensesModal({ isOpen, onClose, onExpensesCreated, uni
             <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
-                id="taxRelevant"
+                id="recurring-taxRelevant"
                 checked={formData.taxRelevant}
                 onChange={(e) => setFormData({ ...formData, taxRelevant: e.target.checked })}
                 className="h-4 w-4 rounded border-input"
               />
-              <Label htmlFor="taxRelevant" className="font-normal">Steuerlich relevant</Label>
+              <Label htmlFor="recurring-taxRelevant" className="font-normal">Steuerlich relevant</Label>
             </div>
             
             <div className="flex gap-2">
