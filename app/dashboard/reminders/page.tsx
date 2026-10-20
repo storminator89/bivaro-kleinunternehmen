@@ -65,7 +65,7 @@ type Reminder = {
   id: number;
   invoiceId: number;
   reminderLevel: number;
-  sentAt: string;
+  createdAt: string;
   dueDate: string;
   fee: number;
   notes: string | null;
@@ -361,7 +361,7 @@ export default function RemindersPage() {
           <p>{invoice.customer?.name || 'Unbekannter Kunde'}</p>
           <div className={styles.recordMeta}><Badge variant={REMINDER_LEVEL_VARIANTS[invoice.currentReminderLevel]}>{REMINDER_LEVEL_LABELS[invoice.currentReminderLevel]}</Badge><span>{showOverdue ? `${invoice.daysOverdue} Tage überfällig` : `Fällig am ${formatDate(invoice.dueDate)}`}</span>{invoice.totalFees > 0 && <span>Gebühren: {formatCurrency(invoice.totalFees)}</span>}</div>
           <div className={styles.reminderActions}>{invoice.currentReminderLevel < 4 && <Button variant="outline" size="sm" onClick={() => { setSelectedInvoice(invoice); setShowCreateReminder(true); }}><Mail className="mr-1 h-4 w-4" aria-hidden="true" />{invoice.nextReminderLevelLabel}</Button>}<Button variant="ghost" size="sm" onClick={() => handleMarkAsPaid(invoice.id)}><Check className="mr-1 h-4 w-4" aria-hidden="true" />Als bezahlt markieren</Button></div>
-          {invoice.reminders.length > 0 && <details className={styles.reminderHistory}><summary>Mahnungshistorie ({invoice.reminders.length})</summary>{invoice.reminders.map(reminder => <article key={reminder.id}><strong className="text-sm">{REMINDER_LEVEL_LABELS[reminder.reminderLevel]}</strong><p>Gesendet: {formatDate(reminder.sentAt)} · Fällig: {formatDate(reminder.dueDate)}</p>{reminder.notes && <p>{reminder.notes}</p>}<div className="flex items-center justify-between gap-2"><span className="text-sm tabular-nums">{formatCurrency(reminder.fee)}</span><Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteReminder(reminder.id)} aria-label="Mahnung löschen"><Trash2 className="h-4 w-4" aria-hidden="true" /></Button></div></article>)}</details>}
+          {invoice.reminders.length > 0 && <details className={styles.reminderHistory}><summary>Mahnungshistorie ({invoice.reminders.length})</summary>{invoice.reminders.map(reminder => <article key={reminder.id}><strong className="text-sm">{REMINDER_LEVEL_LABELS[reminder.reminderLevel]}</strong><p>Erfasst: {formatDate(reminder.createdAt)} · Fällig: {formatDate(reminder.dueDate)}</p>{reminder.notes && <p>{reminder.notes}</p>}<div className="flex items-center justify-between gap-2"><span className="text-sm tabular-nums">{formatCurrency(reminder.fee)}</span><Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteReminder(reminder.id)} aria-label="Mahnung löschen"><Trash2 className="h-4 w-4" aria-hidden="true" /></Button></div></article>)}</details>}
         </article>)}
       </div>
       <div className={styles.reminderDesktop}>
@@ -504,7 +504,7 @@ export default function RemindersPage() {
                                 {REMINDER_LEVEL_LABELS[reminder.reminderLevel]}
                               </Badge>
                               <span className="text-sm text-muted-foreground">
-                                Gesendet: {formatDate(reminder.sentAt)}
+                                Erfasst: {formatDate(reminder.createdAt)}
                               </span>
                               <span className="text-sm text-muted-foreground">
                                 Fällig: {formatDate(reminder.dueDate)}
@@ -557,6 +557,11 @@ export default function RemindersPage() {
 
         {stats && <dl className={styles.collectionSummary} aria-label="Forderungsübersicht"><div><dt>Ausstehender Betrag</dt><dd>{formatCurrency(stats.totalAmount)}</dd></div><div><dt>Überfällige Rechnungen</dt><dd>{stats.totalOverdue}</dd></div><div><dt>Mahngebühren</dt><dd>{formatCurrency(stats.totalFees)}</dd></div><div><dt>Offene Rechnungen</dt><dd>{invoices.length}</dd></div></dl>}
         {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm text-destructive"><p>{loadError}</p><Button variant="outline" onClick={loadData}>Erneut laden</Button></div>}
+
+        <p className="text-sm text-muted-foreground">
+          Mahnungen und ihre Historie dokumentieren die interne Erfassung, nicht den E-Mail-Versand.
+          E-Mails werden nicht automatisch versendet.
+        </p>
 
         {/* Filter */}
         <Card className={styles.collectionFilter}>
@@ -776,7 +781,7 @@ export default function RemindersPage() {
           <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-xl">
-                {selectedInvoice?.nextReminderLevelLabel} erstellen
+                {selectedInvoice?.nextReminderLevelLabel} intern erfassen
               </DialogTitle>
               <DialogDescription className="mt-2">
                 Für Rechnung: <span className="font-medium">{selectedInvoice?.invoiceNumber || selectedInvoice?.fileName}</span>
@@ -790,6 +795,15 @@ export default function RemindersPage() {
                 Betrag: <span className="font-medium">{selectedInvoice?.totalAmount ? formatCurrency(selectedInvoice.totalAmount) : '-'}</span>
               </DialogDescription>
             </DialogHeader>
+
+            <Alert className="mt-4">
+              <Info className="h-4 w-4" />
+              <AlertTitle>Nur interne Erfassung</AlertTitle>
+              <AlertDescription>
+                Das Speichern erfasst die Mahnung nur intern. Es wird keine E-Mail automatisch versendet.
+                Nutzen Sie bei Bedarf die E-Mail-Vorlage und senden Sie die Nachricht selbst in Ihrem E-Mail-Client.
+              </AlertDescription>
+            </Alert>
 
             <Tabs defaultValue="settings" className="mt-4">
               <TabsList className="grid w-full grid-cols-2">
@@ -865,7 +879,7 @@ export default function RemindersPage() {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground">
-                          Vorgeschlagener E-Mail-Text für diese Mahnstufe. Sie können den Text kopieren oder direkt im E-Mail-Client öffnen.
+                          Vorlage für den manuellen Versand. Kopieren oder Öffnen im E-Mail-Client versendet noch keine E-Mail. Den Versand bestätigen Sie selbst im E-Mail-Client.
                         </p>
                         <Button
                           variant="outline"
@@ -923,7 +937,7 @@ export default function RemindersPage() {
                       {selectedInvoice.customer?.email && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
                           <Mail className="h-4 w-4" />
-                          E-Mail wird gesendet an: <span className="font-medium">{selectedInvoice.customer.email}</span>
+                          Empfänger für den manuellen Versand: <span className="font-medium">{selectedInvoice.customer.email}</span>
                         </div>
                       )}
 
@@ -959,10 +973,10 @@ export default function RemindersPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Wird erstellt...
+                    Wird erfasst...
                   </>
                 ) : (
-                  <>Mahnung erstellen</>
+                  <>Mahnung intern erfassen</>
                 )}
               </Button>
             </div>

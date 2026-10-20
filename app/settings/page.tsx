@@ -945,14 +945,14 @@ export default function SettingsPage() {
             <CardTitle>Audit-Log</CardTitle>
           </div>
           <CardDescription>
-            Protokoll aller Änderungen und Aktivitäten für Compliance und Sicherheit.
+            Protokoll der erfassten Änderungen und Aktivitäten.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm">
-                Sehen Sie wer was wann geändert hat – vollständige Nachverfolgbarkeit aller Aktionen.
+                Sehen Sie, wer erfasste Änderungen vorgenommen hat. Die Abdeckung ist begrenzt; einige Ereignisse werden bestmöglich protokolliert.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Kunden, Rechnungen, Ausgaben, Einnahmen, Einstellungen und mehr

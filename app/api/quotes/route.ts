@@ -44,7 +44,7 @@ export async function GET(request: Request) {
             prisma.invoice.findMany({
                 where,
                 orderBy: { uploadedAt: 'desc' },
-                include: { customer: true },
+                include: { customer: true, convertedInvoice: { select: { id: true } } },
                 skip,
                 take: pageSize,
             }),
