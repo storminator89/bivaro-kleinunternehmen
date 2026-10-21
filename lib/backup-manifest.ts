@@ -3,21 +3,35 @@ import { createHash } from 'node:crypto';
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
 /** Combined capability identity: never relabel standalone 061000 or 070000. */
-export const CURRENT_SCHEMA_VERSION = '20261021091000_add_ai_receipt_extraction';
+export const CURRENT_SCHEMA_VERSION = '20261021110000_combine_growth_ai_receipt_context';
+export const GROWTH_SCHEMA_VERSION = '20261021100000_combine_customer_catalog_quote_context';
+export const AI_RECEIPT_EXTRACTION_SCHEMA_VERSION = '20261021091000_add_ai_receipt_extraction';
 export const COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION = '20261021080000_combine_photo_annual_context';
+export const DATA_IMPORT_SCHEMA_VERSION = '20261021080000_add_service_catalog_and_import_receipts';
+export const QUOTE_WORKFLOW_SCHEMA_VERSION = '20261021073000_add_quote_followup';
+export const PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
+export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
+export const PRE_DATA_IMPORT_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021061000_add_manual_photo_approval';
 export const ANNUAL_CONTEXT_SCHEMA_VERSION = '20261021070000_add_annual_business_context';
 export const PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_ANNUAL_CONTEXT_SCHEMA_VERSION = PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
-const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
+export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
 /** Explicit registry preserves the incompatible standalone feature boundaries. */
-export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; aiReceiptExtraction?: boolean }>> = Object.freeze({
-  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, aiReceiptExtraction: true }),
-  [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true }),
-  [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: false }),
-  [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true }),
-  [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false }),
+export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean }>> = Object.freeze({
+  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true }),
+  [GROWTH_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: false }),
+  [AI_RECEIPT_EXTRACTION_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: true }),
+  [QUOTE_WORKFLOW_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: true, aiReceiptExtraction: false }),
+  [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false }),
+  [DATA_IMPORT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: true, quoteWorkflow: false, aiReceiptExtraction: false }),
+  [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false }),
+  [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false }),
+  [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false }),
 });
+export function backupSchemaSupportsDataImport(schemaVersion?: string): boolean {
+  return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.dataImport === true;
+}
 export function backupSchemaSupportsManualPhotoApproval(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.manualPhotoApproval === true;
 }
@@ -113,6 +127,8 @@ const COVERAGE = [
   { model: 'AiProviderSettings', key: 'aiProviderSettings', mode: 'excluded' as const, reason: 'Provider configuration and encrypted credentials remain target-owned; never imported or enabled by business restore.' },
   { model: 'SmtpSettings', key: 'smtpSettings', mode: 'excluded' as const, reason: 'Host-wide SMTP override and encrypted credential material are never backed up.' },
   { model: 'RateLimitBucket', key: 'rateLimitBuckets', mode: 'excluded' as const, reason: 'Operational runtime state is not restorable business data.' },
+  { model: 'DataImportBatch', key: 'dataImportBatches', mode: 'excluded' as const, reason: 'Operational CSV replay receipts are target-owned; imported business records are included in customers/serviceArticles.' },
+  { model: 'ServiceArticle', key: 'serviceArticles', mode: 'included' as const },
   { model: 'Customer', key: 'customers', mode: 'included' as const },
   { model: 'Supplier', key: 'suppliers', mode: 'included' as const },
   { model: 'Expense', key: 'expenses', mode: 'included' as const },
@@ -290,6 +306,7 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (!Array.isArray(value.modelCoverage)) throw new Error('Backup-Manifest enthält keine Modellabdeckung');
   const expectedCoverage = COVERAGE.filter((entry) =>
     (entry.model !== 'AiProviderSettings' || backupSchemaSupportsAiExtraction(value.schemaVersion))
+    && (backupSchemaSupportsDataImport(value.schemaVersion) || !['DataImportBatch', 'ServiceArticle'].includes(entry.model))
     && (value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION || entry.model !== 'BillingNote')
     && (PURCHASE_DOCUMENT_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'PurchaseDocument')
     && (SUPPLIER_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'Supplier')
@@ -301,6 +318,8 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   });
   if (!backupSchemaSupportsAnnualContext(value.schemaVersion) && coverageCount(data, 'annualBusinessContextRevisions') > 0) throw new Error('Älteres Backupschema darf keine Jahreskontexthistorie enthalten');
   if (!REVIEW_DRAFT_SCHEMAS.includes(value.schemaVersion!) && Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(item => item && typeof item === 'object' && ((item as Record<string, unknown>).reviewDraft != null || (item as Record<string, unknown>).reviewDraftSavedAt != null || ['image/jpeg', 'image/png'].includes(String((item as Record<string, unknown>).mediaType))))) throw new Error('Älteres Backupschema darf keine Foto- oder Prüfentwurfsdaten enthalten');
+  if (!QUOTE_WORKFLOW_SCHEMAS.includes(value.schemaVersion!) && Array.isArray(data.invoices) && data.invoices.some(row => row && typeof row === 'object' && ((row as Record<string, unknown>).quoteFollowUpOn != null || (row as Record<string, unknown>).quoteResponseNote != null))) throw new Error('Älteres Backupschema darf keine Angebots-Wiedervorlage oder Rückmeldungsnotiz enthalten');
+  if (QUOTE_WORKFLOW_SCHEMAS.includes(value.schemaVersion!) && Array.isArray(data.invoices) && data.invoices.some(row => row && typeof row === 'object' && (row as Record<string, unknown>).type === 'QUOTE' && (!Object.hasOwn(row, 'quoteFollowUpOn') || !Object.hasOwn(row, 'quoteResponseNote')))) throw new Error('Aktuelles Backupschema benötigt für jedes Angebot beide nullable Wiedervorlage- und Rückmeldungsfelder');
   if (!PURCHASE_DOCUMENT_SCHEMAS.includes(value.schemaVersion!) && coverageCount(data, 'purchaseDocuments') > 0) {
     throw new Error('Ein altes Backup-Manifest darf keine ungebundenen Eingangsbelege enthalten');
   }
@@ -314,11 +333,12 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (value.schemaVersion === PRE_BILLING_NOTES_SCHEMA_VERSION && coverageCount(data, 'billingNotes') > 0) {
     throw new Error('Ein altes Backup-Manifest darf keine ungebundenen BillingNotes enthalten');
   }
+  if (!backupSchemaSupportsDataImport(value.schemaVersion) && coverageCount(data, 'serviceArticles') > 0) throw new Error('Ein altes Backupschema darf keine ungebundenen Artikel enthalten');
   // These additive sections are mandatory once their model exists in the schema.
   // An absent section is not evidence of an empty collection, even if an attacker
   // recomputes a zero-count coverage entry without a data hash.
   for (const entry of expectedCoverage) {
-    if (['Supplier', 'PurchaseDocument', 'PaymentJournalEvent'].includes(entry.model) && !Array.isArray(data[entry.key])) {
+    if (['Supplier', 'PurchaseDocument', 'PaymentJournalEvent', 'ServiceArticle'].includes(entry.model) && !Array.isArray(data[entry.key])) {
       throw new Error(`Backup-Daten enthalten keinen erforderlichen Abschnitt: ${entry.key}`);
     }
   }

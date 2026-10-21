@@ -49,7 +49,7 @@ function makeBackup() {
       issuanceState: 'UNKNOWN',
       customerId: 10,
     }],
-    suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
+    serviceArticles: [], suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
     incomes: [],
     apiKeys: [{ id: 30, name: 'old-key', keyPrefix: 'biv_sk_old', scopes: '["read"]', isActive: true, createdAt: '2026-01-01T00:00:00.000Z' }],
     auditLogs: [{
@@ -167,7 +167,11 @@ describe('backup v3 manifest and restore', () => {
 
   it('never lowers an existing issuance marker and only upgrades to ISSUED', async () => {
     await database.client.user.create({ data: { id: 'issuance-owner', email: 'issuance-owner@backup.test', password: 'fixture' } });
+    // Keep this issuance-only fixture on the same explicit customer identity;
+    // mismatched customer merges are rejected by the separate identity suite.
+    const customer = await database.client.customer.create({ data: { userId: 'issuance-owner', name: 'Restore customer' } });
     await database.client.invoice.create({ data: {
+      customerId: customer.id,
       type: 'INVOICE',
       fileName: 'existing.pdf',
       storedFileName: 'existing.pdf',
@@ -179,6 +183,7 @@ describe('backup v3 manifest and restore', () => {
     await restore.restoreBackupData({ userId: 'issuance-owner', overwrite: false, backup: makeBackup(), resolveFile: async () => new Uint8Array([1]) });
     let invoice = await database.client.invoice.findFirstOrThrow({ where: { userId: 'issuance-owner' } });
     expect(invoice.issuanceState).toBe('UNKNOWN');
+    expect(invoice.customerId).toBe(customer.id);
 
     const issuedBackup = makeBackup();
     issuedBackup.data.invoices[0].issuanceState = 'ISSUED';
@@ -186,6 +191,7 @@ describe('backup v3 manifest and restore', () => {
     await restore.restoreBackupData({ userId: 'issuance-owner', overwrite: false, backup: issuedBackup, resolveFile: async () => new Uint8Array([1]) });
     invoice = await database.client.invoice.findFirstOrThrow({ where: { userId: 'issuance-owner' } });
     expect(invoice.issuanceState).toBe('ISSUED');
+    expect(invoice.customerId).toBe(customer.id);
   });
 
   it('redacts sensitive audit fields and rejects unknown manifest models', () => {

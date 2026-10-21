@@ -37,6 +37,7 @@ async function postHandler(request: NextRequest) {
         overwriteMode: overwrite,
         importedCustomers: results.customers.imported,
         importedSuppliers: results.suppliers.imported,
+        importedServiceArticles: results.serviceArticles.imported,
         importedBillingNotes: results.billingNotes.imported,
         importedExpenses: results.expenses.imported,
         importedIncomes: results.incomes.imported,

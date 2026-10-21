@@ -1,0 +1,3 @@
+-- Exact reviewed union of growth100000 and AI091000 capabilities.
+-- All additive tables and columns remain owned by original migrations.
+-- No business evidence or target-owned provider configuration is rewritten.

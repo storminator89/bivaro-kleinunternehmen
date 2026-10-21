@@ -228,6 +228,8 @@ export async function GET(request: Request) {
           issuanceState: true,
           paidAt: true,
           validUntil: true,
+          quoteFollowUpOn: true,
+          quoteResponseNote: true,
           originalInvoiceId: true,
           cancellationReason: true,
           convertedFromQuoteId: true,

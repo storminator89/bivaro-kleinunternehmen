@@ -41,7 +41,7 @@ function oldBackup(version: '2.0' | '3.0', invoiceNumber: string | null = null, 
   };
   const manifest = createBackupManifest({ sourceUserId, generatedAt: '2025-03-18T00:00:00.000Z', data });
   manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
-  manifest.modelCoverage = manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent' && entry.model !== 'AiProviderSettings');
+  manifest.modelCoverage = manifest.modelCoverage.filter(entry => !['PaymentJournalEvent', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch'].includes(entry.model));
   return { version, type: 'json', exportedAt: '2025-03-18T00:00:00.000Z', data, ...(version === '3.0' ? { manifest } : {}) };
 }
 

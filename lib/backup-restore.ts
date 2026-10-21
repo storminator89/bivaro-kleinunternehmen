@@ -1,4 +1,8 @@
 import { annualContextAppendAfter, readAnnualContextRevision, validateAnnualContextHistory } from '@/lib/annual-business-context';
+import { CUSTOMER_FIELD_LIMITS, customerBusinessIdentity } from '@/lib/customer-field-contract';
+import { readServiceArticle, serviceArticleNameKey } from '@/lib/service-articles';
+import { QUOTE_WORKFLOW_SCHEMAS } from '@/lib/backup-manifest';
+import { parseQuoteWorkflowUpdate } from '@/lib/quote-workflow';
 import { formatMoneyEUR, parseMoneyEUR } from '@/lib/money';
 import { EMPTY_FISCAL_PROFILE, validateFiscalProfileInput } from '@/lib/fiscal-profile';
 import { Prisma } from '@prisma/client';
@@ -80,6 +84,7 @@ type RestoreResult = {
   deleted?: string;
   customers: { imported: number; skipped: number };
   suppliers: { imported: number; skipped: number };
+  serviceArticles: { imported: number; skipped: number };
   billingNotes: { imported: number; skipped: number };
   expenses: { imported: number; skipped: number };
   incomes: { imported: number; skipped: number };
@@ -108,7 +113,7 @@ type ValidatedBackup = {
 };
 
 const ARRAY_KEYS = [
-  'customers', 'suppliers', 'expenses', 'incomes', 'paymentJournalEvents', 'invoices', 'purchaseDocuments', 'templates',
+  'customers', 'suppliers', 'serviceArticles', 'expenses', 'incomes', 'paymentJournalEvents', 'invoices', 'purchaseDocuments', 'templates',
   'billingNotes', 'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
   'documentations', 'apiKeys', 'auditLogs',
 ] as const;
@@ -870,6 +875,7 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   }
 
   const arrays = Object.fromEntries(ARRAY_KEYS.map((key) => [key, asArray(data, key)]));
+  if (version === LEGACY_BACKUP_VERSION && arrays.serviceArticles.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine ungebundenen Artikel enthalten');
   if (version === LEGACY_BACKUP_VERSION && arrays.suppliers.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine ungebundenen Lieferanten enthalten');
   if (version === LEGACY_BACKUP_VERSION && arrays.purchaseDocuments.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine ungebundenen Eingangsbelege enthalten');
   const sets: Record<string, Set<number>> = {};
@@ -881,6 +887,14 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   validateDateFields(arrays.expenses, 'expenses', ['date']);
   validateDateFields(arrays.incomes, 'incomes', ['date']);
   validateDateFields(arrays.invoices, 'invoices', ['uploadedAt', 'invoiceDate', 'dueDate', 'paidAt', 'validUntil']);
+  validateDateFields(arrays.serviceArticles, 'serviceArticles', ['createdAt']);
+  const articleKeys = new Set<string>();
+  arrays.serviceArticles.forEach((article, index) => {
+    const value = readServiceArticle(article);
+    if (!value || article.nameKey !== serviceArticleNameKey(value.name)) throw new BackupValidationError(`serviceArticles[${index}] enthält ungültige Artikel- oder Preisangaben`);
+    if (articleKeys.has(String(article.nameKey))) throw new BackupValidationError('Artikelbezeichnungen müssen im Backup eindeutig sein');
+    articleKeys.add(String(article.nameKey));
+  });
   validateDateFields(arrays.templates, 'templates', ['createdAt', 'updatedAt']);
   validateDateFields(arrays.recurringExpenses, 'recurringExpenses', ['startDate', 'endDate', 'lastExecuted', 'nextExecution', 'createdAt', 'updatedAt']);
   validateDateFields(arrays.reminders, 'reminders', ['sentAt', 'dueDate', 'createdAt']);
@@ -890,7 +904,10 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   validateDateFields(arrays.billingNotes, 'billingNotes', ['serviceDate', 'createdAt', 'updatedAt']);
 
   arrays.customers.forEach((customer, index) => {
-    asRequiredString(customer.name, `customers[${index}].name`, 255);
+    asRequiredString(customer.name, `customers[${index}].name`, CUSTOMER_FIELD_LIMITS.name);
+    for (const [field, limit] of Object.entries(CUSTOMER_FIELD_LIMITS)) {
+      if (field !== 'name') asOptionalString(customer[field], `customers[${index}].${field}`, limit);
+    }
     asOptionalString(customer.internalNote, `customers[${index}].internalNote`, 5_000);
     if (customer.noteVisibility !== undefined && !['EDITOR', 'SEND', 'BOTH'].includes(String(customer.noteVisibility))) {
       throw new BackupValidationError(`customers[${index}].noteVisibility ist ungültig`);
@@ -906,6 +923,12 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
       throw new BackupValidationError(`invoices[${index}].issuanceState ist ungültig`);
     }
     if (invoice.parsedData !== undefined) asJson(invoice.parsedData, `invoices[${index}].parsedData`);
+    if (version === LEGACY_BACKUP_VERSION && (invoice.quoteFollowUpOn != null || invoice.quoteResponseNote != null)) throw new BackupValidationError('Altes Backupformat darf keine ungebundenen Angebots-Wiedervorlagen enthalten');
+    try {
+      const workflow = parseQuoteWorkflowUpdate({ quoteFollowUpOn: invoice.quoteFollowUpOn ?? null, quoteResponseNote: invoice.quoteResponseNote ?? null });
+      if (workflow.quoteFollowUpOn !== (invoice.quoteFollowUpOn ?? null) || workflow.quoteResponseNote !== (invoice.quoteResponseNote ?? null)) throw new Error('Nicht kanonische Angebotsdaten');
+    } catch { throw new BackupValidationError('Angebots-Wiedervorlage oder Rückmeldungsnotiz ist ungültig'); }
+    if (invoice.type !== 'QUOTE' && (invoice.quoteFollowUpOn != null || invoice.quoteResponseNote != null)) throw new BackupValidationError('Angebots-Wiedervorlagen sind ausschließlich an Angebote gebunden');
   });
   arrays.expenses.forEach((expense, index) => {
     asRequiredString(expense.description, `expenses[${index}].description`, 255);
@@ -988,6 +1011,7 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     deleted: overwrite ? 'Alle bestehenden Daten wurden gelöscht' : undefined,
     customers: { imported: 0, skipped: 0 },
     suppliers: { imported: 0, skipped: 0 },
+    serviceArticles: { imported: 0, skipped: 0 },
     billingNotes: { imported: 0, skipped: 0 },
     expenses: { imported: 0, skipped: 0 },
     incomes: { imported: 0, skipped: 0 },
@@ -1058,6 +1082,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   sourceUserId?: string;
   customers: Map<number, number>;
   suppliers: Map<number, number>;
+  serviceArticles: Map<number, number>;
   billingNotes: Map<number, number>;
   expenses: Map<number, number>;
   incomes: Map<number, number>;
@@ -1079,6 +1104,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   const mapByType: Record<string, Map<number, number> | undefined> = {
     Customer: maps.customers,
     Supplier: maps.suppliers,
+    ServiceArticle: maps.serviceArticles,
     BillingNote: maps.billingNotes,
     Expense: maps.expenses,
     Income: maps.incomes,
@@ -1154,6 +1180,8 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
   await tx.apiLog.deleteMany({ where: { userId } });
   await tx.apiKey.deleteMany({ where: { userId } });
   await tx.invoiceTemplate.deleteMany({ where: { userId } });
+  await tx.serviceArticle.deleteMany({ where: { userId } });
+  await tx.dataImportBatch.deleteMany({ where: { userId } });
   await tx.billingNote.deleteMany({ where: { userId } });
   await tx.invoice.deleteMany({ where: { userId } });
   await tx.customer.deleteMany({ where: { userId } });
@@ -1208,6 +1236,43 @@ function purchaseExpenseFingerprint(record: JsonRecord): string {
     taxRelevant: record.taxRelevant ?? true,
     scheduledDate: asDate(record.scheduledDate, 'expense.scheduledDate')?.toISOString() ?? null,
   });
+}
+
+/** Preflight before staging files, then repeat inside the authoritative write
+ * transaction. Never collapse different source IDs onto one name-only match. */
+async function planCustomerMerge(client: Pick<Prisma.TransactionClient, 'customer' | 'invoice'>, userId: string, customers: JsonRecord[], invoices: JsonRecord[]): Promise<Map<number, number>> {
+  const matches = new Map<number, number>();
+  if (!customers.length && !invoices.length) return matches;
+  const targets = await client.customer.findMany({ where: { userId }, select: { id: true, name: true, email: true, address: true, zipCode: true, city: true } });
+  const byIdentity = new Map<string, number[]>();
+  for (const target of targets) {
+    const key = customerBusinessIdentity(target);
+    byIdentity.set(key, [...(byIdentity.get(key) ?? []), target.id]);
+  }
+  const sourceCounts = new Map<string, number>();
+  for (const source of customers) {
+    const key = customerBusinessIdentity(source);
+    sourceCounts.set(key, (sourceCounts.get(key) ?? 0) + 1);
+  }
+  for (const source of customers) {
+    const key = customerBusinessIdentity(source);
+    const ids = byIdentity.get(key) ?? [];
+    if (ids.length > 1 || (ids.length > 0 && sourceCounts.get(key)! > 1)) throw new BackupValidationError('Mehrdeutige Kundenidentität: Mehrere Kunden dürfen beim Zusammenführen nicht auf einen Datensatz abgebildet werden. Bitte ein leeres Wiederherstellungsziel verwenden oder die Kunden getrennt prüfen.');
+    if (ids.length === 1) matches.set(asOptionalInt(source.id, 'customer.id')!, ids[0]);
+  }
+  const invoiceNumbers = invoices.map(invoice => asOptionalString(invoice.invoiceNumber, 'invoice.invoiceNumber', 255)).filter((value): value is string => Boolean(value));
+  if (invoiceNumbers.length) {
+    const existing = await client.invoice.findMany({ where: { userId, invoiceNumber: { in: invoiceNumbers } }, select: { invoiceNumber: true, customerId: true } });
+    const byNumber = new Map(existing.map(invoice => [invoice.invoiceNumber, invoice]));
+    for (const source of invoices) {
+      const target = byNumber.get(String(source.invoiceNumber));
+      if (!target) continue;
+      const sourceCustomerId = asOptionalInt(source.customerId, 'invoice.customerId');
+      const mapped = sourceCustomerId === null ? null : matches.get(sourceCustomerId);
+      if (mapped !== target.customerId) throw new BackupValidationError('Die Zielrechnung verweist auf einen anderen oder nicht eindeutig zugeordneten Kunden; Zusammenführen wurde ohne Änderungen abgebrochen.');
+    }
+  }
+  return matches;
 }
 
 export async function restoreBackupData(options: RestoreOptions): Promise<RestoreResult> {
@@ -1278,6 +1343,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
   try {
     const customers = asArray(data, 'customers');
     const suppliers = asArray(data, 'suppliers');
+    const serviceArticles = asArray(data, 'serviceArticles');
     const expenses = asArray(data, 'expenses');
     const incomes = asArray(data, 'incomes');
     const paymentJournalEvents = asArray(data, 'paymentJournalEvents');
@@ -1312,6 +1378,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const targetContext = (await prisma.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } })).map(readAnnualContextRevision);
     try { annualContextAppendAfter(targetContext, sourceContext); }
     catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Jahreskontext-Konflikt'); }
+    if (!overwrite) await planCustomerMerge(prisma, userId, customers, invoices);
 
     // A merge may keep an existing component only if its original is still
     // usable. Metadata equality alone must not preserve a missing/tampered file.
@@ -1360,6 +1427,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (sourceLogo) await stageFile('logo', sourceLogo, sourceLogo);
 
     await prisma.$transaction(async (tx) => {
+      const existingCustomerMatches = overwrite ? new Map<number, number>() : await planCustomerMerge(tx, userId, customers, invoices);
       // Read both counters and invoice-number history before overwrite can
       // remove the rows.  Historical years come from the number grammar.
       const [existingCounters, existingInvoices] = await Promise.all([
@@ -1385,7 +1453,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       try { appendContext = annualContextAppendAfter(existingContext, incomingContext); }
       catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Jahreskontext-Konflikt'); }
       if (existingContext.length > incomingContext.length) result.warnings.push('Bestehende neuere Jahreskontexthistorie wurde bewahrt; das Backup ersetzt oder bestätigt keine fehlenden Angaben.');
-      if (overwrite) await deleteUserData(tx, userId);
+      if (overwrite) {
+        const activeWorkflow = await tx.invoice.count({ where: { userId, type: 'QUOTE', OR: [{ quoteFollowUpOn: { not: null } }, { quoteResponseNote: { not: null } }] } });
+        if (activeWorkflow > 0 && (!manifest || !QUOTE_WORKFLOW_SCHEMAS.includes(manifest.schemaVersion))) throw new BackupValidationError('Dieses ältere Backup enthält keine vollständigen Angebots-Wiedervorlagen. Überschreiben würde interne Aufgaben oder Notizen löschen; bitte ein aktuelles Backup verwenden oder getrennt wiederherstellen.');
+        await deleteUserData(tx, userId);
+      }
       result.annualBusinessContextRevisions.skipped = incomingContext.length - appendContext.length;
       result.annualBusinessContextRevisions.imported = appendContext.length;
       for (const context of appendContext) {
@@ -1456,21 +1528,34 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         }
       }
 
-      // In merge mode only records that existed before this restore are
-      // deduplicated by name. Two same-named records in one backup remain
-      // distinct so their source IDs and relationships are preserved.
-      const existingCustomersByName = new Map<string, number>();
+      // Existing cash-book and template name behavior is unchanged. Customer
+      // matching above uses the shared complete business identity instead.
       const existingCashBooksByName = new Map<string, number>();
       const existingTemplatesByName = new Map<string, number>();
       if (!overwrite) {
-        const [existingCustomers, existingCashBooks, existingTemplates] = await Promise.all([
-          tx.customer.findMany({ where: { userId }, select: { id: true, name: true } }),
+        const [existingCashBooks, existingTemplates] = await Promise.all([
           tx.cashBook.findMany({ where: { userId }, select: { id: true, name: true } }),
           tx.invoiceTemplate.findMany({ where: { userId }, select: { id: true, name: true } }),
         ]);
-        for (const existing of existingCustomers) existingCustomersByName.set(existing.name, existing.id);
         for (const existing of existingCashBooks) existingCashBooksByName.set(existing.name, existing.id);
         for (const existing of existingTemplates) existingTemplatesByName.set(existing.name, existing.id);
+      }
+
+      const serviceArticleMap = new Map<number, number>();
+      for (const source of serviceArticles) {
+        const article = readServiceArticle(source)!;
+        const nameKey = serviceArticleNameKey(article.name);
+        const existing = await tx.serviceArticle.findUnique({ where: { userId_nameKey: { userId, nameKey } } });
+        if (existing) {
+          // A name collision with different prices is ambiguous, never silently merged.
+          if (['name', 'description', 'unit', 'unitPriceCents', 'sourcePriceCents', 'sourcePriceBasis', 'taxRate'].some(key => existing[key as keyof typeof existing] !== source[key])) throw new BackupValidationError('Ein vorhandener Artikel hat abweichende Daten; Zusammenführen wurde ohne Änderungen abgebrochen.');
+          serviceArticleMap.set(article.id, existing.id);
+          result.serviceArticles.skipped += 1;
+        } else {
+          const created = await tx.serviceArticle.create({ data: { userId, nameKey, name: article.name, description: article.description, unit: article.unit, unitPriceCents: article.unitPriceCents, sourcePriceCents: article.sourcePriceCents, sourcePriceBasis: article.sourcePriceBasis, taxRate: article.taxRate, createdAt: asDate(source.createdAt, 'serviceArticle.createdAt', new Date())! } });
+          serviceArticleMap.set(article.id, created.id);
+          result.serviceArticles.imported += 1;
+        }
       }
 
       // Supplier identity is source-tenant + source ID, never a display name.
@@ -1557,21 +1642,21 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
       for (const customer of customers) {
         const sourceId = asOptionalInt(customer.id, 'customer.id')!;
-        const name = asRequiredString(customer.name, 'customer.name', 255);
-        const existingId = existingCustomersByName.get(name);
+        const name = asRequiredString(customer.name, 'customer.name', CUSTOMER_FIELD_LIMITS.name);
+        const existingId = existingCustomerMatches.get(sourceId);
         if (existingId) {
           customerMap.set(sourceId, existingId);
           result.customers.skipped += 1;
         } else {
           const created = await tx.customer.create({ data: {
             name,
-            contactPerson: asOptionalString(customer.contactPerson, 'customer.contactPerson', 255),
-            email: asOptionalString(customer.email, 'customer.email', 320),
-            phone: asOptionalString(customer.phone, 'customer.phone', 64),
-            address: asOptionalString(customer.address, 'customer.address', 1_000),
-            zipCode: asOptionalString(customer.zipCode, 'customer.zipCode', 32),
-            city: asOptionalString(customer.city, 'customer.city', 255),
-            taxNumber: asOptionalString(customer.taxNumber, 'customer.taxNumber', 128),
+            contactPerson: asOptionalString(customer.contactPerson, 'customer.contactPerson', CUSTOMER_FIELD_LIMITS.contactPerson),
+            email: asOptionalString(customer.email, 'customer.email', CUSTOMER_FIELD_LIMITS.email),
+            phone: asOptionalString(customer.phone, 'customer.phone', CUSTOMER_FIELD_LIMITS.phone),
+            address: asOptionalString(customer.address, 'customer.address', CUSTOMER_FIELD_LIMITS.address),
+            zipCode: asOptionalString(customer.zipCode, 'customer.zipCode', CUSTOMER_FIELD_LIMITS.zipCode),
+            city: asOptionalString(customer.city, 'customer.city', CUSTOMER_FIELD_LIMITS.city),
+            taxNumber: asOptionalString(customer.taxNumber, 'customer.taxNumber', CUSTOMER_FIELD_LIMITS.taxNumber),
             internalNote: asOptionalString(customer.internalNote, 'customer.internalNote', 5_000),
             noteVisibility: asOptionalString(customer.noteVisibility, 'customer.noteVisibility', 16) ?? 'BOTH',
             createdAt: asDate(customer.createdAt, 'customer.createdAt', new Date())!,
@@ -1613,6 +1698,13 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           throw new BackupValidationError('Zahlungshistorie ohne eindeutige Rechnungsidentität kann nicht mit einem journalisierten Ziel zusammengeführt werden.');
         }
         if (existing) {
+          if (existing.customerId !== relationMapValue(customerMap, invoice.customerId, 'invoice.customerId')) throw new BackupValidationError('Die Zielrechnung verweist auf einen anderen Kunden; Zusammenführen wurde ohne Änderungen abgebrochen.');
+          if (existing.type === 'QUOTE' || invoice.type === 'QUOTE') {
+            if (existing.type !== invoice.type || (existing.quoteFollowUpOn ?? null) !== (invoice.quoteFollowUpOn ?? null)
+              || (existing.quoteResponseNote ?? null) !== (invoice.quoteResponseNote ?? null)) {
+              throw new BackupValidationError('Gleiche Angebotsnummer mit abweichender Wiedervorlage oder Rückmeldungsnotiz. Zusammenführen würde Aufgaben oder Notizen verlieren; bitte getrennt prüfen.');
+            }
+          }
           const targetPayments = existingPaymentsByInvoice.get(existing.id) ?? [];
           if (sourcePayments.length || targetPayments.length) {
             if (mappedJournalInvoices.has(existing.id)) throw new BackupValidationError('Mehrere Quellrechnungen dürfen nicht auf dieselbe Zahlungsrechnung abgebildet werden');
@@ -1694,6 +1786,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           invoiceDate: asDate(invoice.invoiceDate, 'invoice.invoiceDate'),
           dueDate: asDate(invoice.dueDate, 'invoice.dueDate'),
           validUntil: asDate(invoice.validUntil, 'invoice.validUntil'),
+          quoteFollowUpOn: asOptionalString(invoice.quoteFollowUpOn, 'invoice.quoteFollowUpOn', 10),
+          quoteResponseNote: asOptionalString(invoice.quoteResponseNote, 'invoice.quoteResponseNote', 2000),
           parsedData: asJson(invoice.parsedData, 'invoice.parsedData'),
           totalAmount: asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount'),
           status: asOptionalString(invoice.status, 'invoice.status', 32) ?? 'DRAFT',
@@ -2138,6 +2232,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         sourceUserId,
         customers: customerMap,
         suppliers: supplierMap,
+        serviceArticles: serviceArticleMap,
         billingNotes: billingNoteMap,
         expenses: expenseMap,
         incomes: incomeMap,

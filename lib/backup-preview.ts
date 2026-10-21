@@ -19,6 +19,7 @@ export type BackupPreview = {
   counts: {
     customers: number;
     suppliers: number;
+    serviceArticles: number;
     billingNotes: number;
     expenses: number;
     incomes: number;
@@ -77,6 +78,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   const counts = {
     customers: countArray(data, 'customers'),
     suppliers: countArray(data, 'suppliers'),
+    serviceArticles: countArray(data, 'serviceArticles'),
     billingNotes: countArray(data, 'billingNotes'),
     expenses: countArray(data, 'expenses'),
     incomes: countArray(data, 'incomes'),

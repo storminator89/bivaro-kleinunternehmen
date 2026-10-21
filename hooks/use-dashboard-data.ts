@@ -12,6 +12,8 @@ type PaginatedResponse<T> = {
   total: number;
   page: number;
   pageSize: number;
+  workflowCounts?: import("@/lib/quote-workflow").QuoteWorkflowCounts;
+  workflowDate?: string;
 };
 
 export type DashboardTab = "expenses" | "incomes" | "invoices" | "quotes" | "eur" | "gwg" | null;
@@ -358,6 +360,8 @@ export function useDashboardData({
     quotesPageSize,
     quotesTotal,
     quotesTotalPages,
+    quotesWorkflowCounts: quotesQuery.data?.workflowCounts,
+    quotesWorkflowDate: quotesQuery.data?.workflowDate,
     quotesIsFetching: quotesQuery.isFetching,
     quotesIsError: quotesQuery.isError,
     setExpensesPage,

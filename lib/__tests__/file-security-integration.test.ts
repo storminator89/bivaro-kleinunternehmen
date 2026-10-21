@@ -57,6 +57,16 @@ function jsonRequest(url: string, body: object) {
   return new NextRequest(`http://localhost${url}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 }
 
+async function conversionRequest(quoteId: number, number: string) {
+  const document = await PDFDocument.create(); document.addPage();
+  const xml = `<Invoice><ID>${number}</ID><IssueDate>2026-10-21</IssueDate><DocumentCurrencyCode>EUR</DocumentCurrencyCode><LegalMonetaryTotal><TaxInclusiveAmount currencyID="EUR">25</TaxInclusiveAmount><PayableAmount currencyID="EUR">25</PayableAmount></LegalMonetaryTotal></Invoice>`;
+  await document.attach(new TextEncoder().encode(xml), 'factur-x.xml', { mimeType: 'application/xml' });
+  const form = new FormData();
+  form.append('file', new File([new Uint8Array(await document.save())], `${number}.pdf`, { type: 'application/pdf' }));
+  form.append('fromQuoteId', String(quoteId));
+  return new NextRequest('http://localhost/api/invoices/upload', { method: 'POST', body: form });
+}
+
 describe('file and restore security integration', () => {
   it('forces raw XML downloads and sandboxes the HTML viewer', async () => {
     state.userId = 'alice';
@@ -189,7 +199,10 @@ describe('file and restore security integration', () => {
     expect(invoice.invoiceNumber).toBe('CONVERT-INVOICE');
     expect(invoice.convertedFromQuoteId).toBe(quote.id);
     expect(invoice.storedFileName).not.toBe(quote.storedFileName);
+    expect(invoice.status).toBe('DRAFT');
+    expect((await database.client.invoice.findUniqueOrThrow({ where: { id: quote.id } })).status).toBe('DRAFT');
     expect(await database.client.income.count({ where: { invoiceId: invoice.id } })).toBe(0);
+    await database.client.invoice.update({ where: { id: quote.id }, data: { status: 'REJECTED' } });
     const retry = await upload.POST(request());
     expect(retry.status).toBe(200);
     expect((await retry.json()).id).toBe(invoice.id);
@@ -198,6 +211,86 @@ describe('file and restore security integration', () => {
     const downloaded = await download.GET(new NextRequest(`http://localhost/api/invoices/download?id=${invoice.id}`));
     expect(downloaded.status).toBe(200);
     expect(Buffer.from(await downloaded.arrayBuffer())).toEqual(Buffer.from(invoiceBytes));
+  });
+
+
+  it('requires an explicit manual response for elapsed/rejected quotes but permits user-accepted late offers', async () => {
+    state.userId = 'alice';
+    for (const status of ['SENT', 'REJECTED', 'EXPIRED', 'CANCELLED']) {
+      const quote = await database.client.invoice.create({ data: {
+        userId: 'alice', type: 'QUOTE', fileName: `blocked-${status}.pdf`, storedFileName: `blocked-${status}.pdf`,
+        parsedData: {}, status, validUntil: new Date('2000-01-01T00:00:00Z'),
+      } });
+      const request = await conversionRequest(quote.id, `BLOCKED-${status}`);
+      const blocked = await upload.POST(request);
+      expect(blocked.status, status).toBe(409);
+      expect(await database.client.invoice.count({ where: { convertedFromQuoteId: quote.id } })).toBe(0);
+      expect((await database.client.invoice.findUniqueOrThrow({ where: { id: quote.id } })).status).toBe(status);
+      if (status === 'SENT') {
+        const accepted = await quotes.PUT(new NextRequest('http://localhost/api/quotes', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: quote.id, status: 'ACCEPTED' }) }));
+        expect(accepted.status).toBe(200);
+        const converted = await upload.POST(await conversionRequest(quote.id, 'USER-ACCEPTED-LATE'));
+        expect(converted.status).toBe(200);
+        expect(await converted.json()).toMatchObject({ convertedFromQuoteId: quote.id, status: 'DRAFT' });
+      }
+    }
+  });
+
+  it('parallel draft conversion claims one source link without inventing manual acceptance or changing source bytes', async () => {
+    state.userId = 'alice';
+    const created = await quotes.POST(jsonRequest('/api/quotes', { fileName: 'parallel-source.pdf', quoteNumber: 'PARALLEL-SOURCE', parsedData: { items: [{ description: 'Original source line', quantity: 1, unitPrice: 25, unit: 'Stück', taxRate: 0 }] }, pdfBytes: Buffer.from(pdf).toString('base64') }));
+    const quote = await created.json();
+    await database.client.invoice.update({ where: { id: quote.id }, data: { status: 'SENT', validUntil: new Date('9999-12-31T00:00:00Z'), quoteFollowUpOn: '2026-12-31', quoteResponseNote: 'No client acceptance recorded' } });
+    const source = await database.client.invoice.findUniqueOrThrow({ where: { id: quote.id } });
+    const before = await readFile(storage.getTenantUploadPath('alice', quote.storedFileName));
+    const requests = await Promise.all([conversionRequest(quote.id, 'PARALLEL-INVOICE'), conversionRequest(quote.id, 'PARALLEL-INVOICE')]);
+    const initialResponses = await Promise.all(requests.map(request => upload.POST(request)));
+    // Same-tenant parsing is deliberately bounded. Depending on scheduling, one
+    // concurrent request may be refused before either conversion transaction.
+    expect(initialResponses.some(response => response.status === 200)).toBe(true);
+    expect(initialResponses.filter(response => response.status === 429).length).toBeLessThanOrEqual(1);
+    const responses: Response[] = [];
+    for (const response of initialResponses) {
+      if (response.status === 429) {
+        expect(response.headers.get('Retry-After')).toBe('1');
+        expect(await response.json()).toEqual({ error: 'Die Dokumentverarbeitung ist ausgelastet. Bitte später erneut versuchen.' });
+        // Promise.all above settled the first admitted call and released its
+        // real processing slot. Rebuild this consumed request and retry once;
+        // a second refusal or any other status must still fail the test.
+        const retry = await upload.POST(await conversionRequest(quote.id, 'PARALLEL-INVOICE'));
+        expect(retry.status).toBe(200);
+        responses.push(retry);
+      } else {
+        expect(response.status).toBe(200);
+        responses.push(response);
+      }
+    }
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    const invoices = await Promise.all(responses.map(response => response.json()));
+    expect(invoices[0].id).toBe(invoices[1].id);
+    expect(invoices[0]).toMatchObject({ convertedFromQuoteId: quote.id, status: 'DRAFT', totalAmount: 25 });
+    expect(await database.client.invoice.count({ where: { convertedFromQuoteId: quote.id } })).toBe(1);
+    expect(await database.client.invoice.findUniqueOrThrow({ where: { id: quote.id } })).toEqual(source);
+    expect(await readFile(storage.getTenantUploadPath('alice', quote.storedFileName))).toEqual(before);
+    expect(await database.client.income.count({ where: { invoiceId: invoices[0].id } })).toBe(0);
+    state.userId = 'bob';
+    expect((await upload.POST(await conversionRequest(quote.id, 'FOREIGN-CONVERSION'))).status).toBe(404);
+    state.userId = 'alice';
+  });
+
+
+  it('rechecks a changed response inside the conversion transaction, after upload preflight', async () => {
+    state.userId = 'alice';
+    const quote = await database.client.invoice.create({ data: { userId: 'alice', type: 'QUOTE', status: 'SENT', fileName: 'raced-response.pdf', storedFileName: 'raced-response.pdf', parsedData: {}, validUntil: new Date('9999-12-31T00:00:00Z') } });
+    const originalWrite = storage.writeTenantFile;
+    const spy = vi.spyOn(storage, 'writeTenantFile').mockImplementationOnce(async (...args) => {
+      await database.client.invoice.update({ where: { id: quote.id }, data: { status: 'REJECTED' } });
+      return originalWrite(...args);
+    });
+    try { expect((await upload.POST(await conversionRequest(quote.id, 'RESPONSE-RACED'))).status).toBe(409); }
+    finally { spy.mockRestore(); }
+    expect(await database.client.invoice.count({ where: { convertedFromQuoteId: quote.id } })).toBe(0);
+    expect((await database.client.invoice.findUniqueOrThrow({ where: { id: quote.id } })).status).toBe('REJECTED');
   });
 
 

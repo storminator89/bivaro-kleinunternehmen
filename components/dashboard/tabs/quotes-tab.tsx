@@ -1,5 +1,9 @@
 "use client";
 
+import { QuoteWorkflowDialog } from '@/components/dashboard/quote-workflow-dialog';
+import { quoteConversionBlockReason, quoteNextAction, type QuoteWorkflowCounts } from '@/lib/quote-workflow';
+import { formatBusinessDateDisplay } from '@/lib/business-date';
+import Link from "next/link";
 import { DashboardIcon } from "@/components/brand/dashboard-icon";
 import { QueryFeedback } from '@/components/dashboard/query-feedback';
 import React, { useState } from 'react';
@@ -33,6 +37,8 @@ export type Quote = {
     validUntil?: string;
     totalAmount?: number;
     status: string;
+    quoteFollowUpOn?: string | null;
+    quoteResponseNote?: string | null;
     convertedInvoice?: { id: number } | null;
     customer?: { id: number; name: string } | null;
     parsedData?: {
@@ -46,6 +52,8 @@ export type Quote = {
 type QuotesTabProps = {
     quotes: Quote[];
     total: number;
+    workflowCounts?: QuoteWorkflowCounts;
+    workflowDate?: string;
     page: number;
     pageSize: number;
     totalPages: number;
@@ -57,6 +65,7 @@ type QuotesTabProps = {
     onPageSizeChange: (size: number) => void;
     onStatusFilterChange: (status: string) => void;
     onSearchChange: (term: string) => void;
+    onResetFilters?: () => void;
     onOpenCreateModal: () => void;
     onStatusChange: (quoteId: number, newStatus: string) => Promise<void>;
     onConvertToInvoice: (quote: Quote) => void | Promise<void>;
@@ -64,7 +73,7 @@ type QuotesTabProps = {
     loadQuotes: (page: number, pageSize: number) => Promise<void>;
 };
 
-const STATUS_OPTIONS = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'];
+const STATUS_OPTIONS = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'CANCELLED'];
 
 const STATUS_LABELS: Record<string, string> = {
     DRAFT: 'Entwurf',
@@ -72,6 +81,7 @@ const STATUS_LABELS: Record<string, string> = {
     ACCEPTED: 'Angenommen',
     REJECTED: 'Abgelehnt',
     EXPIRED: 'Abgelaufen',
+    CANCELLED: 'Zurückgezogen',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -101,6 +111,8 @@ function QuoteStatusBadge({ status, onStatusChange }: { status: string; onStatus
 export function QuotesTab({
     quotes,
     total,
+    workflowCounts,
+    workflowDate,
     page,
     pageSize,
     totalPages,
@@ -112,12 +124,14 @@ export function QuotesTab({
     onPageSizeChange,
     onStatusFilterChange,
     onSearchChange,
+    onResetFilters,
     onOpenCreateModal,
     onStatusChange,
     onConvertToInvoice,
     onDelete,
     loadQuotes,
 }: QuotesTabProps) {
+    const [workflowQuote, setWorkflowQuote] = useState<Quote | null>(null);
     const [convertingId, setConvertingId] = useState<number | null>(null);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [confirmConvert, setConfirmConvert] = useState<Quote | null>(null);
@@ -148,11 +162,26 @@ export function QuotesTab({
 
     return (
         <div className={`space-y-6 ${styles.records}`}>
+            <section aria-labelledby="quote-next-heading" className="rounded-xl border bg-card p-4 sm:p-6">
+                <h2 id="quote-next-heading" className="text-lg font-semibold">Was ist als Nächstes dran?</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Alle Ihre Angebote im Blick – unabhängig von Suche und Seite. Status und Rückmeldungen erfassen Sie selbst; Bivaro bestätigt nichts im Namen Ihrer Kunden.</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {([
+                        ['FOLLOW_UP', '1 · Nachfassen', 'Heute oder früher vorgemerkt'],
+                        ['NEEDS_RESPONSE', '2 · Rückmeldung klären', 'Versendet, Gültigkeit vorbei'],
+                        ['READY_TO_INVOICE', '3 · Rechnung vorbereiten', 'Von Ihnen als angenommen erfasst'],
+                    ] as const).map(([key, title, detail]) => <button key={key} type="button" aria-pressed={statusFilter === key} disabled={isLoading || isError} onClick={() => onStatusFilterChange(statusFilter === key ? 'all' : key)} className={`min-h-24 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${statusFilter === key ? 'border-primary bg-positive-surface' : 'border-border'}`}>
+                        <span className="flex items-center justify-between gap-2 font-medium"><span>{title}</span><span className="text-xl tabular-nums">{isLoading || isError || !workflowCounts ? '–' : workflowCounts[key]}</span></span>
+                        <span className="mt-1 block text-sm text-muted-foreground">{detail}</span>
+                    </button>)}
+                </div>
+                <p className="mt-3 text-sm text-muted-foreground">In-App-Aufgaben nach deutschem Kalender. Ein Angebot kann Nachfassen und Rückmeldung benötigen. Keine E-Mails oder automatischen Erinnerungen.</p>
+            </section>
             {/* Header card */}
             <div className="ledger-list overflow-hidden rounded-xl border bg-card">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4 sm:p-6">
                     <LedgerListHeading icon="nav-quotes" title="Ihre Angebote" isLoading={isLoading} isError={isError} total={total} amounts={isLoading || isError ? [] : quotes.map(quote => quote.totalAmount ?? 0)} />
-                    {(searchTerm || statusFilter !== 'all') && <Button variant="ghost" size="sm" onClick={() => { onSearchChange(''); onStatusFilterChange('all'); }}><X className="mr-1.5 h-4 w-4" aria-hidden="true" />Filter zurücksetzen</Button>}
+                    {(searchTerm || statusFilter !== 'all') && <Button variant="ghost" size="sm" onClick={() => { if (onResetFilters) onResetFilters(); else { onSearchChange(''); onStatusFilterChange('all'); } }}><X className="mr-1.5 h-4 w-4" aria-hidden="true" />Filter zurücksetzen</Button>}
                 </div>
 
                 {/* Filters */}
@@ -167,6 +196,7 @@ export function QuotesTab({
                                 onChange={(e) => onStatusFilterChange(e.target.value)}
                             >
                                 <option value="all">Alle Status</option>
+                                <optgroup label="Nächster Schritt"><option value="FOLLOW_UP">Nachfassen – heute &amp; überfällig</option><option value="NEEDS_RESPONSE">Gültigkeit vorbei – Rückmeldung klären</option><option value="READY_TO_INVOICE">Angenommen – Rechnung vorbereiten</option></optgroup>
                                 {STATUS_OPTIONS.map(s => (
                                     <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                                 ))}
@@ -180,7 +210,7 @@ export function QuotesTab({
                                     id="quote-search"
                                     type="text"
                                     className="pl-9 pr-11"
-                                    placeholder="Angebotsnummer suchen..."
+                                    placeholder="Angebotsnummer oder Kunde suchen…"
                                     value={searchTerm}
                                     onChange={(e) => onSearchChange(e.target.value)}
                                 />
@@ -216,10 +246,15 @@ export function QuotesTab({
                                 <p className="shrink-0 font-semibold tabular-nums">{quote.totalAmount != null ? formatCurrency(quote.totalAmount) : '–'}</p>
                             </div>
                             {quote.validUntil && <p className="text-xs text-muted-foreground">Gültig bis {new Date(quote.validUntil).toLocaleDateString('de-DE')}</p>}
+                            {quoteNextAction(quote, workflowDate) && <p className="text-sm font-medium text-primary">{quoteNextAction(quote, workflowDate)?.label}</p>}
+                            {!quote.convertedInvoice && quoteConversionBlockReason(quote, workflowDate) && <p className="text-sm text-muted-foreground">Vor dem Rechnungsentwurf: Rückmeldung klären und Angebot bewusst wieder öffnen oder Annahme erfassen.</p>}
+                            {quote.quoteFollowUpOn && <p className="text-sm text-muted-foreground">Wiedervorlage: {formatBusinessDateDisplay(quote.quoteFollowUpOn)}</p>}
                             <QuoteStatusBadge status={quote.status} onStatusChange={(newStatus) => onStatusChange(quote.id, newStatus)} />
                             <div className="flex flex-wrap gap-2">
+                                {quote.convertedInvoice && <Button variant="outline" size="sm" asChild><Link href={`/history?invoiceId=${quote.convertedInvoice.id}`}>Verknüpfte Rechnung ansehen</Link></Button>}
+                                <Button variant="outline" size="sm" onClick={() => setWorkflowQuote(quote)}>Rückmeldung &amp; Nachfassen</Button>
                                 <Button variant="outline" size="sm" className="min-h-11" onClick={() => window.open(`/api/quotes/download?id=${quote.id}`, '_blank')}><Eye className="h-4 w-4" />Ansehen</Button>
-                                {!quote.convertedInvoice && !['REJECTED', 'EXPIRED', 'CANCELLED'].includes(quote.status) && (
+                                {!quote.convertedInvoice && !quoteConversionBlockReason(quote, workflowDate) && (
                                     <Button variant="outline" size="sm" className="min-h-11" disabled={convertingId === quote.id} onClick={() => setConfirmConvert(quote)}>In Rechnung</Button>
                                 )}
                                 <Button variant="outline" size="sm" disabled={quote.status === 'REJECTED' || quote.status === 'EXPIRED'} onClick={() => setEmailQuote(quote)}><Mail className="h-4 w-4" aria-hidden="true" />E-Mail</Button>
@@ -259,6 +294,7 @@ export function QuotesTab({
                                                 : new Date(quote.uploadedAt).toLocaleDateString('de-DE')}
                                         </TableCell>
                                         <TableCell className="font-medium">
+                                            {quoteNextAction(quote, workflowDate) && <p className="mb-1 text-xs font-medium text-primary">{quoteNextAction(quote, workflowDate)?.label}</p>}
                                             {quote.invoiceNumber || <span className="text-muted-foreground italic text-xs">Nicht verfügbar</span>}
                                         </TableCell>
                                         <TableCell className="text-muted-foreground">
@@ -283,6 +319,10 @@ export function QuotesTab({
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right">
+                                            {!quote.convertedInvoice && quoteConversionBlockReason(quote, workflowDate) && <p className="mb-2 max-w-64 text-left text-sm text-muted-foreground">Vor dem Rechnungsentwurf bitte Rückmeldung klären.</p>}
+                                            {quote.convertedInvoice && <Button variant="outline" size="sm" className="mb-2 mr-2" asChild><Link href={`/history?invoiceId=${quote.convertedInvoice.id}`}>Verknüpfte Rechnung ansehen</Link></Button>}
+                                            <Button variant="outline" size="sm" className="mb-2" onClick={() => setWorkflowQuote(quote)}>Rückmeldung &amp; Nachfassen</Button>
+                                            {quote.quoteFollowUpOn && <p className="mb-2 text-sm text-muted-foreground">Wiedervorlage: {formatBusinessDateDisplay(quote.quoteFollowUpOn)}</p>}
                                             <TooltipProvider>
                                                 <div className="flex justify-end space-x-2">
                                                     {/* View */}
@@ -327,7 +367,7 @@ export function QuotesTab({
                                                     </Tooltip>
 
                                                     {/* Convert to Invoice */}
-                                                    {!quote.convertedInvoice && !['REJECTED', 'EXPIRED', 'CANCELLED'].includes(quote.status) && (
+                                                    {!quote.convertedInvoice && !quoteConversionBlockReason(quote, workflowDate) && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
                                                                 <Button
@@ -419,22 +459,22 @@ export function QuotesTab({
                 </div>
             </div>
 
+            {workflowQuote && <QuoteWorkflowDialog key={workflowQuote.id} quote={workflowQuote} onClose={() => setWorkflowQuote(null)} onSaved={() => loadQuotes(page, pageSize)} />}
             {/* Confirm: Convert to Invoice */}
             <Dialog open={!!confirmConvert} onOpenChange={() => setConfirmConvert(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Angebot in Rechnung umwandeln?</DialogTitle>
+                        <DialogTitle>Rechnungsentwurf prüfen?</DialogTitle>
                         <DialogDescription>
-                            Das Angebot <strong>{confirmConvert?.invoiceNumber}</strong> wird in eine Rechnung umgewandelt.
-                            Es wird automatisch eine neue Rechnungsnummer vergeben und ein Einnahme-Eintrag erstellt.
-                            Das Angebot wird als &quot;Angenommen&quot; markiert.
+                            Kunde und Positionen aus <strong>{confirmConvert?.invoiceNumber}</strong> werden in den Rechnungseditor übernommen. Prüfen Sie dort Datum, Leistung und Steuerentscheidung.
+                            Erst wenn Sie im Editor speichern, wird ein verknüpfter Rechnungsentwurf angelegt. Es wird nichts versendet und keine Zahlung oder Einnahme gebucht. Abbrechen schließt ohne neue Rechnung.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setConfirmConvert(null)}>Abbrechen</Button>
                         <Button onClick={handleConvert} className="gap-2">
                             <ArrowRightCircle className="h-4 w-4" />
-                            In Rechnung umwandeln
+                            Entwurf prüfen
                         </Button>
                     </DialogFooter>
                 </DialogContent>

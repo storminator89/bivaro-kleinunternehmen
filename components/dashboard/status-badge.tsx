@@ -9,6 +9,7 @@ import { XCircle } from "lucide-react";
 
 export interface StatusBadgeProps {
   status: string;
+  paymentReturnId?: number;
   paymentState?: 'OPEN' | 'PARTIAL' | 'PAID';
   onStatusChange?: (newStatus: string) => void;
   availableStatuses?: string[];
@@ -28,7 +29,7 @@ const statusConfig: {
 // Statuses that can be changed via dropdown
 const changeableStatuses = ["DRAFT", "SENT", "PAID"];
 
-export function StatusBadge({ status, paymentState, onStatusChange, availableStatuses }: StatusBadgeProps) {
+export function StatusBadge({ status, paymentReturnId, paymentState, onStatusChange, availableStatuses }: StatusBadgeProps) {
   const { label, color, surface } = statusConfig[status !== "CANCELLED" && paymentState ? paymentState : status] || { label: "Unbekannt", color: "bg-muted-foreground", surface: "bg-secondary text-foreground" };
   const options = availableStatuses === undefined
     ? changeableStatuses
@@ -58,7 +59,7 @@ export function StatusBadge({ status, paymentState, onStatusChange, availableSta
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label={`Zahlungsstatus: ${label}`} className={`inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium transition-colors hover:brightness-95 ${surface}`}>
+        <button type="button" data-invoice-payment-return={paymentReturnId} aria-label={`Zahlungsstatus: ${label}`} className={`inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium transition-colors hover:brightness-95 ${surface}`}>
           <span className={`w-2 h-2 rounded-full mr-2 ${color}`}></span>
           {label}
         </button>

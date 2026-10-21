@@ -1,3 +1,4 @@
+import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -30,7 +31,7 @@ const paidAt = '2026-01-05T00:00:00.000Z';
 const createdAt = '2026-01-08T12:00:00.000Z';
 function makeBackup(unknown = false) {
   const data = {
-    suppliers: [], purchaseDocuments: [],
+    serviceArticles: [], suppliers: [], purchaseDocuments: [],
     user: { id: 'journal-source' }, customers: [], expenses: [], auditLogs: [], invoiceNumberCounters: [],
     invoices: [{ id: 10, type: 'INVOICE', invoiceNumber: '2026-101', fileName: 'invoice.pdf', storedFileName: 'invoice.pdf',
       totalAmount: 25.01, status: 'PAID', issuanceState: 'ISSUED', paidAt: unknown ? null : paidAt, parsedData: { currency: 'EUR' } }],
@@ -137,7 +138,7 @@ describe('immutable payment journal backup', () => {
     older.data.paymentJournalEvents = [];
     older.data.invoices[0].paidAt = initial.data.invoices[0].paidAt;
     const source = envelope(older.data);
-    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; source.manifest.modelCoverage = source.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: older.data } : source;
     expect(() => restore.validateBackupForRestore(backup)).not.toThrow();
@@ -158,7 +159,7 @@ describe('immutable payment journal backup', () => {
     const before = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { userId: target } });
     const older = makeBackup(); older.data.paymentJournalEvents = [];
     const source = envelope(older.data);
-    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; source.manifest.modelCoverage = source.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: older.data } : source;
     await expect(restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile })).rejects.toThrow(/ohne Zahlungsidentitäten/u);
@@ -177,7 +178,7 @@ describe('immutable payment journal backup', () => {
     const older = makeBackup();
     const data = { ...older.data, invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber })), paymentJournalEvents: [] };
     const source = envelope(data);
-    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; source.manifest.modelCoverage = source.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data } : source;
     await restore.restoreBackupData({ userId: target, backup, overwrite: true, resolveFile });
@@ -204,7 +205,7 @@ describe('immutable payment journal backup', () => {
     const before = await readBackupSnapshot(target);
     const whitespaceData = { ...data, invoices: data.invoices.map(row => ({ ...row, invoiceNumber: '   ' })) };
     const source = envelope(whitespaceData);
-    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; source.manifest.modelCoverage = source.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: whitespaceData } : source;
     await expect(restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile })).rejects.toThrow(/eindeutige.*Rechnungsidentität/u);
@@ -254,8 +255,8 @@ describe('immutable payment journal backup', () => {
 
   it('rejects destructive overwrite of journal targets, including pre-journal backup versions', async () => {
     const before = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { userId: 'journal-target' } });
-    const old = envelope({ suppliers: [], purchaseDocuments: [], user: { id: 'journal-source' }, customers: [], expenses: [], incomes: [], invoices: [], auditLogs: [], invoiceNumberCounters: [] });
-    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    const old = envelope({ serviceArticles: [], suppliers: [], purchaseDocuments: [], user: { id: 'journal-source' }, customers: [], expenses: [], incomes: [], invoices: [], auditLogs: [], invoiceNumberCounters: [] });
+    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(old);
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     expect(() => restore.validateBackupForRestore(old)).not.toThrow();
     for (const backup of [old, makeBackup(), { version: '2.0', data: old.data }]) {
@@ -292,7 +293,7 @@ describe('immutable payment journal backup', () => {
   it('rejects unmanifested legacy event arrays and pre-journal manifest injection', () => {
     const backup = makeBackup();
     expect(() => restore.validateBackupForRestore({ version: '2.0', data: backup.data })).toThrow(/Legacy-Backups/u);
-    backup.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    backup.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(backup);
     backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     expect(() => restore.validateBackupForRestore(backup)).toThrow(/ungebundenen Zahlungsereignisse/u);
   });

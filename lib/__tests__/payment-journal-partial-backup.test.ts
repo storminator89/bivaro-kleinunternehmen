@@ -1,3 +1,4 @@
+import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -38,7 +39,7 @@ function envelope<T extends Record<string, unknown>>(data: T) {
 function fixture(amounts = [40, 80], dates = [dateA, dateB]) {
   const sum = amounts.reduce((total, amount) => total + amount, 0);
   return envelope({
-    user: { id: 'partial-source' }, suppliers: [], purchaseDocuments: [], customers: [], expenses: [], auditLogs: [], invoiceNumberCounters: [],
+    user: { id: 'partial-source' }, serviceArticles: [], suppliers: [], purchaseDocuments: [], customers: [], expenses: [], auditLogs: [], invoiceNumberCounters: [],
     invoices: [{ id: 10, type: 'INVOICE', invoiceNumber: '2026-120', fileName: 'invoice.pdf', storedFileName: 'invoice.pdf',
       totalAmount: 120, status: sum === 120 ? 'PAID' : 'SENT', issuanceState: 'ISSUED',
       paidAt: sum === 120 ? [...dates].sort().at(-1)! : null, parsedData: { currency: 'EUR' } }],
@@ -127,12 +128,12 @@ describe('partial-payment backup identity and grouped invariants', () => {
 
   it('recognizes the immediately previous full-payment journal schema, including restore and replay', async () => {
     await user('partial-previous');
-    const previous = fixture([120], [dateA]); previous.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; previous.manifest.modelCoverage = previous.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    const previous = fixture([120], [dateA]); previous.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(previous);
     expect(() => restore.validateBackupForRestore(previous)).not.toThrow();
     await apply('partial-previous', previous, true);
     const replay = await apply('partial-previous', previous);
     expect(replay.paymentJournalEvents).toEqual({ imported: 0, skipped: 1 });
-    const invalid = fixture(); invalid.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; invalid.manifest.modelCoverage = invalid.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    const invalid = fixture(); invalid.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(invalid);
     expect(() => restore.validateBackupForRestore(invalid)).toThrow(/Vollzahlungs-Backup-Schema/u);
   });
 
@@ -183,7 +184,7 @@ describe('partial-payment backup identity and grouped invariants', () => {
     await apply(target, fixture([40], [dateA]), true);
     const old = fixture([120], [dateA]); old.data.paymentJournalEvents = [];
     old.manifest = createBackupManifest({ sourceUserId: 'partial-source', generatedAt: createdAt, data: old.data });
-    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(old);
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry) => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: old.data } : old;
     await apply(empty, backup, true);

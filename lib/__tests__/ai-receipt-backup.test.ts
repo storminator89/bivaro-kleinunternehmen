@@ -30,8 +30,13 @@ describe('AI evidence backup boundaries',()=>{
     await database.client.purchaseDocument.create({data:{userId:'ai-backup-source',originalFileName:'synthetic.png',storedFileName:stored,originalSha256:hash,originalByteCount:bytes.length,mediaType:'image/png',uploadRequestId:randomUUID(),parseStatus:'FAILED',parseErrorCode:'PHOTO_MANUAL_REVIEW',revision:1,aiExtraction:{version:1,jobs:[completed,running]}}});
     const targetConfig=await database.client.aiProviderSettings.create({data:{userId:'ai-backup-target',enabled:true,autoAnalyzeNewUploads:true,baseUrl:'https://target.invalid/v1',model:'target',keyCiphertext:'synthetic-ciphertext',keyIv:'synthetic-iv',keyTag:'synthetic-tag'}});
     await database.client.aiProviderSettings.create({data:{userId:'ai-backup-source',enabled:true,baseUrl:'https://source.invalid/v1',model:'source',keyCiphertext:'source-secret-sentinel',keyIv:'source-iv',keyTag:'source-tag'}});
+    const customer=await database.client.customer.create({data:{userId:'ai-backup-source',name:'Synthetic union customer',contactPerson:'Synthetic contact',email:'union@example.test',phone:'000123',address:'Musterweg 1',zipCode:'00123',city:'Musterstadt',taxNumber:'SYNTHETIC',internalNote:'Private owner note',noteVisibility:'EDITOR'}});
+    await database.client.serviceArticle.create({data:{userId:'ai-backup-source',name:'Synthetic union catalog',nameKey:'synthetic union catalog',description:'Exact reusable service',unit:'Stunde',unitPriceCents:'10000',sourcePriceCents:'11900',sourcePriceBasis:'GROSS',taxRate:'19'}});
+    await database.client.annualBusinessContextRevision.create({data:{userId:'ai-backup-source',revision:1,contextYear:2026,effectiveFrom:'2026-01-01',completeness:'UNKNOWN',sourceNote:'Synthetic owner-declared context'}});
+    const quoteBytes=Buffer.from('%PDF-1.7\nSynthetic union quote only'),quoteFile=await storage.writeTenantFile('ai-backup-source','synthetic-quote.pdf',quoteBytes);
+    const quote=await database.client.invoice.create({data:{userId:'ai-backup-source',customerId:customer.id,type:'QUOTE',status:'REJECTED',invoiceNumber:'AN-SYNTHETIC-UNION',fileName:'synthetic-quote.pdf',storedFileName:quoteFile,parsedData:{items:[]},quoteFollowUpOn:'2026-12-31',quoteResponseNote:'Manual owner response, not acceptance'}});
     const captured=await snapshot.readBackupSnapshot('ai-backup-source');
-    const manifest=createBackupManifest({sourceUserId:'ai-backup-source',generatedAt:new Date().toISOString(),data:captured.data,fileManifest:[{kind:'purchase-document',sourceName:stored,zipPath:`purchase-documents/${stored}`,bytes:bytes.length,sha256:hash}],snapshot:captured.info});
+    const manifest=createBackupManifest({sourceUserId:'ai-backup-source',generatedAt:new Date().toISOString(),data:captured.data,fileManifest:[{kind:'purchase-document',sourceName:stored,zipPath:`purchase-documents/${stored}`,bytes:bytes.length,sha256:hash},{kind:'invoice',sourceName:quoteFile,zipPath:`invoices/${quoteFile}`,bytes:quoteBytes.length,sha256:hashBytes(quoteBytes)}],snapshot:captured.info});
     const backup={version:'3.0',type:'full',data:captured.data,manifest};
     expect(JSON.stringify(backup)).not.toContain('source-secret-sentinel');expect(captured.data).not.toHaveProperty('aiProviderSettings');
     expect(manifest.modelCoverage).toContainEqual(expect.objectContaining({model:'AiProviderSettings',mode:'excluded'}));
@@ -43,6 +48,14 @@ describe('AI evidence backup boundaries',()=>{
     await restore.restoreBackupData({userId:'ai-backup-target',backup,overwrite:true,resolveFile:async(_kind,name)=>readFile(storage.getTenantUploadPath('ai-backup-source',name))});
     expect(await database.client.aiProviderSettings.findUniqueOrThrow({where:{userId:'ai-backup-target'}})).toEqual(targetConfig);
     expect(await database.client.expense.count()).toBe(0);expect(await database.client.income.count()).toBe(0);
+    const targetCustomer=await database.client.customer.findFirstOrThrow({where:{userId:'ai-backup-target'}});
+    expect(targetCustomer).toMatchObject({name:customer.name,contactPerson:customer.contactPerson,email:customer.email,phone:customer.phone,address:customer.address,zipCode:'00123',city:customer.city,taxNumber:customer.taxNumber,internalNote:customer.internalNote,noteVisibility:'EDITOR'});
+    expect(await database.client.customer.count({where:{userId:'ai-backup-target'}})).toBe(1);
+    expect(await database.client.invoice.findMany({where:{userId:'ai-backup-target'}})).toMatchObject([{customerId:targetCustomer.id,status:'REJECTED',quoteFollowUpOn:'2026-12-31',quoteResponseNote:quote.quoteResponseNote,convertedFromQuoteId:null}]);
+    expect(await database.client.serviceArticle.findMany({where:{userId:'ai-backup-target'}})).toMatchObject([{unitPriceCents:'10000',sourcePriceCents:'11900',sourcePriceBasis:'GROSS',taxRate:'19'}]);
+    expect(await database.client.annualBusinessContextRevision.findMany({where:{userId:'ai-backup-target'}})).toMatchObject([{revision:1,contextYear:2026,completeness:'UNKNOWN',sourceNote:'Synthetic owner-declared context'}]);
+    expect(await database.client.invoice.findUniqueOrThrow({where:{id:quote.id}})).toEqual(quote);
+
     const old={...manifest,schemaVersion:COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION,modelCoverage:manifest.modelCoverage.filter(entry=>entry.model!=='AiProviderSettings')};
     expect(()=>validateBackupManifest(old,captured.data)).toThrow(/KI-Herkunft/);
     expect(()=>restore.validateBackupForRestore({...backup,manifest:old})).toThrow(/KI-Herkunft/);

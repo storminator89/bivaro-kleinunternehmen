@@ -1,3 +1,4 @@
+import { quoteConversionBlockReason } from '@/lib/quote-workflow';
 import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
@@ -310,20 +311,20 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json({ error: 'Ungültige Angebotsreferenz' }, { status: 400 });
     }
 
-    let sourceQuote: { id: number; status: string; convertedInvoice?: { id: number } | null } | null = null;
+    let sourceQuote: { id: number; status: string; validUntil: Date | null; convertedInvoice?: { id: number } | null } | null = null;
     if (fromQuoteId !== null) {
       sourceQuote = await prisma.invoice.findFirst({
         where: { id: fromQuoteId, userId, type: 'QUOTE' },
-        select: { id: true, status: true, convertedInvoice: { select: { id: true } } },
+        select: { id: true, status: true, validUntil: true, convertedInvoice: { select: { id: true } } },
       });
       if (!sourceQuote) return NextResponse.json({ error: 'Angebot nicht gefunden' }, { status: 404 });
-      if (sourceQuote.status === 'CANCELLED') {
-        return NextResponse.json({ error: 'Stornierte Angebote können nicht umgewandelt werden' }, { status: 409 });
-      }
       if (sourceQuote.convertedInvoice) {
-        const existing = await prisma.invoice.findUnique({ where: { id: sourceQuote.convertedInvoice.id }, include: { incomes: true } });
+        const existing = await prisma.invoice.findFirst({ where: { id: sourceQuote.convertedInvoice.id, userId, type: 'INVOICE' }, include: { incomes: true } });
+        if (!existing) throw new QuoteConversionError('Die Angebotsumwandlung ist inkonsistent', 409);
         return NextResponse.json({ ...existing, idempotent: true });
       }
+      const blockReason = quoteConversionBlockReason(sourceQuote);
+      if (blockReason) return NextResponse.json({ error: blockReason }, { status: 409 });
     }
 
     const invoiceDate = parsedInvoice.invoiceDate || new Date();
@@ -384,18 +385,15 @@ async function postHandler(request: NextRequest) {
         const currentQuote = sourceQuote
           ? await tx.invoice.findFirst({
             where: { id: sourceQuote.id, userId, type: 'QUOTE' },
-            select: { id: true, status: true, convertedInvoice: { select: { id: true } } },
+            select: { id: true, status: true, validUntil: true, convertedInvoice: { select: { id: true } } },
           })
           : null;
         if (sourceQuote && !currentQuote) {
           throw new QuoteConversionError('Angebot nicht gefunden', 404);
         }
-        if (currentQuote?.status === 'CANCELLED') {
-          throw new QuoteConversionError('Stornierte Angebote können nicht umgewandelt werden', 409);
-        }
         if (currentQuote?.convertedInvoice) {
           const existing = await tx.invoice.findUnique({
-            where: { id: currentQuote.convertedInvoice.id },
+            where: { id: currentQuote.convertedInvoice.id, userId, type: 'INVOICE' },
             include: { incomes: true },
           });
           if (existing) return { invoice: existing, idempotent: true };
@@ -411,6 +409,10 @@ async function postHandler(request: NextRequest) {
           }
         }
 
+        if (currentQuote) {
+          const blockReason = quoteConversionBlockReason(currentQuote);
+          if (blockReason) throw new QuoteConversionError(blockReason, 409);
+        }
         const conversionQuoteId = currentQuote?.id ?? null;
         if (conversionQuoteId) {
           const claimed = await tx.invoice.updateMany({
@@ -418,25 +420,28 @@ async function postHandler(request: NextRequest) {
               id: conversionQuoteId,
               userId,
               type: 'QUOTE',
-              status: { not: 'CANCELLED' },
+              status: currentQuote!.status,
+              validUntil: currentQuote!.validUntil,
               convertedInvoice: { is: null },
             },
-            data: { status: 'ACCEPTED' },
+            // A claim is not a customer response. Keep the user's manual state.
+            data: { status: currentQuote!.status },
           });
           if (claimed.count !== 1) {
             const racedQuote = await tx.invoice.findFirst({
               where: { id: conversionQuoteId, userId, type: 'QUOTE' },
-              select: { status: true, convertedInvoice: { select: { id: true } } },
+              select: { status: true, validUntil: true, convertedInvoice: { select: { id: true } } },
             });
             if (racedQuote?.convertedInvoice) {
               const existing = await tx.invoice.findUnique({
-                where: { id: racedQuote.convertedInvoice.id },
+                where: { id: racedQuote.convertedInvoice.id, userId, type: 'INVOICE' },
                 include: { incomes: true },
               });
               if (existing) return { invoice: existing, idempotent: true };
             }
-            if (racedQuote?.status === 'CANCELLED') {
-              throw new QuoteConversionError('Stornierte Angebote können nicht umgewandelt werden', 409);
+            if (racedQuote) {
+              const blockReason = quoteConversionBlockReason(racedQuote);
+              if (blockReason) throw new QuoteConversionError(blockReason, 409);
             }
             throw new QuoteConversionError('Das Angebot wurde bereits geändert. Bitte erneut versuchen.', 409);
           }

@@ -1,3 +1,4 @@
+import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
@@ -33,7 +34,7 @@ describe('annual context backup history cannot be erased or reinterpreted', () =
     expect(await database.client.annualBusinessContextRevision.count({ where: { userId: 'context-target' } })).toBe(1);
   });
   it('imports genuine standalone 070000 history with its original non-photo capability', async () => {
-    const backup = await snapshot(); backup.manifest.schemaVersion = ANNUAL_CONTEXT_SCHEMA_VERSION; backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    const backup = await snapshot(); backup.manifest.schemaVersion = ANNUAL_CONTEXT_SCHEMA_VERSION; stripCsvCatalogForLegacy(backup);
     expect(() => validateBackupForRestore(backup)).not.toThrow();
     const result = await restoreBackupData({ userId: 'context-standalone', overwrite: false, backup });
     expect(result.annualBusinessContextRevisions.imported).toBe(1);
@@ -51,7 +52,7 @@ describe('annual context backup history cannot be erased or reinterpreted', () =
   });
   it('legacy and pre-context snapshots never erase or falsely reconfirm an existing history', async () => {
     const backup = await snapshot(); delete backup.data.annualBusinessContextRevisions;
-    const old = pack(backup.data); old.manifest.schemaVersion = PRE_ANNUAL_CONTEXT_SCHEMA_VERSION; old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    const old = pack(backup.data); old.manifest.schemaVersion = PRE_ANNUAL_CONTEXT_SCHEMA_VERSION; stripCsvCatalogForLegacy(old);
     expect(() => validateBackupForRestore(old)).not.toThrow();
     const before = await database.client.annualBusinessContextRevision.findMany({ where: { userId: 'context-target' } });
     for (const candidate of [old, { version: '2.0', data: old.data }]) {

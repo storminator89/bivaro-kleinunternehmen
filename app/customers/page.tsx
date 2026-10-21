@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styles from "@/components/dashboard/sales-workspace.module.css";
@@ -588,7 +589,9 @@ export default function CustomersPage() {
     <div className={`customer-workspace ${styles.directory}`}>
       <div className="space-y-6">
         <PageHeader title="Kundenverwaltung" description="Kontakte, Anschriften und offene Leistungen an einem Ort." section="Verkauf" actions={<>
-<div className="mt-4 md:mt-0 flex gap-3">
+<div className="mt-4 md:mt-0 flex flex-wrap gap-3">
+            <Button variant="outline" asChild><Link href="/customers/import">CSV importieren</Link></Button>
+            <Button variant="outline" asChild><Link href="/customers/articles">Artikel und Leistungen</Link></Button>
             <div className="hidden items-center text-sm text-muted-foreground md:flex">
               <span className="font-medium">
                 {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}

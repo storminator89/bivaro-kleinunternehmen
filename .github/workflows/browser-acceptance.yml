@@ -99,6 +99,10 @@ jobs:
               'eur-2026-working-paper-1440.png',
               'eur-2026-working-paper-390.png',
               'eur-2027-handoff-390.png',
+              'csv-customer-preview-mobile.png',
+              'csv-service-catalog-desktop.png',
+              'quote-followup-mobile-390.png',
+              'quote-followup-desktop-1440.png',
               'ai-receipt-settings-desktop.png',
               'ai-receipt-review-mobile.png',
           }
@@ -126,7 +130,7 @@ jobs:
           if not matches:
               skip('no allowlisted images were produced')
           if len(matches) > len(allowed) or len({source.name for source, _ in matches}) != len(matches):
-              skip('file count exceeds allowlist or basenames are duplicated')
+              skip('file count exceeds the exact allowlist or basenames are duplicated')
           if sum(info.st_size for _, info in matches) > limit:
               skip('combined size exceeds 5 MiB')
 

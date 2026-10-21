@@ -1,3 +1,4 @@
+import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
@@ -61,7 +62,7 @@ function makeBackup(options: { sourceUserId?: string; mismatchedInvoiceCustomer?
       createdAt: '2026-01-02T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
     }] : [])],
-    suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
+    serviceArticles: [], suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
     incomes: [],
     auditLogs: [],
     invoiceNumberCounters: [],
@@ -141,7 +142,7 @@ describe('billing-note backup compatibility', () => {
     expect(() => restore.validateBackupForRestore(dateBackup)).toThrow(/Mitternacht/u);
 
     const quoteBackup = makeBackup();
-    (quoteBackup.data.invoices[0] as unknown as Record<string, unknown>).type = 'QUOTE';
+    Object.assign(quoteBackup.data.invoices[0], { type: 'QUOTE', quoteFollowUpOn: null, quoteResponseNote: null });
     quoteBackup.manifest = createBackupManifest({ sourceUserId: 'billing-source', generatedAt: quoteBackup.exportedAt, data: quoteBackup.data });
     expect(() => restore.validateBackupForRestore(quoteBackup)).toThrow(/Rechnung referenzieren/u);
   });
@@ -211,12 +212,12 @@ describe('billing-note backup compatibility', () => {
     const { billingNotes: _billingNotes, ...legacyData } = backup.data;
     const legacy = { ...backup, data: legacyData };
     legacy.manifest.modelCoverage = legacy.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote' && entry.model !== 'PurchaseDocument' && entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
-    legacy.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; legacy.manifest.modelCoverage = legacy.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    legacy.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; stripCsvCatalogForLegacy(legacy);
     expect(() => restore.validateBackupForRestore(legacy)).not.toThrow();
 
     const injected = makeBackup();
     injected.manifest.modelCoverage = injected.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote' && entry.model !== 'PaymentJournalEvent');
-    injected.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; injected.manifest.modelCoverage = injected.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+    injected.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; stripCsvCatalogForLegacy(injected);
     expect(() => restore.validateBackupForRestore(injected)).toThrow(/ungebundenen BillingNotes/u);
   });
 });
