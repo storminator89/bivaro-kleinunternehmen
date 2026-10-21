@@ -1,33 +1,37 @@
+import { REMINDER_BALANCE_SCHEMA_VERSION, validateReminderBackupFields } from '@/lib/reminder-backup';
 import { createHash } from 'node:crypto';
 
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
 /** Combined capability identity: never relabel standalone 061000 or 070000. */
-export const CURRENT_SCHEMA_VERSION = '20261021110000_combine_growth_ai_receipt_context';
+export const CURRENT_SCHEMA_VERSION = '20261021120000_combine_growth_ai_reminder_context';
+export const GROWTH_AI_SCHEMA_VERSION = '20261021110000_combine_growth_ai_receipt_context';
 export const GROWTH_SCHEMA_VERSION = '20261021100000_combine_customer_catalog_quote_context';
 export const AI_RECEIPT_EXTRACTION_SCHEMA_VERSION = '20261021091000_add_ai_receipt_extraction';
 export const COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION = '20261021080000_combine_photo_annual_context';
 export const DATA_IMPORT_SCHEMA_VERSION = '20261021080000_add_service_catalog_and_import_receipts';
 export const QUOTE_WORKFLOW_SCHEMA_VERSION = '20261021073000_add_quote_followup';
 export const PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
-export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
+export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
 export const PRE_DATA_IMPORT_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021061000_add_manual_photo_approval';
 export const ANNUAL_CONTEXT_SCHEMA_VERSION = '20261021070000_add_annual_business_context';
 export const PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_ANNUAL_CONTEXT_SCHEMA_VERSION = PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
-export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
+export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
 /** Explicit registry preserves the incompatible standalone feature boundaries. */
-export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean }>> = Object.freeze({
-  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true }),
-  [GROWTH_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: false }),
-  [AI_RECEIPT_EXTRACTION_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: true }),
-  [QUOTE_WORKFLOW_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: true, aiReceiptExtraction: false }),
-  [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false }),
-  [DATA_IMPORT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: true, quoteWorkflow: false, aiReceiptExtraction: false }),
-  [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false }),
-  [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false }),
-  [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false }),
+export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean }>> = Object.freeze({
+  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true }),
+  [GROWTH_AI_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: false }),
+  [REMINDER_BALANCE_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: true }),
+  [GROWTH_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: false, reminderBalance: false }),
+  [AI_RECEIPT_EXTRACTION_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: true, reminderBalance: false }),
+  [QUOTE_WORKFLOW_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: true, aiReceiptExtraction: false, reminderBalance: false }),
+  [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false }),
+  [DATA_IMPORT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: true, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false }),
+  [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false }),
+  [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false }),
+  [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false }),
 });
 export function backupSchemaSupportsDataImport(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.dataImport === true;
@@ -40,6 +44,9 @@ export function backupSchemaSupportsAiExtraction(schemaVersion?: string): boolea
 }
 export function backupSchemaSupportsAnnualContext(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.annualContext === true;
+}
+export function backupSchemaSupportsReminderBalance(schemaVersion?: string): boolean {
+  return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.reminderBalance === true;
 }
 export const PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION = '20261021043000_add_partial_payments';
 /** Full-payment journal snapshots retain their immutable evidence semantics. */
@@ -316,6 +323,9 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (Array.isArray(data.purchaseDocuments)) data.purchaseDocuments.forEach((document, index) => {
     if (document && typeof document === 'object' && !Array.isArray(document)) validatePurchaseDocumentBackupFields(document as Record<string, unknown>, `purchaseDocuments[${index}]`, value.schemaVersion);
   });
+  if (Array.isArray(data.reminders)) for (const [index, reminder] of data.reminders.entries()) {
+    if (reminder && typeof reminder === 'object' && !Array.isArray(reminder)) validateReminderBackupFields(reminder as Record<string, unknown>, backupSchemaSupportsReminderBalance(value.schemaVersion), `reminders[${index}]`);
+  }
   if (!backupSchemaSupportsAnnualContext(value.schemaVersion) && coverageCount(data, 'annualBusinessContextRevisions') > 0) throw new Error('Älteres Backupschema darf keine Jahreskontexthistorie enthalten');
   if (!REVIEW_DRAFT_SCHEMAS.includes(value.schemaVersion!) && Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(item => item && typeof item === 'object' && ((item as Record<string, unknown>).reviewDraft != null || (item as Record<string, unknown>).reviewDraftSavedAt != null || ['image/jpeg', 'image/png'].includes(String((item as Record<string, unknown>).mediaType))))) throw new Error('Älteres Backupschema darf keine Foto- oder Prüfentwurfsdaten enthalten');
   if (!QUOTE_WORKFLOW_SCHEMAS.includes(value.schemaVersion!) && Array.isArray(data.invoices) && data.invoices.some(row => row && typeof row === 'object' && ((row as Record<string, unknown>).quoteFollowUpOn != null || (row as Record<string, unknown>).quoteResponseNote != null))) throw new Error('Älteres Backupschema darf keine Angebots-Wiedervorlage oder Rückmeldungsnotiz enthalten');

@@ -105,6 +105,18 @@ jobs:
               'quote-followup-desktop-1440.png',
               'ai-receipt-settings-desktop.png',
               'ai-receipt-review-mobile.png',
+              'confirmed-reminder-1440.png',
+              'confirmed-reminder-390.png',
+              'revenue-indicators-source-360.png',
+              'revenue-indicators-amounts-360.png',
+              'revenue-indicators-source-390.png',
+              'revenue-indicators-amounts-390.png',
+              'revenue-indicators-source-1440.png',
+              'revenue-indicators-amounts-1440.png',
+              'daily-actions-empty-390.png',
+              'daily-actions-360.png',
+              'daily-actions-390.png',
+              'daily-actions-1440.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'

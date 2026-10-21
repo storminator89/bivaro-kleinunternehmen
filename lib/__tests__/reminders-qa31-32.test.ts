@@ -122,16 +122,20 @@ describe('QA #31: only open invoices are eligible for reminders', () => {
 
 describe('QA #32: internal recording and manual email copy', () => {
   it('labels history with the recording date on mobile and desktop, never as sent', () => {
-    const source = readFileSync('app/dashboard/reminders/page.tsx', 'utf8');
+    const source = readFileSync('app/dashboard/reminders/page.tsx', 'utf8') + readFileSync('components/dashboard/reminder-workbench-dialog.tsx', 'utf8');
     expect(source.match(/Erfasst: \{formatDate\(reminder\.createdAt\)\}/g)).toHaveLength(2);
     expect(source).not.toContain('Gesendet:');
     expect(source).not.toContain('E-Mail wird gesendet an');
     expect(source).toContain('Mahnung intern erfassen');
     expect(source).toContain('Es wird keine E-Mail automatisch versendet.');
     expect(source).toContain('Empfänger für den manuellen Versand:');
-    expect(source).toContain('Kopieren oder Öffnen im E-Mail-Client versendet noch keine E-Mail.');
-    expect(source).toContain('onClick={handleOpenMailClient}');
-    expect(source).toContain('window.open(`mailto:${email}?subject=${subject}&body=${body}`');
+    expect(source).toContain('Textentwurf herunterladen');
+    expect(source).toContain('expectedBalanceVersion: preview.balanceVersion');
+    expect(source).not.toContain('window.open(`mailto:');
+    expect(source).not.toContain('Empfehlung:');
+    expect(source).not.toContain('Verzugszinsen:');
+    expect(source).not.toContain('§ 286');
+    expect(source).toContain('Gebühren starten bei 0 EUR und werden weder empfohlen noch berechnet.');
     expect(source).toContain('setInvoiceToPay(invoice)');
     expect(source).toContain('<FullPaymentDialog');
     expect(source).toContain('onSuccess={handlePaymentSuccess}');

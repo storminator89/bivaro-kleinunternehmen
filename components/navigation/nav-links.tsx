@@ -81,6 +81,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
       title: "Übersicht",
       items: [
         { href: "/dashboard", label: "Dashboard", icon: "nav-dashboard", auth: "authenticated" },
+        { href: "/dashboard/today", label: "Heute erledigen", icon: "nav-reminders", auth: "authenticated" },
       ]
     },
     {

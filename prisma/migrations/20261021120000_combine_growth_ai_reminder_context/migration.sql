@@ -1,0 +1,2 @@
+-- Capability boundary only: customer/catalog/quote, AI/photo/annual and confirmed reminder fields are integrated.
+-- Historical standalone identities retain their exact original capabilities.

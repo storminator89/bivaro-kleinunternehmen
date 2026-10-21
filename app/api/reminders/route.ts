@@ -1,3 +1,4 @@
+import { reminderBalance, recordReminder, ReminderWorkbenchError } from '@/lib/reminder-workbench';
 import { ledgerSummary } from '@/lib/payment-journal/service';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
@@ -57,7 +58,9 @@ export async function GET(request: Request) {
     const enrichedInvoices = invoices.map(invoice => {
       let summary = null;
       try { summary = ledgerSummary(invoice); } catch { /* Explicit review, no guessed balance. */ }
-      const canCreateReminder = !!summary && summary.paymentState === 'OPEN';
+      let balance = null;
+      try { balance = reminderBalance(invoice); } catch { /* Fail closed for unexplained balances. */ }
+      const canCreateReminder = balance !== null && balance.paidCents === '0';
       const latestReminder = invoice.reminders[0];
       const currentLevel = latestReminder ? latestReminder.reminderLevel : 0;
       const nextLevel = Math.min(currentLevel + 1, 4);
@@ -80,9 +83,11 @@ export async function GET(request: Request) {
         ...invoice,
         customer, // Kunde überschreiben mit dem gefundenen
         paymentSummary: summary,
+        balanceVersion: balance?.balanceVersion ?? null,
         openAmount: summary ? Number(summary.openCents) / 100 : null,
         canCreateReminder,
-        paymentReviewRequired: summary === null,
+        canPrepareBalanceReminder: balance !== null,
+        paymentReviewRequired: balance === null,
         currentReminderLevel: currentLevel,
         nextReminderLevel: nextLevel,
         nextReminderLevelLabel: REMINDER_LEVELS[nextLevel as keyof typeof REMINDER_LEVELS] || 'Zahlungserinnerung',
@@ -120,59 +125,14 @@ export async function GET(request: Request) {
 async function postHandler(request: Request) {
   try {
     const userId = await requireUserId();
-    const { invoiceId, reminderLevel, fee, notes, dueDays } = await request.json();
-
-    if (!invoiceId) {
-      return NextResponse.json({ error: 'Rechnungs-ID ist erforderlich' }, { status: 400 });
-    }
-
-    // Prüfen, ob Rechnung existiert und dem User gehört
-    const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, userId },
-      include: { paymentJournalEvents: true, incomes: true, reminders: { orderBy: { sentAt: 'desc' }, take: 1 } }
-    });
-
-    if (!invoice) {
-      return NextResponse.json({ error: 'Rechnung nicht gefunden' }, { status: 404 });
-    }
-
-    if (invoice.type !== 'INVOICE' || ['PAID', 'CANCELLED'].includes(invoice.status)) {
-      return NextResponse.json({ error: 'Mahnungen können nur für offene Rechnungen erfasst werden' }, { status: 409 });
-    }
-
-    if (invoice.paymentJournalEvents.length > 0 || invoice.incomes.length > 0 || invoice.paidAt) {
-      return NextResponse.json({ error: 'Mahnungen nach Zahlungseingang sind bis zur Restbetragsprüfung gesperrt.', code: 'PAYMENT_REVIEW_REQUIRED' }, { status: 409 });
-    }
-
-    // Nächste Mahnstufe bestimmen
-    const lastReminder = invoice.reminders[0];
-    const nextLevel = reminderLevel || (lastReminder ? Math.min(lastReminder.reminderLevel + 1, 4) : 1);
-
-    // Fälligkeitsdatum der Mahnung (Standard: 14 Tage)
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + (dueDays || 14));
-
-    const reminder = await prisma.reminder.create({
-      data: {
-        invoiceId,
-        reminderLevel: nextLevel,
-        fee: fee || 0,
-        notes: notes || null,
-        dueDate,
-        userId
-      },
-      include: {
-        invoice: {
-          include: { customer: true }
-        }
-      }
-    });
-
+    const { invoiceId, ...input } = await request.json();
+    const reminder = await recordReminder(userId, Number(invoiceId), input);
     return NextResponse.json(reminder);
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof ReminderWorkbenchError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     console.error('Error creating reminder:', error);
     return NextResponse.json({ error: 'Fehler beim Erstellen der Mahnung' }, { status: 500 });
   }
@@ -189,6 +149,8 @@ async function deleteHandler(request: Request) {
       return NextResponse.json({ error: 'ID ist erforderlich' }, { status: 400 });
     }
 
+    const existing = await prisma.reminder.findFirst({ where: { id: Number(id), userId } });
+    if (existing?.balanceSnapshot != null) return NextResponse.json({ error: 'Bestätigte Restbeträge bleiben als interne Historie erhalten.', code: 'IMMUTABLE_REMINDER' }, { status: 409 });
     await prisma.reminder.delete({
       where: { id: Number(id), userId }
     });

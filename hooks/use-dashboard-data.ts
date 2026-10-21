@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Quote } from "@/components/dashboard/tabs/quotes-tab";
 import { toQuery } from "@/lib/dashboard-utils";
@@ -90,6 +91,7 @@ export function useDashboardData({
   selectedTimeRange,
 }: UseDashboardDataParams) {
   const queryClient = useQueryClient();
+  const selectedDocument = useSearchParams().get("document");
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
@@ -141,14 +143,16 @@ export function useDashboardData({
     sortOrder: filters.incomes.sortOrder ?? "desc",
   });
   const invoicesQueryString = toQuery({
-    page: invoicesPage,
+    document: selectedDocument === null ? undefined : selectedDocument || "0",
+    page: selectedDocument === null ? invoicesPage : 1,
     pageSize: invoicesPageSize,
     paidStatus: filters.invoices.paidStatus !== "all" ? filters.invoices.paidStatus : undefined,
     dateRange: filters.invoices.dateRange !== "all" ? filters.invoices.dateRange : undefined,
     search: invoiceSearch || undefined,
   });
   const quotesQueryString = toQuery({
-    page: quotesPage,
+    document: selectedDocument === null ? undefined : selectedDocument || "0",
+    page: selectedDocument === null ? quotesPage : 1,
     pageSize: quotesPageSize,
     status: quotesStatusFilter && quotesStatusFilter !== "all" ? quotesStatusFilter : undefined,
     search: quotesSearch || undefined,

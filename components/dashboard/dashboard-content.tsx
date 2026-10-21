@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { DailyActionsPanel } from "@/components/daily-actions/daily-actions-workspace";
 import { PageHeader } from "@/components/page-header";
 import { GettingStarted } from "@/components/onboarding/getting-started";
 import { toast } from 'sonner';
@@ -903,9 +905,12 @@ export function DashboardContent() {
         {!tabParam ? (
           <>
             <GettingStarted />
+            <DailyActionsPanel compact />
             <DashboardClient />
           </>
         ) : (
+        <div className="space-y-4">
+        {searchParams.has("document") && ["invoices", "quotes"].includes(activeTab) && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 text-sm"><p>Gezielt geöffnetes Dokument · Die bestehenden Aktionen bleiben unverändert.</p><div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link href="/dashboard/today">Zur Tagesübersicht</Link></Button><Button variant="outline" asChild><Link href={`/dashboard?tab=${activeTab}`}>Alle Dokumente anzeigen</Link></Button></div></div>}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
           {/* Ausgaben Tab */}
           <TabsContent value="expenses" className="space-y-6">
@@ -1078,6 +1083,7 @@ export function DashboardContent() {
             />
           </TabsContent>
         </Tabs>
+        </div>
         )}
 
         {/* Rechnungsdetails-Modal */}

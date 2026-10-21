@@ -21,7 +21,7 @@ describe('quote list conversion metadata (#23)', () => {
     expect(response.status).toBe(200);
     expect(state.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { userId: 'owner', type: 'QUOTE' },
-      include: { customer: true, convertedInvoice: { select: { id: true } } },
+      include: { customer: { select: { id: true, name: true, userId: true } }, convertedInvoice: { select: { id: true } } },
     }));
     expect(await response.json()).toMatchObject({ items: [
       { id: 1, status: 'ACCEPTED', convertedInvoice: null },

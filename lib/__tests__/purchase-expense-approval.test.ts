@@ -447,6 +447,16 @@ describe('explicit manual photo source approval', () => {
       const quoteFile = await (await import('@/lib/upload-path')).writeTenantFile(sourceOwner, 'synthetic-quote.pdf', quoteBytes);
       const quote = await database.client.invoice.create({ data: { userId: sourceOwner, customerId: customer.id, type: 'QUOTE', status: 'REJECTED', invoiceNumber: 'AN-SYNTHETIC-UNION', fileName: 'synthetic-quote.pdf', storedFileName: quoteFile, parsedData: { items: [] }, quoteFollowUpOn: '2026-12-31', quoteResponseNote: 'Manual owner response, not acceptance' } });
 
+      // Confirmed reminders coexist with every other feature in one real ZIP.
+      const reminderBytes = Buffer.from('%PDF-1.7\nSynthetic unpaid reminder source only');
+      const reminderFile = await (await import('@/lib/upload-path')).writeTenantFile(sourceOwner, 'synthetic-reminder.pdf', reminderBytes);
+      const reminderInvoice = await database.client.invoice.create({ data: { userId: sourceOwner, customerId: customer.id, type: 'INVOICE', status: 'SENT', invoiceNumber: 'RE-SYNTHETIC-REMINDER-UNION', dueDate: new Date('2026-01-01T00:00:00.000Z'), fileName: 'synthetic-reminder.pdf', storedFileName: reminderFile, totalAmount: 120, parsedData: { currency: 'EUR' } } });
+      const reminders = await import('@/lib/reminder-workbench');
+      const reminderPreview = await reminders.previewReminder(sourceOwner, reminderInvoice.id);
+      const confirmedReminder = await reminders.recordReminder(sourceOwner, reminderInvoice.id, { expectedBalanceVersion: reminderPreview.balanceVersion, idempotencyKey: 'full-zip-cross-feature-reminder' });
+      const targetProvider = await database.client.aiProviderSettings.create({ data: { userId: targetOwner, enabled: true, baseUrl: 'https://synthetic.invalid/v1', model: 'target-owned', keyCiphertext: 'synthetic-target-cipher', keyIv: 'synthetic-target-iv', keyTag: 'synthetic-target-tag' } });
+      const sourceBeforeBackup = (await (await import('@/lib/backup-snapshot')).readBackupSnapshot(sourceOwner)).data;
+
       const jsonResponse = await (await import('@/app/api/backup/route')).GET(); expect(jsonResponse.status).toBe(200);
       const jsonBackup = await jsonResponse.json();
       const manifestContract = await import('@/lib/backup-manifest');
@@ -469,7 +479,7 @@ describe('explicit manual photo source approval', () => {
       const restore = await import('@/lib/backup-restore');
       const resolveFile = async (kind: string, sourceName: string) => { const entry = backup.manifest.fileManifest.find((entry: { kind: string; sourceName: string }) => entry.kind === kind && entry.sourceName === sourceName); return entry?.zipPath ? zip.file(entry.zipPath)!.async('uint8array') : null; };
       // Genuine standalone 061000 evidence remains importable, without annual history.
-      const standalonePhoto = structuredClone(backup); delete standalonePhoto.data.annualBusinessContextRevisions; delete standalonePhoto.data.serviceArticles;
+      const standalonePhoto = structuredClone(backup); delete standalonePhoto.data.annualBusinessContextRevisions; delete standalonePhoto.data.serviceArticles; standalonePhoto.data.reminders = [];
       for (const row of standalonePhoto.data.purchaseDocuments) { delete row.aiExtraction; delete row.aiDraftProvenance; delete row.aiApprovedSnapshot; }
       for (const row of standalonePhoto.data.invoices) { delete row.quoteFollowUpOn; delete row.quoteResponseNote; }
       standalonePhoto.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: standalonePhoto.exportedAt, data: standalonePhoto.data, fileManifest: standalonePhoto.manifest.fileManifest }); standalonePhoto.manifest.schemaVersion = manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(standalonePhoto);
@@ -493,10 +503,10 @@ describe('explicit manual photo source approval', () => {
       for (const overwrite of [false, true]) await expect(restore.restoreBackupData({ userId: divergentOwner, backup, overwrite, resolveFile: neverResolve })).rejects.toThrow(/Jahreskontext-Konflikt/);
       expect(neverResolve).not.toHaveBeenCalled();
       expect((await (await import('@/lib/backup-snapshot')).readBackupSnapshot(divergentOwner)).data).toEqual(divergentBefore);
-      for (const schemaVersion of [manifestContract.PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, manifestContract.ANNUAL_CONTEXT_SCHEMA_VERSION, manifestContract.COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, manifestContract.DATA_IMPORT_SCHEMA_VERSION, manifestContract.QUOTE_WORKFLOW_SCHEMA_VERSION, manifestContract.GROWTH_SCHEMA_VERSION, manifestContract.AI_RECEIPT_EXTRACTION_SCHEMA_VERSION]) {
+      for (const schemaVersion of [manifestContract.PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, manifestContract.ANNUAL_CONTEXT_SCHEMA_VERSION, manifestContract.COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, manifestContract.DATA_IMPORT_SCHEMA_VERSION, manifestContract.QUOTE_WORKFLOW_SCHEMA_VERSION, manifestContract.GROWTH_SCHEMA_VERSION, manifestContract.AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, manifestContract.GROWTH_AI_SCHEMA_VERSION, (await import('@/lib/reminder-backup')).REMINDER_BALANCE_SCHEMA_VERSION]) {
         const relabeled = structuredClone(backup); relabeled.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: relabeled.exportedAt, data: relabeled.data, fileManifest: relabeled.manifest.fileManifest }); relabeled.manifest.schemaVersion = schemaVersion;
-        expect(() => restore.validateBackupForRestore(relabeled)).toThrow(/reviewedSourceSnapshot|Jahreskontexthistorie|Artikel|Angebots-Wiedervorlage|KI-Herkunft/);
-        await expect(restore.restoreBackupData({ userId: divergentOwner, backup: relabeled, overwrite: true, resolveFile: neverResolve })).rejects.toThrow(/reviewedSourceSnapshot|Jahreskontexthistorie|Artikel|Angebots-Wiedervorlage|KI-Herkunft/);
+        expect(() => restore.validateBackupForRestore(relabeled)).toThrow(/reviewedSourceSnapshot|Jahreskontexthistorie|Artikel|Angebots-Wiedervorlage|KI-Herkunft|Restbetragsbestätigung/);
+        await expect(restore.restoreBackupData({ userId: divergentOwner, backup: relabeled, overwrite: true, resolveFile: neverResolve })).rejects.toThrow(/reviewedSourceSnapshot|Jahreskontexthistorie|Artikel|Angebots-Wiedervorlage|KI-Herkunft|Restbetragsbestätigung/);
       }
       expect(neverResolve).not.toHaveBeenCalled();
       // One failed required audit rolls back annual history, source evidence,
@@ -522,17 +532,46 @@ describe('explicit manual photo source approval', () => {
       const merged = await restore.restoreBackupData({ userId: targetOwner, backup, overwrite: false, resolveFile }); expect(merged.purchaseDocuments.skipped).toBe(1); expect(merged.expenses.skipped).toBe(1);
       const restoredCustomer = await database.client.customer.findFirstOrThrow({ where: { userId: targetOwner } });
       expect(restoredCustomer).toMatchObject({ name: customer.name, contactPerson: customer.contactPerson, email: customer.email, phone: customer.phone, address: customer.address, zipCode: '00123', city: customer.city, taxNumber: customer.taxNumber, internalNote: customer.internalNote, noteVisibility: customer.noteVisibility });
-      expect(await database.client.invoice.findMany({ where: { userId: targetOwner } })).toMatchObject([{ customerId: restoredCustomer.id, status: 'REJECTED', quoteFollowUpOn: '2026-12-31', quoteResponseNote: quote.quoteResponseNote, convertedFromQuoteId: null }]);
+      expect(await database.client.invoice.findMany({ where: { userId: targetOwner, type: 'QUOTE' } })).toMatchObject([{ customerId: restoredCustomer.id, status: 'REJECTED', quoteFollowUpOn: '2026-12-31', quoteResponseNote: quote.quoteResponseNote, convertedFromQuoteId: null }]);
       expect(await database.client.serviceArticle.findMany({ where: { userId: targetOwner } })).toMatchObject([{ unitPriceCents: '10000', sourcePriceCents: '11900', sourcePriceBasis: 'GROSS', taxRate: '19' }]);
       expect(await database.client.customer.count({ where: { userId: targetOwner } })).toBe(1);
-      expect(await database.client.invoice.count({ where: { userId: targetOwner } })).toBe(1);
+      expect(await database.client.invoice.count({ where: { userId: targetOwner } })).toBe(2);
       expect(await database.client.serviceArticle.count({ where: { userId: targetOwner } })).toBe(1);
       expect(await database.client.income.count({ where: { userId: targetOwner } })).toBe(0);
       expect(await database.client.invoice.findUniqueOrThrow({ where: { id: quote.id } })).toEqual(quote);
 
-      await expect(restore.restoreBackupData({ userId: targetOwner, backup, overwrite: true, resolveFile })).rejects.toThrow(/Unveränderliche manuelle Foto-Freigaben/);
+      await expect(restore.restoreBackupData({ userId: targetOwner, backup, overwrite: true, resolveFile })).rejects.toThrow(/bestätigte Mahn-Restbeträge/);
       const noFiles = vi.fn(async () => { throw new Error('immutable overwrite must reject before file resolution'); });
-      await expect(restore.restoreBackupData({ userId: targetOwner, backup, overwrite: true, resolveFile: noFiles })).rejects.toThrow(/Unveränderliche manuelle Foto-Freigaben/); expect(noFiles).not.toHaveBeenCalled();
+      await expect(restore.restoreBackupData({ userId: targetOwner, backup, overwrite: true, resolveFile: noFiles })).rejects.toThrow(/bestätigte Mahn-Restbeträge/); expect(noFiles).not.toHaveBeenCalled();
+      const targetReminder = await database.client.reminder.findFirstOrThrow({ where: { userId: targetOwner } });
+      expect(targetReminder.balanceSnapshot).toEqual(confirmedReminder.balanceSnapshot);
+      expect(targetReminder.idempotencyKey).toMatch(/^restored:[a-f0-9]{64}$/u);
+      expect(await database.client.invoice.findUniqueOrThrow({ where: { id: targetReminder.invoiceId } })).toMatchObject({ userId: targetOwner, customerId: restoredCustomer.id, totalAmount: 120 });
+      expect(await database.client.reminder.count({ where: { userId: targetOwner } })).toBe(1);
+      expect(merged.reminders).toEqual({ imported: 0, skipped: 1 });
+      expect(await database.client.aiProviderSettings.findUniqueOrThrow({ where: { userId: targetOwner } })).toEqual(targetProvider);
+      const sourceAfterBackup = (await (await import('@/lib/backup-snapshot')).readBackupSnapshot(sourceOwner)).data;
+      // Backup endpoints append expected audit evidence; every business/source row is byte-for-byte equivalent.
+      const { auditLogs: beforeAudits, ...sourceBusinessBefore } = sourceBeforeBackup;
+      const { auditLogs: afterAudits, ...sourceBusinessAfter } = sourceAfterBackup;
+      expect(sourceBusinessAfter).toEqual(sourceBusinessBefore);
+      expect(afterAudits.slice(0, beforeAudits.length)).toEqual(beforeAudits);
+      expect(afterAudits.slice(beforeAudits.length).map(row => row.action)).toEqual(['BACKUP', 'SECURITY_EVENT', 'SECURITY_EVENT']);
+      expect(await database.client.invoice.findUniqueOrThrow({ where: { id: reminderInvoice.id } })).toEqual(reminderInvoice);
+      expect(await (await import('node:fs/promises')).readFile(paths.getTenantUploadPath(sourceOwner, reminderFile))).toEqual(reminderBytes);
+      const reexport = await (await import('@/lib/backup-snapshot')).readBackupSnapshot(targetOwner);
+      expect((reexport.data.reminders as { balanceSnapshot: unknown }[])[0].balanceSnapshot).toEqual(confirmedReminder.balanceSnapshot);
+
+      // New daily aggregation and revenue orientation remain read-only over the full restored union.
+      const restoredBeforeRead = (await (await import('@/lib/backup-snapshot')).readBackupSnapshot(targetOwner)).data;
+      const daily = await (await import('@/lib/daily-actions/service')).readDailyActions(targetOwner, new Date('2026-10-21T12:00:00.000Z'));
+      expect(daily.actions).toHaveLength(1);
+      expect(daily.actions[0]).toMatchObject({ id: `invoice:${targetReminder.invoiceId}`, kind: 'INVOICE_OVERDUE', amountCents: '12000', party: restoredCustomer.name, href: `/dashboard?tab=invoices&document=${targetReminder.invoiceId}` });
+      const revenue = (await import('@/lib/revenue-indicators')).buildRevenueIndicatorBasis({ year: 2026, inAppRevenue: 0, previousYearInAppRevenue: 0, history: targetHistory.map((await import('@/lib/annual-business-context')).readAnnualContextRevision), now: new Date('2026-10-21T12:00:00.000Z') });
+      expect(revenue).toMatchObject({ year: 2026, inAppRevenue: 0, businessTotal: null, externalRevenue: null, context: { previousYearTurnoverCents: '0', completeness: 'PARTIAL' } });
+      expect((await (await import('@/lib/backup-snapshot')).readBackupSnapshot(targetOwner)).data).toEqual(restoredBeforeRead);
+      expect(await database.client.aiProviderSettings.findUniqueOrThrow({ where: { userId: targetOwner } })).toEqual(targetProvider);
+
       // Annual prefix appends coexist with immutable photo merge/replay.
       await database.client.annualBusinessContextRevision.create({ data: { userId: sourceOwner, ...context, revision: 2, sourceNote: 'Synthetic compatible correction', previousYearTurnoverCents: null } });
       const latest = await (await import('@/lib/backup-snapshot')).readBackupSnapshot(sourceOwner);
