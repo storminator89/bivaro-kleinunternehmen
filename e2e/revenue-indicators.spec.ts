@@ -7,7 +7,12 @@ import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
 async function expectUnobscuredBasis(node: Locator) {
   await expect.poll(() => node.evaluate(element => {
     const rect = element.getBoundingClientRect();
-    const headerBottom = window.document.querySelector('.app-topbar')?.getBoundingClientRect().bottom ?? 0;
+    const header = [...window.document.querySelectorAll<HTMLElement>('.app-topbar')].find(item => {
+      const rect = item.getBoundingClientRect();
+      return item.getClientRects().length > 0 && rect.width > 0 && rect.height > 0;
+    });
+    if (!header) return false;
+    const headerBottom = header.getBoundingClientRect().bottom;
     if (rect.width <= 0 || rect.height <= 0 || rect.top < headerBottom + 8 || rect.bottom > window.innerHeight - 8 || rect.left < 0 || rect.right > window.innerWidth) return false;
     const points = [[rect.left + 1, rect.top + 1], [rect.right - 1, rect.top + 1], [rect.left + 1, rect.bottom - 1], [rect.right - 1, rect.bottom - 1], [rect.left + rect.width / 2, rect.top + rect.height / 2]];
     return points.every(([x, y]) => {
@@ -101,7 +106,12 @@ test('revenue indicators preserve unknown/zero, included external share, correct
     }
     const currentBasis = panel.locator('dl > div').first();
     await currentBasis.evaluate(node => {
-      const headerBottom = window.document.querySelector('.app-topbar')?.getBoundingClientRect().bottom ?? 0;
+      const header = [...window.document.querySelectorAll<HTMLElement>('.app-topbar')].find(item => {
+        const rect = item.getBoundingClientRect();
+        return item.getClientRects().length > 0 && rect.width > 0 && rect.height > 0;
+      });
+      if (!header) throw new Error('Expected visible application header');
+      const headerBottom = header.getBoundingClientRect().bottom;
       window.scrollTo({ top: window.scrollY + node.getBoundingClientRect().top - headerBottom - 24, behavior: 'instant' });
     });
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
