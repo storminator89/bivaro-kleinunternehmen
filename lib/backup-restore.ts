@@ -1443,6 +1443,16 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const existing = existingPayment
           ? await tx.invoice.findFirst({ where: { id: existingPayment.invoiceId, userId } })
           : invoiceNumber ? await tx.invoice.findFirst({ where: { userId, invoiceNumber } }) : null;
+        // Old unnamed invoices have neither a source journal key nor a stable
+        // document identity. Numeric IDs, filenames and equal amounts are not
+        // proof across restores/tenants. Once the target has immutable payment
+        // history, importing such a row could duplicate an adopted invoice and
+        // its Income. Require separate review instead of guessing or rewriting
+        // that history; empty targets and independently numbered imports remain
+        // available.
+        if (!sourcePayment && !invoiceNumber?.trim() && existingPaymentEvents.length > 0) {
+          throw new BackupValidationError('Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.');
+        }
         if (existing && sourcePayment && (existing.type !== invoice.type || existing.invoiceNumber !== invoiceNumber
           || existing.totalAmount !== asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount')
           || existing.status !== invoice.status

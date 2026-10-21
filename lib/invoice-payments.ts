@@ -109,7 +109,7 @@ export async function updateInvoiceStatus(
       if (customerChanged) await tx.invoice.update({ where: { id, userId }, data: { customerId } });
       await recordFullPaymentInTransaction(tx, userId, id, {
         amount: old.totalAmount!, currency: 'EUR', paidAt: paidAt!, source: 'LEGACY_STATUS',
-        reference: old.invoiceNumber ?? `invoice:${id}`, idempotencyKey: `legacy-status:invoice:${id}`,
+        reference: old.invoiceNumber?.trim() || `invoice:${id}`, idempotencyKey: `legacy-status:invoice:${id}`,
       });
     } else if (changed) {
       await tx.invoice.update({ where: { id, userId }, data: {

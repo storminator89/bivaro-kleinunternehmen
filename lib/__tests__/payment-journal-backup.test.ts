@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
 import { createBackupManifest, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
+import { adoptLegacyPaidInvoice } from '@/lib/payment-journal/service';
 
 const state = vi.hoisted(() => ({ client: null as ReturnType<typeof createTestDatabase>['client'] | null }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
@@ -167,6 +168,89 @@ describe('immutable payment journal backup', () => {
     const snapshot = await readBackupSnapshot(target);
     expect(() => restore.validateBackupForRestore({ version: '3.0', data: snapshot.data,
       manifest: createBackupManifest({ sourceUserId: target, generatedAt: createdAt, data: snapshot.data }) })).not.toThrow();
+  });
+
+  it.each([
+    { version: '2.0', invoiceNumber: null }, { version: '3.0', invoiceNumber: null },
+  ])('rejects ambiguous unnamed pre-journal $version ($invoiceNumber) merge after explicit legacy adoption', async ({ version, invoiceNumber }) => {
+    const target = `journal-unnamed-adopted-${version.replace('.', '-')}-${invoiceNumber === null ? 'null' : 'empty'}`;
+    await user(target);
+    const older = makeBackup();
+    const data = { ...older.data, invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber })), paymentJournalEvents: [] };
+    const source = envelope(data);
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
+    source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
+    const backup = version === '2.0' ? { version, data } : source;
+    await restore.restoreBackupData({ userId: target, backup, overwrite: true, resolveFile });
+    const beforeInvoice = await database.client.invoice.findFirstOrThrow({ where: { userId: target } });
+    const beforeIncome = await database.client.income.findFirstOrThrow({ where: { userId: target } });
+    await adoptLegacyPaidInvoice(target, beforeInvoice.id);
+    const beforeEvent = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { userId: target } });
+    const beforeAudits = await database.client.auditLog.count({ where: { userId: target } });
+    await expect(restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile })).rejects.toThrow(/eindeutige.*Rechnungsidentität/u);
+    expect(await database.client.invoice.findMany({ where: { userId: target } })).toEqual([beforeInvoice]);
+    expect(await database.client.income.findMany({ where: { userId: target } })).toEqual([beforeIncome]);
+    expect(await database.client.paymentJournalEvent.findMany({ where: { userId: target } })).toEqual([beforeEvent]);
+    expect(await database.client.auditLog.count({ where: { userId: target } })).toBe(beforeAudits);
+  });
+
+  it.each(['2.0', '3.0'])('rejects whitespace-only pre-journal %s identity against an adopted null-number target', async version => {
+    const target = `journal-whitespace-identity-${version.replace('.', '-')}`;
+    await user(target);
+    const older = makeBackup();
+    const data = { ...older.data, invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber: null })), paymentJournalEvents: [] };
+    await restore.restoreBackupData({ userId: target, backup: { version: '2.0', data }, overwrite: true, resolveFile });
+    const invoice = await database.client.invoice.findFirstOrThrow({ where: { userId: target } });
+    await adoptLegacyPaidInvoice(target, invoice.id);
+    const before = await readBackupSnapshot(target);
+    const whitespaceData = { ...data, invoices: data.invoices.map(row => ({ ...row, invoiceNumber: '   ' })) };
+    const source = envelope(whitespaceData);
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
+    source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
+    const backup = version === '2.0' ? { version, data: whitespaceData } : source;
+    await expect(restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile })).rejects.toThrow(/eindeutige.*Rechnungsidentität/u);
+    expect((await readBackupSnapshot(target)).data).toEqual(before.data);
+    expect((await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id } })).invoiceNumber).toBeNull();
+  });
+
+  it('preserves unrelated numbered pre-journal imports into a journal-bearing tenant', async () => {
+    const target = 'journal-unrelated-numbered';
+    await user(target);
+    await restore.restoreBackupData({ userId: target, backup: makeBackup(), overwrite: true, resolveFile });
+    const beforeEvent = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { userId: target } });
+    const older = makeBackup();
+    older.data.invoices[0].invoiceNumber = '2026-unrelated';
+    older.data.incomes[0].description = 'Unrelated invoice';
+    const backup = { version: '2.0', data: { ...older.data, paymentJournalEvents: [] } };
+    const result = await restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile });
+    expect(result.invoices).toEqual({ imported: 1, skipped: 0 });
+    expect(result.incomes).toEqual({ imported: 1, skipped: 0 });
+    expect(await database.client.invoice.count({ where: { userId: target } })).toBe(2);
+    expect(await database.client.income.count({ where: { userId: target } })).toBe(2);
+    expect(await database.client.paymentJournalEvent.findMany({ where: { userId: target } })).toEqual([beforeEvent]);
+  });
+
+  it('rejects empty-string legacy identity and rolls back earlier customer imports', async () => {
+    const target = 'journal-empty-identity';
+    await user(target);
+    await restore.restoreBackupData({ userId: target, backup: makeBackup(), overwrite: true, resolveFile });
+    const before = await readBackupSnapshot(target);
+    const older = makeBackup();
+    const data = { ...older.data, customers: [{ id: 55, name: 'Must roll back' }],
+      invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber: '' })), paymentJournalEvents: [] };
+    await expect(restore.restoreBackupData({ userId: target, backup: { version: '2.0', data }, overwrite: false, resolveFile })).rejects.toThrow(/eindeutige.*Rechnungsidentität/u);
+    expect((await readBackupSnapshot(target)).data).toEqual(before.data);
+  });
+
+  it('allows unnamed pre-journal merge into an empty tenant despite journal history in another tenant', async () => {
+    const target = 'journal-unrelated-empty';
+    await user(target);
+    const older = makeBackup();
+    const data = { ...older.data, invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber: null })), paymentJournalEvents: [] };
+    const result = await restore.restoreBackupData({ userId: target, backup: { version: '2.0', data }, overwrite: false, resolveFile });
+    expect(result.invoices).toEqual({ imported: 1, skipped: 0 });
+    expect(result.incomes).toEqual({ imported: 1, skipped: 0 });
+    expect(await database.client.paymentJournalEvent.count({ where: { userId: target } })).toBe(0);
   });
 
   it('rejects destructive overwrite of journal targets, including pre-journal backup versions', async () => {
