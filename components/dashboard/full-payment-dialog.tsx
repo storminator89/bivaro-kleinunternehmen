@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { paymentDialogReturnTarget } from '@/lib/payment-dialog-focus';
+import { paymentConfirmationStillOwnsFocus, paymentDialogReturnTarget } from '@/lib/payment-dialog-focus';
 import { PaymentHistory } from '@/components/payments/payment-history';
 import { PaymentAdjustmentPanel } from '@/components/payments/payment-adjustment-panel';
 import { readPaymentAdjustmentPreflight, type PaymentAdjustmentPreflight } from '@/lib/payment-adjustment-form';
@@ -141,6 +141,11 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
 
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
   useEffect(() => { if (confirmed) successRef.current?.focus(); }, [confirmed]);
+  useEffect(() => {
+    if (!confirmed || isLoading) return;
+    const confirmation = successRef.current;
+    if (paymentConfirmationStillOwnsFocus(confirmation)) confirmation.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [confirmed, isLoading, adjustmentJournal]);
 
   const refreshLists = async () => {
     setRefreshError(false);

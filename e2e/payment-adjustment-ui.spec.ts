@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
+import { expect, test, type CDPSession, type Locator, type Page, type Request } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { allocate, createInvoice, isolatedAccount, loadJournal, openJournal, snapshot } from './helpers/payment-adjustments';
@@ -109,6 +109,7 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 390, height: 844 });
   const userId = await isolatedAccount(page);
+  let releaseDelayedJournal: (() => void) | undefined, delayedJournalPath: string | undefined;
   try {
     const invoiceNumber = 'ADJUSTMENT-UI-MOBILE-120';
     const invoice = await createInvoice(page, invoiceNumber);
@@ -182,21 +183,49 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     await expect(dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true })).toHaveValue('120.00');
     await dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true }).fill(replacementDate);
     await dialog.getByLabel('Zahlungsreferenz', { exact: true }).fill('Synthetic actual replacement receipt');
-    const received = page.waitForResponse(result => new URL(result.url()).pathname === `/api/invoices/${invoice.id}/payments` && result.request().method() === 'POST');
+    delayedJournalPath = `/api/invoices/${invoice.id}/payments`;
+    let journalFetched!: () => void, heldJournal = false, replacementPosts = 0;
+    const realJournalFetched = new Promise<void>(resolve => { journalFetched = resolve; });
+    const journalDelivery = new Promise<void>(resolve => { releaseDelayedJournal = resolve; });
+    await page.route(`**${delayedJournalPath}`, async route => {
+      if (route.request().method() === 'POST') { replacementPosts += 1; return route.continue(); }
+      if (route.request().method() !== 'GET' || heldJournal) return route.continue();
+      heldJournal = true;
+      const actualResponse = await route.fetch();
+      expect(actualResponse.status()).toBe(200);
+      journalFetched();
+      await journalDelivery;
+      await route.fulfill({ response: actualResponse }); // Delay only the real authoritative response.
+    });
+    const received = page.waitForResponse(result => new URL(result.url()).pathname === delayedJournalPath && result.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true }).focus(); await page.keyboard.press('Enter');
     const receiptResponse = await received; expect(receiptResponse.status()).toBe(201);
     expect(receiptResponse.request().postDataJSON()).toMatchObject({ amount: '120.00', paidAt: replacementDate, expectedPaidCents: '0', expectedLedgerVersion: corrected.ledgerVersion });
-    await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
+    const savedProof = dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) });
+    await expect(savedProof).toBeFocused();
+    await expect(savedProof.getByText('Zahlung gespeichert', { exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(savedProof.locator('p.text-2xl')).toBeInViewport({ ratio: 1 });
+    await realJournalFetched;
+    await expect(dialog.getByText('Aktueller Journalstand wird geprüft …', { exact: true })).toBeVisible();
+    const userClose = dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true });
+    await expect(userClose).toBeEnabled();
+    await page.keyboard.press('Tab');
+    await expect(userClose).toBeFocused();
+    const deliveredJournal = page.waitForResponse(result => new URL(result.url()).pathname === delayedJournalPath && result.request().method() === 'GET');
+    releaseDelayedJournal!();
+    expect((await deliveredJournal).status()).toBe(200);
     const replacementPanel = dialog.getByRole('region', { name: panelName, exact: true });
     await expect(metric(replacementPanel, 'Gültig eingegangen')).toHaveText(/^120,00\s*€$/u);
     await expect(metric(replacementPanel, 'Noch einzuziehen')).toHaveText(/^0,00\s*€$/u);
+    await expect(userClose).toBeFocused(); // A late journal must not take focus back from the user.
+    expect(replacementPosts).toBe(1);
     const settled = await loadJournal(page, invoice.id), after = await snapshot(userId, invoice.id);
     expect(settled.ledger).toMatchObject({ documentState: 'PAID', originalReceivedCents: '24000', correctedCents: '12000', validReceivedCents: '12000', refundedCents: '0', collectibleOpenCents: '0' });
     expect(settled.events).toHaveLength(2); expect(settled.adjustments).toHaveLength(1);
     expect(after.events[0]).toEqual(before.events[0]); expect(after.incomes.find(income => income.id === before.incomes[0].id)).toEqual(before.incomes[0]);
     expect(after.adjustments).toEqual(afterCorrection.adjustments); expect(after.operations).toHaveLength(before.operations.length + 2);
     await testInfo.attach('payment-adjustment-mobile-http-db-evidence.json', { body: Buffer.from(JSON.stringify({ before, posts, savedBody, corrected, afterCorrection, settled, after }, null, 2)), contentType: 'application/json' });
-  } finally { await prisma.$disconnect(); }
+  } finally { releaseDelayedJournal?.(); if (delayedJournalPath) await page.unroute(`**${delayedJournalPath}`); await prisma.$disconnect(); }
 });
 
 test('stale correction preserves the draft, rejects without writes and requires explicit fresh-ledger review', async ({ page }, testInfo) => {
@@ -322,9 +351,11 @@ for (const view of ['eur', 'tax-focus-fallback'] as const) {
     test.setTimeout(120_000);
     const userId = await isolatedAccount(page);
     let editor: Page | undefined;
+    let observerFocusSession: CDPSession | undefined, editorFocusSession: CDPSession | undefined;
     let completed = false;
     const focusCheckpoints: Record<string, unknown> = {};
     const fiscalResponses: { status: number; method: string }[] = [];
+    const focusEmulation = { observerDisableAcknowledged: false, editorDisableAcknowledged: false };
     try {
       const invoice = await createInvoice(page, `ADJUSTMENT-TWO-TAB-${view.toUpperCase()}`);
       const today = new Date().toISOString().slice(0, 10);
@@ -333,6 +364,13 @@ for (const view of ['eur', 'tax-focus-fallback'] as const) {
       // Disable the channel only in the tax observer, before its app JS loads.
       // All HTTP responses and browser lifecycle events remain real/unmodified.
       await observeFiscalFocus(page, view === 'tax-focus-fallback');
+      if (view === 'tax-focus-fallback') {
+        // Playwright's Chromium main-frame initialization forces every page to
+        // appear focused/active. Restore native focus, not fabricated DOM state.
+        observerFocusSession = await context.newCDPSession(page);
+        await observerFocusSession.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+        focusEmulation.observerDisableAcknowledged = true;
+      }
       page.on('response', response => {
         if (new URL(response.url()).pathname !== fiscalPath) return;
         fiscalResponses.push({ status: response.status(), method: response.request().method() });
@@ -355,6 +393,11 @@ for (const view of ['eur', 'tax-focus-fallback'] as const) {
       const beforeEditor = await fiscalFocusSnapshot(page);
       focusCheckpoints.observerBeforeEditor = fiscalFocusCheckpoint(beforeEditor);
       editor = await context.newPage();
+      if (view === 'tax-focus-fallback') {
+        editorFocusSession = await context.newCDPSession(editor);
+        await editorFocusSession.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+        focusEmulation.editorDisableAcknowledged = true;
+      }
       await observeFiscalFocus(editor);
       await editor.bringToFront();
       await editor.goto(`/dashboard?tab=invoices&document=${invoice.id}`);
@@ -415,12 +458,16 @@ for (const view of ['eur', 'tax-focus-fallback'] as const) {
         // Available on failures too; no input text, account IDs or bank evidence.
         const observerState = await fiscalFocusSnapshot(page).catch(() => ({ unavailable: true }));
         const editorState = editor ? await fiscalFocusSnapshot(editor).catch(() => ({ unavailable: true })) : null;
-        const diagnostics = { observer: view, focusCheckpoints, observerState, editorState, fiscalResponses };
+        const diagnostics = { observer: view, focusEmulation, focusCheckpoints, observerState, editorState, fiscalResponses };
         // The hosted workflow uploads only allowlisted PNGs. Preserve bounded,
         // nonfinancial failure diagnostics in its log without changing that policy.
         if (!completed) console.warn('Synthetic fiscal focus diagnostics:', JSON.stringify(diagnostics));
         await testInfo.attach(`payment-adjustment-two-tab-${view}-focus-diagnostics.json`, { body: Buffer.from(JSON.stringify(diagnostics, null, 2)), contentType: 'application/json' });
-      } finally { await editor?.close(); await prisma.$disconnect(); }
+      } finally {
+        await editorFocusSession?.detach().catch(() => {});
+        await observerFocusSession?.detach().catch(() => {});
+        await editor?.close(); await prisma.$disconnect();
+      }
     }
   });
 }

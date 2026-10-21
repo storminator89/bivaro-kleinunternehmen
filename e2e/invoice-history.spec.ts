@@ -67,6 +67,11 @@ test('traces original, existing correction and separate payment without changing
     await expect(documents.getByText('Synthetic service correction', { exact: true })).toHaveCount(2);
     await expect(page.getByText('Storno bedeutet nicht zurückgezahlt.', { exact: true })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Gespeicherte Zahlungsnachweise' }).getByRole('listitem')).toHaveCount(1);
+    const receiptEvent = page.getByRole('list', { name: 'Protokollierte Dokumentereignisse' }).getByRole('listitem').filter({ hasText: 'Zahlung erhalten' });
+    await expect(receiptEvent).toHaveCount(1);
+    await expect(receiptEvent.getByText('Eingegangener Betrag (Cent)', { exact: true })).toBeVisible();
+    await expect(receiptEvent.getByText('Tatsächliches Eingangsdatum', { exact: true })).toBeVisible();
+    await expect(receiptEvent).not.toContainText('Berichtigung / tatsächliche Rückzahlung');
     await expect(page.getByRole('list', { name: 'Protokollierte Dokumentereignisse' }).getByText('Dein Konto (im Protokoll zugeordnet)', { exact: false }).first()).toBeVisible();
     for (const id of [invoiceId, correction.id]) {
       const download = await page.request.get(`/api/invoices/download?id=${id}&download=true`); expect(download.status()).toBe(200); expect((await download.body()).subarray(0, 4).toString()).toBe('%PDF');
@@ -83,6 +88,8 @@ test('traces original, existing correction and separate payment without changing
     const dark = page.getByRole('button', { name: 'Dunkles Farbschema aktivieren', exact: true }); if (await dark.isVisible()) await dark.click();
     await expect(page.locator('html')).toHaveClass(/dark/);
     await expect(documents.getByRole('link', { name: /Gespeicherte Datei herunterladen/ }).first()).toBeVisible();
+    await expect(receiptEvent.getByText('Eingegangener Betrag (Cent)', { exact: true })).toBeVisible();
+    await expect(receiptEvent.getByText('Tatsächliches Eingangsdatum', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('history-correction-mobile.png'), fullPage: true });
     const finalCounter = await prisma.invoiceNumberCounter.findMany({ where: { userId } });

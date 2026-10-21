@@ -50,18 +50,25 @@ export function historyDocument(row: DocumentRow, allowedIds: Set<number>): Hist
     cancellationReason: text(row.cancellationReason, 1000), originalInvoiceId: row.originalInvoiceId !== null && allowedIds.has(row.originalInvoiceId) ? row.originalInvoiceId : null };
 }
 const fields: [string, string, (value: unknown) => string | null][] = [
-  ['amountCents', 'Berichtigung / tatsächliche Rückzahlung (Cent)', value => typeof value === 'string' && /^[1-9][0-9]*$/u.test(value) ? value : null],
+  ['amountCents', 'Finanzbelegbetrag (Cent)', value => typeof value === 'string' && /^[1-9][0-9]*$/u.test(value) ? value : null],
   ['originalPaymentId', 'Unveränderte Originalzahlung', value => Number.isSafeInteger(value) ? String(value) : null],
   ['reason', 'Begründung', value => text(value, 1000)],
   ['accountingEffectiveOn', 'Operatives Wirksamkeitsdatum (keine Steuerfreigabe)', value => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null],
   ['status', 'Status', historyStatusLabel],
   ['issuanceState', 'Ausstellungsnachweis', value => value === 'UNKNOWN' ? 'Unbekannt' : value === 'UNISSUED' ? 'Nicht ausgestellt' : value === 'ISSUED' ? 'Ausgestellt' : null],
-  ['paidAt', 'Zahlungsdatum (Statusfeld)', value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null],
+  ['paidAt', 'Gespeicherter Zahlungsdatumswert', value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null],
   ['totalAmount', 'Dokumentbetrag', value => typeof value === 'number' && Number.isFinite(value) ? String(value) : null],
 ];
 export function historyEvent(row: Pick<AuditLog, 'id' | 'userId' | 'entityId' | 'action' | 'createdAt' | 'oldValues' | 'newValues' | 'metadata'>): HistoryEvent {
   const before = object(row.oldValues), after = object(row.newValues), metadata = object(row.metadata);
-  const changes = fields.flatMap(([field, label, format]) => {
+  const changes = fields.flatMap(([field, baseLabel, format]) => {
+    // Identical field names do not make receipts, corrections and refunds the
+    // same movement. Unknown/legacy actions must remain direction-neutral.
+    const label = field === 'amountCents'
+      ? row.action === 'PAYMENT_RECEIVED' ? 'Eingegangener Betrag (Cent)'
+        : row.action === 'PAYMENT_CORRECTION' ? 'Nie erhaltener Betrag (Cent)'
+          : row.action === 'CUSTOMER_REFUND' ? 'Tatsächlich zurückgezahlter Betrag (Cent)' : baseLabel
+      : field === 'paidAt' && row.action === 'PAYMENT_RECEIVED' ? 'Tatsächliches Eingangsdatum' : baseLabel;
     const oldValue = Object.hasOwn(before, field) ? format(before[field]) : null;
     const newValue = Object.hasOwn(after, field) ? format(after[field]) : null;
     return oldValue !== newValue ? [{ field, label, before: oldValue, after: newValue }] : [];

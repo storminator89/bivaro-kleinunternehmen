@@ -923,6 +923,9 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       const currentAxes = dialog.getByRole('region', { name: 'Zahlung korrigieren oder Erstattung dokumentieren', exact: true });
       await expect(currentAxes.getByText('Gültig eingegangen', { exact: true }).locator('..').locator('dd')).toHaveText(/^120,00\s*€$/u);
       await expect(currentAxes.getByText('Noch einzuziehen', { exact: true }).locator('..').locator('dd')).toHaveText(/^0,00\s*€$/u);
+      const currentConfirmation = dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) });
+      await expect(currentConfirmation).toBeFocused();
+      await expect(currentConfirmation).toBeInViewport({ ratio: 1 });
       const incomeList = await (await page.request.get(`/api/incomes?search=${invoiceNumber}&pageSize=100`)).json();
       expect(incomeList.items).toHaveLength(2);
       expect(new Set(incomeList.items.map((income: { amount: number }) => income.amount))).toEqual(new Set([40, 80]));
