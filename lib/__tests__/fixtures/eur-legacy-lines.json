@@ -1,0 +1,443 @@
+[
+  {
+    "lineNumber": 12,
+    "name": "Betriebseinnahmen als umsatzsteuerlicher Kleinunternehmer",
+    "description": "Umsätze nach § 19 Abs. 1 UStG",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 14,
+    "name": "Betriebseinnahmen als Land- und Forstwirt",
+    "description": "Durchschnittssatzbesteuerung nach § 24 UStG",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 15,
+    "name": "Umsatzsteuerpflichtige Betriebseinnahmen",
+    "description": "Umsatzsteuerpflichtige Betriebseinnahmen",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 16,
+    "name": "Umsatzsteuerfreie / nicht steuerbare Betriebseinnahmen",
+    "description": "Steuerfreie oder nicht steuerbare Umsätze",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 17,
+    "name": "Vereinnahmte Umsatzsteuer",
+    "description": "Vereinnahmte Umsatzsteuer und unentgeltliche Wertabgaben",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 18,
+    "name": "Vom Finanzamt erstattete Umsatzsteuer",
+    "description": "Erstattete oder verrechnete Umsatzsteuer",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 19,
+    "name": "Veräußerung oder Entnahme von Anlagevermögen",
+    "description": "Veräußerung oder Entnahme von Anlagevermögen",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 20,
+    "name": "Private Kfz-Nutzung",
+    "description": "Private Kfz-Nutzung",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 21,
+    "name": "Sonstige Sach-, Nutzungs- und Leistungsentnahmen",
+    "description": "Sonstige Entnahmen",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 22,
+    "name": "Auflösung von Rücklagen und Ausgleichsposten",
+    "description": "Auflösung von Rücklagen",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 23,
+    "name": "Summe Betriebseinnahmen",
+    "description": "Summe der Betriebseinnahmen",
+    "type": "income",
+    "section": "Betriebseinnahmen"
+  },
+  {
+    "lineNumber": 24,
+    "name": "Betriebsausgabenpauschale",
+    "description": "Pauschale für bestimmte Berufsgruppen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 25,
+    "name": "Betriebsausgabenpauschale Weinbau",
+    "description": "Richtbeträge für Weinbaubetriebe",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 26,
+    "name": "Betriebsausgabenpauschale Forstwirte",
+    "description": "Pauschale für Forstwirte",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 27,
+    "name": "Waren, Rohstoffe und Hilfsstoffe",
+    "description": "Waren, Rohstoffe und Hilfsstoffe einschließlich Nebenkosten",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 29,
+    "name": "Bezogene Fremdleistungen",
+    "description": "Bezogene Fremdleistungen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 30,
+    "name": "Ausgaben für eigenes Personal",
+    "description": "Gehälter, Löhne und Versicherungsbeiträge",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 31,
+    "name": "AfA auf Grundstücke",
+    "description": "AfA auf Grundstücke und grundstücksgleiche Rechte",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 32,
+    "name": "AfA auf immaterielle Wirtschaftsgüter",
+    "description": "AfA auf immaterielle Wirtschaftsgüter",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 33,
+    "name": "AfA auf bewegliche Wirtschaftsgüter",
+    "description": "AfA auf bewegliche Wirtschaftsgüter",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 34,
+    "name": "Sonderabschreibungen",
+    "description": "Sonderabschreibungen nach §§ 7b, 7g EStG",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 35,
+    "name": "Herabsetzungsbeträge nach § 7g EStG",
+    "description": "Herabsetzungsbeträge nach § 7g Abs. 2 EStG",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 36,
+    "name": "Geringwertige Wirtschaftsgüter",
+    "description": "Aufwendungen für GWG nach § 6 Abs. 2 EStG",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 37,
+    "name": "Auflösung Sammelposten",
+    "description": "Auflösung von Sammelposten nach § 6 Abs. 2a EStG",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 38,
+    "name": "Restbuchwerte ausgeschiedener Anlagegüter",
+    "description": "Restbuchwerte ausgeschiedener Anlagegüter",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 39,
+    "name": "Miete und Pacht für Geschäftsräume",
+    "description": "Miete/Pacht für Geschäftsräume und Grundstücke",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 40,
+    "name": "Aufwendungen für doppelte Haushaltsführung",
+    "description": "Doppelte Haushaltsführung",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 41,
+    "name": "Sonstige Grundstücksaufwendungen",
+    "description": "Sonstige Aufwendungen für betrieblich genutzte Grundstücke",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 42,
+    "name": "Erhaltungsaufwendungen Grundstücke",
+    "description": "In Zeile 41 enthaltene Erhaltungsaufwendungen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 43,
+    "name": "Aufwendungen für Telekommunikation",
+    "description": "Telefon und Internet",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 44,
+    "name": "Übernachtungs- und Reisenebenkosten",
+    "description": "Reisenebenkosten des Steuerpflichtigen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 45,
+    "name": "Fortbildungskosten",
+    "description": "Fortbildungskosten ohne Reisekosten",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 46,
+    "name": "Rechts- und Steuerberatung",
+    "description": "Rechts- und Steuerberatung sowie Buchführung",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 47,
+    "name": "Miete und Leasing beweglicher Wirtschaftsgüter",
+    "description": "Miete/Leasing ohne Kfz",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 48,
+    "name": "Erhaltungsaufwendungen",
+    "description": "Instandhaltung, Wartung und Reparatur",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 49,
+    "name": "Beiträge, Gebühren, Abgaben und Versicherungen",
+    "description": "Beiträge und Versicherungen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 50,
+    "name": "Laufende EDV-Kosten",
+    "description": "EDV-Beratung, Wartung und Reparatur",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 51,
+    "name": "Arbeitsmittel",
+    "description": "Bürobedarf, Porto und Fachliteratur",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 52,
+    "name": "Abfallbeseitigung und Entsorgung",
+    "description": "Abfallbeseitigung und Entsorgung",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 53,
+    "name": "Verpackung und Transport",
+    "description": "Kosten für Verpackung und Transport",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 54,
+    "name": "Werbekosten",
+    "description": "Werbung und Marketing",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 55,
+    "name": "Schuldzinsen Anlagevermögen",
+    "description": "Schuldzinsen zur Finanzierung von Anlagevermögen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 56,
+    "name": "Übrige Schuldzinsen",
+    "description": "Übrige Schuldzinsen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 57,
+    "name": "Abziehbare Vorsteuerbeträge",
+    "description": "Nach § 15 UStG abziehbare Vorsteuer",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 58,
+    "name": "An das Finanzamt gezahlte Umsatzsteuer",
+    "description": "Gezahlte oder verrechnete Umsatzsteuer",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 59,
+    "name": "Rücklagen und stille Reserven",
+    "description": "Rücklagen, stille Reserven und Ausgleichsposten",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 60,
+    "name": "Übrige unbeschränkt abziehbare Betriebsausgaben",
+    "description": "Sonstige Betriebsausgaben, einschließlich zurückgezahlter Hilfen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 61,
+    "name": "Übertrag Betriebsausgaben",
+    "description": "Summe der unbeschränkt abziehbaren Betriebsausgaben",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 62,
+    "name": "Geschenke",
+    "description": "Beschränkt abziehbare Geschenke",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 63,
+    "name": "Bewirtungsaufwendungen",
+    "description": "Beschränkt abziehbare Bewirtung",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 64,
+    "name": "Verpflegungsmehraufwendungen",
+    "description": "Verpflegungsmehraufwendungen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 65,
+    "name": "Häusliches Arbeitszimmer",
+    "description": "Aufwendungen für ein häusliches Arbeitszimmer",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 66,
+    "name": "Tagespauschale häusliche Tätigkeit",
+    "description": "Tagespauschale für Tätigkeit in der häuslichen Wohnung",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 67,
+    "name": "Sonstige beschränkt abziehbare Betriebsausgaben",
+    "description": "Sonstige beschränkt abziehbare Ausgaben",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 68,
+    "name": "Kfz-Leasingkosten",
+    "description": "Leasingkosten für Kfz",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 69,
+    "name": "Kfz-Steuern, Versicherungen und Maut",
+    "description": "Kfz-Steuern, Versicherungen und Maut",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 70,
+    "name": "Sonstige tatsächliche Fahrtkosten",
+    "description": "Fahrtkosten ohne AfA und Zinsen",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 71,
+    "name": "Fahrtkosten privates Fahrzeug",
+    "description": "Fahrtkosten für nicht zum Betriebsvermögen gehörende Fahrzeuge",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 72,
+    "name": "Fahrtkosten Wohnung und Betriebsstätte",
+    "description": "Entfernungspauschale und Familienheimfahrten",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 73,
+    "name": "Mindestens abziehbare Fahrtkosten",
+    "description": "Mindestens abziehbare Fahrtkosten",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 74,
+    "name": "Nicht abziehbare Beträge",
+    "description": "Nicht abziehbare Betriebsausgaben",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 75,
+    "name": "Summe Betriebsausgaben",
+    "description": "Summe der Betriebsausgaben",
+    "type": "expense",
+    "section": "Betriebsausgaben"
+  },
+  {
+    "lineNumber": 90,
+    "name": "Berechneter Überschuss (Übertrag)",
+    "description": "Vereinfachter Übertrag der Summe/Differenz aus Zeilen 76 bis 89; keine vollständige steuerpflichtige Ergebnisermittlung",
+    "type": "result",
+    "section": "Ergebnis"
+  }
+]

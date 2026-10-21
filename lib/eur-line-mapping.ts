@@ -9,16 +9,18 @@
 
 import { EURLineDefinition } from '@/types/eur-export';
 
-export type SupportedEURYear = 2024 | 2025;
+export type SupportedEURYear = 2024 | 2025 | 2026;
 
 export const EUR_MAPPING_SOURCES: Record<SupportedEURYear, string> = {
     2024: 'https://www.elster.de/eportal/helpGlobal?themaGlobal=help_euer_ufa_77_2024',
     2025: 'https://www.bundesfinanzministerium.de/Content/DE/Downloads/BMF_Schreiben/Steuerarten/Einkommensteuer/2025-08-29-anlage-EUER-2025.pdf?__blob=publicationFile&v=2',
+    2026: 'https://www.bundesfinanzministerium.de/Content/DE/Downloads/BMF_Schreiben/Steuerarten/Einkommensteuer/2026-09-01-anlage-EUER-2026.pdf?__blob=publicationFile&v=4',
 };
 
 export const EUR_MAPPING_VERSIONS: Record<SupportedEURYear, string> = {
     2024: 'anlage-euer-2024-v1',
     2025: 'anlage-euer-2025-v1',
+    2026: 'anlage-euer-2026-v1',
 };
 
 /** Official rows for the simple single-business working paper supported here. */
@@ -115,16 +117,104 @@ const CATEGORY_MAPPINGS: Record<string, number> = {
 };
 
 
+/**
+ * Explicit crosswalk for this existing subset, BMF 01.09.2026, PDF pages 3–6.
+ * This is NOT a form-wide offset: goods move 27 -> 29, while income is stable.
+ * New agricultural reserve 27 and transfer subtotal 28 are deliberately absent.
+ * Labels/types retain the bounded working-paper semantics, not fiscal approval.
+ */
+const ROWS_2026: Record<number, number> = {
+    12: 12, 14: 14, 15: 15, 16: 16, 17: 17, 18: 18, 19: 19, 20: 20, 21: 21, 22: 22, 23: 23,
+    24: 24, 25: 25, 26: 26, 27: 29,
+    29: 30, 30: 31, 31: 32, 32: 33, 33: 34, 34: 35, 35: 36, 36: 37, 37: 38, 38: 39,
+    39: 40, 40: 41, 41: 42, 42: 43, 43: 44, 44: 45, 45: 46, 46: 47, 47: 48, 48: 49,
+    49: 50, 50: 51, 51: 52, 52: 53, 53: 54, 54: 55, 55: 56, 56: 57, 57: 58, 58: 59,
+    59: 60, 60: 61, 61: 62, 62: 63, 63: 64, 64: 65, 65: 66, 66: 67, 67: 68,
+    68: 69, 69: 70, 70: 71, 71: 72, 72: 73, 73: 74, 74: 75, 75: 76, 90: 91,
+};
+
+export interface EURYearContract {
+    year: SupportedEURYear;
+    mappingVersion: string;
+    /** Retrieval identity; distinct from the application's mapping version. */
+    sourceVersion: string;
+    sourceSha256?: string;
+    sourceReferences: string[];
+    checkedScope: string;
+    roles: {
+        defaultIncome: number;
+        fallbackExpense: number;
+        movableDepreciation: number;
+        intermediateResult: number;
+    };
+    resultDescription: string;
+    resultCaveat: string;
+    laterResultRowsLabel: string;
+    lines: EURLineDefinition[];
+    categoryMappings: Record<string, number>;
+}
+
+const LEGACY_RESULT_DESCRIPTION = OFFICIAL_LINES.find(line => line.lineNumber === 90)!.description;
+const RESULT_DESCRIPTION_2026 = 'Vereinfachter Übertrag der Summe/Differenz aus Zeilen 77 bis 90; keine vollständige steuerpflichtige Ergebnisermittlung';
+const LINES_2026 = OFFICIAL_LINES.map(line => ({
+    ...line,
+    lineNumber: ROWS_2026[line.lineNumber],
+    ...(line.lineNumber === 27 ? {
+        name: 'Waren, Rohstoffe und Hilfsstoffe einschließlich der Nebenkosten',
+        description: 'Waren, Rohstoffe und Hilfsstoffe einschließlich der Nebenkosten',
+    } : {}),
+    ...(line.lineNumber === 42 ? { description: 'In Zeile 42 enthaltene Erhaltungsaufwendungen' } : {}),
+    ...(line.lineNumber === 90 ? { description: RESULT_DESCRIPTION_2026 } : {}),
+}));
+const CATEGORY_MAPPINGS_2026 = Object.fromEntries(Object.entries(CATEGORY_MAPPINGS)
+    .map(([category, row]) => [category, ROWS_2026[row]]));
+const CHECKED_SCOPE = 'Jahresbezogene Zeilen des bestehenden vereinfachten Einzelbetriebs-Arbeitspapiers; keine vollständige steuerliche Ergebnisermittlung, Anlagenartprüfung oder ELSTER-Datensatzprüfung.';
+
+function createYearContract(year: SupportedEURYear): EURYearContract {
+    const is2026 = year === 2026;
+    const intermediateResult = is2026 ? 91 : 90;
+    const sourceRange = is2026 ? '77 bis 90' : '76 bis 89';
+    const laterResultRowsLabel = is2026 ? '93, 96 und 98' : '92, 95 und 97';
+    return {
+        year,
+        mappingVersion: EUR_MAPPING_VERSIONS[year],
+        sourceVersion: year === 2024 ? 'ELSTER-Hilfe Anlage EÜR 2024 (ohne angezeigtes Revisionsdatum)'
+            : is2026 ? 'BMF 01.09.2026, PDF-URL v=4, 44 Seiten, Hauptformular S. 3–6'
+                : 'BMF 29.08.2025, PDF-URL v=2',
+        ...(is2026 ? { sourceSha256: '03d3033acc5c5a126729e58743128596ae39193759c55b207872da9432b83a8f' } : {}),
+        sourceReferences: [EUR_MAPPING_SOURCES[year], 'https://www.elster.de/eportal/formulare-leistungen/alleformulare/euer'],
+        checkedScope: CHECKED_SCOPE,
+        roles: { defaultIncome: 12, fallbackExpense: is2026 ? 61 : 60, movableDepreciation: is2026 ? 34 : 33, intermediateResult },
+        resultDescription: is2026 ? RESULT_DESCRIPTION_2026 : LEGACY_RESULT_DESCRIPTION,
+        resultCaveat: `Der ausgewiesene Betrag ist ein vereinfachter Überschuss für den Übertrag in Zeile ${intermediateResult} (Summe/Differenz der Zeilen ${sourceRange}). Die vollständige steuerpflichtige Ergebnisermittlung der späteren amtlichen Zeilen ${laterResultRowsLabel} wird hier nicht berechnet.`,
+        laterResultRowsLabel,
+        lines: is2026 ? LINES_2026 : OFFICIAL_LINES,
+        categoryMappings: is2026 ? CATEGORY_MAPPINGS_2026 : CATEGORY_MAPPINGS,
+    };
+}
+
+const YEAR_CONTRACTS: Record<SupportedEURYear, EURYearContract> = {
+    2024: createYearContract(2024),
+    2025: createYearContract(2025),
+    2026: createYearContract(2026),
+};
+
+export function getEURYearContract(year: number): EURYearContract {
+    if (!isSupportedEURYear(year)) throw new Error(`Nicht unterstütztes EÜR-Jahr: ${year}`);
+    return YEAR_CONTRACTS[year];
+}
+
+
 function normalizeCategory(category: string): string {
     return category.toLowerCase().trim();
 }
 
 export function isSupportedEURYear(year: number): year is SupportedEURYear {
-    return year === 2024 || year === 2025;
+    return year === 2024 || year === 2025 || year === 2026;
 }
 
 export function getSupportedEURYears(): SupportedEURYear[] {
-    return [2024, 2025];
+    return [2024, 2025, 2026];
 }
 
 export function getEURMappingVersion(year: number): string | null {
@@ -132,18 +222,18 @@ export function getEURMappingVersion(year: number): string | null {
 }
 
 export function getEURSourceReferences(year: number): string[] {
-    return isSupportedEURYear(year) ? [EUR_MAPPING_SOURCES[year], 'https://www.elster.de/eportal/formulare-leistungen/alleformulare/euer'] : [];
+    return isSupportedEURYear(year) ? getEURYearContract(year).sourceReferences : [];
 }
 
 export function getEURLinesForYear(year: number): EURLineDefinition[] {
     if (!isSupportedEURYear(year)) return [];
-    return OFFICIAL_LINES;
+    return getEURYearContract(year).lines;
 }
 
 export function getEURLineForCategoryForYear(category: string, year: number): number | null {
     if (!isSupportedEURYear(year) || !category) return null;
     const normalized = normalizeCategory(category);
-    for (const [key, lineNumber] of Object.entries(CATEGORY_MAPPINGS)) {
+    for (const [key, lineNumber] of Object.entries(getEURYearContract(year).categoryMappings)) {
         if (normalizeCategory(key) === normalized) return lineNumber;
     }
     return null;
@@ -186,13 +276,17 @@ export function generateElsterCSV(
     year: number,
     companyName?: string,
     taxNumber?: string,
-    options?: { mappingVersion?: string; corrections?: EURCSVCorrection[]; warnings?: string[] },
+    options?: { mappingVersion?: string; sourceVersion?: string; sourceSha256?: string; checkedScope?: string; sourceReferences?: string[]; corrections?: EURCSVCorrection[]; warnings?: string[] },
 ): string {
     const BOM = '\uFEFF';
     let csv = BOM;
     csv += 'Anlage EÜR - CSV-Übertragungshilfe (keine ELSTER-Einreichung)\n';
     csv += `Veranlagungsjahr: ${year}\n`;
     if (options?.mappingVersion) csv += `Mappingversion: ${options.mappingVersion}\n`;
+    if (options?.sourceVersion) csv += `Quellenversion: ${csvCell(options.sourceVersion)}\n`;
+    if (options?.sourceSha256) csv += `Quellen-SHA256: ${options.sourceSha256}\n`;
+    if (options?.checkedScope) csv += `Prüfumfang: ${csvCell(options.checkedScope)}\n`;
+    for (const source of options?.sourceReferences ?? []) csv += `Quelle: ${csvCell(source)}\n`;
     if (companyName) csv += `Betrieb: ${csvCell(companyName)}\n`;
     if (taxNumber) csv += `Steuernummer: ${csvCell(taxNumber)}\n`;
     csv += 'Hinweis: Diese Datei ist eine Arbeitsunterlage für die Übertragung durch eine fachkundige Person.\n\n';
@@ -227,12 +321,12 @@ function csvCell(value: string): string {
 
 export function getDefaultIncomeLineForKleinunternehmer(year = 2025): number {
     if (!isSupportedEURYear(year)) throw new Error(`Nicht unterstütztes EÜR-Jahr: ${year}`);
-    return 12;
+    return getEURYearContract(year).roles.defaultIncome;
 }
 
 export function getDefaultExpenseLineForYear(year: number): number {
     if (!isSupportedEURYear(year)) throw new Error(`Nicht unterstütztes EÜR-Jahr: ${year}`);
-    return 60;
+    return getEURYearContract(year).roles.fallbackExpense;
 }
 
 export function getDefaultExpenseLine(year = 2025): number {

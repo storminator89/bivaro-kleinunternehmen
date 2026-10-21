@@ -8,7 +8,7 @@ import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
 const state = vi.hoisted(() => ({ client: null as unknown, userId: 'purchase-owner', failAudit: false, failAuditEntity: '' }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
-vi.mock('@/lib/get-user-id', () => { class UnauthorizedError extends Error {} return { requireUserId: async () => state.userId, UnauthorizedError, unauthorizedResponse: () => new Response(null, { status: 401 }) }; });
+vi.mock('@/lib/get-user-id', () => { class UnauthorizedError extends Error {} return { requireUserId: async () => state.userId, getUserId: async () => state.userId, UnauthorizedError, unauthorizedResponse: () => new Response(null, { status: 401 }) }; });
 vi.mock('@/lib/api-auth', () => ({ withApiAuth: async (_request: Request, handler: (value: { userId: string }) => unknown) => handler({ userId: state.userId }), apiError: (error: string, status: number, code: string) => Response.json({ error, code }, { status }), apiSuccess: (value: unknown) => Response.json(value), corsHeaders: () => ({}), handleCors: () => new Response(null) }));
 vi.mock('@/lib/audit-log', async importOriginal => { const actual = await importOriginal<typeof import('@/lib/audit-log')>(); return { ...actual, createFinancialAuditLog: async (...args: Parameters<typeof actual.createFinancialAuditLog>) => { if (state.failAudit && (!state.failAuditEntity || args[0].entityType === state.failAuditEntity) && args[0].metadata.operation === 'purchase-document.approve-expense') throw new Error('synthetic audit failure'); return actual.createFinancialAuditLog(...args); } }; });
 let database: ReturnType<typeof createTestDatabase>, storage: string;
@@ -374,6 +374,39 @@ describe('explicit manual photo source approval', () => {
       expect(persisted.reviewedSourceSnapshot).toEqual(initial.reviewedSourceSnapshot); expect(persisted.reviewDraft).toEqual(initial.reviewDraft); expect(persisted.supplierId).toBe(doc.supplierId);
     } finally { gate.release(); gate.restore(); }
   });
+  it('keeps the accepted 2026 working paper on actual paid-photo cents, independent of annual declarations', async () => {
+    const oldOwner = state.userId, oldSupplier = supplierId, owner = 'photo-annual-eur-integration';
+    await database.client.user.create({ data: { id: owner, email: `${owner}@test.invalid`, password: 'synthetic' } });
+    try {
+      state.userId = owner; supplierId = (await suppliers.createSupplier(owner, { name: 'Synthetic combined export supplier' })).id;
+      const doc = await photoSource('PHOTO-ANNUAL-EUR', '0.29', '2026-01-01');
+      const payload = { ...photoBody(doc), category: 'Bürobedarf', taxDeductiblePercentage: '100', taxRelevant: true };
+      const approved = await approve(doc.id, payload); expect(approved.status).toBe(200);
+      const { expense } = await approved.json();
+      const eur = await import('@/app/api/eur-export/route');
+      const read = async (year: number) => {
+        const response = await eur.GET(new NextRequest(`http://localhost/api/eur-export?year=${year}&format=json`));
+        expect(response.status).toBe(200); return response.json();
+      };
+      const priorYear = await read(2025), before = await read(2026);
+      expect(priorYear.data).toMatchObject({ totalIncome: 0, totalExpense: 0, controlTotals: { incomeCount: 0, expenseCount: 0 } });
+      expect(before.data).toMatchObject({ year: 2026, mappingVersion: 'anlage-euer-2026-v1', totalIncome: 0, totalExpense: 0.29, profit: -0.29, controlTotals: { incomeCount: 0, expenseCount: 1, expenseAmount: 0.29 } });
+      expect(before.data.lines).toEqual([expect.objectContaining({ lineNumber: 52, amount: 0.29, type: 'expense' }), expect.objectContaining({ lineNumber: 91, amount: -0.29, type: 'result' })]);
+      expect(before.unmappedCategories).toEqual([]);
+      await database.client.annualBusinessContextRevision.create({ data: { userId: owner, revision: 1, contextYear: 2026, effectiveFrom: '2026-01-01', foundingYear: 2020, previousYearTurnoverCents: '90000000', previousYearExternalTurnoverCents: '80000000', completeness: 'COMPLETE', sourceNote: 'Synthetic declaration is not financial input' } });
+      const after = await read(2026);
+      const { generatedAt: _beforeTime, ...beforeData } = before.data;
+      const { generatedAt: _afterTime, ...afterData } = after.data;
+      void _beforeTime; void _afterTime;
+      expect(afterData).toEqual(beforeData); expect(after.warnings).toEqual(before.warnings); expect(after.unmappedCategories).toEqual(before.unmappedCategories);
+      expect(await database.client.expense.findUniqueOrThrow({ where: { id: expense.id } })).toMatchObject({ userId: owner, amount: 0.29, date: new Date('2026-01-01T00:00:00.000Z') });
+      expect(await database.client.purchaseDocument.findUniqueOrThrow({ where: { id: doc.id } })).toMatchObject({ reviewedSourceSnapshot: { grossAmount: '0.29', invoiceDate: '2025-12-31', paymentDate: '2026-01-01' }, expenseId: expense.id });
+      expect(await database.client.expense.count({ where: { userId: owner } })).toBe(1);
+      expect(await database.client.income.count({ where: { userId: owner } })).toBe(0);
+      expect(await database.client.cashTransaction.count({ where: { userId: owner } })).toBe(0);
+    } finally { state.userId = oldOwner; supplierId = oldSupplier; }
+  });
+
   it('roundtrips a real approved photo through full ZIP with remapped ownership/replay and one actual-payment original pack', async () => {
     const oldOwner = state.userId, oldSupplier = supplierId;
     const sourceOwner = 'photo-real-backup-source', targetOwner = 'photo-real-backup-target', jsonOwner = 'photo-real-json-target', divergentOwner = 'photo-real-divergent-target', rollbackOwner = 'photo-real-rollback-target';
