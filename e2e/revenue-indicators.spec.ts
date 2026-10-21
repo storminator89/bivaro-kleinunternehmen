@@ -77,13 +77,21 @@ test('revenue indicators preserve unknown/zero, included external share, correct
     await link.scrollIntoViewIfNeeded();
     await link.focus(); await expect(link).toBeFocused();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`revenue-indicators-source-${width}.png`), fullPage: false });
+    await expect(link).toBeInViewport();
+    const declaration = panel.getByText(`Gründungsjahr: ${year - 2} · Quelle: Synthetic own prior-year source`, { exact: true });
+    await declaration.scrollIntoViewIfNeeded();
+    await expect(declaration).toBeInViewport();
+    // Check the complete basis by scrolling; a viewport image is not a full-form claim.
+    for (const term of await panel.locator('dt').all()) {
+      await term.scrollIntoViewIfNeeded();
+      await expect(term).toBeInViewport();
+    }
     await panel.locator('dl').evaluate(node => {
       const header = document.querySelector('.app-topbar');
       window.scrollBy({ top: node.getBoundingClientRect().top - (header?.getBoundingClientRect().bottom ?? 0) - 16, behavior: 'instant' });
     });
     await expect(panel.getByText(`In Bivaro erfasste Einnahmen · ${year}`, { exact: true })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`revenue-indicators-amounts-${width}.png`), fullPage: false });
+    if (width === 390 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`revenue-indicators-amounts-${width}.png`), fullPage: false });
   }
   await page.goto('/steuer-simulation');
   await expect(page.getByText('Nur In-App-Buchungen;', { exact: false })).toBeVisible();

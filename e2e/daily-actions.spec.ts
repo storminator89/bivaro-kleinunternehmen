@@ -30,7 +30,6 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click(); await expect(page).toHaveURL(/\/dashboard/);
     await page.goto('/dashboard/today');
     await expect(page.getByRole('heading', { name: 'Aktuell kein nächster Schritt aus diesen Quellen', exact: true })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('daily-actions-empty-390.png'), fullPage: true });
 
     const invoice = await pdfDocument(page, 'invoices', 'SYNTHETIC-DAILY-PARTIAL');
     expect((await page.request.put('/api/invoices', { data: { id: invoice.id, status: 'SENT' } })).status()).toBe(200);
@@ -62,8 +61,19 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     await expect(list.getByRole('listitem').first()).toContainText('SYNTHETIC-DAILY-PARTIAL');
     for (const width of [360, 390, 1440]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`daily-actions-${width}.png`), fullPage: true });
+      await expect(page.locator('.app-topbar:visible')).toHaveCount(1);
+      expect(await page.evaluate(() => window.document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      // Every action remains reachable at every tested width, including 360px.
+      for (const actionLink of await list.getByRole('link').all()) {
+        await actionLink.scrollIntoViewIfNeeded();
+        await expect(actionLink).toBeInViewport();
+      }
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+      const firstAction = list.getByRole('listitem').first();
+      await expect(firstAction.getByText('80,00 €', { exact: true })).toBeInViewport();
+      await expect(firstAction.getByRole('link', { name: 'Rechnung prüfen: SYNTHETIC-DAILY-PARTIAL', exact: true })).toBeInViewport();
+      // A normal viewport records the priority/balance/CTA, not the entire long list.
+      if (width === 390 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`daily-actions-${width}.png`), fullPage: false });
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await list.getByRole('link', { name: 'Rechnung prüfen: SYNTHETIC-DAILY-PARTIAL', exact: true }).focus(); await page.keyboard.press('Enter');
@@ -87,7 +97,10 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     await page.keyboard.press('Escape'); await expect(workflow).toBeHidden(); await page.goBack();
 
     await list.getByRole('link', { name: 'Angebot öffnen: SYNTHETIC-DAILY-ACCEPTED', exact: true }).click();
-    await page.getByRole('button', { name: 'Angebot SYNTHETIC-DAILY-ACCEPTED in Rechnung umwandeln', exact: true }).filter({ visible: true }).click();
+    await expect(page).toHaveURL(new RegExp(`tab=quotes&document=${accepted.id}`));
+    const acceptedCard = page.locator('[aria-label="Angebotsliste"]').getByRole('article').filter({ has: page.getByRole('heading', { name: 'SYNTHETIC-DAILY-ACCEPTED', exact: true }) });
+    await expect(acceptedCard).toHaveCount(1);
+    await acceptedCard.getByRole('button', { name: 'In Rechnung', exact: true }).click();
     const confirmation = page.getByRole('dialog', { name: 'Rechnungsentwurf prüfen?', exact: true });
     await confirmation.getByRole('button', { name: 'Entwurf prüfen', exact: true }).click();
     const editor = page.getByRole('dialog', { name: 'Rechnung erstellen', exact: true });
