@@ -28,6 +28,26 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/dashboard/);
 }
 
+/** Wait for the actual debounced query and its rendered result, not a row
+ * left over from the unfiltered list that may unmount during menu selection. */
+async function searchPartialInvoiceAndWait(page: Page, invoiceNumber: string) {
+  const filtered = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET' && url.pathname === '/api/invoices'
+      && url.searchParams.get('search') === invoiceNumber;
+  });
+  await page.getByLabel('Suche', { exact: true }).fill(invoiceNumber);
+  const response = await filtered;
+  expect(response.status()).toBe(200);
+  expect(await response.finished()).toBeNull();
+  const result = await response.json();
+  expect(result.total).toBe(1);
+  expect(result.items).toHaveLength(1);
+  expect(result.items[0].invoiceNumber).toBe(invoiceNumber);
+  await expect(page.getByRole('status').filter({ hasText: 'Rechnungen werden geladen…' })).toHaveCount(0);
+  await expect(page.locator('.invoice-ledger .ledger-count')).toHaveText('1');
+}
+
 async function saveFiscalProfile(page: Page, regime: 'STANDARD' | 'SMALL_BUSINESS', date: string) {
   await page.goto('/settings#fiscal-profile');
   const profile = page.locator('#fiscal-profile');
@@ -823,7 +843,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       const paymentPath = `/api/invoices/${invoice.id}/payments`;
       const journal = async () => (await page.request.get(paymentPath)).json();
       await page.goto('/dashboard?tab=invoices');
-      await page.getByLabel('Suche', { exact: true }).fill(invoiceNumber);
+      await searchPartialInvoiceAndWait(page, invoiceNumber);
       const record = () => width < 1280 ? page.getByRole('article').filter({ hasText: invoiceNumber }) : page.getByRole('row').filter({ hasText: invoiceNumber });
       await expect(record()).toHaveCount(1);
       const open = async (state: 'Offen' | 'Teilbezahlt') => {
@@ -872,7 +892,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await expect(record()).toContainText('Offen 80,00');
       await page.reload();
       // Reload server state; select the explicit server-side filter again.
-      await page.getByLabel('Suche', { exact: true }).fill(invoiceNumber);
+      await searchPartialInvoiceAndWait(page, invoiceNumber);
       await page.getByRole('button', { name: 'Teilbezahlt', exact: true }).click();
       dialog = await open('Teilbezahlt');
       await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toHaveCount(0);
@@ -928,7 +948,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const invoice = await created.json();
     const paymentPath = `/api/invoices/${invoice.id}/payments`;
     await page.goto('/dashboard?tab=invoices');
-    await page.getByLabel('Suche', { exact: true }).fill(invoiceNumber);
+    await searchPartialInvoiceAndWait(page, invoiceNumber);
     const row = page.getByRole('row').filter({ hasText: invoiceNumber });
     await row.getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).click();
@@ -962,7 +982,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const concurrent = await page.request.post(paymentPath, { data: { amount: '20.00', currency: 'EUR', paidAt: '2026-10-18', source: 'MANUAL', reference: 'Concurrent independent evidence', idempotencyKey: `independent-${invoice.id}`, expectedPaidCents: '0' } });
     expect(concurrent.status()).toBe(201);
     await page.reload();
-    await page.getByLabel('Suche', { exact: true }).fill(invoiceNumber);
+    await searchPartialInvoiceAndWait(page, invoiceNumber);
     await row.getByRole('button', { name: 'Zahlungsstatus: Teilbezahlt', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Weitere Zahlung erfassen', exact: true }).click();
     activeDialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });

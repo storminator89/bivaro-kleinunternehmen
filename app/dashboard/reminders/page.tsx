@@ -461,7 +461,7 @@ export default function RemindersPage() {
                         handleMarkAsPaid(invoice.id);
                       }}
                       title="Zahlung und Restbetrag erfassen"
-                      aria-label={`Vollständige Zahlung für Rechnung ${invoice.invoiceNumber || invoice.fileName} erfassen`}
+                      aria-label={`Zahlung für Rechnung ${invoice.invoiceNumber || invoice.fileName} erfassen`}
                     >
                       <Check className="h-4 w-4" />
                     </Button>

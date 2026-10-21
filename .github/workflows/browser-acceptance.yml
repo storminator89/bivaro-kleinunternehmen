@@ -41,20 +41,25 @@ jobs:
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
 
-      # Factur-X generation executes gs; Playwright's dependencies do not include it.
-      - name: Install and verify PDF runtime dependency
+      # PDF generation needs gs; real PDF preview needs headed Chromium/Xvfb.
+      - name: Install and verify PDF and virtual display dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ghostscript
+          sudo apt-get install -y --no-install-recommends ghostscript xvfb xauth
           command -v gs
+          command -v Xvfb
+          command -v xvfb-run
+          command -v xauth
           gs --version
+          xauth -V
 
       # Use the supported runner: it owns a fresh temporary database and cleanup.
       # Security hardening remains in CI / Security checks (see testing docs).
       - name: Run the complete functional suite
         timeout-minutes: 25
         run: >-
-          npm run test:e2e --
+          xvfb-run --auto-servernum npm run test:e2e --
+          --headed
           --workers=1
           --retries=0
           --forbid-only

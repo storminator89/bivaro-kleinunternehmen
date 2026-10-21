@@ -139,3 +139,11 @@ describe('QA #32: internal recording and manual email copy', () => {
     expect(source).not.toContain("JSON.stringify({ id: invoiceId, status: 'PAID' })");
   });
 });
+
+
+it('names amount-capable reminder payment actions without a misleading full-settlement promise', () => {
+  const source = readFileSync('app/dashboard/reminders/page.tsx', 'utf8');
+  expect(source).toContain('aria-label={`Zahlung für Rechnung ${invoice.invoiceNumber || invoice.fileName} erfassen`}');
+  expect(source).toContain('title="Zahlung und Restbetrag erfassen"');
+  expect(source).not.toContain('Vollständige Zahlung für Rechnung');
+});

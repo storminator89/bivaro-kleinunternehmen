@@ -61,8 +61,11 @@ test('treats a later deliberate equal amount/date/reference as a distinct alloca
     const payloads: Record<string, unknown>[] = [];
     for (const baseline of ['0', '4000', '8000']) {
       await page.goto('/dashboard?tab=invoices');
-      await page.getByLabel('Suche', { exact: true }).fill(invoiceNumber);
+      // This isolated tenant has one invoice: avoid opening a dropdown while
+      // an unnecessary debounced search replaces the same row underneath it.
       const row = page.getByRole('row').filter({ hasText: invoiceNumber });
+      await expect(page.getByRole('row').filter({ has: page.getByRole('button', { name: /^Zahlungsstatus:/ }) })).toHaveCount(1);
+      await expect(row).toHaveCount(1);
       const state = baseline === '0' ? 'Offen' : 'Teilbezahlt';
       await row.getByRole('button', { name: `Zahlungsstatus: ${state}`, exact: true }).click();
       await page.getByRole('menuitem', { name: baseline === '0' ? 'Bezahlt' : 'Weitere Zahlung erfassen', exact: true }).click();
@@ -138,7 +141,7 @@ test('shows only the remaining reminder balance and blocks internal, preview and
       await expect(record).toBeVisible();
       await expect(record).toContainText('80,00');
       await expect(record.getByRole('button', { name: 'Zahlungserinnerung', exact: true })).toHaveCount(0);
-      await expect(record.getByRole('button', { name: 'Zahlung erfassen', exact: true })).toBeVisible();
+      await expect(record.getByRole('button', { name: width < 1280 ? 'Zahlung erfassen' : `Zahlung für Rechnung ${invoiceNumber} erfassen`, exact: true })).toBeVisible();
       await expect(page.getByText('Nach Teilzahlungen sind Mahnaktionen bis zur Restbetragsprüfung gesperrt.', { exact: false })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`partial-reminder-guard-${width}.png`), fullPage: true });
