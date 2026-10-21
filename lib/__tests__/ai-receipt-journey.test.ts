@@ -138,7 +138,14 @@ afterEach(async () => {
     database.client.expense.count(), database.client.income.count(), database.client.cashTransaction.count(),
     database.client.invoice.count(), database.client.paymentJournalEvent.count(),
   ])) expect(count).toBe(0);
-  expect(JSON.stringify(await database.client.auditLog.findMany())).not.toContain(syntheticKey);
+  const audit = await database.client.auditLog.findMany();
+  expect(JSON.stringify(audit)).not.toContain(syntheticKey);
+  for (const event of audit) {
+    const metadata = event.metadata ? JSON.parse(event.metadata) : null;
+    if (metadata?.operation === 'purchase-document.ai-extraction' || metadata?.operation === 'purchase-document.apply-ai-suggestions') {
+      expect(metadata).toMatchObject({ actorId: event.userId, tenantId: event.userId });
+    }
+  }
 });
 afterAll(async () => {
   server?.closeAllConnections();
@@ -230,6 +237,13 @@ describe('real backend optional AI receipt journey with a local synthetic provid
     const applied = await appliedResponse.json() as ExtractionResponse;
     expect(applied.document.reviewDraft).toMatchObject({ supplierName: 'Manually confirmed supplier', amount: '1.23', note: 'Keep my note', paymentDate: '2026-10-20', invoiceNumber: rawResult.invoiceNumber, invoiceDate: rawResult.invoiceDate });
     expect(providerRequests).toHaveLength(1);
+    const auditRows = await database.client.auditLog.findMany({ where: { entityType: 'PurchaseDocument', entityId: String(document.id) } });
+    const aiMetadata = auditRows.map(event => event.metadata ? JSON.parse(event.metadata) : null).filter(metadata => metadata?.operation === 'purchase-document.ai-extraction' || metadata?.operation === 'purchase-document.apply-ai-suggestions');
+    expect(aiMetadata).toHaveLength(2);
+    expect(aiMetadata).toEqual(expect.arrayContaining([
+      expect.objectContaining({ actorId: state.userId, tenantId: state.userId, operation: 'purchase-document.ai-extraction' }),
+      expect.objectContaining({ actorId: state.userId, tenantId: state.userId, operation: 'purchase-document.apply-ai-suggestions' }),
+    ]));
   });
 
   it('uses separate automatic opt-in only for new uploads, never replay or exact duplicates', async () => {

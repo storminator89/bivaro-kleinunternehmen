@@ -56,7 +56,7 @@ describe('deliberate purchase expense input', () => {
     expect(approvalBlockedReason({ ...photo, reviewDraftSavedAt: null })).toContain('ausdrücklich speichern');
     expect(approvalBlockedReason({ ...photo, supplierId: null, selectedSupplierSnapshot: null })).toContain('ausdrücklich auswählen');
     const html = renderToStaticMarkup(createElement(PurchaseExpenseApproval, { document: photo, onApproved: vi.fn(), onBack: vi.fn(), onReload: vi.fn(), onOpenDuplicate: vi.fn(), onBusyChange: vi.fn(), onPendingChange: vi.fn() }));
-    expect(html).toContain('Manuelle Foto-Originalprüfung, kein OCR'); expect(html).toContain('0,29 EUR');
+    expect(html).toContain('Manuelle Foto-Originalprüfung, keine automatische Buchung'); expect(html).toContain('0,29 EUR');
     expect(html).toMatch(/id="purchase-expense-date"[^>]*readOnly=""[^>]*value="2026-01-01"/);
     expect(html).toMatch(/id="purchase-photo-buyer"[^>]*value=""/);
     for (const id of ['purchase-expense-category', 'purchase-expense-share']) expect(html).toMatch(new RegExp(`id="${id}"[^>]*value=""`));

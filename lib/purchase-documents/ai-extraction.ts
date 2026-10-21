@@ -90,7 +90,7 @@ async function finishJob(userId: string,id: number,jobId: string,outcome: { resu
     }
     state.jobs[index] = job;
     await writeState(tx,document,state,extra);
-    await createFinancialAuditLog({userId,action:'REVIEW',entityType:'PurchaseDocument',entityId:id,newValues:{aiStatus:job.status,jobId:job.id,draftApplied:job.draftApplied},metadata:{operation:'purchase-document.ai-extraction',originalReference:document.originalSha256,reason:'unreviewed suggestions only; no financial posting'}},tx);
+    await createFinancialAuditLog({userId,action:'REVIEW',entityType:'PurchaseDocument',entityId:id,newValues:{aiStatus:job.status,jobId:job.id,draftApplied:job.draftApplied},metadata:{actorId:userId,tenantId:userId,operation:'purchase-document.ai-extraction',originalReference:document.originalSha256,reason:'unreviewed suggestions only; no financial posting'}},tx);
   });
 }
 export async function runPurchaseAiExtraction(userId: string,id: number,revision: number,options:{expectedConfigVersion:number;expectedConfigRevision:string;retry:boolean;automatic?:boolean}) {
@@ -194,7 +194,7 @@ export async function applyPurchaseAiSuggestions(userId:string,id:number,revisio
     job.draftApplied=true;
     const draftProvenance = { ...provenance(job,[...new Set([...(priorProvenance?.fields ?? []),...fields])]), ...(priorProvenance ? { provenance: priorProvenance.provenance } : {}) };
     await writeState(tx,document,state,{reviewDraft:draft as Prisma.InputJsonValue,reviewDraftSearch:[draft.supplierName,draft.invoiceNumber].filter(Boolean).join(' · '),reviewDraftSavedAt:new Date(),aiDraftProvenance:draftProvenance as unknown as Prisma.InputJsonValue,revision:{increment:1}});
-    await createFinancialAuditLog({userId,action:'REVIEW',entityType:'PurchaseDocument',entityId:id,newValues:{jobId,draftFields:fields},metadata:{operation:'purchase-document.apply-ai-suggestions',originalReference:document.originalSha256,reason:'explicit empty-field draft merge; no posting'}},tx);
+    await createFinancialAuditLog({userId,action:'REVIEW',entityType:'PurchaseDocument',entityId:id,newValues:{jobId,draftFields:fields},metadata:{actorId:userId,tenantId:userId,operation:'purchase-document.apply-ai-suggestions',originalReference:document.originalSha256,reason:'explicit empty-field draft merge; no posting'}},tx);
   });
   return {extraction:await getPurchaseAiExtraction(userId,id),document:await purchaseDocumentDetail(userId,id)};
 }

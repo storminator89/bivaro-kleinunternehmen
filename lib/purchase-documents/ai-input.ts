@@ -30,7 +30,7 @@ export async function prepareAiReceiptImages(mediaType: string, bytes: Buffer, s
       await run('prlimit', ['--as=536870912', '--cpu=15', '--fsize=2097152', '--nofile=64', '--', 'gs',
         '-q','-dPDFSTOPONERROR','-dPDFSTOPONWARNING','-dSAFER','-dBATCH','-dNOPAUSE','-dNumRenderingThreads=1','-dMaxBitmap=16777216','-dBufferSpace=16777216',
         '-sDEVICE=jpeg','-dJPEGQ=80','-r100','-g850x1100','-dFIXEDMEDIA','-dPDFFitPage','-dFirstPage=1',`-dLastPage=${AI_MAX_PDF_PAGES + 1}`,
-        `-sOutputFile=${path.join(directory, 'page-%d.jpg')}`, input], { signal, timeout: 20_000, killSignal: 'SIGKILL', maxBuffer: 64 * 1024, windowsHide: true, env: { PATH: process.env.PATH, LANG: 'C', HOME: directory, TMPDIR: directory } });
+        `-sOutputFile=${path.join(directory, 'page-%d.jpg')}`, input], { signal, timeout: 20_000, killSignal: 'SIGKILL', maxBuffer: 64 * 1024, windowsHide: true, env: { PATH: process.env.PATH, NODE_ENV: process.env.NODE_ENV ?? 'production', LANG: 'C', HOME: directory, TMPDIR: directory } });
     } catch (error) {
       if (signal?.aborted) return inputError('AI_REQUEST_INTERRUPTED', 'KI-Eingabeaufbereitung wurde durch Gesamtzeitlimit oder Abbruch beendet.');
       if ((error as { code?: string }).code === 'ENOENT') return inputError('AI_RENDER_UNAVAILABLE', 'Isolierter PDF-Renderer fehlt. Das Original bleibt archiviert; keine KI-Anfrage wurde gesendet.');
