@@ -102,7 +102,7 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
 
     await page.route('**/api/daily-actions', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Synthetic read interruption' }) }), { times: 1 });
     await page.getByRole('button', { name: 'Nächste Schritte aktualisieren', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Nächste Schritte konnten nicht geladen werden');
+    await expect(page.locator('section[aria-labelledby="daily-actions-title"]').getByRole('alert')).toContainText('Nächste Schritte konnten nicht geladen werden');
     await expect(list).toHaveCount(0);
     await page.getByRole('button', { name: 'Erneut laden', exact: true }).click(); await expect(list.getByRole('listitem')).toHaveCount(4);
     expect(await financialSnapshot(user.id)).toEqual(before);

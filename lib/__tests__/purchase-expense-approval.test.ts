@@ -554,9 +554,14 @@ describe('explicit manual photo source approval', () => {
       // Backup endpoints append expected audit evidence; every business/source row is byte-for-byte equivalent.
       const { auditLogs: beforeAudits, ...sourceBusinessBefore } = sourceBeforeBackup;
       const { auditLogs: afterAudits, ...sourceBusinessAfter } = sourceAfterBackup;
+      if (!Array.isArray(beforeAudits) || !Array.isArray(afterAudits)) throw new Error('Expected complete audit snapshot arrays');
       expect(sourceBusinessAfter).toEqual(sourceBusinessBefore);
       expect(afterAudits.slice(0, beforeAudits.length)).toEqual(beforeAudits);
-      expect(afterAudits.slice(beforeAudits.length).map(row => row.action)).toEqual(['BACKUP', 'SECURITY_EVENT', 'SECURITY_EVENT']);
+      const appendedAuditActions = afterAudits.slice(beforeAudits.length).map((row: unknown) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row) || !('action' in row) || typeof row.action !== 'string') throw new Error('Expected typed audit action');
+        return row.action;
+      });
+      expect(appendedAuditActions).toEqual(['BACKUP', 'SECURITY_EVENT', 'SECURITY_EVENT']);
       expect(await database.client.invoice.findUniqueOrThrow({ where: { id: reminderInvoice.id } })).toEqual(reminderInvoice);
       expect(await (await import('node:fs/promises')).readFile(paths.getTenantUploadPath(sourceOwner, reminderFile))).toEqual(reminderBytes);
       const reexport = await (await import('@/lib/backup-snapshot')).readBackupSnapshot(targetOwner);
