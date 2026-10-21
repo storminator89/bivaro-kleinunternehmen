@@ -24,10 +24,11 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
     await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard/);
     await page.goto('/purchases');
+    const uploadRegion = page.locator('section[aria-labelledby="incoming-upload-heading"]');
     await expect(page.getByRole('button', { name: 'Foto aufnehmen', exact: true })).toBeVisible();
     const input = page.getByLabel('Foto, PDF- oder XML-Original auswählen', { exact: true });
     await input.setInputFiles({ name: 'too-large.png', mimeType: 'image/png', buffer: Buffer.alloc(10 * 1024 * 1024 + 1) });
-    await expect(page.getByRole('alert')).toContainText('10 MB');
+    await expect(uploadRegion.getByRole('alert')).toContainText('10 MB');
     await input.setInputFiles({ name: 'synthetic-mobile.png', mimeType: 'image/png', buffer: photo });
     let interrupted = false;
     await page.route('**/api/purchase-documents', async route => {
@@ -35,7 +36,7 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
       else await route.continue();
     });
     await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Verbindung');
+    await expect(uploadRegion.getByRole('alert')).toContainText('Verbindung');
     expect(await prisma.purchaseDocument.count({ where: { userId: user.id } })).toBe(0);
     await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
     const dialog = page.getByRole('dialog');

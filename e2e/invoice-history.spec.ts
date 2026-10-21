@@ -96,6 +96,9 @@ test('handles protected entry, empty results, filtering, retry and keyboard navi
   test.setTimeout(60_000);
   await page.goto('/history'); await expect(page).toHaveURL(/\/login\?callbackUrl=/);
   await account(page);
+  // Next also renders a route-announcer alert. Match the history error's
+  // actual recovery actions rather than weakening either expected message.
+  const historyError = page.getByRole('main').getByRole('alert').filter({ has: page.getByRole('button', { name: 'Zur Dokumentübersicht', exact: true }) });
   try {
     await page.goto('/history'); await expect(page.getByText('Keine passenden Dokumente', { exact: true })).toBeVisible();
     const invoiceId = await source(page);
@@ -105,11 +108,11 @@ test('handles protected entry, empty results, filtering, retry and keyboard navi
     await page.getByLabel('Protokollierte Aktion', { exact: true }).selectOption('DELETE'); await page.getByRole('button', { name: 'Filter anwenden', exact: true }).click();
     await expect(page.getByText('Keine protokollierten Ereignisse für diese Auswahl', { exact: true })).toBeVisible();
     await page.route('**/api/change-history?*', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Synthetic temporary history outage' }) }));
-    await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('Synthetic temporary history outage');
+    await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click(); await expect(historyError).toContainText('Synthetic temporary history outage');
     await page.unroute('**/api/change-history?*'); await page.getByRole('button', { name: 'Erneut versuchen', exact: true }).focus(); await page.keyboard.press('Enter');
     await expect(page.getByText('Keine protokollierten Ereignisse für diese Auswahl', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Filter zurücksetzen', exact: true }).click(); await expect(page.getByRole('list', { name: 'Protokollierte Dokumentereignisse' }).getByRole('listitem')).toHaveCount(1);
-    await page.goto('/history?invoiceId=999999999'); await expect(page.getByRole('alert')).toContainText('Dokument nicht gefunden.');
+    await page.goto('/history?invoiceId=999999999'); await expect(historyError).toContainText('Dokument nicht gefunden.');
   } finally { await prisma.$disconnect(); }
 });
 

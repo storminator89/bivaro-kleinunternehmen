@@ -55,9 +55,18 @@ Runner disposal is the final isolation boundary on forced cancellation.
 
 ## Coverage and separate security evidence
 
-There are no file/title/grep filters, shards, changed-only selection, or
-fail-fast limits: the workflow runs every case selected by the existing default
-Playwright config, including generated payment-ledger cases, incoming documents,
+The existing serial `auth-dashboard-invoice.spec.ts` core flow belongs to
+`chromium-bootstrap`; the remaining functional files belong to `chromium` and
+explicitly depend on it. This makes empty-instance first-admin bootstrap run
+before feature suites seed independent user accounts, rather than relying on
+alphabetical file order. The two project selections partition the functional
+suite: every case runs exactly once; no case is skipped, filtered out, or replaced.
+A core failure blocks dependent feature execution and remains a failed gate.
+The security configuration and separate CI security job are unchanged.
+
+There are no workflow file/title/grep filters, shards, changed-only selection, or
+fail-fast limits: the workflow runs every case in the default Playwright config
+once across these two dependent projects, including generated payment-ledger cases, incoming documents,
 supplier booking, accountant handoff, legacy restore and public-help regressions.
 No functional case or assertion is removed. Existing serial-suite failure
 semantics still apply; a green result must not be inferred from a partial run.

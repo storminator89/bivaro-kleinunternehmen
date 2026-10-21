@@ -81,7 +81,7 @@ async function uploadPurchaseFixture(page: Page, number: string, suffix = '', op
   await page.goto('/purchases');
   await expect(page.getByRole('heading', { name: 'Belegeingang', exact: true })).toBeVisible();
   const bytes = Buffer.from(`<Invoice><ID>${number}</ID><IssueDate>2026-10-11</IssueDate><DueDate>2026-10-25</DueDate><InvoiceTypeCode>${typeCode}</InvoiceTypeCode><DocumentCurrencyCode>${currency}</DocumentCurrencyCode><AccountingSupplierParty><Party><PartyName><Name>Synthetischer Originalverkäufer</Name></PartyName><PostalAddress><StreetName>Original-Testweg 1</StreetName><CityName>Quellstadt</CityName><PostalZone>10115</PostalZone><Country><IdentificationCode>DE</IdentificationCode></Country></PostalAddress></Party></AccountingSupplierParty><AccountingCustomerParty><Party><PartyName><Name>Synthetischer eigener Betrieb</Name></PartyName></Party></AccountingCustomerParty><LegalMonetaryTotal><TaxExclusiveAmount currencyID="${currency}">100.00</TaxExclusiveAmount><TaxInclusiveAmount currencyID="${currency}">119.00</TaxInclusiveAmount><PayableAmount currencyID="${currency}">${payable}</PayableAmount></LegalMonetaryTotal>${suffix}</Invoice>`);
-  await page.getByLabel('PDF- oder XML-Original auswählen', { exact: true }).setInputFiles({ name: `${number}${suffix ? '-duplicate' : ''}.xml`, mimeType: 'application/xml', buffer: bytes });
+  await page.getByLabel('Foto, PDF- oder XML-Original auswählen', { exact: true }).setInputFiles({ name: `${number}${suffix ? '-duplicate' : ''}.xml`, mimeType: 'application/xml', buffer: bytes });
   const uploaded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/purchase-documents' && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
   const response = await uploaded; expect(response.status()).toBe(201);
@@ -164,7 +164,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByRole('heading', { name: 'Letzte Aktivitäten', exact: true })).toBeVisible();
     // Generated artwork must load without breaking text labels or navigation.
     const sidebarIcons = page.locator('aside [data-bivaro-icon^="nav-"]');
-    await expect(sidebarIcons).toHaveCount(15);
+    await expect(sidebarIcons).toHaveCount(16);
+    await expect(page.locator('aside').getByRole('link', { name: 'Rechnungshistorie', exact: true })).toHaveAttribute('href', '/history');
     await expect(page.locator('aside').getByRole('link', { name: 'Belegeingang', exact: true })).toHaveAttribute('href', '/purchases');
     await expect(page.locator('.dashboard-metrics [data-bivaro-icon^="tile-"]')).toHaveCount(4);
     await expect(page.getByRole('main').locator('img[data-bivaro-icon]')).toHaveCount(0);
@@ -1605,7 +1606,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByRole('heading', { name: 'Belegeingang', exact: true })).toBeVisible();
     const bytes = Buffer.from('<Invoice><ID>INCOMING-E2E-42</ID><IssueDate>2026-10-20</IssueDate><DocumentCurrencyCode>EUR</DocumentCurrencyCode><AccountingSupplierParty><Party><PartyName><Name>E2E Eingangslieferant</Name></PartyName></Party></AccountingSupplierParty><AccountingCustomerParty><Party><PartyName><Name>E2E eigener Betrieb</Name></PartyName></Party></AccountingCustomerParty><LegalMonetaryTotal><TaxInclusiveAmount currencyID="EUR">119.00</TaxInclusiveAmount><PayableAmount currencyID="EUR">119.00</PayableAmount></LegalMonetaryTotal></Invoice>');
     const original = { name: 'incoming-e2e-original.xml', mimeType: 'application/xml', buffer: bytes };
-    await page.getByLabel('PDF- oder XML-Original auswählen', { exact: true }).setInputFiles(original);
+    await page.getByLabel('Foto, PDF- oder XML-Original auswählen', { exact: true }).setInputFiles(original);
     const uploaded = page.waitForResponse(response => response.url().endsWith('/api/purchase-documents') && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
     const first = await uploaded; expect(first.status()).toBe(201);
@@ -1641,7 +1642,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect(page).toHaveURL(/\/purchases$/);
-    await page.getByLabel('PDF- oder XML-Original auswählen', { exact: true }).setInputFiles(original);
+    await page.getByLabel('Foto, PDF- oder XML-Original auswählen', { exact: true }).setInputFiles(original);
     const duplicate = page.waitForResponse(response => response.url().endsWith('/api/purchase-documents') && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
     expect((await duplicate).status()).toBe(409);
