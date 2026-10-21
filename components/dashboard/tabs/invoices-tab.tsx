@@ -215,6 +215,10 @@ export function InvoicesTab({
         <div className="min-w-0"><h2 className="text-sm font-semibold">Regelmäßige Betreuung oder Wartung?</h2><p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">Servicepläne merken den nächsten Zeitraum vor. Du prüfst und erzeugst bewusst genau einen Rechnungsentwurf — ohne automatischen Versand.</p></div>
         <Button asChild variant="outline"><Link href="/service-billing">Servicepläne öffnen</Link></Button>
       </section>
+      <section aria-label="Bankumsätze prüfen" className="flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-4 py-4 sm:px-5">
+        <div className="min-w-0"><h2 className="text-sm font-semibold">Zahlungseingänge aus einer Bank-CSV?</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Datei lokal prüfen, passende Rechnungen finden. Keine automatische Buchung.</p></div>
+        <Button asChild variant="outline"><Link href="/bank-csv">Bank-CSV prüfen</Link></Button>
+      </section>
       <details className="invoice-import group rounded-xl border border-dashed bg-card" open={selectedFile ? true : undefined}>
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-notice-surface text-notice"><DashboardIcon name="invoice-import" size={40} /></span>
