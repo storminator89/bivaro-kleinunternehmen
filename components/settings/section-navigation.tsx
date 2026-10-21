@@ -5,6 +5,7 @@ export function SettingsSectionNavigation({ isAdmin }: { isAdmin: boolean }) {
   const items = [
     { id: 'company-settings', label: 'Firmendaten', Icon: Building2 },
     { id: 'fiscal-profile', label: 'Steuerprofil', Icon: FileCheck },
+    { id: 'ai-receipt-settings', label: 'KI-Belege (optional)', Icon: FileCheck },
     ...(isAdmin ? [
       { id: 'email-settings', label: 'E-Mail-Versand', Icon: Mail },
       { id: 'registration-settings', label: 'Registrierung', Icon: ShieldCheck },

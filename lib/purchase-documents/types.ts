@@ -60,6 +60,8 @@ export type IncomingDocument = {
   validationStatus: 'NOT_VALIDATED';
   revision: number;
   reviewedSourceSnapshot?: ManualPhotoSnapshot | null;
+  aiDraftProvenance?: import('./ai-contract').AiDraftProvenance | null;
+  aiApprovedSnapshot?: import('./ai-provenance').AiApprovedSnapshot | null;
   reviewDraft?: PurchaseReviewDraft | null;
   reviewDraftSavedAt?: string | null;
   originalRef: {

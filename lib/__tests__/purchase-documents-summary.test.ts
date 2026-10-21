@@ -36,6 +36,7 @@ function assertProjectedQueriesOnly() {
   for (const query of selects) {
     expect(query).not.toMatch(/SELECT\s+\*/i);
     expect(query).not.toMatch(/(?:SELECT|,)\s*(?:"\w+"\.)*(?:"parsedData")(?=\s|,)/i);
+    expect(query).not.toMatch(/(?:SELECT|,)\s*(?:"\w+"\.)*(?:"aiExtraction"|"aiApprovedSnapshot")(?=\s|,)/i);
     expect(query).not.toContain('lineItems'); expect(query).not.toContain('rawXml');
   }
 }
@@ -44,6 +45,7 @@ describe('bounded incoming list and duplicate projections', () => {
     const first = await source('summary-owner', '90071992547409.91');
     const second = await source('summary-owner', '100.000000000000000001');
     await source('summary-other', '50.00');
+    await database.client.purchaseDocument.update({ where: { id: first.id }, data: { aiExtraction: { oversizedSentinel: 'AI_RESULT_SENTINEL'.repeat(100_000) }, aiApprovedSnapshot: { oversizedSentinel: 'AI_APPROVED_SENTINEL'.repeat(100_000) } } });
     queries.length = 0;
     const listing = await listPurchaseDocuments('summary-owner', new URLSearchParams({ limit: '50', reviewStatus: 'REVIEW', search: 'SUMMARY-17' }));
     expect(listing.total).toBe(2); expect(listing.documents.map(document => document.id)).toEqual([second.id, first.id]);
@@ -54,6 +56,9 @@ describe('bounded incoming list and duplicate projections', () => {
       expect(document.parserWarnings).toContainEqual({ code: 'UNSUPPORTED_AMOUNT', message: 'Exact source is not approved for posting.' });
     }
     expect(JSON.stringify(listing)).not.toContain('SOURCE_LINE_SENTINEL');
+    expect(JSON.stringify(listing)).not.toContain('AI_RESULT_SENTINEL');
+    expect(JSON.stringify(listing)).not.toContain('AI_APPROVED_SENTINEL');
+    expect(listing.documents.every(document => document.aiApprovedSnapshot === undefined)).toBe(true);
     assertProjectedQueriesOnly();
     expect(queries.some(query => query.includes("'$.grossAmount'"))).toBe(true);
     expect(queries.some(query => query.includes("'$.parserWarnings'"))).toBe(true);

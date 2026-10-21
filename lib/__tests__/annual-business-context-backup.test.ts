@@ -33,7 +33,7 @@ describe('annual context backup history cannot be erased or reinterpreted', () =
     expect(await database.client.annualBusinessContextRevision.count({ where: { userId: 'context-target' } })).toBe(1);
   });
   it('imports genuine standalone 070000 history with its original non-photo capability', async () => {
-    const backup = await snapshot(); backup.manifest.schemaVersion = ANNUAL_CONTEXT_SCHEMA_VERSION;
+    const backup = await snapshot(); backup.manifest.schemaVersion = ANNUAL_CONTEXT_SCHEMA_VERSION; backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     expect(() => validateBackupForRestore(backup)).not.toThrow();
     const result = await restoreBackupData({ userId: 'context-standalone', overwrite: false, backup });
     expect(result.annualBusinessContextRevisions.imported).toBe(1);
@@ -51,7 +51,7 @@ describe('annual context backup history cannot be erased or reinterpreted', () =
   });
   it('legacy and pre-context snapshots never erase or falsely reconfirm an existing history', async () => {
     const backup = await snapshot(); delete backup.data.annualBusinessContextRevisions;
-    const old = pack(backup.data); old.manifest.schemaVersion = PRE_ANNUAL_CONTEXT_SCHEMA_VERSION;
+    const old = pack(backup.data); old.manifest.schemaVersion = PRE_ANNUAL_CONTEXT_SCHEMA_VERSION; old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     expect(() => validateBackupForRestore(old)).not.toThrow();
     const before = await database.client.annualBusinessContextRevision.findMany({ where: { userId: 'context-target' } });
     for (const candidate of [old, { version: '2.0', data: old.data }]) {
@@ -75,9 +75,9 @@ describe('annual context backup history cannot be erased or reinterpreted', () =
       const updated = pack(backup.data);
       expect(() => validateBackupForRestore(updated)).toThrow();
     }
-    const backup = await snapshot(); backup.manifest.schemaVersion = PRE_ANNUAL_CONTEXT_SCHEMA_VERSION;
+    const backup = await snapshot(); backup.manifest.schemaVersion = PRE_ANNUAL_CONTEXT_SCHEMA_VERSION; backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     expect(() => validateBackupManifest(backup.manifest, backup.data)).toThrow(/Jahreskontexthistorie/);
-    const photoIdentity = await snapshot(); photoIdentity.manifest.schemaVersion = '20261021061000_add_manual_photo_approval';
+    const photoIdentity = await snapshot(); photoIdentity.manifest.schemaVersion = '20261021061000_add_manual_photo_approval'; photoIdentity.manifest.modelCoverage = photoIdentity.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     expect(() => validateBackupForRestore(photoIdentity)).toThrow(/Jahreskontexthistorie/);
   });
 });

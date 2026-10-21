@@ -256,6 +256,23 @@ async function expectOnePhotoClaim(doc: Awaited<ReturnType<typeof photoSource>>,
   return persisted;
 }
 describe('explicit manual photo source approval', () => {
+  it('snapshots AI-origin suggestions only after explicit human review and freezes pending analyses before immutable approval', async () => {
+    const doc = await photoSource('PHOTO-AI-HUMAN', '0.29', '2026-01-01');
+    const { validateAiReceiptResult } = await import('@/lib/purchase-documents/ai-validation');
+    const result = validateAiReceiptResult(JSON.stringify({ supplierName: 'Source Seller', invoiceNumber: 'PHOTO-AI-HUMAN', invoiceDate: '2025-12-31', currency: 'EUR', documentType: 'INVOICE', grossAmount: '0.29', netAmount: '0.24', taxAmount: '0.05', lineItems: [], lineItemsComplete: true }));
+    const job = { id: randomUUID(), configVersion: 1, configRevision: randomUUID(), status: 'completed', sourceSha256: doc.originalRef.sha256, sourceRevision: doc.revision - 1, createdAt: '2026-10-21T00:00:00.000Z', deadlineAt: '2026-10-21T00:01:30.000Z', finishedAt: '2026-10-21T00:00:30.000Z', errorCode: null, result, draftApplied: true };
+    const running = { ...job, id: randomUUID(), configRevision: randomUUID(), status: 'running', result: null, finishedAt: null, draftApplied: false };
+    await database.client.purchaseDocument.update({ where: { id: doc.id }, data: { aiExtraction: { version: 1, jobs: [job, running] }, aiDraftProvenance: { version: 1, provenance: 'AI_USER_EDITED', jobId: job.id, configVersion: 1, configRevision: job.configRevision, originalSha256: doc.originalRef.sha256, appliedAt: job.createdAt, fields: ['supplierName', 'invoiceNumber', 'invoiceDate', 'amount'] } } });
+    const response = await approve(doc.id, photoBody(doc)); expect(response.status).toBe(200); const approved = await response.json();
+    expect(approved.document.aiApprovedSnapshot).toMatchObject({ version: 1, provenance: 'AI_ASSISTED_USER_REVIEW', jobId: job.id, configRevision: job.configRevision, originalSha256: doc.originalRef.sha256, confirmedDraft: doc.reviewDraft, resultSnapshot: result });
+    expect(approved.document.reviewedSourceSnapshot.provenance).toBe('MANUAL_PHOTO_REVIEW');
+    const stored = await database.client.purchaseDocument.findUniqueOrThrow({ where: { id: doc.id } });
+    expect(stored.aiExtraction).toMatchObject({ jobs: [job, { ...running, status: 'unknown', errorCode: 'AI_SOURCE_APPROVED', finishedAt: expect.any(String) }] });
+    const { validateAiApprovedSnapshot } = await import('@/lib/purchase-documents/ai-provenance');
+    expect(() => validateAiApprovedSnapshot(stored.aiApprovedSnapshot, stored)).not.toThrow();
+    await expect(database.client.$executeRaw`UPDATE "PurchaseDocument" SET "aiExtraction" = NULL WHERE "id" = ${doc.id}`).rejects.toThrow(/immutable/);
+  });
+
   it('binds actual saved fields, original and attestations to one readonly paid Expense, then safely replays', async () => {
     const doc = await photoSource('PHOTO-EXPLICIT', '0.29', '2026-01-01'), payload = photoBody(doc), before = await database.client.expense.count();
     const response = await approve(doc.id, payload); expect(response.status).toBe(200); const result = await response.json();
@@ -441,7 +458,7 @@ describe('explicit manual photo source approval', () => {
       const resolveFile = async (kind: string, sourceName: string) => { const entry = backup.manifest.fileManifest.find((entry: { kind: string; sourceName: string }) => entry.kind === kind && entry.sourceName === sourceName); return entry?.zipPath ? zip.file(entry.zipPath)!.async('uint8array') : null; };
       // Genuine standalone 061000 evidence remains importable, without annual history.
       const standalonePhoto = structuredClone(backup); delete standalonePhoto.data.annualBusinessContextRevisions;
-      standalonePhoto.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: standalonePhoto.exportedAt, data: standalonePhoto.data, fileManifest: standalonePhoto.manifest.fileManifest }); standalonePhoto.manifest.schemaVersion = manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
+      standalonePhoto.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: standalonePhoto.exportedAt, data: standalonePhoto.data, fileManifest: standalonePhoto.manifest.fileManifest }); standalonePhoto.manifest.schemaVersion = manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION; standalonePhoto.manifest.modelCoverage = standalonePhoto.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
       expect(() => restore.validateBackupForRestore(standalonePhoto)).not.toThrow();
       expect(backup.manifest.schemaVersion).toBe(manifestContract.CURRENT_SCHEMA_VERSION);
       expect(backup.data.annualBusinessContextRevisions).toEqual(jsonBackup.data.annualBusinessContextRevisions);
@@ -463,7 +480,7 @@ describe('explicit manual photo source approval', () => {
       expect(neverResolve).not.toHaveBeenCalled();
       expect((await (await import('@/lib/backup-snapshot')).readBackupSnapshot(divergentOwner)).data).toEqual(divergentBefore);
       for (const schemaVersion of [manifestContract.PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, manifestContract.ANNUAL_CONTEXT_SCHEMA_VERSION]) {
-        const relabeled = structuredClone(backup); relabeled.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: relabeled.exportedAt, data: relabeled.data, fileManifest: relabeled.manifest.fileManifest }); relabeled.manifest.schemaVersion = schemaVersion;
+        const relabeled = structuredClone(backup); relabeled.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: relabeled.exportedAt, data: relabeled.data, fileManifest: relabeled.manifest.fileManifest }); relabeled.manifest.schemaVersion = schemaVersion; relabeled.manifest.modelCoverage = relabeled.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
         expect(() => restore.validateBackupForRestore(relabeled)).toThrow(/reviewedSourceSnapshot|Jahreskontexthistorie/);
         await expect(restore.restoreBackupData({ userId: divergentOwner, backup: relabeled, overwrite: true, resolveFile: neverResolve })).rejects.toThrow(/reviewedSourceSnapshot|Jahreskontexthistorie/);
       }
@@ -506,7 +523,7 @@ describe('explicit manual photo source approval', () => {
         expect(await database.client.expense.count({ where: { userId: targetOwner } })).toBe(1);
         expect(await database.client.purchaseDocument.findUniqueOrThrow({ where: { id: restored.id } })).toMatchObject({ reviewedSourceSnapshot: restored.reviewedSourceSnapshot, expenseId: restored.expenseId });
       }
-      const oldIdentity = structuredClone(backup); oldIdentity.manifest.schemaVersion = (await import('@/lib/backup-manifest')).PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
+      const oldIdentity = structuredClone(backup); oldIdentity.manifest.schemaVersion = (await import('@/lib/backup-manifest')).PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION; oldIdentity.manifest.modelCoverage = oldIdentity.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
       expect(() => restore.validateBackupForRestore(oldIdentity)).toThrow(/Älteres Backupschema/);
       const targetExpense = await database.client.expense.findUniqueOrThrow({ where: { id: restored.expenseId! } });
       expect(targetExpense.date.toISOString()).toBe('2026-01-01T00:00:00.000Z'); expect(await database.client.income.count({ where: { userId: targetOwner } })).toBe(0); expect(await database.client.cashTransaction.count({ where: { userId: targetOwner } })).toBe(0);
