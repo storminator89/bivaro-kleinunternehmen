@@ -91,6 +91,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       paymentOperations,
       invoices,
       purchaseDocuments,
+      purchaseValidationReports,
       customers,
       suppliers,
       serviceArticles,
@@ -121,6 +122,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       tx.paymentOperation.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.invoice.findMany({ where: { userId } }),
       tx.purchaseDocument.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
+      tx.purchaseValidationReport.findMany({ where: { userId }, orderBy: [{ checkedAt: 'asc' }, { id: 'asc' }] }),
       tx.customer.findMany({ where: { userId } }),
       tx.supplier.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.serviceArticle.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
@@ -147,6 +149,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       tx.invoiceNumberCounter.findMany({ where: { userId }, orderBy: [{ type: 'asc' }, { year: 'asc' }] }),
     ]);
 
+    const includedOriginalHashes = new Set(purchaseDocuments.map(document => document.originalSha256));
     return {
       user: { id: user?.id, email: user?.email, name: user?.name },
       expenses: expenses.map((item) => ({ ...item, userId: undefined })),
@@ -156,6 +159,8 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       paymentJournalEvents: paymentJournalEvents.map((item) => ({ ...item, userId: undefined })),
       invoices: invoices.map((item) => ({ ...item, userId: undefined })),
       purchaseDocuments: purchaseDocuments.map((item) => ({ ...item, userId: undefined })),
+      // Orphaned historical proof remains target-owned but is not exported without its original.
+      purchaseValidationReports: purchaseValidationReports.filter(item => includedOriginalHashes.has(item.originalSha256)).map(item => ({ stableKey: item.stableKey, originalSha256: item.originalSha256, sourceDocumentIdAtCheck: item.sourceDocumentIdAtCheck, requestId: item.requestId, fingerprint: item.fingerprint, provenance: item.provenance, report: item.report, checkedAt: item.checkedAt, createdAt: item.createdAt })),
       customers: customers.map((item) => ({ ...item, userId: undefined })),
       suppliers: suppliers.map((item) => ({ ...item, userId: undefined })),
       annualBusinessContextRevisions: annualBusinessContextRevisions.map(readAnnualContextRevision),

@@ -9,6 +9,7 @@ export function createBackupManifest(options: Parameters<typeof createManifest>[
     note.captureFingerprint ??= null;
     note.deletedAt ??= null;
   }
+  options.data.purchaseValidationReports ??= [];
   options.data.paymentAdjustments ??= [];
   options.data.paymentOperations ??= [];
   return createManifest(options);

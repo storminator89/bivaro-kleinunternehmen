@@ -29,13 +29,14 @@ async function snapshot(source = sourceUserId) {
 function historical(backup: ReturnType<typeof pack>) {
   const old = structuredClone(backup);
   delete old.data.serviceProjects;
+  delete old.data.purchaseValidationReports;
   for (const note of old.data.billingNotes as Record<string, unknown>[]) {
     delete note.projectId; delete note.durationMinutes;
     for (const field of ['captureKey', 'captureFingerprint', 'deletedAt']) if (note[field] === null) delete note[field];
   }
   old.manifest = createBackupManifest({ sourceUserId: old.manifest.sourceUserId, generatedAt: fixed.toISOString(), data: old.data });
   old.manifest.schemaVersion = PAYMENT_ADJUSTMENTS_SCHEMA_VERSION;
-  old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => entry.model !== 'ServiceProject');
+  old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => !['ServiceProject', 'PurchaseValidationReport'].includes(entry.model));
   return old;
 }
 function capture(note: Record<string, unknown>, key = randomUUID()) {
@@ -92,7 +93,7 @@ describe('exact project and manual-duration backup contract', () => {
       const old = historical(original);
       (old.data.billingNotes as Record<string, unknown>[])[0][field] = null;
       old.manifest = { ...createBackupManifest({ sourceUserId, generatedAt: fixed.toISOString(), data: old.data }), schemaVersion: PAYMENT_ADJUSTMENTS_SCHEMA_VERSION };
-      old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => entry.model !== 'ServiceProject');
+      old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => !['ServiceProject', 'PurchaseValidationReport'].includes(entry.model));
       expect(() => validateBackupForRestore(old)).toThrow(/Älteres Backupschema/);
       const missing = structuredClone(original); delete (missing.data.billingNotes as Record<string, unknown>[])[0][field];
       expect(() => validateBackupForRestore(pack(missing.data))).toThrow(/explizit nullable/);

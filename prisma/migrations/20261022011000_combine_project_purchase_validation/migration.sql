@@ -1,0 +1,2 @@
+-- Capability identity only. Project capture and immutable technical evidence
+-- have independent additive migrations; neither standalone identity gains the other.

@@ -87,8 +87,16 @@ jobs:
       - name: 🔧 Generate Prisma Client
         run: npx prisma generate
 
+      - name: Install official offline invoice validation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends default-jre-headless util-linux
+          node scripts/einvoice-validation/install-runtime.mjs "${{ runner.temp }}/bivaro-einvoice"
+
       - name: 🧪 Run Tests
         run: npm run test
+        env:
+          BIVARO_EINVOICE_TEST_ASSETS: ${{ runner.temp }}/bivaro-einvoice
 
   # ---------------------------------------------------------------------------
   # Build Check

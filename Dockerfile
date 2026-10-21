@@ -37,6 +37,12 @@ RUN npm ci && \
     npx prisma generate && \
     npm cache clean --force
 
+# Official validator assets are downloaded only while building the image.
+# Runtime validation is strictly local and never uploads invoice documents.
+FROM deps AS einvoice-assets
+COPY scripts/einvoice-validation/install-runtime.mjs ./scripts/einvoice-validation/install-runtime.mjs
+RUN node scripts/einvoice-validation/install-runtime.mjs /opt/bivaro/einvoice
+
 # -----------------------------------------------------------------------------
 # Stage 3: Builder - Build the application
 # -----------------------------------------------------------------------------
@@ -68,7 +74,7 @@ FROM node:22-slim AS runner
 
 # Install security updates and dumb-init for proper signal handling
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates ghostscript util-linux && \
+    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates ghostscript util-linux default-jre-headless && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -93,6 +99,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Read-only, original-hash-verified tools/rules; no external validation service.
+COPY --from=einvoice-assets /opt/bivaro/einvoice /opt/bivaro/einvoice
 # Runtime diagnostics and the explicit upgrade job are outside Next standalone
 # tracing and must be present in the final image.
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/database-runtime.mjs ./scripts/database-runtime.mjs

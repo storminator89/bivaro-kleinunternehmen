@@ -12,6 +12,7 @@ import type { ParsedEInvoiceParty } from '@/lib/e-invoice-parser';
 import type { IncomingDocument, IncomingDocumentResponse, PurchaseExpenseApprovalResponse } from '@/lib/purchase-documents/types';
 import { IncomingAiExtraction } from './incoming-ai-extraction';
 import { IncomingPhotoPreview } from './incoming-photo-preview';
+import { IncomingTechnicalValidation } from './incoming-technical-validation';
 import { IncomingReviewDraft, IncomingSavedDraft } from './incoming-review-draft';
 import { SupplierContactPanel } from './supplier-contact-panel';
 import { PurchaseExpenseApproval } from './purchase-expense-approval';
@@ -50,7 +51,7 @@ export function SourcePreview({ document, onOpen }: { document: IncomingDocument
       <div><dt>Dokumenttyp</dt><dd>{preview ? types[preview.documentType] : 'Nicht ausgelesen'}</dd></div>
       <div><dt>Währung</dt><dd>{document.currency || 'Nicht ausgelesen'}</dd></div>
       <div><dt>Auslesen</dt><dd>{extractionLabel(document.parseStatus)}</dd></div>
-      <div><dt>Konformitätsprüfung</dt><dd>Nicht validiert</dd></div>
+      <div><dt>Steuerliche Freigabe</dt><dd>Nicht erfolgt</dd></div>
       {preview?.dueDate && <div><dt>Fällig laut Original</dt><dd>{formatSourceDate(preview.dueDate)}</dd></div>}
       {preview?.dueAmount !== null && preview?.dueAmount !== undefined && <div><dt>Restbetrag laut Original</dt><dd>{formatSourceAmount(preview.dueAmount, preview.currency)}</dd></div>}
     </dl>
@@ -80,7 +81,7 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
-  const [busy, setBusy] = useState<ReviewAction | 'download' | null>(null);
+  const [busy, setBusy] = useState<ReviewAction | 'download' | 'validation' | null>(null);
   const [dismissOpen, setDismissOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [view, setView] = useState<'source' | 'supplier' | 'approval'>('source');
@@ -166,6 +167,7 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
           <IncomingAiExtraction document={document} locked={draftDirty || draftBusy || !!busy || approvalBusy || dismissOpen || hasPending} onBusyChange={setAiBusy} onDocument={updated => { setDocument(updated); setDraftGeneration(value => value + 1); onChanged(); }} onRefresh={() => { if (!draftDirty && !draftBusy) { setDraftGeneration(value => value + 1); setRefresh(value => value + 1); } }} />
           {document.reviewState === 'REVIEW' && <details open={document.originalRef.mediaType.startsWith('image/') || Boolean(document.reviewDraftSavedAt)} className="mb-4"><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">Prüfentwurf</summary><IncomingReviewDraft key={draftGeneration} document={document} locked={dismissOpen || !!busy || aiBusy || approvalBusy || hasPending} onSaved={saved => { setDocument(saved); setDraftDirty(false); onChanged(); }} onDirtyChange={setDraftDirty} onBusyChange={setDraftBusy} /></details>}
           <SourcePreview document={document} onOpen={target => { if (!draftBusy && (!draftDirty || window.confirm('Ungespeicherten Prüfentwurf verwerfen?'))) onOpen(target); }} />
+          <IncomingTechnicalValidation document={document} locked={dismissOpen || mutationBlocked || approvalBusy} onBusyChange={value => { busyRef.current = value; setBusy(value ? 'validation' : null); }} />
           <section aria-label="Gewählter Lieferantenkontakt" className="border-t border-border py-4 text-sm"><h3 className="font-semibold">Lieferantenkontakt</h3>{document.selectedSupplierSnapshot ? <><p className="mt-2 break-words font-medium">{document.selectedSupplierSnapshot.name}</p><p className="mt-1 break-words text-muted-foreground">{[document.selectedSupplierSnapshot.address, document.selectedSupplierSnapshot.postalCode, document.selectedSupplierSnapshot.city, document.selectedSupplierSnapshot.country].filter(Boolean).join(' · ')}</p><p className="mt-2 text-xs text-muted-foreground">Für diesen Beleg gespeichert; Identität und Empfänger ungeprüft.</p></> : <p className="mt-2 text-muted-foreground">Noch nicht zugeordnet.</p>}{document.reviewState === 'REVIEW' && <Button ref={contactTrigger} variant="outline" className="mt-3" disabled={dismissOpen || mutationBlocked} onClick={() => setView('supplier')}>{document.supplierId ? 'Kontakt wechseln / verwalten' : 'Kontakt auswählen / anlegen'}</Button>}</section>
           {document.reviewState === 'REVIEW' && <section className="border-t border-border py-4 text-sm"><h3 className="font-semibold">Vollständig bezahlt und geprüft?</h3><p className="mt-1 text-muted-foreground">Nur bei vollständiger Zahlung als Ausgabe erfassen.</p><Button ref={approvalTrigger} className="mt-3" disabled={dismissOpen || mutationBlocked || !!approvalBlockedReason(document)} onClick={() => setView('approval')}>Als Ausgabe erfassen</Button>{approvalBlockedReason(document) && <p className="mt-2 text-caution-foreground">{approvalBlockedReason(document)}</p>}</section>}
         </>}
