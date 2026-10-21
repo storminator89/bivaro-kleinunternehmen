@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import sharp from 'sharp';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
@@ -55,6 +55,7 @@ test('mocked optional AI settings and dirty-safe receipt suggestions', async ({ 
     await page.route('**/api/purchase-documents/87123', route => route.fulfill({ json: { document } }));
     await page.route('**/api/purchase-documents?*', route => route.fulfill({ json: { documents: [document], total: 1, page: 1, limit: 25 } }));
     const photo = await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="390" height="240"><rect width="390" height="240" fill="white"/><text x="20" y="100" font-size="20">SYNTHETISCHER TESTBELEG</text><text x="20" y="150" font-size="28">0,29 EUR</text></svg>')).png().toBuffer();
+    document = { ...document, originalRef: { ...document.originalRef, bytes: photo.length, sha256: createHash('sha256').update(photo).digest('hex') } };
     await page.route('**/api/purchase-documents/87123/original', route => route.fulfill({ contentType: 'image/png', body: photo }));
     await page.route('**/approve-expense', async route => { postingCalls++; await route.abort(); });
     // Authenticate a fresh synthetic user in the runner-owned temporary database.
@@ -86,15 +87,52 @@ test('mocked optional AI settings and dirty-safe receipt suggestions', async ({ 
     await testButton.click(); await expect(panel.getByText(/Verbindung mit einem künstlichen Text erfolgreich/)).toBeVisible(); expect(testCalls).toBe(1);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.emulateMedia({ colorScheme: 'dark' });
-    await panel.screenshot({ path: testInfo.outputPath('ai-receipt-settings-desktop.png'), animations: 'disabled' });
+    // Keep the real viewport/header; a tall element capture can composite the
+    // sticky header across fields. Verify normal scrolling/hit targets instead.
+    const unobscuredInViewport = (target: Locator) => target.evaluate(node => {
+      const header = [...window.document.querySelectorAll<HTMLElement>('.app-topbar')].find(item => item.getClientRects().length > 0);
+      if (!header) return false;
+      const rect = node.getBoundingClientRect();
+      const hit = window.document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return rect.top >= header.getBoundingClientRect().bottom + 8 && rect.bottom <= window.innerHeight - 8
+        && rect.left >= 0 && rect.right <= window.innerWidth && hit !== null && (hit === node || node.contains(hit));
+    });
+    const alignBelowHeader = async (target: Locator) => {
+      await target.evaluate(node => {
+        const header = [...window.document.querySelectorAll<HTMLElement>('.app-topbar')].find(item => item.getClientRects().length > 0);
+        if (!header) throw new Error('Visible application header is required for viewport evidence');
+        window.scrollBy({ top: node.getBoundingClientRect().top - header.getBoundingClientRect().bottom - 16, behavior: 'instant' });
+      });
+      await expect.poll(() => unobscuredInViewport(target)).toBe(true);
+    };
+    await expect(page.locator('.app-topbar:visible')).toHaveCount(1);
+    for (const target of [
+      panel.getByLabel('Base URL (HTTPS)', { exact: true }), panel.getByLabel('Modell', { exact: true }),
+      panel.getByRole('radio', { name: 'Gespeicherten Schlüssel behalten', exact: true }),
+      panel.getByRole('radio', { name: 'Neuen Schlüssel speichern / ersetzen', exact: true }),
+      panel.getByRole('radio', { name: 'Schlüssel entfernen und KI deaktivieren', exact: true }),
+      panel.getByRole('switch', { name: 'KI-Auslesen aktivieren', exact: true }),
+      panel.getByRole('switch', { name: 'Neue Uploads automatisch analysieren', exact: true }),
+      panel.getByRole('button', { name: 'KI-Einstellungen speichern', exact: true }),
+      panel.getByLabel('Mögliche Kosten für diesen Verbindungstest akzeptieren.', { exact: true }), testButton,
+      panel.getByRole('button', { name: 'Gespeicherten Stand laden', exact: true }),
+    ]) await alignBelowHeader(target);
+    await alignBelowHeader(panel.getByRole('heading', { name: 'Belege mit KI auslesen', exact: false }));
+    for (const target of [panel.getByLabel('Base URL (HTTPS)', { exact: true }), panel.getByLabel('Modell', { exact: true })]) {
+      await expect.poll(() => unobscuredInViewport(target)).toBe(true);
+    }
+    // One ordinary viewport shows the main setup fields, not the entire form.
+    await page.screenshot({ path: testInfo.outputPath('ai-receipt-settings-desktop.png'), animations: 'disabled' });
     await panel.getByLabel('Base URL (HTTPS)', { exact: true }).fill('https://different-synthetic.example/v1');
     await expect(panel.getByRole('button', { name: 'KI-Einstellungen speichern', exact: true })).toBeDisabled();
     await panel.getByLabel('Base URL (HTTPS)', { exact: true }).fill(settings.baseUrl);
     await page.goto('/purchases?document=87123');
     const dialog = page.getByRole('dialog');
+    const aiPanel = dialog.getByRole('region', { name: 'Optionales KI-Auslesen', exact: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: 'light' });
     await expect(dialog.getByText('Noch keine KI-Analyse', { exact: true })).toBeVisible(); expect(aiCalls).toBe(0);
+    await expect(dialog.getByAltText('Unverändertes Foto-Original: synthetic-ai-receipt.png', { exact: true })).toBeVisible();
     await dialog.getByLabel('Lieferant laut eigener Prüfung', { exact: true }).fill('Eigener unveränderlicher Entwurf');
     await expect(dialog.getByRole('button', { name: 'Diesen Beleg mit KI auslesen', exact: true })).toBeDisabled();
     page.once('dialog', confirmation => confirmation.dismiss());
@@ -104,7 +142,7 @@ test('mocked optional AI settings and dirty-safe receipt suggestions', async ({ 
     await expect(dialog.getByText('Prüfentwurf gespeichert · nicht gebucht', { exact: true })).toBeVisible();
     await dialog.getByLabel('Übermittlung und mögliche Kosten für diese Analyse freigeben.', { exact: true }).check();
     await dialog.getByRole('button', { name: 'Diesen Beleg mit KI auslesen', exact: true }).click();
-    await expect(dialog.getByRole('alert')).toContainText('Status zuerst prüfen');
+    await expect(aiPanel.getByRole('alert')).toContainText('Status zuerst prüfen');
     expect(aiCalls).toBe(1);
     await expect(dialog.getByRole('button', { name: 'Diesen Beleg mit KI auslesen', exact: true })).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Nur KI-Status aktualisieren', exact: true }).click();
