@@ -61,7 +61,7 @@ describe('payment API boundaries', () => {
       expect((await GET(new Request('http://localhost:3000'), context(source.id))).status).toBe(404);
     } finally { state.userId = 'route-payment-owner'; }
   });
-  it.each([{ source: 'LEGACY_STATUS' }, { amount: '20' }, { currency: 'USD' }, { amount: null }, { paidAt: '2026-10-19T00:00:00Z' }, { refund: true }])('rejects unsupported input %j without writing', async changes => {
+  it.each([{ source: 'LEGACY_STATUS' }, { currency: 'USD' }, { amount: null }, { paidAt: '2026-10-19T00:00:00Z' }, { refund: true }])('rejects unsupported input %j without writing', async changes => {
     const source = await invoice(); const response = await POST(request({ ...payment(), ...changes }), context(source.id));
     expect(response.status).toBe(400); expect(await response.json()).toHaveProperty('code');
     expect(await database.client.paymentJournalEvent.count({ where: { invoiceId: source.id } })).toBe(0);
@@ -136,9 +136,17 @@ describe('authenticated v1 invoice payment compatibility', () => {
     const source = await invoice();
     const body = { status: 'PAID', paidAt: '2026-10-19' };
     const first = await putV1Invoice(v1Request(source.id, body));
-    expect(first.status).toBe(200); expect(await first.json()).toMatchObject({ data: { status: 'PAID', income: { amount: 25 } } });
+    expect(first.status).toBe(200); expect(await first.json()).toMatchObject({ data: { status: 'PAID', incomes: [{ amount: 25 }] } });
     expect((await putV1Invoice(v1Request(source.id, body))).status).toBe(200);
     expect(await database.client.paymentJournalEvent.count({ where: { invoiceId: source.id } })).toBe(1);
     expect(await database.client.income.count({ where: { invoiceId: source.id } })).toBe(1);
   });
+});
+
+it('preflight returns PAYMENT_REVIEW_REQUIRED for invalid invoice totals rather than a guessed open amount', async () => {
+  const source = await invoice();
+  await database.client.invoice.update({ where: { id: source.id }, data: { totalAmount: 0 } });
+  const response = await GET(new Request('http://localhost:3000'), context(source.id));
+  expect(response.status).toBe(409); expect(await response.json()).toMatchObject({ code: 'PAYMENT_REVIEW_REQUIRED' });
+  expect(await database.client.paymentJournalEvent.count({ where: { invoiceId: source.id } })).toBe(0);
 });

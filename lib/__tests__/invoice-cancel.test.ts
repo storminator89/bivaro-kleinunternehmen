@@ -92,7 +92,7 @@ describe('invoice cancellation', () => {
     const persisted = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
     expect(persisted.status).toBe('CANCELLED');
     expect(persisted.paidAt).toEqual(incomeDate);
-    expect((await database.client.income.findUniqueOrThrow({ where: { invoiceId: invoice.id } })).date).toEqual(incomeDate);
+    expect((await database.client.income.findFirstOrThrow({ where: { invoiceId: invoice.id } })).date).toEqual(incomeDate);
     expect(await database.client.invoice.count({ where: { originalInvoiceId: invoice.id } })).toBe(1);
     expect(state.files).toHaveLength(1);
   });

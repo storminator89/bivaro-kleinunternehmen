@@ -13,12 +13,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import { displayPaymentAmount } from '@/lib/full-payment-form';
 import { Invoice } from "@/types/dashboard";
 
 type InvoiceDetailsModalProps = {
   isOpen: boolean;
   onClose: () => void;
   invoice: Invoice | null;
+  onPaymentHistory?: () => void;
 };
 
 function DetailItem({
@@ -46,7 +48,7 @@ function DetailItem({
   );
 }
 
-export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetailsModalProps) {
+export function InvoiceDetailsModal({ isOpen, onClose, invoice, onPaymentHistory }: InvoiceDetailsModalProps) {
   if (!invoice) return null;
 
   return (
@@ -77,8 +79,11 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice }: InvoiceDetails
         <div className="min-h-0 min-w-0 flex-1 space-y-6 overflow-x-clip overflow-y-auto px-6 py-6 sm:px-8 sm:py-7">
           <section className="invoice-detail-summary" aria-label="Rechnungsbetrag und Zahlungsstatus">
             <div><p className="text-xs text-muted-foreground">Rechnungsbetrag</p><p className="invoice-detail-amount">{invoice.totalAmount != null ? new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(invoice.totalAmount) : 'Nicht verfügbar'}</p></div>
-            <StatusBadge status={invoice.status} />
+            <StatusBadge status={invoice.status} paymentState={invoice.paymentSummary?.paymentState} />
           </section>
+          {invoice.paymentSummary && <dl className="grid grid-cols-2 gap-4"><DetailItem label="Erhalten">{displayPaymentAmount(invoice.paymentSummary.paidCents)}</DetailItem><DetailItem label="Noch offen">{displayPaymentAmount(invoice.paymentSummary.openCents)}</DetailItem></dl>}
+          {invoice.paymentReviewRequired && <p role="status" className="text-sm">Zahlungsstand muss anhand der historischen Nachweise geprüft werden.</p>}
+          {onPaymentHistory && invoice.type !== 'CREDIT_NOTE' && <Button type="button" variant="outline" onClick={onPaymentHistory}>Zahlungsverlauf ansehen</Button>}
           <dl className="invoice-detail-dates grid min-w-0 grid-cols-2 gap-4">
             <DetailItem label="Rechnungsdatum">{invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE') : 'Nicht verfügbar'}</DetailItem>
             <DetailItem label="Fälligkeitsdatum">{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('de-DE') : 'Nicht verfügbar'}</DetailItem>

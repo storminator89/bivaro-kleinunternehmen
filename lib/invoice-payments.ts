@@ -10,7 +10,7 @@ export class InvoicePaymentError extends Error {
 export async function deleteInvoice(userId: string, id: number) {
   if (!Number.isSafeInteger(id) || id <= 0) throw new InvoicePaymentError('Ungültige Rechnungs-ID');
   await inTransaction(async tx => {
-    const invoice = await tx.invoice.findFirst({ where: { id, userId, type: 'INVOICE' }, include: { income: { include: { cashTransaction: true } } } });
+    const invoice = await tx.invoice.findFirst({ where: { id, userId, type: 'INVOICE' }, include: { incomes: { include: { cashTransaction: true } } } });
     if (!invoice) throw new InvoicePaymentError('Rechnung nicht gefunden', 404);
     if (invoice.type !== 'INVOICE') {
       throw new InvoicePaymentError('Dieser Beleg kann nicht gelöscht werden', 409);
@@ -22,7 +22,7 @@ export async function deleteInvoice(userId: string, id: number) {
       throw new InvoicePaymentError('Ausgestellte oder nicht eindeutig ungeausfertigte Rechnungen können nicht gelöscht werden', 409);
     }
     if (invoice.paidAt) throw new InvoicePaymentError('Die Rechnung hat einen Zahlungsnachweis und kann nicht gelöscht werden', 409);
-    if (invoice.income) throw new InvoicePaymentError('Die Rechnung hat bereits eine Einnahme und kann nicht gelöscht werden', 409);
+    if (invoice.incomes.length > 0) throw new InvoicePaymentError('Die Rechnung hat bereits eine Einnahme und kann nicht gelöscht werden', 409);
     await tx.invoice.delete({ where: { id, userId } });
     await createFinancialAuditLog({
       userId,
@@ -61,16 +61,14 @@ export async function updateInvoiceStatus(
     const old = await tx.invoice.findFirst({
       where: { id, userId },
       include: {
-        income: { include: { cashTransaction: true } },
+        incomes: { include: { cashTransaction: true } },
+        paymentJournalEvents: true,
         billingNotes: { select: { id: true } },
       },
     });
     if (!old) throw new InvoicePaymentError('Rechnung nicht gefunden', 404);
     if (old.type !== 'INVOICE' || old.status === 'CANCELLED') {
       throw new InvoicePaymentError('Dieser Beleg kann nicht als Rechnung geändert werden', 409);
-    }
-    if (old.income?.cashTransaction) {
-      throw new InvoicePaymentError('Die Zahlung ist mit dem Kassenbuch verknüpft. Bitte zuerst dort korrigieren.', 409);
     }
     if (old.paidAt && old.status !== 'PAID') {
       throw new InvoicePaymentError('Die Rechnung enthält einen Zahlungsnachweis bei inkonsistentem Status und kann nicht geändert werden.', 409);
@@ -99,7 +97,14 @@ export async function updateInvoiceStatus(
     }
     const statusChanged = nextStatus !== old.status;
     const changed = statusChanged || paidDateChanged || customerChanged;
-    if (old.income && changed) {
+    if (changed && old.incomes.some(income => income.cashTransaction)) {
+      throw new InvoicePaymentError('Die Zahlung ist mit dem Kassenbuch verknüpft. Bitte zuerst dort korrigieren.', 409);
+    }
+
+    if (old.paymentJournalEvents.length > 0 && changed && nextStatus === 'PAID' && old.status !== 'PAID') {
+      throw new PaymentJournalError('Bitte die Restzahlung mit Betrag, Datum und Bezug im Zahlungsdialog erfassen.', 409, 'PAYMENT_DETAILS_REQUIRED');
+    }
+    if ((old.incomes.length > 0 || old.paymentJournalEvents.length > 0) && changed) {
       throw new InvoicePaymentError('Die Rechnung ist bereits als Einnahme gebucht und kann nicht erneut verändert werden.', 409);
     }
     if (changed && nextStatus === 'PAID') {
@@ -109,7 +114,7 @@ export async function updateInvoiceStatus(
       if (customerChanged) await tx.invoice.update({ where: { id, userId }, data: { customerId } });
       await recordFullPaymentInTransaction(tx, userId, id, {
         amount: old.totalAmount!, currency: 'EUR', paidAt: paidAt!, source: 'LEGACY_STATUS',
-        reference: old.invoiceNumber ?? `invoice:${id}`, idempotencyKey: `legacy-status:invoice:${id}`,
+        reference: old.invoiceNumber?.trim() || `invoice:${id}`, idempotencyKey: `legacy-status:invoice:${id}`,
       });
     } else if (changed) {
       await tx.invoice.update({ where: { id, userId }, data: {
@@ -118,7 +123,7 @@ export async function updateInvoiceStatus(
         ...(nextStatus === 'SENT' ? { issuanceState: 'ISSUED' } : {}),
       } });
     }
-    const persisted = await tx.invoice.findUniqueOrThrow({ where: { id }, include: { income: true, customer: true } });
+    const persisted = await tx.invoice.findUniqueOrThrow({ where: { id }, include: { incomes: true, customer: true } });
     if (changed && nextStatus !== 'PAID') {
       await createFinancialAuditLog({
         userId,

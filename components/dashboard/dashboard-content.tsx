@@ -640,11 +640,10 @@ export function DashboardContent() {
 
   const handleInvoiceStatusChange = async (id: number | undefined, newStatus: string) => {
     if (id === undefined) return;
-    if (newStatus === 'PAID') {
+    if (newStatus === 'PAID' || newStatus === 'PAYMENT_HISTORY') {
       const invoice = invoices.find(item => item.id === id);
-      const income = incomes.find(item => item.invoiceId === id);
-      // An unchanged historical PAID row is not silently adopted or booked again.
-      if (invoice?.status === 'PAID' || income?.invoiceStatus === 'PAID') return;
+      // Eligibility comes from this invoice's complete server ledger, never a paginated Income list.
+      if (newStatus === 'PAID' && invoice?.status === 'PAID') return;
       // Let the status menu close and restore its trigger before the dialog
       // takes focus, so cancellation has a live keyboard return target.
       window.requestAnimationFrame(() => setInvoiceToPay(invoice ?? { id, fileName: `#${id}` }));
@@ -1074,6 +1073,7 @@ export function DashboardContent() {
             isOpen={invoiceDetailsModalOpen}
             onClose={() => setInvoiceDetailsModalOpen(false)}
             invoice={selectedInvoice}
+            onPaymentHistory={() => { setInvoiceDetailsModalOpen(false); window.requestAnimationFrame(() => setInvoiceToPay(selectedInvoice)); }}
           />
         )}
 

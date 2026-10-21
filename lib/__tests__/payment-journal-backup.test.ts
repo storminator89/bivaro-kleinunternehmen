@@ -150,7 +150,7 @@ describe('immutable payment journal backup', () => {
     expect(() => restore.validateBackupForRestore(exported)).not.toThrow();
   });
 
-  it.each(['2.0', '3.0'])('preserves a compatible pre-journal %s Income merge into an already linked event', async version => {
+  it.each(['2.0', '3.0'])('rejects ambiguous pre-journal %s Income merge even when amount/date match an event', async version => {
     const target = `journal-linked-legacy-merge-${version.replace('.', '-')}`;
     await user(target);
     await restore.restoreBackupData({ userId: target, backup: makeBackup(), overwrite: true, resolveFile });
@@ -160,8 +160,7 @@ describe('immutable payment journal backup', () => {
     source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: older.data } : source;
-    const result = await restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile });
-    expect(result.incomes).toEqual({ imported: 0, skipped: 1 });
+    await expect(restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile })).rejects.toThrow(/ohne Zahlungsidentitäten/u);
     expect(await database.client.income.count({ where: { userId: target } })).toBe(1);
     expect(await database.client.paymentJournalEvent.findUniqueOrThrow({ where: { id: before.id } })).toEqual(before);
     const snapshot = await readBackupSnapshot(target);
@@ -191,7 +190,7 @@ describe('immutable payment journal backup', () => {
     expect(() => restore.validateBackupForRestore(envelope(backup.data))).toThrow();
   });
 
-  it('rejects duplicate event invoice/key and mismatched Income without changing target state', async () => {
+  it('rejects duplicate event key/Income and mismatched Income without changing target state', async () => {
     const backup = makeBackup();
     backup.data.paymentJournalEvents.push({ ...backup.data.paymentJournalEvents[0], id: 31 });
     expect(() => restore.validateBackupForRestore(envelope(backup.data))).toThrow(/doppelt/u);

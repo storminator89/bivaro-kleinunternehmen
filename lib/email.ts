@@ -351,13 +351,21 @@ async function loadEmailDocument(userId: string, request: EmailDraftRequest): Pr
     throw new Error('Dokument nicht gefunden');
   }
 
+  // Partial-invoice reminder composition is intentionally deferred to BPR-013.
+  // Block both preview and send, including stale composed messages, rather
+  // than knowingly demand the original total after receiving an allocation.
+  if (request.documentType === 'reminder' && (invoice.type !== 'INVOICE'
+    || !['DRAFT', 'SENT'].includes(invoice.status) || invoice.paymentJournalEvents.length > 0
+    || invoice.incomes.length > 0 || invoice.paidAt)) {
+    throw new Error('Mahnungen für Rechnungen mit Zahlungsnachweisen sind gesperrt. Bitte Restbetrag und Zahlungsjournal prüfen.');
+  }
   const sanitizedFileName = basename(invoice.storedFileName);
   const attachmentPath = await findOwnedUploadedFile(userId, sanitizedFileName);
   if (!attachmentPath) {
     throw new Error('Datei nicht gefunden');
   }
 
-  const linkedCustomer = invoice.customer || invoice.income?.customer || null;
+  const linkedCustomer = invoice.customer || (invoice.incomes.length === 1 ? invoice.incomes[0].customer : null);
   const customer = linkedCustomer ? await prisma.customer.findFirst({
     where: { id: linkedCustomer.id, userId },
     select: { id: true, name: true, email: true },
@@ -388,7 +396,8 @@ async function getDocumentInvoice(userId: string, request: EmailDraftRequest) {
       customer: {
         select: { id: true, name: true, email: true },
       },
-      income: {
+      paymentJournalEvents: true,
+      incomes: {
         include: {
           customer: {
             select: { id: true, name: true, email: true },

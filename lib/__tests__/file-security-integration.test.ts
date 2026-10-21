@@ -154,9 +154,9 @@ describe('file and restore security integration', () => {
     await restore.restoreBackupData({ userId: 'restore', overwrite: true, backup, resolveFile: async () => pdf });
     const customerRecords = await database.client.customer.findMany({ where: { userId: 'restore' } });
     expect(customerRecords).toHaveLength(2);
-    const invoice = await database.client.invoice.findFirstOrThrow({ where: { userId: 'restore', invoiceNumber: 'RESTORE-INVOICE' }, include: { income: true, customer: true, convertedFromQuote: true, creditNotes: true } });
+    const invoice = await database.client.invoice.findFirstOrThrow({ where: { userId: 'restore', invoiceNumber: 'RESTORE-INVOICE' }, include: { incomes: true, customer: true, convertedFromQuote: true, creditNotes: true } });
     expect(invoice.customer?.email).toBe('second@example.test');
-    expect(invoice.income?.amount).toBe(10);
+    expect(invoice.incomes[0]?.amount).toBe(10);
     expect(invoice.convertedFromQuote?.validUntil?.toISOString()).toBe('2026-02-28T00:00:00.000Z');
     expect(invoice.creditNotes[0]?.originalInvoiceId).toBe(invoice.id);
     expect(await readFile(storage.getTenantUploadPath('restore', invoice.storedFileName))).toEqual(Buffer.from(pdf));
@@ -165,7 +165,7 @@ describe('file and restore security integration', () => {
     expect(expense.recurringExpense?.description).toBe('Schedule');
     const transactions = await database.client.cashTransaction.findMany({ where: { userId: 'restore' }, orderBy: { id: 'asc' } });
     expect(transactions.map(item => item.runningBalance)).toEqual([110, 105]);
-    expect(transactions[0].incomeId).toBe(invoice.income?.id);
+    expect(transactions[0].incomeId).toBe(invoice.incomes[0]?.id);
     expect(transactions[1].expenseId).toBe(expense.id);
   });
 
@@ -206,8 +206,8 @@ describe('file and restore security integration', () => {
     const invoice = await database.client.invoice.create({ data: {
       userId: 'audit-rollback', invoiceNumber: '2026-90', fileName: 'preserved.pdf', storedFileName: 'preserved.pdf',
       parsedData: {}, totalAmount: 90, status: 'PAID', issuanceState: 'ISSUED',
-      income: { create: { userId: 'audit-rollback', description: 'Preserved payment', amount: 90 } },
-    }, include: { income: true } });
+      incomes: { create: { userId: 'audit-rollback', description: 'Preserved payment', amount: 90 } },
+    }, include: { incomes: true } });
     await database.client.$executeRawUnsafe(`CREATE TRIGGER restore_audit_failure BEFORE INSERT ON AuditLog WHEN NEW.action = 'RESTORE' BEGIN SELECT RAISE(ABORT, 'synthetic restore audit failure'); END;`);
     try {
       await expect(restore.restoreBackupData({
@@ -216,7 +216,7 @@ describe('file and restore security integration', () => {
     } finally {
       await database.client.$executeRawUnsafe('DROP TRIGGER restore_audit_failure');
     }
-    expect(await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { income: true } })).toEqual(invoice);
+    expect(await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { incomes: true } })).toEqual(invoice);
     expect(await database.client.invoiceNumberCounter.count({ where: { userId: 'audit-rollback' } })).toBe(0);
   });
 
@@ -235,9 +235,9 @@ describe('file and restore security integration', () => {
     const form = new FormData(); form.append('file', new File([archive], 'backup.zip', { type: 'application/zip' }));
     const imported = await restoreFull.POST(new NextRequest('http://localhost/api/backup/full/restore', { method: 'POST', body: form }));
     expect(imported.status).toBe(200);
-    const copy = await database.client.invoice.findFirstOrThrow({ where: { userId: 'bob', invoiceNumber: 'RESTORE-INVOICE' }, include: { income: true, convertedFromQuote: true } });
+    const copy = await database.client.invoice.findFirstOrThrow({ where: { userId: 'bob', invoiceNumber: 'RESTORE-INVOICE' }, include: { incomes: true, convertedFromQuote: true } });
     expect(copy.storedFileName).not.toBe(original.storedFileName);
-    expect(copy.income?.amount).toBe(10);
+    expect(copy.incomes[0]?.amount).toBe(10);
     expect(copy.convertedFromQuote?.userId).toBe('bob');
     expect(await readFile(storage.getTenantUploadPath('bob', copy.storedFileName))).toEqual(Buffer.from(pdf));
     const copiedAudit = await database.client.auditLog.findFirstOrThrow({ where: { userId: 'bob', action: 'CREATE', entityType: 'Invoice', entityId: String(copy.id) } });

@@ -2,7 +2,7 @@ import { formatMoneyEUR, parseMoneyEUR, type MoneyInput } from '@/lib/money';
 import { parseBusinessDate } from '@/lib/business-date';
 
 export class PaymentJournalError extends Error {
-  constructor(message: string, public status = 400, public code = 'INVALID_PAYMENT') { super(message); }
+  constructor(message: string, public status = 400, public code = 'INVALID_PAYMENT', public summary?: PaymentSummary) { super(message); }
 }
 
 export type FullPaymentInput = {
@@ -12,6 +12,7 @@ export type FullPaymentInput = {
   source: 'MANUAL' | 'LEGACY_STATUS';
   reference: string;
   idempotencyKey: string;
+  expectedPaidCents?: string;
 };
 
 export function exactPaymentCents(value: unknown): bigint {
@@ -47,20 +48,37 @@ export function paymentText(value: unknown, name: string, max: number): string {
   return value.trim();
 }
 
+export type PaymentAllocation = { amountCents: string; dateCertainty: string; paidAt: Date | string | null };
+export type PaymentSummary = {
+  totalCents: string;
+  paidCents: string;
+  openCents: string;
+  paid: boolean;
+  paymentState: 'OPEN' | 'PARTIAL' | 'PAID';
+  dateCertainty: string | null;
+  paidAt: Date | string | null;
+};
+
 /** One source for paid/open totals. Never add Income to its own journal projection. */
-export function paymentSummary(total: MoneyInput, event?: { amountCents: string; dateCertainty: string; paidAt: Date | string | null } | null) {
-  const totalCents = exactPaymentCents(total);
-  if (event && (!/^[1-9][0-9]*$/u.test(event.amountCents) || event.amountCents.length > 16)) {
-    throw new PaymentJournalError('Zahlungsjournal enthält keinen gültigen Centbetrag.', 409, 'PAYMENT_REVIEW_REQUIRED');
+export function paymentSummary(total: MoneyInput, allocations: readonly PaymentAllocation[] | PaymentAllocation | null = []): PaymentSummary {
+  let totalCents: bigint;
+  try { totalCents = exactPaymentCents(total); }
+  catch { throw new PaymentJournalError('Rechnungsbetrag muss vor einer Zahlung geprüft werden.', 409, 'PAYMENT_REVIEW_REQUIRED'); }
+  const events = allocations == null ? [] : Array.isArray(allocations) ? allocations : [allocations as PaymentAllocation];
+  let paidCents = BigInt(0);
+  for (const event of events) {
+    if (!/^[1-9][0-9]*$/u.test(event.amountCents) || event.amountCents.length > 16) {
+      throw new PaymentJournalError('Zahlungsjournal enthält keinen gültigen Centbetrag.', 409, 'PAYMENT_REVIEW_REQUIRED');
+    }
+    paidCents += BigInt(event.amountCents);
   }
-  const paidCents = event ? BigInt(event.amountCents) : BigInt(0);
-  if (paidCents < BigInt(0) || paidCents > totalCents) throw new PaymentJournalError('Zahlungsjournal und Rechnungsbetrag sind inkonsistent.', 409, 'PAYMENT_REVIEW_REQUIRED');
+  if (paidCents > totalCents) throw new PaymentJournalError('Zahlungsjournal und Rechnungsbetrag sind inkonsistent.', 409, 'PAYMENT_REVIEW_REQUIRED');
   return {
-    totalCents: totalCents.toString(),
-    paidCents: paidCents.toString(),
-    openCents: (totalCents - paidCents).toString(),
+    totalCents: totalCents.toString(), paidCents: paidCents.toString(), openCents: (totalCents - paidCents).toString(),
     paid: paidCents === totalCents,
-    dateCertainty: event?.dateCertainty ?? null,
-    paidAt: event?.paidAt ?? null,
+    paymentState: paidCents === totalCents ? 'PAID' : paidCents > BigInt(0) ? 'PARTIAL' : 'OPEN',
+    // Never pretend one allocation's certainty/date describes a plural ledger.
+    dateCertainty: events.length === 1 ? events[0].dateCertainty : null,
+    paidAt: events.length === 1 ? events[0].paidAt : null,
   };
 }

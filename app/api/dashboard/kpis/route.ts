@@ -1,3 +1,4 @@
+import { ledgerSummary } from '@/lib/payment-journal/service';
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -102,11 +103,14 @@ function buildMonthlyAggregateQuery(
     ? Prisma.sql`
         FROM "Income" AS entry
         LEFT JOIN "Invoice" AS invoice ON invoice."id" = entry."invoiceId"
+        LEFT JOIN "PaymentJournalEvent" AS payment ON payment."incomeId" = entry."id"
+          AND payment."userId" = entry."userId" AND payment."invoiceId" = entry."invoiceId"
         WHERE entry."userId" = ${userId}
           AND entry."taxRelevant" = 1
           AND (
             entry."invoiceId" IS NULL
             OR invoice."id" IS NULL
+            OR (payment."dateCertainty" = 'ACTUAL' AND payment."paidAt" IS NOT NULL)
             OR invoice."status" = 'PAID'
             OR (invoice."status" = 'CANCELLED' AND invoice."paidAt" IS NOT NULL)
           )
@@ -117,6 +121,7 @@ function buildMonthlyAggregateQuery(
       `;
   const rawBookingDate = isIncome
     ? Prisma.sql`CASE
+        WHEN payment."dateCertainty" = 'ACTUAL' AND payment."paidAt" IS NOT NULL THEN payment."paidAt"
         WHEN invoice."status" IN ('PAID', 'CANCELLED') AND invoice."paidAt" IS NOT NULL
           THEN invoice."paidAt"
         ELSE entry."date"
@@ -147,7 +152,8 @@ function buildMonthlyAggregateQuery(
 
 function buildRecentIncomeQuery(userId: string) {
   const bookingDate = normalizeDateTimeToEpochMs(Prisma.sql`CASE
-    WHEN invoice."status" IN ('PAID', 'CANCELLED') AND invoice."paidAt" IS NOT NULL
+    WHEN payment."dateCertainty" = 'ACTUAL' AND payment."paidAt" IS NOT NULL THEN payment."paidAt"
+        WHEN invoice."status" IN ('PAID', 'CANCELLED') AND invoice."paidAt" IS NOT NULL
       THEN invoice."paidAt"
     ELSE entry."date"
   END`);
@@ -159,12 +165,15 @@ function buildRecentIncomeQuery(userId: string) {
       ${bookingDate} AS "bookingDate"
     FROM "Income" AS entry
     LEFT JOIN "Invoice" AS invoice ON invoice."id" = entry."invoiceId"
+        LEFT JOIN "PaymentJournalEvent" AS payment ON payment."incomeId" = entry."id"
+          AND payment."userId" = entry."userId" AND payment."invoiceId" = entry."invoiceId"
     WHERE entry."userId" = ${userId}
       AND entry."taxRelevant" = 1
       AND (
         entry."invoiceId" IS NULL
         OR invoice."id" IS NULL
-        OR invoice."status" = 'PAID'
+        OR (payment."dateCertainty" = 'ACTUAL' AND payment."paidAt" IS NOT NULL)
+            OR invoice."status" = 'PAID'
         OR (invoice."status" = 'CANCELLED' AND invoice."paidAt" IS NOT NULL)
       )
     ORDER BY "bookingDate" DESC, entry."id" DESC
@@ -232,16 +241,18 @@ export async function GET(request: Request) {
       )),
       prisma.$queryRaw<RecentIncomeRow[]>(buildRecentIncomeQuery(userId)),
       prisma.$queryRaw<RecentExpenseRow[]>(buildRecentExpenseQuery(userId)),
-      prisma.invoice.aggregate({
-        _sum: { totalAmount: true },
-        where: {
-          userId,
-          type: "INVOICE",
-          status: { in: ["DRAFT", "SENT"] },
-        },
+      prisma.invoice.findMany({
+        where: { userId, type: 'INVOICE', status: { in: ['DRAFT', 'SENT'] } },
+        include: { incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } } },
       }),
     ]);
 
+    let openCents = BigInt(0);
+    let openInvoicesReviewRequired = 0;
+    for (const invoice of openInvoices) {
+      try { openCents += BigInt(ledgerSummary(invoice).openCents); }
+      catch { openInvoicesReviewRequired++; }
+    }
     const recentActivities: RecentActivity[] = [
       ...recentIncomes.map((item) => ({
         id: item.id,
@@ -275,7 +286,8 @@ export async function GET(request: Request) {
       revenueThisMonth,
       revenueThisYear: revenueThisYearTotal,
       expensesThisMonth,
-      openInvoices: openInvoices._sum.totalAmount ?? 0,
+      openInvoices: Number(openCents) / 100,
+      openInvoicesReviewRequired,
       totalRevenue,
       totalExpenses,
       recentActivities,

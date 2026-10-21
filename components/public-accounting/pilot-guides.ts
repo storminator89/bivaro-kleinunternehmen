@@ -18,14 +18,15 @@ export const pilotGuides = [
   },
   {
     id: 'zahlung',
-    title: 'Eine vollständige Zahlung erfassen',
-    summary: 'Erst den tatsächlichen Geldeingang prüfen, dann die eigene Rechnung zuordnen.',
+    title: 'Zahlungen und Restbetrag erfassen',
+    summary: 'Tatsächliche Geldeingänge mit Betrag, Datum und Bezug einzeln zuordnen.',
     steps: [
-      'Prüfen Sie den vollständigen Geldeingang und das Zahlungsdatum anhand Ihrer Unterlagen. Bivaro gleicht keine Bankumsätze automatisch ab.',
-      'Prüfen Sie das Datum, bevor Sie den Status ändern: Die aktuelle Rechnungsoberfläche übernimmt beim Wechsel zu „Bezahlt“ den aktuellen Buchungszeitpunkt als Zahlungsdatum. Ein eigenes Datumsfeld gibt es dort nicht. Nutzen Sie diese Aktion nur, wenn das zum tatsächlichen Geldeingang passt; klären Sie ältere Zahlungen vorab mit Ihrem Ansprechpartner.',
-      'Wählen Sie bei der passenden Ausgangsrechnung den Status „Bezahlt“ und kontrollieren Sie anschließend die zugehörige Buchung unter Einnahmen. Der Status „Bezahlt“ erzeugt die Einnahme zur Rechnung automatisch. Erfassen Sie denselben Geldeingang nicht zusätzlich als manuelle Einnahme.',
+      'Prüfen Sie den tatsächlich eingegangenen Betrag und das tatsächliche Zahlungsdatum anhand Ihrer Unterlagen. Bivaro gleicht keine Bankumsätze automatisch ab.',
+      'Öffnen Sie bei Ihrer Ausgangsrechnung den Zahlungsdialog. Tragen Sie den eingegangenen Betrag, das tatsächliche Datum und eine nachvollziehbare Zahlungsreferenz ein. Das Datum wird bewusst nicht mit heute vorbelegt. Erst die verbindliche Bestätigung speichert die Zahlung.',
+      'Kontrollieren Sie Rechnungssumme, erhaltenen Betrag, Restbetrag und Zahlungsverlauf. Beispiel: Von 120 EUR erhalten Sie 40 EUR an Datum A und später 80 EUR an Datum B; nach der ersten Zahlung bleiben 80 EUR offen. Jeder Zahlungseingang erzeugt eine eigene Einnahme zu seinem tatsächlichen Datum automatisch. Erfassen Sie denselben Geldeingang nicht zusätzlich als manuelle Einnahme.',
+      'Bei einer unklaren Speicherantwort prüfen Sie den Zahlungsnachweis oder wiederholen dieselbe Anfrage unverändert. Ein geänderter Saldo erfordert erneute bewusste Prüfung. Bereits vorhandene Einträge im Verlauf sind keine Bestätigung einer neuen Zahlung. Nach Teilzahlungen sind Mahnaktionen bis zur gesonderten Restbetragsprüfung gesperrt.',
     ],
-    caution: 'Dieser Ablauf gilt für Ihre Ausgangsrechnungen und den vollen Rechnungsbetrag, nicht für Lieferantenrechnungen. Gebuchte Zahlungen lassen sich nicht einfach wieder öffnen oder umdatieren. Teilzahlungen, Erstattungen und irrtümliche Buchungen müssen vorab gesondert geklärt werden. Ein Storno ist keine bereits ausgeführte Rückzahlung.',
+    caution: 'Dieser Ablauf gilt für bestätigte positive Zahlungen auf gewöhnliche Ausgangsrechnungen in Euro, nicht für Lieferanten-, Anzahlungs- oder Schlussrechnungen. Überzahlungen werden nicht gebucht. Gebuchte Zahlungen lassen sich nicht einfach wieder öffnen oder umdatieren. Erstattungen und irrtümliche Buchungen benötigen einen gesonderten Korrekturablauf; ein Storno ist keine bereits ausgeführte Rückzahlung. Historische ungeklärte Zahlungsdaten werden nicht als tatsächliches Datum erfunden.',
     links: [
       { href: '/dashboard?tab=invoices', label: 'Ausgangsrechnung öffnen' },
       { href: '/dashboard?tab=incomes', label: 'Einnahmen prüfen' },
@@ -52,7 +53,7 @@ export const pilotGuides = [
       'Öffnen Sie „Unterlagen übergeben“, wählen Sie ein Kalenderjahr oder höchstens 366 Tage und prüfen Sie die Vorschau mit Zählungen, fehlenden Originalen und Warnungen. Das ZIP-Paket im Bivaro-Format 1 enthält Tabellen und vorhandene unveränderte Originale. Vereinbaren Sie mit Ihrer Steuerkanzlei vorab, welche Unterlagen und welchen sicheren Übergabekanal sie benötigt.',
       'Prüfen Sie Umfang und Warnungen, bevor Sie den ZIP-Download starten. Öffnen Sie danach die Dateien und README.txt. Stimmen Sie Zeitraum, fehlende Unterlagen und Zahlungsbezüge ab; addieren Sie Rechnungen, Einnahmen und verknüpfte Kassenbewegungen nicht. Es wird nichts automatisch an eine Kanzlei gesendet. Für die separate EÜR-Übertragungshilfe gelten weiterhin deren unterstützte Steuerjahre.',
     ],
-    caution: 'Das Übergabepaket ist eine begrenzte Arbeitsunterlage, kein vollständiger GoBD-Prüfexport. Ungebuchte Eingangsbelege, Teilzahlungszuordnungen und ein separates Zahlungs-/Erstattungsjournal sind nicht enthalten. Übergabepaket, CSV und EÜR-Übertragungshilfe sind keine ELSTER-Einreichung und kein zugesicherter DATEV-Import. Die EÜR-Übertragungshilfe unterstützt derzeit die Jahre 2024 und 2025, nicht 2026. Ein Export ersetzt weder fachliche Prüfung noch eine eigenständige Datensicherung.',
+    caution: 'Das Übergabepaket ist eine begrenzte Arbeitsunterlage, kein vollständiger GoBD-Prüfexport. Ungebuchte Eingangsbelege und ein separates Erstattungsjournal sind nicht enthalten. Bestätigte positive Teilzahlungsnachweise stehen in payments.csv; Rechnung, Einnahme und Zahlungstabelle dürfen nicht addiert werden. Übergabepaket, CSV und EÜR-Übertragungshilfe sind keine ELSTER-Einreichung und kein zugesicherter DATEV-Import. Die EÜR-Übertragungshilfe unterstützt derzeit die Jahre 2024 und 2025, nicht 2026. Ein Export ersetzt weder fachliche Prüfung noch eine eigenständige Datensicherung.',
     links: [
       { href: '/handoff', label: 'Unterlagen übergeben' },
       { href: '/dashboard?tab=incomes', label: 'Einnahmen öffnen' },

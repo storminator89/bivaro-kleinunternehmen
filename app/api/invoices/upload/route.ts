@@ -144,7 +144,7 @@ async function findUploadRequestInvoice(
   `);
   const match = matches[0];
   if (!match) return null;
-  return db.invoice.findUnique({ where: { id: match.id }, include: { income: true } });
+  return db.invoice.findUnique({ where: { id: match.id }, include: { incomes: true } });
 }
 
 function decodeStandaloneXml(buffer: Buffer): string | null {
@@ -321,7 +321,7 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Stornierte Angebote können nicht umgewandelt werden' }, { status: 409 });
       }
       if (sourceQuote.convertedInvoice) {
-        const existing = await prisma.invoice.findUnique({ where: { id: sourceQuote.convertedInvoice.id }, include: { income: true } });
+        const existing = await prisma.invoice.findUnique({ where: { id: sourceQuote.convertedInvoice.id }, include: { incomes: true } });
         return NextResponse.json({ ...existing, idempotent: true });
       }
     }
@@ -396,7 +396,7 @@ async function postHandler(request: NextRequest) {
         if (currentQuote?.convertedInvoice) {
           const existing = await tx.invoice.findUnique({
             where: { id: currentQuote.convertedInvoice.id },
-            include: { income: true },
+            include: { incomes: true },
           });
           if (existing) return { invoice: existing, idempotent: true };
           throw new QuoteConversionError('Die Angebotsumwandlung ist inkonsistent', 409);
@@ -431,7 +431,7 @@ async function postHandler(request: NextRequest) {
             if (racedQuote?.convertedInvoice) {
               const existing = await tx.invoice.findUnique({
                 where: { id: racedQuote.convertedInvoice.id },
-                include: { income: true },
+                include: { incomes: true },
               });
               if (existing) return { invoice: existing, idempotent: true };
             }
@@ -508,7 +508,7 @@ async function postHandler(request: NextRequest) {
     } catch (error) {
       // A unique conversion race is idempotent: return the winner's invoice.
       if (sourceQuote && (error as { code?: string }).code === 'P2002') {
-        const existing = await prisma.invoice.findFirst({ where: { convertedFromQuoteId: sourceQuote.id, userId }, include: { income: true } });
+        const existing = await prisma.invoice.findFirst({ where: { convertedFromQuoteId: sourceQuote.id, userId }, include: { incomes: true } });
         if (existing) {
           if (storedFileName) {
             try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort cleanup */ }

@@ -23,7 +23,7 @@ describe('saved-payment dashboard refresh', () => {
 
   it('invalidates inactive invoice/Income lists without an eager fetch and keeps unrelated expenses untouched', async () => {
     const client = new QueryClient();
-    const resources = ['invoices', 'incomes', 'summary', 'assets', 'year-comparison', 'filter-options'];
+    const resources = ['invoices', 'incomes', 'summary', 'assets', 'year-comparison', 'filter-options', 'reminders'];
     resources.forEach(resource => client.setQueryData(['dashboard', resource], { previous: true }));
     client.setQueryData(['dashboard', 'expenses'], { previous: true });
     try {

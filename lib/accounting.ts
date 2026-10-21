@@ -2,8 +2,8 @@
  * Shared accounting rules used by the dashboard and the EÜR export.
  *
  * The application follows a cash-realized view for invoice incomes: a manual
- * income is booked on its own date, while an invoice income is booked only
- * after the invoice is paid. Legacy paid invoices without `paidAt` retain the
+ * income and each ACTUAL journal allocation are booked on their own dates.
+ * Legacy unjournaled invoice income is booked only after the invoice is paid. Legacy paid invoices without `paidAt` retain the
  * income date as their booking date.
  */
 
@@ -31,6 +31,14 @@ export type AccountingIncome = {
   taxRelevant: boolean;
   description?: string | null;
   invoice?: AccountingInvoice | null;
+  /** Immutable allocation provenance. Do not infer this from invoice.paidAt. */
+  paymentJournalEvent?: {
+    id?: number;
+    amountCents: string;
+    paidAt: Date | string | null;
+    dateCertainty: string;
+    source?: string;
+  } | null;
   /** Fields returned by the paginated income API and useful for callers. */
   invoiceStatus?: string | null;
   invoicePaidAt?: Date | string | null;
@@ -88,6 +96,9 @@ export function getBusinessDate(value: Date | string): string {
 
 /** Return the cash booking date for an income. */
 export function getIncomeAccountingDate(income: AccountingIncome): Date {
+  if (income.paymentJournalEvent?.dateCertainty === 'ACTUAL' && income.paymentJournalEvent.paidAt) {
+    return asDate(income.paymentJournalEvent.paidAt);
+  }
   const invoice = getInvoice(income);
   // A credit-note cancellation changes the original invoice's status after
   // payment. Keep the original cash booking date in that case; a refund is a
@@ -105,6 +116,7 @@ export function getIncomeAccountingDate(income: AccountingIncome): Date {
  * booking. An income without an invoice is a manually entered cash booking.
  */
 export function isCashRealizedIncome(income: AccountingIncome): boolean {
+  if (income.paymentJournalEvent?.dateCertainty === 'ACTUAL' && income.paymentJournalEvent.paidAt) return true;
   const invoice = getInvoice(income);
   return !invoice || invoice.status === "PAID" ||
     (invoice.status === "CANCELLED" && invoice.paidAt != null);

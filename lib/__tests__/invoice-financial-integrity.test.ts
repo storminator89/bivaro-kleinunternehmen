@@ -42,7 +42,7 @@ describe('invoice financial audit and lifecycle boundary', () => {
     const paid = await updateInvoiceStatus('alice', invoice.id, 'PAID', '2026-04-15T12:00:00Z');
 
     expect(paid.status).toBe('PAID');
-    expect(paid.income?.amount).toBe(123.45);
+    expect(paid.incomes[0]?.amount).toBe(123.45);
     expect(await database.client.auditLog.count({ where: { userId: 'alice', entityId: String(invoice.id), action: 'PAYMENT_RECEIVED' } })).toBe(1);
     const audit = await database.client.auditLog.findFirstOrThrow({ where: { userId: 'alice', entityId: String(invoice.id), action: 'PAYMENT_RECEIVED' } });
     expect(JSON.parse(audit.metadata!)).toMatchObject({
@@ -58,10 +58,10 @@ describe('invoice financial audit and lifecycle boundary', () => {
     } finally {
       await database.client.$executeRawUnsafe('DROP TRIGGER "audit_insert_failure"');
     }
-    const unchanged = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { income: true } });
+    const unchanged = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { incomes: true } });
     expect(unchanged.status).toBe('DRAFT');
     expect(unchanged.issuanceState).toBe('UNISSUED');
-    expect(unchanged.income).toBeNull();
+    expect(unchanged.incomes).toEqual([]);
   });
 
   it('rolls back draft deletion when its financial audit insert fails', async () => {
@@ -93,9 +93,9 @@ describe('invoice financial audit and lifecycle boundary', () => {
 
     await expect(updateInvoiceStatus('bob', invoice.id, 'PAID')).rejects.toThrow('Rechnung nicht gefunden');
     await expect(deleteInvoice('bob', invoice.id)).rejects.toThrow('Rechnung nicht gefunden');
-    const unchanged = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { income: true } });
+    const unchanged = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { incomes: true } });
     expect(unchanged.status).toBe('DRAFT');
-    expect(unchanged.income).toBeNull();
+    expect(unchanged.incomes).toEqual([]);
   });
 
   it('deletes only an explicitly unissued draft and audits that deletion', async () => {
@@ -114,7 +114,7 @@ describe('invoice financial audit and lifecycle boundary', () => {
     const withIncome = await createInvoice('alice', { totalAmount: 10 });
     await database.client.income.create({ data: { userId: 'alice', invoiceId: withIncome.id, description: 'Existing booking', amount: 10 } });
     await expect(deleteInvoice('alice', withIncome.id)).rejects.toMatchObject({ status: 409 } satisfies Partial<InvoicePaymentError>);
-    expect(await database.client.income.findUnique({ where: { invoiceId: withIncome.id } })).not.toBeNull();
+    expect(await database.client.income.findFirst({ where: { invoiceId: withIncome.id } })).not.toBeNull();
   });
 
   it('keeps drafts with a payment date and non-invoice documents locked', async () => {
@@ -133,8 +133,8 @@ describe('invoice financial audit and lifecycle boundary', () => {
     await updateInvoiceStatus('alice', invoice.id, 'PAID', '2026-04-18T12:00:00Z');
 
     await expect(updateInvoiceStatus('alice', invoice.id, 'SENT')).rejects.toMatchObject({ status: 409 } satisfies Partial<InvoicePaymentError>);
-    const persisted = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { income: true } });
+    const persisted = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { incomes: true } });
     expect(persisted.status).toBe('PAID');
-    expect(persisted.income).not.toBeNull();
+    expect(persisted.incomes).toHaveLength(1);
   });
 });

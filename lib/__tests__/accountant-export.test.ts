@@ -185,7 +185,8 @@ describe('business snapshot, manifest and original-file isolation', () => {
     expect(records.incomes.find((row: { id: number }) => row.id === outsideIncome.id)).toMatchObject({ accountingDate: '2026-02-01', accountingDateInPeriod: false });
     expect(records.invoices.find((row: { id: number }) => row.id === credit.id)).toMatchObject({ amount: '-12.34', originalInvoiceId: original.id, currency: null });
     expect(manifest.scope).toMatchObject({ datevCertified: false, elsterSubmission: false, completeAuditExport: false, restorableBackup: false });
-    expect(manifest.scope.paymentModel).toContain('single-full-payment');
+    expect(manifest.scope.paymentModel).toContain('immutable-positive-allocations');
+    expect(manifest.scope.paymentModel).not.toContain('single-full-payment');
     expect(manifest).not.toHaveProperty('total');
   });
 

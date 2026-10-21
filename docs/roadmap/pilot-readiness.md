@@ -44,7 +44,7 @@ Wellen sind Integrationsabschnitte, keine Kalenderzusagen. Ein Backend-Core kann
 | [BPR-008](https://github.com/storminator89/bivaro-kleinunternehmen/issues/42) | Geprüfter Eingang wird genau einmal zur Ausgabe | BPR-006, BPR-007 | planned |
 | [BPR-009](https://github.com/storminator89/bivaro-kleinunternehmen/issues/43) | Mobile Beleg-Inbox: finden, prüfen, fortsetzen | BPR-008 | in_progress |
 | [BPR-010](https://github.com/storminator89/bivaro-kleinunternehmen/issues/44) | Zahlungsjournal als idempotente Quelle für Rechnungszahlungen | — | planned |
-| [BPR-011](https://github.com/storminator89/bivaro-kleinunternehmen/issues/45) | Teilzahlungen und verständlicher Restbetrag | BPR-010 | planned |
+| [BPR-011](https://github.com/storminator89/bivaro-kleinunternehmen/issues/45) | Teilzahlungen und verständlicher Restbetrag | BPR-010 | in_progress |
 | [BPR-012](https://github.com/storminator89/bivaro-kleinunternehmen/issues/46) | Zahlungsirrtum und Erstattung ohne Historienverlust | BPR-010, BPR-011 | planned |
 | [BPR-013](https://github.com/storminator89/bivaro-kleinunternehmen/issues/47) | Restschuld in Mahnung, Dashboard und Zahlungs-Auswertungen | BPR-011, BPR-012 | planned |
 | [BPR-014](https://github.com/storminator89/bivaro-kleinunternehmen/issues/48) | Unabhängiger Kernexport mit Manifest und späteren Fach-Add-ons | — | in_progress |
@@ -571,7 +571,7 @@ Offene Fakten halten nur davon abhängige echte Verkaufs-/Betriebsfreigaben auf,
 
 ### BPR-011 · Teilzahlungen und verständlicher Restbetrag
 
-**Welle 3 · P1 · M · planned** — Noch nicht als implementiert ausgewiesen.
+**Welle 3 · P1 · M · in_progress** — Implementierung/Abnahme offen (21.10.2026); uncommitted auf `feat/partial-payments`, Basis `79e07e26f8696ea30a22fdda4abe182184e96df9`. Kein Ticketabschluss behauptet.
 
 **User Story:** Als Inhaber möchte ich mehrere Teilzahlungen erfassen und die verbleibende Forderung sofort verstehen.
 
@@ -603,6 +603,40 @@ Offene Fakten halten nur davon abhängige echte Verkaufs-/Betriebsfreigaben auf,
 **Automatisierte Prüfung:**
 - Komponententest Status/Restschuld/konkurrierende Änderung.
 - Integration 40+80, Überzahlung, periodenübergreifende Zahlung mit exakten Centbeträgen.
+
+**Implementierungsstand (21.10.2026):** Schema, API/Journal, Zahlungsdialog,
+Restbeträge und datumsgetreue Income-Buchhaltung werden gemeinsam integriert.
+Die Backup-Scheibe ist verfasst: Schema `20261021043000_add_partial_payments`,
+explizite Erkennung des vorherigen Vollzahlungsjournals
+`20261020230000_add_payment_journal` und journalfreier Altformate; gruppierte
+Event-/Income-/Statusprüfung mit exakter Summenobergrenze. Historische Quellen,
+Datumsunsicherheit, ursprüngliche Nullwerte und Ereignis-Erstellzeiten bleiben
+erhalten. Merge verwendet verifizierte Zahlungsidentitäten statt
+Rechnung/Betrag/Datum; jede neue Zuordnung erhält eigene Income, Replay keine
+zusätzliche Ereignis-Auditzeile. Kompatible Teilmengen können fortgeschrieben
+werden; ältere Sicherungen setzen weiter fortgeschrittene Ziele nicht zurück.
+Divergierende Historien (auch unterhalb der Summengrenze), gemeinsame
+Überzahlung, abweichende Kunden-/Dokument-/Finanzdaten, mehrdeutige Alt-Merges
+in journalisierte Zielrechnungen und destruktives Überschreiben werden
+abgewiesen. Ohne Rechnungsnummer ist ein Merge in ein journalisiertes Ziel
+nur mit verifizierter bestehender Zahlungsidentität erlaubt; unbekannte
+journalfreie oder disjunkte Historien werden konservativ abgewiesen. Leere
+isolierte Ziele bleiben importierbar. Invoice-only und unknown erhalten keine
+erfundene Income.
+
+**Vorläufiger Prüfstand / Nachweisgrenze:** Ein Root-Unit-Lauf am 21.10.2026
+endete mit **1063 bestandenen Tests, 5 Fehlern in 3 Dateien und 1 Skip**
+(lokales Vorab-Log `/tmp/bivaro-partial-all-unit.log`). Bekannte Fixture- und
+Backend-Korrekturen wurden danach verfasst; ein frischer finaler Gesamtlauf
+steht noch aus. Daher kein „grün“, kein Abschluss- oder Browsernachweis aus
+diesem Zwischenstand. Offen bleiben finaler Review, abschließende
+Prisma-/Lint-/Typecheck-/Build-Gates, frische Transaktions-/Accounting-/
+Backup-Prüfungen und sämtliche obigen Browser-ACs. Neue Tests stehen in
+`lib/__tests__/payment-journal-partial-backup.test.ts`; ergänzende Verträge in
+`lib/payment-journal/README.md`. Die JSON-Roadmap enthält denselben getrennten
+Implementierungs-/Prüfstand. Erstattungen/Korrekturen bleiben BPR-012, umfassende
+Mahn-/Reporting-Erweiterung BPR-013. Keine CI-, Browser-, Merge- oder
+Deploymentfreigabe wird aus diesen Änderungen abgeleitet.
 
 **DoD:** GLOBAL-DOD plus alle Ticketkriterien; Issue/PR/Commit/CI/Browser-Evidenz erst nach tatsächlichem Nachweis.
 

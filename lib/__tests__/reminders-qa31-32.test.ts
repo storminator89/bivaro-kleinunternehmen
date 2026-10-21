@@ -112,7 +112,7 @@ describe('QA #31: only open invoices are eligible for reminders', () => {
     // The dated compatibility service and the shared full-payment dialog both
     // preserve the reminder lifecycle after an explicit actual payment date.
     const paid = await updateInvoiceStatus('reminder-owner', invoice.id, 'PAID', '2026-10-20T12:00:00Z');
-    expect(paid.income).toMatchObject({ invoiceId: invoice.id, amount: 297.5, taxRelevant: true, customerId: customer.id });
+    expect(paid.incomes[0]).toMatchObject({ invoiceId: invoice.id, amount: 297.5, taxRelevant: true, customerId: customer.id });
     expect((await listReminders()).invoices).toEqual([]);
     expect((await listReminders()).stats).toMatchObject({ totalOverdue: 0, totalAmount: 0, totalFees: 0 });
     expect((await createReminder(invoice.id)).status).toBe(409);

@@ -95,3 +95,22 @@ describe("shared accounting rules", () => {
     expect(range.start?.getDate()).toBe(28);
   });
 });
+
+describe('per-event actual allocation accounting', () => {
+  it('realizes a partial on its actual date and never shifts it on settlement or cancellation', () => {
+    const allocation = {
+      amount: 40, date: '2025-12-31T00:00:00.000Z', taxRelevant: true,
+      paymentJournalEvent: { amountCents: '4000', dateCertainty: 'ACTUAL', paidAt: '2025-12-31T00:00:00.000Z', source: 'MANUAL' },
+    };
+    for (const invoice of [{ status: 'SENT', paidAt: null }, { status: 'PAID', paidAt: '2026-01-02T00:00:00.000Z' }, { status: 'CANCELLED', paidAt: null }]) {
+      expect(isIncludedIncome({ ...allocation, invoice })).toBe(true);
+      expect(getIncomeAccountingDate({ ...allocation, invoice }).toISOString()).toBe('2025-12-31T00:00:00.000Z');
+    }
+  });
+  it('does not convert historical adopted evidence into actual realization', () => {
+    const income = { amount: 40, date: '2025-12-31', taxRelevant: true, invoice: { status: 'SENT', paidAt: null },
+      paymentJournalEvent: { amountCents: '4000', dateCertainty: 'LEGACY_INCOME', paidAt: '2025-12-31', source: 'LEGACY_IMPORT' } };
+    expect(isIncludedIncome(income)).toBe(false);
+    expect(getIncomeAccountingDate(income).toISOString()).toBe('2025-12-31T00:00:00.000Z');
+  });
+});

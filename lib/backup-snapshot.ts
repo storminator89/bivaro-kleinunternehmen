@@ -107,7 +107,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
         select: { id: true, email: true, name: true, role: true, createdAt: true },
       }),
       tx.expense.findMany({ where: { userId } }),
-      tx.income.findMany({ where: { userId } }),
+      tx.income.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.paymentJournalEvent.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.invoice.findMany({ where: { userId } }),
       tx.purchaseDocument.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
