@@ -84,7 +84,7 @@ export function EURTab({
             Bericht und Export
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Betriebliches Ergebnis aus steuerrelevanten Buchungen im gewählten Zeitraum.
+            Nur steuerrelevante In-App-Buchungen.
           </p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
@@ -105,7 +105,7 @@ export function EURTab({
       />
 
       <section className="report-balance" aria-label="Ergebnisübersicht">
-        <div className="report-balance-result"><DashboardIcon name="tile-profit" size={48} className="mb-3" /><p>Gewählter Berichtszeitraum</p><h3>{profit >= 0 ? 'Gewinn' : 'Verlust'}</h3><strong>{formatCurrency(profit)}</strong><span>Vorläufiges Ergebnis · vor Steuern</span></div>
+        <div className="report-balance-result"><DashboardIcon name="tile-profit" size={48} className="mb-3" /><h3>{profit >= 0 ? 'Gewinn' : 'Verlust'}</h3><strong>{formatCurrency(profit)}</strong><span>Vorläufiges Ergebnis · vor Steuern</span></div>
         <dl><div><dt>Gesamteinnahmen</dt><dd>{formatCurrency(totalIncome)}</dd></div><div><dt>Gesamtausgaben</dt><dd>{formatCurrency(totalExpense)}</dd></div></dl>
       </section>
 
@@ -140,10 +140,9 @@ export function EURTab({
         <Card className="min-w-0 xl:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-3"><DashboardIcon name="tile-expenses" size={36} />Ausgaben nach Kategorie</CardTitle>
-            <CardDescription>Verteilung der Kosten</CardDescription>
           </CardHeader>
           <CardContent>
-            {categoryChartData.length ? <ul className="report-category-list">{categoryChartData.map(entry => <li key={entry.name}><div><span>{entry.name}</span><strong>{formatCurrency(entry.value)}</strong></div><div className="report-category-track" aria-hidden="true"><span style={{width: `${totalExpense > 0 ? Math.min(100, Math.max(0, entry.value / totalExpense * 100)) : 0}%`}} /></div></li>)}</ul> : <p className="report-empty">Noch keine Kostenverteilung. Steuerrelevante Ausgaben erscheinen hier nach der Erfassung.</p>}
+            {categoryChartData.length ? <ul className="report-category-list">{categoryChartData.map(entry => <li key={entry.name}><div><span>{entry.name}</span><strong>{formatCurrency(entry.value)}</strong></div><div className="report-category-track" aria-hidden="true"><span style={{width: `${totalExpense > 0 ? Math.min(100, Math.max(0, entry.value / totalExpense * 100)) : 0}%`}} /></div></li>)}</ul> : <p className="report-empty">Noch keine steuerrelevanten Ausgaben.</p>}
           </CardContent>
         </Card>
       </div>
@@ -228,7 +227,7 @@ export function EURTab({
               <DashboardIcon name="nav-cashbook" size={32} />
               Privatentnahmen und Privateinlagen
             </h3>
-            <p className="mt-1 text-sm">Nicht steuerrelevante Bewegungen zwischen Privat- und Betriebsvermögen</p>
+
           </div>
           <dl className="divide-y divide-caution/25">
             <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6"><dt className="text-sm">Privatentnahmen</dt><dd className="shrink-0 font-medium tabular-nums">−{formatCurrency(privateWithdrawals)}</dd></div>
@@ -237,7 +236,7 @@ export function EURTab({
           </dl>
           <div className="flex items-start gap-2 border-t border-caution/30 px-4 py-4 text-xs sm:px-6">
             <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>Diese Beträge fließen nicht in die EÜR ein. Sie dokumentieren nur Kapitalbewegungen zwischen Privat- und Betriebsvermögen.</p>
+            <p>Nicht in der EÜR enthalten.</p>
           </div>
         </section>
       )}
@@ -291,7 +290,7 @@ export function EURTab({
               </TableBody>
             </Table>
           </div>
-          <p className="border-t px-4 py-3 text-xs text-muted-foreground sm:px-6">Im Anschaffungsjahr erfolgt die Abschreibung zeitanteilig (pro rata temporis).</p>
+          <p className="border-t px-4 py-3 text-xs text-muted-foreground sm:px-6">Im Anschaffungsjahr zeitanteilig.</p>
         </section>
       )}
 

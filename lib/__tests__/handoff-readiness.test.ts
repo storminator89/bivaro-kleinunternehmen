@@ -137,7 +137,7 @@ describe('actionable and honest guide rendering', () => {
     await document(1); await document(2, { invoiceDate: null });
     const tasks = readHandoffReadiness(await readiness(), preview.manifest.period);
     const html = renderToStaticMarkup(createElement(HandoffTasks, { preview, readiness: tasks }));
-    for (const text of ['1 offener Eingangsbeleg im Zeitraum', '1 offener Eingangsbeleg ohne Belegdatum', 'Jahreszuordnung unbekannt', '1 historischer Zahlungsnachweis', '2 fehlende Originaldateien', 'href="/purchases?document=1"', 'href="/purchases?document=2"', 'Original- und Banknachweisen', 'Momentaufnahme']) {
+    for (const text of ['1 offener Eingangsbeleg im Zeitraum', '1 offener Eingangsbeleg ohne Belegdatum', 'Jahreszuordnung unbekannt', '1 historischer Zahlungsnachweis', '2 fehlende Originaldateien', 'href="/purchases?document=1"', 'href="/purchases?document=2"', 'Original- und Banknachweisen', 'Nach Korrekturen neu laden']) {
       expect(html).toContain(text);
     }
     expect(() => readHandoffReadiness(tasks, { from: '2091-01-01', to: '2091-12-31' })).toThrow();
@@ -149,6 +149,6 @@ describe('actionable and honest guide rendering', () => {
   });
   it('separates manual receipt from download and discloses retention/restore limits', () => {
     const html = renderToStaticMarkup(createElement(HandoffAcknowledgement, { preview, downloadStarted: false }));
-    for (const text of ['Ein gestarteter Download ist kein Empfangsnachweis', 'außerhalb von Bivaro geprüft', 'keine Empfangsnotiz', 'Aufbewahrung ist begrenzt', 'Backup-/Restore', 'disabled=""']) expect(html).toContain(text);
+    for (const text of ['Download ist kein Empfangsnachweis', 'außerhalb von Bivaro geprüft', 'Ein Download allein speichert keine Empfangsnotiz', 'begrenzt aufbewahrt', 'Nicht im ZIP oder Backup', 'disabled=""']) expect(html).toContain(text);
   });
 });

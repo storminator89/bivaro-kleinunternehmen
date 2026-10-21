@@ -121,9 +121,9 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
         <DialogHeader className="border-b pb-4">
-          <DialogTitle className="text-xl font-semibold">{customer ? 'Kunden bearbeiten' : 'Neuen Kunden hinzufügen'}</DialogTitle>
-          <DialogDescription>
-            {customer ? 'Bearbeiten Sie die Details des Kunden.' : 'Fügen Sie einen neuen Kunden zu Ihrer Datenbank hinzu.'}
+          <DialogTitle className="text-xl font-semibold">{customer ? 'Kunden bearbeiten' : 'Neuer Kunde'}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Kontakt- und Rechnungsanschrift
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-5 pt-4">
@@ -220,11 +220,12 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
             />
           </div>
 
-          <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/60 dark:bg-amber-950/20">
+          <details open={Boolean(customer?.internalNote)} className="space-y-3 border-t pt-3">
+            <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">Interner Hinweis</summary>
             <div>
               <Label htmlFor="internalNote" className="text-sm font-medium">Interner Kundenhinweis</Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Nur für Ihr Team. Der Hinweis wird niemals in PDF, XML oder den E-Mail-Text übernommen.
+                Nicht für Kunden sichtbar.
               </p>
             </div>
             <Textarea
@@ -247,7 +248,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
                 <option value="BOTH">Rechnungserstellung und E-Mail-Versand</option>
               </select>
             </div>
-          </div>
+          </details>
 
           <DialogFooter className="border-t pt-4 mt-6">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -369,8 +370,8 @@ function BillingNotesDialog({ customer, open, onOpenChange }: BillingNotesDialog
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Leistungsnotizen: {customer?.name || 'Kunde'}</DialogTitle>
-          <DialogDescription>
-            Offene Leistungen können später beim Erstellen einer Rechnung übernommen werden. Zugeordnete Notizen bleiben hier nachvollziehbar.
+          <DialogDescription className="sr-only">
+            Offene Leistungen zur späteren Übernahme in eine Rechnung.
           </DialogDescription>
         </DialogHeader>
 
@@ -588,7 +589,7 @@ export default function CustomersPage() {
   return (
     <div className={`customer-workspace ${styles.directory}`}>
       <div className="space-y-6">
-        <PageHeader title="Kundenverwaltung" description="Kontakte, Anschriften und offene Leistungen an einem Ort." section="Verkauf" actions={<>
+        <PageHeader title="Kunden" actions={<>
 <div className="mt-4 md:mt-0 flex flex-wrap gap-3">
             <Button variant="outline" asChild><Link href="/customers/import">CSV importieren</Link></Button>
             <Button variant="outline" asChild><Link href="/customers/articles">Artikel und Leistungen</Link></Button>
@@ -601,7 +602,7 @@ export default function CustomersPage() {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              Neuen Kunden anlegen
+              Neuer Kunde
             </Button>
           </div>
 </>} />
@@ -636,7 +637,7 @@ export default function CustomersPage() {
                   <div className="customer-record-heading"><span className="customer-monogram">{getInitials(customer.name)}</span><div><h2>{customer.name}</h2><p>{customer.contactPerson || 'Geschäftskontakt'}{customer.city ? ` · ${customer.city}` : ''}</p></div></div>
                   <dl>{customer.email && <div><dt>E-Mail</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>}{customer.phone && <div><dt>Telefon</dt><dd><a href={`tel:${customer.phone}`}>{customer.phone}</a></dd></div>}</dl>
                   <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openEditModal(customer)} aria-label={`${customer.name} bearbeiten`}>Bearbeiten</Button><Button variant="ghost" size="sm" onClick={() => setNotesCustomer(customer)} aria-label={`Leistungsnotizen für ${customer.name}`}>Leistungsnotizen</Button><Button variant="ghost" size="sm" className="text-destructive" disabled={isDeleting} onClick={() => handleDeleteCustomer(customer.id)} aria-label={`${customer.name} löschen`}>Löschen</Button></div>
-                </article>) : <div className="ledger-empty"><h2>Keine Kunden gefunden</h2><p>{searchTerm ? 'Ändern Sie Ihre Suche, um Kontakte zu finden.' : 'Legen Sie Ihren ersten Geschäftskontakt an.'}</p>{!searchTerm && <Button variant="outline" onClick={openAddModal}>Ersten Kunden anlegen</Button>}</div>}
+                </article>) : <div className="ledger-empty"><h2>Keine Kunden gefunden</h2>{!searchTerm && <Button variant="outline" onClick={openAddModal}>Ersten Kunden anlegen</Button>}</div>}
               </div>
               <div className={`hidden ${isLoadingCustomers || loadError ? "" : "xl:block"} overflow-hidden bg-card`}>
                 <Table>
@@ -789,9 +790,7 @@ export default function CustomersPage() {
                               </svg>
                             </div>
                             <h3 className="text-lg font-medium text-foreground mb-1">Keine Kunden gefunden</h3>
-                            <p className="text-sm max-w-sm mx-auto mb-6">
-                              {searchTerm ? 'Es wurden keine Kunden gefunden, die Ihrer Suche entsprechen.' : 'Sie haben noch keine Kunden angelegt. Starten Sie jetzt, indem Sie Ihren ersten Kunden hinzufügen.'}
-                            </p>
+                            {searchTerm && <p className="text-sm max-w-sm mx-auto mb-6">Suche ändern.</p>}
                             {!searchTerm && (
                               <Button onClick={openAddModal} variant="outline">
                                 Ersten Kunden anlegen

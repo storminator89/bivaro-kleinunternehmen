@@ -137,7 +137,7 @@ test('refuses real fiscal outputs and rechecks a cached EÜR before any CSV down
     const handoff = await handoffResponse; expect(handoff.status()).toBe(200);
     expect((await handoff.json()).manifest).toMatchObject({ formatVersion: 2, paymentContractVersion: 2, fiscalMappingStatus: 'UNREVIEWED', counts: { payments: 1, adjustments: 1 } });
     await expect(page.locator('#handoff-review-heading')).toBeFocused();
-    await expect(page.getByText('Steuerlich nicht freigegeben', { exact: true })).toBeVisible();
+    await expect(page.getByText('Steuerlich nicht freigegeben.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
     expect(downloads).toEqual([]);
     const db = await snapshot(userId, invoice.id);

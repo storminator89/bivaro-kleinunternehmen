@@ -192,7 +192,7 @@ describe('adjustment fields and immutable history presentation', () => {
   it('renders bounded original-linked document-history DTOs without private payment references', () => {
     const event = { ...correction, recordedAt: '2026-10-20T14:00:00.000Z', reason: '<script>unsafe</script>' };
     const html = renderToStaticMarkup(createElement(InvoiceAdjustmentEvidence, { adjustments: [event], adjustmentCount: 51 }));
-    for (const content of ['Korrektur: nie erhalten', 'Original-Zahlungsnachweis #3', 'Folgebeleg #8', '40,00', 'Buchungszuordnung', 'Protokolliert', 'neuesten 1 von 51', 'nicht fachlich freigegeben', '&lt;script&gt;']) expect(html).toContain(content);
+    for (const content of ['Korrektur: nie erhalten', 'Original-Zahlungsnachweis #3', 'Folgebeleg #8', '40,00', 'Buchungszuordnung', 'Protokolliert', 'neuesten 1 von 51', 'Steuerlich ungeprüft', '&lt;script&gt;']) expect(html).toContain(content);
     expect(html).not.toContain('Statement check'); expect(html).not.toContain('idempotency');
     expect(renderToStaticMarkup(createElement(InvoiceAdjustmentEvidence, {}))).toContain('in diesem Datenstand nicht enthalten');
     expect(renderToStaticMarkup(createElement(InvoiceAdjustmentEvidence, { adjustments: [], adjustmentCount: 0 }))).toContain('Keine Korrektur- oder Erstattungsbelege');

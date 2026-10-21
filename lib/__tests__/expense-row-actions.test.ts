@@ -60,7 +60,7 @@ describe('source-linked expense list actions', () => {
     expect(list.match(/<ExpenseRowActions /g)).toHaveLength(2);
     expect(list).not.toContain('onEdit(expense)'); expect(list).not.toContain('onDelete(expense.id)');
     const approval = readFileSync('components/purchases/purchase-expense-approval.tsx', 'utf8');
-    expect(approval).toContain('auch eine nachträgliche Kassenbuch-Zuordnung dieser beleggebundenen Ausgabe wird in dieser Version nicht unterstützt');
-    expect(readFileSync('components/purchases/expense-detail.tsx', 'utf8')).toContain('Eine nachträgliche Kassenbuch-Zuordnung wird in dieser Version nicht unterstützt');
+    expect(approval).toContain('keine Zahlungsauslösung oder spätere Kassenzuordnung');
+    expect(readFileSync('components/purchases/expense-detail.tsx', 'utf8')).toContain('nachträgliche Kassenbuch-Zuordnung gesperrt');
   });
 });

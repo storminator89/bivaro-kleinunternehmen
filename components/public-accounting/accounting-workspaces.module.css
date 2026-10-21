@@ -61,10 +61,6 @@
 .taxWorkspace :global(.tax-recommendations) > div:first-child { padding: var(--space-lg); }
 .taxWorkspace :global(.tax-recommendations) > div:last-child { padding: var(--space-lg); }
 .taxWorkspace :global(.tax-recommendations) li > span { background: none; width: 1rem; height: 1.5rem; }
-.taxRouteLinks { display: flex; flex-wrap: wrap; gap: var(--space-md); border-bottom: 1px solid var(--color-rule); padding-bottom: var(--space-sm); }
-.taxRouteLinks a { display: inline-flex; min-height: 44px; align-items: center; gap: var(--space-xs); color: var(--bivaro-color-muted); font-size: var(--text-sm); }
-.taxRouteLinks a:hover { color: var(--bivaro-color-accent); }
-.taxRouteLinks a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
 .taxAssumptionNote { padding: var(--space-md) var(--space-lg); border-top: 1px solid var(--color-rule); background: var(--color-paper-2); font-size: var(--text-xs); line-height: 1.6; color: var(--bivaro-color-muted); }
 @media(min-width:768px) { .cashOverview { grid-template-columns: minmax(0,1.25fr) minmax(0,1fr); } .cashBalance { padding: var(--space-xl); } .cashDaySummary { padding: var(--space-xl); } .dailyHeader { flex-direction: row; align-items: center; justify-content: space-between; } .dailyMetrics { grid-template-columns: repeat(4,minmax(0,1fr)); } .cashCountContent > div { grid-template-columns: minmax(0,1fr) minmax(0,1.5fr); } }
 @media(min-width:1280px) { .desktopJournal { display: block; border-top: 1px solid var(--color-rule); } .mobileJournal { display: none; } .desktopJournal table { table-layout: auto; } .desktopJournal th, .desktopJournal td { padding-block: var(--space-md); } }

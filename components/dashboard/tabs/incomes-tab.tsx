@@ -49,15 +49,15 @@ type IncomesTabProps = {
   onSubmit: (e: React.FormEvent) => void;
   formError: { field?: string; message: string } | null;
   customers: Customer[];
-  
+
   // Filter state
   filters: FilterState['incomes'];
   setFilters: (filters: FilterState['incomes']) => void;
   uniqueCustomers: string[];
-  
+
   // Data
   incomes: Income[];
-  
+
   // Pagination
   page: number;
   pageSize: number;
@@ -66,12 +66,12 @@ type IncomesTabProps = {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   loadIncomes: (page: number, pageSize: number) => Promise<void>;
-  
+
   // Export
   isExportingDocuments: boolean;
   exportError: string | null;
   onExportDocuments: () => void;
-  
+
   // Actions
   onEdit: (income: Income) => void;
   onDuplicate: (income: Income) => void;
@@ -114,9 +114,9 @@ export function IncomesTab({
   const hasFilters = Boolean(filters.searchTerm || filters.dateRange !== 'all' || filters.taxRelevant !== 'all' || filters.customer);
   return (
     <div className="bookkeeping-workspace space-y-6">
-      <details id="income-entry" className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
+      <details id="income-entry" hidden={!entryOpen} className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-6">
-          <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><DashboardIcon name="tile-incomes" size={44} /></span><span><span className="block text-sm font-semibold">Neue Einnahme</span><span className="block text-xs text-muted-foreground">Geschäftlichen Vorgang erfassen</span></span></span>
+          <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><DashboardIcon name="tile-incomes" size={44} /></span><span><span className="block text-sm font-semibold">Neue Einnahme</span></span></span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         </summary>
         <div className="border-t p-4 sm:p-6">
@@ -400,7 +400,7 @@ export function IncomesTab({
                 </div>
               </article>
             )) : (
-              <p className="p-6 text-center text-sm text-muted-foreground">{hasFilters ? 'Keine passenden Einnahmen. Ändern Sie die Suche oder setzen Sie die Filter zurück.' : 'Keine Einnahmen vorhanden. Erfassen Sie oben Ihre erste Einnahme.'}</p>
+              <p className="p-6 text-center text-sm text-muted-foreground">{hasFilters ? 'Keine passenden Einnahmen.' : 'Noch keine Einnahmen.'}</p>
             )}
           </div>
           <div className="hidden overflow-x-auto p-6 xl:block">

@@ -10,15 +10,15 @@ describe('fiscal-start UI safety and accessible recovery', () => {
     const html = renderToStaticMarkup(createElement(DocumentTaxProfileFields, base));
     expect(html).toMatch(/value=""[^>]*selected=""/);
     expect(html).not.toContain('value="small-business" selected=""');
-    expect(html).toContain('Bivaro nimmt § 19 nicht automatisch an');
+    expect(html).toContain('Kein gültiges Steuerprofil');
     expect(html).toContain('for="invoice-tax-mode"');
     expect(html).toContain('id="invoice-tax-mode"');
-    expect(html).toContain('Keine automatische Prüfung');
+    expect(html).toContain('Berechtigung und Leistungsort selbst prüfen');
   });
   it('opens settings separately so entered customer, date and item data stay in the editor', () => {
     const html = renderToStaticMarkup(createElement(DocumentTaxProfileFields, base));
     expect(html).toContain('href="/settings#fiscal-profile" target="_blank" rel="noopener noreferrer"');
-    expect(html).toContain('Ihre Eingaben bleiben in diesem Tab erhalten');
+    expect(html).toContain('Profiländerungen werden erst beim Öffnen eines neuen Dokuments übernommen');
     expect(html).not.toContain('<form');
   });
   it('requires a separate, initially unchecked document-specific acknowledgement', () => {

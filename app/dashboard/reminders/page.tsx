@@ -383,21 +383,20 @@ export default function RemindersPage() {
     <div className={styles.collections}>
       <div className="space-y-6">
         {/* Header */}
-        <PageHeader title="Mahnwesen" description="Fälligkeiten im Blick behalten und den nächsten Zahlungsschritt vorbereiten." section="Verkauf" />
+        <PageHeader title="Mahnwesen" />
 
         {stats && <dl className={styles.collectionSummary} aria-label="Forderungsübersicht"><div><dt>Ausstehender Betrag</dt><dd>{formatCurrency(stats.totalAmount)}</dd></div><div><dt>Überfällige Rechnungen</dt><dd>{stats.totalOverdue}</dd></div><div><dt>Mahngebühren</dt><dd>{formatCurrency(stats.totalFees)}</dd></div><div><dt>Offene Rechnungen</dt><dd>{invoices.length}</dd></div></dl>}
         {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm text-destructive"><p>{loadError}</p><Button variant="outline" onClick={loadData}>Erneut laden</Button></div>}
 
         <p className="text-sm text-muted-foreground">
-          Mahnungen und ihre Historie dokumentieren die interne Erfassung, nicht den E-Mail-Versand.
-          E-Mails werden nicht automatisch versendet.
+          Nur interne Erfassung · Kein automatischer E-Mail-Versand.
         </p>
 
         {/* Filter */}
         <Card className={styles.collectionFilter}>
           <CardHeader className="pb-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <CardTitle className="text-lg">Filter</CardTitle>
+
               <div className="flex min-w-0 flex-wrap items-center gap-4">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <Label htmlFor="filter-level" className="text-sm whitespace-nowrap">Mahnstufe:</Label>
@@ -418,9 +417,9 @@ export default function RemindersPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
+          {stats && Object.values(stats.byLevel).some(count => count > 0) && <CardContent className="pt-0">
             <div className="flex flex-wrap gap-2">
-              {Object.entries(REMINDER_LEVEL_LABELS).map(([level, label]) => (
+              {Object.entries(REMINDER_LEVEL_LABELS).filter(([level]) => (stats.byLevel[parseInt(level) as keyof typeof stats.byLevel] ?? 0) > 0).map(([level, label]) => (
                 <Badge
                   key={level}
                   variant={REMINDER_LEVEL_VARIANTS[parseInt(level)]}
@@ -430,7 +429,7 @@ export default function RemindersPage() {
                 </Badge>
               ))}
             </div>
-          </CardContent>
+          </CardContent>}
         </Card>
 
         {isLoading ? (
@@ -498,7 +497,7 @@ export default function RemindersPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <HelpCircle className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base">Wie funktioniert das Mahnwesen?</CardTitle>
+                    <CardTitle className="text-base">Hilfe zum Mahnwesen</CardTitle>
                   </div>
                   {showInfoOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </div>
@@ -556,9 +555,8 @@ export default function RemindersPage() {
                   <div>
                     <h4 className="mb-3 flex items-center gap-2 font-semibold"><Info className="h-4 w-4" />Vor dem manuellen Versand</h4>
                     <div className="space-y-3 text-sm">
-                      <Alert><AlertCircle className="h-4 w-4" /><AlertTitle>Aktuellen Zahlungsstand prüfen</AlertTitle><AlertDescription>Belegte Teilzahlungen werden abgezogen. Bei neuen Zahlungen müssen Sie den Entwurf erneut prüfen; ungeklärte Nachweise bleiben gesperrt.</AlertDescription></Alert>
-                      <div className="space-y-2 rounded-lg bg-muted/50 p-3"><p className="font-medium">Ihre Entscheidung, keine automatische Forderung</p><ul className="space-y-1 text-xs text-muted-foreground"><li>Gebühren starten bei 0 EUR und werden weder empfohlen noch berechnet.</li><li>Eine manuell eingetragene Gebühr und ihre Grundlage prüfen Sie selbst.</li><li>Die Mahnstufe dokumentiert einen internen Schritt, keine rechtliche Bewertung.</li></ul></div>
-                      <div className="space-y-2 rounded-lg bg-muted/50 p-3"><p className="font-medium">Kein automatischer Versand oder Folgeschritt</p><p className="text-xs text-muted-foreground">Vorschau und Textdownload versenden nichts. Die interne Erfassung bucht keine Zahlung. Ob, wann und auf welchem Weg Sie die Nachricht versenden oder weitere Schritte wählen, entscheiden Sie selbst.</p></div>
+                      <Alert><AlertCircle className="h-4 w-4" /><AlertTitle>Aktuellen Zahlungsstand prüfen</AlertTitle><AlertDescription>Neue Zahlungen erfordern eine erneute Prüfung. Ungeklärte Nachweise bleiben gesperrt.</AlertDescription></Alert>
+                      <p className="text-xs text-muted-foreground">Gebühren und Mahnstufe selbst prüfen. Interne Erfassung; kein Versand und keine Zahlungsbuchung.</p>
                     </div>
                   </div>
                 </div>
@@ -570,7 +568,7 @@ export default function RemindersPage() {
 
         {/* Mahnung erstellen Dialog */}
         {invoiceToPay && <FullPaymentDialog key={invoiceToPay.id} invoice={invoiceToPay} onClose={() => setInvoiceToPay(null)} onSuccess={handlePaymentSuccess} />}
-        <p className="text-sm text-muted-foreground">Nach Teilzahlungen sind Mahnaktionen bis zur Restbetragsprüfung gesperrt. Über „Restbetrag prüfen“ können Sie einen aktuellen Textentwurf vorbereiten. Ungeklärte Zahlungsnachweise bleiben gesperrt; es wird kein Restbetrag geschätzt.</p>
+        <p className="text-sm text-muted-foreground">Nach Teilzahlungen zuerst „Restbetrag prüfen“. Bei ungeklärten Zahlungsnachweisen bleiben Mahnaktionen gesperrt.</p>
         {showCreateReminder && selectedInvoice && <ReminderWorkbenchDialog key={selectedInvoice.id} invoice={selectedInvoice} onRecorded={loadData} onClose={() => { setShowCreateReminder(false); setSelectedInvoice(null); }} />}
 
       </div>

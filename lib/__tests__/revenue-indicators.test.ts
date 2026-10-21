@@ -13,7 +13,7 @@ const html = (history: AnnualContextRevision[] = [], year = 2026) => renderToSta
 describe('read-only revenue indicators with explicit input coverage', () => {
   it('labels signed payment movements as operational, never fiscal approval', () => {
     const content = renderToStaticMarkup(createElement(RevenueIndicators, { basis: { ...basis(), inAppRevenue: -10 } }));
-    for (const text of ['Operativer Zahlungssaldo in Bivaro', '-10,00', 'abzüglich Fehlerkorrekturen', 'tatsächlich dokumentierter Erstattungen', 'Steuerliche Zuordnung prüfpflichtig, nicht fachlich freigegeben', 'kein geprüfter Gesamtumsatz nach § 19 UStG']) expect(content).toContain(text);
+    for (const text of ['Operativer Zahlungssaldo in Bivaro', '-10,00', 'abzüglich Fehlerkorrekturen', 'Erstattungen', 'Steuerlich ungeprüft', 'kein Gesamtumsatz nach § 19 UStG']) expect(content).toContain(text);
     expect(content).not.toContain('Steuerrelevante, berücksichtigte Einnahmen');
   });
   it('distinguishes absent, partial and self-declared complete context without inferring current completeness', () => {
@@ -59,7 +59,7 @@ describe('read-only revenue indicators with explicit input coverage', () => {
     expect(basis([], 2027).reference).toBeNull();
     for (const content of [html(), html([row()]), html([row({ previousYearTurnoverCents: '2500001' })])]) {
       expect(content).not.toMatch(/Sofort steuerpflichtig|Nächstes Jahr steuerpflichtig|Im Rahmen/);
-      expect(content).toContain('Steuerprofil, Rechnungen und Zahlungen bleiben unverändert');
+      expect(content).toContain('Keine automatische Steuer-Einstufung');
     }
   });
   it('labels prior and current years, provenance, effective date, source and correction link accessibly', () => {

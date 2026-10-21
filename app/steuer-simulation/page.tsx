@@ -3,7 +3,6 @@
 import { PageHeader } from "@/components/page-header";
 import { useEffect, useMemo, useState, useCallback, useRef, type ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import styles from "@/components/public-accounting/accounting-workspaces.module.css";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -319,7 +318,7 @@ export default function SteuerSimulationPage() {
 
   const recommendations = useMemo<Recommendation[]>(() => {
     const recs: Recommendation[] = [];
-    if (!simulationInputsValid) return recs;
+    if (!sourceAvailable || !summary?.annualBasis || !simulationInputsValid) return recs;
 
     if (profit < 0) {
       recs.push({
@@ -415,15 +414,17 @@ export default function SteuerSimulationPage() {
 
     if (recs.length === 0) {
       recs.push({
-        tone: "positive",
-        title: "Aktuelle Struktur wirkt effizient",
-        description: "Es wurden keine offensichtlichen Optimierungspotenziale erkannt. Dokumentieren Sie die Annahmen für die Steuerberatung und prüfen Sie regelmäßig neue Investitions- oder Vorsorgechancen.",
+        tone: "info",
+        title: "Keine weiteren Hinweise",
+        description: "Annahmen und steuerliche Zuordnung mit Ihrer Steuerberatung prüfen.",
       });
     }
 
     return recs;
   }, [
     simulationInputsValid,
+    sourceAvailable,
+    summary?.annualBasis,
     effectiveTaxRate,
     expenseCoverage,
     formatCurrency,
@@ -462,7 +463,7 @@ export default function SteuerSimulationPage() {
   return (
     <TooltipProvider delayDuration={800}>
       <div className={`${styles.taxWorkspace} tax-studio space-y-6`}>
-        <PageHeader title="Steuer-Simulation" description="Spielen Sie Szenarien mit Ihren steuerrelevanten EÜR-Daten durch und sehen Sie direkt, wie sich Ihre Steuerlast verändert." section="Auswertungen" actions={<>
+        <PageHeader title="Steuer-Simulation" actions={<>
 <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1 space-y-2 sm:min-w-32">
               <Label htmlFor="taxYear" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -506,38 +507,33 @@ export default function SteuerSimulationPage() {
             </Button>
           </div>
 </>} />
-        <nav className={styles.taxRouteLinks} aria-label="Simulation und Datenbasis">
-          <a href="#overview-heading">Datenbasis</a><a href="#parameters-heading">Annahmen anpassen</a><a href="#simulation-result">Ergebnis prüfen</a><Link href="/dashboard?tab=eur">Zur EÜR<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link>
-        </nav>
         {error && (
           <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}
-        {Boolean(summary?.warnings.length) && <details className="tax-method-notes" open={!taxCalculationSupported}>
-          <summary>Datenbasis und Grenzen<ChevronDown aria-hidden="true" /></summary>
-          <div>{summary?.warnings.map(warning => <p key={warning}>{warning}</p>)}</div>
-        </details>}
         {!taxDataSupported && summary && (
           <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Für diesen Datenstand wird keine endgültige Steuerlast angezeigt. Die Simulation unterstützt nur Jahresansichten ohne Verlust, Verlustvortrag oder Verlustrücktrag; die Vollständigkeit außerhalb Bivaro wird nicht geprüft.
+            Keine Berechnung für diesen Zeitraum oder Verlustfall. Details unter „Datenbasis und Grenzen“.
           </div>
         )}
 
         <section className="tax-source-context" aria-labelledby="overview-heading">
           <div className="tax-source-profit"><span className="tax-source-label">Datenbasis · In-App-EÜR · {taxYear}</span><h2 id="overview-heading">Gewinn laut EÜR</h2><strong>{loading ? '—' : sourceAvailable ? formatCurrency(profit) : 'Nicht verfügbar / fachlich zu prüfen'}</strong><p>{sourceAvailable ? 'Vor Steuern · steuerrelevante Buchungen' : 'Keine bestätigte steuerliche Datenbasis'}</p></div>
           <dl><div><dt>Betriebseinnahmen</dt><dd>{loading ? '—' : sourceAvailable ? formatCurrency(totalIncome) : 'Nicht verfügbar'}</dd></div><div><dt>Betriebsausgaben</dt><dd>{loading ? '—' : sourceAvailable ? formatCurrency(totalExpenses) : 'Nicht verfügbar'}</dd></div><div><dt>Buchungen</dt><dd>{loading ? '—' : sourceAvailable ? summary.sourceCount : 'Nicht verfügbar'}</dd></div></dl>
-          <p className="tax-source-period">Nur In-App-Buchungen; externe Einnahmen und Ausgaben nicht enthalten. Eigene Jahreskontextangaben werden nicht addiert. Keine Aussage zum Kleinunternehmerstatus.</p>
-          {!loading && summary && <p className="tax-source-period">Geladene Daten für Regeljahr {summary.year} · Stand {new Date(summary.dataAsOf).toLocaleString("de-DE")} · Regelpaket {summary.ruleVersion}. Ihre veränderbaren Annahmen stehen im Parameterbereich.</p>}
+          <details className="tax-source-period"><summary className="w-fit cursor-pointer py-2">Datenbasis und Grenzen</summary>
+          <p>Nur In-App-Buchungen; externe Beträge fehlen. Jahreskontext wird nicht addiert. Kleinunternehmerstatus ungeprüft.</p>
+          {!loading && summary && <p className="tax-source-period">Geladene Daten für Regeljahr {summary.year} · Stand {new Date(summary.dataAsOf).toLocaleString("de-DE")} · Regelpaket {summary.ruleVersion}. </p>}
           <p className="tax-source-period">Zeitraum: {selectedTimeRange === "thisYear" ? `Steuerjahr ${taxYear}` : selectedTimeRange === "lastYear" ? `Steuerjahr ${taxYear - 1}` : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}</p>
+          {summary?.warnings.map(warning => <p key={warning}>{warning}</p>)}
+          </details>
         </section>
         <div className="tax-mobile-result"><span>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}<strong>{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</strong></span><a href="#simulation-result">Zum Ergebnis<ArrowUpRight aria-hidden="true" /></a></div>
         <div className="tax-workspace">
         <section aria-labelledby="parameters-heading" className="tax-parameters rounded-[var(--radius-card)] border border-border bg-card">
           <div className="flex flex-col gap-4 border-b border-border p-6 sm:flex-row sm:items-start sm:justify-between sm:p-8">
             <div className="space-y-2">
-              <h2 id="parameters-heading" className="text-2xl font-semibold tracking-tight">Parameter für die Simulation</h2>
-              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Passen Sie Vorsorge, Beschäftigungsverhältnis und Steuersätze an. Das Ergebnis aktualisiert sich sofort.</p>
+              <h2 id="parameters-heading" className="text-2xl font-semibold tracking-tight">Annahmen</h2>
             </div>
             <Button variant="ghost" onClick={resetDefaults} className="self-start text-muted-foreground">
               Standardwerte
@@ -565,15 +561,11 @@ export default function SteuerSimulationPage() {
                 <option value="gewerblich">Gewerbebetrieb</option>
                 <option value="freiberuflich">Freiberufliche Tätigkeit</option>
               </select>
-              <p className="mt-2 text-xs text-muted-foreground">Bei freiberuflicher Tätigkeit wird keine Gewerbesteuer angesetzt. Die Einordnung muss fachlich zutreffen.</p>
             </div>
             <div className="tax-parameter-group">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <Label className="text-base font-semibold">Beschäftigungsverhältnis</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Führen Sie das Gewerbe haupt- oder nebenberuflich?
-                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-1 rounded-[var(--radius-input)] border border-border bg-background p-1">
                   <Button
@@ -645,7 +637,7 @@ export default function SteuerSimulationPage() {
                       onChange={(event) => setAutoCalcSocial(event.target.checked)}
                     />
                     <Label htmlFor="autoCalcSocial" className="font-normal">
-                      Sozialversicherungsbeiträge näherungsweise aus Bruttogehalt berechnen
+                      Sozialabgaben aus Bruttogehalt schätzen
                     </Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -822,9 +814,9 @@ export default function SteuerSimulationPage() {
         <section id="simulation-result" aria-labelledby="result-heading" className="tax-result rounded-[var(--radius-card)] border border-border bg-card">
           <div className="tax-result-hero">
             <span className="tax-result-kicker"><span aria-hidden="true" />Live-Simulation · {taxYear}</span>
-            <h2 id="result-heading">Ergebnis der Simulation</h2>
+            <h2 id="result-heading">Ergebnis</h2>
             <p className="tax-result-amount" aria-live="polite">{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</p>
-            <p>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"} · auf Basis Ihrer Annahmen</p>
+            <p>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}</p>
           </div>
           <div className={styles.taxActiveAssumptions} aria-label="Aktive Simulationsannahmen"><span>{businessType === "gewerblich" ? "Gewerbebetrieb" : "Freiberufliche Tätigkeit"}</span><span>{employmentType === "side-business" ? "Nebenberuflich" : "Hauptberuflich"}</span><span>Abzüge {simulationInputsValid ? formatCurrency(totalDeductions) : "nicht berechnet"}</span></div>
           <div className="space-y-6 p-6 sm:p-8">
@@ -902,22 +894,21 @@ export default function SteuerSimulationPage() {
             </div></details>
             {profit < 0 && (
               <div className="rounded-[var(--radius-input)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
-                Sie weisen aktuell einen Verlust aus. Nutzen Sie die Simulation, um zu prüfen, ab welchem Gewinn eine Steuerlast entsteht.
+                Verlustfall: keine Steuerberechnung.
               </div>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Hinweis: Die Simulation ersetzt keine steuerliche Beratung. Für verbindliche Aussagen wenden Sie sich bitte an Ihre Steuerberatung.
+              Schätzung · keine Steuerberatung.
             </p>
           </div>
         </section>
 
-        <section aria-labelledby="recommendations-heading" className="tax-recommendations rounded-[var(--radius-card)] border border-border bg-card">
-          <div className="border-b border-border p-6 sm:p-8">
-            <h2 id="recommendations-heading" className="mt-2 text-2xl font-semibold tracking-tight">Empfehlungen zur Steueroptimierung</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">Konkrete Ansatzpunkte aus Ihren aktuellen EÜR-Daten und Simulationseinstellungen.</p>
-          </div>
+        <details aria-labelledby="recommendations-heading" className="tax-recommendations rounded-[var(--radius-card)] border border-border bg-card">
+          <summary className="cursor-pointer p-4">
+            <h2 id="recommendations-heading" className="inline text-base font-semibold">Prüfhinweise</h2>
+          </summary>
           <div className="p-6 sm:p-8">
-            {!simulationInputsValid && <p className="text-sm text-muted-foreground">Empfehlungen werden erst nach Korrektur der Eingaben angezeigt.</p>}
+            {!sourceAvailable || !summary?.annualBasis ? <p className="text-sm text-muted-foreground">Hinweise benötigen geladene Daten für ein vollständiges Steuerjahr.</p> : !simulationInputsValid && <p className="text-sm text-muted-foreground">Eingaben korrigieren, um Hinweise zu erhalten.</p>}
             <ul className="divide-y divide-border">
               {recommendations.map((rec, index) => {
                 const Icon = recommendationIconMap[rec.tone];
@@ -938,7 +929,7 @@ export default function SteuerSimulationPage() {
               })}
             </ul>
           </div>
-        </section>
+        </details>
         </aside></div>
       </div>
     </TooltipProvider>

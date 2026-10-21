@@ -162,20 +162,19 @@ export function QuotesTab({
 
     return (
         <div className={`space-y-6 ${styles.records}`}>
-            <section aria-labelledby="quote-next-heading" className="rounded-xl border bg-card p-4 sm:p-6">
-                <h2 id="quote-next-heading" className="text-lg font-semibold">Was ist als Nächstes dran?</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Alle Ihre Angebote im Blick – unabhängig von Suche und Seite. Status und Rückmeldungen erfassen Sie selbst; Bivaro bestätigt nichts im Namen Ihrer Kunden.</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <section aria-labelledby="quote-next-heading">
+                <h2 id="quote-next-heading" className="sr-only">Nächste Schritte</h2>
+
+                <div className="flex flex-wrap gap-2">
                     {([
                         ['FOLLOW_UP', '1 · Nachfassen', 'Heute oder früher vorgemerkt'],
                         ['NEEDS_RESPONSE', '2 · Rückmeldung klären', 'Versendet, Gültigkeit vorbei'],
                         ['READY_TO_INVOICE', '3 · Rechnung vorbereiten', 'Von Ihnen als angenommen erfasst'],
-                    ] as const).map(([key, title, detail]) => <button key={key} type="button" aria-pressed={statusFilter === key} disabled={isLoading || isError} onClick={() => onStatusFilterChange(statusFilter === key ? 'all' : key)} className={`min-h-24 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${statusFilter === key ? 'border-primary bg-positive-surface' : 'border-border'}`}>
-                        <span className="flex items-center justify-between gap-2 font-medium"><span>{title}</span><span className="text-xl tabular-nums">{isLoading || isError || !workflowCounts ? '–' : workflowCounts[key]}</span></span>
-                        <span className="mt-1 block text-sm text-muted-foreground">{detail}</span>
+                    ] as const).map(([key, title, detail]) => <button key={key} type="button" title={detail} aria-pressed={statusFilter === key} disabled={isLoading || isError} onClick={() => onStatusFilterChange(statusFilter === key ? 'all' : key)} className={`min-h-11 rounded-lg border bg-card px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${statusFilter === key ? 'border-primary bg-positive-surface' : 'border-border'}`}>
+                        <span className="flex items-center justify-between gap-3 font-medium"><span>{title}</span><span className="tabular-nums">{isLoading || isError || !workflowCounts ? '–' : workflowCounts[key]}</span></span>
                     </button>)}
                 </div>
-                <p className="mt-3 text-sm text-muted-foreground">In-App-Aufgaben nach deutschem Kalender. Ein Angebot kann Nachfassen und Rückmeldung benötigen. Keine E-Mails oder automatischen Erinnerungen.</p>
+
             </section>
             {/* Header card */}
             <div className="ledger-list overflow-hidden rounded-xl border bg-card">
@@ -247,7 +246,7 @@ export function QuotesTab({
                             </div>
                             {quote.validUntil && <p className="text-xs text-muted-foreground">Gültig bis {new Date(quote.validUntil).toLocaleDateString('de-DE')}</p>}
                             {quoteNextAction(quote, workflowDate) && <p className="text-sm font-medium text-primary">{quoteNextAction(quote, workflowDate)?.label}</p>}
-                            {!quote.convertedInvoice && quoteConversionBlockReason(quote, workflowDate) && <p className="text-sm text-muted-foreground">Vor dem Rechnungsentwurf: Rückmeldung klären und Angebot bewusst wieder öffnen oder Annahme erfassen.</p>}
+                            {!quote.convertedInvoice && quoteConversionBlockReason(quote, workflowDate) && <p className="text-sm text-muted-foreground">Rückmeldung klären.</p>}
                             {quote.quoteFollowUpOn && <p className="text-sm text-muted-foreground">Wiedervorlage: {formatBusinessDateDisplay(quote.quoteFollowUpOn)}</p>}
                             <QuoteStatusBadge status={quote.status} onStatusChange={(newStatus) => onStatusChange(quote.id, newStatus)} />
                             <div className="flex flex-wrap gap-2">
@@ -263,7 +262,7 @@ export function QuotesTab({
                             </div>
                         </article>
                     )) : (
-                        <div className="ledger-empty"><DashboardIcon name="nav-quotes" size={48} /><h3>{searchTerm || statusFilter !== 'all' ? 'Keine passenden Angebote' : 'Ihr nächstes Angebot beginnt hier'}</h3><p>{searchTerm || statusFilter !== 'all' ? 'Ändern Sie Ihre Suche oder setzen Sie die Filter zurück.' : 'Bereiten Sie Leistungen und Preise vor und erstellen Sie daraus später eine Rechnung.'}</p>{!searchTerm && statusFilter === 'all' && <Button variant="outline" onClick={onOpenCreateModal}>Erstes Angebot erstellen</Button>}</div>
+                        <div className="ledger-empty"><DashboardIcon name="nav-quotes" size={48} /><h3>{searchTerm || statusFilter !== 'all' ? 'Keine passenden Angebote' : 'Noch keine Angebote'}</h3>{(searchTerm || statusFilter !== 'all') && <p>Suche oder Filter ändern.</p>}{!searchTerm && statusFilter === 'all' && <Button variant="outline" onClick={onOpenCreateModal}>Erstes Angebot erstellen</Button>}</div>
                     )}
                 </div>
 
@@ -319,7 +318,7 @@ export function QuotesTab({
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            {!quote.convertedInvoice && quoteConversionBlockReason(quote, workflowDate) && <p className="mb-2 max-w-64 text-left text-sm text-muted-foreground">Vor dem Rechnungsentwurf bitte Rückmeldung klären.</p>}
+                                            {!quote.convertedInvoice && quoteConversionBlockReason(quote, workflowDate) && <p className="mb-2 max-w-64 text-left text-sm text-muted-foreground">Rückmeldung klären.</p>}
                                             {quote.convertedInvoice && <Button variant="outline" size="sm" className="mb-2 mr-2" asChild><Link href={`/history?invoiceId=${quote.convertedInvoice.id}`}>Verknüpfte Rechnung ansehen</Link></Button>}
                                             <Button variant="outline" size="sm" className="mb-2" onClick={() => setWorkflowQuote(quote)}>Rückmeldung &amp; Nachfassen</Button>
                                             {quote.quoteFollowUpOn && <p className="mb-2 text-sm text-muted-foreground">Wiedervorlage: {formatBusinessDateDisplay(quote.quoteFollowUpOn)}</p>}
@@ -423,7 +422,6 @@ export function QuotesTab({
                         </TableBody>
                     </Table>
                 </div>
-
                 </div>
                 {/* Pagination */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 pb-6">

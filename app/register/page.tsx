@@ -157,31 +157,15 @@ export default function RegisterPage() {
 
   return (
     <div className={styles.authLayout}>
-      <div className={styles.authStory}>
-        <h2 className="min-w-0 [overflow-wrap:anywhere]">
-          Ein klarer Start für Ihre Buchhaltung.
-        </h2>
-        <p className="mt-6 max-w-sm text-lg leading-8 text-muted-foreground">
-          Erstellen Sie Ihr Konto und halten Sie Geschäftsvorgänge, Kunden und Auswertungen an einem Ort zusammen.
-        </p>
-        <dl><div><dt>Ihr Konto</dt><dd>Persönlicher Zugang zu dieser Bivaro-Instanz.</dd></div><div><dt>Ihre Arbeit</dt><dd>Rechnungen, Belege und Kunden gemeinsam verwalten.</dd></div></dl>
-      </div>
-
       <Card className={styles.authCard}>
         <CardHeader className="space-y-4 pb-5">
           <div>
             <h1 className="text-3xl font-semibold tracking-[-0.03em]">
               {isFirstUser ? "Admin-Konto erstellen" : "Konto erstellen"}
             </h1>
-            <CardDescription className="mt-2">
-              {isFirstUser
-                ? "Erstellen Sie das erste Administrator-Konto für diese Instanz."
-                : "Erstellen Sie ein neues Konto, um loszulegen."}
-            </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <p className="mb-5 text-sm leading-6 text-muted-foreground">Ein Konto für diese Installation ist kein Kauf und keine neue Firmeninstanz. <a href="/help#angebot" className="underline underline-offset-4">Angebotsstatus und Zuständigkeit prüfen</a>. Bei verlorenem Zugang nutzen Sie die <Link href="/help/access" className="underline underline-offset-4">Zugangshilfe</Link>, nicht ein neues Konto.</p>
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {error && (
               <div
@@ -195,7 +179,7 @@ export default function RegisterPage() {
             {isFirstUser && (
               <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
                 <Shield className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>Dieses Konto erhält automatisch Administrator-Rechte.</span>
+                <span>Erstes Konto mit Administrator-Rechten.</span>
               </div>
             )}
             {bootstrapRequired && (
@@ -210,9 +194,6 @@ export default function RegisterPage() {
                   onChange={(e) => setSetupToken(e.target.value)}
                   required
                 />
-                <p className="text-xs text-muted-foreground">
-                  Der Nachweis wird nur einmal akzeptiert und nicht gespeichert.
-                </p>
               </div>
             )}
             <div className="space-y-2">
@@ -264,7 +245,7 @@ export default function RegisterPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">{PASSWORD_POLICY_HINT}</p>
+              <details className="text-xs text-muted-foreground"><summary className="min-h-11 cursor-pointer py-3">Passwortregeln</summary><p>{PASSWORD_POLICY_HINT}</p></details>
               {password.length > 0 && (
                 <div className="space-y-1">
                   <div className="flex gap-1" aria-hidden="true">
@@ -329,10 +310,11 @@ export default function RegisterPage() {
               )}
             </Button>
           </form>
+          <details className="mt-3 text-sm text-muted-foreground"><summary className="min-h-11 cursor-pointer py-3">Konto und Zugang</summary><p>Konto für diese Installation; kein Kauf.</p><div className="flex flex-wrap gap-x-4"><a href="/help#angebot" className="inline-flex min-h-11 items-center underline underline-offset-4">Angebot und Betreiber</a><Link href="/help/access" className="inline-flex min-h-11 items-center underline underline-offset-4">Zugangshilfe</Link></div></details>
         </CardContent>
         <CardFooter className="border-t border-border/80 pt-5">
           <div className="w-full text-center text-sm text-muted-foreground">
-            Sie haben bereits ein Konto?{" "}
+
             <Link href="/login" className="font-medium text-foreground hover:underline">
               Anmelden
             </Link>

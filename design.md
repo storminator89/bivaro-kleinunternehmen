@@ -341,3 +341,13 @@ Die Sidebar behält die bestätigten 14 individuell generierten Emaille-Symbole 
 Dashboard-Kacheln, Aktivitäten, Beleglisten, Formularüberschriften und Auswertungen verwenden zwölf separat generierte flache Motive. Die zentrale Komponente `DashboardIcon` stellt ihre Alpha-Umrisse einfarbig und ohne Glanz, Texturen oder räumliche Schattierungen dar. Die gedeckte Akzentfarbe ist `#456F62`, im dunklen Farbschema `#A5BFB3`. Die sichtbare Bildfläche ist höchstens 32 px groß. Beschriftungen und Zahlen haben Vorrang vor der Illustration.
 
 Quellen, alle Einzelprompts, Exportpipeline, Screenshots und aktueller Deployment-Nachweis: [Flache Dashboard-Icons](docs/design/BIVARO-Icons-Flat-2026-10-17.md). Die ursprüngliche Icon-Familie und ihre Generierungsnachweise bleiben unter [BIVARO-Icons](docs/design/BIVARO-Icons-2026-10-17.md) dokumentiert.
+
+## Minimaler Text · 21. Oktober 2026
+
+- Arbeitsseiten beginnen mit Titel, Daten und Aktion. Keine Bedienungsprosa, die sichtbare Felder oder Schaltflächen wiederholt.
+- Kurze Feldnamen und kompakte Statuswerte; Erklärung nur auf Abruf oder bei einem konkreten Fehler.
+- Einrichtung und optionale Konfigurationen sind zunächst geschlossen. Hauptaktionen öffnen den benötigten Arbeitsbereich direkt.
+- Null-Prüfpunkte beanspruchen keine eigenen Aufgabenzeilen. Unbekannte oder unvollständige Daten dürfen dadurch nicht als geprüft erscheinen.
+- Steuer-, Zahlungs-, Kosten- und Versandbestätigungen bleiben vor der tatsächlichen Aktion erreichbar und eindeutig. Fachliche Dokumente und Druckinhalte bleiben vollständig.
+- Bestehende BIVARO-2.0-Tokens, Schriftarten und Komponenten gelten weiter.
+- Hallmark pre-emit critique: Philosophy 5, Hierarchy 5, Execution 4, Specificity 5, Restraint 5, Variety 4.

@@ -86,8 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <footer className="border-t border-border/80 bg-background py-5">
           <div className="mx-auto flex w-full max-w-[90rem] flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} Bivaro |
-              Alle Beträge werden in Euro (€) angezeigt
+              &copy; {new Date().getFullYear()} Bivaro
             </p>
             <nav aria-label="Weitere Informationen" className="flex flex-wrap gap-4 text-sm text-muted-foreground"><a href="/help#umfang" className="underline underline-offset-4">Umfang und Grenzen</a><Link href="/help/access" className="underline underline-offset-4">Zugangshilfe</Link><a href="/help#angebot" className="underline underline-offset-4">Angebot und Quellcode</a></nav>
           </div>
@@ -147,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Mobile top bar */}
         <header className="app-topbar sticky top-0 z-40 border-b border-border bg-card lg:hidden">
           <div className="flex h-16 items-center justify-between gap-2 px-4">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" aria-label="Menü öffnen">
@@ -172,7 +171,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <PageHeading />
               </Suspense>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <Suspense fallback={null}><CommandPaletteTrigger className="size-11 justify-center p-0 [&>span]:hidden [&>kbd]:hidden" /></Suspense>
               <ThemeToggle />
               <UserMenu />
@@ -189,8 +188,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <footer className="border-t border-border/80 bg-background py-5">
           <div className="mx-auto w-full max-w-[90rem] px-4 sm:px-6 xl:px-10">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} Bivaro |
-              Alle Beträge werden in Euro (€) angezeigt
+              &copy; {new Date().getFullYear()} Bivaro
             </p>
           </div>
         </footer>

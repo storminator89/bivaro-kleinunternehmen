@@ -144,7 +144,7 @@ test('shows only the remaining reminder balance and blocks internal, preview and
       await expect(record).toContainText('80,00');
       await expect(record.getByRole('button', { name: 'Zahlungserinnerung', exact: true })).toHaveCount(0);
       await expect(record.getByRole('button', { name: width < 1280 ? 'Zahlung erfassen' : `Zahlung für Rechnung ${invoiceNumber} erfassen`, exact: true })).toBeVisible();
-      await expect(page.getByText('Nach Teilzahlungen sind Mahnaktionen bis zur Restbetragsprüfung gesperrt.', { exact: false })).toBeVisible();
+      await expect(page.getByText('Nach Teilzahlungen zuerst „Restbetrag prüfen“.', { exact: false })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`partial-reminder-guard-${width}.png`), fullPage: true });
     }
