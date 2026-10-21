@@ -112,7 +112,6 @@ jobs:
               'daily-actions-390.png',
               'daily-actions-1440.png',
               'service-plan-review-mobile-390.png',
-              'service-plan-workspace-desktop-1440.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
@@ -139,7 +138,11 @@ jobs:
               skip('no allowlisted images were produced')
           if len(matches) > len(allowed) or len({source.name for source, _ in matches}) != len(matches):
               skip('file count exceeds the exact allowlist or basenames are duplicated')
-          if sum(info.st_size for _, info in matches) > limit:
+          total = sum(info.st_size for _, info in matches)
+          print(f'Synthetic screenshot budget: {len(matches)}/{len(allowed)} files, {total}/{limit} bytes.')
+          for source, info in sorted(matches, key=lambda match: match[0].name):
+              print(f'Allowlisted synthetic PNG: {source.name} ({info.st_size} bytes).')
+          if total > limit:
               skip('combined size exceeds 5 MiB')
 
           images = {}

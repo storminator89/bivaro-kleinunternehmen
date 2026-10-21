@@ -48,24 +48,33 @@ and KPI behavior. Scoped lint and syntax checks passed, as did private SQLite an
 PostgreSQL schema validation/generation. These are not full semantic typechecking
 or full-repository acceptance.
 
-Browser discovery lists **71 authored cases across 18 files**, including two
-recurring journeys. The screenshot allowlist is the reviewed **29-name base plus
-two recurring views (31 names)**, retaining all 23 accepted baseline filenames.
-An earlier 35-view base attempt exceeded the unchanged **5 MiB** aggregate cap;
-only new, unaccepted base views were consolidated after review, with functional
-360/390/1440-px assertions retained. **One-day** retention and all evidence guards
-are unchanged. The new recurring browser journeys, actual 31-image aggregate
-size and visual quality have **not** been verified. Full build, semantic and
-browser acceptance remain pending.
+Hosted verification passed **1,698 unit tests with two existing skips**, lint,
+full semantic typechecking, production build, the security browser case and the
+production-dependency audit. The functional run passed **70 of 71 cases**; its
+remaining failure was an ambiguous page-level error-alert assertion, now scoped
+to the unique application error. That correction still needs a fresh full run;
+the package does not yet claim complete browser acceptance.
 
-The two recurring images are normal **390×844** and **1440×1000** viewport
-captures, not full-page or full-form claims. Mobile evidence targets the reviewed
-customer/period/exact amount and no-financial-effect warning; confirmation and
-actions are checked separately by scrolling. Desktop evidence targets the real
-plan amount, next period, review/edit/pause actions and existing-draft history
-link below the visible header. Geometry and actual DOM-hit checks are authored
-for these critical details; no UI content is hidden, resized or masked. These
-capture assertions and final PNG legibility still require browser verification.
+Browser discovery lists **71 authored cases across 18 files**, including two
+recurring journeys. The screenshot allowlist is the complete accepted **29-name
+base plus one recurring mobile review (30 names)**. An earlier 31-view recurring
+attempt exceeded the unchanged **5 MiB** aggregate cap and safely delivered no
+artifact. Only the new, unaccepted desktop recurring image was removed from the
+evidence contract; all 29 accepted base views and all 71 functional cases remain.
+**One-day** retention and all evidence guards are unchanged. Safe allowlisted
+filename/byte diagnostics precede the aggregate check. The current 30-image
+aggregate, integrity and visual quality have **not** been verified.
+
+The new recurring image is a normal **390×844** viewport capture, not a full-page
+or full-form claim. It targets the reviewed customer, period, exact amount and
+no-financial-effect warning; confirmation and actions are checked separately by
+scrolling. The **1440×1000** desktop assertions still check the real plan amount,
+next period, review/edit/pause actions and existing-draft history link below the
+visible header, including geometry and actual DOM hits. **Desktop is functionally
+and geometrically tested but is not visually evidenced by this artifact.** No
+whole-workspace visual claim is made, and no UI is hidden, resized, masked,
+cropped or downscaled to fit the budget. Final mobile PNG legibility and the
+current complete browser run remain acceptance gates.
 
 **Known limitation:** a full backup containing a supplier-linked manually
 reviewed photo can restore to a new owner, replay the same archive and restore

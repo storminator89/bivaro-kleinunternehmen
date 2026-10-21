@@ -171,7 +171,8 @@ test('reviews one recurring period, recovers lost responses, edits the same draf
     });
     for (const value of [card.getByRole('heading', { name: 'SYNTHETISCH · IT-Betreuung monatlich', exact: true }), card.locator('p.tabular-nums').filter({ hasText: '235,62 €' }), card.getByText('31.03.2000 – 29.04.2000', { exact: true }), card.getByText('Bewusst übersprungen · keine Rechnung', { exact: true })]) await expectUnobscuredService(value, true);
     for (const control of [card.getByRole('button', { name: 'Entwurf vorbereiten', exact: true }), card.getByRole('button', { name: 'Plan bearbeiten', exact: true }), card.getByRole('button', { name: 'Plan pausieren', exact: true }), existingDraftLink]) await expectUnobscuredService(control);
-    await page.screenshot({ path: testInfo.outputPath('service-plan-workspace-desktop-1440.png'), fullPage: false });
+    // Desktop actions/history retain full geometry assertions; only the mobile
+    // review is included in this bounded package's visual evidence artifact.
     expect((await prisma.settings.findUnique({ where: { userId } }))?.fiscalTaxRegime ?? 'UNSET').toBe('UNSET');
     await noFinancialSideEffects(userId, 1);
   } finally { await cleanup(userId); }
@@ -198,7 +199,9 @@ test('keeps error inputs, rejects stale edits and leaves future periods read-onl
     await expect(editing.getByLabel('Planname', { exact: true })).toHaveValue('Synthetische veraltete Änderung');
     await editing.getByRole('button', { name: 'Abbrechen', exact: true }).click();
     await page.route('**/api/service-billing', async route => { if (route.request().method() === 'GET') await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Synthetische Ladeunterbrechung' }) }); else await route.continue(); }, { times: 1 });
-    await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('Synthetische Ladeunterbrechung');
+    await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click();
+    const loadError = page.getByRole('main').getByRole('alert').filter({ hasText: 'Synthetische Ladeunterbrechung' });
+    await expect(loadError).toHaveCount(1); await expect(loadError).toContainText('Synthetische Ladeunterbrechung');
     await expect(page.getByRole('button', { name: 'Entwurf vorbereiten', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Aktuellen Stand erneut laden', exact: true }).click();
     await expect(page.getByRole('article', { name: 'Serviceplan SYNTHETISCH · Anderer Editor', exact: true })).toBeVisible();
