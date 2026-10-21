@@ -112,6 +112,19 @@ async function expectWorkingPaperGeometry(dialog: Locator) {
   }
 }
 
+
+// The correction section after the main table starts with booking IDs, not
+// official EÜR rows. Require the exact header and stop at its blank boundary.
+function workingPaperMappingRows(csv: string): string[] {
+  const sections = csv.split('Zeile;Bezeichnung;Betrag (EUR)\n');
+  if (sections.length !== 2) throw new Error('Genau eine EÜR-Zeilentabelle erwartet.');
+  const rows = sections[1].split('\n');
+  const boundary = rows.indexOf('');
+  const mappingRows = boundary < 0 ? rows : rows.slice(0, boundary);
+  if (!mappingRows.length) throw new Error('EÜR-Zeilentabelle darf in diesem Prüffall nicht leer sein.');
+  return mappingRows;
+}
+
 for (const year of [2026, 2025]) {
   test(`shows and downloads the bounded ${year} EÜR working paper with verified year-specific rows`, async ({ page }, testInfo) => {
     await isolatedAccount(page);
@@ -184,8 +197,15 @@ for (const year of [2026, 2025]) {
       expect(csv).toContain(`Veranlagungsjahr: ${year}`);
       expect(csv).toContain(`Mappingversion: anlage-euer-${year}-v1`);
       expect(csv).toContain('keine ELSTER-Einreichung');
-      for (const line of body.data.lines) expect(csv).toContain(`${line.lineNumber};${line.name};${line.amount.toFixed(2).replace('.', ',')}`);
-      if (is2026) expect(csv).not.toMatch(/\n(?:27|28|33|60|90);/);
+      const mappingRows = workingPaperMappingRows(csv);
+      for (const line of body.data.lines) expect(mappingRows).toContain(`${line.lineNumber};${line.name};${line.amount.toFixed(2).replace('.', ',')}`);
+      const mappingRowNumbers = mappingRows.map(row => Number(row.split(';', 1)[0]));
+      expect(mappingRowNumbers).toEqual(expected.map(line => line.lineNumber));
+      if (is2026) for (const forbidden of [27, 28, 33, 60, 90]) expect(mappingRowNumbers).not.toContain(forbidden);
+      expect(csv).toContain('Korrekturen / Erstattungen (Prüfspur)\nBuchungs-ID;Geschäftstag;Beschreibung;Kategorie;Betrag (EUR);EÜR-Zeile;Grund;Ursprungs-ID');
+      for (const correction of body.data.corrections) {
+        expect(csv).toContain(`\n${correction.expenseId};${correction.date};${correction.description};${correction.category};${correction.amount.toFixed(2).replace('.', ',')};${correction.lineNumber};`);
+      }
       await dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
       await expect(dialog).not.toBeVisible();
     } finally { await prisma.$disconnect(); }
