@@ -1,0 +1,34 @@
+# Mobile receipt review drafts — issue #43 (partial)
+
+## Implemented boundary
+
+- JPG/JPEG and PNG intake alongside existing PDF/XML originals. Photos: at most 10 MiB, 24 million decoded pixels, 12,000 pixels per edge, one page. The server checks extension, declared media, signature, metadata and complete bounded decoding. Failed validation stores neither source nor financial rows. `sharp` 0.35.5 is now an explicit required dependency, using the same already-locked version as Next.js; missing native support is a hard upload error, never a skipped validation.
+- File-picker alternative and explicit mobile `capture="environment"` action, without `getUserMedia`, permission-policy changes or silent camera access. HEIC, SVG, animation/multipage images and ZIP are not accepted. Multi-page originals remain PDF; individual photos are separate originals, not an inferred invoice group.
+- Authenticated private original download supplies the short-lived image preview. Object URLs are revoked on close/change; neither source bytes nor draft data enter browser persistent storage. No public file URL or external processing service.
+- Explicit saved review draft with supplier name, invoice number, invoice date, actual payment date, cent-exact EUR string and note. Blank/incomplete drafts are allowed. Dates and amounts are validated, but **not** payment/identity/tax attestations. A draft never changes extraction fields, selects a supplier contact or creates Expense, Income, PaymentJournalEvent or CashTransaction rows. It never enables source approval for a photo.
+- Save is tenant-scoped, REVIEW-only and revision-guarded, with an atomic audit entry. Double-click is guarded. Unsaved data is explicitly identified; reload asks via beforeunload, closing asks before discarding, Back/navigation is explained as discarding rather than silently saving. Server-error/conflict leaves typed values visible and does not claim success.
+- Inbox search includes normalized saved-draft supplier/invoice text via a derived cache. Source and draft labels remain distinct. Saved drafts can be reopened after reload; dismissed/booked historical draft values remain read-only and are not expense evidence. Existing query filters/search are retained when opening/closing details, including the additive BOOKED filter.
+
+## Schema and recovery
+
+Migration `20261021054000_add_purchase_review_drafts` adds nullable `reviewDraft` JSON, `reviewDraftSavedAt` and derived `reviewDraftSearch` to PurchaseDocument only. Existing rows remain null. The cache is derived exclusively from validated draft data and recomputed on restore; it is not an authorization or accounting source.
+
+The backup format stays v3, with new explicit schema identity `20261021054000_add_purchase_review_drafts`. Genuine prior `20261021043000_add_partial_payments` snapshots remain accepted with no new fields, alongside earlier explicit identities. Prior identities cannot claim photo/draft support. Full ZIP backup/restore preserves exact photo bytes/hash, saved fields/timestamp and authenticated target ownership, allocating new private filenames. JSON-only restore continues to reject source components without originals. Merge fingerprint includes saved draft and timestamp: differing work is a conflict, not silently lost. Photos remain REVIEW/DISMISSED, never BOOKED. Accounting/EÜR exports do not treat a photo/draft as an expense; full-backup evidence must not be described as financial inclusion.
+
+## Follow-on contract required before image → expense approval
+
+This package intentionally leaves #43 partial. A separate reviewed implementation is required to make photos usable as linked expense sources; no hidden fallback or parallel auto-created manual expense is permitted.
+
+1. Introduce an explicit **human-reviewed source snapshot** for images/plain PDFs, separate from extraction and saved work. Require ordinary purchase invoice type, EUR, supplier identity/contact, invoice number/date, positive cent-exact gross, recipient/business ownership and evidence that the full amount actually left the business. Unsupported credit/refund/debit notes, currencies, split/partial payments or ambiguous originals remain blocked.
+2. The reviewer must inspect the exact immutable hash-verified original, explicitly attest transcribed source total/type, actual full-payment date, recipient ownership and expense/tax treatment. Draft values may prefill editable suggestions only; no draft field or saved checkbox is an attestation. Require renewed attestations after source/review changes. No bank verification claim.
+3. Extend the existing #42 transactional approval with source-kind-specific validation, not a second expense writer. Freeze the human source snapshot/hash and current draft/document revision in the normalized idempotency fingerprint and financial audit. Preserve one-source/one-expense uniqueness, business-duplicate acknowledgments and same-key safe replay. All failed claims roll back expense and audit together.
+4. Keep generic source-linked expense guards and private original receipt access/export. Backup/restore must validate and roundtrip the approved image snapshot and mapped expense as one immutable component, without replaying approval. Test tiny/huge exact cents, stale revisions, concurrent/replayed approvals, malformed data, tenant isolation, atomic rollback and original tampering.
+5. Hosted browser acceptance must then demonstrate photo → review → explicit paid Expense → original-backed accountant export, on 360/390px and desktop, keyboard and dark/light. Until that exists, the UI says photo drafts cannot yet be linked to an expense and #43 is not complete.
+
+## Evidence / remaining gates
+
+2026-10-21: 188 focused tests across 9 suites passed; focused ESLint and `git diff --check` passed. One bounded full TypeScript check (`NODE_OPTIONS=--max-old-space-size=768 npx tsc --noEmit --incremental false`) passed during implementation; final small UI/decoder/test additions are covered by focused checks and still require exact-commit hosted type/build/browser validation.
+
+Focused intake/security/backup/UI tests include genuine JPG/PNG route intake, saved-draft reload read, no ledger side effects, stale/foreign/dismissed writes, audit rollback, image corruption/size/dimensions and full ZIP target-tenant roundtrip. The added Playwright case covers mobile error/retry, zoom keyboard, unsaved close, explicit save/reload/search return and exact-original full backup. It emits only `receipt-draft-mobile.png` and `receipt-draft-desktop.png` using synthetic data.
+
+Local full builds and local browser execution are intentionally not run in the constrained environment. Exact final hosted build/browser evidence, native decoder availability, final visual review and the follow-on approval flow remain release/issue-completion gates; focused checks do not establish those gates.

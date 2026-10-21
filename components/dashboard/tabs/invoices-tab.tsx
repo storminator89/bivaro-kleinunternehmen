@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import Link from 'next/link';
 import styles from "@/components/dashboard/sales-workspace.module.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,6 +151,7 @@ export function InvoicesTab({
                                 <Mail className="h-4 w-4 text-notice" />
                                 Per E-Mail senden
                               </DropdownMenuItem>
+                              <DropdownMenuItem asChild><Link href={`/history?invoiceId=${invoice.id}`}>Rechnungshistorie ansehen</Link></DropdownMenuItem>
                               {invoice.type !== 'CREDIT_NOTE' && <DropdownMenuItem onSelect={() => onStatusChange(invoice.id, 'PAYMENT_HISTORY')}>Zahlungsverlauf ansehen</DropdownMenuItem>}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem

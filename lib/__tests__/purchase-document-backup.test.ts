@@ -4,10 +4,12 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
+import { withProcessingSlot } from '@/lib/processing-limit';
 import JSZip from 'jszip';
 import { NextRequest } from 'next/server';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, hashBytes, CURRENT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
+import { createBackupManifest, hashBytes, CURRENT_SCHEMA_VERSION, PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
 import type { PurchaseParsePreview } from '@/lib/purchase-documents/types';
 
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null, userId: 'incoming-backup-source', failFinalAudit: false }));
@@ -128,6 +130,108 @@ function refreshManifest(backup: ReturnType<typeof JSON.parse>) {
 }
 
 describe('incoming originals backup and restore', () => {
+  it('roundtrips actual JPG/PNG intake and explicit saved drafts with target ownership and zero ledger effects', async () => {
+    const sourceUser = 'photo-draft-source', targetUser = 'photo-draft-target';
+    await user(sourceUser); await user(targetUser); state.userId = sourceUser;
+    const draftRoute = await import('@/app/api/purchase-documents/[id]/review-draft/route');
+    const originals = [];
+    const draft = { supplierName: 'Photo supplier', invoiceNumber: 'PHOTO-1', invoiceDate: '2026-10-20', paymentDate: '2026-10-21', amount: '0.29', note: 'Synthetic photo draft only' };
+    for (const format of ['jpeg', 'png'] as const) {
+      const bytes = await sharp({ create: { width: 390, height: 600, channels: 3, background: '#faf8f3' } })[format]().toBuffer();
+      const form = new FormData(); form.append('file', new File([bytes], `receipt.${format === 'jpeg' ? 'jpg' : 'png'}`, { type: `image/${format}` })); form.append('uploadRequestId', randomUUID());
+      const intake = await incoming.POST(new NextRequest('http://localhost/api/purchase-documents', { method: 'POST', body: form })); expect(intake.status).toBe(201);
+      const document = (await intake.json()).document;
+      const saved = await draftRoute.POST(new NextRequest(`http://localhost/api/purchase-documents/${document.id}/review-draft`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: document.revision, draft }) }), { params: Promise.resolve({ id: String(document.id) }) });
+      expect(saved.status).toBe(200); originals.push({ bytes, document: (await saved.json()).document });
+    }
+    const archive = await exported(sourceUser);
+    expect(archive.backup.manifest.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(createBackupPreview(archive.backup).counts.purchaseDocuments).toBe(2);
+    expect((await restoreZip(targetUser, archive.bytes)).status).toBe(200);
+    const restored = await database.client.purchaseDocument.findMany({ where: { userId: targetUser }, orderBy: { id: 'asc' } });
+    expect(restored).toHaveLength(2);
+    for (const [index, record] of restored.entries()) {
+      expect(record).toMatchObject({ userId: targetUser, reviewStatus: 'REVIEW', parseStatus: 'FAILED', parseErrorCode: 'PHOTO_MANUAL_REVIEW', expenseId: null, reviewDraft: draft, supplierName: null, invoiceDate: null, totalAmount: null });
+      expect(record.reviewDraftSavedAt?.toISOString()).toBe(originals[index].document.reviewDraftSavedAt);
+      expect(record.storedFileName).not.toBe(archive.backup.data.purchaseDocuments[index].storedFileName);
+      expect(record.reviewDraftSearch).toBe('Photo supplier · PHOTO-1');
+      expect(await readFile(storage.getTenantUploadPath(targetUser, record.storedFileName))).toEqual(originals[index].bytes);
+      expect(record.originalSha256).toBe(hashBytes(originals[index].bytes));
+    }
+    expect(await database.client.expense.count({ where: { userId: targetUser } })).toBe(0);
+    expect(await database.client.income.count({ where: { userId: targetUser } })).toBe(0);
+    expect(await database.client.cashTransaction.count({ where: { userId: targetUser } })).toBe(0);
+    const old = structuredClone(archive.backup); old.manifest.schemaVersion = PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION;
+    expect(() => createBackupPreview(old)).toThrow(/Älteres Backupschema/);
+    for (const mutate of [
+      (doc: Record<string, unknown>) => { doc.reviewDraft = { ...draft, confirmPaymentDate: true }; },
+      (doc: Record<string, unknown>) => { doc.reviewDraftSavedAt = null; },
+      (doc: Record<string, unknown>) => { doc.reviewDraft = { ...draft, amount: '1.001' }; },
+      (doc: Record<string, unknown>) => { doc.parseStatus = 'PARSED'; },
+    ]) {
+      const invalid = structuredClone(archive.backup); mutate(invalid.data.purchaseDocuments[0]); refreshManifest(invalid);
+      expect(() => createBackupPreview(invalid)).toThrow();
+    }
+    const corruptTarget = 'photo-corrupt-target'; await user(corruptTarget);
+    const corrupt = structuredClone(archive.backup); const badBytes = Buffer.from([255, 216, 255, 0]);
+    const corruptDocument = corrupt.data.purchaseDocuments[0]; corruptDocument.originalByteCount = badBytes.length; corruptDocument.originalSha256 = hashBytes(badBytes);
+    const corruptEntry = corrupt.manifest.fileManifest.find((file: { sourceName: string }) => file.sourceName === corruptDocument.storedFileName);
+    corruptEntry.bytes = badBytes.length; corruptEntry.sha256 = hashBytes(badBytes); refreshManifest(corrupt);
+    // Even a self-consistent manifest cannot bypass decoding / dimension budgets during restore.
+    await expect(restore.restoreBackupData({ userId: corruptTarget, backup: corrupt, overwrite: false, resolveFile: async (_kind, sourceName) => {
+      if (sourceName === corruptDocument.storedFileName) return badBytes;
+      const entry = corrupt.manifest.fileManifest.find((file: { sourceName: string }) => file.sourceName === sourceName);
+      return archive.zip.file(entry.zipPath)!.async('uint8array');
+    } })).rejects.toThrow(/Foto-Original/);
+    expect(await database.client.purchaseDocument.count({ where: { userId: corruptTarget } })).toBe(0);
+    expect(await database.client.expense.count({ where: { userId: corruptTarget } })).toBe(0);
+    // Draft differences are component conflicts, not a quiet skip of newer work.
+    const changed = structuredClone(archive.backup); changed.data.purchaseDocuments[0].reviewDraft.note = 'Different saved work'; refreshManifest(changed);
+    await expect(restore.restoreBackupData({ userId: targetUser, backup: changed, overwrite: false, resolveFile: async (_kind, sourceName) => {
+      const entry = changed.manifest.fileManifest.find((file: { sourceName: string }) => file.sourceName === sourceName);
+      return archive.zip.file(entry.zipPath)!.async('uint8array');
+    } })).rejects.toThrow(/unterschiedlich|Konflikt|abweich|abweichen|nicht eindeutig|unterschied|Zustand/i);
+    const untouched = await database.client.purchaseDocument.findMany({ where: { userId: targetUser } }); expect(untouched.every(record => (record.reviewDraft as { note: string }).note === draft.note)).toBe(true);
+  });
+
+  it('returns retryable 429 for a valid photo restore under occupied processing capacity, without corruption claims or mutation', async () => {
+    const source = 'capacity-photo-source', target = 'capacity-photo-target'; await user(source); await user(target); state.userId = source;
+    const bytes = await sharp({ create: { width: 40, height: 80, channels: 3, background: '#faf8f3' } }).png().toBuffer();
+    const form = new FormData(); form.append('file', new File([bytes], 'valid-capacity.png', { type: 'image/png' })); form.append('uploadRequestId', randomUUID());
+    const intake = await incoming.POST(new NextRequest('http://localhost/api/purchase-documents', { method: 'POST', body: form })); expect(intake.status).toBe(201);
+    const archive = await exported(source);
+    let release!: () => void;
+    const occupied = withProcessingSlot(target, () => new Promise<void>(resolve => { release = resolve; }));
+    try {
+      const response = await restoreZip(target, archive.bytes);
+      expect(response.status).toBe(429); expect(response.headers.get('retry-after')).toBe('1');
+      const body = await response.json(); expect(body).toMatchObject({ code: 'PROCESSING_BUSY' });
+      expect(body.error).toContain('ausgelastet'); expect(body.error).not.toMatch(/beschädigt|Bildgrenzen|Integrität/i);
+      expect(await database.client.purchaseDocument.count({ where: { userId: target } })).toBe(0);
+      expect(await database.client.expense.count({ where: { userId: target } })).toBe(0);
+      expect(await database.client.auditLog.count({ where: { userId: target } })).toBe(0);
+      const directory = path.join(root, 'data/uploads', target);
+      expect(await readdir(directory).catch(error => { if (error.code === 'ENOENT') return []; throw error; })).toEqual([]);
+    } finally { release(); await occupied; }
+    const retry = await restoreZip(target, archive.bytes); expect(retry.status).toBe(200);
+    const restored = await database.client.purchaseDocument.findFirstOrThrow({ where: { userId: target } });
+    expect(await readFile(storage.getTenantUploadPath(target, restored.storedFileName))).toEqual(bytes);
+    expect(await database.client.expense.count({ where: { userId: target } })).toBe(0);
+  });
+
+  it('accepts a genuine prior partial-payment schema with no photo/draft injection', async () => {
+    const source = 'prior-photo-source', target = 'prior-photo-target'; await sources(source); await user(target);
+    const archive = await exported(source);
+    for (const document of archive.backup.data.purchaseDocuments) { delete document.reviewDraft; delete document.reviewDraftSavedAt; delete document.reviewDraftSearch; }
+    refreshManifest(archive.backup); archive.backup.manifest.schemaVersion = PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION;
+    expect(createBackupPreview(archive.backup).counts.purchaseDocuments).toBe(3);
+    await restore.restoreBackupData({ userId: target, backup: archive.backup, overwrite: false, resolveFile: async (kind, sourceName) => {
+      const entry = archive.backup.manifest.fileManifest.find((file: { kind: string; sourceName: string }) => file.kind === kind && file.sourceName === sourceName);
+      return archive.zip.file(entry.zipPath)!.async('uint8array');
+    } });
+    const restored = await database.client.purchaseDocument.findMany({ where: { userId: target } }); expect(restored).toHaveLength(3); expect(restored.every(record => record.reviewDraft === null && record.reviewDraftSavedAt === null)).toBe(true);
+  });
+
   it('roundtrips actual intake-generated exact/unsupported and oversized-metadata snapshots with original bytes', async () => {
     const sourceUser = 'incoming-generated-source', targetUser = 'incoming-generated-target';
     await user(sourceUser); await user(targetUser); state.userId = sourceUser;

@@ -87,10 +87,16 @@ basenames beneath `${{ runner.temp }}/bivaro-browser-results`:
 - `partial-payments-390-two-events.png`
 - `partial-reminder-guard-1440.png`
 - `partial-reminder-guard-390.png`
+- `accountant-guide-1440-readiness.png`
+- `accountant-guide-390-manual-note.png`
+- `history-correction-desktop.png`
+- `history-correction-mobile.png`
+- `receipt-draft-mobile.png`
+- `receipt-draft-desktop.png`
 
 Staging never follows symbolic links and accepts only regular files inside that
 results tree, verifies PNG signatures, and rejects duplicate basenames. More than
-four files or more than 5 MiB combined skips the entire upload with a warning.
+ten files or more than 5 MiB combined skips the entire upload with a warning.
 Only those checked bytes enter a fresh staging directory; the standard
 `actions/upload-artifact` action uploads that directory with **one-day retention**.
 These are synthetic isolated-fixture UI screenshots, not real customer data or

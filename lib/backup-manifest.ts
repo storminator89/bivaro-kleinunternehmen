@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
-export const CURRENT_SCHEMA_VERSION = '20261021043000_add_partial_payments';
+export const CURRENT_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
+export const PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION = '20261021043000_add_partial_payments';
 /** Full-payment journal snapshots retain their immutable evidence semantics. */
 export const FULL_PAYMENT_JOURNAL_SCHEMA_VERSION = '20261020230000_add_payment_journal';
 /** Supplier booking existed before the additive immutable payment journal. */
@@ -17,7 +18,7 @@ export const PRE_FISCAL_PROFILE_SCHEMA_VERSION = '20260922100000_add_billing_not
 export const PRE_BILLING_NOTES_SCHEMA_VERSION = '20260919100000_invoice_issuance_state';
 
 /** Capabilities are explicit: a non-current schema may already contain a journal. */
-const JOURNAL_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, FULL_PAYMENT_JOURNAL_SCHEMA_VERSION];
+const JOURNAL_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION, FULL_PAYMENT_JOURNAL_SCHEMA_VERSION];
 const SUPPLIER_SCHEMAS: readonly string[] = [...JOURNAL_SCHEMAS, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION];
 const PURCHASE_DOCUMENT_SCHEMAS: readonly string[] = [...SUPPLIER_SCHEMAS, PRE_SUPPLIERS_SCHEMA_VERSION];
 const SUPPORTED_SCHEMAS: readonly string[] = [...PURCHASE_DOCUMENT_SCHEMAS, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, PRE_FISCAL_PROFILE_SCHEMA_VERSION, PRE_BILLING_NOTES_SCHEMA_VERSION];
@@ -239,6 +240,7 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
     && (PURCHASE_DOCUMENT_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'PurchaseDocument')
     && (SUPPLIER_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'Supplier')
     && (backupSchemaSupportsPaymentJournal(value.schemaVersion!) || entry.model !== 'PaymentJournalEvent'));
+  if (value.schemaVersion !== CURRENT_SCHEMA_VERSION && Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(item => item && typeof item === 'object' && ((item as Record<string, unknown>).reviewDraft != null || (item as Record<string, unknown>).reviewDraftSavedAt != null || ['image/jpeg', 'image/png'].includes(String((item as Record<string, unknown>).mediaType))))) throw new Error('Älteres Backupschema darf keine Foto- oder Prüfentwurfsdaten enthalten');
   if (!PURCHASE_DOCUMENT_SCHEMAS.includes(value.schemaVersion!) && coverageCount(data, 'purchaseDocuments') > 0) {
     throw new Error('Ein altes Backup-Manifest darf keine ungebundenen Eingangsbelege enthalten');
   }

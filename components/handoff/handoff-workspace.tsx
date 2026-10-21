@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { HandoffReview } from './handoff-review';
-import { HandoffRequestGate, handoffFilename, handoffPeriodQuery, initialHandoffSelection, readHandoffPreview, type HandoffPreview, type HandoffSelection } from './handoff-model';
+import { HandoffTasks } from './handoff-tasks';
+import { HandoffAcknowledgement } from './handoff-acknowledgement';
+import { HandoffRequestGate, handoffFilename, handoffPeriodQuery, initialHandoffSelection, readHandoffPreview, readHandoffReadiness, type HandoffReadiness, type HandoffPreview, type HandoffSelection } from './handoff-model';
 import styles from './handoff.module.css';
 
 class HandoffHttpError extends Error {
@@ -26,14 +28,18 @@ async function checkResponse(response: Response) {
 export function HandoffWorkspace({ initialSelection, currentYear }: { initialSelection: HandoffSelection; currentYear: string }) {
   const [selection, setSelection] = useState(initialSelection);
   const [preview, setPreview] = useState<HandoffPreview | null>(null);
+  const [readiness, setReadiness] = useState<HandoffReadiness | null>(null);
+  const [downloadStarted, setDownloadStarted] = useState(false);
   const [busy, setBusy] = useState<'preview' | 'download' | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
-  const [error, setError] = useState<{ message: string; login: boolean } | null>(null);
+  const [error, setError] = useState<{ message: string; login: boolean; focus?: boolean } | null>(null);
   const [notice, setNotice] = useState('');
   const gate = useRef(new HandoffRequestGate()).current;
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   const selectionHeading = useRef<HTMLHeadingElement>(null);
   const previousPreview = useRef(false);
+  const errorHeading = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (error?.focus) errorHeading.current?.focus(); }, [error]);
   const downloadUrls = useRef(new Set<string>());
 
   useEffect(() => {
@@ -47,6 +53,8 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
       gate.cancel();
       setBusy(null);
       setPreview(null);
+      setReadiness(null);
+      setDownloadStarted(false);
       setAcknowledged(false);
       setError(null);
       setNotice('Zeitraum aus der Navigation übernommen. Bitte die Vorschau neu laden.');
@@ -78,6 +86,8 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
     gate.cancel();
     setBusy(null);
     setPreview(null);
+    setReadiness(null);
+    setDownloadStarted(false);
     setAcknowledged(false);
     setError(null);
     setNotice('');
@@ -90,7 +100,7 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
     try { query = handoffPeriodQuery(selection); }
     catch (failure) {
       setNotice('');
-      setError({ message: failure instanceof Error ? failure.message : 'Bitte den Zeitraum prüfen.', login: false });
+      setError({ message: failure instanceof Error ? failure.message : 'Bitte den Zeitraum prüfen.', login: false, focus: true });
       return;
     }
     const controller = gate.begin();
@@ -99,17 +109,26 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
     setError(null);
     setNotice('');
     setAcknowledged(false);
+    setDownloadStarted(false);
+    setPreview(null);
+    setReadiness(null);
     // Only the deliberate period choice persists. A reload never downloads a file.
     window.history.replaceState(window.history.state, '', `/handoff?${query}`);
+    const readinessQuery = query.toString();
     query.set('preview', '1');
     try {
-      const response = await fetch(`/api/accountant-export?${query}`, { signal: controller.signal, cache: 'no-store' });
+      const [response, tasksResponse] = await Promise.all([
+        fetch(`/api/accountant-export?${query}`, { signal: controller.signal, cache: 'no-store' }),
+        fetch(`/api/handoff-readiness?${readinessQuery}`, { signal: controller.signal, cache: 'no-store' }),
+      ]);
       await checkResponse(response);
+      await checkResponse(tasksResponse);
       const result = readHandoffPreview(await response.json());
-      if (gate.isCurrent(controller)) setPreview(result);
+      const tasks = readHandoffReadiness(await tasksResponse.json(), result.manifest.period);
+      if (gate.isCurrent(controller)) { setPreview(result); setReadiness(tasks); }
     } catch (failure) {
       if (!gate.isCurrent(controller)) return;
-      setError({ message: failure instanceof TypeError ? 'Keine Verbindung zum Server. Bitte erneut versuchen.' : failure instanceof Error ? failure.message : 'Die Anfrage ist fehlgeschlagen. Bitte erneut versuchen.', login: failure instanceof HandoffHttpError && failure.status === 401 });
+      setError({ message: failure instanceof TypeError ? 'Keine Verbindung zum Server. Bitte erneut versuchen.' : failure instanceof Error ? failure.message : 'Die Anfrage ist fehlgeschlagen. Bitte erneut versuchen.', login: failure instanceof HandoffHttpError && failure.status === 401, focus: true });
     } finally {
       if (gate.finish(controller)) setBusy(null);
     }
@@ -139,11 +158,14 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
       anchor.click();
       anchor.remove();
       window.setTimeout(() => { URL.revokeObjectURL(url); downloadUrls.current.delete(url); }, 60_000);
+      setDownloadStarted(true);
       setNotice(`ZIP-Download gestartet${approved.manifest.warningCount ? ` – mit ${approved.manifest.warningCount} ${approved.manifest.warningCount === 1 ? 'Warnung' : 'Warnungen'}` : ''}. Prüfen Sie die heruntergeladene Datei und stimmen Sie die sichere Übergabe mit Ihrer Kanzlei ab. Es wurde nichts an eine Kanzlei gesendet.`);
     } catch (failure) {
       if (!gate.isCurrent(controller)) return;
       if (failure instanceof HandoffHttpError && failure.status === 409) {
         setPreview(null);
+      setReadiness(null);
+      setDownloadStarted(false);
         setAcknowledged(false);
       }
       setError({ message: failure instanceof TypeError ? 'Keine Verbindung zum Server. Bitte erneut versuchen.' : failure instanceof Error ? failure.message : 'Die Anfrage ist fehlgeschlagen. Bitte erneut versuchen.', login: failure instanceof HandoffHttpError && failure.status === 401 });
@@ -176,14 +198,17 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
           <p className={styles.muted}>Die Vorschau prüft auch vorhandene Originaldateien. Sie lädt noch kein ZIP herunter und verändert keine Buchungen.</p>
         </> : <>
           <h2 id="handoff-review-heading" ref={reviewHeading} tabIndex={-1}>Paket prüfen und herunterladen</h2>
+          {readiness && <HandoffTasks preview={preview} readiness={readiness} />}
           <HandoffReview preview={preview} />
           <div className={styles.approval}>
             <label><input type="checkbox" checked={acknowledged} disabled={Boolean(busy)} onChange={event => setAcknowledged(event.target.checked)} /><span>Ich habe den begrenzten Umfang und die angezeigten Warnungen geprüft. Das Paket ist keine Bestätigung fachlicher Vollständigkeit.</span></label>
             <p className={styles.muted}>Der Download prüft die Daten und Originale erneut. Bei Änderungen müssen Sie eine neue Vorschau bestätigen.</p>
           </div>
           <div className={styles.actions}><Button type="button" disabled={!acknowledged || Boolean(busy)} onClick={download}>{busy === 'download' ? <><Loader2 aria-hidden="true" className="animate-spin" />ZIP wird erstellt</> : <><Download aria-hidden="true" />ZIP herunterladen</>}</Button>{busy ? <Button type="button" variant="outline" onClick={cancel}>Abbrechen</Button> : <Button type="button" variant="outline" onClick={editPeriod}><ArrowLeft aria-hidden="true" />Zeitraum ändern</Button>}</div>
+          <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => loadPreview()}><RotateCcw aria-hidden="true" />Prüfaufgaben und Vorschau aktualisieren</Button>
+          <HandoffAcknowledgement key={preview.manifest.sourceFingerprint} preview={preview} downloadStarted={downloadStarted} />
         </>}
-        {error && <div role="alert" className={styles.error}><AlertTriangle aria-hidden="true" /><div><strong>{preview ? 'Download nicht gestartet' : 'Vorschau nicht verfügbar'}</strong><p>{error.message}</p>{error.login && <Link href={`/login?callbackUrl=${encodeURIComponent(`/handoff${loginQuery ? `?${loginQuery}` : ''}`)}`}>Erneut anmelden</Link>}{!error.login && <p>Ihre Zeitraum-Auswahl bleibt erhalten. {!preview ? 'Laden Sie die Vorschau erneut.' : 'Sie können den Download erneut versuchen.'}</p>}</div></div>}
+        {error && <div role="alert" tabIndex={-1} ref={errorHeading} className={styles.error}><AlertTriangle aria-hidden="true" /><div><strong>{preview ? 'Download nicht gestartet' : 'Vorschau nicht verfügbar'}</strong><p>{error.message}</p>{error.login && <Link href={`/login?callbackUrl=${encodeURIComponent(`/handoff${loginQuery ? `?${loginQuery}` : ''}`)}`}>Erneut anmelden</Link>}{!error.login && <p>Ihre Zeitraum-Auswahl bleibt erhalten. {!preview ? 'Laden Sie die Vorschau erneut.' : 'Sie können den Download erneut versuchen.'}</p>}</div></div>}
         <p role="status" aria-live="polite" className={styles.status}>{busy ? (busy === 'preview' ? 'Die Vorschau und Originaldateien werden geprüft.' : 'Das bestätigte ZIP-Paket wird erstellt. Bitte warten oder abbrechen.') : notice}</p>
       </section>
       <aside className={styles.scope} aria-labelledby="handoff-scope-title">

@@ -5,9 +5,9 @@ import { createFinancialAuditLog } from '@/lib/audit-log';
 import { withProcessingSlot, ProcessingCapacityError } from '@/lib/processing-limit';
 import { writeTenantFile, deleteTenantFile } from '@/lib/upload-path';
 import { parsePurchaseBytes, PURCHASE_PARSER_VERSION } from './parser';
-import { originalHash, readPurchaseOriginal } from './original';
+import { originalHash, readPurchaseOriginal, purchaseOriginalName } from './original';
 import { PurchaseDocumentError } from './errors';
-import type { IncomingDocument, IncomingDocumentList, PurchaseParsePreview, PurchaseParseStatus, PurchaseReviewStatus } from './types';
+import type { IncomingDocument, IncomingDocumentList, PurchaseParsePreview, PurchaseParseStatus, PurchaseReviewStatus, PurchaseMediaType, PurchaseReviewDraft } from './types';
 import { PURCHASE_PARSE_STATUSES, PURCHASE_REVIEW_STATUSES } from './types';
 
 // Paginated reads must not materialize lineItems (or any full parsedData JSON).
@@ -16,7 +16,7 @@ const SOURCE_METADATA_SELECT = {
   mediaType: true, uploadedAt: true, supplierName: true, invoiceNumber: true, invoiceDate: true,
   currency: true, parseStatus: true, parseErrorCode: true, parserVersion: true, reviewStatus: true,
   revision: true, expenseId: true, approvedAt: true, approvalRequestId: true, approvalFingerprint: true,
-  dismissedAt: true, dismissalReason: true, supplierId: true, selectedSupplierSnapshot: true,
+  reviewDraft: true, reviewDraftSavedAt: true, dismissedAt: true, dismissalReason: true, supplierId: true, selectedSupplierSnapshot: true,
 } satisfies Prisma.PurchaseDocumentSelect;
 type SourceMetadata = Prisma.PurchaseDocumentGetPayload<{ select: typeof SOURCE_METADATA_SELECT }>;
 type SourcePreviewSummary = Pick<PurchaseParsePreview, 'grossAmount' | 'parserWarnings' | 'approvalSupported'>
@@ -70,13 +70,14 @@ function previewOf(document: PurchaseDocument): PurchaseParsePreview | null {
 function sourceDto(document: SourceMetadata, preview: SourcePreviewSummary | null, fullPreview: PurchaseParsePreview | null = null): IncomingDocument {
   assertSourceState(document);
   const warnings = [...(preview?.parserWarnings ?? [])];
-  if (!preview) warnings.push({ code: document.parseErrorCode ?? 'PARSE_PENDING', message: document.parseStatus === 'PENDING' ? 'Original archiviert. Extraktion steht aus; bitte erneut auslesen.' : document.parseErrorCode === 'NO_EMBEDDED_XML' ? 'Original archiviert. Keine eingebettete E-Rechnungs-XML gefunden; keine OCR.' : 'Original archiviert. Keine sichere strukturierte Extraktion möglich; Original manuell prüfen.' });
+  if (!preview) warnings.push({ code: document.parseErrorCode ?? 'PARSE_PENDING', message: document.parseStatus === 'PENDING' ? 'Original archiviert. Extraktion steht aus; bitte erneut auslesen.' : document.mediaType.startsWith('image/') ? 'Foto archiviert. Nur manueller Prüfentwurf, kein OCR und noch keine Ausgabenerfassung aus Fotos.' : document.parseErrorCode === 'NO_EMBEDDED_XML' ? 'Original archiviert. Keine eingebettete E-Rechnungs-XML gefunden; keine OCR.' : 'Original archiviert. Keine sichere strukturierte Extraktion möglich; Original manuell prüfen.' });
   if (!preview) warnings.push({ code: 'NOT_VALIDATED', message: 'Original und Extraktion sind nicht auf fachliche Konformität geprüft.' });
   return {
     id: document.id, direction: 'INCOMING', reviewState: document.reviewStatus as PurchaseReviewStatus,
     reviewStatus: document.reviewStatus as PurchaseReviewStatus, parseStatus: document.parseStatus as PurchaseParseStatus,
     validationStatus: 'NOT_VALIDATED', revision: document.revision,
-    originalRef: { id: document.id, fileName: document.originalFileName, sha256: document.originalSha256, bytes: document.originalByteCount, mediaType: document.mediaType as 'application/pdf' | 'application/xml', uploadedAt: document.uploadedAt.toISOString(), downloadUrl: `/api/purchase-documents/${document.id}/original` },
+    reviewDraft: document.reviewDraft as PurchaseReviewDraft | null, reviewDraftSavedAt: document.reviewDraftSavedAt?.toISOString() ?? null,
+    originalRef: { id: document.id, fileName: document.originalFileName, sha256: document.originalSha256, bytes: document.originalByteCount, mediaType: document.mediaType as PurchaseMediaType, uploadedAt: document.uploadedAt.toISOString(), downloadUrl: `/api/purchase-documents/${document.id}/original` },
     supplierName: document.supplierName, invoiceNumber: document.invoiceNumber, invoiceDate: document.invoiceDate?.toISOString() ?? null,
     currency: document.currency, totalAmount: preview?.grossAmount ?? null,
     supplierId: document.supplierId, selectedSupplierSnapshot: document.selectedSupplierSnapshot as IncomingDocument['selectedSupplierSnapshot'],
@@ -132,7 +133,7 @@ export async function listPurchaseDocuments(userId: string, params: URLSearchPar
   if (reviewStatus && !PURCHASE_REVIEW_STATUSES.includes(reviewStatus as PurchaseReviewStatus)) throw new PurchaseDocumentError('Ungültiger Prüfstatus.');
   const search = params.get('search')?.trim() ?? '';
   if (search.length > 200) throw new PurchaseDocumentError('Suchtext ist zu lang.');
-  const where: Prisma.PurchaseDocumentWhereInput = { userId, ...(reviewStatus ? { reviewStatus } : {}), ...(search ? { OR: [{ originalFileName: { contains: search } }, { supplierName: { contains: search } }, { invoiceNumber: { contains: search } }] } : {}) };
+  const where: Prisma.PurchaseDocumentWhereInput = { userId, ...(reviewStatus ? { reviewStatus } : {}), ...(search ? { OR: [{ originalFileName: { contains: search } }, { supplierName: { contains: search } }, { invoiceNumber: { contains: search } }, { reviewDraftSearch: { contains: search } }] } : {}) };
   return prisma.$transaction(async tx => {
     const [documents, total] = await Promise.all([
       tx.purchaseDocument.findMany({ where, select: SOURCE_METADATA_SELECT, orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit }),
@@ -185,14 +186,14 @@ async function saveParseResult(document: PurchaseDocument, bytes: Buffer): Promi
       metadata: { actorId: document.userId, tenantId: document.userId, operation: 'purchase-document.parse', originalReference: document.originalSha256, reason: 'structured preview only; no posting' } }, tx);
   });
 }
-export async function intakePurchaseDocument(input: { userId: string; requestId: string; originalFileName: string; mediaType: 'application/pdf' | 'application/xml'; bytes: Buffer }): Promise<{ document: IncomingDocument; replayed: boolean }> {
+export async function intakePurchaseDocument(input: { userId: string; requestId: string; originalFileName: string; mediaType: PurchaseMediaType; bytes: Buffer }): Promise<{ document: IncomingDocument; replayed: boolean }> {
   const sha256 = originalHash(input.bytes);
   const replay = await findReplay(input.userId, input.requestId, sha256);
   if (replay) return { document: await purchaseDocumentDetail(input.userId, replay.id), replayed: true };
   let storedFileName: string | null = null;
   let created: PurchaseDocument;
   try {
-    storedFileName = await writeTenantFile(input.userId, input.mediaType === 'application/xml' ? 'original.xml' : 'original.pdf', input.bytes);
+    storedFileName = await writeTenantFile(input.userId, purchaseOriginalName(input.mediaType), input.bytes);
     created = await inTransaction(async tx => {
       const document = await tx.purchaseDocument.create({ data: { userId: input.userId, originalFileName: input.originalFileName, storedFileName: storedFileName!, originalSha256: sha256, originalByteCount: input.bytes.byteLength, mediaType: input.mediaType, uploadRequestId: input.requestId } });
       await createFinancialAuditLog({ userId: input.userId, action: 'CREATE', entityType: 'PurchaseDocument', entityId: document.id,

@@ -65,6 +65,7 @@ export function buildPurchasePreview(parsed: ParsedEInvoice, exact: EInvoiceExac
 }
 /** No raw XML or exception strings enter the preview; original bytes remain authoritative. */
 export async function parsePurchaseBytes(mediaType: string, bytes: Buffer): Promise<PurchaseParseResult> {
+  if (mediaType === 'image/jpeg' || mediaType === 'image/png') return { parseStatus: 'FAILED', parseErrorCode: 'PHOTO_MANUAL_REVIEW', preview: null, parsed: null };
   try {
     const xml = mediaType === 'application/pdf'
       ? await extractEmbeddedEInvoiceXml(bytes)

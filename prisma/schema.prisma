@@ -428,6 +428,9 @@ model PurchaseDocument {
   invoiceDate         DateTime?
   currency            String?
   totalAmount         Float?
+  reviewDraftSearch   String?
+  reviewDraft         Json?
+  reviewDraftSavedAt  DateTime?
   reviewStatus        String    @default("REVIEW") // REVIEW, BOOKED, DISMISSED
   revision            Int       @default(0)
   expenseId           Int?      @unique

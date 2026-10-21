@@ -1,0 +1,65 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { Loader2, Save } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { PurchaseDocumentError } from '@/lib/purchase-documents/errors';
+import { EMPTY_REVIEW_DRAFT, parsePurchaseReviewDraft } from '@/lib/purchase-documents/review-draft';
+import type { IncomingDocument, IncomingDocumentResponse, PurchaseReviewDraft } from '@/lib/purchase-documents/types';
+import { errorMessage, incomingJson } from './incoming-document-ui';
+
+export function IncomingReviewDraft({ document, onSaved, onDirtyChange, onBusyChange, locked = false }: { document: IncomingDocument; onSaved: (document: IncomingDocument) => void; onDirtyChange: (dirty: boolean) => void; onBusyChange: (busy: boolean) => void; locked?: boolean }) {
+  const baseline = document.reviewDraft ?? EMPTY_REVIEW_DRAFT;
+  const [draft, setDraft] = useState<PurchaseReviewDraft>(baseline);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const busyRef = useRef(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(baseline);
+  useEffect(() => { onDirtyChange(dirty); return () => onDirtyChange(false); }, [dirty, onDirtyChange]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
+  async function save() {
+    if (busyRef.current || locked) return;
+    setError(null); setSaved(false);
+    let normalized: PurchaseReviewDraft;
+    try { normalized = parsePurchaseReviewDraft(draft); } catch (caught) { setError(caught instanceof PurchaseDocumentError ? caught.message : 'Prüfentwurf ist ungültig.'); return; }
+    busyRef.current = true; setBusy(true); onBusyChange(true);
+    try {
+      const result = await incomingJson<IncomingDocumentResponse>(`/api/purchase-documents/${document.id}/review-draft`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: document.revision, draft: normalized }) });
+      setDraft(result.document.reviewDraft ?? EMPTY_REVIEW_DRAFT); onSaved(result.document); setSaved(true);
+    } catch (caught) { setError(`${errorMessage(caught)} Die Speicherung ist nicht bestätigt. Eingaben bleiben hier erhalten; bei unklarer Antwort Belegstatus neu laden, bevor du erneut speicherst.`); }
+    finally { busyRef.current = false; setBusy(false); onBusyChange(false); }
+  }
+  const fields = [
+    ['supplierName', 'Lieferant laut eigener Prüfung', 'text', 1000], ['invoiceNumber', 'Rechnungsnummer im Entwurf', 'text', 255],
+    ['invoiceDate', 'Rechnungsdatum im Entwurf', 'date', 10], ['paymentDate', 'Tatsächliches Zahlungsdatum im Entwurf', 'date', 10], ['amount', 'Bruttobetrag im Entwurf (EUR)', 'text', 32],
+  ] as const;
+  return <section aria-labelledby="review-draft-heading" className="mb-5 rounded-lg border border-border p-4">
+    <h3 id="review-draft-heading" className="font-semibold">Prüfentwurf · nicht gebucht</h3>
+    <p className="mt-2 text-sm text-muted-foreground">Nur dein ausdrücklich gespeicherter Arbeitsstand. Ändert weder Original noch ausgelesene Daten und bestätigt keine Zahlung oder steuerliche Zuordnung. Leere Felder sind erlaubt.</p>
+    {document.originalRef.mediaType.startsWith('image/') && <p className="mt-2 text-sm text-caution-foreground">Fotos können hier gesammelt und geprüft, aber noch nicht mit einer Ausgabe verknüpft werden. Eine spätere Ausgabenerfassung aus Fotos ist ein eigener, noch nicht freigegebener Schritt. Nicht versehentlich parallel doppelt erfassen.</p>}
+    {locked && <p id="review-draft-lock-help" role="status" className="mt-3 border-l-2 border-caution pl-3 text-sm text-caution-foreground">Entwurf vorübergehend gesperrt: erst die offene Belegaktion abbrechen oder abschließen. Beim Verwerfen wird kein Prüfentwurf still gespeichert.</p>}
+    <form aria-describedby={locked ? 'review-draft-lock-help' : undefined} className="mt-4 space-y-4" onSubmit={event => { event.preventDefault(); void save(); }}>
+      <div className="grid gap-4 sm:grid-cols-2">{fields.map(([key, label, type, maxLength]) => <div key={key} className="min-w-0 space-y-2"><Label htmlFor={`review-draft-${key}`}>{label}</Label><Input id={`review-draft-${key}`} type={type} inputMode={key === 'amount' ? 'decimal' : undefined} value={draft[key]} maxLength={maxLength} disabled={busy || locked} onChange={event => { setDraft(previous => ({ ...previous, [key]: event.target.value })); setSaved(false); }} /></div>)}</div>
+      <div className="space-y-2"><Label htmlFor="review-draft-note">Prüfnotiz</Label><textarea id="review-draft-note" value={draft.note} maxLength={2000} disabled={busy || locked} rows={3} className="w-full rounded-md border border-input bg-background p-3 text-sm focus-visible:outline-2 focus-visible:outline-ring" onChange={event => { setDraft(previous => ({ ...previous, note: event.target.value })); setSaved(false); }} /></div>
+      <p className="text-xs text-muted-foreground">Keine automatische Speicherung. Ungespeicherte Eingaben gehen beim Zurücknavigieren verloren; vor Verlassen bewusst speichern. Gespeicherte Entwürfe bleiben nach Neuladen erhalten.</p>
+      {error && <div ref={errorRef} tabIndex={-1} role="alert" className="rounded bg-critical-surface p-3 text-sm text-critical-foreground">{error}</div>}
+      <div className="sticky bottom-0 -mx-1 flex flex-wrap items-center gap-3 bg-card py-3"><Button type="submit" disabled={busy || locked || (!dirty && !!document.reviewDraftSavedAt)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}Prüfentwurf speichern</Button><p role="status" className="text-xs text-muted-foreground">{busy ? 'Wird gespeichert…' : dirty ? 'Ungespeicherte Änderungen' : saved || document.reviewDraftSavedAt ? 'Prüfentwurf gespeichert · nicht gebucht' : 'Noch kein Prüfentwurf gespeichert'}</p></div>
+    </form>
+  </section>;
+}
+
+export function IncomingSavedDraft({ document }: { document: IncomingDocument }) {
+  const draft = document.reviewDraft;
+  if (!draft) return null;
+  return <section aria-label="Gespeicherter Prüfentwurf" className="mb-5 rounded-lg border border-border p-4 text-sm"><h3 className="font-semibold">Gespeicherter Prüfentwurf · keine Buchungsbestätigung</h3><p className="mt-2 text-muted-foreground">Historischer Arbeitsstand, getrennt von Original und gegebenenfalls verknüpfter Ausgabe. Keine Bestätigung einer Zahlung.</p><dl className="mt-3 space-y-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words"><div><dt>Lieferant / Rechnungsnummer im Entwurf</dt><dd>{[draft.supplierName, draft.invoiceNumber].filter(Boolean).join(' · ') || 'Nicht angegeben'}</dd></div><div><dt>Rechnungsdatum / Zahlungsdatum im Entwurf</dt><dd>{[draft.invoiceDate, draft.paymentDate].filter(Boolean).join(' · ') || 'Nicht angegeben'}</dd></div><div><dt>Entwurfsbetrag (EUR)</dt><dd>{draft.amount || 'Nicht angegeben'}</dd></div><div><dt>Prüfnotiz</dt><dd className="whitespace-pre-wrap">{draft.note || 'Nicht angegeben'}</dd></div></dl></section>;
+}

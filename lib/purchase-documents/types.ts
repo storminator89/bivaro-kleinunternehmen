@@ -3,6 +3,8 @@ import type { ParsedEInvoiceParty } from '@/lib/e-invoice-parser';
 
 export const PURCHASE_PARSE_STATUSES = ['PENDING', 'PARSED', 'FAILED'] as const;
 export const PURCHASE_REVIEW_STATUSES = ['REVIEW', 'BOOKED', 'DISMISSED'] as const;
+export type PurchaseMediaType = 'application/pdf' | 'application/xml' | 'image/jpeg' | 'image/png';
+export type PurchaseReviewDraft = { supplierName: string; invoiceNumber: string; invoiceDate: string; paymentDate: string; amount: string; note: string };
 export type PurchaseParseStatus = typeof PURCHASE_PARSE_STATUSES[number];
 export type PurchaseReviewStatus = typeof PURCHASE_REVIEW_STATUSES[number];
 export type PurchaseParserWarning = { code: string; message: string };
@@ -56,12 +58,14 @@ export type IncomingDocument = {
   parseStatus: PurchaseParseStatus;
   validationStatus: 'NOT_VALIDATED';
   revision: number;
+  reviewDraft?: PurchaseReviewDraft | null;
+  reviewDraftSavedAt?: string | null;
   originalRef: {
     id: number;
     fileName: string;
     sha256: string;
     bytes: number;
-    mediaType: 'application/pdf' | 'application/xml';
+    mediaType: PurchaseMediaType;
     uploadedAt: string;
     downloadUrl: string;
   };

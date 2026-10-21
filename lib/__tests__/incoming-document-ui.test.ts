@@ -2,10 +2,11 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { IncomingReviewDraft, IncomingSavedDraft } from '@/components/purchases/incoming-review-draft';
 import { SourcePreview } from '@/components/purchases/incoming-document-review';
 import { IncomingDocumentRow } from '@/components/purchases/incoming-documents-workspace';
 import type { IncomingDocument } from '@/lib/purchase-documents/types';
-import { documentIdFromQuery, errorMessage, formatSourceAmount, formatSourceDate, incomingJson, incomingResponseError, reviewLabel, validateIncomingFile } from '@/components/purchases/incoming-document-ui';
+import { documentIdFromQuery, errorMessage, formatSourceAmount, formatSourceDate, incomingJson, incomingResponseError, isReviewMutationBlocked, reviewLabel, validateIncomingFile } from '@/components/purchases/incoming-document-ui';
 
 function party(name: string) { return { name, email: null, address: null, addressLines: [], zipCode: null, city: null, country: null }; }
 function document(overrides: Partial<IncomingDocument> = {}): IncomingDocument {
@@ -36,6 +37,37 @@ describe('incoming source presentation', () => {
     expect(formatSourceDate('not a date')).toBe('Nicht ausgelesen');
     expect(formatSourceDate('2026-02-30')).toBe('Nicht ausgelesen');
     expect(formatSourceDate('2026-10-01T00:00:00.000Z')).toBe('1.10.2026');
+  });
+  it('labels photo draft fields and historical work as unposted, never as original extraction or payment attestations', () => {
+    const doc = document({ reviewDraft: { supplierName: '<script>draft</script>', invoiceNumber: 'PHOTO-17', invoiceDate: '2026-10-20', paymentDate: '2026-10-21', amount: '0.29', note: 'Draft, not a payment' }, reviewDraftSavedAt: '2026-10-21T10:00:00.000Z' });
+    doc.originalRef = { ...doc.originalRef, mediaType: 'image/png' };
+    const html = renderToStaticMarkup(createElement(IncomingReviewDraft, { document: doc, onSaved: vi.fn(), onDirtyChange: vi.fn(), onBusyChange: vi.fn() }));
+    expect(html).toContain('Prüfentwurf · nicht gebucht'); expect(html).toContain('noch nicht mit einer Ausgabe verknüpft'); expect(html).toContain('Keine automatische Speicherung');
+    expect(html).not.toContain('type="checkbox"'); expect(html).not.toContain('<script>draft</script>'); expect(html).toContain('&lt;script&gt;draft&lt;/script&gt;');
+    const historical = renderToStaticMarkup(createElement(IncomingSavedDraft, { document: { ...doc, reviewState: 'DISMISSED' } }));
+    expect(historical).toContain('keine Buchungsbestätigung'); expect(historical).not.toContain('<input'); expect(historical).toContain('0.29');
+    const row = renderToStaticMarkup(createElement(IncomingDocumentRow, { document: { ...doc, supplierName: null, invoiceNumber: null, invoiceDate: null }, onOpen: vi.fn() }));
+    expect(row).toContain('Entwurf:'); expect(row).toContain('Prüfentwurf gespeichert'); expect(row).toContain('Entwurfsdatum');
+    const source = renderToStaticMarkup(createElement(SourcePreview, { document: { ...doc, preview: null, parseStatus: 'FAILED', approvalSupported: false }, onOpen: vi.fn() }));
+    expect(source).toContain('Ausgabenerfassung aus Fotos'); expect(source).not.toContain('korrektes PDF');
+  });
+  it('locks draft edits/save while dismissal is open and blocks interrupted dirty/in-flight review mutations', () => {
+    const clean = { busy: false, draftDirty: false, draftBusy: false, hasPending: false };
+    expect(isReviewMutationBlocked(clean)).toBe(false);
+    for (const key of ['busy', 'draftDirty', 'draftBusy', 'hasPending'] as const) expect(isReviewMutationBlocked({ ...clean, [key]: true })).toBe(true);
+    // Opening confirmation from clean state cannot make a later dirty/save event safe to discard.
+    expect(isReviewMutationBlocked({ ...clean, draftDirty: true })).toBe(true);
+    expect(isReviewMutationBlocked({ ...clean, draftDirty: true, draftBusy: true })).toBe(true);
+    expect(isReviewMutationBlocked({ ...clean, draftBusy: true })).toBe(true);
+    expect(isReviewMutationBlocked(clean)).toBe(false); // only after an acknowledged save / deliberate cancellation
+    const props = { document: document(), onSaved: vi.fn(), onDirtyChange: vi.fn(), onBusyChange: vi.fn() };
+    const locked = renderToStaticMarkup(createElement(IncomingReviewDraft, { ...props, locked: true }));
+    expect(locked).toContain('Entwurf vorübergehend gesperrt'); expect(locked).toContain('Beim Verwerfen wird kein Prüfentwurf still gespeichert');
+    expect(locked.match(/<input[^>]*disabled=""/g)).toHaveLength(5);
+    expect(locked).toMatch(/<textarea[^>]*disabled=""/);
+    expect(locked).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Prüfentwurf speichern/);
+    const unlocked = renderToStaticMarkup(createElement(IncomingReviewDraft, { ...props, locked: false }));
+    expect(unlocked).not.toContain('disabled=""'); expect(unlocked).not.toContain('Entwurf vorübergehend gesperrt');
   });
   it('keeps supplier and buyer in distinct labelled source sections', () => {
     const html = renderToStaticMarkup(createElement(SourcePreview, { document: document(), onOpen: vi.fn() }));
@@ -89,7 +121,10 @@ describe('incoming upload and request guards', () => {
     expect(validateIncomingFile({ name: 'invoice.xml', size: 8 * 1024 * 1024 })).toBeNull();
     expect(validateIncomingFile({ name: 'invoice.pdf', size: 25 * 1024 * 1024 + 1 })).toContain('25 MB');
     expect(validateIncomingFile({ name: 'invoice.xml', size: 8 * 1024 * 1024 + 1 })).toContain('8 MB');
-    expect(validateIncomingFile({ name: 'invoice.png', size: 20 })).toContain('nicht unterstützt');
+    expect(validateIncomingFile({ name: 'invoice.png', size: 20 })).toBeNull();
+    expect(validateIncomingFile({ name: 'invoice.jpg', size: 10 * 1024 * 1024 })).toBeNull();
+    expect(validateIncomingFile({ name: 'invoice.jpeg', size: 10 * 1024 * 1024 + 1 })).toContain('10 MB');
+    expect(validateIncomingFile({ name: 'invoice.heic', size: 20 })).toContain('nicht unterstützt');
     expect(validateIncomingFile({ name: 'invoice.pdf', size: 0 })).toContain('leer');
   });
   it.each(['0', '-1', '1.2', '1e2', 'Infinity', '9007199254740992', '../../9', null])('rejects unsafe deep-link ID %s', value => {
