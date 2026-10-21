@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
+import { stripEmptyServiceBillingForLegacy } from './helpers/backup-schema';
 import { createBackupManifest, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 import { recordFullPayment } from '@/lib/payment-journal/service';
@@ -105,6 +106,8 @@ describe('confirmed reminder backup evidence and tenant remap', () => {
     const old = { version: '3.0', data: legacyData, manifest: createBackupManifest({ sourceUserId: owner, generatedAt: '2026-10-21T12:00:00.000Z', data: legacyData }) };
     old.manifest.schemaVersion = COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION;
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => !['AiProviderSettings', 'ServiceArticle', 'DataImportBatch'].includes(entry.model));
+    stripEmptyServiceBillingForLegacy(old);
+    expect(() => restore.validateBackupForRestore(old)).not.toThrow();
     await expect(restore.restoreBackupData({ userId: target, backup: old, overwrite: true, resolveFile: async () => null })).rejects.toThrow(/bestätigte Mahn-Restbeträge/u);
     expect(await db.client.reminder.count({ where: { userId: target } })).toBe(1);
   });

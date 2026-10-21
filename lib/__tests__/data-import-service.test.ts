@@ -123,7 +123,7 @@ describe('catalog backup contract', () => {
     const data = { ...snapshot.data }; delete data.serviceArticles; delete data.annualBusinessContextRevisions;
     const manifest = createBackupManifest({ sourceUserId: 'csv-other', generatedAt: '2026-10-21T06:00:00.000Z', data });
     manifest.schemaVersion = PRE_DATA_IMPORT_SCHEMA_VERSION;
-    manifest.modelCoverage = manifest.modelCoverage.filter(row => !['ServiceArticle', 'DataImportBatch', 'AiProviderSettings'].includes(row.model));
+    manifest.modelCoverage = manifest.modelCoverage.filter(row => !['ServiceArticle', 'DataImportBatch', 'AiProviderSettings', 'ServiceBillingPlan', 'ServiceBillingPeriod'].includes(row.model));
     expect(() => validateBackupManifest(manifest, data)).not.toThrow();
     expect(() => validateBackupManifest(manifest, { ...data, serviceArticles: [{ id: 1 }] })).toThrow(/Artikel/);
   });

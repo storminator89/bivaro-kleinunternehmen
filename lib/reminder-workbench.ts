@@ -4,6 +4,7 @@ import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { ledgerSummary, type LedgerInvoice } from '@/lib/payment-journal/service';
 import { parseMoneyEUR, formatMoneyEUR } from '@/lib/money';
+import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 
 export class ReminderWorkbenchError extends Error {
   constructor(message: string, readonly status = 400, readonly code = 'INVALID_REMINDER') { super(message); }
@@ -27,6 +28,12 @@ const money = (value: string) => {
 
 /** Shared eligibility: only explained, positive EUR balances, never guessed legacy evidence. */
 export function reminderBalance(invoice: LedgerInvoice): ReminderBalanceSnapshot {
+  // Shared by fresh preview, TXT and recording paths; a planning marker is not
+  // a receivable, even when malformed or JSON-string encoded. Prior immutable
+  // idempotent command replay stays ahead of this fresh-eligibility boundary.
+  if (hasServiceBillingDraftMarker(invoice.parsedData)) {
+    throw new ReminderWorkbenchError('Serviceplan-Entwürfe sind keine offenen Forderungen. Bitte zuerst im Rechnungseditor bewusst ein Dokument erstellen.', 409, 'SERVICE_DRAFT_NOT_RENDERED');
+  }
   if (invoice.type !== 'INVOICE' || !['DRAFT', 'SENT'].includes(invoice.status)) {
     throw new ReminderWorkbenchError('Mahnungen können nur für offene Rechnungen erfasst werden', 409, 'INVOICE_NOT_OPEN');
   }

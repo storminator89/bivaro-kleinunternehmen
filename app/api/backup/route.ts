@@ -71,6 +71,8 @@ export async function GET() {
         billingNotes: count('billingNotes'),
         templates: count('templates'),
         recurringExpenses: count('recurringExpenses'),
+        serviceBillingPlans: count('serviceBillingPlans'),
+        serviceBillingPeriods: count('serviceBillingPeriods'),
         reminders: count('reminders'),
         cashBooks: count('cashBooks'),
         cashTransactions: count('cashTransactions'),

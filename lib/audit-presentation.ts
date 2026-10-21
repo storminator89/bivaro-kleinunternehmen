@@ -5,7 +5,7 @@ import type { AuditAction, AuditEntityType } from '@/lib/audit-log';
 export const AUDIT_ENTITY_LABELS: Record<AuditEntityType, string> = {
   Customer: 'Kunde', Supplier: 'Lieferant', Invoice: 'Rechnung', PurchaseDocument: 'Eingangsbeleg', Expense: 'Ausgabe', Income: 'Einnahme',
   Settings: 'Einstellungen', User: 'Benutzer', ApiKey: 'API-Key',
-  RecurringExpense: 'Wiederkehrende Ausgabe', Reminder: 'Mahnung',
+  ServiceBillingPlan: 'Service-Abrechnungsplan', RecurringExpense: 'Wiederkehrende Ausgabe', Reminder: 'Mahnung',
   InvoiceTemplate: 'Rechnungsvorlage', Backup: 'Datensicherung', Session: 'Sitzung',
   CreditNote: 'Gutschrift', CashBook: 'Kassenbuch', CashTransaction: 'Kassenbuchung',
   EURExport: 'EÜR-Export', Quote: 'Angebot', Documentation: 'Verfahrensdokumentation',

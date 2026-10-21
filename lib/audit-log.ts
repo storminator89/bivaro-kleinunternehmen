@@ -54,6 +54,7 @@ export type AuditEntityType =
   | 'User'
   | 'ApiKey'
   | 'RecurringExpense'
+  | 'ServiceBillingPlan'
   | 'Reminder'
   | 'InvoiceTemplate'
   | 'Backup'

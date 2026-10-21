@@ -111,6 +111,8 @@ jobs:
               'revenue-indicators-amounts-1440.png',
               'daily-actions-390.png',
               'daily-actions-1440.png',
+              'service-plan-review-mobile-390.png',
+              'service-plan-workspace-desktop-1440.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'

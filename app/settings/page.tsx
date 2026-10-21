@@ -50,6 +50,8 @@ type RestorePreview = {
       invoices: number;
       templates: number;
       recurringExpenses: number;
+      serviceBillingPlans: number;
+      serviceBillingPeriods: number;
       reminders: number;
       cashBooks: number;
       cashTransactions: number;
@@ -929,6 +931,8 @@ export default function SettingsPage() {
                       <span>Ausgaben: {restorePreview.preview.counts.expenses}</span>
                       <span>Einnahmen: {restorePreview.preview.counts.incomes}</span>
                       <span>Rechnungen: {restorePreview.preview.counts.invoices}</span>
+                      <span>Servicepläne: {restorePreview.preview.counts.serviceBillingPlans ?? 0}</span>
+                      <span>Bestätigte Serviceperioden: {restorePreview.preview.counts.serviceBillingPeriods ?? 0}</span>
                       <span>Vorlagen: {restorePreview.preview.counts.templates}</span>
                       <span>Kassen: {restorePreview.preview.counts.cashBooks}</span>
                       <span>Kassenbuchungen: {restorePreview.preview.counts.cashTransactions}</span>

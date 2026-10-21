@@ -1,0 +1,2 @@
+-- Capability boundary only: growth/AI, recurring service drafts, confirmed reminder balances and read-only daily actions are integrated.
+-- No business record or credential is rewritten; all thirteen historical/current identities retain their exact capability contracts.

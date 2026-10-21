@@ -69,6 +69,8 @@ model User {
   paymentJournalEvents PaymentJournalEvent[]
   dataImportBatches DataImportBatch[]
   serviceArticles ServiceArticle[]
+  serviceBillingPlans ServiceBillingPlan[]
+  serviceBillingPeriods ServiceBillingPeriod[]
 }
 
 // Shared, bounded rate-limit state for authentication and other API surfaces.
@@ -150,6 +152,7 @@ model Invoice {
   originalInvoice   Invoice? @relation("CreditNotes", fields: [originalInvoiceId], references: [id])
   creditNotes       Invoice[] @relation("CreditNotes")
   cancellationReason String? // Grund für Stornierung
+  serviceBillingPeriod ServiceBillingPeriod?
   convertedFromQuoteId Int? @unique
   convertedFromQuote Invoice? @relation("QuoteConversion", fields: [convertedFromQuoteId], references: [id], onDelete: SetNull)
   convertedInvoice Invoice? @relation("QuoteConversion")
@@ -180,6 +183,7 @@ model Customer {
   taxNumber       String?
   internalNote    String?
   noteVisibility  String    @default("BOTH") // EDITOR, SEND, BOTH
+  serviceBillingPlans ServiceBillingPlan[]
   createdAt       DateTime  @default(now())
   invoices        Invoice[]
   incomes         Income[]
@@ -577,4 +581,48 @@ model AiProviderSettings {
   version               Int      @default(1)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+// Private planning only. Creating a plan or preview NEVER issues a document.
+model ServiceBillingPlan {
+  id String @id @default(uuid())
+  // Tenant-scoped portable identity survives full backups and owner remapping.
+  stableKey String @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId Int
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name String
+  cadence String // MONTHLY, QUARTERLY, YEARLY; fixed after creation
+  anchorDate String // YYYY-MM-DD, fixed calendar anchor; not a timezone instant
+  taxMode String // small-business, standard; explicit native document selection
+  items Json
+  nextPeriod Int @default(0)
+  status String @default("ACTIVE") // ACTIVE, PAUSED
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  periods ServiceBillingPeriod[]
+
+  @@unique([userId, stableKey])
+  @@index([userId, status])
+}
+
+// Retained even after draft deletion. Unique plan/index forbids regeneration.
+model ServiceBillingPeriod {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId String
+  plan ServiceBillingPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  periodIndex Int
+  periodStart String
+  periodEnd String
+  action String // GENERATED or SKIPPED; never an issuance/payment record
+  invoiceId Int? @unique
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([planId, periodIndex])
+  @@index([userId, planId])
 }

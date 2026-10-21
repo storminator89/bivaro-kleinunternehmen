@@ -1,4 +1,6 @@
 import { validateReminderBackupFields, restoredReminderKey } from '@/lib/reminder-backup';
+import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
+import { sameServiceBillingInvoice, validateServiceBillingBackup } from '@/lib/service-billing-backup';
 import { annualContextAppendAfter, readAnnualContextRevision, validateAnnualContextHistory } from '@/lib/annual-business-context';
 import { CUSTOMER_FIELD_LIMITS, customerBusinessIdentity } from '@/lib/customer-field-contract';
 import { readServiceArticle, serviceArticleNameKey } from '@/lib/service-articles';
@@ -24,6 +26,7 @@ import { validateRecurringValues } from '@/lib/recurring-schedule';
 import {
   CURRENT_BACKUP_VERSION,
   backupSchemaSupportsReminderBalance,
+  backupSchemaSupportsServiceBilling,
   FULL_PAYMENT_JOURNAL_SCHEMA_VERSION,
   LEGACY_BACKUP_VERSION,
   manifestWarning,
@@ -98,6 +101,8 @@ type RestoreResult = {
   files: { imported: number; skipped: number };
   settings: { imported: boolean };
   recurringExpenses: { imported: number; skipped: number };
+  serviceBillingPlans: { imported: number; skipped: number };
+  serviceBillingPeriods: { imported: number; skipped: number };
   reminders: { imported: number; skipped: number };
   cashBooks: { imported: number; skipped: number };
   cashTransactions: { imported: number; skipped: number };
@@ -995,6 +1000,8 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   try { validateAnnualContextHistory(data.annualBusinessContextRevisions); } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Jahreskontexthistorie ist ungültig'); }
   if (version === LEGACY_BACKUP_VERSION && Array.isArray(data.annualBusinessContextRevisions) && data.annualBusinessContextRevisions.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine Jahreskontexthistorie enthalten');
   if (data.settings !== undefined && data.settings !== null) fiscalProfileForRestore(asRecord(data.settings, 'settings'));
+  try { validateServiceBillingBackup(data, manifest?.sourceUserId ?? (isRecord(data.user) ? String(data.user.id) : undefined), backupSchemaSupportsServiceBilling(manifest?.schemaVersion)); }
+  catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Serviceplan-Backup ist ungültig'); }
   validateBackupReferences(data, sets);
   validateSuppliers(data, manifest);
   validatePurchaseDocuments(data, manifest, root.type === 'full');
@@ -1029,6 +1036,8 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     files: { imported: 0, skipped: 0 },
     settings: { imported: false },
     recurringExpenses: { imported: 0, skipped: 0 },
+    serviceBillingPlans: { imported: 0, skipped: 0 },
+    serviceBillingPeriods: { imported: 0, skipped: 0 },
     reminders: { imported: 0, skipped: 0 },
     cashBooks: { imported: 0, skipped: 0 },
     cashTransactions: { imported: 0, skipped: 0 },
@@ -1096,6 +1105,8 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   invoices: Map<number, number>;
   purchaseDocuments: Map<number, number>;
   recurringExpenses: Map<number, number>;
+  serviceBillingPlans: Map<string, string>;
+  serviceBillingPeriods: Map<string, string>;
   reminders: Map<number, number>;
   cashBooks: Map<number, number>;
   cashTransactions: Map<number, number>;
@@ -1106,6 +1117,11 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   if (!sourceEntityId) return { entityId: null, state: 'not-applicable', sourceEntityId: null };
   if (entityType === 'User') {
     return { entityId: maps.sourceUserId === sourceEntityId ? maps.userId : null, state: maps.sourceUserId === sourceEntityId ? 'mapped' : 'unresolved', sourceEntityId };
+  }
+  if (entityType === 'ServiceBillingPlan' || entityType === 'ServiceBillingPeriod') {
+    const map = entityType === 'ServiceBillingPlan' ? maps.serviceBillingPlans : maps.serviceBillingPeriods;
+    const mapped = map.get(sourceEntityId);
+    return { entityId: mapped ?? null, state: mapped === undefined ? 'unresolved' : 'mapped', sourceEntityId };
   }
   const mapByType: Record<string, Map<number, number> | undefined> = {
     Customer: maps.customers,
@@ -1160,6 +1176,11 @@ function restoredIssuanceState(invoice: JsonRecord, version: string, paidInvoice
   const sourceId = asOptionalInt(invoice.id, 'invoice.id');
   const status = asOptionalString(invoice.status, 'invoice.status', 32) ?? 'DRAFT';
   if (candidate === 'UNISSUED' && (status !== 'DRAFT' || (sourceId !== null && paidInvoiceIds.has(sourceId)))) return 'ISSUED';
+  // A validated no-file service seed is recreated as a NEW planning artifact,
+  // not imported issuance evidence. Validation binds its stable receipt, exact
+  // native amounts and absence of payments; marker guards still forbid issue/send.
+  if (candidate === 'UNISSUED' && isUnrenderedServiceBillingDraft(invoice) && invoice.paidAt == null
+    && (sourceId === null || !paidInvoiceIds.has(sourceId))) return 'UNISSUED';
   // A backup is an untrusted import.  It may preserve a trusted ISSUED
   // state, but it cannot establish the positive evidence required for
   // UNISSUED; keep that conservative state UNKNOWN.
@@ -1173,6 +1194,8 @@ function issuanceStateRank(value: string | null | undefined): number {
 }
 
 async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+  await tx.serviceBillingPeriod.deleteMany({ where: { userId } });
+  await tx.serviceBillingPlan.deleteMany({ where: { userId } });
   await tx.cashTransaction.deleteMany({ where: { userId } });
   await tx.reminder.deleteMany({ where: { userId } });
   await tx.invoice.updateMany({ where: { userId }, data: { originalInvoiceId: null, convertedFromQuoteId: null } });
@@ -1356,6 +1379,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const invoices = asArray(data, 'invoices');
     const templates = asArray(data, 'templates');
     const recurringExpenses = asArray(data, 'recurringExpenses');
+    const serviceBillingPlans = asArray(data, 'serviceBillingPlans');
+    const serviceBillingPeriods = asArray(data, 'serviceBillingPeriods');
     const reminders = asArray(data, 'reminders');
     const billingNotes = asArray(data, 'billingNotes');
     const cashBooks = asArray(data, 'cashBooks');
@@ -1380,6 +1405,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     // Reject known immutable-target conflicts before resolving or staging any
     // files. Repeat these checks inside the write transaction to cover races.
     if (overwrite && await prisma.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
+    if (overwrite && await prisma.serviceBillingPlan.count({ where: { userId } }) > 0) throw new BackupValidationError('Wiederkehrende Servicepläne und bestätigte Periodenidentitäten dürfen nicht überschrieben werden. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
     if (overwrite && await prisma.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
     const sourceContext = validateAnnualContextHistory(data.annualBusinessContextRevisions);
     const targetContext = (await prisma.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } })).map(readAnnualContextRevision);
@@ -1411,6 +1437,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     // not contain bytes; those references stay opaque and are reported as
     // missing instead of creating a corrupt empty PDF/receipt.
     for (const invoice of invoices) {
+      if (isUnrenderedServiceBillingDraft(invoice)) continue;
       const sourceName = validateStoredName(invoice.storedFileName, 'invoice.storedFileName')
         ?? `invoice-${String(invoice.id)}`;
       await stageFile('invoice', sourceName, asRequiredString(invoice.fileName, 'invoice.fileName', 255));
@@ -1449,6 +1476,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       }
 
       if (overwrite && await tx.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
+      if (overwrite && await tx.serviceBillingPlan.count({ where: { userId } }) > 0) throw new BackupValidationError('Wiederkehrende Servicepläne und bestätigte Periodenidentitäten dürfen nicht überschrieben werden. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
       if (overwrite && await tx.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
       if (overwrite && await tx.paymentJournalEvent.count({ where: { userId } }) > 0) {
         throw new BackupValidationError('Überschreiben würde unveränderliche Zahlungsereignisse löschen. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
@@ -1490,6 +1518,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const purchaseDocumentMap = new Map<number, number>();
       const cashBookMap = new Map<number, number>();
       const recurringMap = new Map<number, number>();
+      const serviceBillingPlanMap = new Map<string, string>();
+      const serviceBillingPeriodMap = new Map<string, string>();
       const expenseMap = new Map<number, number>();
       const incomeMap = new Map<number, number>();
       const skippedSourceExpenses = new Set<number>();
@@ -1675,6 +1705,50 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         }
       }
 
+      // Portable plan keys are scoped to the target owner; internal row IDs are
+      // deliberately remapped so source and restored tenants can coexist.
+      for (const plan of serviceBillingPlans) {
+        const sourceId = String(plan.id);
+        const stableKey = String(plan.stableKey);
+        const customerId = relationMapValue(customerMap, plan.customerId, 'serviceBillingPlan.customerId')!;
+        const existing = await tx.serviceBillingPlan.findUnique({ where: { userId_stableKey: { userId, stableKey } } });
+        if (existing) {
+          if (await tx.serviceBillingPeriod.count({ where: { userId, planId: existing.id } }) !== Number(plan.nextPeriod)) throw new BackupValidationError('Der Zielserviceplan enthält unvollständige Periodenidentitäten; bitte getrennt prüfen.');
+          const fields = ['stableKey', 'name', 'cadence', 'anchorDate', 'taxMode', 'items', 'nextPeriod', 'status', 'revision'] as const;
+          if (existing.customerId !== customerId || fields.some(field => hashJson(existing[field]) !== hashJson(plan[field]))
+            || existing.createdAt.toISOString() !== asDate(plan.createdAt, 'serviceBillingPlan.createdAt')!.toISOString()
+            || existing.updatedAt.toISOString() !== asDate(plan.updatedAt, 'serviceBillingPlan.updatedAt')!.toISOString()) {
+            throw new BackupValidationError('Abweichender Serviceplan mit gleicher stabiler Identität. Zusammenführen würde Planstand oder Periodenentscheidungen verlieren; bitte getrennt prüfen.');
+          }
+          serviceBillingPlanMap.set(sourceId, existing.id);
+          result.serviceBillingPlans.skipped += 1;
+        } else {
+          const created = await tx.serviceBillingPlan.create({ data: {
+            userId, stableKey, customerId, name: String(plan.name), cadence: String(plan.cadence),
+            anchorDate: String(plan.anchorDate), taxMode: String(plan.taxMode), items: asJson(plan.items, 'serviceBillingPlan.items'),
+            nextPeriod: Number(plan.nextPeriod), status: String(plan.status), revision: Number(plan.revision),
+            createdAt: asDate(plan.createdAt, 'serviceBillingPlan.createdAt')!, updatedAt: asDate(plan.updatedAt, 'serviceBillingPlan.updatedAt')!,
+          } });
+          serviceBillingPlanMap.set(sourceId, created.id);
+          result.serviceBillingPlans.imported += 1;
+        }
+      }
+      const recurringSourceInvoiceIds = new Set(serviceBillingPeriods.filter(period => period.invoiceId != null).map(period => Number(period.invoiceId)));
+      const recurringInvoiceIdentity = new Map<number, number>();
+      const existingServicePeriods = new Map<string, { id: string; invoiceId: number | null }>();
+      for (const period of serviceBillingPeriods) {
+        const planId = serviceBillingPlanMap.get(String(period.planId))!;
+        const existing = await tx.serviceBillingPeriod.findUnique({ where: { planId_periodIndex: { planId, periodIndex: Number(period.periodIndex) } } });
+        if (!existing) continue;
+        if (existing.userId !== userId || existing.action !== period.action || existing.periodStart !== period.periodStart || existing.periodEnd !== period.periodEnd
+          || existing.createdAt.toISOString() !== asDate(period.createdAt, 'serviceBillingPeriod.createdAt')!.toISOString()
+          || (existing.invoiceId === null) !== (period.invoiceId == null)) {
+          throw new BackupValidationError('Abweichende Service-Periodenidentität. Eine bestätigte oder gelöschte Entwurfsperiode darf nicht erneut erzeugt werden.');
+        }
+        existingServicePeriods.set(String(period.id), existing);
+        if (existing.invoiceId !== null) recurringInvoiceIdentity.set(Number(period.invoiceId), existing.invoiceId);
+      }
+
       const sourceCustomersById = new Map(customers.map((customer) => [asOptionalInt(customer.id, 'customer.id'), customer]));
       for (const invoice of invoices) {
         const sourceId = asOptionalInt(invoice.id, 'invoice.id')!;
@@ -1693,13 +1767,19 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         if (new Set(identityMatches.map((event) => event.invoiceId)).size > 1) {
           throw new BackupValidationError('Kollision: Zahlungsidentitäten verweisen auf verschiedene Zielrechnungen');
         }
+        const recurringInvoiceId = recurringInvoiceIdentity.get(sourceId);
+        if (recurringInvoiceId !== undefined && identityMatches[0] && recurringInvoiceId !== identityMatches[0].invoiceId) throw new BackupValidationError('Service- und Zahlungsidentitäten verweisen auf unterschiedliche Rechnungen.');
         const existing = identityMatches[0]
           ? await tx.invoice.findFirst({ where: { id: identityMatches[0].invoiceId, userId } })
-          : invoiceNumber ? await tx.invoice.findFirst({ where: { userId, invoiceNumber } }) : null;
+          : recurringInvoiceId !== undefined ? await tx.invoice.findFirst({ where: { id: recurringInvoiceId, userId } })
+            : invoiceNumber ? await tx.invoice.findFirst({ where: { userId, invoiceNumber } }) : null;
+        if ((recurringInvoiceId !== undefined && !existing) || (recurringSourceInvoiceIds.has(sourceId) && existing && !sameServiceBillingInvoice(existing as unknown as JsonRecord, invoice, relationMapValue(customerMap, invoice.customerId, 'invoice.customerId')))) {
+          throw new BackupValidationError('Der Service-Periodenentwurf wurde im Ziel oder im Backup verändert. Zusammenführen wird ohne Ersatz oder Duplikat abgebrochen.');
+        }
         // Numeric IDs, filenames and equal amounts do not establish document
         // identity across restores. Keep accepted legacy no-write protection;
         // partial histories additionally require a verified event identity.
-        if (!sourcePayments.length && !invoiceNumber?.trim() && existingPaymentEvents.length) {
+        if (!sourcePayments.length && !invoiceNumber?.trim() && recurringInvoiceId === undefined && existingPaymentEvents.length) {
           throw new BackupValidationError('Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.');
         }
         if (sourcePayments.length && !invoiceNumber?.trim() && existingPaymentEvents.length && !identityMatches.length) {
@@ -1788,7 +1868,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const created = await tx.invoice.create({ data: {
           type: asOptionalString(invoice.type, 'invoice.type', 32) ?? 'INVOICE',
           fileName: asRequiredString(invoice.fileName, 'invoice.fileName', 255),
-          storedFileName: fileMap.get(`invoice:${sourceName}`)!,
+          storedFileName: isUnrenderedServiceBillingDraft(invoice) ? '' : fileMap.get(`invoice:${sourceName}`)!,
           invoiceNumber,
           uploadedAt: asDate(invoice.uploadedAt, 'invoice.uploadedAt', new Date())!,
           invoiceDate: asDate(invoice.invoiceDate, 'invoice.invoiceDate'),
@@ -1805,11 +1885,29 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           customerId: relationMapValue(customerMap, invoice.customerId, 'invoice.customerId'),
           userId,
         } });
-        usedFiles.add(fileMap.get(`invoice:${sourceName}`)!);
+        if (!isUnrenderedServiceBillingDraft(invoice)) usedFiles.add(fileMap.get(`invoice:${sourceName}`)!);
         invoiceMap.set(sourceId, created.id);
         if (sourcePayments.length) mappedJournalInvoices.add(created.id);
         createdInvoiceIds.add(sourceId);
         result.invoices.imported += 1;
+      }
+
+      for (const period of serviceBillingPeriods) {
+        const planId = serviceBillingPlanMap.get(String(period.planId))!;
+        const invoiceId = relationMapValue(invoiceMap, period.invoiceId, 'serviceBillingPeriod.invoiceId');
+        const existing = existingServicePeriods.get(String(period.id));
+        if (existing) {
+          if (existing.invoiceId !== invoiceId) throw new BackupValidationError('Serviceperiode verweist auf einen anderen Zielentwurf. Wiederherstellen wurde abgebrochen.');
+          serviceBillingPeriodMap.set(String(period.id), existing.id);
+          result.serviceBillingPeriods.skipped += 1;
+          continue;
+        }
+        const created = await tx.serviceBillingPeriod.create({ data: {
+          userId, planId, periodIndex: Number(period.periodIndex), periodStart: String(period.periodStart), periodEnd: String(period.periodEnd),
+          action: String(period.action), invoiceId, createdAt: asDate(period.createdAt, 'serviceBillingPeriod.createdAt')!,
+        } });
+        serviceBillingPeriodMap.set(String(period.id), created.id);
+        result.serviceBillingPeriods.imported += 1;
       }
 
       for (const note of billingNotes) {
@@ -2283,6 +2381,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         invoices: invoiceMap,
         purchaseDocuments: purchaseDocumentMap,
         recurringExpenses: recurringMap,
+        serviceBillingPlans: serviceBillingPlanMap,
+        serviceBillingPeriods: serviceBillingPeriodMap,
         reminders: reminderMap,
         cashBooks: cashBookMap,
         cashTransactions: cashTransactionMap,

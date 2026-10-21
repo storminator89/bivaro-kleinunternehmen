@@ -1,3 +1,5 @@
+import { ownedServiceBillingDraft } from '@/lib/server/service-billing-draft';
+import { ServiceBillingError } from '@/lib/service-billing';
 import { quoteConversionBlockReason } from '@/lib/quote-workflow';
 import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
@@ -104,16 +106,18 @@ function buildInvoiceUploadFingerprint(
   customerId: number | null,
   billingNoteIds: number[],
   fromQuoteId: number | null,
+  serviceDraftId: number | null = null,
 ): string {
-  return createHash('sha256')
+  const hash = createHash('sha256')
     .update(rawXml)
     .update('\0')
     .update(String(customerId ?? ''))
     .update('\0')
     .update(JSON.stringify([...billingNoteIds].sort((a, b) => a - b)))
     .update('\0')
-    .update(String(fromQuoteId ?? ''))
-    .digest('hex');
+    .update(String(fromQuoteId ?? ''));
+  if (serviceDraftId !== null) hash.update(`\0service-draft:${serviceDraftId}`);
+  return hash.digest('hex');
 }
 
 type UploadRequestMetadata = { requestId: string; fingerprint: string };
@@ -243,6 +247,10 @@ async function postHandler(request: NextRequest) {
       }
       throw error;
     }
+    const serviceDraftReference = formData.get('serviceDraftId');
+    if (serviceDraftReference !== null && serviceDraftReference !== '' && billingNoteIds.length > 0) {
+      return NextResponse.json({ error: 'Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden.', code: 'UNSUPPORTED_SERVICE_BILLING_NOTES' }, { status: 400 });
+    }
     if (billingNoteIds.length > 0 && selectedCustomerId === null) {
       return NextResponse.json({ error: 'Leistungsnotizen benötigen einen ausgewählten Kunden' }, { status: 400 });
     }
@@ -311,6 +319,14 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json({ error: 'Ungültige Angebotsreferenz' }, { status: 400 });
     }
 
+    const rawServiceDraftId = formData.get('serviceDraftId');
+    const serviceDraftId = rawServiceDraftId === null || rawServiceDraftId === '' ? null : Number(rawServiceDraftId);
+    const serviceDraftToken = formData.get('serviceDraftToken');
+    if (serviceDraftId !== null && (!Number.isSafeInteger(serviceDraftId) || serviceDraftId <= 0 || !generatedRequestId || typeof serviceDraftToken !== 'string' || !/^[0-9a-f]{64}$/.test(serviceDraftToken))) {
+      return NextResponse.json({ error: 'Ungültige Serviceentwurfsreferenz. Bitte den Entwurf neu laden.' }, { status: 400 });
+    }
+    if (serviceDraftId !== null && fromQuoteId !== null) return NextResponse.json({ error: 'Ein Serviceentwurf kann nicht zugleich ein Angebot umwandeln.' }, { status: 400 });
+
     let sourceQuote: { id: number; status: string; validUntil: Date | null; convertedInvoice?: { id: number } | null } | null = null;
     if (fromQuoteId !== null) {
       sourceQuote = await prisma.invoice.findFirst({
@@ -351,7 +367,7 @@ async function postHandler(request: NextRequest) {
     // and its retry, even if findOrCreateCustomer creates a row meanwhile.
     const fingerprintCustomerId = selectedCustomerId;
     const uploadFingerprint = generatedRequestId
-      ? buildInvoiceUploadFingerprint(parsedInvoice.rawXml, fingerprintCustomerId, billingNoteIds, fromQuoteId)
+      ? buildInvoiceUploadFingerprint(parsedInvoice.rawXml, fingerprintCustomerId, billingNoteIds, fromQuoteId, serviceDraftId)
       : null;
     if (generatedRequestId && uploadFingerprint) {
       const existing = await findUploadRequestInvoice(prisma, userId, generatedRequestId);
@@ -360,6 +376,10 @@ async function postHandler(request: NextRequest) {
         if (!metadata || metadata.fingerprint !== uploadFingerprint) throw new UploadIdempotencyConflictError();
         return NextResponse.json({ ...existing, idempotent: true });
       }
+    }
+
+    if (serviceDraftId !== null) {
+      await inTransaction(tx => ownedServiceBillingDraft(tx, userId, serviceDraftId, serviceDraftToken));
     }
 
     if (parsedInvoice.invoiceNumber) {
@@ -453,6 +473,24 @@ async function postHandler(request: NextRequest) {
         if (selectedCustomer && (!customerRecord || !customerNameMatchesInvoiceBuyer(customerRecord.name, parsedInvoice.customerName))) {
           throw new BillingNoteClaimError('Der ausgewählte Kunde entspricht nicht dem Rechnungsempfänger', 409);
         }
+        if (serviceDraftId !== null) {
+          const { invoice: draft } = await ownedServiceBillingDraft(tx, userId, serviceDraftId, serviceDraftToken);
+          if (!customerRecord) throw new ServiceBillingError('Bitte einen Kunden auswählen.', 400);
+          if (!parsedInvoice.invoiceNumber) throw new ServiceBillingError('Bitte eine Rechnungsnummer bewusst im Editor angeben.', 400);
+          const changed = await tx.invoice.updateMany({ where: { id: draft.id, userId, status: 'DRAFT', issuanceState: 'UNISSUED', storedFileName: '', customerId: draft.customerId, parsedData: { equals: draft.parsedData as Prisma.InputJsonValue } }, data: {
+            fileName: file.name, storedFileName: storedFileName!, invoiceNumber: parsedInvoice.invoiceNumber,
+            invoiceDate, dueDate: parsedInvoice.dueDate, totalAmount: parsedInvoice.totalAmount, customerId: customerRecord.id,
+            parsedData: toStoredParsedData(parsedInvoice, { requestId: generatedRequestId!, fingerprint: uploadFingerprint! }),
+            // Explicit file generation remains a DRAFT, never an issuance claim.
+            issuanceState: 'UNKNOWN',
+          } });
+          if (changed.count !== 1) throw new ServiceBillingError('Der Entwurf wurde geändert. Bitte neu laden.', 409);
+          await createFinancialAuditLog({ userId, action: 'UPDATE', entityType: 'Invoice', entityId: draft.id, entityName: parsedInvoice.invoiceNumber,
+            oldValues: { status: 'DRAFT', issuanceState: 'UNISSUED', invoiceNumber: null }, newValues: { status: 'DRAFT', issuanceState: 'UNKNOWN', invoiceNumber: parsedInvoice.invoiceNumber },
+            metadata: { actorId: userId, tenantId: userId, operation: 'service-plan.render-draft', originalReference: `invoice:${draft.id}`, reason: 'explicit invoice editor file generation replaces same draft; no issuance, email or payment' },
+          }, tx);
+          return { invoice: await tx.invoice.findUniqueOrThrow({ where: { id: draft.id, userId }, include: { incomes: true } }), idempotent: false };
+        }
         const invoiceNumber = parsedInvoice.invoiceNumber || await getNextDocumentNumber(tx, userId, 'INVOICE', invoiceDate.getFullYear());
         const created = await tx.invoice.create({
           data: {
@@ -544,6 +582,7 @@ async function postHandler(request: NextRequest) {
     if (error instanceof RequestBodyLimitError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    if (error instanceof ServiceBillingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof QuoteConversionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }

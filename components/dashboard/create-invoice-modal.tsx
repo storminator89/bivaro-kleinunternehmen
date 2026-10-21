@@ -1,4 +1,5 @@
 "use client";
+import type { ServiceBillingDraftSeed } from "@/lib/service-billing";
 import { ServiceArticlePicker } from "@/components/dashboard/service-article-picker";
 
 import salesStyles from "@/components/dashboard/sales-workspace.module.css";
@@ -22,6 +23,7 @@ interface CreateInvoiceModalProps {
   onClose: () => void;
   onInvoiceCreated?: () => void;
   presentation?: "dialog" | "page";
+  fromDraft?: { id: number; customerId: number | null; parsedData: ServiceBillingDraftSeed; draftToken: string };
   fromQuote?: {
     id: number;
     parsedData: {
@@ -111,8 +113,12 @@ export function CreateInvoiceModal({
   onClose,
   onInvoiceCreated,
   fromQuote,
+  fromDraft,
   presentation = "dialog",
 }: CreateInvoiceModalProps) {
+  const [draftToken, setDraftToken] = useState(fromDraft?.draftToken ?? "");
+  const [draftSaveMessage, setDraftSaveMessage] = useState("");
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -196,6 +202,7 @@ export function CreateInvoiceModal({
   const previewGenerationRef = useRef(0);
   const wasOpenRef = useRef(false);
   const appliedQuoteRef = useRef<number | null>(null);
+  const appliedDraftRef = useRef<number | null>(null);
 
   const resetEditorState = useCallback(() => {
     const today = new Date();
@@ -203,6 +210,8 @@ export function CreateInvoiceModal({
     in14Days.setDate(today.getDate() + 14);
 
     appliedQuoteRef.current = null;
+    appliedDraftRef.current = null;
+    setDraftSaveMessage("");
     setCustomerAddress("");
     setInvoiceNumber("");
     setDate(today.toISOString().split('T')[0]);
@@ -279,10 +288,12 @@ export function CreateInvoiceModal({
       fetch("/api/customers")
         .then(res => res.json())
         .then(data => {
+          if (!active) return;
           const nextCustomers = Array.isArray(data) ? data : [];
           setCustomers(nextCustomers);
-          if (fromQuote?.customerId) {
-            const quoteCustomer = nextCustomers.find((customer: Customer) => customer.id.toString() === fromQuote.customerId?.toString());
+          if (fromQuote?.customerId || fromDraft?.customerId) {
+            const sourceCustomerId = fromDraft?.customerId ?? fromQuote?.customerId;
+            const quoteCustomer = nextCustomers.find((customer: Customer) => customer.id.toString() === sourceCustomerId?.toString());
             if (quoteCustomer) {
               setSelectedCustomer(quoteCustomer);
               setSelectedCustomerId(Number(quoteCustomer.id));
@@ -294,7 +305,7 @@ export function CreateInvoiceModal({
       fetch("/api/invoices/next-number")
         .then(res => res.json())
         .then(data => {
-          if (data.nextInvoiceNumber) {
+          if (active && data.nextInvoiceNumber) {
             setInvoiceNumber(data.nextInvoiceNumber);
           }
         })
@@ -303,10 +314,10 @@ export function CreateInvoiceModal({
       fetchTemplates();
     }
     return () => { active = false; };
-  }, [fromQuote?.customerId, isOpen, resetEditorState]);
+  }, [fromQuote?.customerId, fromDraft?.customerId, isOpen, resetEditorState]);
 
   useEffect(() => {
-    if (!selectedCustomerId) {
+    if (!selectedCustomerId || fromDraft) {
       setBillingNotes([]);
       setBillingNotesError(null);
       setIsBillingNotesLoading(false);
@@ -338,7 +349,7 @@ export function CreateInvoiceModal({
     return () => {
       isActive = false;
     };
-  }, [selectedCustomerId]);
+  }, [selectedCustomerId, fromDraft]);
 
   // Pre-fill from quote when converting
   useEffect(() => {
@@ -362,6 +373,17 @@ export function CreateInvoiceModal({
       if (pd.customerAddress) setCustomerAddress(pd.customerAddress);
     }
   }, [isOpen, fromQuote]);
+
+  useEffect(() => {
+    if (!isOpen || !fromDraft || appliedDraftRef.current === fromDraft.id) return;
+    appliedDraftRef.current = fromDraft.id;
+    setItems(fromDraft.parsedData.items.map(item => ({ ...item })));
+    setTaxSelection({ mode: fromDraft.parsedData.taxMode, source: 'template' });
+    setTaxAcknowledged(false);
+    setCustomerAddress(fromDraft.parsedData.customerAddress);
+    setNotes(fromDraft.parsedData.notes);
+    setDraftToken(fromDraft.draftToken);
+  }, [isOpen, fromDraft]);
 
   useEffect(() => {
     if (outputMode === 'xml-only') {
@@ -559,6 +581,7 @@ export function CreateInvoiceModal({
   const isBillingNoteSelected = (noteId: number) => items.some(item => item.billingNoteId === noteId);
 
   const toggleBillingNote = (note: BillingNote, checked: boolean) => {
+    if (fromDraft) { setBillingNotesError('Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden.'); return; }
     if (checked) {
       if (isBillingNoteSelected(note.id)) return;
       const importedItem: InvoiceItem = {
@@ -1376,6 +1399,7 @@ export function CreateInvoiceModal({
     formData.append('billingNoteIds', JSON.stringify(billingNoteIds));
     if (generatedRequestId) formData.append('generatedRequestId', generatedRequestId);
     if (fromQuote) formData.append('fromQuoteId', String(fromQuote.id));
+    if (fromDraft) { formData.append('serviceDraftId', String(fromDraft.id)); formData.append('serviceDraftToken', draftToken); }
 
     let uploadRes: Response;
     try {
@@ -1448,7 +1472,24 @@ export function CreateInvoiceModal({
     return new Uint8Array(await response.arrayBuffer());
   };
 
+  const saveServiceDraft = async () => {
+    if (!fromDraft || !taxMode) return;
+    if (items.some(item => item.billingNoteId !== undefined)) { setDraftSaveMessage('Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden.'); return; }
+    setIsSavingDraft(true); setDraftSaveMessage("");
+    try {
+      const response = await fetch(`/api/service-billing/drafts/${fromDraft.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftToken, customerId: selectedCustomerId, customerAddress, notes, taxMode, items }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Entwurf konnte nicht gespeichert werden.');
+      setDraftToken(data.draftToken); setDraftSaveMessage('Entwurf gespeichert. Keine Rechnungsdatei erstellt oder versendet.');
+    } catch (error) { setDraftSaveMessage(error instanceof Error ? error.message : 'Entwurf konnte nicht gespeichert werden.'); }
+    finally { setIsSavingDraft(false); }
+  };
+
   const createInvoiceFile = async () => {
+    if (fromDraft && items.some(item => item.billingNoteId !== undefined)) { setDraftSaveMessage('Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden.'); return; }
     if (!taxReady) return;
     setIsGenerating(true);
     try {
@@ -1583,6 +1624,7 @@ export function CreateInvoiceModal({
           </div>
         </DialogHeader>
 
+        {fromDraft && <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm"><p className="font-medium">Serviceentwurf · {fromDraft.parsedData.periodStart} bis {fromDraft.parsedData.periodEnd}</p><p className="mt-1 text-muted-foreground">Positionen sind frei bearbeitbar. „Entwurf speichern“ behält diese Rechnung ohne Datei und Nummer. Erst die bewusste Dateierstellung übernimmt die geprüften Rechnungsdaten in denselben Datensatz; kein automatischer Versand und keine Einnahme.</p></div>}
         <div className="invoice-editor-grid">
           <div className="invoice-editor-main">
             <DocumentTaxProfileFields id="invoice" settings={settings} issueDate={date} selection={taxSelection} acknowledged={taxAcknowledged} onAcknowledged={setTaxAcknowledged} onModeChange={handleTaxModeChange} taxCase={taxCase} onTaxCaseChange={setTaxCase} foreignAddress={foreignAddress} domesticConfirmed={domesticConfirmed} onDomesticConfirmed={setDomesticConfirmed} />
@@ -1729,7 +1771,8 @@ export function CreateInvoiceModal({
             )}
 
             {/* Unreserved service notes */}
-            {selectedCustomerId && (
+            {fromDraft && <p className="rounded-md border bg-muted/30 p-3 text-sm" role="note">Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden; dort werden die Notizen beim Erstellen der Rechnungsdatei eindeutig zugeordnet.</p>}
+            {selectedCustomerId && !fromDraft && (
               <section className="space-y-3 rounded-md border border-primary/20 bg-primary/5 p-3" aria-labelledby="billing-notes-title">
                 <div>
                   <Label id="billing-notes-title" className="text-sm font-medium">Leistungsnotizen übernehmen</Label>
@@ -2002,13 +2045,15 @@ export function CreateInvoiceModal({
 
         {!taxReady && <p id="invoice-tax-blocker" className="text-xs"><a href="#invoice-tax-heading" className="underline underline-offset-4">Steuerbehandlung und unterstützten Steuerfall oben klären</a>, bevor Sie die Rechnung erstellen.</p>}
         <DialogFooter className={isPage ? "invoice-create-actions" : undefined}>
-          <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
-          <Button type="button" onClick={createInvoiceFile} aria-describedby={!taxReady ? "invoice-tax-blocker" : undefined} disabled={!taxReady || isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSavingDraft || isGenerating}>Abbrechen</Button>
+          {fromDraft && <Button type="button" variant="outline" onClick={saveServiceDraft} disabled={isSavingDraft || isGenerating || !taxMode}>{isSavingDraft ? 'Speichere Entwurf …' : 'Entwurf speichern'}</Button>}
+          <Button type="button" onClick={createInvoiceFile} aria-describedby={!taxReady ? "invoice-tax-blocker" : undefined} disabled={!taxReady || isSavingDraft || isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
             {isGenerating
               ? (outputMode === 'xml-only' ? "Erstelle XML …" : "Erstelle PDF …")
               : (outputMode === 'xml-only' ? "XML erstellen" : "PDF erstellen")}
           </Button>
         </DialogFooter>
+        {draftSaveMessage && <p role="status" className="text-sm">{draftSaveMessage}</p>}
                 <p className="text-xs text-muted-foreground">Die Rechnung wird gespeichert und heruntergeladen. Die E-Rechnungsdaten werden vorab geprüft.</p>
               </div>
             </section>

@@ -1,4 +1,5 @@
 import { reminderBalance, normalizeReminderOptions, composeReminderText } from '@/lib/reminder-workbench';
+import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 import { readFile } from 'fs/promises';
 import { basename, extname } from 'path';
 import type { SendMailOptions } from 'nodemailer';
@@ -348,6 +349,7 @@ async function loadEmailDocument(userId: string, request: EmailDraftRequest): Pr
     || invoice.incomes.length > 0 || invoice.paidAt)) {
     throw new Error('Mahnungen für Rechnungen mit Zahlungsnachweisen sind gesperrt. Bitte Restbetrag und Zahlungsjournal prüfen.');
   }
+  if (hasServiceBillingDraftMarker(invoice.parsedData)) throw new Error('Bitte den Serviceentwurf zuerst im Rechnungseditor prüfen und eine echte Rechnungsdatei erstellen.');
   if (request.documentType === 'reminder') reminderBalance(invoice);
   const sanitizedFileName = basename(invoice.storedFileName);
   const attachmentPath = await findOwnedUploadedFile(userId, sanitizedFileName);
