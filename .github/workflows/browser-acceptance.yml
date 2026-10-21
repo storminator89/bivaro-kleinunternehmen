@@ -131,6 +131,8 @@ jobs:
               'incoming-validation-mobile-390.png',
               'mocked-email-accepted-1440.png',
               'mocked-email-unknown-390.png',
+              'customer-timeline-desktop-1440.png',
+              'customer-timeline-mobile-360.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
