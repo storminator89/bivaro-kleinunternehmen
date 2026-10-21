@@ -7,6 +7,8 @@ import { createFinancialAuditLog } from '@/lib/audit-log';
 import { readFile } from 'fs/promises';
 import { isPhotoMedia, type ManualPhotoSnapshot } from '@/lib/purchase-documents/manual-photo-contract';
 import { stableManualPhotoSnapshot, validateManualPhotoSnapshot } from '@/lib/purchase-documents/manual-photo-review';
+import { validateAiExtractionState, validateAiDraftProvenance } from '@/lib/purchase-documents/ai-validation';
+import { restoredAiExtractionState, validateAiApprovedSnapshot } from '@/lib/purchase-documents/ai-provenance';
 import { parsePurchaseReviewDraft } from '@/lib/purchase-documents/review-draft';
 import { originalByteLimit, purchaseOriginalName, detectPurchaseContainer, readPurchaseOriginal } from '@/lib/purchase-documents/original';
 import { getBackupFileVersion } from '@/lib/backup-snapshot';
@@ -711,6 +713,11 @@ function validatePurchaseDocuments(data: JsonRecord, manifest?: BackupManifest, 
     try { validatePurchaseDocumentBackupFields(document, label, manifest?.schemaVersion); }
     catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : `${label}: Nicht unterstützte Eingangsbelegdaten`); }
     if (document.userId !== undefined && document.userId !== sourceUserId) throw new BackupValidationError(`${label}.userId gehört nicht zum Quellmandanten`);
+    try {
+      const aiState = document.aiExtraction == null ? null : validateAiExtractionState(document.aiExtraction, String(document.originalSha256));
+      if (document.aiDraftProvenance != null) validateAiDraftProvenance(document.aiDraftProvenance, aiState, String(document.originalSha256));
+      validateAiApprovedSnapshot(document.aiApprovedSnapshot, { aiExtraction: document.aiExtraction, aiDraftProvenance: document.aiDraftProvenance, originalSha256: String(document.originalSha256), reviewDraft: document.reviewDraft, reviewStatus: document.reviewStatus });
+    } catch { throw new BackupValidationError(`${label}: KI-Herkunft ist ungültig oder ungebunden`); }
     const originalFileName = asRequiredString(document.originalFileName, `${label}.originalFileName`, 240);
     if (/[\u0000-\u001f\u007f]/u.test(originalFileName)) throw new BackupValidationError(`${label}.originalFileName enthält Steuerzeichen`);
     if (!isSafeStoredFileName(document.storedFileName) || storedNames.has(document.storedFileName)) throw new BackupValidationError(`${label}.storedFileName enthält keine eindeutige private Dateireferenz`);
@@ -1160,10 +1167,11 @@ function purchaseOriginalIdentity(record: JsonRecord): string {
 
 function purchaseSourceFingerprint(record: JsonRecord, supplierMap?: Map<number, number>): string {
   const dateFields = ['uploadedAt', 'invoiceDate', 'approvedAt', 'dismissedAt', 'reviewDraftSavedAt'];
-  const fields = ['originalFileName', 'originalSha256', 'originalByteCount', 'mediaType', 'uploadRequestId', 'parsedData', 'parseStatus', 'parserVersion', 'parseErrorCode', 'supplierName', 'invoiceNumber', 'currency', 'totalAmount', 'reviewStatus', 'revision', 'approvalRequestId', 'approvalFingerprint', 'dismissalReason', 'reviewDraft'];
+  const fields = ['originalFileName', 'originalSha256', 'originalByteCount', 'mediaType', 'uploadRequestId', 'parsedData', 'parseStatus', 'parserVersion', 'parseErrorCode', 'supplierName', 'invoiceNumber', 'currency', 'totalAmount', 'reviewStatus', 'revision', 'approvalRequestId', 'approvalFingerprint', 'dismissalReason', 'reviewDraft', 'aiDraftProvenance', 'aiApprovedSnapshot'];
   return hashJson({
     ...Object.fromEntries(fields.map((field) => [field, record[field] ?? null])),
     ...Object.fromEntries(dateFields.map((field) => [field, sourceDate(record[field], field)?.toISOString() ?? null])),
+    aiExtraction: restoredAiExtractionState(record.aiExtraction, String(record.originalSha256)),
     linked: record.expenseId !== null && record.expenseId !== undefined,
     supplierId: supplierMap ? relationMapValue(supplierMap, record.supplierId, 'purchaseDocument.supplierId') : record.supplierId ?? null,
     selectedSupplierSnapshot: remapSupplierSnapshot(record.selectedSupplierSnapshot, supplierMap),
@@ -1833,6 +1841,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           currency: asOptionalString(document.currency, 'purchaseDocument.currency', 3),
           totalAmount: asOptionalFinite(document.totalAmount, 'purchaseDocument.totalAmount'),
           reviewedSourceSnapshot: document.reviewedSourceSnapshot == null ? Prisma.DbNull : asJson({ ...asRecord(document.reviewedSourceSnapshot, 'reviewedSourceSnapshot'), ownerId: userId }, 'reviewedSourceSnapshot'),
+          aiExtraction: document.aiExtraction == null ? Prisma.DbNull : asJson(restoredAiExtractionState(document.aiExtraction, String(document.originalSha256)), 'purchaseDocument.aiExtraction'),
+          aiDraftProvenance: document.aiDraftProvenance == null ? Prisma.DbNull : asJson(document.aiDraftProvenance, 'purchaseDocument.aiDraftProvenance'),
+          aiApprovedSnapshot: document.aiApprovedSnapshot == null ? Prisma.DbNull : asJson(document.aiApprovedSnapshot, 'purchaseDocument.aiApprovedSnapshot'),
           reviewDraft: document.reviewDraft == null ? Prisma.DbNull : asJson(document.reviewDraft, 'purchaseDocument.reviewDraft'),
           reviewDraftSearch: document.reviewDraft == null ? null : [parsePurchaseReviewDraft(document.reviewDraft).supplierName, parsePurchaseReviewDraft(document.reviewDraft).invoiceNumber].filter(Boolean).join(' · '),
           reviewDraftSavedAt: sourceDate(document.reviewDraftSavedAt, 'purchaseDocument.reviewDraftSavedAt'),

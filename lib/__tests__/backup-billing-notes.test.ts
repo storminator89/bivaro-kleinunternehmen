@@ -211,12 +211,12 @@ describe('billing-note backup compatibility', () => {
     const { billingNotes: _billingNotes, ...legacyData } = backup.data;
     const legacy = { ...backup, data: legacyData };
     legacy.manifest.modelCoverage = legacy.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote' && entry.model !== 'PurchaseDocument' && entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
-    legacy.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION;
+    legacy.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; legacy.manifest.modelCoverage = legacy.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     expect(() => restore.validateBackupForRestore(legacy)).not.toThrow();
 
     const injected = makeBackup();
     injected.manifest.modelCoverage = injected.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote' && entry.model !== 'PaymentJournalEvent');
-    injected.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION;
+    injected.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; injected.manifest.modelCoverage = injected.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     expect(() => restore.validateBackupForRestore(injected)).toThrow(/ungebundenen BillingNotes/u);
   });
 });

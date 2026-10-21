@@ -3,21 +3,26 @@ import { createHash } from 'node:crypto';
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
 /** Combined capability identity: never relabel standalone 061000 or 070000. */
-export const CURRENT_SCHEMA_VERSION = '20261021080000_combine_photo_annual_context';
+export const CURRENT_SCHEMA_VERSION = '20261021091000_add_ai_receipt_extraction';
+export const COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION = '20261021080000_combine_photo_annual_context';
 export const MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021061000_add_manual_photo_approval';
 export const ANNUAL_CONTEXT_SCHEMA_VERSION = '20261021070000_add_annual_business_context';
 export const PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_ANNUAL_CONTEXT_SCHEMA_VERSION = PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
-const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
+const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
 /** Explicit registry preserves the incompatible standalone feature boundaries. */
-export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean }>> = Object.freeze({
-  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true }),
+export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; aiReceiptExtraction?: boolean }>> = Object.freeze({
+  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, aiReceiptExtraction: true }),
+  [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true }),
   [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: false }),
   [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true }),
   [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false }),
 });
 export function backupSchemaSupportsManualPhotoApproval(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.manualPhotoApproval === true;
+}
+export function backupSchemaSupportsAiExtraction(schemaVersion?: string): boolean {
+  return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.aiReceiptExtraction === true;
 }
 export function backupSchemaSupportsAnnualContext(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.annualContext === true;
@@ -105,6 +110,7 @@ export type BackupManifestData = Record<string, unknown>;
 const COVERAGE = [
   { model: 'User', key: 'user', mode: 'metadata-only' as const, reason: 'Identity and password remain target-owned.' },
   { model: 'AppSettings', key: 'appSettings', mode: 'excluded' as const, reason: 'Host-wide bootstrap setting, not tenant data.' },
+  { model: 'AiProviderSettings', key: 'aiProviderSettings', mode: 'excluded' as const, reason: 'Provider configuration and encrypted credentials remain target-owned; never imported or enabled by business restore.' },
   { model: 'SmtpSettings', key: 'smtpSettings', mode: 'excluded' as const, reason: 'Host-wide SMTP override and encrypted credential material are never backed up.' },
   { model: 'RateLimitBucket', key: 'rateLimitBuckets', mode: 'excluded' as const, reason: 'Operational runtime state is not restorable business data.' },
   { model: 'Customer', key: 'customers', mode: 'included' as const },
@@ -148,6 +154,10 @@ export function validatePurchaseDocumentBackupFields(document: Record<string, un
     throw new Error(`${label}.reviewedSourceSnapshot: Älteres Backupschema unterstützt keine manuellen Foto-Freigaben. Die Quelldaten bleiben unverändert; ein passendes Wiederherstellungsziel ist erforderlich.`);
   }
   for (const field of Object.keys(document)) {
+    if (['aiExtraction','aiDraftProvenance','aiApprovedSnapshot'].includes(field)) {
+      if (document[field] == null || backupSchemaSupportsAiExtraction(schemaVersion)) continue;
+      throw new Error(`${label}.${field}: Älteres Backupschema unterstützt keine KI-Herkunft. Quelldaten dürfen nicht verworfen werden.`);
+    }
     // An explicitly absent future snapshot carries no evidence to discard.
     if (field === 'reviewedSourceSnapshot' && (document[field] == null || backupSchemaSupportsManualPhotoApproval(schemaVersion))) continue;
     if (!PURCHASE_DOCUMENT_BACKUP_FIELDS.has(field)) throw new Error(`${label}: Nicht unterstütztes Eingangsbelegfeld; Wiederherstellung würde Quelldaten verlieren.`);
@@ -243,7 +253,7 @@ export function createBackupManifest(options: {
     sourceUserId: options.sourceUserId,
     generatedAt: options.generatedAt,
     excludesSecrets: true,
-    excludedSecretFields: ['User.password', 'ApiKey.keyHash', 'ApiKey.secret'],
+    excludedSecretFields: ['User.password', 'ApiKey.keyHash', 'ApiKey.secret', 'AiProviderSettings.keyCiphertext', 'AiProviderSettings.keyIv', 'AiProviderSettings.keyTag'],
     rekeyRequired: ['ApiKey'],
     modelCoverage,
     auditSegment: {
@@ -279,11 +289,13 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   }
   if (!Array.isArray(value.modelCoverage)) throw new Error('Backup-Manifest enthält keine Modellabdeckung');
   const expectedCoverage = COVERAGE.filter((entry) =>
-    (value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION || entry.model !== 'BillingNote')
+    (entry.model !== 'AiProviderSettings' || backupSchemaSupportsAiExtraction(value.schemaVersion))
+    && (value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION || entry.model !== 'BillingNote')
     && (PURCHASE_DOCUMENT_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'PurchaseDocument')
     && (SUPPLIER_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'Supplier')
     && (backupSchemaSupportsPaymentJournal(value.schemaVersion!) || entry.model !== 'PaymentJournalEvent')
     && (entry.model !== 'AnnualBusinessContextRevision' || (backupSchemaSupportsAnnualContext(value.schemaVersion) && data.annualBusinessContextRevisions !== undefined)));
+  if (data.aiProviderSettings !== undefined || data.aiProviderSecrets !== undefined) throw new Error('Provider-Konfiguration und Schlüsselmaterial sind kein wiederherstellbares Geschäftsbackup');
   if (Array.isArray(data.purchaseDocuments)) data.purchaseDocuments.forEach((document, index) => {
     if (document && typeof document === 'object' && !Array.isArray(document)) validatePurchaseDocumentBackupFields(document as Record<string, unknown>, `purchaseDocuments[${index}]`, value.schemaVersion);
   });

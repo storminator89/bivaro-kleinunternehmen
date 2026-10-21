@@ -10,7 +10,7 @@ export async function savePurchaseReviewDraft(userId: string, id: number, revisi
   const document = await requirePurchaseDocument(userId, id);
   if (document.reviewStatus !== 'REVIEW') throw new PurchaseDocumentError('Nur offene Belege haben einen bearbeitbaren Prüfentwurf.', 409, 'STATE_CONFLICT');
   await inTransaction(async tx => {
-    const changed = await tx.purchaseDocument.updateMany({ where: { id, userId, revision, reviewStatus: 'REVIEW', expenseId: null }, data: { reviewDraft: draft as Prisma.InputJsonValue, reviewDraftSearch: [draft.supplierName, draft.invoiceNumber].filter(Boolean).join(' · '), reviewDraftSavedAt: new Date(), revision: { increment: 1 } } });
+    const changed = await tx.purchaseDocument.updateMany({ where: { id, userId, revision, reviewStatus: 'REVIEW', expenseId: null }, data: { ...(document.aiDraftProvenance && typeof document.aiDraftProvenance === 'object' && !Array.isArray(document.aiDraftProvenance) ? { aiDraftProvenance: { ...document.aiDraftProvenance, provenance: 'AI_USER_EDITED' } as Prisma.InputJsonValue } : {}), reviewDraft: draft as Prisma.InputJsonValue, reviewDraftSearch: [draft.supplierName, draft.invoiceNumber].filter(Boolean).join(' · '), reviewDraftSavedAt: new Date(), revision: { increment: 1 } } });
     if (changed.count !== 1) throw new PurchaseDocumentError('Beleg wurde inzwischen geändert. Bitte neu laden.', 409, 'REVISION_CONFLICT');
     await createFinancialAuditLog({ userId, action: 'REVIEW', entityType: 'PurchaseDocument', entityId: id,
       newValues: { reviewDraft: draft, revision: revision + 1 },

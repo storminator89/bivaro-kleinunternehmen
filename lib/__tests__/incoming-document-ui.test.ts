@@ -98,7 +98,8 @@ describe('incoming source presentation', () => {
   it('explains plain PDF extraction failure while preserving the original', () => {
     const html = renderToStaticMarkup(createElement(SourcePreview, { document: document({ parseStatus: 'FAILED', parseErrorCode: 'NO_EMBEDDED_XML', preview: null, totalAmount: null }), onOpen: vi.fn() }));
     expect(html).toContain('vollständige Original bleibt erhalten');
-    expect(html).toContain('Kein OCR');
+    expect(html).toContain('Optional den eingerichteten KI-Anbieter');
+    expect(html).not.toContain('Kein OCR');
     expect(html).not.toContain('0,00');
   });
   it('escapes source-derived text and provides a labelled review row', () => {

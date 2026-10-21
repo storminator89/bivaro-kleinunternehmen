@@ -65,6 +65,7 @@ model User {
   billingNotes BillingNote[]
   purchaseDocuments PurchaseDocument[]
   suppliers Supplier[]
+  aiProviderSettings AiProviderSettings?
   paymentJournalEvents PaymentJournalEvent[]
 }
 
@@ -430,6 +431,9 @@ model PurchaseDocument {
   currency            String?
   totalAmount         Float?
   reviewedSourceSnapshot Json?
+  aiExtraction        Json?
+  aiDraftProvenance   Json?
+  aiApprovedSnapshot  Json?
   reviewDraftSearch   String?
   reviewDraft         Json?
   reviewDraftSavedAt  DateTime?
@@ -513,4 +517,21 @@ model AnnualBusinessContextRevision {
 
   @@unique([userId, revision])
   @@index([userId, contextYear, revision])
+}
+
+// Per-tenant optional AI configuration. Entire model is excluded from business backups.
+model AiProviderSettings {
+  userId                String   @id
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled               Boolean  @default(false)
+  autoAnalyzeNewUploads Boolean  @default(false)
+  baseUrl               String
+  model                 String
+  configurationRevision String   @default(uuid())
+  keyCiphertext         String?
+  keyIv                 String?
+  keyTag                String?
+  version               Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }

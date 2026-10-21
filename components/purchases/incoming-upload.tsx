@@ -74,9 +74,10 @@ export function IncomingUpload({ onUploaded, onOpen, onRefresh }: { onUploaded: 
       <FileUp className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <h2 id="incoming-upload-heading" className="font-semibold">Original hinzufügen</h2>
-        <p id="incoming-file-help" className="mt-1 text-sm text-muted-foreground">Foto (JPG/PNG) bis 10 MB / 24 Megapixel, PDF bis 25 MB oder XML bis 8 MB. Ein Original pro Upload. Kein OCR, keine automatische Buchung.</p>
+        <p id="incoming-file-help" className="mt-1 text-sm text-muted-foreground">Foto (JPG/PNG) bis 10 MB / 24 Megapixel, PDF bis 25 MB oder XML bis 8 MB. Ein Original pro Upload. Optionales KI-Auslesen über Ihren eingerichteten Anbieter, keine automatische Buchung.</p>
       </div>
     </div>
+    <p className="mt-3 text-xs text-muted-foreground">Wenn Sie die automatische KI-Analyse aktiviert haben, werden geeignete neue Belege an Ihren gespeicherten Anbieter übermittelt; Anbietergebühren sind möglich. Vorhandene Originale werden nicht nachträglich analysiert. <a href="/settings#ai-receipt-settings" className="inline-flex min-h-11 items-center text-primary underline underline-offset-4">KI-Einstellungen prüfen</a></p>
     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
       <input ref={input} id="incoming-file" type="file" accept=".jpg,.jpeg,.png,.pdf,.xml,image/jpeg,image/png,application/pdf,application/xml,text/xml" disabled={busy} aria-describedby="incoming-file-help" className="min-h-11 w-full min-w-0 rounded-md border border-input bg-background p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60" onChange={event => selectFile(event.target.files?.[0] ?? null)} />
       <label htmlFor="incoming-file" className="sr-only">Foto, PDF- oder XML-Original auswählen</label>
@@ -87,7 +88,7 @@ export function IncomingUpload({ onUploaded, onOpen, onRefresh }: { onUploaded: 
     </div>
     {file && !busy && <p className="mt-2 break-all text-xs text-muted-foreground">{file.name} · {formatFileSize(file.size)}</p>}
     {busy && <div className="mt-3 space-y-1" role="status" aria-live="polite">
-      <p className="text-sm">{progress === 100 ? 'Original angekommen. Vorschau wird ausgelesen…' : 'Original wird übertragen…'}</p>
+      <p className="text-sm">{progress === 100 ? 'Original angekommen. Belegstatus wird vorbereitet…' : 'Original wird übertragen…'}</p>
       <progress aria-label="Dateiübertragung" max={100} value={progress ?? undefined} className="h-1.5 w-full accent-primary" />
       <p className="text-xs text-muted-foreground">Das Auslesen erstellt keine Ausgabe.</p>
     </div>}

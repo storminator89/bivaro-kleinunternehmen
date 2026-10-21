@@ -9,6 +9,7 @@ import { originalHash, readPurchaseOriginal, purchaseOriginalName } from './orig
 import { PurchaseDocumentError } from './errors';
 import type { IncomingDocument, IncomingDocumentList, PurchaseParsePreview, PurchaseParseStatus, PurchaseReviewStatus, PurchaseMediaType, PurchaseReviewDraft } from './types';
 import { findPurchaseDuplicateHints } from './duplicates';
+import { closedSourceAiExtractionState } from './ai-provenance';
 import { isPhotoMedia, type ManualPhotoSnapshot } from './manual-photo-contract';
 import { PURCHASE_PARSE_STATUSES, PURCHASE_REVIEW_STATUSES } from './types';
 
@@ -18,7 +19,7 @@ const SOURCE_METADATA_SELECT = {
   mediaType: true, uploadedAt: true, supplierName: true, invoiceNumber: true, invoiceDate: true,
   currency: true, parseStatus: true, parseErrorCode: true, parserVersion: true, reviewStatus: true,
   revision: true, expenseId: true, approvedAt: true, approvalRequestId: true, approvalFingerprint: true,
-  reviewedSourceSnapshot: true, reviewDraft: true, reviewDraftSavedAt: true, dismissedAt: true, dismissalReason: true, supplierId: true, selectedSupplierSnapshot: true,
+  reviewedSourceSnapshot: true, aiDraftProvenance: true, reviewDraft: true, reviewDraftSavedAt: true, dismissedAt: true, dismissalReason: true, supplierId: true, selectedSupplierSnapshot: true,
 } satisfies Prisma.PurchaseDocumentSelect;
 type SourceMetadata = Prisma.PurchaseDocumentGetPayload<{ select: typeof SOURCE_METADATA_SELECT }>;
 type SourcePreviewSummary = Pick<PurchaseParsePreview, 'grossAmount' | 'parserWarnings' | 'approvalSupported'>
@@ -81,6 +82,7 @@ function sourceDto(document: SourceMetadata, preview: SourcePreviewSummary | nul
     reviewStatus: document.reviewStatus as PurchaseReviewStatus, parseStatus: document.parseStatus as PurchaseParseStatus,
     validationStatus: 'NOT_VALIDATED', revision: document.revision,
     reviewedSourceSnapshot: document.reviewedSourceSnapshot as ManualPhotoSnapshot | null,
+    aiDraftProvenance: document.aiDraftProvenance as IncomingDocument['aiDraftProvenance'],
     reviewDraft: document.reviewDraft as PurchaseReviewDraft | null, reviewDraftSavedAt: document.reviewDraftSavedAt?.toISOString() ?? null,
     originalRef: { id: document.id, fileName: document.originalFileName, sha256: document.originalSha256, bytes: document.originalByteCount, mediaType: document.mediaType as PurchaseMediaType, uploadedAt: document.uploadedAt.toISOString(), downloadUrl: `/api/purchase-documents/${document.id}/original` },
     supplierName: document.supplierName, invoiceNumber: document.invoiceNumber, invoiceDate: document.invoiceDate?.toISOString() ?? null,
@@ -111,6 +113,7 @@ export async function purchaseDocumentDetail(userId: string, id: number): Promis
   const document = await requirePurchaseDocument(userId, id);
   const preview = previewOf(document);
   const dto = sourceDto(document, preview, preview);
+  dto.aiApprovedSnapshot = document.aiApprovedSnapshot as unknown as IncomingDocument['aiApprovedSnapshot'];
   dto.businessDuplicates = await getPurchaseBusinessDuplicates(document);
   if (dto.businessDuplicates.length) dto.parserWarnings.push({ code: 'BUSINESS_DUPLICATE_CANDIDATE', message: 'Andere Originale mit gleichem Lieferantennamen und gleicher Rechnungsnummer gefunden. Kein Beweis identischer Lieferanten oder Rechnungen; vor Erfassung prüfen.' });
   if (dto.businessDuplicates.length > 50) dto.parserWarnings.push({ code: 'DUPLICATE_LIST_LIMITED', message: 'Weitere mögliche Dubletten vorhanden; die Prüfung ist auf 51 Hinweise begrenzt.' });
@@ -208,6 +211,12 @@ export async function intakePurchaseDocument(input: { userId: string; requestId:
     // A committed immutable original survives capacity/process interruption. PENDING is explicitly retryable.
     if (!(error instanceof ProcessingCapacityError) && !(error instanceof PurchaseDocumentError && error.code === 'REVISION_CONFLICT')) throw error;
   }
+  // New originals only: a replay must never spend again. Upload success is independent
+  // from the persisted optional AI outcome; no automatic retry on failure.
+  try {
+    const { automaticallyExtractNewPurchase } = await import('./ai-extraction');
+    await automaticallyExtractNewPurchase(input.userId, created.id);
+  } catch { /* An unavailable optional analyzer must not turn a durable upload into a failure. */ }
   return { document: await purchaseDocumentDetail(input.userId, created.id), replayed: false };
 }
 export async function retryPurchaseParse(userId: string, id: number, revision: number): Promise<IncomingDocument> {
@@ -227,7 +236,7 @@ export async function changePurchaseReview(userId: string, id: number, revision:
     if (action === 'dismiss' && document.reviewStatus === 'DISMISSED') return;
     if (document.revision !== revision) throw new PurchaseDocumentError('Beleg wurde inzwischen geändert. Bitte neu laden.', 409, 'REVISION_CONFLICT');
     if (action === 'reopen' && document.reviewStatus !== 'DISMISSED') throw new PurchaseDocumentError('Nur verworfene Eingangsbelege können wieder geöffnet werden.', 409, 'STATE_CONFLICT');
-    const changed = await tx.purchaseDocument.updateMany({ where: { userId, id, revision, reviewStatus: action === 'dismiss' ? 'REVIEW' : 'DISMISSED', expenseId: null }, data: { reviewStatus: action === 'dismiss' ? 'DISMISSED' : 'REVIEW', dismissedAt: action === 'dismiss' ? new Date() : null, dismissalReason: action === 'dismiss' ? reason : null, revision: { increment: 1 } } });
+    const changed = await tx.purchaseDocument.updateMany({ where: { userId, id, revision, reviewStatus: action === 'dismiss' ? 'REVIEW' : 'DISMISSED', expenseId: null }, data: { ...(action === 'dismiss' && document.aiExtraction !== null ? { aiExtraction: closedSourceAiExtractionState(document.aiExtraction,document.originalSha256,'AI_SOURCE_DISMISSED') as unknown as Prisma.InputJsonValue } : {}), reviewStatus: action === 'dismiss' ? 'DISMISSED' : 'REVIEW', dismissedAt: action === 'dismiss' ? new Date() : null, dismissalReason: action === 'dismiss' ? reason : null, revision: { increment: 1 } } });
     if (changed.count !== 1) throw new PurchaseDocumentError('Beleg wurde inzwischen geändert. Bitte neu laden.', 409, 'REVISION_CONFLICT');
     await createFinancialAuditLog({ userId, action: 'REVIEW', entityType: 'PurchaseDocument', entityId: id,
       oldValues: { reviewStatus: document.reviewStatus, revision }, newValues: { reviewStatus: action === 'dismiss' ? 'DISMISSED' : 'REVIEW', revision: revision + 1, ...(action === 'dismiss' ? { dismissalReason: reason } : {}) },

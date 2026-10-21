@@ -127,12 +127,12 @@ describe('partial-payment backup identity and grouped invariants', () => {
 
   it('recognizes the immediately previous full-payment journal schema, including restore and replay', async () => {
     await user('partial-previous');
-    const previous = fixture([120], [dateA]); previous.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION;
+    const previous = fixture([120], [dateA]); previous.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; previous.manifest.modelCoverage = previous.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     expect(() => restore.validateBackupForRestore(previous)).not.toThrow();
     await apply('partial-previous', previous, true);
     const replay = await apply('partial-previous', previous);
     expect(replay.paymentJournalEvents).toEqual({ imported: 0, skipped: 1 });
-    const invalid = fixture(); invalid.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION;
+    const invalid = fixture(); invalid.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; invalid.manifest.modelCoverage = invalid.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     expect(() => restore.validateBackupForRestore(invalid)).toThrow(/Vollzahlungs-Backup-Schema/u);
   });
 
@@ -183,7 +183,7 @@ describe('partial-payment backup identity and grouped invariants', () => {
     await apply(target, fixture([40], [dateA]), true);
     const old = fixture([120], [dateA]); old.data.paymentJournalEvents = [];
     old.manifest = createBackupManifest({ sourceUserId: 'partial-source', generatedAt: createdAt, data: old.data });
-    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
+    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry) => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: old.data } : old;
     await apply(empty, backup, true);

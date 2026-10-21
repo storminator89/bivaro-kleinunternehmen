@@ -1,0 +1,52 @@
+import { afterAll,beforeAll,describe,expect,it,vi } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp,readFile,rm } from 'node:fs/promises';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
+import sharp from 'sharp';
+import { createTestDatabase } from './helpers/database';
+import { createBackupManifest,validateBackupManifest,COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION,hashBytes } from '@/lib/backup-manifest';
+import { validateAiReceiptResult } from '@/lib/purchase-documents/ai-validation';
+import type { AiExtractionJob } from '@/lib/purchase-documents/ai-contract';
+const state=vi.hoisted(()=>({client:null as PrismaClient|null}));
+vi.mock('@/lib/prisma',()=>({get prisma(){return state.client;}}));
+let database:ReturnType<typeof createTestDatabase>,root:string;
+let snapshot:typeof import('@/lib/backup-snapshot'),restore:typeof import('@/lib/backup-restore'),storage:typeof import('@/lib/upload-path');
+beforeAll(async()=>{
+  database=createTestDatabase();state.client=database.client;
+  await database.client.user.createMany({data:['ai-backup-source','ai-backup-target'].map(id=>({id,email:`${id}@synthetic.invalid`,password:'unused'}))});
+  root=await mkdtemp(path.join(tmpdir(),'bivaro-ai-backup-'));const cwd=vi.spyOn(process,'cwd').mockReturnValue(root);
+  try{snapshot=await import('@/lib/backup-snapshot');restore=await import('@/lib/backup-restore');storage=await import('@/lib/upload-path');}finally{cwd.mockRestore();}
+},40000);
+afterAll(async()=>{await database?.cleanup();if(root)await rm(root,{recursive:true,force:true});});
+describe('AI evidence backup boundaries',()=>{
+  it('preserves bounded suggestions and converts operational jobs to unknown without importing/changing target provider settings',async()=>{
+    const bytes=await sharp({create:{width:20,height:20,channels:3,background:'#fff'}}).png().toBuffer();
+    const hash=hashBytes(bytes),stored=await storage.writeTenantFile('ai-backup-source','original.png',bytes);
+    const result=validateAiReceiptResult(JSON.stringify({supplierName:'Synthetic',invoiceNumber:'SYN1',invoiceDate:'2026-10-21',currency:'EUR',documentType:'INVOICE',grossAmount:'0.29',netAmount:'0.24',taxAmount:'0.05',lineItems:[],lineItemsComplete:true}));
+    const completed:AiExtractionJob={id:randomUUID(),configVersion:1,configRevision:randomUUID(),status:'completed',sourceSha256:hash,sourceRevision:1,createdAt:'2026-10-21T00:00:00.000Z',deadlineAt:'2026-10-21T00:01:30.000Z',finishedAt:'2026-10-21T00:00:30.000Z',errorCode:null,result,draftApplied:false};
+    const running:AiExtractionJob={...completed,id:randomUUID(),configRevision:randomUUID(),status:'running',finishedAt:null,result:null};
+    await database.client.purchaseDocument.create({data:{userId:'ai-backup-source',originalFileName:'synthetic.png',storedFileName:stored,originalSha256:hash,originalByteCount:bytes.length,mediaType:'image/png',uploadRequestId:randomUUID(),parseStatus:'FAILED',parseErrorCode:'PHOTO_MANUAL_REVIEW',revision:1,aiExtraction:{version:1,jobs:[completed,running]}}});
+    const targetConfig=await database.client.aiProviderSettings.create({data:{userId:'ai-backup-target',enabled:true,autoAnalyzeNewUploads:true,baseUrl:'https://target.invalid/v1',model:'target',keyCiphertext:'synthetic-ciphertext',keyIv:'synthetic-iv',keyTag:'synthetic-tag'}});
+    await database.client.aiProviderSettings.create({data:{userId:'ai-backup-source',enabled:true,baseUrl:'https://source.invalid/v1',model:'source',keyCiphertext:'source-secret-sentinel',keyIv:'source-iv',keyTag:'source-tag'}});
+    const captured=await snapshot.readBackupSnapshot('ai-backup-source');
+    const manifest=createBackupManifest({sourceUserId:'ai-backup-source',generatedAt:new Date().toISOString(),data:captured.data,fileManifest:[{kind:'purchase-document',sourceName:stored,zipPath:`purchase-documents/${stored}`,bytes:bytes.length,sha256:hash}],snapshot:captured.info});
+    const backup={version:'3.0',type:'full',data:captured.data,manifest};
+    expect(JSON.stringify(backup)).not.toContain('source-secret-sentinel');expect(captured.data).not.toHaveProperty('aiProviderSettings');
+    expect(manifest.modelCoverage).toContainEqual(expect.objectContaining({model:'AiProviderSettings',mode:'excluded'}));
+    expect(()=>validateBackupManifest(manifest,captured.data)).not.toThrow();
+    await restore.restoreBackupData({userId:'ai-backup-target',backup,overwrite:false,resolveFile:async(_kind,name)=>readFile(storage.getTenantUploadPath('ai-backup-source',name))});
+    const restored=await database.client.purchaseDocument.findFirstOrThrow({where:{userId:'ai-backup-target'}});
+    expect(restored.aiExtraction).toMatchObject({version:1,jobs:[completed,{...running,status:'unknown',errorCode:'AI_RESTORED_INTERRUPTED',finishedAt:running.deadlineAt}]});
+    expect(await database.client.aiProviderSettings.findUniqueOrThrow({where:{userId:'ai-backup-target'}})).toEqual(targetConfig);
+    await restore.restoreBackupData({userId:'ai-backup-target',backup,overwrite:true,resolveFile:async(_kind,name)=>readFile(storage.getTenantUploadPath('ai-backup-source',name))});
+    expect(await database.client.aiProviderSettings.findUniqueOrThrow({where:{userId:'ai-backup-target'}})).toEqual(targetConfig);
+    expect(await database.client.expense.count()).toBe(0);expect(await database.client.income.count()).toBe(0);
+    const old={...manifest,schemaVersion:COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION,modelCoverage:manifest.modelCoverage.filter(entry=>entry.model!=='AiProviderSettings')};
+    expect(()=>validateBackupManifest(old,captured.data)).toThrow(/KI-Herkunft/);
+    expect(()=>restore.validateBackupForRestore({...backup,manifest:old})).toThrow(/KI-Herkunft/);
+    const injected={...captured.data,aiProviderSettings:{keyCiphertext:'never-import'}};
+    expect(()=>validateBackupManifest(createBackupManifest({sourceUserId:'ai-backup-source',generatedAt:new Date().toISOString(),data:injected}),injected)).toThrow(/Provider-Konfiguration/);
+  });
+});

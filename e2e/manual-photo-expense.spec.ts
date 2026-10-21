@@ -42,7 +42,7 @@ test('saved mobile photo needs explicit source/payment confirmation and safely r
     await dialog.getByRole('button', { name: 'Für diesen Beleg auswählen', exact: true }).click();
     await expect(dialog.getByRole('button', { name: 'Als Ausgabe erfassen', exact: true })).toBeEnabled();
     await dialog.getByRole('button', { name: 'Als Ausgabe erfassen', exact: true }).click();
-    await expect(dialog.getByText('Manuelle Foto-Originalprüfung, kein OCR.', { exact: false })).toBeVisible();
+    await expect(dialog.getByText('Manuelle Foto-Originalprüfung, keine automatische Buchung.', { exact: false })).toBeVisible();
     await expect(dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true })).toHaveValue('2026-01-01');
     await expect(dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true })).toHaveAttribute('readonly', '');
     await dialog.getByLabel('Empfänger / Käufer laut Foto-Original', { exact: true }).fill('Mein synthetischer Betrieb');

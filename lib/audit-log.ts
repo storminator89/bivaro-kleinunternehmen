@@ -116,6 +116,10 @@ const SENSITIVE_FIELDS = [
   'keyHash',
   'secret',
   'authorization',
+  'apiKey',
+  'keyCiphertext',
+  'keyIv',
+  'keyTag',
 ];
 
 // Fields to mask partially in logs
@@ -383,6 +387,8 @@ export type SecurityEventName =
   | 'AUTH_ROLE_CHANGED'
   | 'AUTH_USER_DELETED'
   | 'AUTH_REGISTRATION_SETTINGS_CHANGED'
+  | 'AI_PROVIDER_SETTINGS_CHANGED'
+  | 'AI_PROVIDER_CONNECTION_TEST'
   | 'AUTH_SMTP_SETTINGS_CHANGED'
   | 'ADMIN_USER_CHANGE';
 
