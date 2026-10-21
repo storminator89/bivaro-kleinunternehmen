@@ -8,6 +8,7 @@ export async function recordDocumentDelivery(input: {
   documentType: 'invoice' | 'quote';
   expectedStatus: string;
   messageId: string;
+  outbox?: { id: string; attemptId: string; attachmentSha256: string; storedFileName: string };
 }) {
   if (!input.messageId || input.messageId.length > 998) throw new Error('Ungültige SMTP-Nachrichtenreferenz');
   return inTransaction(async tx => {
@@ -15,6 +16,12 @@ export async function recordDocumentDelivery(input: {
       id: input.invoiceId, userId: input.userId,
       type: input.documentType === 'quote' ? 'QUOTE' : { not: 'QUOTE' },
     } });
+    if (input.outbox) {
+      const linked = await tx.emailOutbox.findFirst({ where: { id: input.outbox.id, userId: input.userId,
+        invoiceId: input.invoiceId, currentAttemptId: input.outbox.attemptId, state: 'ACCEPTED',
+        attachmentSha256: input.outbox.attachmentSha256, storedFileName: input.outbox.storedFileName } });
+      if (!linked || !current || current.storedFileName !== input.outbox.storedFileName) return { recorded: false, projectionSkipped: true };
+    }
     if (!current) throw new Error('Dokument nicht gefunden');
     const entityType = input.documentType === 'quote' ? 'Quote' : 'Invoice';
     // Transaction serialization makes repeated acknowledgements harmless.
@@ -36,7 +43,7 @@ export async function recordDocumentDelivery(input: {
       await createFinancialAuditLog({
         userId: input.userId, action: 'STATUS_CHANGED', entityType, entityId: current.id,
         oldValues: { status: current.status }, newValues: { status: 'SENT' },
-        metadata: { actorId: input.userId, tenantId: input.userId, operation: 'invoice.issued', originalReference: `invoice:${current.id}`, reason: 'SMTP acknowledged delivery', messageId: input.messageId },
+        metadata: { actorId: input.userId, tenantId: input.userId, operation: 'invoice.issued', originalReference: `invoice:${current.id}`, reason: 'SMTP accepted submission', messageId: input.messageId },
       }, tx);
     }
     await createFinancialAuditLog({
@@ -44,7 +51,7 @@ export async function recordDocumentDelivery(input: {
       metadata: {
         actorId: input.userId, tenantId: input.userId,
         operation: 'document.delivery-acknowledged', originalReference: `invoice:${current.id}`,
-        reason: 'SMTP acknowledged delivery', messageId: input.messageId,
+        reason: 'SMTP accepted submission', messageId: input.messageId,
         expectedStatus: input.expectedStatus, observedStatus: current.status,
         statusConflict: current.status !== input.expectedStatus && current.status !== 'SENT',
         resultingStatus: advance ? 'SENT' : current.status,
