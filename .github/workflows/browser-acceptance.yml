@@ -117,6 +117,8 @@ jobs:
               'daily-actions-1440.png',
               'service-plan-review-mobile-390.png',
               'payment-adjustment-confirmation-desktop-1440.png',
+              'bank-csv-mapping-desktop-1440.png',
+              'bank-csv-results-mobile-390.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
