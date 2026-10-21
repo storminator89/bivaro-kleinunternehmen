@@ -693,7 +693,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
           await card.getByRole('button', { name: 'Zahlung erfassen', exact: true }).focus();
           await page.keyboard.press('Enter');
         }
-        const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+        const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
         await expect(dialog).toBeVisible();
         await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toBeEnabled();
         await expect(dialog).toContainText('123,45');
@@ -851,7 +851,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       const open = async (state: 'Offen' | 'Teilbezahlt') => {
         await record().getByRole('button', { name: `Zahlungsstatus: ${state}`, exact: true }).click();
         await page.getByRole('menuitem', { name: state === 'Offen' ? 'Bezahlt' : 'Weitere Zahlung erfassen', exact: true }).click();
-        const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+        const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
         await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toBeEnabled();
         return dialog;
       };
@@ -933,7 +933,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       // Merely opening history must not masquerade as a new saved operation.
       await record().getByRole('button', { name: `Weitere Aktionen fuer Rechnung ${invoiceNumber}`, exact: true }).click();
       await page.getByRole('menuitem', { name: 'Zahlungsverlauf ansehen', exact: true }).click();
-      dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+      dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
       await expect(dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true }).getByRole('listitem')).toHaveCount(2);
       await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toHaveCount(0);
       await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toHaveCount(0);
@@ -954,7 +954,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const row = page.getByRole('row').filter({ hasText: invoiceNumber });
     await row.getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
     let activeDialog = dialog;
     let submit = activeDialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true });
     await expect(submit).toBeEnabled();
@@ -987,7 +987,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await searchPartialInvoiceAndWait(page, invoiceNumber);
     await row.getByRole('button', { name: 'Zahlungsstatus: Teilbezahlt', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Weitere Zahlung erfassen', exact: true }).click();
-    activeDialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+    activeDialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
     submit = activeDialog.getByRole('button', { name: /^(Zahlung verbindlich erfassen|Unverändert erneut bestätigen)$/ });
     await expect(submit).toBeEnabled();
     await activeDialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true }).fill('40.00');

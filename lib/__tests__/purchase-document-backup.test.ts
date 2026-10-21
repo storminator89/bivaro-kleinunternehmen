@@ -1,3 +1,5 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
@@ -10,7 +12,7 @@ import { withProcessingSlot } from '@/lib/processing-limit';
 import JSZip from 'jszip';
 import { NextRequest } from 'next/server';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, hashBytes, CURRENT_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
+import { hashBytes, CURRENT_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
 import type { PurchaseParsePreview } from '@/lib/purchase-documents/types';
 
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null, userId: 'incoming-backup-source', failFinalAudit: false }));
@@ -155,12 +157,12 @@ describe('incoming originals backup and restore', () => {
         else { document.parseStatus = 'PARSED'; document.parseErrorCode = null; document.parsedData = preview(); }
         for (const entry of backup.manifest.fileManifest) if (entry.sourceName === previousName) entry.sourceName = document.storedFileName;
         for (const expense of backup.data.expenses) if (expense.storedReceiptFileName === previousName) expense.storedReceiptFileName = document.storedFileName;
-        refreshManifest(backup); backup.manifest.schemaVersion = schemaVersion; stripCsvCatalogForLegacy(backup);
+        refreshManifest(backup); backup.manifest.schemaVersion = schemaVersion; stripEmptyPaymentAdjustmentsForLegacy(backup); stripCsvCatalogForLegacy(backup);
         // The same metadata graph without unsupported evidence is admissible;
         // rejection below is not an unrelated invalid relationship/media state.
         expect(() => createBackupPreview(backup)).not.toThrow();
         document.reviewedSourceSnapshot = { provenance: 'MANUAL_PHOTO_REVIEW', originalSha256: document.originalSha256, snapshotVersion: 1 };
-        refreshManifest(backup); backup.manifest.schemaVersion = schemaVersion; backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+        refreshManifest(backup); backup.manifest.schemaVersion = schemaVersion; stripEmptyPaymentAdjustmentsForLegacy(backup); backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
         expect(() => validateBackupManifest(backup.manifest, backup.data)).toThrow(/reviewedSourceSnapshot/);
         expect(() => createBackupPreview(backup)).toThrow(/reviewedSourceSnapshot/);
         for (const overwrite of [false, true]) await expect(restore.restoreBackupData({ userId: targetUser, backup, overwrite, resolveFile: resolver })).rejects.toThrow(/reviewedSourceSnapshot/);
@@ -215,7 +217,7 @@ describe('incoming originals backup and restore', () => {
     expect(await database.client.expense.count({ where: { userId: targetUser } })).toBe(0);
     expect(await database.client.income.count({ where: { userId: targetUser } })).toBe(0);
     expect(await database.client.cashTransaction.count({ where: { userId: targetUser } })).toBe(0);
-    const old = structuredClone(archive.backup); old.manifest.schemaVersion = PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION; stripCsvCatalogForLegacy(old);
+    const old = structuredClone(archive.backup); old.manifest.schemaVersion = PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(old); stripCsvCatalogForLegacy(old);
     expect(() => createBackupPreview(old)).toThrow(/Älteres Backupschema/);
     for (const mutate of [
       (doc: Record<string, unknown>) => { doc.reviewDraft = { ...draft, confirmPaymentDate: true }; },
@@ -279,7 +281,7 @@ describe('incoming originals backup and restore', () => {
     for (const document of archive.backup.data.purchaseDocuments) { delete document.reviewDraft; delete document.reviewDraftSavedAt; delete document.reviewDraftSearch; }
     // Build a genuine historical fixture, not a relabeled current snapshot.
     delete archive.backup.data.annualBusinessContextRevisions;
-    refreshManifest(archive.backup); archive.backup.manifest.schemaVersion = PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION; stripCsvCatalogForLegacy(archive.backup);
+    refreshManifest(archive.backup); archive.backup.manifest.schemaVersion = PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(archive.backup); stripCsvCatalogForLegacy(archive.backup);
     expect(createBackupPreview(archive.backup).counts.purchaseDocuments).toBe(3);
     await restore.restoreBackupData({ userId: target, backup: archive.backup, overwrite: false, resolveFile: async (kind, sourceName) => {
       const entry = archive.backup.manifest.fileManifest.find((file: { kind: string; sourceName: string }) => file.kind === kind && file.sourceName === sourceName);
@@ -669,7 +671,7 @@ describe('incoming originals backup and restore', () => {
     delete backup.data.paymentJournalEvents;
     delete backup.data.annualBusinessContextRevisions;
     refreshManifest(backup);
-    backup.manifest.schemaVersion = schemaVersion; stripCsvCatalogForLegacy(backup);
+    backup.manifest.schemaVersion = schemaVersion; stripEmptyPaymentAdjustmentsForLegacy(backup); stripCsvCatalogForLegacy(backup);
     backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => !(excludedModels as readonly string[]).includes(entry.model));
     expect(createBackupPreview(backup).counts).toMatchObject({ suppliers: supplierCount, purchaseDocuments: documentCount, expenses: expenseCount, paymentJournalEvents: 0 });
     const result = await restore.restoreBackupData({ userId: targetId, backup, overwrite: false, resolveFile: async (_kind, name) => readFile(storage.getTenantUploadPath(sourceId, name)) });
@@ -692,7 +694,7 @@ describe('incoming originals backup and restore', () => {
     delete backup.data.suppliers;
     delete backup.data.annualBusinessContextRevisions;
     refreshManifest(backup);
-    backup.manifest.schemaVersion = PRE_SUPPLIERS_SCHEMA_VERSION; stripCsvCatalogForLegacy(backup);
+    backup.manifest.schemaVersion = PRE_SUPPLIERS_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(backup); stripCsvCatalogForLegacy(backup);
     backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
     expect(createBackupPreview(backup).counts).toMatchObject({ suppliers: 0, purchaseDocuments: 1 });
     await user('incoming-pre-supplier-target');
@@ -706,7 +708,7 @@ describe('incoming originals backup and restore', () => {
     oldBooked.data.purchaseDocuments.forEach((record: Record<string, unknown>) => { delete record.supplierId; delete record.selectedSupplierSnapshot; });
     delete oldBooked.data.annualBusinessContextRevisions;
     refreshManifest(oldBooked);
-    oldBooked.manifest.schemaVersion = PRE_SUPPLIERS_SCHEMA_VERSION; stripCsvCatalogForLegacy(oldBooked);
+    oldBooked.manifest.schemaVersion = PRE_SUPPLIERS_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(oldBooked); stripCsvCatalogForLegacy(oldBooked);
     oldBooked.manifest.modelCoverage = oldBooked.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
     expect(() => restore.validateBackupForRestore(oldBooked)).toThrow(/ausdrücklich ausgewählten Lieferanten/u);
   });

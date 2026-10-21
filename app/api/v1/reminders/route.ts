@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     const invoices = await prisma.invoice.findMany({
       where: whereClause,
       include: {
-        paymentJournalEvents: { orderBy: { id: 'asc' } },
+        paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } },
         incomes: { include: { cashTransaction: true } },
         customer: {
           select: {

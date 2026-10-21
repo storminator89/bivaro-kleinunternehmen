@@ -1,10 +1,13 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { legacyPaymentData } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
 import { autoMapColumns, parseImportCsv } from '@/lib/data-import-contract';
 import { confirmDataImport, findImportResult, previewDataImport, type ImportRequest } from '@/lib/data-import-service';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
-import { createBackupManifest, PRE_DATA_IMPORT_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
+import { PRE_DATA_IMPORT_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
 import { createBackupPreview } from '@/lib/backup-preview';
 import { restoreBackupData } from '@/lib/backup-restore';
 import { readServiceArticle, serviceArticleNameKey } from '@/lib/service-articles';
@@ -112,7 +115,7 @@ describe('catalog backup contract', () => {
     expect(() => createBackupPreview(bad)).toThrow(/Preis/);
     const missing = { ...snapshot.data }; delete missing.serviceArticles;
     expect(() => createBackupPreview({ version: '3.0', data: missing, manifest: createBackupManifest({ sourceUserId: 'csv-owner', generatedAt: '2026-10-21T06:00:00.000Z', data: missing }) })).toThrow(/serviceArticles/);
-    expect(() => createBackupPreview({ version: '2.0', data: snapshot.data })).toThrow(/Artikel/);
+    expect(() => createBackupPreview({ version: '2.0', data: legacyPaymentData(snapshot.data) })).toThrow(/Artikel/);
     await db.client.serviceArticle.updateMany({ where: { userId: 'csv-restore', nameKey: 'service' }, data: { description: 'Lokal verändert' } });
     const backup = { version: '3.0', data: snapshot.data, manifest: createBackupManifest({ sourceUserId: 'csv-owner', generatedAt: '2026-10-21T06:00:00.000Z', data: snapshot.data }) };
     await expect(restoreBackupData({ userId: 'csv-restore', backup, overwrite: false })).rejects.toThrow(/abweichende Daten/);
@@ -123,6 +126,7 @@ describe('catalog backup contract', () => {
     const data = { ...snapshot.data }; delete data.serviceArticles; delete data.annualBusinessContextRevisions;
     const manifest = createBackupManifest({ sourceUserId: 'csv-other', generatedAt: '2026-10-21T06:00:00.000Z', data });
     manifest.schemaVersion = PRE_DATA_IMPORT_SCHEMA_VERSION;
+    stripEmptyPaymentAdjustmentsForLegacy({ data, manifest });
     manifest.modelCoverage = manifest.modelCoverage.filter(row => !['ServiceArticle', 'DataImportBatch', 'AiProviderSettings', 'ServiceBillingPlan', 'ServiceBillingPeriod'].includes(row.model));
     expect(() => validateBackupManifest(manifest, data)).not.toThrow();
     expect(() => validateBackupManifest(manifest, { ...data, serviceArticles: [{ id: 1 }] })).toThrow(/Artikel/);

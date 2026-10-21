@@ -27,6 +27,8 @@ export type AuditAction =
   | 'SETTINGS_CHANGED'
   | 'STATUS_CHANGED'
   | 'PAYMENT_RECEIVED'
+  | 'PAYMENT_CORRECTION'
+  | 'CUSTOMER_REFUND'
   | 'REVIEW'
   | 'REMINDER_SENT'
   | 'EMAIL_SENT'
@@ -91,6 +93,8 @@ export interface FinancialAuditMetadata {
   observedStatus?: string;
   resultingStatus?: string;
   statusConflict?: boolean;
+  /** Verified restore-source alias; never a new money event. */
+  identityOnly?: boolean;
 }
 
 export type FinancialAuditEntry = Omit<AuditLogEntry, 'metadata'> & {

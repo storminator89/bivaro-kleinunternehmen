@@ -33,6 +33,7 @@ import {
   getTaxRulePack,
 } from "@/lib/tax-calculator";
 import type { TaxSummary } from "@/lib/tax-summary";
+import { connectPaymentRefreshBridge, PAYMENT_DASHBOARD_REFRESH_EVENT } from '@/lib/payment-dashboard-refresh';
 import { simulationInputErrors, simulationNumberError, simulationNumberRules, type SimulationNumberField } from "./validation";
 
 const defaultSettings = {
@@ -164,7 +165,8 @@ export default function SteuerSimulationPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/tax-summary?year=${taxYear}&timeRange=${selectedTimeRange}`);
+      setSummary(null);
+      const response = await fetch(`/api/tax-summary?year=${taxYear}&timeRange=${selectedTimeRange}`, { cache: 'no-store' });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Daten konnten nicht geladen werden.");
       if (version !== requestVersion.current) return;
@@ -181,6 +183,15 @@ export default function SteuerSimulationPage() {
 
   useEffect(() => {
     fetchData();
+    const disconnect = connectPaymentRefreshBridge();
+    const refreshPayments = () => { void fetchData(); };
+    const recheckVisibleFiscalData = () => { if (document.visibilityState === 'visible') void fetchData(); };
+    const restoreFiscalData = (event: PageTransitionEvent) => { if (event.persisted) recheckVisibleFiscalData(); };
+    window.addEventListener(PAYMENT_DASHBOARD_REFRESH_EVENT, refreshPayments);
+    window.addEventListener('focus', recheckVisibleFiscalData);
+    document.addEventListener('visibilitychange', recheckVisibleFiscalData);
+    window.addEventListener('pageshow', restoreFiscalData);
+    return () => { disconnect(); window.removeEventListener(PAYMENT_DASHBOARD_REFRESH_EVENT, refreshPayments); window.removeEventListener('focus', recheckVisibleFiscalData); document.removeEventListener('visibilitychange', recheckVisibleFiscalData); window.removeEventListener('pageshow', restoreFiscalData); requestVersion.current += 1; };
   }, [fetchData]);
 
   const totalIncome = summary?.totalIncome ?? 0;
@@ -199,7 +210,8 @@ export default function SteuerSimulationPage() {
     tradeTaxHebesatz, churchTaxRate, grossSalary, employeeExpenses,
   }, { sideBusiness: employmentType === "side-business", includeChurchTax });
   const simulationInputsValid = inputErrors.length === 0;
-  const taxDataSupported = Boolean(summary?.annualBasis && profit >= 0);
+  const sourceAvailable = !loading && !error && summary !== null;
+  const taxDataSupported = Boolean(sourceAvailable && summary?.annualBasis && profit >= 0);
   const taxCalculationSupported = taxDataSupported && simulationInputsValid;
 
 
@@ -513,8 +525,8 @@ export default function SteuerSimulationPage() {
         )}
 
         <section className="tax-source-context" aria-labelledby="overview-heading">
-          <div className="tax-source-profit"><span className="tax-source-label">Datenbasis · In-App-EÜR · {taxYear}</span><h2 id="overview-heading">Gewinn laut EÜR</h2><strong>{loading ? '—' : formatCurrency(profit)}</strong><p>Vor Steuern · steuerrelevante Buchungen</p></div>
-          <dl><div><dt>Betriebseinnahmen</dt><dd>{loading ? '—' : formatCurrency(totalIncome)}</dd></div><div><dt>Betriebsausgaben</dt><dd>{loading ? '—' : formatCurrency(totalExpenses)}</dd></div><div><dt>Buchungen</dt><dd>{loading ? '—' : summary?.sourceCount ?? 0}</dd></div></dl>
+          <div className="tax-source-profit"><span className="tax-source-label">Datenbasis · In-App-EÜR · {taxYear}</span><h2 id="overview-heading">Gewinn laut EÜR</h2><strong>{loading ? '—' : sourceAvailable ? formatCurrency(profit) : 'Nicht verfügbar / fachlich zu prüfen'}</strong><p>{sourceAvailable ? 'Vor Steuern · steuerrelevante Buchungen' : 'Keine bestätigte steuerliche Datenbasis'}</p></div>
+          <dl><div><dt>Betriebseinnahmen</dt><dd>{loading ? '—' : sourceAvailable ? formatCurrency(totalIncome) : 'Nicht verfügbar'}</dd></div><div><dt>Betriebsausgaben</dt><dd>{loading ? '—' : sourceAvailable ? formatCurrency(totalExpenses) : 'Nicht verfügbar'}</dd></div><div><dt>Buchungen</dt><dd>{loading ? '—' : sourceAvailable ? summary.sourceCount : 'Nicht verfügbar'}</dd></div></dl>
           <p className="tax-source-period">Nur In-App-Buchungen; externe Einnahmen und Ausgaben nicht enthalten. Eigene Jahreskontextangaben werden nicht addiert. Keine Aussage zum Kleinunternehmerstatus.</p>
           {!loading && summary && <p className="tax-source-period">Geladene Daten für Regeljahr {summary.year} · Stand {new Date(summary.dataAsOf).toLocaleString("de-DE")} · Regelpaket {summary.ruleVersion}. Ihre veränderbaren Annahmen stehen im Parameterbereich.</p>}
           <p className="tax-source-period">Zeitraum: {selectedTimeRange === "thisYear" ? `Steuerjahr ${taxYear}` : selectedTimeRange === "lastYear" ? `Steuerjahr ${taxYear - 1}` : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}</p>

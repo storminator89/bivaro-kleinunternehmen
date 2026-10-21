@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 
-const state = vi.hoisted(() => ({ timeRange: 'thisYear', setTimeRange: vi.fn(), tab: 'eur', createAction: vi.fn() }));
+const state = vi.hoisted(() => ({ timeRange: 'thisYear', setTimeRange: vi.fn(), tab: 'eur', createAction: vi.fn(), summary: null as Record<string, unknown> | null, summaryFetching: false, summaryFailed: false, reloadSummary: vi.fn() }));
 vi.mock('react', async importOriginal => {
   const actual = await importOriginal<typeof import('react')>();
   const useState = (initial: unknown) => initial === 'thisYear'
     ? [state.timeRange, state.setTimeRange]
     : [typeof initial === 'function' ? initial() : initial, vi.fn()];
   const useMemo = (factory: () => unknown) => factory();
-  return { ...actual, default: { ...actual, useMemo, useState }, useState, useEffect: vi.fn() };
+  const useRef = (current: unknown) => ({ current });
+  return { ...actual, default: { ...actual, useMemo, useState, useRef }, useState, useRef, useEffect: vi.fn() };
 });
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -16,7 +17,8 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/hooks/use-dashboard-data', () => ({ useDashboardData: () => ({
   expenses: [], incomes: [], invoices: [], customers: [], quotes: [], assetExpenses: [],
-  uniqueCategories: [], uniqueCustomers: [], summary: null,
+  uniqueCategories: [], uniqueCustomers: [], summary: state.summary,
+  summaryIsFetching: state.summaryFetching, summaryIsError: state.summaryFailed, reloadSummary: state.reloadSummary,
 }) }));
 vi.mock('@/hooks/use-dashboard-create-action', () => ({ useDashboardCreateAction: state.createAction }));
 vi.mock('@/components/dashboard/dashboard-client', () => ({ DashboardClient: () => null }));
@@ -47,6 +49,48 @@ function findElements(node: ReactNode, predicate: (element: Element) => boolean)
 beforeEach(() => {
   state.tab = 'eur'; state.timeRange = 'thisYear';
   state.setTimeRange.mockReset(); state.createAction.mockReset();
+  state.summary = null; state.summaryFetching = false; state.summaryFailed = false; state.reloadSummary.mockReset();
+});
+
+describe('fresh guarded EÜR client export and cached-value suppression', () => {
+  const fresh = { timeRange: 'thisYear', totalIncome: 120, totalExpense: 20, profit: 100, expenseCategories: [{ category: 'Fresh category', amount: 20 }], monthlyData: [], depreciationDetails: [] };
+  function exportHandler() {
+    const report = findElements(DashboardContent(), element => typeof element.props.onExport === 'function' && 'totalIncome' in element.props)[0];
+    expect(report).toBeDefined();
+    return report.props.onExport as () => Promise<void>;
+  }
+  it('fetches once for repeated clicks and downloads only the newly guarded values, never cached totals/categories', async () => {
+    state.summary = { ...fresh, totalIncome: 999, expenseCategories: [{ category: 'Cached category', amount: 999 }] };
+    let resolve!: (value: unknown) => void;
+    state.reloadSummary.mockReturnValue(new Promise(value => { resolve = value; }));
+    const onExport = exportHandler(), click = vi.fn();
+    let blob: Blob | undefined;
+    vi.stubGlobal('document', { createElement: () => ({ href: '', download: '', click, remove: vi.fn() }), body: { appendChild: vi.fn() } });
+    vi.stubGlobal('URL', { createObjectURL: vi.fn((value: Blob) => { blob = value; return 'blob:synthetic'; }), revokeObjectURL: vi.fn() });
+    vi.useFakeTimers();
+    try {
+      const first = onExport(), repeated = onExport();
+      expect(state.reloadSummary).toHaveBeenCalledTimes(1); expect(click).not.toHaveBeenCalled();
+      resolve(fresh); await first; await repeated;
+      expect(click).toHaveBeenCalledTimes(1);
+      const csv = await blob!.text();
+      expect(csv).toContain('120,00'); expect(csv).toContain('Fresh category;20,00');
+      expect(csv).not.toContain('999,00'); expect(csv).not.toContain('Cached category');
+    } finally { vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); }
+  });
+  it('does not create a CSV download when the fresh authoritative summary rejects a guarded adjustment', async () => {
+    state.summary = fresh;
+    state.reloadSummary.mockRejectedValue(new Error('409: Zahlungszuordnung fachlich prüfen.'));
+    const onExport = exportHandler(), createObjectURL = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL });
+    try { await onExport(); expect(state.reloadSummary).toHaveBeenCalledTimes(1); expect(createObjectURL).not.toHaveBeenCalled(); }
+    finally { vi.unstubAllGlobals(); }
+  });
+  it.each(['fetching', 'failed'])('does not render cached fiscal totals or export actions while summary is %s', mode => {
+    state.summary = fresh; state.summaryFetching = mode === 'fetching'; state.summaryFailed = mode === 'failed';
+    const reports = findElements(DashboardContent(), element => typeof element.props.onExport === 'function' && 'totalIncome' in element.props);
+    expect(reports).toHaveLength(0);
+  });
 });
 
 describe('report period arrows (#26)', () => {

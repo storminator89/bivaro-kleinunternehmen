@@ -1,8 +1,11 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { legacyPaymentData } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION } from '@/lib/backup-manifest';
+import { PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
@@ -30,7 +33,7 @@ describe('quote workflow backup compatibility and identity', () => {
   it('refuses older manifest claims containing new metadata and invalid non-quote/task dates', async () => {
     const original = await backup();
     for (const mutate of [
-      (source: typeof original) => { source.manifest.schemaVersion = PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION; },
+      (source: typeof original) => { source.manifest.schemaVersion = PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(source); },
       (source: typeof original) => { source.data.invoices[0].type = 'INVOICE'; },
       (source: typeof original) => { source.data.invoices[0].quoteFollowUpOn = '2026-02-30'; },
     ]) {
@@ -51,14 +54,14 @@ describe('quote workflow backup compatibility and identity', () => {
       source.manifest = createBackupManifest({ sourceUserId: 'quote-backup-source', generatedAt: '2026-10-21T00:00:00Z', data: source.data });
       expect(() => validateBackupForRestore(source)).toThrow();
     }
-    expect(() => validateBackupForRestore({ version: '2.0', data: original.data })).toThrow(/Backupformat/);
+    expect(() => validateBackupForRestore({ version: '2.0', data: legacyPaymentData(original.data) })).toThrow(/Backupformat/);
   });
 
   it('imports old backups into empty targets, but refuses merge/overwrite that silently erases task metadata', async () => {
     const source = await backup();
     for (const invoice of source.data.invoices) { delete invoice.quoteFollowUpOn; delete invoice.quoteResponseNote; }
     source.manifest = createBackupManifest({ sourceUserId: 'quote-backup-source', generatedAt: '2026-10-21T00:00:00Z', data: source.data });
-    source.manifest.schemaVersion = PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
+    source.manifest.schemaVersion = PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(source); stripCsvCatalogForLegacy(source);
     expect(() => validateBackupForRestore(source)).not.toThrow();
     await restoreBackupData({ userId: 'quote-backup-old-empty', overwrite: false, backup: source });
     for (const overwrite of [false, true]) await expect(restoreBackupData({ userId: 'quote-backup-target', overwrite, backup: source })).rejects.toThrow(/Wiedervorlage|Wiedervorlagen/);

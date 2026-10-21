@@ -1,8 +1,10 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import JSZip from 'jszip';
 import { createTestDatabase } from './helpers/database';
-import { backupSchemaSupportsServiceBilling, createBackupManifest, CURRENT_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
+import { backupSchemaSupportsServiceBilling, CURRENT_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
 import { getServiceBillingPeriod, isUnrenderedServiceBillingDraft, readServiceBillingPlanInput } from '@/lib/service-billing';
 import { createBackupPreview } from '@/lib/backup-preview';
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null, userId: 'recurring-backup-source' }));
@@ -50,7 +52,7 @@ describe('recurring service plans are portable, non-financial business state', (
     expect(backupSchemaSupportsServiceBilling(CURRENT_SCHEMA_VERSION)).toBe(true);
     expect(backupSchemaSupportsServiceBilling(GROWTH_AI_SCHEMA_VERSION)).toBe(false);
     expect(createBackupPreview(source).counts).toMatchObject({ serviceBillingPlans: 1, serviceBillingPeriods: 3, invoices: 1, incomes: 0, paymentJournalEvents: 0 });
-    const downgrade = structuredClone(source); downgrade.manifest.schemaVersion = GROWTH_AI_SCHEMA_VERSION;
+    const downgrade = structuredClone(source); downgrade.manifest.schemaVersion = GROWTH_AI_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(downgrade);
     expect(() => validateBackupManifest(downgrade.manifest, downgrade.data)).toThrow(/Servicepläne|Periodenidentitäten/);
     for (const key of ['serviceBillingPlans', 'serviceBillingPeriods']) {
       const missing = structuredClone(source); delete missing.data[key]; missing.manifest = createBackupManifest({ sourceUserId: sourceOwner, generatedAt: fixed.toISOString(), data: missing.data });

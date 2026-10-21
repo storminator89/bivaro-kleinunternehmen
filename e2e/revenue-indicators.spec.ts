@@ -117,7 +117,7 @@ test('revenue indicators preserve unknown/zero, included external share, correct
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     const currentLabel = currentBasis.locator('dt');
     const currentAmount = currentBasis.locator('dd').first();
-    await expect(currentLabel).toHaveText(`In Bivaro erfasste Einnahmen · ${year}`);
+    await expect(currentLabel).toHaveText(`Operativer Zahlungssaldo in Bivaro · ${year}`);
     await expect(currentAmount).toHaveText('1.234,56 €');
     await expectUnobscuredBasis(currentLabel);
     await expectUnobscuredBasis(currentAmount);

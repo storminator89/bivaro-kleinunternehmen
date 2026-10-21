@@ -38,6 +38,7 @@ import { EURTab, GWGTab, ExpensesTab, IncomesTab, InvoicesTab } from "@/componen
 import { useDashboardData } from "@/hooks/use-dashboard-data";
 import type { DashboardTab } from "@/hooks/use-dashboard-data";
 import { useDashboardCreateAction } from "@/hooks/use-dashboard-create-action";
+import { buildEURCSVFromFreshSummary } from "@/lib/eur-csv-export";
 
 export function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
@@ -90,7 +91,16 @@ export function DashboardContent() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExportingIncomeDocuments, setIsExportingIncomeDocuments] = useState(false);
   const [incomeExportError, setIncomeExportError] = useState<string | null>(null);
+  const [isExportingEUR, setIsExportingEUR] = useState(false);
+  const [eurExportError, setEURExportError] = useState<string | null>(null);
+  const eurExportInFlight = React.useRef(false);
   const [selectedTimeRange, setSelectedTimeRange] = useState<'all' | 'last3Months' | 'last6Months' | 'thisYear' | 'lastYear'>('thisYear');
+  const currentEURRange = React.useRef(selectedTimeRange);
+  const currentEURView = React.useRef(tabParam);
+  currentEURRange.current = selectedTimeRange;
+  currentEURView.current = tabParam;
+  useEffect(() => () => { currentEURView.current = null; }, []);
+  useEffect(() => { setEURExportError(null); }, [selectedTimeRange]);
   const [recurringExpensesModalOpen, setRecurringExpensesModalOpen] = useState(false);
 
   // Delete Modal State
@@ -187,8 +197,10 @@ export function DashboardContent() {
     assetExpenses,
     summary,
     summaryIsLoading,
+    summaryIsFetching,
     summaryIsError,
     summaryError,
+    reloadSummary,
     assetsIsLoading,
     assetsIsError,
     assetsError,
@@ -759,44 +771,30 @@ export function DashboardContent() {
 
 
   // CSV-Export für die EÜR
-  const handleExportEUR = () => {
-    // Aktuelles Datum für den Dateinamen
-    const date = new Date().toISOString().split('T')[0];
-    const fileName = `eur-export-${date}.csv`;
-
-    // CSV-Header
-    let csvContent = "Kategorie;Betrag (EUR)\n";
-
-    // Einnahmen hinzufügen
-    csvContent += "BETRIEBSEINNAHMEN;\n";
-    csvContent += `Einnahmen (steuerpflichtig);${totalIncome.toFixed(2).replace('.', ',')}\n`;
-    csvContent += `Summe Betriebseinnahmen;${totalIncome.toFixed(2).replace('.', ',')}\n\n`;
-
-    // Ausgaben nach Kategorie hinzufügen
-    csvContent += "BETRIEBSAUSGABEN;\n";
-
-    // Gruppierte Ausgaben nach Kategorie
-    const expensesByCategory = categoryChartData.map(({ name, value }) => [name, value] as const);
-    // Alle Ausgabenkategorien hinzufügen
-    expensesByCategory.forEach(([category, amount]) => {
-      csvContent += `${category};${amount.toFixed(2).replace('.', ',')}\n`;
-    });
-
-    csvContent += `Summe Betriebsausgaben;${totalExpense.toFixed(2).replace('.', ',')}\n\n`;
-
-    // Gewinn/Verlust hinzufügen
-    csvContent += `GEWINN/VERLUST;${profit.toFixed(2).replace('.', ',')}\n`;
-
-    // CSV-Datei erstellen und herunterladen
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', fileName);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportEUR = async () => {
+    if (eurExportInFlight.current) return;
+    eurExportInFlight.current = true;
+    setIsExportingEUR(true);
+    setEURExportError(null);
+    const requestedRange = selectedTimeRange;
+    try {
+      // refetch executes the no-store, server-guarded summary request each time.
+      const freshSummary = await reloadSummary();
+      if (currentEURRange.current !== requestedRange || currentEURView.current !== 'eur') return;
+      const csvContent = buildEURCSVFromFreshSummary(freshSummary, requestedRange);
+      const date = new Date().toISOString().split('T')[0];
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `eur-export-${requestedRange}-${date}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (failure) {
+      if (currentEURRange.current === requestedRange && currentEURView.current === 'eur') setEURExportError(failure instanceof Error ? failure.message : 'Die aktuelle EÜR-Prüfung ist fehlgeschlagen. Es wurde keine CSV erzeugt.');
+    } finally { eurExportInFlight.current = false; setIsExportingEUR(false); }
   };
 
   // CSV-Export für das GWG-Verzeichnis
@@ -1012,11 +1010,12 @@ export function DashboardContent() {
 
           {/* EÜR Tab */}
           <TabsContent value="eur" className="space-y-6">
-            {summaryIsLoading ? (
+            {summaryIsLoading || summaryIsFetching || isExportingEUR ? (
               <div className="rounded-lg border p-6 text-sm text-muted-foreground" role="status">Lade EÜR-Auswertung…</div>
-            ) : summaryIsError ? (
-              <div className="rounded-lg border border-critical/40 bg-critical-surface p-6 text-sm text-critical-foreground" role="alert">
-                Die EÜR-Auswertung konnte nicht geladen werden{summaryError instanceof Error ? `: ${summaryError.message}` : "."}
+            ) : summaryIsError || eurExportError || !summary ? (
+              <div className="space-y-3 rounded-lg border border-critical/40 bg-critical-surface p-6 text-sm text-critical-foreground" role="alert">
+                <p>Die EÜR-Auswertung ist nicht verfügbar{eurExportError ? `: ${eurExportError}` : summaryError instanceof Error ? `: ${summaryError.message}` : "."} Kein Export aus zwischengespeicherten Zahlen.</p>
+                <Button type="button" variant="outline" onClick={() => { setEURExportError(null); void reloadSummary().catch(() => {}); }}>Aktuellen EÜR-Stand erneut prüfen</Button>
               </div>
             ) : (
               <EURTab

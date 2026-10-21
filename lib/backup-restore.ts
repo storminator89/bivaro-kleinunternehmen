@@ -1,3 +1,4 @@
+import { validatePaymentAdjustmentBackup, paymentAdjustmentValues, sameAdjustmentEvidence } from '@/lib/payment-adjustment-backup';
 import { validateReminderBackupFields, restoredReminderKey } from '@/lib/reminder-backup';
 import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
 import { sameServiceBillingInvoice, validateServiceBillingBackup } from '@/lib/service-billing-backup';
@@ -25,6 +26,7 @@ import { documentNumberPrefix, maximumDocumentSequence, type DocumentType } from
 import { validateRecurringValues } from '@/lib/recurring-schedule';
 import {
   CURRENT_BACKUP_VERSION,
+  CURRENT_SCHEMA_VERSION,
   backupSchemaSupportsReminderBalance,
   backupSchemaSupportsServiceBilling,
   FULL_PAYMENT_JOURNAL_SCHEMA_VERSION,
@@ -94,6 +96,8 @@ type RestoreResult = {
   expenses: { imported: number; skipped: number };
   incomes: { imported: number; skipped: number };
   paymentJournalEvents: { imported: number; skipped: number };
+  paymentAdjustments: { imported: number; skipped: number };
+  paymentOperations: { imported: number; skipped: number };
   annualBusinessContextRevisions: { imported: number; skipped: number };
   invoices: { imported: number; skipped: number };
   purchaseDocuments: { imported: number; skipped: number };
@@ -120,7 +124,7 @@ type ValidatedBackup = {
 };
 
 const ARRAY_KEYS = [
-  'customers', 'suppliers', 'serviceArticles', 'expenses', 'incomes', 'paymentJournalEvents', 'invoices', 'purchaseDocuments', 'templates',
+  'customers', 'suppliers', 'serviceArticles', 'expenses', 'incomes', 'paymentJournalEvents', 'paymentAdjustments', 'paymentOperations', 'invoices', 'purchaseDocuments', 'templates',
   'billingNotes', 'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
   'documentations', 'apiKeys', 'auditLogs',
 ] as const;
@@ -602,7 +606,9 @@ function validatePaymentJournalBackup(data: JsonRecord, version: string, schemaV
     let total: bigint;
     try { total = parseMoneyEUR(asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount') ?? NaN); }
     catch { throw new BackupValidationError('Zahlungsbetrag erfordert einen exakten Rechnungsbetrag'); }
-    const paid = allocations.reduce((sum, event) => sum + BigInt(String(event.amountCents)), BigInt(0));
+    const invoiceAdjustments = asArray(data, 'paymentAdjustments').filter(row => row.invoiceId === invoiceId);
+    const corrected = invoiceAdjustments.filter(row => row.kind === 'PAYMENT_CORRECTION').reduce((sum, row) => sum + BigInt(String(row.amountCents)), BigInt(0));
+    const paid = allocations.reduce((sum, event) => sum + BigInt(String(event.amountCents)), BigInt(0)) - corrected;
     const historical = allocations.some((event) => event.dateCertainty !== 'ACTUAL');
     if (schemaVersion === FULL_PAYMENT_JOURNAL_SCHEMA_VERSION && paid !== total) {
       throw new BackupValidationError('Das Vollzahlungs-Backup-Schema erfordert den vollständigen Zahlungsbetrag');
@@ -621,9 +627,10 @@ function validatePaymentJournalBackup(data: JsonRecord, version: string, schemaV
     }
     if (!historical) {
       if (invoice.issuanceState !== 'ISSUED') throw new BackupValidationError('Tatsächliche Zahlungen erfordern eine ausgestellte Rechnung');
+      const residual = allocations.filter(root => BigInt(String(root.amountCents)) > invoiceAdjustments.filter(row => row.originalPaymentId === root.id && row.kind === 'PAYMENT_CORRECTION').reduce((sum, row) => sum + BigInt(String(row.amountCents)), BigInt(0)));
       const expectedPaidAt = paid === total
-        ? allocations.reduce((latest, event) => Math.max(latest, asDate(event.paidAt, 'payment.paidAt')!.getTime()), -Infinity) : null;
-      if ((asDate(invoice.paidAt, 'invoice.paidAt')?.getTime() ?? null) !== expectedPaidAt) {
+        ? residual.reduce((latest, event) => Math.max(latest, asDate(event.paidAt, 'payment.paidAt')!.getTime()), -Infinity) : null;
+      if (invoice.status !== 'CANCELLED' && (asDate(invoice.paidAt, 'invoice.paidAt')?.getTime() ?? null) !== expectedPaidAt) {
         throw new BackupValidationError('Rechnungszahlungsdatum stimmt nicht mit dem letzten tatsächlichen Zahlungsnachweis überein');
       }
     }
@@ -1006,6 +1013,7 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   validateSuppliers(data, manifest);
   validatePurchaseDocuments(data, manifest, root.type === 'full');
   validatePaymentJournalBackup(data, version, manifest?.schemaVersion);
+  try { validatePaymentAdjustmentBackup(data, manifest?.schemaVersion); } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zahlungsberichtigungsgraph ungültig'); }
   const invariantValidation: RestoreInvariantValidation = { issues: [], truncated: false };
   validateRestoreInvariants(data, invariantValidation);
   if (invariantValidation.issues.length > 0) {
@@ -1029,6 +1037,8 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     expenses: { imported: 0, skipped: 0 },
     incomes: { imported: 0, skipped: 0 },
     paymentJournalEvents: { imported: 0, skipped: 0 },
+    paymentAdjustments: { imported: 0, skipped: 0 },
+    paymentOperations: { imported: 0, skipped: 0 },
     annualBusinessContextRevisions: { imported: 0, skipped: 0 },
     invoices: { imported: 0, skipped: 0 },
     purchaseDocuments: { imported: 0, skipped: 0 },
@@ -1376,6 +1386,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const expenses = asArray(data, 'expenses');
     const incomes = asArray(data, 'incomes');
     const paymentJournalEvents = asArray(data, 'paymentJournalEvents');
+    const paymentAdjustments = asArray(data, 'paymentAdjustments');
+    const paymentOperations = asArray(data, 'paymentOperations');
     const invoices = asArray(data, 'invoices');
     const templates = asArray(data, 'templates');
     const recurringExpenses = asArray(data, 'recurringExpenses');
@@ -1407,6 +1419,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (overwrite && await prisma.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
     if (overwrite && await prisma.serviceBillingPlan.count({ where: { userId } }) > 0) throw new BackupValidationError('Wiederkehrende Servicepläne und bestätigte Periodenidentitäten dürfen nicht überschrieben werden. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
     if (overwrite && await prisma.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
+    if (overwrite && (await prisma.paymentJournalEvent.count({ where: { userId } }) > 0 || await prisma.paymentAdjustment.count({ where: { userId } }) > 0 || await prisma.paymentOperation.count({ where: { userId } }) > 0)) throw new BackupValidationError('Überschreiben würde unveränderliche Zahlungsereignisse, Berichtigungen oder Finanzaktionsnachweise löschen. Bitte ein leeres Ziel verwenden.');
     const sourceContext = validateAnnualContextHistory(data.annualBusinessContextRevisions);
     const targetContext = (await prisma.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } })).map(readAnnualContextRevision);
     try { annualContextAppendAfter(targetContext, sourceContext); }
@@ -1478,7 +1491,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       if (overwrite && await tx.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
       if (overwrite && await tx.serviceBillingPlan.count({ where: { userId } }) > 0) throw new BackupValidationError('Wiederkehrende Servicepläne und bestätigte Periodenidentitäten dürfen nicht überschrieben werden. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
       if (overwrite && await tx.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
-      if (overwrite && await tx.paymentJournalEvent.count({ where: { userId } }) > 0) {
+      if (overwrite && (await tx.paymentJournalEvent.count({ where: { userId } }) > 0 || await tx.paymentAdjustment.count({ where: { userId } }) > 0 || await tx.paymentOperation.count({ where: { userId } }) > 0)) {
         throw new BackupValidationError('Überschreiben würde unveränderliche Zahlungsereignisse löschen. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
       }
       // Context history is immutable even in overwrite mode. Validate the exact
@@ -1501,10 +1514,15 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         void _version; void _provenance;
         await tx.annualBusinessContextRevision.create({ data: { userId, ...record, declaredAt: new Date(record.declaredAt) } });
       }
+      const existingAdjustments = await tx.paymentAdjustment.findMany({ where: { userId } });
+      const existingOperations = await tx.paymentOperation.findMany({ where: { userId } });
       const existingPaymentEvents = await tx.paymentJournalEvent.findMany({ where: { userId } });
+      for (const root of paymentJournalEvents) if (existingOperations.some(operation => operation.idempotencyKey === root.idempotencyKey && operation.kind !== 'PAYMENT_RECEIVED')) throw new BackupValidationError('Finanzaktionsschlüssel kollidiert mit einer anderen Zahlungsaktion.');
+      for (const adjustment of paymentAdjustments) if (existingPaymentEvents.some(root => root.idempotencyKey === adjustment.idempotencyKey)) throw new BackupValidationError('Berichtigungsschlüssel kollidiert mit Originalzahlung.');
       const existingPaymentByKey = new Map(existingPaymentEvents.map((event) => [event.idempotencyKey, event]));
       const existingPaymentById = new Map(existingPaymentEvents.map((event) => [event.id, event]));
       const existingPaymentSourceIdentities = new Map<string, number>();
+      const existingAdjustmentSourceIdentities = new Map<string, number>();
       const existingPaymentsByInvoice = groupByInvoice(existingPaymentEvents, (event) => event.invoiceId);
       const sourcePaymentsByInvoice = groupByInvoice(paymentJournalEvents, (event) => asOptionalInt(event.invoiceId, 'payment.invoiceId'));
       const sourcePaymentByIncome = new Map(paymentJournalEvents.filter((event) => event.incomeId != null)
@@ -1550,6 +1568,14 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           }
           existingPaymentSourceIdentities.set(sourceIdentity, paymentValues.paymentJournalEventId as number);
         }
+        if (row.action === 'RESTORE' && metadata?.operation === 'payment-adjustment.restore'
+          && metadata.tenantId === userId && metadata.backupImport === undefined && typeof paymentValues?.sourceUserId === 'string'
+          && Number.isSafeInteger(paymentValues.sourceAdjustmentId) && Number.isSafeInteger(paymentValues.paymentAdjustmentId)) {
+          const identity = JSON.stringify([paymentValues.sourceUserId, paymentValues.sourceAdjustmentId]);
+          const prior = existingAdjustmentSourceIdentities.get(identity);
+          if (prior !== undefined && prior !== paymentValues.paymentAdjustmentId) throw new BackupValidationError('Mehrdeutige persistierte Berichtigungs-Quellidentität.');
+          existingAdjustmentSourceIdentities.set(identity, paymentValues.paymentAdjustmentId as number);
+        }
         const key = metadata?.backupImport && typeof metadata.backupImport === 'object'
           ? (metadata.backupImport as Record<string, unknown>).importKey
           : null;
@@ -1563,6 +1589,16 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           && (provenance as Record<string, unknown>).sourceEntityType === 'BillingNote'
           && typeof (provenance as Record<string, unknown>).importKey === 'string') {
           existingBillingNoteImports.set((provenance as Record<string, unknown>).importKey as string, row);
+        }
+      }
+
+      for (const adjustment of paymentAdjustments) {
+        const sourceId = asOptionalInt(adjustment.id, 'adjustment.id')!;
+        const mapped = existingAdjustmentSourceIdentities.get(JSON.stringify([sourceUserId, sourceId]))
+          ?? (sourceUserId === userId && existingAdjustments.some(row => row.id === sourceId) ? sourceId : undefined);
+        if (mapped !== undefined) {
+          const target = existingAdjustments.find(row => row.id === mapped);
+          if (!target || target.idempotencyKey !== adjustment.idempotencyKey || !sameAdjustmentEvidence(target as unknown as JsonRecord, adjustment)) throw new BackupValidationError('Berichtigungs-Quellidentität wurde für einen anderen unveränderlichen Nachweis wiederverwendet.');
         }
       }
 
@@ -1818,7 +1854,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
             }
             const targetIncomes = await tx.income.findMany({ where: { userId, invoiceId: existing.id } });
             if (targetPayments.length) {
-              validatePaymentJournalBackup({ user: { id: userId }, invoices: [existing], incomes: targetIncomes, paymentJournalEvents: targetPayments }, CURRENT_BACKUP_VERSION);
+              validatePaymentJournalBackup({ user: { id: userId }, invoices: [existing], incomes: targetIncomes, paymentJournalEvents: targetPayments, paymentAdjustments: existingAdjustments.filter(row => row.invoiceId === existing.id) }, CURRENT_BACKUP_VERSION);
             } else if (targetIncomes.length || existing.status === 'PAID' || existing.paidAt !== null
               || !['DRAFT', 'SENT'].includes(existing.status)) {
               throw new BackupValidationError('Zielrechnung enthält ungeklärte historische Einnahmen oder einen inkompatiblen Finanzstatus.');
@@ -1840,9 +1876,24 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
               }
               union.set(String(event.idempotencyKey), String(event.amountCents));
             }
-            const unionPaid = [...union.values()].reduce((sum, amount) => sum + BigInt(amount), BigInt(0));
-            if (unionPaid > parseMoneyEUR(existing.totalAmount!) || (!sourceSubset && !targetSubset)) {
-              throw new BackupValidationError('Unvereinbare Zahlungshistorien oder gemeinsame Überzahlung; bitte getrennt prüfen.');
+            const sourceAdjustments = paymentAdjustments.filter(row => row.invoiceId === sourceId);
+            const targetAdjustments = existingAdjustments.filter(row => row.invoiceId === existing.id);
+            const sourceAdjustmentKeys = new Set(sourceAdjustments.map(row => String(row.idempotencyKey)));
+            const targetAdjustmentKeys = new Set(targetAdjustments.map(row => row.idempotencyKey));
+            const sourceHistorySubset = sourceSubset && [...sourceAdjustmentKeys].every(key => targetAdjustmentKeys.has(key));
+            const targetHistorySubset = targetSubset && [...targetAdjustmentKeys].every(key => sourceAdjustmentKeys.has(key));
+            for (const adjustment of sourceAdjustments) {
+              const target = targetAdjustments.find(row => row.idempotencyKey === adjustment.idempotencyKey);
+              if (target && !sameAdjustmentEvidence(target as unknown as JsonRecord, adjustment)) throw new BackupValidationError('Abweichende unveränderliche Berichtigungshistorie.');
+            }
+            if (!sourceHistorySubset && !targetHistorySubset) throw new BackupValidationError('Unvereinbare Zahlungshistorien oder divergierende Berichtigungshistorien benötigen ein getrenntes Ziel.');
+            const unionAdjustments = new Map(targetAdjustments.map(row => [row.idempotencyKey, row as unknown as JsonRecord]));
+            for (const row of sourceAdjustments) unionAdjustments.set(String(row.idempotencyKey), row);
+            const unionCorrected = [...unionAdjustments.values()].filter(row => row.kind === 'PAYMENT_CORRECTION').reduce((sum, row) => sum + BigInt(String(row.amountCents)), BigInt(0));
+            const unionPaid = [...union.values()].reduce((sum, amount) => sum + BigInt(amount), BigInt(0)) - unionCorrected;
+            if (unionPaid < BigInt(0) || unionPaid > parseMoneyEUR(existing.totalAmount!)) throw new BackupValidationError('Gemeinsamer berichtigter Zahlungsbetrag ist inkonsistent.');
+            if (targetHistorySubset && !sourceHistorySubset && existing.status !== 'CANCELLED') {
+              projectionUpdates.set(existing.id, { status: String(invoice.status), paidAt: asDate(invoice.paidAt, 'invoice.paidAt'), cancellationReason: asOptionalString(invoice.cancellationReason, 'invoice.cancellationReason', 1_000) });
             }
             if ((existing.status === 'CANCELLED' && !sourceSubset)
               || (invoice.status === 'CANCELLED' && !targetSubset)) {
@@ -2110,6 +2161,17 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         result.incomes.imported += 1;
       }
 
+      for (const operation of paymentOperations) {
+        const existing = existingOperations.find(row => row.idempotencyKey === operation.idempotencyKey);
+        if (existing) {
+          if (existing.kind !== operation.kind || existing.createdAt.getTime() !== asDate(operation.createdAt, 'operation.createdAt')!.getTime()) throw new BackupValidationError('Abweichender Finanzaktionsbeleg.');
+          result.paymentOperations.skipped++;
+        } else {
+          await tx.paymentOperation.create({ data: { userId, idempotencyKey: String(operation.idempotencyKey), kind: String(operation.kind), createdAt: asDate(operation.createdAt, 'operation.createdAt')! } });
+          result.paymentOperations.imported++;
+        }
+      }
+
       for (const [index, event] of paymentJournalEvents.entries()) {
         const label = `paymentJournalEvents[${index}]`;
         const values = paymentEventValues(event, label);
@@ -2129,6 +2191,16 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
             || existing.createdAt.getTime() !== values.createdAt.getTime()) {
             throw new BackupValidationError(`${label}: Kollision mit abweichendem unveränderlichem Zahlungsereignis`);
           }
+          const sourceId = asOptionalInt(event.id, `${label}.id`)!;
+          const identity = JSON.stringify([sourceUserId, sourceId]);
+          if (sourceUserId && !existingPaymentSourceIdentities.has(identity) && !(sourceUserId === userId && sourceId === existing.id)) {
+            await createFinancialAuditLog({ userId, action: 'RESTORE', entityType: 'Invoice', entityId: invoiceId,
+              newValues: { paymentJournalEventId: existing.id, amountCents: existing.amountCents, paidAt: existing.paidAt, dateCertainty: existing.dateCertainty, incomeId: existing.incomeId, sourceEventId: sourceId, sourceUserId },
+              metadata: { actorId: userId, tenantId: userId, operation: 'payment-journal.restore', identityOnly: true,
+                originalReference: `source:${sourceUserId}:payment:${sourceId}`, reason: 'Zusätzliche verifizierte Quellidentität eines unveränderten Originalzahlungsnachweises; keine neue Geldbewegung.' },
+            }, tx);
+            existingPaymentSourceIdentities.set(identity, existing.id);
+          }
           paymentJournalMap.set(asOptionalInt(event.id, `${label}.id`)!, existing.id);
           result.paymentJournalEvents.skipped += 1;
           continue;
@@ -2146,10 +2218,37 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         }, tx);
       }
 
-      // Apply lifecycle projections only after the complete compatible ledger
-      // has been imported; older subset snapshots never regress the target.
+      // Verified lifecycle advancement belongs before refund insertion: the DB
+      // ownership trigger checks the already-cancelled original, in this same transaction.
       for (const [invoiceId, projection] of projectionUpdates) {
         await tx.invoice.update({ where: { id: invoiceId, userId }, data: projection });
+      }
+
+      for (const adjustment of paymentAdjustments) {
+        const invoiceId = relationMapValue(invoiceMap, adjustment.invoiceId, 'adjustment.invoiceId')!;
+        const originalPaymentId = relationMapValue(paymentJournalMap, adjustment.originalPaymentId, 'adjustment.originalPaymentId')!;
+        const cancellationInvoiceId = relationMapValue(invoiceMap, adjustment.cancellationInvoiceId, 'adjustment.cancellationInvoiceId');
+        const existing = existingAdjustments.find(row => row.idempotencyKey === adjustment.idempotencyKey);
+        if (existing) {
+          if (existing.invoiceId !== invoiceId || existing.originalPaymentId !== originalPaymentId || existing.cancellationInvoiceId !== cancellationInvoiceId || !sameAdjustmentEvidence(existing as unknown as JsonRecord, adjustment)) throw new BackupValidationError('Kollision mit abweichender Zahlungsberichtigung.');
+          const sourceId = asOptionalInt(adjustment.id, 'adjustment.id')!;
+          const identity = JSON.stringify([sourceUserId, sourceId]);
+          if (sourceUserId && !existingAdjustmentSourceIdentities.has(identity) && !(sourceUserId === userId && sourceId === existing.id)) {
+            await createFinancialAuditLog({ userId, action: 'RESTORE', entityType: 'Invoice', entityId: invoiceId,
+              newValues: { paymentAdjustmentId: existing.id, originalPaymentId, kind: existing.kind, amountCents: existing.amountCents, sourceAdjustmentId: sourceId, sourceUserId, fiscalMappingStatus: 'UNREVIEWED' },
+              metadata: { actorId: userId, tenantId: userId, operation: 'payment-adjustment.restore', identityOnly: true,
+                originalReference: `source:${sourceUserId}:adjustment:${sourceId}`, reason: 'Zusätzliche verifizierte Quellidentität einer unveränderten Zahlungsberichtigung; keine neue Geldbewegung.' },
+            }, tx);
+            existingAdjustmentSourceIdentities.set(identity, existing.id);
+          }
+          result.paymentAdjustments.skipped++; continue;
+        }
+        const created = await tx.paymentAdjustment.create({ data: { ...paymentAdjustmentValues(adjustment), userId, invoiceId, originalPaymentId, cancellationInvoiceId } });
+        result.paymentAdjustments.imported++;
+        await createFinancialAuditLog({ userId, action: 'RESTORE', entityType: 'Invoice', entityId: invoiceId,
+          newValues: { paymentAdjustmentId: created.id, originalPaymentId, kind: created.kind, amountCents: created.amountCents, actionDate: created.actionDate, accountingEffectiveOn: created.accountingEffectiveOn, sourceAdjustmentId: adjustment.id, sourceUserId, fiscalMappingStatus: 'UNREVIEWED' },
+          metadata: { actorId: userId, tenantId: userId, operation: 'payment-adjustment.restore', originalReference: `backup:${backupId}:adjustment:${String(adjustment.id)}`, reason: 'Unveränderliche originalverknüpfte Zahlungsberichtigung wiederhergestellt.' },
+        }, tx);
       }
 
       // A final union check covers every mapped invoice, including newly
@@ -2162,7 +2261,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           tx.income.findMany({ where: { userId, invoiceId: { in: journalInvoiceIds } } }),
           tx.paymentJournalEvent.findMany({ where: { userId, invoiceId: { in: journalInvoiceIds } } }),
         ]);
-        validatePaymentJournalBackup({ user: { id: userId }, invoices: targetInvoices, incomes: targetIncomes, paymentJournalEvents: targetEvents }, CURRENT_BACKUP_VERSION);
+        const targetAdjustments = await tx.paymentAdjustment.findMany({ where: { userId, invoiceId: { in: journalInvoiceIds } } });
+        validatePaymentJournalBackup({ user: { id: userId }, invoices: targetInvoices, incomes: targetIncomes, paymentJournalEvents: targetEvents, paymentAdjustments: targetAdjustments }, CURRENT_BACKUP_VERSION);
+
       }
 
       if (settings) {
@@ -2291,7 +2392,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const sourceId = asOptionalInt(transaction.id, 'cashTransaction.id');
         const cashBookId = relationMapValue(cashBookMap, transaction.cashBookId, 'cashTransaction.cashBookId');
         if (!cashBookId) throw new BackupValidationError('cashTransaction.cashBookId fehlt');
-        const created = await tx.cashTransaction.create({ data: {
+        const values = {
           date: asDate(transaction.date, 'cashTransaction.date', new Date(0))!,
           createdAt: asDate(transaction.createdAt, 'cashTransaction.createdAt', new Date(0))!,
           updatedAt: asDate(transaction.updatedAt, 'cashTransaction.updatedAt', new Date())!,
@@ -2307,7 +2408,22 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           expenseId: relationMapValue(expenseMap, transaction.expenseId, 'cashTransaction.expenseId'),
           incomeId: relationMapValue(incomeMap, transaction.incomeId, 'cashTransaction.incomeId'),
           userId,
-        } });
+        };
+        // A journal-linked Income is a verified one-to-one financial identity,
+        // not an amount/date duplicate heuristic. Preserve it on ancestor/replay.
+        if (values.incomeId !== null && await tx.paymentJournalEvent.findFirst({ where: { userId, incomeId: values.incomeId }, select: { id: true } })) {
+          const existing = await tx.cashTransaction.findUnique({ where: { incomeId: values.incomeId } });
+          if (existing) {
+            const equal = existing.userId === userId && existing.cashBookId === values.cashBookId && existing.expenseId === values.expenseId
+              && existing.type === values.type && existing.description === values.description && existing.amount === values.amount
+              && existing.date.getTime() === values.date.getTime() && existing.createdAt.getTime() === values.createdAt.getTime()
+              && existing.category === values.category && existing.receiptNumber === values.receiptNumber && existing.taxRelevant === values.taxRelevant && existing.notes === values.notes;
+            if (!equal) throw new BackupValidationError('Kassenbezug der unveränderlichen Originalzahlung widerspricht dem Ziel.');
+            if (sourceId !== null) cashTransactionMap.set(sourceId, existing.id);
+            result.cashTransactions.skipped++; continue;
+          }
+        }
+        const created = await tx.cashTransaction.create({ data: values });
         if (sourceId !== null) cashTransactionMap.set(sourceId, created.id);
         result.cashTransactions.imported += 1;
       }
@@ -2481,6 +2597,13 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         existingAuditImportRows.set(importKey, { id: -1, entityId: mapped.entityId, metadata });
         result.auditLogs.imported += 1;
       }
+
+      // Authoritative union validation belongs after every financial import,
+      // especially CashTransaction links that may target existing adjusted roots.
+      const completeGraph = { user: { id: userId }, invoices: await tx.invoice.findMany({ where: { userId } }), incomes: await tx.income.findMany({ where: { userId } }),
+          paymentJournalEvents: await tx.paymentJournalEvent.findMany({ where: { userId } }), paymentAdjustments: await tx.paymentAdjustment.findMany({ where: { userId } }),
+          paymentOperations: await tx.paymentOperation.findMany({ where: { userId } }), auditLogs: await tx.auditLog.findMany({ where: { userId } }), cashTransactions: await tx.cashTransaction.findMany({ where: { userId } }) };
+      try { validatePaymentAdjustmentBackup(completeGraph, CURRENT_SCHEMA_VERSION); } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zahlungsberichtigungsgraph ungültig'); }
 
       await createFinancialAuditLog({
         userId,

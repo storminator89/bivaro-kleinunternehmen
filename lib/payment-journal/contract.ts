@@ -2,7 +2,7 @@ import { formatMoneyEUR, parseMoneyEUR, type MoneyInput } from '@/lib/money';
 import { parseBusinessDate } from '@/lib/business-date';
 
 export class PaymentJournalError extends Error {
-  constructor(message: string, public status = 400, public code = 'INVALID_PAYMENT', public summary?: PaymentSummary) { super(message); }
+  constructor(message: string, public status = 400, public code = 'INVALID_PAYMENT', public summary?: PaymentSummary, public ledgerVersion?: string) { super(message); }
 }
 
 export type FullPaymentInput = {
@@ -13,6 +13,7 @@ export type FullPaymentInput = {
   reference: string;
   idempotencyKey: string;
   expectedPaidCents?: string;
+  expectedLedgerVersion?: string;
 };
 
 export function exactPaymentCents(value: unknown): bigint {
@@ -42,7 +43,7 @@ export function paymentDate(value: unknown, allowInstant = false): Date {
 }
 
 export function paymentText(value: unknown, name: string, max: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > max || /[\u0000-\u001f]/u.test(value)) {
+  if (typeof value !== 'string' || !value.trim() || value.length > max || /[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
     throw new PaymentJournalError(`${name} fehlt oder ist ungültig.`);
   }
   return value.trim();

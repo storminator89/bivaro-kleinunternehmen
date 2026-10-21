@@ -1,3 +1,4 @@
+import { reducePaymentLedger } from '@/lib/payment-journal/adjustment-contract';
 import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
 import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
@@ -216,7 +217,7 @@ export async function GET(request: Request) {
       ];
     }
 
-    const items = await prisma.invoice.findMany({
+    const items = await prisma.$transaction(tx => tx.invoice.findMany({
         where,
         orderBy: { uploadedAt: 'desc' },
         select: {
@@ -242,19 +243,21 @@ export async function GET(request: Request) {
           customerId: true,
           userId: true,
           incomes: { include: { cashTransaction: true } },
-          paymentJournalEvents: { orderBy: { id: 'asc' } },
+          paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } },
           customer: { select: { id: true, name: true, userId: true } },
         },
-      });
+      }));
 
-    const checkedItems = await Promise.all(items.map(async ({ parsedData, paymentJournalEvents, incomes, customer, ...invoice }) => {
+    const supportsPaymentV2 = request.headers.get('X-Bivaro-Payment-Contract') === '2';
+    if (!supportsPaymentV2 && items.some(invoice => invoice.paymentAdjustments.length > 0)) return NextResponse.json({ error: 'Diese Rechnungsauswahl enthält Berichtigungen und erfordert Zahlungsjournal-Vertrag 2.', code: 'PAYMENT_CAPABILITY_REQUIRED', requiredContract: 2 }, { status: 409 });
+    const checkedItems = await Promise.all(items.map(async ({ parsedData, paymentJournalEvents, paymentAdjustments, creditNotes, incomes, customer, ...invoice }) => {
       let summary: ReturnType<typeof ledgerSummary> | null = null;
       let paymentReviewRequired = false;
       let canRecordPayment = false;
       const serviceDraftEditable = isUnrenderedServiceBillingDraft({ ...invoice, parsedData });
       if (invoice.type === 'INVOICE' && !serviceDraftEditable) {
         try {
-          summary = ledgerSummary({ ...invoice, parsedData, paymentJournalEvents, incomes });
+          summary = ledgerSummary({ ...invoice, parsedData, paymentJournalEvents, paymentAdjustments, creditNotes, incomes });
           if (customer && customer.userId !== userId) throw new Error('Invalid customer ownership');
           const currency = parsedData && typeof parsedData === 'object' && !Array.isArray(parsedData) ? parsedData.currency : null;
           if (currency != null && currency !== 'EUR') throw new Error('Unsupported currency');
@@ -270,6 +273,7 @@ export async function GET(request: Request) {
         incomes: incomes.map(income => ({ id: income.id, amount: income.amount, date: income.date })),
         customer: customer && customer.userId === userId ? { id: customer.id, name: customer.name } : null,
         paymentSummary: summary,
+        paymentLedger: summary ? reducePaymentLedger(invoice.totalAmount!, paymentJournalEvents, paymentAdjustments, invoice.status).ledger : null,
         paymentReviewRequired,
         canRecordPayment,
         serviceDraftEditable,
@@ -280,7 +284,7 @@ export async function GET(request: Request) {
     const filtered = checkedItems.filter(invoice => {
       if (paidStatus === 'paid') return invoice.paymentSummary?.paid === true;
       if (paidStatus === 'unpaid') return invoice.status !== 'CANCELLED' && invoice.paymentSummary?.paid === false;
-      if (paidStatus === 'partial') return invoice.paymentSummary?.paymentState === 'PARTIAL';
+      if (paidStatus === 'partial') return invoice.status !== 'CANCELLED' && invoice.paymentSummary?.paymentState === 'PARTIAL';
       return true;
     });
     return NextResponse.json({ items: filtered.slice(skip, skip + pageSize), total: filtered.length, page, pageSize });

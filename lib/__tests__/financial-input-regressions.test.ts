@@ -209,6 +209,23 @@ describe('issue #29: numeric assumption validation', () => {
     return nodes(expanded).find(node => node.type === Input)!;
   }
 
+  it('shows unavailable fiscal source values after a guarded failure, not invented zero receipts/profit/counts', () => {
+    hooks.states[0] = null; hooks.states[1] = false; hooks.states[2] = 'Zahlungszuordnung fachlich prüfen.';
+    const tree = simulation(), source = nodes(tree).find(node => node.props['aria-labelledby'] === 'overview-heading')!;
+    const sourceText = text(source);
+    expect(sourceText).toContain('Nicht verfügbar / fachlich zu prüfen');
+    expect(sourceText).toContain('Keine bestätigte steuerliche Datenbasis');
+    expect(sourceText).not.toContain('0,00'); expect(sourceText).not.toContain('Buchungen 0');
+    expect(calculateIncomeTax).not.toHaveBeenCalled();
+  });
+
+  it('keeps a genuinely loaded zero distinct from unavailable fiscal data', () => {
+    hooks.states[0] = buildTaxSummary({ year: 2026, timeRange: 'thisYear', incomes: [], expenses: [] });
+    hooks.states[1] = false;
+    const source = nodes(simulation()).find(node => node.props['aria-labelledby'] === 'overview-heading')!;
+    expect(text(source)).toContain('0,00'); expect(text(source)).not.toContain('Nicht verfügbar');
+  });
+
   it.each([
     ['churchTaxRate', '101'], ['healthInsurance', '-4000'], ['pensionInsurance', '-1'],
     ['careInsurance', '-1'], ['otherDeductions', '-1'], ['tradeTaxHebesatz', '1001'],

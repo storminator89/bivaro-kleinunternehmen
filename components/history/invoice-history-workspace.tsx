@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AUDIT_ACTION_LABELS } from '@/lib/audit-presentation';
 import { HISTORY_ACTIONS, historyStatusLabel, historyLifecycle, type HistoryDetail, type HistoryDocument, type HistoryList, type HistoryPagination } from '@/lib/invoice-history-contract';
+import { displayPaymentAmount } from '@/lib/full-payment-form';
+import { PAYMENT_DASHBOARD_REFRESH_EVENT } from '@/lib/payment-dashboard-refresh';
 
 const control = 'min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
 function instant(value: string) { return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(value)) + ' UTC'; }
@@ -34,6 +36,22 @@ function DocumentStand({ document, originalId, missingOriginal }: { document: Hi
     <a className="inline-flex min-h-11 items-center gap-2 rounded-md px-1 text-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" href={`/api/invoices/download?id=${document.id}&download=true`}><FileText className="size-4" aria-hidden="true" />Gespeicherte Datei herunterladen<span className="sr-only">: {document.invoiceNumber || `Dokument ${document.id}`}</span></a>
   </li>;
 }
+export function InvoiceAdjustmentEvidence({ adjustments, adjustmentCount }: Pick<HistoryDetail, 'adjustments' | 'adjustmentCount'>) {
+  if (adjustments === undefined) return <p className="mt-4 text-sm text-muted-foreground">Korrektur- und Erstattungsbelege sind in diesem Datenstand nicht enthalten. Daraus folgt keine Aussage über erfolgte Erstattungen.</p>;
+  return <section aria-label="Original-verknüpfte Zahlungsfolgebelege" className="mt-4 space-y-3 border-t border-border pt-4">
+    <h3 className="font-semibold">Korrektur- und Erstattungsbelege · {adjustmentCount ?? adjustments.length}</h3>
+    <p className="text-sm text-muted-foreground">Gespeicherte Folgebelege, keine automatische Überweisung. Steuerliche Zuordnung: prüfpflichtig, nicht fachlich freigegeben.</p>
+    {adjustments.length ? <ol className="divide-y divide-border">{adjustments.map(adjustment => <li key={adjustment.id} className="space-y-1 py-3 text-sm">
+      <p className="font-semibold">{adjustment.kind === 'PAYMENT_CORRECTION' ? 'Korrektur: nie erhalten' : adjustment.kind === 'CUSTOMER_REFUND' ? 'Erstattung: tatsächlich zurückgezahlt' : 'Finanzbeleg prüfen'} · {/^[1-9]\d{0,15}$/u.test(adjustment.amountCents) ? displayPaymentAmount(adjustment.amountCents) : 'Betrag prüfen'}</p>
+      <p>Folgebeleg #{adjustment.id} → Original-Zahlungsnachweis #{adjustment.originalPaymentId}</p>
+      <p>{adjustment.kind === 'CUSTOMER_REFUND' ? 'Tatsächliche Auszahlung' : 'Fehlbuchung entdeckt'}: {day(adjustment.actionDate)}</p>
+      <p>Buchungszuordnung: {instant(adjustment.accountingEffectiveOn)}</p><p>Protokolliert: {instant(adjustment.recordedAt)}</p>
+      {adjustment.cancellationInvoiceId && <p>Vollständiger Stornobeleg #{adjustment.cancellationInvoiceId}</p>}
+      <p className="break-words">Grund: {adjustment.reason}</p>
+    </li>)}</ol> : <p className="text-sm">Keine Korrektur- oder Erstattungsbelege im aktuellen Journal vorhanden.</p>}
+    {(adjustmentCount ?? adjustments.length) > adjustments.length && <p className="text-sm text-muted-foreground">Gezeigt: die neuesten {adjustments.length} von {adjustmentCount} Folgebelegen. Vollständigen Verlauf in den Rechnungsaktionen prüfen; aus diesem Ausschnitt keine Zahlungsbilanz ableiten.</p>}
+  </section>;
+}
 function Detail({ detail }: { detail: HistoryDetail }) {
   return <>
     <section className="overflow-hidden rounded-xl border border-border bg-card" aria-labelledby="document-relationship-title">
@@ -45,9 +63,10 @@ function Detail({ detail }: { detail: HistoryDetail }) {
     </section>
     <section className="rounded-xl border border-border bg-card p-4 sm:p-5" aria-labelledby="history-payments-title">
       <h2 id="history-payments-title" className="font-semibold">Zahlungsnachweise getrennt vom Dokument</h2>
-      <p className="mt-2 text-sm font-medium">Storno bedeutet nicht zurückgezahlt.</p><p className="mt-1 text-sm text-muted-foreground">Nur gespeicherte Zahlungsjournal-Einträge zum Ursprungsdokument. Keine Erstattung, neue Buchung oder Zahlungsbilanz wird daraus abgeleitet.</p>
+      <p className="mt-2 text-sm font-medium">Storno bedeutet nicht zurückgezahlt.</p><p className="mt-1 text-sm text-muted-foreground">Gespeicherte ursprüngliche Zahlungseingänge und getrennte Folgebelege. Aus ursprünglichen Eingängen allein wird keine Erstattung oder Zahlungsbilanz abgeleitet; hier wird nichts neu gebucht.</p>
       {detail.payments.length ? <ol aria-label="Gespeicherte Zahlungsnachweise" className="mt-4 divide-y divide-border">{detail.payments.map(payment => <li key={payment.id} className="py-3 text-sm"><p className="flex flex-wrap justify-between gap-2"><span>Nachweis #{payment.id}</span><strong className="tabular-nums">{/^[1-9]\d{0,15}$/.test(payment.amountCents) ? new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(payment.amountCents) / 100) : 'Betrag prüfen'} {payment.currency}</strong></p><p className="mt-1">{day(payment.paidAt)} · {payment.dateCertainty === 'ACTUAL' ? 'Tatsächliches Zahlungsdatum' : payment.dateCertainty === 'UNKNOWN' ? 'Datumsnachweis unbekannt' : 'Historischer Datumsnachweis'}</p><p className="mt-1 text-muted-foreground">Quelle: {payment.source === 'MANUAL' ? 'Manuell erfasst' : payment.source === 'LEGACY_IMPORT' ? 'Historische Übernahme' : payment.source === 'LEGACY_STATUS' ? 'Historischer Status' : 'Nicht eingeordnet'}</p></li>)}</ol> : <p className="mt-4 text-sm">Keine Zahlungsjournal-Einträge vorhanden. Ein alter Bezahlt-Status allein belegt hier weder Zahlung noch Erstattung.</p>}
       {detail.paymentCount > detail.payments.length && <p className="mt-3 text-sm text-muted-foreground">Gezeigt: die neuesten {detail.payments.length} von {detail.paymentCount} Zahlungsnachweisen. Den vollständigen Zahlungsverlauf findest du in den Rechnungsaktionen.</p>}
+      <InvoiceAdjustmentEvidence adjustments={detail.adjustments} adjustmentCount={detail.adjustmentCount} />
       <Link className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring" href="/dashboard?tab=invoices">Zu den Rechnungsaktionen</Link>
     </section>
   </>;
@@ -63,6 +82,11 @@ function HistoryContent() {
   const [data, setData] = useState<HistoryList | HistoryDetail | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState<string | null>(null), [retry, setRetry] = useState(0);
   const [search, setSearch] = useState(params.get('search') ?? '');
+  useEffect(() => {
+    const refreshPayments = () => setRetry(value => value + 1);
+    window.addEventListener(PAYMENT_DASHBOARD_REFRESH_EVENT, refreshPayments);
+    return () => window.removeEventListener(PAYMENT_DASHBOARD_REFRESH_EVENT, refreshPayments);
+  }, []);
   useEffect(() => setSearch(params.get('search') ?? ''), [params]);
   useEffect(() => {
     if (status !== 'authenticated') return;

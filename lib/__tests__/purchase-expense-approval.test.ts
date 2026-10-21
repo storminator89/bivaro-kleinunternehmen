@@ -1,3 +1,4 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
 import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -482,7 +483,7 @@ describe('explicit manual photo source approval', () => {
       const standalonePhoto = structuredClone(backup); delete standalonePhoto.data.annualBusinessContextRevisions; delete standalonePhoto.data.serviceArticles; standalonePhoto.data.reminders = [];
       for (const row of standalonePhoto.data.purchaseDocuments) { delete row.aiExtraction; delete row.aiDraftProvenance; delete row.aiApprovedSnapshot; }
       for (const row of standalonePhoto.data.invoices) { delete row.quoteFollowUpOn; delete row.quoteResponseNote; }
-      standalonePhoto.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: standalonePhoto.exportedAt, data: standalonePhoto.data, fileManifest: standalonePhoto.manifest.fileManifest }); standalonePhoto.manifest.schemaVersion = manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(standalonePhoto);
+      standalonePhoto.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: standalonePhoto.exportedAt, data: standalonePhoto.data, fileManifest: standalonePhoto.manifest.fileManifest }); standalonePhoto.manifest.schemaVersion = manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(standalonePhoto); stripCsvCatalogForLegacy(standalonePhoto);
       expect(() => restore.validateBackupForRestore(standalonePhoto)).not.toThrow();
       expect(backup.manifest.schemaVersion).toBe(manifestContract.CURRENT_SCHEMA_VERSION);
       expect(backup.data.annualBusinessContextRevisions).toEqual(jsonBackup.data.annualBusinessContextRevisions);
@@ -504,7 +505,7 @@ describe('explicit manual photo source approval', () => {
       expect(neverResolve).not.toHaveBeenCalled();
       expect((await (await import('@/lib/backup-snapshot')).readBackupSnapshot(divergentOwner)).data).toEqual(divergentBefore);
       for (const schemaVersion of [manifestContract.PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, manifestContract.MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, manifestContract.ANNUAL_CONTEXT_SCHEMA_VERSION, manifestContract.COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, manifestContract.DATA_IMPORT_SCHEMA_VERSION, manifestContract.QUOTE_WORKFLOW_SCHEMA_VERSION, manifestContract.GROWTH_SCHEMA_VERSION, manifestContract.AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, manifestContract.GROWTH_AI_SCHEMA_VERSION, (await import('@/lib/reminder-backup')).REMINDER_BALANCE_SCHEMA_VERSION]) {
-        const relabeled = structuredClone(backup); relabeled.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: relabeled.exportedAt, data: relabeled.data, fileManifest: relabeled.manifest.fileManifest }); relabeled.manifest.schemaVersion = schemaVersion;
+        const relabeled = structuredClone(backup); relabeled.manifest = manifestContract.createBackupManifest({ sourceUserId: sourceOwner, generatedAt: relabeled.exportedAt, data: relabeled.data, fileManifest: relabeled.manifest.fileManifest }); relabeled.manifest.schemaVersion = schemaVersion; stripEmptyPaymentAdjustmentsForLegacy(relabeled);
         expect(() => restore.validateBackupForRestore(relabeled)).toThrow(/reviewedSourceSnapshot|Jahreskontexthistorie|Artikel|Angebots-Wiedervorlage|KI-Herkunft|Restbetragsbestätigung/);
         await expect(restore.restoreBackupData({ userId: divergentOwner, backup: relabeled, overwrite: true, resolveFile: neverResolve })).rejects.toThrow(/reviewedSourceSnapshot|Jahreskontexthistorie|Artikel|Angebots-Wiedervorlage|KI-Herkunft|Restbetragsbestätigung/);
       }
@@ -595,7 +596,7 @@ describe('explicit manual photo source approval', () => {
         expect(await database.client.expense.count({ where: { userId: targetOwner } })).toBe(1);
         expect(await database.client.purchaseDocument.findUniqueOrThrow({ where: { id: restored.id } })).toMatchObject({ reviewedSourceSnapshot: restored.reviewedSourceSnapshot, expenseId: restored.expenseId });
       }
-      const oldIdentity = structuredClone(backup); oldIdentity.manifest.schemaVersion = (await import('@/lib/backup-manifest')).PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION; oldIdentity.manifest.modelCoverage = oldIdentity.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+      const oldIdentity = structuredClone(backup); oldIdentity.manifest.schemaVersion = (await import('@/lib/backup-manifest')).PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(oldIdentity); oldIdentity.manifest.modelCoverage = oldIdentity.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
       expect(() => restore.validateBackupForRestore(oldIdentity)).toThrow(/Älteres Backupschema/);
       const targetExpense = await database.client.expense.findUniqueOrThrow({ where: { id: restored.expenseId! } });
       expect(targetExpense.date.toISOString()).toBe('2026-01-01T00:00:00.000Z'); expect(await database.client.income.count({ where: { userId: targetOwner } })).toBe(0); expect(await database.client.cashTransaction.count({ where: { userId: targetOwner } })).toBe(0);

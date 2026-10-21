@@ -1,3 +1,5 @@
+import { validateAdjustmentEvidence } from './adjustment-evidence';
+import { reducePaymentLedger, paymentLedgerVersion } from './adjustment-contract';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { inTransaction, isRetryableDatabaseError } from '@/lib/db-transaction';
@@ -6,10 +8,10 @@ import { getEInvoiceBookingRejection } from '@/lib/e-invoice-parser';
 import { formatMoneyEUR } from '@/lib/money';
 import { exactPaymentCents, paymentDate, paymentSummary, paymentText, PaymentJournalError, type FullPaymentInput } from './contract';
 
-async function ownedInvoice(tx: Prisma.TransactionClient, userId: string, invoiceId: number) {
+export async function ownedInvoice(tx: Prisma.TransactionClient, userId: string, invoiceId: number) {
   if (!Number.isSafeInteger(invoiceId) || invoiceId <= 0) throw new PaymentJournalError('Ungültige Rechnungs-ID');
   const invoice = await tx.invoice.findFirst({ where: { id: invoiceId, userId }, include: {
-    incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } },
+    incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } }, paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } },
   } });
   if (!invoice) throw new PaymentJournalError('Rechnung nicht gefunden', 404, 'INVOICE_NOT_FOUND');
   if (invoice.customerId !== null && !await tx.customer.findFirst({ where: { id: invoice.customerId, userId }, select: { id: true } })) {
@@ -24,7 +26,11 @@ const review = () => new PaymentJournalError('Zahlungsnachweise und Rechnungspro
 /** Validate every linked projection; an unexplained Income must never be counted or hidden. */
 export function ledgerSummary(invoice: LedgerInvoice) {
   const events = invoice.paymentJournalEvents;
-  const summary = paymentSummary(invoice.totalAmount!, events);
+  if (!Array.isArray(invoice.paymentAdjustments)) throw review();
+  const reduction = reducePaymentLedger(invoice.totalAmount!, events, invoice.paymentAdjustments, invoice.status);
+  const summary = reduction.summary;
+  validateAdjustmentEvidence(invoice, events, invoice.paymentAdjustments, invoice.creditNotes,
+    new Set(invoice.incomes.filter(income => income.cashTransaction != null).map(income => income.id)));
   const incomes = new Map(invoice.incomes.map(income => [income.id, income]));
   const linked = new Set<number>();
   for (const event of events) {
@@ -49,12 +55,11 @@ export function ledgerSummary(invoice: LedgerInvoice) {
   if (events.length > 0) {
     if (linked.size !== incomes.size || (events.some(event => event.dateCertainty === 'ACTUAL') && invoice.issuanceState !== 'ISSUED')) throw review();
     if (invoice.status !== 'CANCELLED' && invoice.status !== (summary.paid ? 'PAID' : 'SENT')) throw review();
-    if (!summary.paid && invoice.paidAt !== null) throw review();
+    if (invoice.status !== 'CANCELLED' && !summary.paid && invoice.paidAt !== null) throw review();
     // Adopted evidence retains all historical date/null values. Actual ledgers
     // project only the latest real allocation date at full settlement.
     if (events.every(event => event.dateCertainty === 'ACTUAL')) {
-      const latest = Math.max(...events.map(event => event.paidAt!.getTime()));
-      if (summary.paid && invoice.paidAt?.getTime() !== latest) throw review();
+      if (invoice.status !== 'CANCELLED' && summary.paid && invoice.paidAt?.getTime() !== reduction.settlementDate?.getTime()) throw review();
     }
   } else if (invoice.status === 'PAID' || invoice.incomes.length > 0 || invoice.paidAt) {
     throw review();
@@ -62,7 +67,7 @@ export function ledgerSummary(invoice: LedgerInvoice) {
   return summary;
 }
 
-async function assertBookable(invoice: LedgerInvoice) {
+export async function assertBookable(invoice: LedgerInvoice) {
   if (invoice.type !== 'INVOICE') throw new PaymentJournalError('Nur Rechnungen unterstützen diese Zahlung.', 409, 'UNSUPPORTED_DOCUMENT');
   const parsed = invoice.parsedData;
   const currency = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.currency : null;
@@ -90,6 +95,8 @@ export async function recordFullPaymentInTransaction(tx: Prisma.TransactionClien
   const paidAt = paymentDate(input.paidAt, input.source === 'LEGACY_STATUS');
   const reference = paymentText(input.reference, 'Zahlungsbezug', 255);
   const idempotencyKey = paymentText(input.idempotencyKey, 'Idempotenzschlüssel', 128);
+  const operation = await tx.paymentOperation.findUnique({ where: { userId_idempotencyKey: { userId, idempotencyKey } } });
+  if (operation && operation.kind !== 'PAYMENT_RECEIVED') throw new PaymentJournalError('Idempotenzschlüssel gehört zu einer anderen Finanzaktion.', 409, 'IDEMPOTENCY_CONFLICT');
   const priorKey = await tx.paymentJournalEvent.findUnique({ where: { userId_idempotencyKey: { userId, idempotencyKey } } });
   if (priorKey) {
     if (priorKey.invoiceId !== invoiceId || priorKey.amountCents !== amountCents || priorKey.currency !== input.currency
@@ -98,7 +105,11 @@ export async function recordFullPaymentInTransaction(tx: Prisma.TransactionClien
     }
     return { event: priorKey, summary: ledgerSummary(invoice), replayed: true };
   }
+  if (operation) throw new PaymentJournalError('Finanzaktionsbeleg ohne passende Originalzahlung; Prüfung erforderlich.', 409, 'PAYMENT_REVIEW_REQUIRED');
   const summary = ledgerSummary(invoice);
+  if (invoice.paymentAdjustments.length && input.expectedLedgerVersion !== paymentLedgerVersion(invoice)) {
+    throw new PaymentJournalError('Zahlungsjournal geändert. Bitte neu laden und bewusst bestätigen.', 409, 'PAYMENT_STATE_CHANGED', summary, paymentLedgerVersion(invoice));
+  }
   if (!['DRAFT', 'SENT', 'PAID'].includes(invoice.status)) throw new PaymentJournalError('Diese Rechnung kann nicht bezahlt werden.', 409, 'UNSUPPORTED_DOCUMENT');
   if (input.source === 'LEGACY_STATUS' && invoice.paymentJournalEvents.length > 0) {
     throw new PaymentJournalError('Bitte den verbleibenden Betrag mit Datum und Bezug im Zahlungsdialog erfassen.', 409, 'PAYMENT_DETAILS_REQUIRED', summary);
@@ -118,13 +129,15 @@ export async function recordFullPaymentInTransaction(tx: Prisma.TransactionClien
   if (BigInt(amountCents) > BigInt(summary.openCents)) {
     throw new PaymentJournalError('Der Zahlungsbetrag übersteigt den offenen Restbetrag.', 409, 'PAYMENT_EXCEEDS_OPEN', summary);
   }
+  if (!operation) await tx.paymentOperation.create({ data: { userId, idempotencyKey, kind: 'PAYMENT_RECEIVED' } });
   const income = await tx.income.create({ data: { userId, invoiceId, amount: Number(formatMoneyEUR(BigInt(amountCents))), date: paidAt,
     customerId: invoice.customerId, description: `Rechnung ${invoice.invoiceNumber ?? invoiceId}`, taxRelevant: true } });
   const event = await tx.paymentJournalEvent.create({ data: { userId, invoiceId, incomeId: income.id, amountCents, currency: 'EUR', paidAt,
     dateCertainty: 'ACTUAL', source: input.source, reference, idempotencyKey } });
   const allocations = [...invoice.paymentJournalEvents, event];
-  const nextSummary = paymentSummary(invoice.totalAmount!, allocations);
-  const latestDate = new Date(Math.max(...allocations.map(allocation => allocation.paidAt!.getTime())));
+  const reduction = reducePaymentLedger(invoice.totalAmount!, allocations, invoice.paymentAdjustments, invoice.status);
+  const nextSummary = reduction.summary;
+  const latestDate = reduction.settlementDate;
   await tx.invoice.update({ where: { id: invoiceId, userId }, data: {
     status: nextSummary.paid ? 'PAID' : 'SENT', paidAt: nextSummary.paid ? latestDate : null, issuanceState: 'ISSUED',
   } });
@@ -172,7 +185,8 @@ export async function adoptLegacyPaidInvoice(userId: string, invoiceId: number) 
 
 /** Legacy unknown balances are explicit, never guessed as unpaid. */
 export async function readInvoicePaymentJournal(userId: string, invoiceId: number) {
-  const invoice = await ownedInvoice(prisma, userId, invoiceId);
+  return prisma.$transaction(async tx => {
+  const invoice = await ownedInvoice(tx, userId, invoiceId);
   await assertBookable(invoice);
   const legacyAdoptionRequired = invoice.status === 'PAID' && invoice.paymentJournalEvents.length === 0;
   let summary = null;
@@ -182,9 +196,15 @@ export async function readInvoicePaymentJournal(userId: string, invoiceId: numbe
     if (!(error instanceof PaymentJournalError) || error.code !== 'PAYMENT_REVIEW_REQUIRED') throw error;
     reviewRequired = true;
   }
-  return { currency: 'EUR' as const, events: invoice.paymentJournalEvents,
+  const reduction = summary ? reducePaymentLedger(invoice.totalAmount!, invoice.paymentJournalEvents, invoice.paymentAdjustments, invoice.status) : null;
+  const adjustmentEligibility = await import('./adjustment-service').then(module => module.adjustmentEligibility(invoice));
+  return { ledger: reduction?.ledger ?? null, ledgerVersion: paymentLedgerVersion(invoice),
+    adjustments: invoice.paymentAdjustments.map(adjustment => ({ ...adjustment, fiscalMappingStatus: 'UNREVIEWED' as const })),
+    adjustmentCapacities: reduction?.adjustmentCapacities ?? [], ...adjustmentEligibility,
+    currency: 'EUR' as const, events: invoice.paymentJournalEvents,
     event: invoice.paymentJournalEvents.length === 1 ? invoice.paymentJournalEvents[0] : null,
     summary, legacyAdoptionRequired, reviewRequired,
     canRecordPayment: !reviewRequired && !!summary && !summary.paid && ['DRAFT', 'SENT'].includes(invoice.status),
   };
+  });
 }

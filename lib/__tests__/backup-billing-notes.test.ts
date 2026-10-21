@@ -1,8 +1,10 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, PRE_BILLING_NOTES_SCHEMA_VERSION } from '@/lib/backup-manifest';
+import { PRE_BILLING_NOTES_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 import { createBackupPreview } from '@/lib/backup-preview';
 
@@ -212,12 +214,12 @@ describe('billing-note backup compatibility', () => {
     const { billingNotes: _billingNotes, ...legacyData } = backup.data;
     const legacy = { ...backup, data: legacyData };
     legacy.manifest.modelCoverage = legacy.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote' && entry.model !== 'PurchaseDocument' && entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
-    legacy.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; stripCsvCatalogForLegacy(legacy);
+    legacy.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(legacy); stripCsvCatalogForLegacy(legacy);
     expect(() => restore.validateBackupForRestore(legacy)).not.toThrow();
 
     const injected = makeBackup();
     injected.manifest.modelCoverage = injected.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote' && entry.model !== 'PaymentJournalEvent');
-    injected.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; stripCsvCatalogForLegacy(injected);
+    injected.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(injected); stripCsvCatalogForLegacy(injected);
     expect(() => restore.validateBackupForRestore(injected)).toThrow(/ungebundenen BillingNotes/u);
   });
 });

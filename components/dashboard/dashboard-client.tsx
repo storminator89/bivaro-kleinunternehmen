@@ -4,21 +4,13 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { RevenueIndicatorBasis } from "@/lib/revenue-indicators";
 import type { YearComparisonData } from "@/types/dashboard";
+import { PAYMENT_DASHBOARD_REFRESH_EVENT } from '@/lib/payment-dashboard-refresh';
 import { DashboardHeader } from "./dashboard-header";
-import { DashboardActivityFeed } from "./dashboard-activity-feed";
+import { DashboardActivityFeed, type DashboardActivity } from "./dashboard-activity-feed";
 import { YearComparison } from "./year-comparison";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-
-interface Activity {
-  id: number | string;
-  type: 'income' | 'expense';
-  description: string;
-  date: string;
-  amount: number;
-}
-
 
 interface KpiData {
   revenueThisMonth: number;
@@ -28,7 +20,7 @@ interface KpiData {
   openInvoicesReviewRequired?: number;
   totalRevenue: number;
   totalExpenses: number;
-  recentActivities: Activity[];
+  recentActivities: DashboardActivity[];
   revenueBasis?: RevenueIndicatorBasis;
   yearComparison?: YearComparisonData;
 }
@@ -39,6 +31,11 @@ export function DashboardClient() {
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [comparisonYear, setComparisonYear] = useState<number | null>(null);
+  useEffect(() => {
+    const refreshKpis = () => setAttempt(value => value + 1);
+    window.addEventListener(PAYMENT_DASHBOARD_REFRESH_EVENT, refreshKpis);
+    return () => window.removeEventListener(PAYMENT_DASHBOARD_REFRESH_EVENT, refreshKpis);
+  }, []);
   const referenceYear = data?.yearComparison?.currentYear ?? new Date().getFullYear();
   const selectedYear = comparisonYear ?? referenceYear;
   const comparisonQuery = useQuery({
@@ -57,7 +54,7 @@ export function DashboardClient() {
     setError(null);
     async function fetchData() {
       try {
-        const res = await fetch("/api/dashboard/kpis", { signal: controller.signal });
+        const res = await fetch("/api/dashboard/kpis", { signal: controller.signal, cache: 'no-store' });
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const kpiData = await res.json();
         if (!controller.signal.aborted) setData(kpiData);
@@ -91,6 +88,7 @@ export function DashboardClient() {
   return (
     <div className="dashboard-layout">
       <DashboardHeader data={data} />
+      <p role="note" className="rounded-lg border p-3 text-sm text-muted-foreground">Operative Zahlungsübersicht: Eingänge abzüglich Fehlerkorrekturen und tatsächlich dokumentierter Erstattungen. Kennzahlen und Jahresgrafiken sind keine fachlich freigegebene EÜR oder Steuergröße; steuerliche Zuordnung prüfpflichtig, nicht freigegeben.</p>
       <div className="dashboard-analysis-grid">
       {data.yearComparison && (
         <YearComparison

@@ -1,10 +1,12 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
 import { stripEmptyServiceBillingForLegacy } from './helpers/backup-schema';
-import { createBackupManifest, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION } from '@/lib/backup-manifest';
+import { COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 import { recordFullPayment } from '@/lib/payment-journal/service';
 import { previewReminder, recordReminder } from '@/lib/reminder-workbench';
@@ -100,11 +102,11 @@ describe('confirmed reminder backup evidence and tenant remap', () => {
   });
   it('refuses older schema evidence and prevents overwrite from erasing confirmed history', async () => {
     const backup = await backupOf(owner);
-    const downgraded = structuredClone(backup); downgraded.manifest.schemaVersion = COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION;
+    const downgraded = structuredClone(backup); downgraded.data.paymentOperations = []; downgraded.manifest.schemaVersion = COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(downgraded);
     expect(() => restore.validateBackupForRestore(downgraded)).toThrow(/Restbetragsbestätigung/u);
-    const legacyData = { ...backup.data, reminders: [] };
+    const legacyData = { ...backup.data, paymentOperations: [], reminders: [] };
     const old = { version: '3.0', data: legacyData, manifest: createBackupManifest({ sourceUserId: owner, generatedAt: '2026-10-21T12:00:00.000Z', data: legacyData }) };
-    old.manifest.schemaVersion = COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION;
+    old.manifest.schemaVersion = COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(old);
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => !['AiProviderSettings', 'ServiceArticle', 'DataImportBatch'].includes(entry.model));
     stripEmptyServiceBillingForLegacy(old);
     expect(() => restore.validateBackupForRestore(old)).not.toThrow();

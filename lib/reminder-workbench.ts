@@ -37,6 +37,7 @@ export function reminderBalance(invoice: LedgerInvoice): ReminderBalanceSnapshot
   if (invoice.type !== 'INVOICE' || !['DRAFT', 'SENT'].includes(invoice.status)) {
     throw new ReminderWorkbenchError('Mahnungen können nur für offene Rechnungen erfasst werden', 409, 'INVOICE_NOT_OPEN');
   }
+  if (invoice.paymentAdjustments.length) throw new ReminderWorkbenchError('Berichtigte Zahlungsnachweise erfordern eine erneute fachliche Restbetragsprüfung; dieser Mahnvertrag unterstützt keine Berichtigungen.', 409, 'PAYMENT_ADJUSTMENTS_REVIEW_REQUIRED');
   const parsed = invoice.parsedData;
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.currency != null && parsed.currency !== 'EUR') {
     throw new ReminderWorkbenchError('Bitte die Rechnungswährung prüfen. Nur EUR wird unterstützt.', 409, 'PAYMENT_REVIEW_REQUIRED');
@@ -87,7 +88,7 @@ async function ownedReminderInvoice(tx: Prisma.TransactionClient, userId: string
   if (!Number.isSafeInteger(invoiceId) || invoiceId <= 0) throw new ReminderWorkbenchError('Ungültige Rechnungs-ID.');
   const invoice = await tx.invoice.findFirst({ where: { id: invoiceId, userId }, include: {
     customer: true, incomes: { include: { cashTransaction: true } },
-    paymentJournalEvents: { orderBy: { id: 'asc' } }, reminders: { orderBy: { id: 'desc' }, take: 1 },
+    paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } }, reminders: { orderBy: { id: 'desc' }, take: 1 },
   } });
   if (!invoice) throw new ReminderWorkbenchError('Rechnung nicht gefunden.', 404, 'NOT_FOUND');
   if (invoice.customerId != null && !await tx.customer.findFirst({ where: { id: invoice.customerId, userId }, select: { id: true } })) {

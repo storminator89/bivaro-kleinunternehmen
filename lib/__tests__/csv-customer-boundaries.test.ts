@@ -1,3 +1,4 @@
+import { createBackupManifest } from './helpers/backup';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -8,7 +9,7 @@ import { CUSTOMER_FIELD_LIMITS } from '@/lib/customer-field-contract';
 import { autoMapColumns, parseImportCsv } from '@/lib/data-import-contract';
 import { confirmDataImport, previewDataImport, type ImportRequest } from '@/lib/data-import-service';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
-import { createBackupManifest } from '@/lib/backup-manifest';
+
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
 let db: ReturnType<typeof createTestDatabase>;
