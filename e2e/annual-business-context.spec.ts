@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
@@ -78,12 +78,45 @@ test('optional annual context preserves unknown/zero, corrections, conflict, dir
   await expect(section.getByText(/Revision 1 · Kontext gültig/)).toBeVisible();
   await expect(section.getByText(/Revision 2 · Kontext gültig/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await section.scrollIntoViewIfNeeded();
-  await section.screenshot({ path: testInfo.outputPath('annual-context-mobile.png'), animations: 'disabled' });
+  // Inspect normal viewport geometry, not a tall element capture: the latter
+  // can composite the sticky global header across unrelated section content.
+  // Keep the real header, styles and 390x844 / 1440x1000 viewports unchanged.
+  const unobscuredInViewport = (target: Locator) => target.evaluate(node => {
+    const header = [...document.querySelectorAll<HTMLElement>('.app-topbar')].find(item => item.getClientRects().length > 0);
+    if (!header) return false;
+    const rect = node.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return rect.top >= header.getBoundingClientRect().bottom + 8
+      && rect.bottom <= window.innerHeight - 8 && rect.left >= 0 && rect.right <= window.innerWidth
+      && hit !== null && (hit === node || node.contains(hit));
+  });
+  const alignBelowHeader = async (target: Locator) => {
+    await target.evaluate(node => {
+      const header = [...document.querySelectorAll<HTMLElement>('.app-topbar')].find(item => item.getClientRects().length > 0);
+      if (!header) throw new Error('Visible application header is required for viewport evidence');
+      window.scrollBy({ top: node.getBoundingClientRect().top - header.getBoundingClientRect().bottom - 16, behavior: 'instant' });
+    });
+    await expect.poll(() => unobscuredInViewport(target)).toBe(true);
+  };
+  const captureAnnualViewport = async (name: string) => {
+    await expect(page.locator('.app-topbar:visible')).toHaveCount(1);
+    // Every editable annual field must be normally reachable below the header;
+    // no overlays are hidden and no values, layout or application CSS change.
+    for (const id of ['annual-year', 'annual-effective', 'annual-founding', 'annual-turnover', 'annual-external', 'annual-completeness', 'annual-source']) {
+      await alignBelowHeader(section.locator(`#${id}`));
+    }
+    await alignBelowHeader(section.getByRole('heading', { name: 'Optionaler Jahreskontext', exact: true }));
+    for (const id of ['annual-year', 'annual-effective', 'annual-founding']) {
+      await expect.poll(() => unobscuredInViewport(section.locator(`#${id}`))).toBe(true);
+    }
+    // One honest viewport per size, not a stitched claim that the entire long
+    // revision form fits on a phone. Functional history assertions stay above.
+    await page.screenshot({ path: testInfo.outputPath(name), animations: 'disabled' });
+  };
+  await captureAnnualViewport('annual-context-mobile.png');
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.emulateMedia({ colorScheme: 'dark' });
-  await section.scrollIntoViewIfNeeded();
-  await section.screenshot({ path: testInfo.outputPath('annual-context-desktop.png'), animations: 'disabled' });
+  await captureAnnualViewport('annual-context-desktop.png');
   await page.goto('/dashboard');
   await page.goBack();
   await expect(section.getByRole('heading', { name: 'Optionaler Jahreskontext', exact: true })).toBeVisible();
