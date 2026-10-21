@@ -39,7 +39,7 @@ function envelope<T extends Record<string, unknown>>(data: T) {
 function fixture(amounts = [40, 80], dates = [dateA, dateB]) {
   const sum = amounts.reduce((total, amount) => total + amount, 0);
   return envelope({
-    user: { id: 'partial-source' }, serviceArticles: [], suppliers: [], purchaseDocuments: [], customers: [], expenses: [], auditLogs: [], invoiceNumberCounters: [],
+    user: { id: 'partial-source' }, serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], customers: [], expenses: [], auditLogs: [], invoiceNumberCounters: [],
     invoices: [{ id: 10, type: 'INVOICE', invoiceNumber: '2026-120', fileName: 'invoice.pdf', storedFileName: 'invoice.pdf',
       totalAmount: 120, status: sum === 120 ? 'PAID' : 'SENT', issuanceState: 'ISSUED',
       paidAt: sum === 120 ? [...dates].sort().at(-1)! : null, parsedData: { currency: 'EUR' } }],

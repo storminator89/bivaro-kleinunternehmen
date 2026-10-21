@@ -1,3 +1,4 @@
+import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { recordFullPaymentInTransaction } from '@/lib/payment-journal/service';
@@ -68,6 +69,7 @@ export async function updateInvoiceStatus(
       },
     });
     if (!old) throw new InvoicePaymentError('Rechnung nicht gefunden', 404);
+    if (hasServiceBillingDraftMarker(old.parsedData)) throw new InvoicePaymentError('Bitte diesen Serviceentwurf zuerst im Rechnungseditor prüfen und eine echte Rechnungsdatei erstellen.', 409);
     if (old.type !== 'INVOICE' || old.status === 'CANCELLED') {
       throw new InvoicePaymentError('Dieser Beleg kann nicht als Rechnung geändert werden', 409);
     }

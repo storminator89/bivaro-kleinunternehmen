@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getEInvoiceBookingRejection } from '@/lib/e-invoice-parser';
+import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 import { formatBusinessDate, parseBusinessDate } from '@/lib/business-date';
 import { exactPaymentCents } from '@/lib/payment-journal/contract';
 import { ledgerSummary } from '@/lib/payment-journal/service';
@@ -95,12 +96,14 @@ export async function readDailyActions(userId: string, now = new Date()): Promis
   const evidenceByReceipt = new Map(receiptEvidence.map(evidence => [Number(evidence.id), evidence]));
   const actions: DailyAction[] = [];
   for (const invoice of invoices.slice(0, SOURCE_LIMIT)) {
-    // Zero/negative and closed documents never create collection suggestions.
-    if (invoice.totalAmount !== null && invoice.totalAmount <= 0) continue;
+    // Valid planning drafts remain outside the existing SENT-only source query.
+    // A planning marker on a SENT row is damaged evidence, never a receivable.
+    const planningMarker = hasServiceBillingDraftMarker(invoice.parsedData);
+    if (!planningMarker && invoice.totalAmount !== null && invoice.totalAmount <= 0) continue;
     const date = formatBusinessDate(invoice.dueDate!);
     let openCents: string | null = null;
     try {
-      if (currencyIsEUR(invoice.parsedData) && (!invoice.customer || invoice.customer.userId === userId) && !await getEInvoiceBookingRejection(invoice.parsedData)) openCents = ledgerSummary(invoice).openCents;
+      if (!planningMarker && currencyIsEUR(invoice.parsedData) && (!invoice.customer || invoice.customer.userId === userId) && !await getEInvoiceBookingRejection(invoice.parsedData)) openCents = ledgerSummary(invoice).openCents;
     } catch { /* Unknown historical balance is a review, never an estimated debt. */ }
     if (openCents === '0') continue;
     const overdue = date < today;
@@ -108,10 +111,10 @@ export async function readDailyActions(userId: string, now = new Date()): Promis
     actions.push({
       id: `invoice:${invoice.id}`, kind: unknown ? 'INVOICE_REVIEW' : overdue ? 'INVOICE_OVERDUE' : 'INVOICE_DUE',
       priority: unknown ? 2 : overdue ? 1 : 3,
-      title: unknown ? 'Zahlungsstand klären' : overdue ? 'Überfällige Rechnung prüfen' : 'Heute fällige Rechnung prüfen',
-      reason: unknown ? 'Zahlungsnachweise, Währung oder Belegquelle sind nicht eindeutig. Erst prüfen, keinen offenen Betrag annehmen.' : overdue ? 'Das Fälligkeitsdatum ist vorbei. Der Restbetrag stammt aus dem vollständigen Zahlungsjournal; vor dem Nachfassen Zahlungseingänge prüfen.' : 'Laut gespeichertem Fälligkeitsdatum heute fällig. Zahlungseingänge prüfen; noch nicht überfällig.',
+      title: planningMarker ? 'Serviceentwurf klären' : unknown ? 'Zahlungsstand klären' : overdue ? 'Überfällige Rechnung prüfen' : 'Heute fällige Rechnung prüfen',
+      reason: planningMarker ? 'Dieser Datensatz enthält einen Serviceplan-Entwurfsmarker und ist keine bestätigte Forderung. Den Beleg im bestehenden Rechnungsablauf prüfen; keine Zahlung oder Mahnung daraus ableiten.' : unknown ? 'Zahlungsnachweise, Währung oder Belegquelle sind nicht eindeutig. Erst prüfen, keinen offenen Betrag annehmen.' : overdue ? 'Das Fälligkeitsdatum ist vorbei. Der Restbetrag stammt aus dem vollständigen Zahlungsjournal; vor dem Nachfassen Zahlungseingänge prüfen.' : 'Laut gespeichertem Fälligkeitsdatum heute fällig. Zahlungseingänge prüfen; noch nicht überfällig.',
       source: invoice.invoiceNumber || invoice.fileName, party: invoice.customer?.userId === userId ? invoice.customer.name : null,
-      date, dateLabel: 'Fällig am', amountCents: openCents, amountLabel: unknown ? 'Restbetrag ungeklärt' : 'Noch offen laut Journal',
+      date, dateLabel: planningMarker ? 'Gespeichertes Datum' : 'Fällig am', amountCents: openCents, amountLabel: planningMarker ? 'Keine bestätigte Forderung' : unknown ? 'Restbetrag ungeklärt' : 'Noch offen laut Journal',
       href: `/dashboard?tab=invoices&document=${invoice.id}`, cta: 'Rechnung prüfen',
     });
   }

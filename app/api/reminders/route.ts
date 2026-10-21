@@ -1,4 +1,5 @@
 import { reminderBalance, recordReminder, ReminderWorkbenchError } from '@/lib/reminder-workbench';
+import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 import { ledgerSummary } from '@/lib/payment-journal/service';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
@@ -55,7 +56,9 @@ export async function GET(request: Request) {
     });
 
     // Rechnungen mit zusätzlichen Infos anreichern
-    const enrichedInvoices = invoices.map(invoice => {
+    // No-file planning records are not reminder candidates, including
+    // damaged markers. The underlying invoice remains visible for review.
+    const enrichedInvoices = invoices.filter(invoice => !hasServiceBillingDraftMarker(invoice.parsedData)).map(invoice => {
       let summary = null;
       try { summary = ledgerSummary(invoice); } catch { /* Explicit review, no guessed balance. */ }
       let balance = null;

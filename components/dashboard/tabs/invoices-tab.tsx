@@ -38,7 +38,7 @@ function canDeleteDraft(invoice: Invoice): boolean {
 }
 
 function availableInvoiceStatuses(invoice: Invoice): string[] {
-  if (invoice.type === 'CREDIT_NOTE' || invoice.type === 'QUOTE' || invoice.status === 'CANCELLED') return [];
+  if (invoice.serviceDraftEditable || invoice.type === 'CREDIT_NOTE' || invoice.type === 'QUOTE' || invoice.status === 'CANCELLED') return [];
   const options: string[] = [];
   if (invoice.status === 'DRAFT' && !invoice.incomes?.length && !invoice.paidAt) options.push('SENT');
   if (invoice.canRecordPayment) options.push('PAID');
@@ -131,6 +131,7 @@ export function InvoicesTab({
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-64">
+                              {invoice.serviceDraftEditable && <><DropdownMenuItem asChild><Link href={`/dashboard/invoices/new?draftId=${invoice.id}`}>Entwurf bearbeiten</Link></DropdownMenuItem><p className="px-2 py-1.5 text-xs text-muted-foreground">Serviceentwurf ohne Rechnungsdatei. Zuerst im Editor prüfen; noch kein Versand und keine Zahlung möglich.</p><DropdownMenuSeparator /></>}
                               <DropdownMenuItem
                                 disabled={invoice.hasPdfFile === false}
                                 onSelect={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}
@@ -145,7 +146,7 @@ export function InvoicesTab({
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem
-                                disabled={invoice.status === 'CANCELLED'}
+                                disabled={invoice.serviceDraftEditable || invoice.status === 'CANCELLED'}
                                 onSelect={() => setEmailInvoice(invoice)}
                               >
                                 <Mail className="h-4 w-4 text-notice" />
@@ -173,7 +174,7 @@ export function InvoicesTab({
                                   XML herunterladen
                                 </DropdownMenuItem>
                               )}
-                              {(invoice.status !== 'CANCELLED' && invoice.type !== 'CREDIT_NOTE') && (
+                              {(!invoice.serviceDraftEditable && invoice.status !== 'CANCELLED' && invoice.type !== 'CREDIT_NOTE') && (
                                 <>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem onSelect={() => onCancel(invoice)}>
@@ -207,6 +208,10 @@ export function InvoicesTab({
           <div><dt><CheckCheck aria-hidden="true" />Bezahlt auf dieser Seite</dt><dd className="text-positive">{isLoading || isError ? '—' : paidCount}</dd></div>
           <div><dt><Clock3 aria-hidden="true" />Offen auf dieser Seite</dt><dd>{isLoading || isError ? '—' : openCount}</dd></div>
         </dl>
+      </section>
+      <section aria-label="Wiederkehrende Serviceleistungen" className="flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-4 py-4 sm:px-5">
+        <div className="min-w-0"><h2 className="text-sm font-semibold">Regelmäßige Betreuung oder Wartung?</h2><p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">Servicepläne merken den nächsten Zeitraum vor. Du prüfst und erzeugst bewusst genau einen Rechnungsentwurf — ohne automatischen Versand.</p></div>
+        <Button asChild variant="outline"><Link href="/service-billing">Servicepläne öffnen</Link></Button>
       </section>
       <details className="invoice-import group rounded-xl border border-dashed bg-card" open={selectedFile ? true : undefined}>
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3 sm:px-5">

@@ -1,3 +1,4 @@
+import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFStream, PDFString } from 'pdf-lib';
 import { parseStringPromise } from 'xml2js';
 import zlib from 'zlib';
@@ -755,6 +756,7 @@ export function getEInvoiceImportRejection(parsed: ParsedEInvoice): string | nul
 
 /** Validate an already stored import before it enters payment bookkeeping. */
 export async function getEInvoiceBookingRejection(parsedData: unknown): Promise<string | null> {
+  if (hasServiceBillingDraftMarker(parsedData)) return 'Bitte den Serviceentwurf zuerst im Rechnungseditor prüfen und eine echte Rechnungsdatei erstellen.';
   const rawXml = getRawEInvoiceXml(parsedData);
   if (rawXml) {
     try {

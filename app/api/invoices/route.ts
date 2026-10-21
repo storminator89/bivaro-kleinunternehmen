@@ -1,3 +1,4 @@
+import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
 import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
@@ -250,7 +251,8 @@ export async function GET(request: Request) {
       let summary: ReturnType<typeof ledgerSummary> | null = null;
       let paymentReviewRequired = false;
       let canRecordPayment = false;
-      if (invoice.type === 'INVOICE') {
+      const serviceDraftEditable = isUnrenderedServiceBillingDraft({ ...invoice, parsedData });
+      if (invoice.type === 'INVOICE' && !serviceDraftEditable) {
         try {
           summary = ledgerSummary({ ...invoice, parsedData, paymentJournalEvents, incomes });
           if (customer && customer.userId !== userId) throw new Error('Invalid customer ownership');
@@ -270,6 +272,7 @@ export async function GET(request: Request) {
         paymentSummary: summary,
         paymentReviewRequired,
         canRecordPayment,
+        serviceDraftEditable,
         hasEInvoiceXml: Boolean(getRawEInvoiceXml(parsedData)),
         hasPdfFile: isPdfFile(invoice.fileName) || isPdfFile(invoice.storedFileName),
       };

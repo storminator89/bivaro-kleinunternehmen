@@ -62,7 +62,7 @@ function makeBackup(options: { sourceUserId?: string; mismatchedInvoiceCustomer?
       createdAt: '2026-01-02T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
     }] : [])],
-    serviceArticles: [], suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
+    serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
     incomes: [],
     auditLogs: [],
     invoiceNumberCounters: [],

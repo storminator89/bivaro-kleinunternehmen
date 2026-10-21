@@ -23,7 +23,7 @@ afterAll(async () => { await database?.cleanup(); });
 function backup(settings: Record<string, unknown>) {
   const data = {
     user: { id: 'fiscal-backup-source' }, settings,
-    serviceArticles: [], suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
+    serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
     invoices: [], incomes: [], expenses: [], customers: [], auditLogs: [], invoiceNumberCounters: [],
   };
   return { version: '3.0', data, manifest: createBackupManifest({ sourceUserId: 'fiscal-backup-source', generatedAt: '2026-10-20T00:00:00.000Z', data }) };

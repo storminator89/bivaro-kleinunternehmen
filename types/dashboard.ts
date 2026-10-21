@@ -69,6 +69,7 @@ export type Invoice = {
   originalInvoiceId?: number;
   cancellationReason?: string;
   customer?: { id: number; name: string } | null;
+  serviceDraftEditable?: boolean;
   hasEInvoiceXml?: boolean;
   hasPdfFile?: boolean;
 };

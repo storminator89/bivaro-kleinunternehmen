@@ -10,6 +10,7 @@ const STATIC_TITLES: Record<string, string> = {
   "/dashboard/quotes/new": "Neues Angebot",
   "/cashbook": "Kassenbuch",
   "/purchases": "Belegeingang",
+  "/service-billing": "Servicepläne",
   "/customers": "Kunden",
   "/settings": "Einstellungen",
   "/handoff": "Unterlagen übergeben",

@@ -1,5 +1,6 @@
 import { readAnnualContextRevision } from '@/lib/annual-business-context';
 import { buildRevenueIndicatorBasis } from '@/lib/revenue-indicators';
+import { hasServiceBillingDraftMarker, isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
 import { ledgerSummary } from '@/lib/payment-journal/service';
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -253,6 +254,12 @@ export async function GET(request: Request) {
     let openCents = BigInt(0);
     let openInvoicesReviewRequired = 0;
     for (const invoice of openInvoices) {
+      // Planning records stay in the invoice workspace, but are not issued
+      // receivables. A damaged marker needs review, never a guessed balance.
+      if (hasServiceBillingDraftMarker(invoice.parsedData)) {
+        if (!isUnrenderedServiceBillingDraft(invoice)) openInvoicesReviewRequired++;
+        continue;
+      }
       try { openCents += BigInt(ledgerSummary(invoice).openCents); }
       catch { openInvoicesReviewRequired++; }
     }

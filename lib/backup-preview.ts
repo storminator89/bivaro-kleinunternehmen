@@ -29,6 +29,8 @@ export type BackupPreview = {
     purchaseDocuments: number;
     templates: number;
     recurringExpenses: number;
+    serviceBillingPlans: number;
+    serviceBillingPeriods: number;
     reminders: number;
     cashBooks: number;
     cashTransactions: number;
@@ -88,6 +90,8 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     purchaseDocuments: countArray(data, 'purchaseDocuments'),
     templates: countArray(data, 'templates'),
     recurringExpenses: countArray(data, 'recurringExpenses'),
+    serviceBillingPlans: countArray(data, 'serviceBillingPlans'),
+    serviceBillingPeriods: countArray(data, 'serviceBillingPeriods'),
     reminders: countArray(data, 'reminders'),
     cashBooks: countArray(data, 'cashBooks'),
     cashTransactions: countArray(data, 'cashTransactions'),
@@ -116,6 +120,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     warnings.push('Eingangsbeleg-Originale sind im JSON-Backup nicht eingebettet. Zum Wiederherstellen ist ein vollständiges ZIP-Backup erforderlich.');
   }
   if (Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(document => document && typeof document === 'object' && (document as Record<string, unknown>).aiExtraction != null)) warnings.push('KI-Herkunft bleibt erhalten. Unterbrochene Analysen werden nicht fortgesetzt; Provider-Verbindungsdaten sind ausgeschlossen, vorhandene Ziel-Einstellungen bleiben unverändert.');
+  if (counts.serviceBillingPlans > 0) warnings.push('Servicepläne und erledigte Perioden bleiben erhalten. Wiederherstellen erzeugt, versendet oder verbucht keine Rechnungen; abweichende Periodenidentitäten werden nicht überschrieben.');
   if (counts.apiKeys > 0) {
     warnings.push('API-Schlüssel werden aus Sicherheitsgründen ohne geheime Schlüssel wiederhergestellt und müssen neu erstellt werden.');
   }

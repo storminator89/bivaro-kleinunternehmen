@@ -1,3 +1,4 @@
+import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
 import { NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import JSZip from 'jszip';
@@ -98,6 +99,7 @@ export async function GET() {
     // cannot be read; otherwise a later restore could only create a broken
     // invoice record.
     for (const invoice of invoices) {
+      if (isUnrenderedServiceBillingDraft(invoice)) continue;
       await addOwnedFile('invoices', invoice.storedFileName);
     }
 
@@ -168,6 +170,8 @@ export async function GET() {
         billingNotes: count('billingNotes'),
         templates: count('templates'),
         recurringExpenses: count('recurringExpenses'),
+        serviceBillingPlans: count('serviceBillingPlans'),
+        serviceBillingPeriods: count('serviceBillingPeriods'),
         reminders: count('reminders'),
         cashBooks: count('cashBooks'),
         cashTransactions: count('cashTransactions'),
