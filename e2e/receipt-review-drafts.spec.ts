@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import JSZip from 'jszip';
 import { hashPassword } from '../lib/password';
+import { parseMoneyEUR } from '../lib/money';
 import { prisma } from '../lib/prisma';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
 
@@ -62,10 +63,14 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
     await expect(dialog.getByText('Prüfentwurf gespeichert · nicht gebucht', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Als Ausgabe erfassen', exact: true })).toBeDisabled();
     const source = await prisma.purchaseDocument.findFirstOrThrow({ where: { userId: user.id } });
-    expect(source).toMatchObject({ reviewStatus: 'REVIEW', expenseId: null, parseErrorCode: 'PHOTO_MANUAL_REVIEW', reviewDraft: { amount: '119.00', paymentDate: '2026-10-21' } });
+    // MoneyEUR deliberately omits insignificant trailing zeros; the exact
+    // canonical string and integer cents must both survive save/reload/backup.
+    expect(source).toMatchObject({ reviewStatus: 'REVIEW', expenseId: null, parseErrorCode: 'PHOTO_MANUAL_REVIEW', reviewDraft: { amount: '119', paymentDate: '2026-10-21' } });
+    expect(parseMoneyEUR((source.reviewDraft as { amount: string }).amount, { mode: 'strict' })).toBe(BigInt(11900));
     await page.reload();
     await expect(dialog.getByLabel('Lieferant laut eigener Prüfung', { exact: true })).toHaveValue('Foto Lieferant');
-    await expect(dialog.getByLabel('Bruttobetrag im Entwurf (EUR)', { exact: true })).toHaveValue('119.00');
+    await expect(dialog.getByLabel('Bruttobetrag im Entwurf (EUR)', { exact: true })).toHaveValue('119');
+    expect(parseMoneyEUR(await dialog.getByLabel('Bruttobetrag im Entwurf (EUR)', { exact: true }).inputValue(), { mode: 'strict' })).toBe(BigInt(11900));
     // Interrupted dismissal: the already-open confirmation must freeze draft edits/save.
     await dialog.getByRole('button', { name: 'Beleg verwerfen', exact: true }).click();
     await expect(dialog.getByLabel('Prüfnotiz', { exact: true })).toBeDisabled();
@@ -117,7 +122,8 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
     const archive = await JSZip.loadAsync(await archiveResponse.body());
     const backup = JSON.parse(await archive.file('backup.json')!.async('string'));
     const document = backup.data.purchaseDocuments.find((candidate: { id: number }) => candidate.id === source.id);
-    expect(document.reviewDraft).toMatchObject({ supplierName: 'Foto Lieferant', amount: '119.00' });
+    expect(document.reviewDraft).toMatchObject({ supplierName: 'Foto Lieferant', amount: '119' });
+    expect(parseMoneyEUR(document.reviewDraft.amount, { mode: 'strict' })).toBe(BigInt(11900));
     const entry = backup.manifest.fileManifest.find((candidate: { kind: string; sourceName: string }) => candidate.kind === 'purchase-document' && candidate.sourceName === document.storedFileName);
     expect(await archive.file(entry.zipPath)!.async('nodebuffer')).toEqual(photo);
     expect(await prisma.purchaseDocument.count({ where: { userId: user.id } })).toBe(1);
