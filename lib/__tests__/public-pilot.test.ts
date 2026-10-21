@@ -18,6 +18,16 @@ import { proxy } from '@/proxy';
 beforeEach(() => { getToken.mockReset(); getToken.mockResolvedValue(null); });
 
 describe('public buyer and task guidance', () => {
+  it('uses native public help fragments to avoid cached initial-hash duplication', () => {
+    const home = readFileSync(new URL('../../app/page.tsx', import.meta.url), 'utf8');
+    const shell = readFileSync(new URL('../../components/app-shell.tsx', import.meta.url), 'utf8');
+    expect(home).toContain('<a href="/help#erste-rechnung">');
+    expect(home).toContain('<a href={`/help#${guide.id}`}>');
+    expect(home).not.toContain("import Link from 'next/link'");
+    expect(shell).toContain('<a href="/help#umfang"');
+    expect(shell).not.toMatch(/<Link[^>]*href="\/help#/);
+  });
+
   it('makes only the exact help page public and keeps workspaces and lookalikes guarded', async () => {
     for (const path of ['/', '/help', '/login', '/register']) {
       const response = await proxy(new NextRequest(`http://localhost${path}`));

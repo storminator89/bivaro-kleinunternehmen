@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               &copy; {new Date().getFullYear()} Bivaro |
               Alle Beträge werden in Euro (€) angezeigt
             </p>
-            <nav aria-label="Weitere Informationen" className="flex flex-wrap gap-4 text-sm text-muted-foreground"><Link href="/help#umfang" className="underline underline-offset-4">Umfang und Grenzen</Link><Link href="/help#zugang" className="underline underline-offset-4">Zugang und Unterstützung</Link></nav>
+            <nav aria-label="Weitere Informationen" className="flex flex-wrap gap-4 text-sm text-muted-foreground"><a href="/help#umfang" className="underline underline-offset-4">Umfang und Grenzen</a><a href="/help#zugang" className="underline underline-offset-4">Zugang und Unterstützung</a></nav>
           </div>
         </footer>
       </div>
