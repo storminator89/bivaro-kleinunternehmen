@@ -72,14 +72,18 @@ jobs:
         id: stage-visuals
         if: ${{ always() }}
         continue-on-error: true
-        timeout-minutes: 1
+        timeout-minutes: 3
         shell: bash
         run: |
           python3 - <<'PY'
+          import json
           import os
           from pathlib import Path
           import stat
+          import sys
           import tempfile
+          sys.path.insert(0, 'scripts')
+          from lossless_evidence_png import recompress_png
 
           allowed = {
               'partial-payments-1440-two-events.png',
@@ -140,11 +144,11 @@ jobs:
           if len(matches) > len(allowed) or len({source.name for source, _ in matches}) != len(matches):
               skip('file count exceeds the exact allowlist or basenames are duplicated')
           total = sum(info.st_size for _, info in matches)
-          print(f'Synthetic screenshot budget: {len(matches)}/{len(allowed)} files, {total}/{limit} bytes.')
+          print(f'Synthetic screenshot source bytes: {len(matches)}/{len(allowed)} files, {total} bytes.')
           for source, info in sorted(matches, key=lambda match: match[0].name):
               print(f'Allowlisted synthetic PNG: {source.name} ({info.st_size} bytes).')
-          if total > limit:
-              skip('combined size exceeds 5 MiB')
+          if total > 16 * 1024 * 1024:
+              skip('encoded evidence input exceeds its bounded read budget')
 
           images = {}
           for source, expected in matches:
@@ -154,11 +158,19 @@ jobs:
                   if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (expected.st_dev, expected.st_ino):
                       skip('an image changed during staging')
                   data = handle.read(limit + 1)
+              if len(data) > limit:
+                  skip('an input PNG exceeds the per-file read budget')
+              try:
+                  data, proof = recompress_png(data)
+              except Exception:
+                  skip('lossless PNG structure, color metadata or full-pixel verification failed')
+              print(f'Lossless PNG proof: {source.name} {json.dumps(proof, sort_keys=True)}')
               images[source.name] = data
               if sum(map(len, images.values())) > limit:
                   skip('combined read size exceeds 5 MiB')
               if not data.startswith(b'\x89PNG\r\n\x1a\n'):
                   skip('an allowlisted file is not a PNG')
+          print(f'Synthetic screenshot budget after lossless verification: {len(images)}/{len(allowed)} files, {sum(map(len, images.values()))}/{limit} bytes.')
           staging = Path(tempfile.mkdtemp(prefix='bivaro-synthetic-visuals-', dir=os.environ['RUNNER_TEMP']))
           for name, data in images.items():
               (staging / name).write_bytes(data)

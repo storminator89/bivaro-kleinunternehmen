@@ -11,6 +11,35 @@ const correctionDate = '2026-03-03';
 const replacementDate = '2026-03-04';
 const panelName = 'Zahlung korrigieren oder Erstattung dokumentieren';
 type Payload = Record<string, unknown>;
+type FiscalFocusObservation = { sequence: number; event: string; trusted: boolean | null; at: number; visibilityState: DocumentVisibilityState; hasFocus: boolean };
+
+async function observeFiscalFocus(page: Page, disableBroadcastChannel = false) {
+  await page.addInitScript(({ disableBroadcastChannel }) => {
+    if (disableBroadcastChannel) Object.defineProperty(window, 'BroadcastChannel', { value: undefined, configurable: true });
+    const events: FiscalFocusObservation[] = [];
+    Object.defineProperty(window, '__bivaroFiscalFocus', { value: events, configurable: true });
+    let sequence = 0;
+    const record = (event: string, trusted: boolean | null) => {
+      events.push({ sequence: ++sequence, event, trusted, at: performance.now(), visibilityState: document.visibilityState, hasFocus: document.hasFocus() });
+      if (events.length > 80) events.shift();
+    };
+    record('installed', null);
+    // Passive observations only: never dispatch or intercept a lifecycle event.
+    for (const name of ['focus', 'blur', 'pageshow']) window.addEventListener(name, event => record(name, event.isTrusted));
+    for (const name of ['visibilitychange', 'focusin', 'focusout', 'pointerdown']) document.addEventListener(name, event => record(name, event.isTrusted));
+  }, { disableBroadcastChannel });
+}
+async function fiscalFocusSnapshot(page: Page) {
+  return page.evaluate(() => ({
+    path: location.pathname, visibilityState: document.visibilityState, hasFocus: document.hasFocus(), readyState: document.readyState,
+    broadcastChannel: typeof window.BroadcastChannel,
+    events: [...((window as typeof window & { __bivaroFiscalFocus?: FiscalFocusObservation[] }).__bivaroFiscalFocus ?? [])],
+  }));
+}
+function fiscalFocusCheckpoint(snapshot: Awaited<ReturnType<typeof fiscalFocusSnapshot>>) {
+  const { events, ...state } = snapshot;
+  return { ...state, eventCount: events.length, lastSequence: events.at(-1)?.sequence ?? 0 };
+}
 
 function adjustmentPath(invoiceId: number) { return `/api/invoices/${invoiceId}/payments/adjustments`; }
 function observesPost(request: Request, path: string) { return request.method() === 'POST' && new URL(request.url()).pathname === path; }
@@ -293,16 +322,22 @@ for (const view of ['eur', 'tax-focus-fallback'] as const) {
     test.setTimeout(120_000);
     const userId = await isolatedAccount(page);
     let editor: Page | undefined;
+    let completed = false;
+    const focusCheckpoints: Record<string, unknown> = {};
+    const fiscalResponses: { status: number; method: string }[] = [];
     try {
       const invoice = await createInvoice(page, `ADJUSTMENT-TWO-TAB-${view.toUpperCase()}`);
       const today = new Date().toISOString().slice(0, 10);
       const original = await allocate(page, invoice.id, '120.00', today, '0');
       const fiscalPath = view === 'eur' ? '/api/dashboard/summary' : '/api/tax-summary';
-      if (view === 'tax-focus-fallback') {
-        // Simulate a missed cross-tab capability before observer-page JS loads.
-        // All server requests/responses remain real and unmodified.
-        await page.addInitScript(() => { Object.defineProperty(window, 'BroadcastChannel', { value: undefined, configurable: true }); });
-      }
+      // Disable the channel only in the tax observer, before its app JS loads.
+      // All HTTP responses and browser lifecycle events remain real/unmodified.
+      await observeFiscalFocus(page, view === 'tax-focus-fallback');
+      page.on('response', response => {
+        if (new URL(response.url()).pathname !== fiscalPath) return;
+        fiscalResponses.push({ status: response.status(), method: response.request().method() });
+        if (fiscalResponses.length > 80) fiscalResponses.shift();
+      });
       const initiallyLoaded = page.waitForResponse(response => new URL(response.url()).pathname === fiscalPath && response.status() === 200);
       await page.goto(view === 'eur' ? '/dashboard?tab=eur' : '/steuer-simulation');
       const initialResponse = await initiallyLoaded, initialBody = await initialResponse.json();
@@ -313,13 +348,26 @@ for (const view of ['eur', 'tax-focus-fallback'] as const) {
       } else {
         await expect(page.locator('.tax-source-profit strong')).toContainText('120,00');
         expect(await page.evaluate(() => typeof window.BroadcastChannel)).toBe('undefined');
+        await page.getByRole('heading', { name: 'Steuer-Simulation', exact: true }).click();
+        await expect.poll(async () => { const state = await fiscalFocusSnapshot(page); return { visibilityState: state.visibilityState, hasFocus: state.hasFocus }; }).toEqual({ visibilityState: 'visible', hasFocus: true });
+        await expect(page.locator('.tax-source-profit strong')).toContainText('120,00');
       }
+      const beforeEditor = await fiscalFocusSnapshot(page);
+      focusCheckpoints.observerBeforeEditor = fiscalFocusCheckpoint(beforeEditor);
       editor = await context.newPage();
+      await observeFiscalFocus(editor);
       await editor.bringToFront();
       await editor.goto(`/dashboard?tab=invoices&document=${invoice.id}`);
       const dialog = await openJournal(editor, invoice.invoiceNumber), panel = await enterCorrection(editor, dialog);
       await fillCorrection(panel, original.event.id, '20.00', 'Synthetic other-tab never-received portion', `Synthetic two-tab ${view} evidence`, today);
       await panel.getByRole('checkbox', { name: /Dieser Betrag ist nie eingegangen/ }).check();
+      if (view === 'tax-focus-fallback') {
+        await expect.poll(async () => { const state = await fiscalFocusSnapshot(editor!); return { visibilityState: state.visibilityState, hasFocus: state.hasFocus }; }).toEqual({ visibilityState: 'visible', hasFocus: true });
+        await expect.poll(async () => { const state = await fiscalFocusSnapshot(page); return state.visibilityState !== 'visible' || !state.hasFocus; }).toBe(true);
+        const away = await fiscalFocusSnapshot(page), sequence = beforeEditor.events.at(-1)?.sequence ?? 0;
+        focusCheckpoints.observerAway = fiscalFocusCheckpoint(away);
+        expect(away.events.some(event => event.sequence > sequence && event.trusted && ['blur', 'visibilitychange'].includes(event.event) && (event.visibilityState !== 'visible' || !event.hasFocus))).toBe(true);
+      }
       const remoteRevalidation = view === 'eur' ? page.waitForResponse(response => new URL(response.url()).pathname === fiscalPath && response.status() === 409) : null;
       const saved = editor.waitForResponse(response => new URL(response.url()).pathname === adjustmentPath(invoice.id) && response.request().method() === 'POST');
       await panel.getByRole('button', { name: 'Korrektur verbindlich speichern', exact: true }).click();
@@ -335,7 +383,19 @@ for (const view of ['eur', 'tax-focus-fallback'] as const) {
         await expect(page.locator('.tax-source-profit strong')).toContainText('120,00');
       }
       const focusRevalidation = view === 'tax-focus-fallback' ? page.waitForResponse(response => new URL(response.url()).pathname === fiscalPath && response.status() === 409) : null;
+      const beforeReturn = await fiscalFocusSnapshot(page);
+      focusCheckpoints.observerBeforeReturn = fiscalFocusCheckpoint(beforeReturn);
       await page.bringToFront();
+      if (view === 'tax-focus-fallback') {
+        // Target activation alone need not focus Chromium's content under Xvfb.
+        // Return with a real pointer action on an inert heading, never a DOM event.
+        await page.getByRole('heading', { name: 'Steuer-Simulation', exact: true }).click();
+        await expect.poll(async () => { const state = await fiscalFocusSnapshot(page); return { visibilityState: state.visibilityState, hasFocus: state.hasFocus }; }).toEqual({ visibilityState: 'visible', hasFocus: true });
+        const returned = await fiscalFocusSnapshot(page), sequence = beforeReturn.events.at(-1)?.sequence ?? 0;
+        focusCheckpoints.observerReturned = fiscalFocusCheckpoint(returned);
+        expect(returned.events.some(event => event.sequence > sequence && event.trusted && ['focus', 'visibilitychange'].includes(event.event) && event.visibilityState === 'visible')).toBe(true);
+        expect(returned.events.some(event => event.sequence > sequence && event.event === 'pointerdown' && event.trusted)).toBe(true);
+      }
       if (focusRevalidation) expect((await focusRevalidation).status()).toBe(409);
       if (view === 'eur') {
         await expect(page.getByRole('alert').filter({ hasText: 'Die EÜR-Auswertung ist nicht verfügbar' })).toBeVisible();
@@ -349,6 +409,18 @@ for (const view of ['eur', 'tax-focus-fallback'] as const) {
       }
       expect(await snapshot(userId, invoice.id)).toEqual(afterMutation);
       await testInfo.attach(`payment-adjustment-two-tab-${view}-evidence.json`, { body: Buffer.from(JSON.stringify({ initialBody, observer: view, afterMutation, afterReturn: await snapshot(userId, invoice.id), journal: await loadJournal(page, invoice.id) }, null, 2)), contentType: 'application/json' });
-    } finally { await editor?.close(); await prisma.$disconnect(); }
+      completed = true;
+    } finally {
+      try {
+        // Available on failures too; no input text, account IDs or bank evidence.
+        const observerState = await fiscalFocusSnapshot(page).catch(() => ({ unavailable: true }));
+        const editorState = editor ? await fiscalFocusSnapshot(editor).catch(() => ({ unavailable: true })) : null;
+        const diagnostics = { observer: view, focusCheckpoints, observerState, editorState, fiscalResponses };
+        // The hosted workflow uploads only allowlisted PNGs. Preserve bounded,
+        // nonfinancial failure diagnostics in its log without changing that policy.
+        if (!completed) console.warn('Synthetic fiscal focus diagnostics:', JSON.stringify(diagnostics));
+        await testInfo.attach(`payment-adjustment-two-tab-${view}-focus-diagnostics.json`, { body: Buffer.from(JSON.stringify(diagnostics, null, 2)), contentType: 'application/json' });
+      } finally { await editor?.close(); await prisma.$disconnect(); }
+    }
   });
 }
