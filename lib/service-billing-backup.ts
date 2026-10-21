@@ -111,9 +111,10 @@ export function validateServiceBillingBackup(data: RecordValue, sourceUserId: st
     if (!hasServiceBillingDraftMarker(invoice.parsedData)) continue;
     closed(invoice, NO_FILE_INVOICE_FIELDS, 'Nicht gerenderter Serviceentwurf');
     if (!isUnrenderedServiceBillingDraft(invoice)) throw new Error('Unvollständiger oder ausgestellter Serviceentwurf enthält widersprüchliche Entwurfsmerkmale');
-    if (invoice.paidAt != null || incomeInvoiceIds.has(invoice.id) || paymentInvoiceIds.has(invoice.id)) throw new Error('Nicht gerenderter Serviceentwurf darf keine Zahlung, Einnahme oder Zahlungszeitpunkt enthalten');
-    if (creditNoteOriginalIds.has(Number(invoice.id)) || convertedQuoteIds.has(Number(invoice.id)) || reminderInvoiceIds.has(Number(invoice.id)) || billingNoteInvoiceIds.has(Number(invoice.id))) throw new Error('Nicht gerenderter Serviceentwurf darf keine Gutschrift, Angebotsumwandlung, Mahnung oder beanspruchte Leistungsnotiz enthalten');
-    const receipt = receiptByInvoice.get(Number(invoice.id));
+    const invoiceId = integer(invoice.id, 'Nicht gerenderter Serviceentwurf.id', 1, Number.MAX_SAFE_INTEGER);
+    if (invoice.paidAt != null || incomeInvoiceIds.has(invoiceId) || paymentInvoiceIds.has(invoiceId)) throw new Error('Nicht gerenderter Serviceentwurf darf keine Zahlung, Einnahme oder Zahlungszeitpunkt enthalten');
+    if (creditNoteOriginalIds.has(invoiceId) || convertedQuoteIds.has(invoiceId) || reminderInvoiceIds.has(invoiceId) || billingNoteInvoiceIds.has(invoiceId)) throw new Error('Nicht gerenderter Serviceentwurf darf keine Gutschrift, Angebotsumwandlung, Mahnung oder beanspruchte Leistungsnotiz enthalten');
+    const receipt = receiptByInvoice.get(invoiceId);
     const parsed = record(invoice.parsedData, 'Serviceentwurf.parsedData');
     const marker = record(parsed._serviceBillingDraft, 'Serviceentwurf._serviceBillingDraft');
     const seed = readServiceBillingDraftSeed(parsed)!;

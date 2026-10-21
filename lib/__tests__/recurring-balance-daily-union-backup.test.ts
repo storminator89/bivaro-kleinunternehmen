@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -31,7 +31,7 @@ let sourceArchive: FullArchive, targetArchive: FullArchive;
 let planStableKey: string, noFileId: number, renderedId: number, deletedId: number, quoteId: number;
 let targetProvider: Awaited<ReturnType<PrismaClient['aiProviderSettings']['findUniqueOrThrow']>>;
 let mirrorProvider: typeof targetProvider;
-let outbound: ReturnType<typeof vi.spyOn<typeof globalThis, 'fetch'>>;
+let outbound: MockInstance<typeof globalThis.fetch>;
 const records = (data: Record<string, unknown>, key: string) => data[key] as Record<string, unknown>[];
 
 beforeAll(async () => {
