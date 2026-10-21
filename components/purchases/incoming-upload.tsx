@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { FileUp, Loader2, Upload, X } from 'lucide-react';
+import { Camera, FileUp, Loader2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { IncomingDocument, IncomingDocumentResponse } from '@/lib/purchase-documents/types';
 import { errorMessage, formatFileSize, IncomingRequestError, incomingResponseError, validateIncomingFile } from './incoming-document-ui';
 
 export function IncomingUpload({ onUploaded, onOpen, onRefresh }: { onUploaded: (document: IncomingDocument) => void; onOpen: (id: number) => void; onRefresh: () => void }) {
   const input = useRef<HTMLInputElement>(null);
+  const camera = useRef<HTMLInputElement>(null);
   const activeRequest = useRef<XMLHttpRequest | null>(null);
   const requestId = useRef<string | null>(null);
   const busyRef = useRef(false);
@@ -55,6 +56,7 @@ export function IncomingUpload({ onUploaded, onOpen, onRefresh }: { onUploaded: 
       });
       setFile(null); requestId.current = null;
       if (input.current) input.current.value = '';
+      if (camera.current) camera.current.value = '';
       onUploaded(result.document);
       setNotice(result.replayed ? 'Bereits gespeichertes Original geöffnet. Es wurde keine Ausgabe erstellt.' : 'Original gespeichert. Es wurde keine Ausgabe erstellt.');
     } catch (caught) {
@@ -72,12 +74,14 @@ export function IncomingUpload({ onUploaded, onOpen, onRefresh }: { onUploaded: 
       <FileUp className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <h2 id="incoming-upload-heading" className="font-semibold">Original hinzufügen</h2>
-        <p id="incoming-file-help" className="mt-1 text-sm text-muted-foreground">PDF bis 25 MB oder XML bis 8 MB. Ein Original pro Upload. Kein OCR, keine automatische Buchung.</p>
+        <p id="incoming-file-help" className="mt-1 text-sm text-muted-foreground">Foto (JPG/PNG) bis 10 MB / 24 Megapixel, PDF bis 25 MB oder XML bis 8 MB. Ein Original pro Upload. Kein OCR, keine automatische Buchung.</p>
       </div>
     </div>
-    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-      <input ref={input} id="incoming-file" type="file" accept=".pdf,.xml,application/pdf,application/xml,text/xml" disabled={busy} aria-describedby="incoming-file-help" className="min-h-11 w-full min-w-0 rounded-md border border-input bg-background p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60" onChange={event => selectFile(event.target.files?.[0] ?? null)} />
-      <label htmlFor="incoming-file" className="sr-only">PDF- oder XML-Original auswählen</label>
+    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+      <input ref={input} id="incoming-file" type="file" accept=".jpg,.jpeg,.png,.pdf,.xml,image/jpeg,image/png,application/pdf,application/xml,text/xml" disabled={busy} aria-describedby="incoming-file-help" className="min-h-11 w-full min-w-0 rounded-md border border-input bg-background p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60" onChange={event => selectFile(event.target.files?.[0] ?? null)} />
+      <label htmlFor="incoming-file" className="sr-only">Foto, PDF- oder XML-Original auswählen</label>
+      <input ref={camera} type="file" accept="image/jpeg,image/png" capture="environment" disabled={busy} className="sr-only" tabIndex={-1} aria-label="Kameraaufnahme auswählen" onChange={event => selectFile(event.target.files?.[0] ?? null)} />
+      <Button variant="outline" className="shrink-0" disabled={busy} onClick={() => camera.current?.click()}><Camera className="size-4" aria-hidden="true" />Foto aufnehmen</Button>
       <Button className="shrink-0" disabled={!file || busy} onClick={upload}>{busy ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Upload aria-hidden="true" className="size-4" />}{busy ? 'Wird gespeichert…' : 'Original hochladen'}</Button>
       {busy && <Button variant="outline" className="shrink-0" onClick={() => activeRequest.current?.abort()}><X aria-hidden="true" className="size-4" />Abbrechen</Button>}
     </div>

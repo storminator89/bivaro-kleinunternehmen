@@ -4,9 +4,10 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { readFile } from 'fs/promises';
-import { readPurchaseOriginal } from '@/lib/purchase-documents/original';
+import { parsePurchaseReviewDraft } from '@/lib/purchase-documents/review-draft';
+import { originalByteLimit, purchaseOriginalName, detectPurchaseContainer, readPurchaseOriginal } from '@/lib/purchase-documents/original';
 import { getBackupFileVersion } from '@/lib/backup-snapshot';
-import { MAX_INVOICE_UPLOAD_BYTES, MAX_XML_INPUT_BYTES } from '@/lib/resource-limits';
+import { ProcessingCapacityError, withProcessingSlot } from '@/lib/processing-limit';
 import { CashbookError, recalculateCashBalances } from '@/lib/cashbook-service';
 import { documentNumberPrefix, maximumDocumentSequence, type DocumentType } from '@/lib/invoice-numbers';
 import { validateRecurringValues } from '@/lib/recurring-schedule';
@@ -718,10 +719,10 @@ function validatePurchaseDocuments(data: JsonRecord, manifest?: BackupManifest, 
     hashes.add(hash);
     requestIds.add(requestId);
     const media = asRequiredString(document.mediaType, `${label}.mediaType`, 64);
-    if (!['application/pdf', 'application/xml'].includes(media)) throw new BackupValidationError(`${label}.mediaType ist ungültig`);
-    if (!(document.storedFileName as string).endsWith(media === 'application/pdf' ? '.pdf' : '.xml')) throw new BackupValidationError(`${label}.storedFileName entspricht nicht dem Medientyp`);
+    if (!['application/pdf', 'application/xml', 'image/jpeg', 'image/png'].includes(media)) throw new BackupValidationError(`${label}.mediaType ist ungültig`);
+    if (!(document.storedFileName as string).endsWith(purchaseOriginalName(media).slice('original'.length))) throw new BackupValidationError(`${label}.storedFileName entspricht nicht dem Medientyp`);
     const bytes = asOptionalInt(document.originalByteCount, `${label}.originalByteCount`);
-    if (typeof document.originalByteCount !== 'number' || bytes === null || bytes <= 0 || bytes > (media === 'application/pdf' ? MAX_INVOICE_UPLOAD_BYTES : MAX_XML_INPUT_BYTES)) {
+    if (typeof document.originalByteCount !== 'number' || bytes === null || bytes <= 0 || bytes > originalByteLimit(media)) {
       throw new BackupValidationError(`${label}.originalByteCount ist ungültig`);
     }
     sourceDate(document.uploadedAt, `${label}.uploadedAt`, true);
@@ -777,6 +778,13 @@ function validatePurchaseDocuments(data: JsonRecord, manifest?: BackupManifest, 
     } else if (document.parseStatus === 'PARSED') {
       throw new BackupValidationError(`${label}.parsedData fehlt`);
     }
+    const draftDate = sourceDate(document.reviewDraftSavedAt, `${label}.reviewDraftSavedAt`);
+    if ((document.reviewDraft != null) !== (draftDate !== null)) throw new BackupValidationError(`${label}: Prüfentwurf und Speicherzeitpunkt müssen zusammen vorliegen`);
+    if (document.reviewDraft != null) {
+      try { const draft = parsePurchaseReviewDraft(document.reviewDraft); if (hashJson(draft) !== hashJson(document.reviewDraft)) throw new Error(); }
+      catch { throw new BackupValidationError(`${label}.reviewDraft ist ungültig`); }
+    }
+    if (media.startsWith('image/') && (document.parseStatus === 'PARSED' || (document.parseStatus === 'FAILED' && parseErrorCode !== 'PHOTO_MANUAL_REVIEW') || document.reviewStatus === 'BOOKED')) throw new BackupValidationError(`${label}: Fotos sind ausschließlich ungebuchte manuelle Prüfentwürfe`);
     const supplierId = asOptionalInt(document.supplierId, `${label}.supplierId`);
     const snapshot = document.selectedSupplierSnapshot == null ? null : asRecord(document.selectedSupplierSnapshot, `${label}.selectedSupplierSnapshot`);
     if ((supplierId === null) !== (snapshot === null) || (supplierId !== null && (!suppliers.has(supplierId) || typeof document.supplierId !== 'number'))) throw new BackupValidationError(`${label}.supplierId enthält keine eindeutige Lieferantenzuordnung`);
@@ -1133,8 +1141,8 @@ function purchaseOriginalIdentity(record: JsonRecord): string {
 }
 
 function purchaseSourceFingerprint(record: JsonRecord, supplierMap?: Map<number, number>): string {
-  const dateFields = ['uploadedAt', 'invoiceDate', 'approvedAt', 'dismissedAt'];
-  const fields = ['originalFileName', 'originalSha256', 'originalByteCount', 'mediaType', 'uploadRequestId', 'parsedData', 'parseStatus', 'parserVersion', 'parseErrorCode', 'supplierName', 'invoiceNumber', 'currency', 'totalAmount', 'reviewStatus', 'revision', 'approvalRequestId', 'approvalFingerprint', 'dismissalReason'];
+  const dateFields = ['uploadedAt', 'invoiceDate', 'approvedAt', 'dismissedAt', 'reviewDraftSavedAt'];
+  const fields = ['originalFileName', 'originalSha256', 'originalByteCount', 'mediaType', 'uploadRequestId', 'parsedData', 'parseStatus', 'parserVersion', 'parseErrorCode', 'supplierName', 'invoiceNumber', 'currency', 'totalAmount', 'reviewStatus', 'revision', 'approvalRequestId', 'approvalFingerprint', 'dismissalReason', 'reviewDraft'];
   return hashJson({
     ...Object.fromEntries(fields.map((field) => [field, record[field] ?? null])),
     ...Object.fromEntries(dateFields.map((field) => [field, sourceDate(record[field], field)?.toISOString() ?? null])),
@@ -1207,6 +1215,13 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     }
     if (expected && (!bytes || bytes.byteLength !== expected.bytes || hashBytes(bytes) !== expected.sha256)) {
       throw new BackupValidationError('Integritätsprüfung eines Eingangsbeleg-Originals fehlgeschlagen');
+    }
+    if (kind === 'purchase-document' && /\.(jpg|png)$/.test(originalName) && bytes) {
+      try { await withProcessingSlot(userId, () => detectPurchaseContainer({ name: originalName, type: originalName.endsWith('.jpg') ? 'image/jpeg' : 'image/png', size: bytes!.byteLength }, Buffer.from(bytes!))); }
+      catch (error) {
+        if (error instanceof ProcessingCapacityError) throw error;
+        throw new BackupValidationError('Foto-Original ist beschädigt oder überschreitet die zulässigen Bildgrenzen');
+      }
     }
     const missing = bytes === null;
     const storedName = missing
@@ -1293,7 +1308,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     }
     for (const document of documents) {
       const sourceName = document.storedFileName as string;
-      const targetName = await stageFile('purchase-document', sourceName, document.mediaType === 'application/pdf' ? 'original.pdf' : 'original.xml', {
+      const targetName = await stageFile('purchase-document', sourceName, purchaseOriginalName(document.mediaType as string), {
         sha256: document.originalSha256 as string, bytes: document.originalByteCount as number,
       });
       // A booked expense and its source retain the exact same private file.
@@ -1774,6 +1789,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           invoiceDate: sourceDate(document.invoiceDate, 'purchaseDocument.invoiceDate'),
           currency: asOptionalString(document.currency, 'purchaseDocument.currency', 3),
           totalAmount: asOptionalFinite(document.totalAmount, 'purchaseDocument.totalAmount'),
+          reviewDraft: document.reviewDraft == null ? Prisma.DbNull : asJson(document.reviewDraft, 'purchaseDocument.reviewDraft'),
+          reviewDraftSearch: document.reviewDraft == null ? null : [parsePurchaseReviewDraft(document.reviewDraft).supplierName, parsePurchaseReviewDraft(document.reviewDraft).invoiceNumber].filter(Boolean).join(' · '),
+          reviewDraftSavedAt: sourceDate(document.reviewDraftSavedAt, 'purchaseDocument.reviewDraftSavedAt'),
           reviewStatus: document.reviewStatus as string,
           revision: document.revision as number,
           expenseId: relationMapValue(expenseMap, document.expenseId, 'purchaseDocument.expenseId'),

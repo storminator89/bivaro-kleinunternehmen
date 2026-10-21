@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { hashPassword } from '../lib/password';
@@ -66,6 +66,52 @@ async function openWorkingPaper(page: Page, year: number) {
   return dialog;
 }
 
+
+/** Real rendered geometry: a visible cell alone can still hide its text behind
+ * an ancestor scroller. Check full text width and every overflow boundary. */
+async function expectWorkingPaperGeometry(dialog: Locator) {
+  const viewport = dialog.getByRole('region', { name: 'EÜR-Vorschau', exact: true });
+  for (const container of [dialog, viewport]) {
+    const width = await container.evaluate(element => ({ content: element.scrollWidth, visible: element.clientWidth }));
+    expect(width.content).toBeLessThanOrEqual(width.visible + 1);
+  }
+  const tables = dialog.getByRole('table');
+  await expect(tables).toHaveCount(2);
+  for (const table of await tables.all()) {
+    const width = await table.evaluate(element => ({ content: element.scrollWidth, visible: element.clientWidth }));
+    expect(width.content).toBeLessThanOrEqual(width.visible + 1);
+    for (const cell of await table.locator('tbody td').all()) {
+      await cell.scrollIntoViewIfNeeded();
+      await expect(cell).toBeInViewport();
+      const geometry = await cell.evaluate(element => {
+        const viewport = element.closest('[aria-label="EÜR-Vorschau"]')!;
+        const cell = element.getBoundingClientRect();
+        const clip = viewport.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const text = range.getBoundingClientRect();
+        const nestedScrollers = [];
+        for (let parent = element.parentElement; parent && parent !== viewport; parent = parent.parentElement) {
+          const style = getComputedStyle(parent);
+          if (['auto', 'scroll'].includes(style.overflowY) && parent.scrollHeight > parent.clientHeight + 1) nestedScrollers.push(parent.tagName);
+          if (parent.scrollLeft !== 0) nestedScrollers.push('horizontal-scroll');
+        }
+        return { cellLeft: cell.left, cellRight: cell.right, textLeft: text.left, textRight: text.right,
+          viewportLeft: clip.left, viewportRight: clip.left + viewport.clientWidth,
+          contentWidth: element.scrollWidth, visibleWidth: element.clientWidth,
+          viewportScrollLeft: viewport.scrollLeft, nestedScrollers };
+      });
+      expect(geometry.contentWidth).toBeLessThanOrEqual(geometry.visibleWidth + 1);
+      expect(geometry.textLeft).toBeGreaterThanOrEqual(geometry.cellLeft - 1);
+      expect(geometry.textRight).toBeLessThanOrEqual(geometry.cellRight + 1);
+      expect(geometry.cellLeft).toBeGreaterThanOrEqual(geometry.viewportLeft - 1);
+      expect(geometry.cellRight).toBeLessThanOrEqual(geometry.viewportRight + 1);
+      expect(geometry.viewportScrollLeft).toBe(0);
+      expect(geometry.nestedScrollers).toEqual([]);
+    }
+  }
+}
+
 for (const year of [2026, 2025]) {
   test(`shows and downloads the bounded ${year} EÜR working paper with verified year-specific rows`, async ({ page }, testInfo) => {
     await isolatedAccount(page);
@@ -100,8 +146,11 @@ for (const year of [2026, 2025]) {
       }
       const dialog = await openWorkingPaper(page, year);
       await expect(dialog).toContainText(body.data.mappingVersion);
-      await expect(dialog).toContainText(body.data.sourceVersion);
-      await expect(dialog).toContainText(body.data.checkedScope);
+      const sourceDetails = dialog.getByText('Quelle und Prüfumfang', { exact: true });
+      await sourceDetails.click();
+      await expect(dialog.getByText(body.data.sourceVersion, { exact: false })).toBeVisible();
+      await expect(dialog.getByText(body.data.checkedScope, { exact: true })).toBeVisible();
+      await sourceDetails.click();
       await expect(dialog.getByText(`Vereinfachter Überschuss für Zeile ${is2026 ? 91 : 90}`, { exact: true })).toBeVisible();
       await expect(dialog).toContainText('keine ELSTER-Einreichung');
       for (const line of body.data.lines.filter(line => line.type !== 'result')) {
@@ -109,16 +158,22 @@ for (const year of [2026, 2025]) {
         await expect(row.getByRole('cell').first()).toHaveText(String(line.lineNumber));
         await expect(row.getByRole('cell').last()).toContainText(line.amount.toLocaleString('de-DE', { minimumFractionDigits: 2 }));
       }
-      if (is2026) {
-        for (const width of [1440, 390]) {
-          await page.setViewportSize({ width, height: 1000 });
-          const result = dialog.getByText('Vereinfachter Überschuss für Zeile 91', { exact: true });
-          await dialog.locator('.text-4xl').scrollIntoViewIfNeeded();
-          await expect(result).toBeInViewport();
-          await expect(dialog.locator('.text-4xl')).toContainText('1.520,00');
-          await expect(dialog.getByRole('combobox')).toHaveText('2026');
-          await dialog.screenshot({ path: testInfo.outputPath(`eur-2026-working-paper-${width}.png`) });
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await expectWorkingPaperGeometry(dialog);
+        for (const [name, label, amount] of [
+          ['Einnahmen nach EÜR-Zeile', 'Summe Einnahmen', body.data.totalIncome],
+          ['Ausgaben nach EÜR-Zeile', 'Summe Ausgaben', body.data.totalExpense],
+        ] as const) {
+          const total = dialog.getByRole('table', { name, exact: true }).getByRole('row').filter({ hasText: label }).getByRole('cell').last();
+          await expect(total).toContainText(amount.toLocaleString('de-DE', { minimumFractionDigits: 2 }));
         }
+        const result = dialog.getByText(`Vereinfachter Überschuss für Zeile ${is2026 ? 91 : 90}`, { exact: true });
+        await dialog.locator('.text-4xl').scrollIntoViewIfNeeded();
+        await expect(result).toBeInViewport();
+        await expect(dialog.locator('.text-4xl')).toContainText(is2026 ? '1.520,00' : '800,00');
+        await expect(dialog.getByRole('combobox')).toHaveText(String(year));
+        if (is2026) await dialog.screenshot({ path: testInfo.outputPath(`eur-2026-working-paper-${width}.png`) });
       }
       const downloading = page.waitForEvent('download');
       await dialog.getByRole('button', { name: 'CSV herunterladen', exact: true }).click();
@@ -172,10 +227,19 @@ test('rejects 2027 official rows and opens the real bounded handoff without repl
     await page.reload();
     await expect(page.locator('#handoff-year')).toHaveValue('2027');
     await expect(page.getByRole('button', { name: 'Vorschau laden', exact: true })).toBeVisible();
-    await page.setViewportSize({ width: 390, height: 1000 });
-    await page.locator('#handoff-year').scrollIntoViewIfNeeded();
-    await expect(page.locator('#handoff-year')).toHaveValue('2027');
-    await expect(page.locator('#handoff-year')).toBeInViewport();
-    await page.screenshot({ path: testInfo.outputPath('eur-2027-handoff-390.png') });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.locator('#handoff-year').scrollIntoViewIfNeeded();
+      await expect(page.locator('#handoff-year')).toHaveValue('2027');
+      await expect(page.locator('#handoff-year')).toBeInViewport();
+      const geometry = await page.getByRole('main').evaluate(element => {
+        const year = element.querySelector('#handoff-year')!.getBoundingClientRect();
+        return { content: element.scrollWidth, visible: element.clientWidth, left: year.left, right: year.right, viewport: window.innerWidth };
+      });
+      expect(geometry.content).toBeLessThanOrEqual(geometry.visible + 1);
+      expect(geometry.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
+      if (width === 390) await page.screenshot({ path: testInfo.outputPath('eur-2027-handoff-390.png') });
+    }
   } finally { await prisma.$disconnect(); }
 });

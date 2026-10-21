@@ -5,6 +5,7 @@ import { MAX_INVOICE_UPLOAD_BYTES, readRequestBodyWithinLimit, requestWithBody }
 import { detectPurchaseContainer } from '@/lib/purchase-documents/original';
 import { intakePurchaseDocument, listPurchaseDocuments, parseUploadRequestId } from '@/lib/purchase-documents/service';
 import { purchaseErrorResponse } from '@/lib/purchase-documents/http';
+import { withProcessingSlot } from '@/lib/processing-limit';
 import { PurchaseDocumentError } from '@/lib/purchase-documents/errors';
 
 export async function GET(request: NextRequest) {
@@ -23,7 +24,7 @@ async function postHandler(request: NextRequest) {
     const requestId = parseUploadRequestId(form.get('uploadRequestId'));
     if (file.size > MAX_INVOICE_UPLOAD_BYTES) throw new PurchaseDocumentError('Datei überschreitet das Größenlimit.', 413, 'FILE_SIZE');
     const bytes = Buffer.from(await file.arrayBuffer());
-    const mediaType = detectPurchaseContainer(file, bytes);
+    const mediaType = await withProcessingSlot(userId, () => detectPurchaseContainer(file, bytes), requestId);
     const result = await intakePurchaseDocument({ userId, requestId, originalFileName: file.name, mediaType, bytes });
     return NextResponse.json(result, { status: result.replayed ? 200 : 201 });
   } catch (error) { return purchaseErrorResponse(error); }

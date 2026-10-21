@@ -45,7 +45,7 @@ PDF-capable headed check. Subsequent headed hosted runs passed on their own
 immutable candidates: [PR 70 run 39549513302, 42/42](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39549513302)
 and [PR 68 run 39549625967, 48/48](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39549625967).
 These are historical results, not acceptance of later source changes. The current
-combined partial-payment/EÜR candidate selects **51 cases; its headed acceptance
+current-main/EÜR candidate selects **59 cases; its headed acceptance
 is pending**. No historical pass proves this new candidate or complete fiscal
 correctness. Any later preview failure still requires investigation without
 weakening its assertion.
@@ -60,9 +60,18 @@ Runner disposal is the final isolation boundary on forced cancellation.
 
 ## Coverage and separate security evidence
 
-There are no file/title/grep filters, shards, changed-only selection, or
-fail-fast limits: the workflow runs every case selected by the existing default
-Playwright config, including generated payment-ledger cases, incoming documents,
+The existing serial `auth-dashboard-invoice.spec.ts` core flow belongs to
+`chromium-bootstrap`; the remaining functional files belong to `chromium` and
+explicitly depend on it. This makes empty-instance first-admin bootstrap run
+before feature suites seed independent user accounts, rather than relying on
+alphabetical file order. The two project selections partition the functional
+suite: every case runs exactly once; no case is skipped, filtered out, or replaced.
+A core failure blocks dependent feature execution and remains a failed gate.
+The security configuration and separate CI security job are unchanged.
+
+There are no workflow file/title/grep filters, shards, changed-only selection, or
+fail-fast limits: the workflow runs every case in the default Playwright config
+once across these two dependent projects, including generated payment-ledger cases, incoming documents,
 supplier booking, accountant handoff, legacy restore and public-help regressions.
 No functional case or assertion is removed. Existing serial-suite failure
 semantics still apply; a green result must not be inferred from a partial run.
@@ -92,15 +101,21 @@ basenames beneath `${{ runner.temp }}/bivaro-browser-results`:
 - `partial-payments-390-two-events.png`
 - `partial-reminder-guard-1440.png`
 - `partial-reminder-guard-390.png`
+- `accountant-guide-1440-readiness.png`
+- `accountant-guide-390-manual-note.png`
+- `history-correction-desktop.png`
+- `history-correction-mobile.png`
+- `receipt-draft-mobile.png`
+- `receipt-draft-desktop.png`
 - `eur-2026-working-paper-1440.png`
 - `eur-2026-working-paper-390.png`
 - `eur-2027-handoff-390.png`
 
-This feature branch adds only the three named EÜR captures to the existing four-name allowlist. The working-paper captures show the same verified synthetic 2026 result at desktop/mobile widths; the handoff capture shows the actual 2027 fallback destination after edit/reload with its selected year retained. Capture instructions are not proof that images have been produced or visually accepted.
+This feature branch adds only the three named EÜR captures to the accepted ten-name baseline allowlist. The working-paper captures show the same verified synthetic 2026 result at desktop/mobile widths; the handoff capture shows the actual 2027 fallback destination after edit/reload with its selected year retained. Capture instructions are not proof that images have been produced or visually accepted.
 
 Staging never follows symbolic links and accepts only regular files inside that
 results tree, verifies PNG signatures, and rejects duplicate basenames. More than
-seven files or more than 5 MiB combined skips the entire upload with a warning.
+thirteen files or more than 5 MiB combined skips the entire upload with a warning.
 Only those checked bytes enter a fresh staging directory; the standard
 `actions/upload-artifact` action uploads that directory with **one-day retention**.
 These are synthetic isolated-fixture UI screenshots, not real customer data or

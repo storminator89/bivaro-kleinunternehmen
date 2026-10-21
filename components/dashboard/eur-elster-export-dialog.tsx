@@ -154,15 +154,15 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="!max-w-[1200px] !w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent className="!max-w-[1200px] !w-[95vw] max-h-[90dvh] min-h-0 min-w-0 overflow-hidden flex flex-col p-4 sm:p-6">
                 {/* Header */}
-                <DialogHeader className="pb-4 border-b">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-primary p-2 text-primary-foreground">
+                <DialogHeader className="shrink-0 border-b pb-4 text-left">
+                    <div className="flex min-w-0 items-center gap-3 pr-6">
+                        <div className="shrink-0 rounded-lg bg-primary p-2 text-primary-foreground">
                             <FileSpreadsheet className="h-6 w-6" />
                         </div>
-                        <div>
-                            <DialogTitle className="text-xl font-bold">
+                        <div className="min-w-0">
+                            <DialogTitle className="text-lg font-bold leading-snug sm:text-xl">
                                 Anlage EÜR – Übertragungshilfe
                             </DialogTitle>
                             <DialogDescription className="text-sm">
@@ -172,24 +172,20 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                     </div>
 
                     {previewData && (
-                        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-                            <span className="font-medium text-foreground">Mappingversion:</span> {previewData.data.mappingVersion}
-                            <span className="mx-2">·</span>
-                            <span>Kontrollsummen: {previewData.data.controlTotals.incomeCount} Einnahmen, {previewData.data.controlTotals.expenseCount} Ausgaben</span>
-                            <p className="mt-2 break-words"><span className="font-medium text-foreground">Quellenversion:</span> {previewData.data.sourceVersion}</p>
-                            {previewData.data.sourceSha256 && <p className="mt-1 break-all text-xs">Quellen-SHA256: {previewData.data.sourceSha256}</p>}
-                            <p className="mt-1">{previewData.data.checkedScope}</p>
+                        <div className="min-w-0 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground sm:text-sm">
+                            <p className="break-words"><span className="font-medium text-foreground">Mappingversion:</span> {previewData.data.mappingVersion}</p>
+                            <p className="mt-1">Kontrollsummen: {previewData.data.controlTotals.incomeCount} Einnahmen, {previewData.data.controlTotals.expenseCount} Ausgaben</p>
                         </div>
                     )}
                 </DialogHeader>
 
                 {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto py-6 space-y-6">
+                <div role="region" aria-label="EÜR-Vorschau" className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain py-4 space-y-5 [overflow-wrap:anywhere]">
                     {/* Year Selection & Company Info */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-1">
-                        <div className="flex items-center gap-4 bg-muted/50 p-3 rounded-lg">
-                            <Calendar className="h-5 w-5 text-muted-foreground" />
-                            <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-3 bg-muted/50 p-3 rounded-lg">
+                            <Calendar className="h-5 w-5 shrink-0 text-muted-foreground" />
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
                                 <Label htmlFor="year-select" className="font-medium">Veranlagungsjahr:</Label>
                                 <Select value={selectedYear} onValueChange={setSelectedYear}>
                                     <SelectTrigger id="year-select" className="w-28 bg-background">
@@ -205,9 +201,9 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                         </div>
 
                         {previewData?.data.companyName && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2 text-muted-foreground">
                                 <Building2 className="h-4 w-4" />
-                                <span className="text-sm">{previewData.data.companyName}</span>
+                                <span className="min-w-0 break-words text-sm">{previewData.data.companyName}</span>
                                 {previewData.data.taxNumber && (
                                     <Badge variant="outline" className="ml-2">
                                         StNr: {previewData.data.taxNumber}
@@ -216,6 +212,15 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                             </div>
                         )}
                     </div>
+
+                    {previewData && (
+                        <details className="min-w-0 rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                            <summary className="cursor-pointer font-medium text-foreground">Quelle und Prüfumfang</summary>
+                            <p className="mt-2 break-words"><span className="font-medium text-foreground">Quellenversion:</span> {previewData.data.sourceVersion}</p>
+                            {previewData.data.sourceSha256 && <p className="mt-2 break-all font-mono text-xs">Quellen-SHA256: {previewData.data.sourceSha256}</p>}
+                            <p className="mt-2">{previewData.data.checkedScope}</p>
+                        </details>
+                    )}
 
                     <p className="text-sm text-muted-foreground">
                         Kein passendes Formularjahr? Das <Link className="underline" href={`/handoff?year=${selectedYear}`}>
@@ -250,7 +255,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                     {!isLoading && !error && previewData && (
                         <>
                             {/* Summary Cards - Main KPIs */}
-                            <div className="grid gap-4 md:grid-cols-3">
+                            <div className="grid min-w-0 gap-4 md:grid-cols-3">
                                 <Card className="relative overflow-hidden border-positive/40 bg-positive-surface">
                                     <div className="absolute top-0 right-0 w-24 h-24 transform translate-x-8 -translate-y-8">
                                         <div className="w-full h-full rounded-full bg-emerald-200/30 dark:bg-emerald-800/20" />
@@ -340,7 +345,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         {previewData.unmappedCategories.map((cat, i) => (
-                                            <Badge key={i} variant="outline" className="bg-white dark:bg-background py-1.5 px-3">
+                                            <Badge key={i} variant="outline" className="max-w-full min-w-0 flex-wrap whitespace-normal break-words bg-white dark:bg-background py-1.5 px-3">
                                                 <span className="font-medium">{cat.category}</span>
                                                 <span className="mx-1.5 text-muted-foreground">·</span>
                                                 <span className="text-orange-600">{formatCurrency(cat.amount)}</span>
@@ -377,9 +382,9 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                             <div className="border-t my-2" />
 
                             {/* EÜR Lines Tables */}
-                            <div className="grid gap-6 lg:grid-cols-2">
+                            <div className="grid min-w-0 gap-6 lg:grid-cols-2 [&_[data-slot=table-container]]:overflow-visible">
                                 {/* Income Lines */}
-                                <div className="space-y-3">
+                                <div className="min-w-0 space-y-3">
                                     <div className="flex items-center gap-2">
                                         <div className="p-1.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50">
                                             <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
@@ -391,11 +396,12 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                             {groupedLines.income.length} Zeilen
                                         </Badge>
                                     </div>
-                                    <div className="rounded-xl border bg-card overflow-hidden">
-                                        <Table>
+                                    <div className="min-w-0 rounded-xl border bg-card">
+                                        <Table aria-label="Einnahmen nach EÜR-Zeile" className="table-fixed">
+                                            <colgroup><col className="w-11 sm:w-14" /><col /><col className="w-28 sm:w-32" /></colgroup>
                                             <TableHeader>
                                                 <TableRow className="bg-muted/50">
-                                                    <TableHead className="w-20 font-semibold">Zeile</TableHead>
+                                                    <TableHead className="font-semibold">Zeile</TableHead>
                                                     <TableHead className="font-semibold">Bezeichnung</TableHead>
                                                     <TableHead className="text-right font-semibold">Betrag</TableHead>
                                                 </TableRow>
@@ -410,9 +416,9 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                                 ) : (
                                                     groupedLines.income.map((line) => (
                                                         <TableRow key={line.lineNumber} className="hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20">
-                                                            <TableCell className="font-mono text-sm font-medium">{line.lineNumber}</TableCell>
-                                                            <TableCell className="text-sm">{line.name}</TableCell>
-                                                            <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                                            <TableCell className="align-top font-mono text-sm font-medium">{line.lineNumber}</TableCell>
+                                                            <TableCell className="whitespace-normal break-words align-top text-sm [overflow-wrap:anywhere]">{line.name}</TableCell>
+                                                            <TableCell className="whitespace-nowrap text-right align-top font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                                                                 {formatCurrency(line.amount)}
                                                             </TableCell>
                                                         </TableRow>
@@ -420,9 +426,8 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                                 )}
                                                 {groupedLines.income.length > 0 && (
                                                     <TableRow className="bg-emerald-50 dark:bg-emerald-950/30 font-bold">
-                                                        <TableCell></TableCell>
-                                                        <TableCell>Summe Einnahmen</TableCell>
-                                                        <TableCell className="text-right text-emerald-700 dark:text-emerald-300">
+                                                        <TableCell colSpan={2} className="whitespace-normal break-words">Summe Einnahmen</TableCell>
+                                                        <TableCell className="whitespace-nowrap text-right tabular-nums text-emerald-700 dark:text-emerald-300">
                                                             {formatCurrency(previewData.data.totalIncome)}
                                                         </TableCell>
                                                     </TableRow>
@@ -433,7 +438,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                 </div>
 
                                 {/* Expense Lines */}
-                                <div className="space-y-3">
+                                <div className="min-w-0 space-y-3">
                                     <div className="flex items-center gap-2">
                                         <div className="p-1.5 rounded-md bg-rose-100 dark:bg-rose-900/50">
                                             <TrendingDown className="h-4 w-4 text-rose-600 dark:text-rose-400" />
@@ -445,11 +450,12 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                             {groupedLines.expense.length} Zeilen
                                         </Badge>
                                     </div>
-                                    <div className="rounded-xl border bg-card overflow-hidden max-h-[400px] overflow-y-auto">
-                                        <Table>
-                                            <TableHeader className="sticky top-0 bg-card z-10">
+                                    <div className="min-w-0 rounded-xl border bg-card">
+                                        <Table aria-label="Ausgaben nach EÜR-Zeile" className="table-fixed">
+                                            <colgroup><col className="w-11 sm:w-14" /><col /><col className="w-28 sm:w-32" /></colgroup>
+                                            <TableHeader>
                                                 <TableRow className="bg-muted/50">
-                                                    <TableHead className="w-20 font-semibold">Zeile</TableHead>
+                                                    <TableHead className="font-semibold">Zeile</TableHead>
                                                     <TableHead className="font-semibold">Bezeichnung</TableHead>
                                                     <TableHead className="text-right font-semibold">Betrag</TableHead>
                                                 </TableRow>
@@ -464,19 +470,18 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                                 ) : (
                                                     groupedLines.expense.map((line) => (
                                                         <TableRow key={line.lineNumber} className="hover:bg-rose-50/50 dark:hover:bg-rose-950/20">
-                                                            <TableCell className="font-mono text-sm font-medium">{line.lineNumber}</TableCell>
-                                                            <TableCell className="text-sm">{line.name}</TableCell>
-                                                            <TableCell className="text-right font-semibold text-rose-600 dark:text-rose-400">
+                                                            <TableCell className="align-top font-mono text-sm font-medium">{line.lineNumber}</TableCell>
+                                                            <TableCell className="whitespace-normal break-words align-top text-sm [overflow-wrap:anywhere]">{line.name}</TableCell>
+                                                            <TableCell className="whitespace-nowrap text-right align-top font-semibold tabular-nums text-rose-600 dark:text-rose-400">
                                                                 {formatCurrency(line.amount)}
                                                             </TableCell>
                                                         </TableRow>
                                                     ))
                                                 )}
                                                 {groupedLines.expense.length > 0 && (
-                                                    <TableRow className="bg-rose-50 dark:bg-rose-950/30 font-bold sticky bottom-0">
-                                                        <TableCell></TableCell>
-                                                        <TableCell>Summe Ausgaben</TableCell>
-                                                        <TableCell className="text-right text-rose-700 dark:text-rose-300">
+                                                    <TableRow className="bg-rose-50 dark:bg-rose-950/30 font-bold">
+                                                        <TableCell colSpan={2} className="whitespace-normal break-words">Summe Ausgaben</TableCell>
+                                                        <TableCell className="whitespace-nowrap text-right tabular-nums text-rose-700 dark:text-rose-300">
                                                             {formatCurrency(previewData.data.totalExpense)}
                                                         </TableCell>
                                                     </TableRow>
@@ -531,7 +536,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                 </div>
 
                 {/* Footer */}
-                <DialogFooter className="pt-4 border-t gap-2">
+                <DialogFooter className="shrink-0 border-t pt-4 gap-2">
                     <Button variant="outline" onClick={onClose}>
                         Schließen
                     </Button>

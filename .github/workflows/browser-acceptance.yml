@@ -86,6 +86,12 @@ jobs:
               'partial-payments-390-two-events.png',
               'partial-reminder-guard-1440.png',
               'partial-reminder-guard-390.png',
+              'accountant-guide-1440-readiness.png',
+              'accountant-guide-390-manual-note.png',
+              'history-correction-desktop.png',
+              'history-correction-mobile.png',
+              'receipt-draft-mobile.png',
+              'receipt-draft-desktop.png',
               'eur-2026-working-paper-1440.png',
               'eur-2026-working-paper-390.png',
               'eur-2027-handoff-390.png',
@@ -113,8 +119,8 @@ jobs:
                   matches.append((source, info))
           if not matches:
               skip('no allowlisted images were produced')
-          if len(matches) > 7 or len({source.name for source, _ in matches}) != len(matches):
-              skip('file count exceeds seven or basenames are duplicated')
+          if len(matches) > 13 or len({source.name for source, _ in matches}) != len(matches):
+              skip('file count exceeds thirteen or basenames are duplicated')
           if sum(info.st_size for _, info in matches) > limit:
               skip('combined size exceeds 5 MiB')
 
@@ -146,7 +152,7 @@ jobs:
         timeout-minutes: 2
         uses: actions/upload-artifact@v4
         with:
-          name: partial-payments-synthetic-visuals
+          name: user-workflows-synthetic-visuals
           path: ${{ steps.stage-visuals.outputs.directory }}
           retention-days: 1
           if-no-files-found: warn

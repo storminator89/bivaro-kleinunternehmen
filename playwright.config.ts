@@ -35,7 +35,16 @@ export default defineConfig({
   },
   projects: [
     {
+      // The existing serial core suite proves first-admin bootstrap against the
+      // empty runner fixture before independent feature suites create users.
+      name: 'chromium-bootstrap',
+      testMatch: '**/auth-dashboard-invoice.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'chromium',
+      dependencies: ['chromium-bootstrap'],
+      testIgnore: ['**/auth-dashboard-invoice.spec.ts', '**/security-hardening.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],

@@ -88,6 +88,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
       items: [
         { href: "/dashboard?tab=invoices", label: "Rechnungen", icon: "nav-invoices", auth: "authenticated" },
         { href: "/dashboard?tab=quotes", label: "Angebote", icon: "nav-quotes", auth: "authenticated" },
+        { href: "/history", label: "Rechnungshistorie", icon: "nav-invoices", auth: "authenticated" },
         { href: "/dashboard/reminders", label: "Mahnwesen", icon: "nav-reminders", auth: "authenticated" },
         { href: "/customers", label: "Kunden", icon: "nav-customers", auth: "authenticated" },
       ]

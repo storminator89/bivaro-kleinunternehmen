@@ -4,6 +4,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
 import { createTestDatabase } from './helpers/database';
 import type { IncomingDocument } from '@/lib/purchase-documents/types';
@@ -29,6 +30,7 @@ let original: typeof import('@/app/api/purchase-documents/[id]/original/route');
 let dismiss: typeof import('@/app/api/purchase-documents/[id]/dismiss/route');
 let reopen: typeof import('@/app/api/purchase-documents/[id]/reopen/route');
 let retry: typeof import('@/app/api/purchase-documents/[id]/retry-parse/route');
+let draftRoute: typeof import('@/app/api/purchase-documents/[id]/review-draft/route');
 let firstId: number;
 const xml = (number: string, seller = 'Supplier Alpha', currency = 'EUR', root = 'Invoice', date = '2026-10-20') => `<${root}><ID>${number}</ID><IssueDate>${date}</IssueDate><DocumentCurrencyCode>${currency}</DocumentCurrencyCode><AccountingSupplierParty><Party><PartyName><Name>${seller}</Name></PartyName></Party></AccountingSupplierParty><AccountingCustomerParty><Party><PartyName><Name>Buyer Beta</Name></PartyName></Party></AccountingCustomerParty><LegalMonetaryTotal><TaxInclusiveAmount currencyID="${currency}">119.00</TaxInclusiveAmount><PayableAmount currencyID="${currency}">119.00</PayableAmount></LegalMonetaryTotal></${root}>`;
 function upload(bytes: string | Uint8Array, key: string = randomUUID(), name = 'incoming.xml', type = 'application/xml') {
@@ -58,6 +60,7 @@ beforeAll(async () => {
   storage = await mkdtemp(path.join(tmpdir(), 'bivaro-incoming-files-'));
   const cwd = vi.spyOn(process, 'cwd').mockReturnValue(storage);
   try {
+    draftRoute = await import('@/app/api/purchase-documents/[id]/review-draft/route');
     collection = await import('@/app/api/purchase-documents/route');
     detail = await import('@/app/api/purchase-documents/[id]/route');
     original = await import('@/app/api/purchase-documents/[id]/original/route');
@@ -190,7 +193,7 @@ describe('incoming original intake without posting', () => {
     expect((await collection.GET(new NextRequest('http://localhost/api/purchase-documents?limit=1000'))).status).toBe(400);
     expect((await detail.GET(new NextRequest('http://localhost/detail'), { params: Promise.resolve({ id: '../etc/passwd' }) })).status).toBe(404);
     expect(await database.client.purchaseDocument.count()).toBe(before);
-    const ownerFiles = await readdir(path.join(storage, 'data/uploads/incoming-owner')); expect(ownerFiles.every(name => /^[0-9a-f-]{36}\.(pdf|xml)$/.test(name))).toBe(true);
+    const ownerFiles = await readdir(path.join(storage, 'data/uploads/incoming-owner')); expect(ownerFiles.every(name => /^[0-9a-f-]{36}\.(pdf|xml|jpg|png)$/.test(name))).toBe(true);
   });
   it('rolls back failed intake audit and cleans only its unreferenced newly created original', async () => {
     const beforeRows = await database.client.purchaseDocument.count();
@@ -237,9 +240,61 @@ describe('incoming original intake without posting', () => {
     expect(refreshed.approvalSupported).toBe(true);
     await noFinancialRows();
   });
+  it('archives genuine JPG/PNG bytes and saves a separate exact-money draft without posting or rewriting extracted values', async () => {
+    for (const format of ['jpeg', 'png'] as const) {
+      const bytes = await sharp({ create: { width: 390, height: 700, channels: 3, background: '#f7f4ed' } })[format]().toBuffer();
+      const key = randomUUID();
+      const response = await collection.POST(upload(bytes, key, `mobile.${format === 'jpeg' ? 'jpg' : 'png'}`, `image/${format}`));
+      expect(response.status).toBe(201); const source = (await response.json()).document;
+      expect(source).toMatchObject({ parseStatus: 'FAILED', parseErrorCode: 'PHOTO_MANUAL_REVIEW', preview: null, approvalSupported: false, reviewDraft: null });
+      const draft = { supplierName: 'Mobile Supplier', invoiceNumber: 'PHONE-17', invoiceDate: '2026-10-20', paymentDate: '2026-10-21', amount: '123,45', note: 'Only an unposted draft' };
+      const saved = await draftRoute.POST(json(source.id, 'review-draft', { expectedRevision: source.revision, draft }), context(source.id));
+      expect(saved.status).toBe(200); const document = (await saved.json()).document;
+      expect(document).toMatchObject({ reviewState: 'REVIEW', linkedExpenseId: null, supplierName: null, invoiceDate: null, totalAmount: null, reviewDraft: { ...draft, amount: '123.45' }, revision: source.revision + 1 });
+      expect(document.reviewDraftSavedAt).toMatch(/^\d{4}-/);
+      const refreshed = await fetchDetail(source.id); expect(refreshed.reviewDraft).toEqual(document.reviewDraft);
+      const listing = await collection.GET(new NextRequest('http://localhost/api/purchase-documents?search=Mobile%20Supplier'));
+      expect((await listing.json()).documents.some((row: IncomingDocument) => row.id === source.id && row.reviewDraftSavedAt)).toBe(true);
+      const download = await original.GET(new NextRequest('http://localhost/original'), context(source.id));
+      expect(Buffer.from(await download.arrayBuffer())).toEqual(bytes); expect(download.headers.get('cache-control')).toBe('private, no-store');
+      const replay = await collection.POST(upload(bytes, key, `mobile.${format === 'jpeg' ? 'jpg' : 'png'}`, `image/${format}`)); expect(replay.status).toBe(200); expect((await replay.json()).document.reviewDraft).toEqual(document.reviewDraft);
+      const stale = await draftRoute.POST(json(source.id, 'review-draft', { expectedRevision: source.revision, draft }), context(source.id)); expect(stale.status).toBe(409);
+      expect((await fetchDetail(source.id)).reviewDraft).toEqual(document.reviewDraft);
+    }
+    await noFinancialRows();
+  });
+  it('enforces real image decoding, media agreement, byte/dimension limits and rejects active SVG/HEIC', async () => {
+    const count = await database.client.purchaseDocument.count();
+    const png = await sharp({ create: { width: 20, height: 20, channels: 3, background: '#fff' } }).png().toBuffer();
+    const animationControl = Buffer.alloc(20); animationControl.writeUInt32BE(8, 0); animationControl.write('acTL', 4); animationControl.writeUInt32BE(2, 8);
+    const animated = Buffer.concat([png.subarray(0, 33), animationControl, png.subarray(33)]);
+    const bomb = Buffer.from(png); bomb.writeUInt32BE(7000, 16); bomb.writeUInt32BE(7000, 20);
+    let crc = 0xffffffff; for (const value of bomb.subarray(12, 29)) { crc ^= value; for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0); } bomb.writeUInt32BE((crc ^ 0xffffffff) >>> 0, 29);
+    const wide = await sharp({ create: { width: 12001, height: 1, channels: 3, background: '#fff' } }).png().toBuffer();
+    for (const [bytes, name, mime] of [[animated, 'animated.png', 'image/png'], [png, 'wrong.jpg', 'image/jpeg'], [bomb, 'decompression-bomb.png', 'image/png'], [wide, 'wide.png', 'image/png'], [Buffer.from([255,216,255,0]), 'corrupt.jpg', 'image/jpeg'], [Buffer.from('<svg onload="alert(1)"/>'), 'active.svg', 'image/svg+xml'], [png, 'mobile.heic', 'image/heic']] as const) {
+      expect((await collection.POST(upload(bytes, randomUUID(), name, mime))).status).toBe(415);
+    }
+    expect((await collection.POST(upload(Buffer.alloc(10 * 1024 * 1024 + 1), randomUUID(), 'large.png', 'image/png'))).status).toBe(413);
+    expect(await database.client.purchaseDocument.count()).toBe(count);
+  });
+  it('rejects forged draft attestations and stale/cross-tenant/dismissed writes; failed audit rolls back the draft', async () => {
+    const initial = (await (await collection.POST(upload(xml('DRAFT-BOUNDARY')))).json()).document;
+    const draft = { supplierName: '', invoiceNumber: '', invoiceDate: '', paymentDate: '', amount: '0.29', note: 'Pending review' };
+    const send = (value: unknown) => draftRoute.POST(json(initial.id, 'review-draft', { expectedRevision: initial.revision, draft: value }), context(initial.id));
+    for (const invalid of [{ ...draft, confirmPaymentDate: true }, { ...draft, amount: '1.001' }, { ...draft, amount: '90071992547409.92' }, { ...draft, paymentDate: '2026-02-30' }, { ...draft, amount: '-1' }, { ...draft, note: 'x'.repeat(2001) }]) expect((await send(invalid)).status).toBe(400);
+    state.userId = 'incoming-other'; try { expect((await send(draft)).status).toBe(404); } finally { state.userId = 'incoming-owner'; }
+    state.failOperation = 'purchase-document.save-review-draft'; try { expect((await send(draft)).status).toBe(500); } finally { state.failOperation = ''; }
+    expect((await fetchDetail(initial.id)).reviewDraft).toBeNull(); expect((await fetchDetail(initial.id)).revision).toBe(initial.revision);
+    expect((await send(draft)).status).toBe(200);
+    const saved = await fetchDetail(initial.id);
+    expect((await dismiss.POST(json(initial.id, 'dismiss', { expectedRevision: saved.revision, reason: 'No posting' }), context(initial.id))).status).toBe(200);
+    expect((await draftRoute.POST(json(initial.id, 'review-draft', { expectedRevision: saved.revision + 1, draft }), context(initial.id))).status).toBe(409);
+    expect((await fetchDetail(initial.id)).reviewDraft).toEqual(draft);
+    await noFinancialRows();
+  });
   it('requires authentication before data access', async () => {
     state.userId = null;
-    try { expect((await collection.GET(new NextRequest('http://localhost/api/purchase-documents'))).status).toBe(401); expect((await collection.POST(upload(xml('ANON')))).status).toBe(401); }
+    try { expect((await draftRoute.POST(json(firstId, 'review-draft', { expectedRevision: 0, draft: {} }), context(firstId))).status).toBe(401); expect((await collection.GET(new NextRequest('http://localhost/api/purchase-documents'))).status).toBe(401); expect((await collection.POST(upload(xml('ANON')))).status).toBe(401); }
     finally { state.userId = 'incoming-owner'; }
   });
 });
