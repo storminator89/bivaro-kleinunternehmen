@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getHeapStatistics } from 'node:v8'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,8 @@ interface HealthStatus {
       used: number
       total: number
       percentage: number
+      limit: number
+      limitPercentage: number
     }
   }
 }
@@ -37,7 +40,9 @@ export async function GET() {
       memory: {
         used: 0,
         total: 0,
-        percentage: 0
+        percentage: 0,
+        limit: 0,
+        limitPercentage: 0
       }
     }
   }
@@ -57,14 +62,17 @@ export async function GET() {
 
   // Memory check
   const memUsage = process.memoryUsage()
+  const heapLimit = getHeapStatistics().heap_size_limit
   health.checks.memory = {
     used: Math.round(memUsage.heapUsed / 1024 / 1024),
     total: Math.round(memUsage.heapTotal / 1024 / 1024),
-    percentage: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100)
+    percentage: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
+    limit: Math.round(heapLimit / 1024 / 1024),
+    limitPercentage: Math.round((memUsage.heapUsed / heapLimit) * 100)
   }
 
-  // Memory warning threshold (90%)
-  if (health.checks.memory.percentage > 90) {
+  // heapTotal is currently allocated space; warn against V8's actual heap limit.
+  if (health.checks.memory.limitPercentage > 90) {
     health.status = health.status === 'healthy' ? 'degraded' : health.status
   }
 
