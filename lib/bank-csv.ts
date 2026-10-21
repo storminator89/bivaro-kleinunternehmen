@@ -41,6 +41,8 @@ export type BankCsvPreviewRow = {
   externalId: string;
   errors: string[];
   warnings: string[];
+  /** Duplicate-family detail only; unrelated review warnings stay immediately visible. */
+  duplicateWarnings: string[];
   /** Canonical in-memory identity, not a persisted/import id or cryptographic digest. */
   fingerprint: string | null;
   duplicate: boolean;
@@ -290,12 +292,12 @@ export function buildBankCsvPreview(parsed: BankCsvParsed, mapping: BankCsvMappi
     if (reference.length > 2000 || counterparty.length > 255 || externalId.length > 255) rowErrors.push('Verwendungszweck, Zahlungspartner oder externe ID ist zu lang.');
     return {
       rowNumber: parsed.rowNumbers[index], date, amountCents: amount === null ? null : amount.toString(), currency,
-      reference, counterparty, externalId, errors: [...new Set(rowErrors)], warnings, duplicate: false,
+      reference, counterparty, externalId, errors: [...new Set(rowErrors)], warnings, duplicateWarnings: [], duplicate: false,
       fingerprint: rowErrors.length || !date || amount === null || currency !== 'EUR' ? null : JSON.stringify(['bank-csv-v1', normalized(mapping.accountAlias), date, amount.toString(), currency, counterparty, reference, externalId]),
     };
   });
   function mark(groups: Map<string, BankCsvPreviewRow[]>, message: string) {
-    for (const group of groups.values()) if (group.length > 1) for (const row of group) { row.duplicate = true; row.warnings.push(message); }
+    for (const group of groups.values()) if (group.length > 1) for (const row of group) { row.duplicate = true; row.warnings.push(message); row.duplicateWarnings.push(message); }
   }
   const fingerprints = new Map<string, BankCsvPreviewRow[]>(), externalIds = new Map<string, BankCsvPreviewRow[]>(), sameDayAmounts = new Map<string, BankCsvPreviewRow[]>();
   for (const row of rows) {

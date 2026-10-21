@@ -34,12 +34,31 @@ describe('bank preview UI safety and clear hierarchy', () => {
     expect(html).toContain('Möglicherweise bereits erfasst'); expect(html).toContain('nicht erneut buchen');
     expect(html).toContain('Nachweis öffnen'); expect(html).not.toContain('Starkes Signal');
     expect(html).not.toContain('Nur Vorschlag · keine Zahlung erfasst');
-    expect(html.match(/Möglicherweise bereits erfasst/gu)).toHaveLength(1);
+    expect(html.replace(/<details[\s\S]*?<\/details>/gu, '').match(/Möglicherweise bereits erfasst/gu)).toHaveLength(1);
   });
-  it('keeps invalid fields and duplicate warnings visible instead of hiding them in details', () => {
-    const html = render(row({ errors: ['Ungültiges Datum'], duplicate: true, warnings: ['Mögliche Dublette — Originalbelege prüfen.'] }));
+  it('keeps errors and the essential duplicate caution visible while detailed reasons use native disclosure', () => {
+    const html = render(row({ errors: ['Ungültiges Datum'], duplicate: true, warnings: ['Mögliche Dublette — Originalbelege prüfen.'], duplicateWarnings: ['Mögliche Dublette — Originalbelege prüfen.'] }));
     expect(html).toContain('Ungültiges Datum'); expect(html).toContain('Mögliche Dublette');
-    expect(html).not.toContain('<details'); expect(html).not.toContain('Starkes Signal');
+    expect(html).toContain('<details'); expect(html).not.toContain('<details open'); expect(html).not.toContain('Starkes Signal');
+    expect(html.replace(/<details[\s\S]*?<\/details>/gu, '')).toContain('Ungültiges Datum');
+  });
+  it('consolidates duplicate and existing-payment cautions without dropping any detailed risk reason', () => {
+    const reasons = ['Identische Buchungsdaten kommen mehrfach vor.', 'Die externe Bank-ID kommt mehrfach vor.', 'Mehrere Buchungen haben denselben Tag und Betrag.'];
+    const html = render(row({ duplicate: true, warnings: reasons, duplicateWarnings: reasons }), result([candidate({ existingPayments: [{ amountCents: '4000', paidAt: '2026-10-21T00:00:00.000Z', reference: 'RE-120', source: 'MANUAL' }] })]));
+    const visible = html.replace(/<details[\s\S]*?<\/details>/gu, '');
+    expect(visible.match(/Mögliche Dublette\. Keine Zeile entfernt/gu)).toHaveLength(1);
+    expect(visible.match(/Möglicherweise bereits erfasst/gu)).toHaveLength(1);
+    expect(html).toContain('aria-label="Prüfhinweise zu Bankzeile 2"');
+    for (const reason of reasons) { expect(html).toContain(reason); expect(visible).not.toContain(reason); }
+    expect(html).toContain('nicht nochmals als neue Zahlung buchen');
+  });
+  it('keeps missing-reference and missing-customer warnings visible even on duplicate rows', () => {
+    const reason = 'Identische Buchungsdaten kommen mehrfach vor.';
+    const blockers = ['Verwendungszweck fehlt: keine Rechnungsvorschläge möglich.', 'Zahlungspartner fehlt: kein Kunden-/Betragsabgleich möglich.'];
+    const html = render(row({ duplicate: true, reference: '', counterparty: '', warnings: [...blockers, reason], duplicateWarnings: [reason] }));
+    const visible = html.replace(/<details[\s\S]*?<\/details>/gu, '');
+    for (const blocker of blockers) expect(visible).toContain(blocker);
+    expect(visible).not.toContain(reason); expect(html).toContain(reason);
   });
   it('shows a clear no-match result without inventing a candidate', () => {
     expect(render(row(), result([]))).toContain('Kein eindeutiger Rechnungsvorschlag');

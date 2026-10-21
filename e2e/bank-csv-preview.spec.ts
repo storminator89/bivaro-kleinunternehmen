@@ -20,7 +20,7 @@ async function account(page: Page) {
 }
 async function invoice(page: Page, invoiceNumber: string) {
   const pdf = await PDFDocument.create(); pdf.addPage();
-  const response = await page.request.post('/api/invoices', { data: { fileName: `${invoiceNumber}.pdf`, invoiceNumber, invoiceDate: '2026-10-01', totalAmount: 120, parsedData: { currency: 'EUR' }, pdfBytes: await pdf.saveAsBase64() } });
+  const response = await page.request.post('/api/invoices', { data: { fileName: `${invoiceNumber}.pdf`, invoiceNumber, invoiceDate: '2026-10-01', totalAmount: 120, parsedData: { currency: 'EUR', taxMode: 'small-business', taxAmount: 0 }, pdfBytes: await pdf.saveAsBase64() } });
   expect(response.status()).toBe(200);
   return response.json() as Promise<{ id: number }>;
 }
@@ -33,6 +33,10 @@ async function upload(page: Page, contents: string, name = 'synthetic-bank-only.
   await page.getByLabel('Bank-CSV auswählen', { exact: true }).setInputFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(contents, 'utf8') });
   await expect(page.getByRole('heading', { name: 'Spalten zuordnen', exact: true })).toBeVisible();
   await page.getByLabel('Kontoalias *', { exact: true }).fill('Synthetic Geschäftskonto');
+}
+// Next's global route announcer is outside the application-owned workspace.
+function bankWorkspace(page: Page) {
+  return page.getByRole('list', { name: 'Bank-CSV Schritte', exact: true }).locator('..').locator('..');
 }
 async function preview(page: Page) {
   await page.getByRole('button', { name: 'Vorschau prüfen', exact: true }).focus(); await page.keyboard.press('Enter');
@@ -65,6 +69,14 @@ test('desktop preview explains partial suggestions, duplicate and manual-payment
   await expect(partial).toContainText('mögliche Teilzahlung');
   await expect(partial).toContainText('Nur Vorschlag · keine Zahlung erfasst');
   await expect(partial).toContainText('Geprüfter Rechnungsrest: 80,00 €');
+  const duplicate = page.getByRole('article', { name: 'Bankzeile 2', exact: true });
+  const details = duplicate.locator('details');
+  await expect(details).not.toHaveAttribute('open', '');
+  const disclosure = duplicate.getByLabel('Prüfhinweise zu Bankzeile 2', { exact: true });
+  await disclosure.focus(); await page.keyboard.press('Enter');
+  await expect(details).toHaveAttribute('open', '');
+  await expect(duplicate.getByText('Die externe Buchungs-ID kommt mehrfach vor. Bitte mögliche Doppelbuchung oder widersprüchliche Daten prüfen.', { exact: true })).toBeVisible();
+  await page.keyboard.press('Enter'); await expect(details).not.toHaveAttribute('open', '');
   await expect(page.getByText('Nur Vorschau · keine Buchung', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('bank-csv-desktop-preview.png'), fullPage: true });
@@ -93,12 +105,12 @@ for (const width of [360, 390]) {
     await page.setViewportSize({ width, height: 844 }); await page.emulateMedia({ colorScheme: 'light' });
     await page.goto('/bank-csv');
     await page.getByLabel('Bank-CSV auswählen', { exact: true }).setInputFiles({ name: 'too-large.csv', mimeType: 'text/csv', buffer: Buffer.alloc(2 * 1024 * 1024 + 1) });
-    await expect(page.getByRole('alert')).toContainText('2 MiB');
+    await expect(bankWorkspace(page).getByRole('alert')).toContainText('2 MiB');
     await upload(page, single); await preview(page);
     let fail = true;
     await page.route('**/api/invoices?*', route => fail ? route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }) : route.continue());
     await page.getByRole('button', { name: 'Rechnungsvorschläge prüfen', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Vorschau bleibt erhalten');
+    await expect(bankWorkspace(page).getByRole('alert')).toContainText('Vorschau bleibt erhalten');
     fail = false;
     await page.getByRole('button', { name: 'Rechnungsvorschläge erneut prüfen', exact: true }).focus(); await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { name: 'Rechnungsvorschläge geprüft', exact: true })).toBeFocused();

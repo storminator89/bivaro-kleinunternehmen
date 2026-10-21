@@ -173,6 +173,16 @@ describe('explicit mapping and strict preview values', () => {
     expect(result.rows.every(item => item.duplicate)).toBe(true);
     expect(suggestBankInvoiceMatches(result.rows[0], [invoice()])[0].confidence).toBe('review');
   });
+  it('separates duplicate detail from immediate missing-reference/customer review warnings', () => {
+    const result = preview('21.10.2026;40,00;EUR;;;same-id\n21.10.2026;40,00;EUR;;;same-id');
+    for (const bankRow of result.rows) {
+      expect(bankRow.duplicate).toBe(true); expect(bankRow.duplicateWarnings).toHaveLength(3);
+      expect(bankRow.warnings).toEqual(expect.arrayContaining(bankRow.duplicateWarnings));
+      expect(bankRow.duplicateWarnings.join(' ')).not.toMatch(/Verwendungszweck fehlt|Zahlungspartner fehlt/u);
+      expect(bankRow.warnings.join(' ')).toMatch(/Verwendungszweck fehlt/u);
+      expect(bankRow.warnings.join(' ')).toMatch(/Zahlungspartner fehlt/u);
+    }
+  });
 });
 
 describe('read-only authoritative invoice matching', () => {
