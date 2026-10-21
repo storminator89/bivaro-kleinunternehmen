@@ -1,114 +1,130 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { FullPaymentFields } from '@/components/dashboard/full-payment-dialog';
-import { displayPaymentAmount, paymentAttempt, paymentFailure, paymentIdentityStorageKey, readConfirmedPayment, readPaymentPreflight, recoverConfirmedPayment, validatePaymentFields } from '@/lib/full-payment-form';
+import { PaymentHistory } from '@/components/payments/payment-history';
+import { displayPaymentAmount, paymentAttempt, paymentFailure, paymentIdentityStorageKey, paymentInputCents, paymentPendingStorageKey, readConfirmedPayment, readPaymentPreflight, recoverConfirmedPayment, validatePaymentFields } from '@/lib/full-payment-form';
 
-const preflight = () => ({ currency: 'EUR', canRecordPayment: true, event: null, legacyAdoptionRequired: false, summary: { totalCents: '12345', paidCents: '0', openCents: '12345', paid: false } });
+const summary = (paidCents = '0') => ({ totalCents: '12000', paidCents, openCents: (BigInt(12000) - BigInt(paidCents)).toString(), paid: paidCents === '12000', paymentState: paidCents === '12000' ? 'PAID' : paidCents === '0' ? 'OPEN' : 'PARTIAL' });
+const event = (id = 1, amountCents = '4000', key = 'first') => ({ id, invoiceId: 7, amountCents, currency: 'EUR' as const, paidAt: '2026-10-19T00:00:00.000Z', dateCertainty: 'ACTUAL', source: 'MANUAL', reference: 'Statement', idempotencyKey: key });
+const preflight = (paidCents = '0', events = paidCents === '0' ? [] : [event(1, paidCents)]) => ({ currency: 'EUR', canRecordPayment: paidCents !== '12000', events, event: events.length === 1 ? events[0] : null, legacyAdoptionRequired: false, reviewRequired: false, summary: summary(paidCents) });
 
-describe('first full-payment form safety', () => {
-  it('uses checked server cents without a floating point or locale round trip', () => {
-    expect(readPaymentPreflight(preflight())).toEqual({ amount: '123.45', amountCents: '12345' });
-    const whole = preflight(); whole.summary.totalCents = whole.summary.openCents = '12000';
-    expect(readPaymentPreflight(whole).amount).toBe('120.00');
+describe('partial-payment form safety', () => {
+  it('uses exact checked server remainder and keeps settlement separate from the allocation', () => {
+    expect(readPaymentPreflight(preflight())).toMatchObject({ amount: '120.00', amountCents: '12000', canRecordPayment: true });
+    expect(readPaymentPreflight(preflight('4000'))).toMatchObject({ amount: '80.00', amountCents: '8000', summary: { paymentState: 'PARTIAL' } });
+    expect(readPaymentPreflight(preflight('12000')).canRecordPayment).toBe(false);
     expect(displayPaymentAmount('123456789')).toBe('1.234.567,89 €');
     expect(displayPaymentAmount('1')).toBe('0,01 €');
   });
-
-  it.each([undefined, null, {}, { ...preflight(), currency: undefined }, { ...preflight(), currency: 'USD' }, { ...preflight(), canRecordPayment: false }])('blocks unknown currency/eligibility or missing data: %j', data => {
+  it.each([undefined, null, {}, { ...preflight(), currency: undefined }, { ...preflight(), currency: 'USD' }, { ...preflight(), reviewRequired: true }, { ...preflight(), legacyAdoptionRequired: true }, { ...preflight(), summary: null }])('blocks unknown or review-required balances: %j', data => {
     expect(() => readPaymentPreflight(data)).toThrow();
   });
-
+  it('allows read-only history but never entry when capability is false', () => {
+    expect(readPaymentPreflight({ ...preflight('4000'), canRecordPayment: false })).toMatchObject({ canRecordPayment: false, events: [event()] });
+  });
   it.each(['', '0', '-1', '1.2', '001', '9007199254740992', 'NaN'])('rejects ambiguous/unsafe total cents %s', cents => {
     const data = preflight(); data.summary.totalCents = data.summary.openCents = cents;
     expect(() => readPaymentPreflight(data)).toThrow();
   });
-
-  it('refuses partial, prior and historical payments rather than making another income', () => {
-    expect(() => readPaymentPreflight({ ...preflight(), legacyAdoptionRequired: true, summary: null })).toThrow(/historische/i);
-    expect(() => readPaymentPreflight({ ...preflight(), event: { id: 1 } })).toThrow(/bereits/i);
-    const partial = preflight(); partial.summary.paidCents = '1'; partial.summary.openCents = '12344';
-    expect(() => readPaymentPreflight(partial)).toThrow(/Teilzahlungen/);
+  it('rejects inconsistent totals, state and event sums', () => {
+    for (const change of [{ paidCents: '4000' }, { openCents: '1' }, { paymentState: 'PAID' }, { paid: true }]) {
+      expect(() => readPaymentPreflight({ ...preflight(), summary: { ...summary(), ...change } })).toThrow();
+    }
+    expect(() => readPaymentPreflight({ ...preflight('4000'), events: [event(1, '3999')] })).toThrow();
   });
-
-  it.each(['', '2026-02-30', '2026-2-01', '2026-10-20T00:00:00.000Z'])('requires a real explicitly entered calendar date: %s', date => {
-    expect(validatePaymentFields(date, 'Kontoauszug')).toMatch(/Zahlungsdatum/);
+  it.each(['0', '-1', '0.001', '1.001', '1e2', 'NaN', '1.000,00', '90071992547409.92'])('rejects nonpositive, subcent or unsafe editable amounts: %s', amount => {
+    expect(() => paymentInputCents(amount)).toThrow();
   });
-  it('accepts an actual past date including a leap day, and requires a bounded reference', () => {
-    expect(validatePaymentFields('2024-02-29', ' Kontoauszug ')).toBeNull();
-    expect(validatePaymentFields('2024-02-29', '')).toMatch(/Referenz/i);
-    expect(validatePaymentFields('2024-02-29', 'x'.repeat(256))).toMatch(/Referenz/i);
-    expect(validatePaymentFields('2024-02-29', 'line\nline')).toMatch(/Referenz/i);
+  it('accepts decimal comma/dot and one cent without rounding', () => {
+    expect(paymentInputCents('40,00')).toBe('4000');
+    expect(paymentInputCents(' 0.01 ')).toBe('1');
+    expect(paymentInputCents('80')).toBe('8000');
   });
-
-  it('retains the same UUID across failed retries, reload and trimmed-reference equivalence', () => {
+  it.each(['', '2026-02-30', '2026-2-01', '2026-10-20T00:00:00.000Z'])('requires a real explicitly entered date: %s', date => {
+    expect(validatePaymentFields(date, 'Statement')).toMatch(/Zahlungsdatum/);
+  });
+  it('accepts an actual past leap date and requires a bounded reference', () => {
+    expect(validatePaymentFields('2024-02-29', ' Statement ')).toBeNull();
+    for (const reference of ['', 'x'.repeat(256), 'line\nline']) expect(validatePaymentFields('2024-02-29', reference)).toMatch(/Referenz/i);
+  });
+  it('retains UUID and frozen precondition for identical uncertain retries', () => {
     const uuid = vi.fn().mockReturnValueOnce('first').mockReturnValue('second');
-    const first = paymentAttempt(null, 7, '123.45', '2026-10-19', ' Statement ', uuid);
-    const restored = JSON.parse(JSON.stringify(first));
-    const retry = paymentAttempt(restored, 7, '123.45', '2026-10-19', 'Statement', uuid);
+    const first = paymentAttempt(null, 7, '40.00', '2026-10-19', ' Statement ', uuid, '0');
+    const retry = paymentAttempt(JSON.parse(JSON.stringify(first)), 7, '40,00', '2026-10-19', 'Statement', uuid, '0');
     expect(retry.idempotencyKey).toBe('first');
+    expect(retry.expectedPaidCents).toBe('0');
     expect(uuid).toHaveBeenCalledTimes(1);
-    expect(paymentAttempt(retry, 7, '123.45', '2026-10-18', 'Statement', uuid).idempotencyKey).toBe('second');
+    // A later intentional same-looking payment is not a replay of the first.
+    expect(paymentAttempt(retry, 7, '40.00', '2026-10-19', 'Statement', uuid, '4000').idempotencyKey).toBe('second');
   });
-
-  it.each(['invoice', 'amount', 'date', 'reference'])('changes the UUID for a genuine changed %s payload', changed => {
+  it.each(['invoice', 'amount', 'date', 'reference'])('changes UUID for genuinely changed %s', changed => {
     const uuid = vi.fn().mockReturnValueOnce('first').mockReturnValueOnce('new');
-    const first = paymentAttempt(null, 7, '123.45', '2026-10-19', 'Statement', uuid);
-    const next = paymentAttempt(first, changed === 'invoice' ? 8 : 7, changed === 'amount' ? '123.46' : '123.45', changed === 'date' ? '2026-10-18' : '2026-10-19', changed === 'reference' ? 'Other' : 'Statement', uuid);
-    expect(next.idempotencyKey).toBe('new');
+    const first = paymentAttempt(null, 7, '40', '2026-10-19', 'Statement', uuid);
+    expect(paymentAttempt(first, changed === 'invoice' ? 8 : 7, changed === 'amount' ? '40.01' : '40', changed === 'date' ? '2026-10-18' : '2026-10-19', changed === 'reference' ? 'Other' : 'Statement', uuid).idempotencyKey).toBe('new');
   });
-
-  it('only displays a real matching saved payment and actual date as success', () => {
-    const draft = paymentAttempt(null, 7, '123.45', '2026-10-19', 'Statement', () => 'key');
-    const response = { replayed: true, event: { id: 3, invoiceId: 7, amountCents: '12345', currency: 'EUR', paidAt: '2026-10-19T00:00:00.000Z', source: 'MANUAL', dateCertainty: 'ACTUAL', reference: 'Statement', idempotencyKey: 'key' }, summary: { paid: true, totalCents: '12345', paidCents: '12345', openCents: '0' } };
-    expect(readConfirmedPayment(response, draft, 7, '12345').paidAt).toBe('2026-10-19T00:00:00.000Z');
-    expect(recoverConfirmedPayment({ ...response, canRecordPayment: false }, 7)?.id).toBe(3);
-    expect(recoverConfirmedPayment({ event: null }, 7)).toBeNull();
-    expect(recoverConfirmedPayment({ ...response, event: { ...response.event, source: 'LEGACY_IMPORT', dateCertainty: 'UNKNOWN' } }, 7)).toBeNull();
-    for (const mismatch of [{ dateCertainty: 'UNKNOWN' }, { paidAt: '2026-10-20T00:00:00.000Z' }, { currency: 'USD' }, { idempotencyKey: 'different' }, { invoiceId: 8 }, { amountCents: '12344' }]) {
-      expect(() => readConfirmedPayment({ ...response, event: { ...response.event, ...mismatch } }, draft, 7, '12345')).toThrow(/Speicherbestätigung/);
+  it('confirms a matching allocation while accepting its still-open whole-ledger summary', () => {
+    const draft = paymentAttempt(null, 7, '40', '2026-10-19', 'Statement', () => 'first');
+    const response = { event: event(), summary: summary('4000') };
+    expect(readConfirmedPayment(response, draft, 7)).toMatchObject({ id: 1, amountCents: '4000', summary: { openCents: '8000', paid: false } });
+    for (const mismatch of [{ dateCertainty: 'UNKNOWN' }, { paidAt: '2026-10-20T00:00:00.000Z' }, { currency: 'USD' }, { idempotencyKey: 'other' }, { invoiceId: 8 }, { amountCents: '3999' }]) {
+      expect(() => readConfirmedPayment({ ...response, event: { ...event(), ...mismatch } }, draft, 7)).toThrow(/Speicherbestätigung/);
     }
   });
-
-  it('explains conflict and full-payment restrictions without suggesting a second payment', () => {
-    expect(paymentFailure({ code: 'IDEMPOTENCY_CONFLICT' })).toMatch(/keine zweite Zahlung/);
-    expect(paymentFailure({ code: 'FULL_PAYMENT_REQUIRED' })).toMatch(/Teil- oder Überzahlungen/);
-    expect(paymentFailure({ code: 'PAYMENT_ALREADY_EXISTS' })).toMatch(/vorhandenen Zahlungseingang/);
+  it('recovers ONLY the known pending key, not any/latest manual event or mere existing history', () => {
+    const data = preflight('12000', [event(), event(2, '8000', 'second')]);
+    expect(recoverConfirmedPayment(data, 7)).toBeNull();
+    expect(recoverConfirmedPayment(data, 7, 'missing')).toBeNull();
+    expect(recoverConfirmedPayment(data, 7, 'first')?.id).toBe(1);
+    expect(recoverConfirmedPayment(data, 7, 'second')?.id).toBe(2);
+    expect(recoverConfirmedPayment({ ...data, events: [{ ...event(), source: 'LEGACY_IMPORT' }] }, 7, 'first')).toBeNull();
+    const wrongDraft = paymentAttempt(null, 7, '30', '2026-10-19', 'Statement', () => 'first');
+    expect(() => recoverConfirmedPayment(data, 7, 'first', wrongDraft)).toThrow();
   });
-
-  it('namespaces durable UUID identity by tenant, invoice and hashed payload without storing plaintext financial fields', async () => {
-    const fingerprint = JSON.stringify([7, '123.45', 'EUR', '2026-10-19', 'Private bank statement']);
+  it('explains stale-balance and overpayment conflicts without losing the draft', () => {
+    expect(paymentFailure({ code: 'PAYMENT_STATE_CHANGED' })).toMatch(/Eingaben bleiben erhalten/);
+    expect(paymentFailure({ code: 'PAYMENT_EXCEEDS_OPEN' })).toMatch(/nichts gebucht/);
+    expect(paymentFailure({ code: 'IDEMPOTENCY_CONFLICT' })).toMatch(/keine zweite Zahlung/);
+  });
+  it('namespaces opaque durable identity by tenant/invoice and hash, not plaintext payment fields', async () => {
+    const fingerprint = JSON.stringify([7, '40.00', 'EUR', '2026-10-19', 'Private bank statement', '0']);
     const key = await paymentIdentityStorageKey('user:one', 7, fingerprint);
     expect(key).toMatch(/^bivaro:payment-attempt:user%3Aone:7:[a-f0-9]{64}$/);
-    expect(key).not.toContain('123.45');
-    expect(key).not.toContain('2026-10-19');
-    expect(key).not.toContain('Private');
-    expect(await paymentIdentityStorageKey('user:one', 7, fingerprint)).toBe(key);
+    for (const text of ['40.00', '2026-10-19', 'Private']) expect(key).not.toContain(text);
     expect(await paymentIdentityStorageKey('user:two', 7, fingerprint)).not.toBe(key);
-    expect(await paymentIdentityStorageKey('user:one', 8, fingerprint)).not.toBe(key);
-    expect(await paymentIdentityStorageKey('user:one', 7, `${fingerprint}changed`)).not.toBe(key);
+    expect(paymentPendingStorageKey('user:one', 7)).toBe('bivaro:payment-pending:user%3Aone:7');
+  });
+  it('keeps conflict resubmission deliberate and clears pending identity only after confirmed success', () => {
+    const dialog = readFileSync('components/dashboard/full-payment-dialog.tsx', 'utf8');
+    expect(dialog).toContain('expectedPaidCents: draft.expectedPaidCents');
+    expect(dialog).toContain('setConflict(true)');
+    expect(dialog).toContain('Aktuellen Restbetrag geprüft');
+    expect(dialog).toContain('isSubmitting || conflict}');
+    expect(dialog).toContain('pendingKey.current, attempt.current');
+    expect(dialog).toContain('setConfirmed(saved);');
+    expect(dialog).toContain('sessionStorage.removeItem(identityStorage)');
+    expect(dialog).toContain('onEscapeKeyDown');
   });
 });
 
-describe('accessible full-payment fields', () => {
+describe('accessible payment fields and history cards', () => {
   const props = { id: 'payment', paidAt: '', reference: '', disabled: false, onDateChange: vi.fn(), onReferenceChange: vi.fn() };
-  it('starts with an empty date and visible labels, help and native required inputs', () => {
+  it('starts with empty date and visible labels, help and required fields', () => {
     const html = renderToStaticMarkup(createElement(FullPaymentFields, props));
-    expect(html).toContain('for="payment-date"');
-    expect(html).toContain('id="payment-date"');
-    expect(html).toContain('aria-describedby="payment-date-help"');
-    expect(html).toContain('type="date"');
-    expect(html).toContain('value=""');
-    expect(html).toContain('kein heutiges Datum vorbelegt');
-    expect(html).toContain('for="payment-reference"');
-    expect(html).toContain('maxLength="255"');
+    for (const text of ['for="payment-date"', 'aria-describedby="payment-date-help"', 'type="date"', 'value=""', 'kein heutiges Datum vorbelegt', 'for="payment-reference"', 'maxLength="255"']) expect(html).toContain(text);
     expect(html.match(/required=""/g)).toHaveLength(2);
-    expect(html).not.toContain('type="number"');
   });
-  it('keeps entered actual date and reference visible while both controls are locked for submission', () => {
+  it('locks entered evidence while submitting', () => {
     const html = renderToStaticMarkup(createElement(FullPaymentFields, { ...props, disabled: true, paidAt: '2026-10-19', reference: 'Statement' }));
     expect(html).toContain('value="2026-10-19"');
-    expect(html).toContain('value="Statement"');
     expect(html.match(/disabled=""/g)).toHaveLength(2);
+  });
+  it('renders both allocations, actual dates, references and historical uncertainty as readable cards', () => {
+    const events = [event(), { ...event(2, '8000', 'second'), paidAt: null, source: 'LEGACY_IMPORT', dateCertainty: 'UNKNOWN' }];
+    const html = renderToStaticMarkup(createElement(PaymentHistory, { events }));
+    expect(html.match(/<li /g)).toHaveLength(2);
+    for (const text of ['aria-label="Zahlungsverlauf"', '40,00', '80,00', '19.10.2026', 'Tatsächliches Datum', 'Quelle: ', 'Manuell', 'Historische Übernahme', 'Datum unbekannt', 'Statement']) expect(html).toContain(text);
+    expect(html).not.toContain('hidden');
   });
 });

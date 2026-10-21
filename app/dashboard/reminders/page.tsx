@@ -43,6 +43,9 @@ type Invoice = {
   invoiceNumber: string | null;
   fileName: string;
   totalAmount: number | null;
+  openAmount?: number | null;
+  canCreateReminder?: boolean;
+  paymentReviewRequired?: boolean;
   dueDate: string | null;
   invoiceDate: string | null;
   status: string;
@@ -112,8 +115,8 @@ const generateEmailTemplate = (
   // Nutze Ansprechpartner wenn vorhanden, sonst Firmenname, sonst Standard
   const customerName = invoice.customer?.contactPerson || invoice.customer?.name || 'Sehr geehrte Damen und Herren';
   const invoiceNumber = invoice.invoiceNumber || invoice.fileName;
-  const amount = invoice.totalAmount ? (invoice.totalAmount + fee).toFixed(2).replace('.', ',') : '[Betrag]';
-  const originalAmount = invoice.totalAmount ? invoice.totalAmount.toFixed(2).replace('.', ',') : '[Betrag]';
+  const amount = invoice.openAmount != null ? (invoice.openAmount + fee).toFixed(2).replace('.', ',') : '[Betrag]';
+  const originalAmount = invoice.openAmount != null ? invoice.openAmount.toFixed(2).replace('.', ',') : '[Betrag]';
   const invoiceDate = invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('de-DE') : '[Rechnungsdatum]';
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + dueDays);
@@ -281,7 +284,7 @@ export default function RemindersPage() {
   }, [loadData]);
 
   const handleCreateReminder = async () => {
-    if (!selectedInvoice) return;
+    if (!selectedInvoice || !selectedInvoice.canCreateReminder) return;
 
     setIsCreating(true);
     try {
@@ -356,10 +359,10 @@ export default function RemindersPage() {
     <div>
       <div className={styles.reminderMobile}>
         {invoiceList.length === 0 ? <div className="ledger-empty"><CheckCircle aria-hidden="true" /><p>{showOverdue ? 'Keine überfälligen Rechnungen' : 'Keine bald fälligen Rechnungen'}</p></div> : invoiceList.map(invoice => <article key={invoice.id} className={styles.reminderRecord}>
-          <div className={styles.reminderRecordHeader}><h3>{invoice.invoiceNumber || invoice.fileName}</h3><strong>{invoice.totalAmount != null ? formatCurrency(invoice.totalAmount) : '–'}</strong></div>
+          <div className={styles.reminderRecordHeader}><h3>{invoice.invoiceNumber || invoice.fileName}</h3><strong>{invoice.openAmount != null ? formatCurrency(invoice.openAmount) : '–'}</strong></div>
           <p>{invoice.customer?.name || 'Unbekannter Kunde'}</p>
           <div className={styles.recordMeta}><Badge variant={REMINDER_LEVEL_VARIANTS[invoice.currentReminderLevel]}>{REMINDER_LEVEL_LABELS[invoice.currentReminderLevel]}</Badge><span>{showOverdue ? `${invoice.daysOverdue} Tage überfällig` : `Fällig am ${formatDate(invoice.dueDate)}`}</span>{invoice.totalFees > 0 && <span>Gebühren: {formatCurrency(invoice.totalFees)}</span>}</div>
-          <div className={styles.reminderActions}>{invoice.currentReminderLevel < 4 && <Button variant="outline" size="sm" onClick={() => { setSelectedInvoice(invoice); setShowCreateReminder(true); }}><Mail className="mr-1 h-4 w-4" aria-hidden="true" />{invoice.nextReminderLevelLabel}</Button>}<Button variant="ghost" size="sm" onClick={() => handleMarkAsPaid(invoice.id)}><Check className="mr-1 h-4 w-4" aria-hidden="true" />Zahlung erfassen</Button></div>
+          <div className={styles.reminderActions}>{invoice.canCreateReminder && invoice.currentReminderLevel < 4 && <Button variant="outline" size="sm" onClick={() => { setSelectedInvoice(invoice); setShowCreateReminder(true); }}><Mail className="mr-1 h-4 w-4" aria-hidden="true" />{invoice.nextReminderLevelLabel}</Button>}<Button variant="ghost" size="sm" onClick={() => handleMarkAsPaid(invoice.id)}><Check className="mr-1 h-4 w-4" aria-hidden="true" />Zahlung erfassen</Button></div>
           {invoice.reminders.length > 0 && <details className={styles.reminderHistory}><summary>Mahnungshistorie ({invoice.reminders.length})</summary>{invoice.reminders.map(reminder => <article key={reminder.id}><strong className="text-sm">{REMINDER_LEVEL_LABELS[reminder.reminderLevel]}</strong><p>Erfasst: {formatDate(reminder.createdAt)} · Fällig: {formatDate(reminder.dueDate)}</p>{reminder.notes && <p>{reminder.notes}</p>}<div className="flex items-center justify-between gap-2"><span className="text-sm tabular-nums">{formatCurrency(reminder.fee)}</span><Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteReminder(reminder.id)} aria-label="Mahnung löschen"><Trash2 className="h-4 w-4" aria-hidden="true" /></Button></div></article>)}</details>}
         </article>)}
       </div>
@@ -417,7 +420,7 @@ export default function RemindersPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-right font-semibold">
-                  {invoice.totalAmount ? formatCurrency(invoice.totalAmount) : '-'}
+                  {invoice.openAmount != null ? formatCurrency(invoice.openAmount) : '-'}
                 </TableCell>
                 <TableCell className="text-center">
                   <Badge variant={REMINDER_LEVEL_VARIANTS[invoice.currentReminderLevel]}>
@@ -436,7 +439,7 @@ export default function RemindersPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {invoice.currentReminderLevel < 4 && (
+                    {invoice.canCreateReminder && invoice.currentReminderLevel < 4 && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -457,8 +460,8 @@ export default function RemindersPage() {
                         e.stopPropagation();
                         handleMarkAsPaid(invoice.id);
                       }}
-                      title="Vollständige Zahlung erfassen"
-                      aria-label={`Vollständige Zahlung für Rechnung ${invoice.invoiceNumber || invoice.fileName} erfassen`}
+                      title="Zahlung und Restbetrag erfassen"
+                      aria-label={`Zahlung für Rechnung ${invoice.invoiceNumber || invoice.fileName} erfassen`}
                     >
                       <Check className="h-4 w-4" />
                     </Button>
@@ -771,6 +774,7 @@ export default function RemindersPage() {
 
         {/* Mahnung erstellen Dialog */}
         {invoiceToPay && <FullPaymentDialog key={invoiceToPay.id} invoice={invoiceToPay} onClose={() => setInvoiceToPay(null)} onSuccess={handlePaymentSuccess} />}
+        <p className="text-sm text-muted-foreground">Nach Teilzahlungen sind Mahnaktionen bis zur Restbetragsprüfung gesperrt. Die Übersicht zeigt den verbleibenden Betrag; ungeklärte Zahlungsnachweise werden nicht als offen geschätzt.</p>
         <Dialog open={showCreateReminder && !!selectedInvoice} onOpenChange={(open) => {
           if (!open) {
             setShowCreateReminder(false);

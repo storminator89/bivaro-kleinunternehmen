@@ -8,7 +8,7 @@ type Context = { params: Promise<{ id: string }> };
 
 function errorResponse(error: unknown) {
   if (error instanceof UnauthorizedError) return unauthorizedResponse();
-  if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+  if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code, ...(error.summary ? { summary: error.summary } : {}) }, { status: error.status });
   throw error;
 }
 
@@ -34,7 +34,7 @@ async function postHandler(request: Request, context: Context) {
       if (Object.keys(input).some(key => key !== 'kind')) throw new PaymentJournalError('Legacy-Übernahme akzeptiert keine geänderten Beträge oder historischen Daten.');
       return NextResponse.json(await adoptLegacyPaidInvoice(userId, Number(id)));
     }
-    if (Object.keys(input).some(key => !['amount', 'currency', 'paidAt', 'source', 'reference', 'idempotencyKey'].includes(key))) {
+    if (Object.keys(input).some(key => !['amount', 'currency', 'paidAt', 'source', 'reference', 'idempotencyKey', 'expectedPaidCents'].includes(key))) {
       throw new PaymentJournalError('Nicht unterstützte Zahlungsfelder.');
     }
     if (input.source !== 'MANUAL') throw new PaymentJournalError('Für neue Zahlungen ist die Quelle MANUAL erforderlich.');

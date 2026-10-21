@@ -112,7 +112,7 @@ describe('QA #31: only open invoices are eligible for reminders', () => {
     // The dated compatibility service and the shared full-payment dialog both
     // preserve the reminder lifecycle after an explicit actual payment date.
     const paid = await updateInvoiceStatus('reminder-owner', invoice.id, 'PAID', '2026-10-20T12:00:00Z');
-    expect(paid.income).toMatchObject({ invoiceId: invoice.id, amount: 297.5, taxRelevant: true, customerId: customer.id });
+    expect(paid.incomes[0]).toMatchObject({ invoiceId: invoice.id, amount: 297.5, taxRelevant: true, customerId: customer.id });
     expect((await listReminders()).invoices).toEqual([]);
     expect((await listReminders()).stats).toMatchObject({ totalOverdue: 0, totalAmount: 0, totalFees: 0 });
     expect((await createReminder(invoice.id)).status).toBe(409);
@@ -138,4 +138,12 @@ describe('QA #32: internal recording and manual email copy', () => {
     expect(source).toContain("fetch('/api/reminders?includeAll=true', { cache: 'no-store' })");
     expect(source).not.toContain("JSON.stringify({ id: invoiceId, status: 'PAID' })");
   });
+});
+
+
+it('names amount-capable reminder payment actions without a misleading full-settlement promise', () => {
+  const source = readFileSync('app/dashboard/reminders/page.tsx', 'utf8');
+  expect(source).toContain('aria-label={`Zahlung für Rechnung ${invoice.invoiceNumber || invoice.fileName} erfassen`}');
+  expect(source).toContain('title="Zahlung und Restbetrag erfassen"');
+  expect(source).not.toContain('Vollständige Zahlung für Rechnung');
 });

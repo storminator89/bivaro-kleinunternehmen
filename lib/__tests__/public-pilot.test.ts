@@ -59,7 +59,11 @@ describe('public buyer and task guidance', () => {
     expect(html).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
     expect(html).toContain('Zugang verloren oder Betriebsstörung');
     expect(html).toContain('id="steuerprofil"');
-    expect(html).toContain('Ein eigenes Datumsfeld gibt es dort nicht');
+    expect(html).toContain('das tatsächliche Datum und eine nachvollziehbare Zahlungsreferenz');
+    expect(html).toContain('nach der ersten Zahlung bleiben 80 EUR offen');
+    expect(html).toContain('payments.csv');
+    expect(html).not.toContain('Ein eigenes Datumsfeld gibt es dort nicht');
+    expect(html).not.toContain('aktuellen Buchungszeitpunkt als Zahlungsdatum');
     expect(html).not.toMatch(/mailto:|tel:|kostenlos testen|rechtssicher|GoBD-konform/i);
   });
 

@@ -122,9 +122,9 @@ it.each(['PAID', 'CANCELLED'])('keeps %s when it changes while SMTP is pending a
     else await database.client.invoice.update({ where: { id: source.id }, data: { status } });
   } finally { release(); }
   await sending;
-  const saved = await database.client.invoice.findUniqueOrThrow({ where: { id: source.id }, include: { income: true } });
+  const saved = await database.client.invoice.findUniqueOrThrow({ where: { id: source.id }, include: { incomes: true } });
   expect(saved.status).toBe(status);
-  if (status === 'PAID') expect(saved.income?.amount).toBe(25);
+  if (status === 'PAID') expect(saved.incomes[0]?.amount).toBe(25);
   const event = await database.client.auditLog.findFirstOrThrow({ where: { entityId: String(source.id), action: 'EMAIL_SENT' } });
   expect(JSON.parse(event.metadata!)).toMatchObject({ statusConflict: true, observedStatus: status, resultingStatus: status });
 });

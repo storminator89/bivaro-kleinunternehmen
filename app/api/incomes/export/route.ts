@@ -94,12 +94,13 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'desc' },
       include: {
         invoice: true,
+        paymentJournalEvent: true,
         customer: true,
       },
     });
 
     const items = incomes as (Prisma.IncomeGetPayload<{
-      include: { invoice: true, customer: true }
+      include: { invoice: true, customer: true, paymentJournalEvent: true }
     }>)[];
 
     if (!items.length) {

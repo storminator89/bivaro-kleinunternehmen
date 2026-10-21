@@ -24,6 +24,7 @@ interface KpiData {
   revenueThisYear: number;
   expensesThisMonth: number;
   openInvoices: number;
+  openInvoicesReviewRequired?: number;
   totalRevenue: number;
   totalExpenses: number;
   recentActivities: Activity[];

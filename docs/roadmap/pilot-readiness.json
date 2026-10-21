@@ -695,7 +695,7 @@
       "id": "BPR-011",
       "title": "Teilzahlungen und verständlicher Restbetrag",
       "wave": 3,
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
       "size": "M",
       "user_story": "Als Inhaber möchte ich mehrere Teilzahlungen erfassen und die verbleibende Forderung sofort verstehen.",
@@ -736,7 +736,52 @@
       "ci_run_url": null,
       "browser_evidence": [],
       "definition_of_done": "GLOBAL-DOD + ticket acceptance",
-      "status_note": "Noch nicht als implementiert ausgewiesen."
+      "status_note": "21.10.2026: Implementierung auf feat/partial-payments (uncommitted, Basis 79e07e26f8696ea30a22fdda4abe182184e96df9) in Arbeit; keine Browser-/CI-Abnahme und kein Ticketabschluss behauptet.",
+      "implementation_evidence": {
+        "observed_at": "2026-10-21",
+        "git_state": "uncommitted",
+        "baseline_commit": "79e07e26f8696ea30a22fdda4abe182184e96df9",
+        "implemented_scope": [
+          "Parallele Integration mehrerer exakter positiver EUR-Zuordnungen pro gewöhnlicher Rechnung; API, UI, Restbeträge und Income-Accounting werden gemeinsam angepasst.",
+          "Backup-Schema 20261021043000_add_partial_payments; explizite Erkennung des vorherigen Vollzahlungsjournals 20261020230000_add_payment_journal und journalfreier Altformate.",
+          "Gruppierte Event-/Income-/Statusprüfung mit exakter Gesamtsummenobergrenze, ereigniseigener Betrags-/Datumsprojektion und Erhalt historischer Quelle, Datumsunsicherheit, Erstellzeit sowie Nullwerte.",
+          "Identitätsbasierter Merge über verifizierte Ereignisse/Idempotenzschlüssel, eigene Income für jede neue Zuordnung, keine zusätzliche Ereignis-Auditzeile beim Replay, Fortschreibung kompatibler Teilmengen ohne Rückschritt weiter fortgeschrittener Ziele.",
+          "Ablehnung divergierender Historien/gemeinsamer Überzahlung, abweichender Kunden-/Dokument-/Finanzdaten, mehrdeutiger journalfreier Alt-Merges in journalisierte Zielrechnungen und destruktiver Überschreibungen."
+        ],
+        "remaining_acceptance": [
+          "Finaler Integrationsreview sowie isolierte Prisma-Generierung, Lint, Typecheck und Productionbuild.",
+          "Isolierte fokussierte Prüfungen: 120 → 40 → 80, Idempotenz/Parallelität, Audit-Rollback, Perioden-/Stornobuchhaltung, historische Evidenz und Backup-Roundtrip/Replay.",
+          "Browser-ACs: Abbrechen ohne Writes, Lost-Response-Recovery, zweite/gleichartige Zahlung, Konflikt/Reload/Filter, mobile Karten und Tastaturfokus.",
+          "Commit/PR/CI/Browserbelege erst nach tatsächlichem Nachweis; kein Done-, Merge- oder Deploymentstatus."
+        ],
+        "verification": {
+          "passed": [
+            "Vorläufiger Root-Unit-Lauf am 21.10.2026: 1063 Tests bestanden, 1 Skip; kein finaler grüner Gesamtstand."
+          ],
+          "failed": [
+            "Derselbe Vorab-Lauf: 5 fehlgeschlagene Tests in 3 Dateien. Fixture- und Backend-Korrekturen wurden anschließend verfasst; ein frischer finaler Gesamtlauf steht noch aus."
+          ],
+          "not_run": [
+            "Frischer finaler Gesamt-Unit-Lauf nach sämtlichen Korrekturen; abschließende Gates einschließlich Productionbuild, Browser-ACs und CI sind nicht nachgewiesen."
+          ],
+          "preliminary_log": "/tmp/bivaro-partial-all-unit.log (lokales vorläufiges Ausführungslog; kein dauerhafter finaler Abnahmebeleg)"
+        },
+        "files": [
+          "lib/backup-manifest.ts",
+          "lib/backup-snapshot.ts",
+          "lib/backup-preview.ts",
+          "lib/backup-restore.ts",
+          "lib/__tests__/payment-journal-backup.test.ts",
+          "lib/__tests__/payment-journal-partial-backup.test.ts",
+          "lib/payment-journal/README.md"
+        ],
+        "limitations": [
+          "Merge akzeptiert nur teilgeordnet kompatible Journale; abzweigende Historien bleiben auch unterhalb der Summengrenze zur getrennten Prüfung gesperrt.",
+          "Gleicher Betrag/Datum ersetzt keine Zahlungsidentität. Altformate sind in leeren Zielen importierbar, nicht als mehrdeutiger Merge in journalisierte Rechnungen.",
+          "Erstattungen und Zahlungskorrekturen bleiben BPR-012; umfassende Mahn-/Reporting-Erweiterung bleibt BPR-013. Keine neuen Dienste oder Sicherheits-/Hoständerungen.",
+          "Konservativer Schutz für Rechnungen ohne Rechnungsnummer: Bei journalisiertem Ziel ist Zusammenführen nur mit verifizierter bestehender Zahlungsidentität erlaubt; journalfreie oder disjunkte unbekannte Historien werden abgewiesen. Leeres isoliertes Ziel bleibt importierbar."
+        ]
+      }
     },
     {
       "id": "BPR-012",

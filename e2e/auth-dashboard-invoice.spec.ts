@@ -28,6 +28,26 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/dashboard/);
 }
 
+/** Wait for the actual debounced query and its rendered result, not a row
+ * left over from the unfiltered list that may unmount during menu selection. */
+async function searchPartialInvoiceAndWait(page: Page, invoiceNumber: string) {
+  const filtered = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET' && url.pathname === '/api/invoices'
+      && url.searchParams.get('search') === invoiceNumber;
+  });
+  await page.getByLabel('Suche', { exact: true }).fill(invoiceNumber);
+  const response = await filtered;
+  expect(response.status()).toBe(200);
+  expect(await response.finished()).toBeNull();
+  const result = await response.json();
+  expect(result.total).toBe(1);
+  expect(result.items).toHaveLength(1);
+  expect(result.items[0].invoiceNumber).toBe(invoiceNumber);
+  await expect(page.getByRole('status').filter({ hasText: 'Rechnungen werden geladen…' })).toHaveCount(0);
+  await expect(page.locator('.invoice-ledger .ledger-count')).toHaveText('1');
+}
+
 async function saveFiscalProfile(page: Page, regime: 'STANDARD' | 'SMALL_BUSINESS', date: string) {
   await page.goto('/settings#fiscal-profile');
   const profile = page.locator('#fiscal-profile');
@@ -664,14 +684,14 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       const openPayment = async () => {
         if (workspace === 'dashboard') {
           const row = page.getByRole('row').filter({ hasText: invoiceNumber });
-          await row.getByRole('button', { name: 'Zahlungsstatus: Entwurf', exact: true }).click();
+          await row.getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true }).click();
           await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).click();
         } else {
           const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: invoiceNumber, exact: true }) });
           await card.getByRole('button', { name: 'Zahlung erfassen', exact: true }).focus();
           await page.keyboard.press('Enter');
         }
-        const dialog = page.getByRole('dialog', { name: 'Vollständige Zahlung erfassen', exact: true });
+        const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
         await expect(dialog).toBeVisible();
         await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toBeEnabled();
         await expect(dialog).toContainText('123,45');
@@ -786,7 +806,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
         expect(stored).toMatchObject({ canRecordPayment: false, event: { id: savedEvent!.id, incomeId: savedEvent!.incomeId, amountCents: '12345', reference: savedPayload!.reference, dateCertainty: 'ACTUAL', paidAt: '2024-12-31T00:00:00.000Z' },
           summary: { totalCents: '12345', paidCents: '12345', openCents: '0', paid: true } });
         const record = await readInvoice();
-        expect(record).toMatchObject({ status: 'PAID', paidAt: '2024-12-31T00:00:00.000Z', issuanceState: 'ISSUED', income: { id: savedEvent!.incomeId, amount: 123.45, date: '2024-12-31T00:00:00.000Z' } });
+        expect(record).toMatchObject({ status: 'PAID', paidAt: '2024-12-31T00:00:00.000Z', issuanceState: 'ISSUED', incomes: [{ id: savedEvent!.incomeId, amount: 123.45, date: '2024-12-31T00:00:00.000Z' }] });
         const incomes = await (await page.request.get(`/api/incomes?search=${invoiceNumber}&pageSize=100`)).json();
         expect(incomes.items).toHaveLength(1);
         expect(incomes.items[0]).toMatchObject({ id: savedEvent!.incomeId, invoiceId: invoice.id, amount: 123.45 });
@@ -809,6 +829,184 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await page.screenshot({ path: testInfo.outputPath(`${workspace}-payment-reloaded.png`), fullPage: false, animations: 'disabled' });
     });
   }
+
+  for (const width of [1440, 390]) {
+    test(`records two dated partial allocations and recovers only the lost pending request at ${width}px`, async ({ page }, testInfo) => {
+      test.setTimeout(90_000);
+      await signIn(page);
+      await page.setViewportSize({ width, height: 900 });
+      const invoiceNumber = `E2E-BPR011-${width}`;
+      const pdf = await PDFDocument.create(); pdf.addPage();
+      const created = await page.request.post('/api/invoices', { data: { fileName: `${invoiceNumber}.pdf`, invoiceNumber, totalAmount: 120, invoiceDate: '2026-09-01', dueDate: '2026-09-15', parsedData: { currency: 'EUR' }, pdfBytes: await pdf.saveAsBase64() } });
+      expect(created.status()).toBe(200);
+      const invoice = await created.json();
+      const paymentPath = `/api/invoices/${invoice.id}/payments`;
+      const journal = async () => (await page.request.get(paymentPath)).json();
+      await page.goto('/dashboard?tab=invoices');
+      await searchPartialInvoiceAndWait(page, invoiceNumber);
+      const record = () => width < 1280 ? page.getByRole('article').filter({ hasText: invoiceNumber }) : page.getByRole('row').filter({ hasText: invoiceNumber });
+      await expect(record()).toHaveCount(1);
+      const open = async (state: 'Offen' | 'Teilbezahlt') => {
+        await record().getByRole('button', { name: `Zahlungsstatus: ${state}`, exact: true }).click();
+        await page.getByRole('menuitem', { name: state === 'Offen' ? 'Bezahlt' : 'Weitere Zahlung erfassen', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+        await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toBeEnabled();
+        return dialog;
+      };
+      const before = await journal();
+      let dialog = await open('Offen');
+      await expect(dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true })).toHaveValue('');
+      await page.keyboard.press('Escape');
+      await expect(dialog).not.toBeVisible();
+      expect(await journal()).toEqual(before);
+      await expect(record().getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true })).toBeFocused();
+      dialog = await open('Offen');
+      await dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true }).fill('40,00');
+      await dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true }).fill('2026-09-30');
+      await dialog.getByLabel('Zahlungsreferenz', { exact: true }).fill('Synthetic first allocation');
+      let posts = 0;
+      let savedFirst: Record<string, unknown> | undefined;
+      await page.route(`**${paymentPath}`, async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        posts += 1;
+        if (posts !== 1) return route.continue();
+        savedFirst = route.request().postDataJSON();
+        const response = await route.fetch();
+        expect(response.status()).toBe(201);
+        // Real committed allocation, deliberately lost client response.
+        await route.abort('failed');
+      });
+      await dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toContainText('Keine verlässliche Speicherbestätigung');
+      await expect(dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true })).toHaveValue('40,00');
+      await dialog.getByRole('button', { name: 'Zahlungsnachweis prüfen', exact: true }).click();
+      await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
+      await expect(dialog).toContainText('Noch offen: 80,00');
+      expect(posts).toBe(1);
+      expect(savedFirst).toMatchObject({ amount: '40.00', expectedPaidCents: '0', paidAt: '2026-09-30' });
+      expect((await journal()).events).toHaveLength(1);
+      await dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
+      await page.getByRole('button', { name: 'Teilbezahlt', exact: true }).click();
+      await expect(record()).toContainText('Teilbezahlt');
+      await expect(record()).toContainText('Erhalten 40,00');
+      await expect(record()).toContainText('Offen 80,00');
+      await page.reload();
+      // Reload server state; select the explicit server-side filter again.
+      await searchPartialInvoiceAndWait(page, invoiceNumber);
+      await page.getByRole('button', { name: 'Teilbezahlt', exact: true }).click();
+      dialog = await open('Teilbezahlt');
+      await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toHaveCount(0);
+      await expect(dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true }).getByRole('listitem')).toHaveCount(1);
+      await expect(dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true })).toHaveValue('80.00');
+      await expect(dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true })).toHaveValue('');
+      await dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true }).fill('80.01');
+      await dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true }).fill('2026-10-20');
+      await dialog.getByLabel('Zahlungsreferenz', { exact: true }).fill('Synthetic settlement');
+      await dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toContainText('übersteigt');
+      expect(posts).toBe(1);
+      await dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true }).fill('80.00');
+      await dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
+      await expect(dialog).toContainText('Rechnung vollständig bezahlt.');
+      const history = dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true });
+      await expect(history.getByRole('listitem')).toHaveCount(2);
+      await expect(history).toContainText('30.09.2026'); await expect(history).toContainText('20.10.2026');
+      const ledger = await journal();
+      expect(ledger.event).toBeNull();
+      expect(ledger.events).toHaveLength(2);
+      expect(ledger.summary).toMatchObject({ paidCents: '12000', openCents: '0', paymentState: 'PAID' });
+      const incomeList = await (await page.request.get(`/api/incomes?search=${invoiceNumber}&pageSize=100`)).json();
+      expect(incomeList.items).toHaveLength(2);
+      expect(new Set(incomeList.items.map((income: { amount: number }) => income.amount))).toEqual(new Set([40, 80]));
+      await page.screenshot({ path: testInfo.outputPath(`partial-payments-${width}-two-events.png`), fullPage: false, animations: 'disabled' });
+      expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
+      await expect(page.getByLabel('Suche', { exact: true })).toHaveValue(invoiceNumber);
+      await expect(page.getByRole('button', { name: 'Teilbezahlt', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(record()).toHaveCount(0);
+      await page.getByRole('button', { name: 'Bezahlt', exact: true }).click();
+      await expect(record()).toContainText('Bezahlt');
+      // Merely opening history must not masquerade as a new saved operation.
+      await record().getByRole('button', { name: `Weitere Aktionen fuer Rechnung ${invoiceNumber}`, exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Zahlungsverlauf ansehen', exact: true }).click();
+      dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+      await expect(dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true }).getByRole('listitem')).toHaveCount(2);
+      await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toHaveCount(0);
+      await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toHaveCount(0);
+      expect(posts).toBe(2);
+    });
+  }
+
+  test('restores an uncertain request baseline after remount, then deliberately resolves a concurrent allocation', async ({ page }) => {
+    await signIn(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const invoiceNumber = 'E2E-BPR011-CONFLICT';
+    const pdf = await PDFDocument.create(); pdf.addPage();
+    const created = await page.request.post('/api/invoices', { data: { fileName: `${invoiceNumber}.pdf`, invoiceNumber, totalAmount: 120, parsedData: { currency: 'EUR' }, pdfBytes: await pdf.saveAsBase64() } });
+    const invoice = await created.json();
+    const paymentPath = `/api/invoices/${invoice.id}/payments`;
+    await page.goto('/dashboard?tab=invoices');
+    await searchPartialInvoiceAndWait(page, invoiceNumber);
+    const row = page.getByRole('row').filter({ hasText: invoiceNumber });
+    await row.getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+    let activeDialog = dialog;
+    let submit = activeDialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true });
+    await expect(submit).toBeEnabled();
+    await dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true }).fill('40.00');
+    await dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true }).fill('2026-10-19');
+    await dialog.getByLabel('Zahlungsreferenz', { exact: true }).fill('Deliberate second allocation');
+    let pendingPayload: Record<string, unknown> | undefined;
+    let retryPayload: Record<string, unknown> | undefined;
+    let posts = 0;
+    await page.route(`**${paymentPath}`, async route => {
+      if (route.request().method() !== 'POST') return route.continue();
+      posts += 1;
+      if (posts === 1) {
+        pendingPayload = route.request().postDataJSON();
+        // No server commit, but the client cannot know that this response was lost.
+        return route.abort('failed');
+      }
+      if (posts === 2) retryPayload = route.request().postDataJSON();
+      return route.continue();
+    });
+    await submit.click();
+    await expect(activeDialog.getByRole('alert')).toContainText('Keine verlässliche Speicherbestätigung');
+    await page.keyboard.press('Escape');
+    await expect(activeDialog).not.toBeVisible();
+    // An independent client books while the uncertain form is unmounted.
+
+    const concurrent = await page.request.post(paymentPath, { data: { amount: '20.00', currency: 'EUR', paidAt: '2026-10-18', source: 'MANUAL', reference: 'Concurrent independent evidence', idempotencyKey: `independent-${invoice.id}`, expectedPaidCents: '0' } });
+    expect(concurrent.status()).toBe(201);
+    await page.reload();
+    await searchPartialInvoiceAndWait(page, invoiceNumber);
+    await row.getByRole('button', { name: 'Zahlungsstatus: Teilbezahlt', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Weitere Zahlung erfassen', exact: true }).click();
+    activeDialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+    submit = activeDialog.getByRole('button', { name: /^(Zahlung verbindlich erfassen|Unverändert erneut bestätigen)$/ });
+    await expect(submit).toBeEnabled();
+    await activeDialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true }).fill('40.00');
+    await activeDialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true }).fill('2026-10-19');
+    await activeDialog.getByLabel('Zahlungsreferenz', { exact: true }).fill('Deliberate second allocation');
+    const rejected = page.waitForResponse(response => response.url().endsWith(paymentPath) && response.request().method() === 'POST' && response.status() === 409);
+    await submit.click(); await rejected;
+    expect(retryPayload).toEqual(pendingPayload);
+    expect(retryPayload?.expectedPaidCents).toBe('0');
+    await expect(dialog).toContainText('Der Saldo wurde aktualisiert');
+    await expect(dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true })).toHaveValue('40.00');
+    await expect(dialog.getByLabel('Zahlungsreferenz', { exact: true })).toHaveValue('Deliberate second allocation');
+    await expect(submit).toBeDisabled();
+    const checked = dialog.getByRole('button', { name: 'Aktuellen Restbetrag geprüft', exact: true });
+    await expect(checked).toBeEnabled();
+    let journal = await (await page.request.get(paymentPath)).json(); expect(journal.events).toHaveLength(1);
+    await checked.click(); await submit.click();
+    await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
+    journal = await (await page.request.get(paymentPath)).json();
+    expect(journal.events).toHaveLength(2); expect(journal.summary).toMatchObject({ paidCents: '6000', openCents: '6000' });
+  });
 
   test('preserves a paid invoice and hides destructive actions on desktop and mobile', async ({ page }, testInfo) => {
     await page.goto('/login');
@@ -837,7 +1035,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect(list.items).toHaveLength(1);
     expect(list.items[0]).toMatchObject({
       id: invoice.id, status: 'PAID', issuanceState: 'ISSUED',
-      income: { amount: 123.45, date: '2026-06-15T12:00:00.000Z' },
+      incomes: [{ amount: 123.45, date: '2026-06-15T12:00:00.000Z' }],
     });
     const retainedPdf = await page.request.get(`/api/invoices/download?id=${invoice.id}`);
     expect(retainedPdf.ok()).toBe(true);

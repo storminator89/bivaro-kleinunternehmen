@@ -1,3 +1,4 @@
+import type { PaymentSummary } from '@/lib/full-payment-form';
 import type { LedgerSortBy, LedgerSortOrder } from '@/lib/ledger-sort';
 // Typdefinitionen für das Dashboard
 
@@ -29,6 +30,8 @@ export type Income = {
   invoicePaidStatus?: boolean;
   invoiceStatus?: string;
   invoiceId?: number;
+  invoicePaidAt?: string | null;
+  paymentJournalEvent?: { id: number; amountCents: string; paidAt: string | null; dateCertainty: string; source: string } | null;
 };
 
 export type DashboardEditData = Omit<Partial<Expense & Income>, 'amount'> & {
@@ -56,7 +59,10 @@ export type Invoice = {
   status: string;
   issuanceState?: 'UNKNOWN' | 'UNISSUED' | 'ISSUED';
   paidAt?: string | null;
-  income?: { id: number } | null;
+  incomes?: { id: number }[];
+  paymentSummary?: PaymentSummary | null;
+  paymentReviewRequired?: boolean;
+  canRecordPayment?: boolean;
   invoiceDate?: string;
   dueDate?: string;
   validUntil?: string;
@@ -98,7 +104,7 @@ export type FilterState = {
     searchTerm: string;
   };
   invoices: {
-    paidStatus: 'all' | 'paid' | 'unpaid';
+    paidStatus: 'all' | 'paid' | 'unpaid' | 'partial';
     dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
     searchTerm: string;
     sortBy: 'date' | 'invoiceNumber' | 'amount';

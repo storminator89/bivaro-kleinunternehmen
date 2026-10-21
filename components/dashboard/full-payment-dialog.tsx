@@ -7,8 +7,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PaymentHistory } from '@/components/payments/payment-history';
 import { formatBusinessDateDisplay } from '@/lib/business-date';
-import { displayPaymentAmount, paymentAttempt, paymentFailure, paymentIdentityStorageKey, readConfirmedPayment, readPaymentPreflight, recoverConfirmedPayment, validatePaymentFields, type ConfirmedPayment, type PaymentDraft, type PaymentPreflight } from '@/lib/full-payment-form';
+import { displayPaymentAmount, paymentAttempt, paymentFailure, paymentIdentityStorageKey, paymentPendingStorageKey, paymentInputCents, readPaymentEvents, readConfirmedPayment, readPaymentPreflight, recoverConfirmedPayment, validatePaymentFields, type ConfirmedPayment, type PaymentDraft, type PaymentPreflight, type PaymentHistoryEvent } from '@/lib/full-payment-form';
 
 type Props = {
   invoice: { id: number; invoiceNumber?: string | null; fileName: string };
@@ -34,7 +35,7 @@ export function FullPaymentFields({ id, paidAt, reference, disabled, dateRef, on
   </>;
 }
 
-/** Explicit first full payment only. Never silently derive an accounting date. */
+/** Allocation entry and immutable history. Never infer evidence or saved success. */
 export function FullPaymentDialog(props: Props) {
   const { data: session } = useSession();
   const tenantId = session?.user?.id;
@@ -45,7 +46,14 @@ export function FullPaymentDialog(props: Props) {
 
 function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props & { tenantId: string }) {
   const id = useId();
+  const returnFocusRef = useRef<HTMLElement | null>(typeof document !== 'undefined' ? document.activeElement as HTMLElement | null : null);
+  const [amount, setAmount] = useState('');
   const [paidAt, setPaidAt] = useState('');
+  const [history, setHistory] = useState<PaymentHistoryEvent[]>([]);
+  const [conflict, setConflict] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const pendingKey = useRef<string | null>(null);
+  const pendingBaseline = useRef<string | null>(null);
   const [reference, setReference] = useState('');
   const attempt = useRef<PaymentDraft | null>(null);
   const [preflight, setPreflight] = useState<PaymentPreflight | null>(null);
@@ -62,12 +70,19 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
   const dateRef = useRef<HTMLInputElement>(null);
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
-  const clearIdentity = useCallback(async (payment: ConfirmedPayment) => {
-    // Derive the canonical API amount without a Number round trip.
-    const cents = BigInt(payment.amountCents);
-    const amount = `${cents / BigInt(100)}.${(cents % BigInt(100)).toString().padStart(2, '0')}`;
-    const fingerprint = JSON.stringify([invoice.id, amount, 'EUR', payment.paidAt.slice(0, 10), payment.reference.trim()]);
-    try { sessionStorage.removeItem(await paymentIdentityStorageKey(tenantId, invoice.id, fingerprint)); } catch { /* storage may be disabled */ }
+  const clearIdentity = useCallback(() => {
+    const pendingStorage = paymentPendingStorageKey(tenantId, invoice.id);
+    try {
+      const identityStorage = sessionStorage.getItem(`${pendingStorage}:identity`);
+      if (identityStorage) sessionStorage.removeItem(identityStorage);
+      sessionStorage.removeItem(pendingStorage);
+      sessionStorage.removeItem(`${pendingStorage}:identity`);
+      sessionStorage.removeItem(`${pendingStorage}:baseline`);
+    } catch { /* storage may be disabled */ }
+    attempt.current = null;
+    pendingKey.current = null;
+    pendingBaseline.current = null;
+    setUncertain(false);
   }, [invoice.id, tenantId]);
 
   useEffect(() => {
@@ -80,15 +95,27 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
         const response = await fetch(`/api/invoices/${invoice.id}/payments`, { cache: 'no-store', signal: controller.signal });
         const data: unknown = await response.json();
         if (!response.ok) throw new Error(paymentFailure(data));
-        const recovered = recoverConfirmedPayment(data, invoice.id);
+        try {
+          const storage = paymentPendingStorageKey(tenantId, invoice.id);
+          pendingKey.current ??= sessionStorage.getItem(storage);
+          const baseline = sessionStorage.getItem(`${storage}:baseline`);
+          if (baseline && /^(?:0|[1-9]\d{0,15})$/u.test(baseline) && BigInt(baseline) <= BigInt(Number.MAX_SAFE_INTEGER)) pendingBaseline.current ??= baseline;
+        } catch { /* storage may be disabled */ }
+        const events = readPaymentEvents(data);
+        if (!controller.signal.aborted) setHistory(events);
+        const recovered = recoverConfirmedPayment(data, invoice.id, pendingKey.current, attempt.current);
         if (recovered && !controller.signal.aborted) {
           setConfirmed(recovered);
-          await clearIdentity(recovered);
+          clearIdentity();
           try { await onSuccessRef.current(); } catch { if (!controller.signal.aborted) setRefreshError(true); }
           return;
         }
         const checked = readPaymentPreflight(data);
-        if (!controller.signal.aborted) setPreflight(checked);
+        if (!controller.signal.aborted) {
+          setPreflight(checked);
+          setAmount(current => current || checked.amount);
+          if (pendingKey.current) setUncertain(true);
+        }
       } catch (failure) {
         if (!controller.signal.aborted) setLoadError(failure instanceof Error ? failure.message : 'Zahlungsdaten konnten nicht geladen werden. Bitte erneut laden.');
       } finally {
@@ -96,7 +123,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
       }
     })();
     return () => controller.abort();
-  }, [invoice.id, reload, clearIdentity]);
+  }, [invoice.id, reload, clearIdentity, tenantId]);
 
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
   useEffect(() => { if (confirmed) successRef.current?.focus(); }, [confirmed]);
@@ -121,32 +148,79 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting.current || confirmed || !preflight) return;
+    if (submitting.current || confirmed || !preflight || (!preflight.canRecordPayment && !pendingKey.current) || conflict) return;
+    try { paymentInputCents(amount); } catch (failure) { setError(failure instanceof Error ? failure.message : 'Bitte Betrag prüfen.'); return; }
     const invalid = validatePaymentFields(paidAt, reference);
     if (invalid) { setError(invalid); return; }
     submitting.current = true;
     setIsSubmitting(true);
     setError(null);
     try {
-      const draft = paymentAttempt(attempt.current, invoice.id, preflight.amount, paidAt, reference, () => crypto.randomUUID());
+      const amountCents = paymentInputCents(amount);
+      if (!uncertain && BigInt(amountCents) > BigInt(preflight.summary.openCents)) {
+        setError('Der Betrag übersteigt den offenen Restbetrag. Bitte den Betrag korrigieren.');
+        return;
+      }
+      const draft = uncertain && attempt.current
+        ? attempt.current
+        : paymentAttempt(attempt.current, invoice.id, amount, paidAt, reference, () => crypto.randomUUID(), pendingKey.current ? pendingBaseline.current ?? preflight.summary.paidCents : preflight.summary.paidCents);
+      let identityStorage: string | null = null;
       try {
-        const key = await paymentIdentityStorageKey(tenantId, invoice.id, draft.fingerprint);
-        const stored = sessionStorage.getItem(key);
+        identityStorage = await paymentIdentityStorageKey(tenantId, invoice.id, draft.fingerprint);
+        const stored = sessionStorage.getItem(identityStorage);
         if (stored && /^[\da-f-]{36}$/iu.test(stored)) draft.idempotencyKey = stored;
-        sessionStorage.setItem(key, draft.idempotencyKey);
+      } catch { /* the in-memory identity remains usable */ }
+      // Never let a storage error turn an unresolved attempt into a fresh key.
+      if (pendingKey.current && pendingKey.current !== draft.idempotencyKey) {
+        setError('Eine frühere Anfrage ist noch ungeklärt. Bitte deren unveränderte Zahlungsdaten eingeben und den Zahlungsnachweis erneut prüfen; keine neue Zahlung erfassen.');
+        return;
+      }
+      try {
+        const pendingStorage = paymentPendingStorageKey(tenantId, invoice.id);
+        if (identityStorage) {
+          sessionStorage.setItem(identityStorage, draft.idempotencyKey);
+          sessionStorage.setItem(`${pendingStorage}:identity`, identityStorage);
+        }
+        sessionStorage.setItem(pendingStorage, draft.idempotencyKey);
+        // Preserve the optimistic precondition, never plaintext evidence fields.
+        sessionStorage.setItem(`${pendingStorage}:baseline`, draft.expectedPaidCents);
       } catch { /* in-memory retry identity still works when storage is disabled */ }
       attempt.current = draft;
+      pendingKey.current = draft.idempotencyKey;
+      pendingBaseline.current = draft.expectedPaidCents;
       const response = await fetch(`/api/invoices/${invoice.id}/payments`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: preflight.amount, currency: 'EUR', paidAt: draft.paidAt, source: 'MANUAL', reference: draft.reference.trim(), idempotencyKey: draft.idempotencyKey }),
+        body: JSON.stringify({ amount: draft.amount, currency: 'EUR', paidAt: draft.paidAt, source: 'MANUAL', reference: draft.reference.trim(), idempotencyKey: draft.idempotencyKey, expectedPaidCents: draft.expectedPaidCents }),
       });
       const data: unknown = await response.json();
-      if (!response.ok) { setError(paymentFailure(data)); return; }
-      const saved = readConfirmedPayment(data, draft, invoice.id, preflight.amountCents);
+      if (!response.ok) {
+        const code = data && typeof data === 'object' ? (data as { code?: string }).code : undefined;
+        if (code === 'PAYMENT_STATE_CHANGED' || code === 'PAYMENT_EXCEEDS_OPEN') {
+          clearIdentity();
+          setConflict(true);
+          setReload(value => value + 1);
+        } else if (response.status < 500 && code !== 'IDEMPOTENCY_CONFLICT') {
+          // Rejected input wrote nothing. An unchanged retry retains its UUID.
+          pendingKey.current = null;
+          pendingBaseline.current = null;
+          setUncertain(false);
+          try {
+            const key = paymentPendingStorageKey(tenantId, invoice.id);
+            sessionStorage.removeItem(key);
+            sessionStorage.removeItem(`${key}:identity`);
+            sessionStorage.removeItem(`${key}:baseline`);
+          } catch { /* in-memory identity remains available */ }
+        } else setUncertain(true);
+        setError(paymentFailure(data));
+        return;
+      }
+      const saved = readConfirmedPayment(data, draft, invoice.id);
       setConfirmed(saved);
-      await clearIdentity(saved);
+      try { setHistory(readPaymentEvents({ events: [...history, (data as { event: unknown }).event] })); } catch { /* confirmation above already verifies the saved allocation */ }
+      clearIdentity();
       await refreshLists();
     } catch (failure) {
+      setUncertain(Boolean(attempt.current));
       setError(failure instanceof Error && failure.message.startsWith('Die Speicherbestätigung') ? failure.message : 'Keine verlässliche Speicherbestätigung erhalten. Bitte unverändert erneut versuchen oder den Zahlungsnachweis prüfen. Ihre Eingaben und die Anfragekennung bleiben erhalten.');
     } finally {
       submitting.current = false;
@@ -158,12 +232,22 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
     <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg" showCloseButton={!isSubmitting}
         onOpenAutoFocus={(event) => { event.preventDefault(); dateRef.current?.focus(); }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          const previous = returnFocusRef.current;
+          if (previous?.isConnected && previous !== document.body) previous.focus();
+          else {
+            const fallback = Array.from(document.querySelectorAll<HTMLElement>(`[data-invoice-return="${invoice.id}"], #invoice-search, main button`)).find(element => element.getClientRects().length > 0 && !element.closest('[role="dialog"]'));
+            fallback?.focus();
+          }
+        }}
         onEscapeKeyDown={(event) => { if (submitting.current) event.preventDefault(); }}
         onPointerDownOutside={(event) => { if (submitting.current) event.preventDefault(); }}>
         <DialogHeader>
-          <DialogTitle>Vollständige Zahlung erfassen</DialogTitle>
+          <DialogTitle>Zahlung erfassen</DialogTitle>
           <DialogDescription className="break-words">Rechnung {invoice.invoiceNumber || invoice.fileName}. Nur bereits tatsächlich eingegangene Zahlungen erfassen; es wird kein Geld überwiesen.</DialogDescription>
         </DialogHeader>
+        <PaymentHistory events={history} />
         {confirmed ? (
           <>
             <div ref={successRef} tabIndex={-1} role="status" className="space-y-2 border-y py-4 outline-none">
@@ -171,23 +255,37 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
               <p className="text-2xl font-semibold tabular-nums">{displayPaymentAmount(confirmed.amountCents)}</p>
               <p>Tatsächliches Zahlungsdatum: <strong>{formatBusinessDateDisplay(confirmed.paidAt)}</strong></p>
               <p className="break-words text-sm">Referenz: {confirmed.reference}</p>
-              <p className="text-sm text-muted-foreground">Zahlungsnachweis #{confirmed.id} · Einnahme ist erfasst. Keine weitere Zahlung erforderlich.</p>
+              <p className="text-sm text-muted-foreground">Zahlungsnachweis #{confirmed.id} · Einnahme ist erfasst. {confirmed.summary.paid ? 'Rechnung vollständig bezahlt.' : `Noch offen: ${displayPaymentAmount(confirmed.summary.openCents)}.`}</p>
             </div>
             {refreshError && <p role="alert" className="text-sm text-destructive">Die Zahlung ist gespeichert, aber die Listen konnten nicht aktualisiert werden. Nicht erneut buchen.</p>}
             <DialogFooter>{refreshError && <Button type="button" variant="outline" className="min-h-11" onClick={() => void refreshLists()}>Listen aktualisieren</Button>}<Button type="button" className="min-h-11" disabled={isSubmitting} onClick={close}>Schließen</Button></DialogFooter>
           </>
-        ) : (
+        ) : preflight && !preflight.canRecordPayment && !pendingKey.current ? <>
+          <dl className="grid grid-cols-3 gap-3 text-sm"><div><dt>Gesamt</dt><dd>{displayPaymentAmount(preflight.summary.totalCents)}</dd></div><div><dt>Erhalten</dt><dd>{displayPaymentAmount(preflight.summary.paidCents)}</dd></div><div><dt>Noch offen</dt><dd>{displayPaymentAmount(preflight.summary.openCents)}</dd></div></dl>
+          <p className="text-sm">{preflight.summary.paid ? 'Rechnung vollständig bezahlt.' : 'Für diesen Rechnungsstatus kann keine neue Zahlung erfasst werden.'}</p>
+          <DialogFooter><Button type="button" className="min-h-11" onClick={close}>Schließen</Button></DialogFooter>
+        </> : (
           <form onSubmit={submit} className="space-y-5" aria-busy={isSubmitting}>
             <div className="border-y py-4">
-              <p className="text-sm text-muted-foreground">Vollständiger Rechnungsbetrag (EUR)</p>
-              {isLoading ? <p role="status" className="mt-2 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Betrag wird geprüft …</p> : preflight ? <p className="mt-1 text-3xl font-semibold tabular-nums">{displayPaymentAmount(preflight.amountCents)}</p> : <p className="mt-1 font-medium">Nicht buchbar</p>}
-              <p className="mt-2 text-sm text-muted-foreground">Keine Teilzahlungen, Überzahlungen oder Mahngebühren. Eine bestätigte Zahlung kann nicht zurückgesetzt werden.</p>
+              {isLoading ? <p role="status" className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Zahlungssaldo wird geprüft …</p> : preflight ? <dl className="grid grid-cols-3 gap-3 text-sm">
+                <div><dt>Gesamt</dt><dd className="font-semibold tabular-nums">{displayPaymentAmount(preflight.summary.totalCents)}</dd></div>
+                <div><dt>Erhalten</dt><dd className="font-semibold tabular-nums">{displayPaymentAmount(preflight.summary.paidCents)}</dd></div>
+                <div><dt>Noch offen</dt><dd className="font-semibold tabular-nums">{displayPaymentAmount(preflight.summary.openCents)}</dd></div>
+              </dl> : <p className="font-medium">Nicht buchbar</p>}
+              <p className="mt-2 text-sm text-muted-foreground">Teilzahlungen sind möglich, Überzahlungen und Mahngebühren nicht. Bestätigte Zahlungen bleiben unveränderlich erhalten.</p>
+            </div>
+            {uncertain && <p role="status" className="text-sm">Eine Anfrage ist noch ungeklärt. Nur unverändert wiederholen oder den Zahlungsnachweis prüfen; keine neue Zahlung erfassen.</p>}
+            <div className="space-y-2">
+              <Label htmlFor={`${id}-amount`}>Eingegangener Betrag (EUR)</Label>
+              <Input id={`${id}-amount`} inputMode="decimal" autoComplete="off" required value={amount} disabled={isSubmitting || (uncertain && Boolean(attempt.current))} aria-describedby={`${id}-amount-help`} onChange={event => { setAmount(event.target.value); setError(null); }} />
+              <p id={`${id}-amount-help`} className="text-sm text-muted-foreground">Exakter Betrag laut Zahlungsnachweis, z. B. 40,00.</p>
             </div>
             {loadError && <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{loadError}</p><Button type="button" variant="outline" className="min-h-11" onClick={reloadPaymentData}>Zahlungsdaten erneut laden</Button></div>}
-            <FullPaymentFields id={id} paidAt={paidAt} reference={reference} disabled={isSubmitting} dateRef={dateRef}
+            <FullPaymentFields id={id} paidAt={paidAt} reference={reference} disabled={isSubmitting || (uncertain && Boolean(attempt.current))} dateRef={dateRef}
               onDateChange={value => { setPaidAt(value); setError(null); }} onReferenceChange={value => { setReference(value); setError(null); }} />
             {error && <div className="space-y-3"><p ref={errorRef} tabIndex={-1} role="alert" className="text-sm text-destructive outline-none">{error}</p><Button type="button" variant="outline" className="min-h-11" disabled={isSubmitting} onClick={reloadPaymentData}>Zahlungsnachweis prüfen</Button></div>}
-            <DialogFooter><Button type="button" variant="outline" className="min-h-11" disabled={isSubmitting} onClick={close}>Abbrechen</Button><Button type="submit" className="min-h-11" disabled={isLoading || !preflight || isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isSubmitting ? 'Wird gespeichert …' : 'Zahlung verbindlich erfassen'}</Button></DialogFooter>
+            {conflict && <div className="space-y-2 rounded-md border p-3"><p className="text-sm">Der Saldo wurde aktualisiert; Ihre Zahlungsdaten wurden nicht verändert. Bitte Betrag und Nachweis erneut prüfen.</p><Button type="button" variant="outline" disabled={isLoading || !preflight} onClick={() => { setConflict(false); setError(null); }}>Aktuellen Restbetrag geprüft</Button></div>}
+            <DialogFooter><Button type="button" variant="outline" className="min-h-11" disabled={isSubmitting} onClick={close}>Abbrechen</Button><Button type="submit" className="min-h-11" disabled={isLoading || !preflight || (!preflight.canRecordPayment && !pendingKey.current) || isSubmitting || conflict}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isSubmitting ? 'Wird gespeichert …' : uncertain ? 'Unverändert erneut bestätigen' : 'Zahlung verbindlich erfassen'}</Button></DialogFooter>
           </form>
         )}
       </DialogContent>

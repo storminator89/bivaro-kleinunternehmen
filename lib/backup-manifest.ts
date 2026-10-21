@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
-export const CURRENT_SCHEMA_VERSION = '20261020230000_add_payment_journal';
+export const CURRENT_SCHEMA_VERSION = '20261021043000_add_partial_payments';
+/** Full-payment journal snapshots retain their immutable evidence semantics. */
+export const FULL_PAYMENT_JOURNAL_SCHEMA_VERSION = '20261020230000_add_payment_journal';
 /** Supplier booking existed before the additive immutable payment journal. */
 export const PRE_PAYMENT_JOURNAL_SCHEMA_VERSION = '20261020223000_add_suppliers_and_purchase_booking';
 /** Incoming originals existed before supplier selection and expense approval. */
@@ -13,6 +15,16 @@ export const PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION = '20261020213000_add_fiscal_
 export const PRE_FISCAL_PROFILE_SCHEMA_VERSION = '20260922100000_add_billing_notes';
 /** v3 manifests produced before BillingNote was introduced remain importable. */
 export const PRE_BILLING_NOTES_SCHEMA_VERSION = '20260919100000_invoice_issuance_state';
+
+/** Capabilities are explicit: a non-current schema may already contain a journal. */
+const JOURNAL_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, FULL_PAYMENT_JOURNAL_SCHEMA_VERSION];
+const SUPPLIER_SCHEMAS: readonly string[] = [...JOURNAL_SCHEMAS, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION];
+const PURCHASE_DOCUMENT_SCHEMAS: readonly string[] = [...SUPPLIER_SCHEMAS, PRE_SUPPLIERS_SCHEMA_VERSION];
+const SUPPORTED_SCHEMAS: readonly string[] = [...PURCHASE_DOCUMENT_SCHEMAS, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, PRE_FISCAL_PROFILE_SCHEMA_VERSION, PRE_BILLING_NOTES_SCHEMA_VERSION];
+
+export function backupSchemaSupportsPaymentJournal(schemaVersion: string): boolean {
+  return JOURNAL_SCHEMAS.includes(schemaVersion);
+}
 
 export type BackupCoverageMode = 'included' | 'metadata-only' | 'excluded';
 
@@ -215,7 +227,7 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (value.format !== 'bivaro-backup' || value.version !== CURRENT_BACKUP_VERSION) {
     throw new Error('Nicht unterstützte Backup-Manifest-Version');
   }
-  if (![CURRENT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, PRE_FISCAL_PROFILE_SCHEMA_VERSION, PRE_BILLING_NOTES_SCHEMA_VERSION].includes(value.schemaVersion!) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
+  if (!SUPPORTED_SCHEMAS.includes(value.schemaVersion!) || typeof value.backupId !== 'string' || typeof value.sourceUserId !== 'string' || typeof value.generatedAt !== 'string') {
     throw new Error('Backup-Manifest enthält keine gültige Herkunft');
   }
   if (value.excludesSecrets !== true || !Array.isArray(value.excludedSecretFields) || !value.excludedSecretFields.includes('User.password') || !value.excludedSecretFields.includes('ApiKey.keyHash') || !value.excludedSecretFields.includes('ApiKey.secret') || !Array.isArray(value.rekeyRequired) || !value.rekeyRequired.includes('ApiKey')) {
@@ -224,17 +236,17 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (!Array.isArray(value.modelCoverage)) throw new Error('Backup-Manifest enthält keine Modellabdeckung');
   const expectedCoverage = COVERAGE.filter((entry) =>
     (value.schemaVersion !== PRE_BILLING_NOTES_SCHEMA_VERSION || entry.model !== 'BillingNote')
-    && ([CURRENT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION].includes(value.schemaVersion!) || entry.model !== 'PurchaseDocument')
-    && ([CURRENT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION].includes(value.schemaVersion!) || entry.model !== 'Supplier')
-    && (value.schemaVersion === CURRENT_SCHEMA_VERSION || entry.model !== 'PaymentJournalEvent'));
-  if (![CURRENT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION].includes(value.schemaVersion!) && coverageCount(data, 'purchaseDocuments') > 0) {
+    && (PURCHASE_DOCUMENT_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'PurchaseDocument')
+    && (SUPPLIER_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'Supplier')
+    && (backupSchemaSupportsPaymentJournal(value.schemaVersion!) || entry.model !== 'PaymentJournalEvent'));
+  if (!PURCHASE_DOCUMENT_SCHEMAS.includes(value.schemaVersion!) && coverageCount(data, 'purchaseDocuments') > 0) {
     throw new Error('Ein altes Backup-Manifest darf keine ungebundenen Eingangsbelege enthalten');
   }
-  if (![CURRENT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION].includes(value.schemaVersion!) && (coverageCount(data, 'suppliers') > 0
+  if (!SUPPLIER_SCHEMAS.includes(value.schemaVersion!) && (coverageCount(data, 'suppliers') > 0
     || (Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some((item) => item && typeof item === 'object' && ((item as Record<string, unknown>).supplierId != null || (item as Record<string, unknown>).selectedSupplierSnapshot != null))))) {
     throw new Error('Ein altes Backup-Manifest darf keine ungebundenen Lieferanten oder Lieferantenauswahlen enthalten');
   }
-  if (value.schemaVersion !== CURRENT_SCHEMA_VERSION && coverageCount(data, 'paymentJournalEvents') > 0) {
+  if (!backupSchemaSupportsPaymentJournal(value.schemaVersion!) && coverageCount(data, 'paymentJournalEvents') > 0) {
     throw new Error('Ein altes Backup-Manifest darf keine ungebundenen Zahlungsereignisse enthalten');
   }
   if (value.schemaVersion === PRE_BILLING_NOTES_SCHEMA_VERSION && coverageCount(data, 'billingNotes') > 0) {

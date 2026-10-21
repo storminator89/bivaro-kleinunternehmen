@@ -1,3 +1,4 @@
+import { ledgerSummary } from '@/lib/payment-journal/service';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
@@ -38,8 +39,10 @@ export async function GET(request: Request) {
       where: whereClause,
       include: {
         customer: true,
-        income: {
+        paymentJournalEvents: { orderBy: { id: 'asc' } },
+        incomes: {
           include: {
+            cashTransaction: true,
             customer: true
           }
         },
@@ -52,6 +55,9 @@ export async function GET(request: Request) {
 
     // Rechnungen mit zusätzlichen Infos anreichern
     const enrichedInvoices = invoices.map(invoice => {
+      let summary = null;
+      try { summary = ledgerSummary(invoice); } catch { /* Explicit review, no guessed balance. */ }
+      const canCreateReminder = !!summary && summary.paymentState === 'OPEN';
       const latestReminder = invoice.reminders[0];
       const currentLevel = latestReminder ? latestReminder.reminderLevel : 0;
       const nextLevel = Math.min(currentLevel + 1, 4);
@@ -68,11 +74,15 @@ export async function GET(request: Request) {
       const totalFees = invoice.reminders.reduce((sum, r) => sum + (r.fee || 0), 0);
 
       // Kunde aus direkter Relation oder über Income holen
-      const customer = invoice.customer || invoice.income?.customer || null;
+      const customer = invoice.customer || (invoice.incomes.length === 1 ? invoice.incomes[0].customer : null);
 
       return {
         ...invoice,
         customer, // Kunde überschreiben mit dem gefundenen
+        paymentSummary: summary,
+        openAmount: summary ? Number(summary.openCents) / 100 : null,
+        canCreateReminder,
+        paymentReviewRequired: summary === null,
         currentReminderLevel: currentLevel,
         nextReminderLevel: nextLevel,
         nextReminderLevelLabel: REMINDER_LEVELS[nextLevel as keyof typeof REMINDER_LEVELS] || 'Zahlungserinnerung',
@@ -85,7 +95,7 @@ export async function GET(request: Request) {
     // Statistiken berechnen
     const stats = {
       totalOverdue: enrichedInvoices.filter(i => i.isOverdue).length,
-      totalAmount: enrichedInvoices.filter(i => i.isOverdue).reduce((sum, i) => sum + (i.totalAmount || 0), 0),
+      totalAmount: enrichedInvoices.filter(i => i.isOverdue).reduce((sum, i) => sum + (i.openAmount ?? 0), 0),
       totalFees: enrichedInvoices.reduce((sum, i) => sum + i.totalFees, 0),
       byLevel: {
         0: enrichedInvoices.filter(i => i.currentReminderLevel === 0 && i.isOverdue).length,
@@ -119,7 +129,7 @@ async function postHandler(request: Request) {
     // Prüfen, ob Rechnung existiert und dem User gehört
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, userId },
-      include: { reminders: { orderBy: { sentAt: 'desc' }, take: 1 } }
+      include: { paymentJournalEvents: true, incomes: true, reminders: { orderBy: { sentAt: 'desc' }, take: 1 } }
     });
 
     if (!invoice) {
@@ -128,6 +138,10 @@ async function postHandler(request: Request) {
 
     if (invoice.type !== 'INVOICE' || ['PAID', 'CANCELLED'].includes(invoice.status)) {
       return NextResponse.json({ error: 'Mahnungen können nur für offene Rechnungen erfasst werden' }, { status: 409 });
+    }
+
+    if (invoice.paymentJournalEvents.length > 0 || invoice.incomes.length > 0 || invoice.paidAt) {
+      return NextResponse.json({ error: 'Mahnungen nach Zahlungseingang sind bis zur Restbetragsprüfung gesperrt.', code: 'PAYMENT_REVIEW_REQUIRED' }, { status: 409 });
     }
 
     // Nächste Mahnstufe bestimmen

@@ -1,5 +1,6 @@
 import {
   CURRENT_BACKUP_VERSION,
+  backupSchemaSupportsPaymentJournal,
   LEGACY_BACKUP_VERSION,
   manifestWarning,
   validateBackupManifest,
@@ -100,6 +101,12 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     warnings.push(manifestWarning(LEGACY_BACKUP_VERSION)!);
   } else {
     warnings.push(`Backup-Version ${candidate.version} kann inkompatibel sein.`);
+  }
+  if (manifest && !backupSchemaSupportsPaymentJournal(manifest.schemaVersion)) {
+    warnings.push('Dieses Backup enthält keine Zahlungsidentitäten. Zusammenführen mit bereits journalisierten Rechnungen ist nicht sicher; hierfür ein leeres Ziel verwenden.');
+  }
+  if (Array.isArray(data.paymentJournalEvents) && data.paymentJournalEvents.some((event) => event && typeof event === 'object' && (event as Record<string, unknown>).dateCertainty !== 'ACTUAL')) {
+    warnings.push('Historische Zahlungsnachweise behalten ihre ursprüngliche Datumsunsicherheit; fehlende Einnahmen oder Daten werden nicht ergänzt.');
   }
   if (counts.purchaseDocuments > 0 && candidate.type !== 'full') {
     warnings.push('Eingangsbeleg-Originale sind im JSON-Backup nicht eingebettet. Zum Wiederherstellen ist ein vollständiges ZIP-Backup erforderlich.');

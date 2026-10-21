@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { inTransaction } from '@/lib/db-transaction';
-import { getRawEInvoiceXml } from '@/lib/e-invoice-parser';
+import { getEInvoiceBookingRejection, getRawEInvoiceXml } from '@/lib/e-invoice-parser';
 import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
 import {
   isFiniteNumber,
@@ -14,6 +14,7 @@ import {
   MAX_INVOICE_UPLOAD_BYTES,
   MAX_JSON_REQUEST_BYTES,
 } from '@/lib/resource-limits';
+import { ledgerSummary } from '@/lib/payment-journal/service';
 import { PaymentJournalError } from '@/lib/payment-journal/contract';
 import { deleteInvoice, InvoicePaymentError, updateInvoiceStatus } from '@/lib/invoice-payments';
 
@@ -167,8 +168,8 @@ export async function GET(request: Request) {
 
     const where: Prisma.InvoiceWhereInput = { userId, type: { not: 'QUOTE' } };
 
-    if (paidStatus === 'paid') where.status = 'PAID';
-    if (paidStatus === 'unpaid') where.status = { not: 'PAID' };
+    // Financial filters are applied to the validated complete ledger below,
+    // before pagination and count. A partial allocation is never fully paid.
 
     if (dateRange && dateRange !== 'all') {
       const now = new Date();
@@ -209,8 +210,7 @@ export async function GET(request: Request) {
       ];
     }
 
-    const [items, total] = await Promise.all([
-      prisma.invoice.findMany({
+    const items = await prisma.invoice.findMany({
         where,
         orderBy: { uploadedAt: 'desc' },
         select: {
@@ -233,21 +233,47 @@ export async function GET(request: Request) {
           convertedFromQuoteId: true,
           customerId: true,
           userId: true,
-          income: true,
+          incomes: { include: { cashTransaction: true } },
+          paymentJournalEvents: { orderBy: { id: 'asc' } },
+          customer: { select: { id: true, name: true, userId: true } },
         },
-        skip,
-        take: pageSize,
-      }),
-      prisma.invoice.count({ where }),
-    ]);
+      });
 
-    const itemsWithCapabilities = items.map(({ parsedData, ...invoice }) => ({
-      ...invoice,
-      hasEInvoiceXml: Boolean(getRawEInvoiceXml(parsedData)),
-      hasPdfFile: isPdfFile(invoice.fileName) || isPdfFile(invoice.storedFileName),
+    const checkedItems = await Promise.all(items.map(async ({ parsedData, paymentJournalEvents, incomes, customer, ...invoice }) => {
+      let summary: ReturnType<typeof ledgerSummary> | null = null;
+      let paymentReviewRequired = false;
+      let canRecordPayment = false;
+      if (invoice.type === 'INVOICE') {
+        try {
+          summary = ledgerSummary({ ...invoice, parsedData, paymentJournalEvents, incomes });
+          if (customer && customer.userId !== userId) throw new Error('Invalid customer ownership');
+          const currency = parsedData && typeof parsedData === 'object' && !Array.isArray(parsedData) ? parsedData.currency : null;
+          if (currency != null && currency !== 'EUR') throw new Error('Unsupported currency');
+          if (await getEInvoiceBookingRejection(parsedData)) throw new Error('Unsupported invoice evidence');
+          canRecordPayment = !summary.paid && ['DRAFT', 'SENT'].includes(invoice.status);
+        } catch {
+          summary = null;
+          paymentReviewRequired = true;
+        }
+      }
+      return {
+        ...invoice,
+        incomes: incomes.map(income => ({ id: income.id, amount: income.amount, date: income.date })),
+        customer: customer && customer.userId === userId ? { id: customer.id, name: customer.name } : null,
+        paymentSummary: summary,
+        paymentReviewRequired,
+        canRecordPayment,
+        hasEInvoiceXml: Boolean(getRawEInvoiceXml(parsedData)),
+        hasPdfFile: isPdfFile(invoice.fileName) || isPdfFile(invoice.storedFileName),
+      };
     }));
-
-    return NextResponse.json({ items: itemsWithCapabilities, total, page, pageSize });
+    const filtered = checkedItems.filter(invoice => {
+      if (paidStatus === 'paid') return invoice.paymentSummary?.paid === true;
+      if (paidStatus === 'unpaid') return invoice.status !== 'CANCELLED' && invoice.paymentSummary?.paid === false;
+      if (paidStatus === 'partial') return invoice.paymentSummary?.paymentState === 'PARTIAL';
+      return true;
+    });
+    return NextResponse.json({ items: filtered.slice(skip, skip + pageSize), total: filtered.length, page, pageSize });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();

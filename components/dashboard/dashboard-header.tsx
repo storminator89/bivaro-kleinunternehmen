@@ -19,6 +19,7 @@ interface KpiData {
   revenueThisYear: number;
   expensesThisMonth: number;
   openInvoices: number;
+  openInvoicesReviewRequired?: number;
   totalRevenue: number;
   totalExpenses: number;
   recentActivities: Activity[];
@@ -53,6 +54,7 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
   }, []);
 
   // Berechne zusätzliche Metriken
+  const reviewCount = data.openInvoicesReviewRequired ?? 0;
   const profit = data.totalRevenue - data.totalExpenses;
   const comparison = data.yearComparison;
   const revenue = comparison?.revenueThisYearToDate ?? data.totalRevenue;
@@ -80,8 +82,9 @@ export function DashboardHeader({ data }: DashboardHeaderProps) {
         <MetricCard title="Einnahmen" amount={revenue} icon="tile-incomes" period={period} previous={comparison?.revenueLastYearToDate} href="/dashboard?tab=incomes" series={comparison?.monthlyDataThisYear.map(month => month.revenue)} />
         <MetricCard title="Ausgaben" amount={expenses} icon="tile-expenses" tone="critical" period={period} previous={comparison?.expensesLastYearToDate} positiveIsGood={false} href="/dashboard?tab=expenses" series={comparison?.monthlyDataThisYear.map(month => month.expenses)} />
         <MetricCard title="Gewinn" amount={revenue - expenses} icon="tile-profit" period={period} previous={comparison ? comparison.revenueLastYearToDate - comparison.expensesLastYearToDate : undefined} href="/dashboard?tab=eur" />
-        <MetricCard title="Offene Rechnungen" amount={data.openInvoices} icon="tile-open-invoices" tone="notice" period="Aktuell ausstehender Betrag" href="/dashboard?tab=invoices" />
+        <MetricCard title="Offene Rechnungen" amount={data.openInvoices} icon="tile-open-invoices" tone="notice" period={reviewCount > 0 ? "Bestätigter offener Teilbetrag" : "Aktuell ausstehender Betrag"} href="/dashboard?tab=invoices" />
       </div>
+      {reviewCount > 0 && <p role="status" className="rounded-lg border border-caution/40 bg-caution-surface p-3 text-sm text-caution-foreground">Der angezeigte offene Betrag enthält nur geprüfte Salden. {reviewCount} {reviewCount === 1 ? 'Rechnung mit ungeklärtem Zahlungsstand ist' : 'Rechnungen mit ungeklärtem Zahlungsstand sind'} nicht enthalten; der gesamte offene Betrag ist noch unbekannt.</p>}
       <section className="dashboard-context" aria-labelledby="dashboard-overview-title">
         <button type="button" className="dashboard-context-toggle" onClick={() => {
           const next = !isExpanded;

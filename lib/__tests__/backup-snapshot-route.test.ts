@@ -157,9 +157,9 @@ describe('full backup snapshot route', () => {
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('ZIP-Gate wurde nicht erreicht')), 5_000)),
       ]);
       await applyPayment(control.userId, source.invoice.id);
-      const sourceAfter = await database.client.invoice.findUniqueOrThrow({ where: { id: source.invoice.id }, include: { income: true } });
+      const sourceAfter = await database.client.invoice.findUniqueOrThrow({ where: { id: source.invoice.id }, include: { incomes: true } });
       expect(sourceAfter.status).toBe('PAID');
-      expect(sourceAfter.income?.amount).toBe(20);
+      expect(sourceAfter.incomes[0]?.amount).toBe(20);
       expect((await database.client.invoiceNumberCounter.findUniqueOrThrow({ where: { userId_type_year: { userId: control.userId, type: 'INVOICE', year: 2026 } } })).value).toBe(21);
       control.release?.();
       const response = await exportPromise;
