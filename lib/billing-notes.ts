@@ -1,3 +1,4 @@
+import { durationToQuantity, parseManualDuration, ServiceDurationError } from '@/lib/service-duration';
 import { Prisma } from '@prisma/client';
 import { parseBusinessDate, BusinessDateError } from '@/lib/business-date';
 import type { ParsedEInvoiceLineItem } from '@/lib/e-invoice-parser';
@@ -11,7 +12,7 @@ export const NOTE_VISIBILITIES = ['EDITOR', 'SEND', 'BOTH'] as const;
 export type NoteVisibility = typeof NOTE_VISIBILITIES[number];
 
 export class BillingNoteInputError extends Error {
-  constructor(message: string, public readonly status = 400) {
+  constructor(message: string, public readonly status = 400, public readonly code?: string) {
     super(message);
     this.name = 'BillingNoteInputError';
   }
@@ -59,19 +60,37 @@ export function parseBillingNoteInput(input: Record<string, unknown>) {
     throw error;
   }
 
-  const quantityValue = input.quantity === undefined ? 1 : input.quantity;
+  let durationMinutes: number | null = null;
+  if (input.duration !== undefined && input.duration !== null) {
+    try { durationMinutes = parseManualDuration(input.duration); }
+    catch (error) {
+      if (error instanceof ServiceDurationError) throw new BillingNoteInputError(error.message);
+      throw error;
+    }
+  }
+  // durationMinutes is an output/storage field, never a second input convention.
+  if (Object.hasOwn(input, 'durationMinutes')) throw new BillingNoteInputError('Dauer ausschließlich als HH:MM übergeben.');
+  const canonicalQuantity = durationMinutes === null ? null : durationToQuantity(durationMinutes);
+  const quantityValue = input.quantity === undefined ? (canonicalQuantity ?? 1) : input.quantity;
   const quantity = typeof quantityValue === 'number'
     ? quantityValue
     : (typeof quantityValue === 'string' && quantityValue.trim() ? Number(quantityValue) : NaN);
   if (!Number.isFinite(quantity) || quantity <= 0) throw new BillingNoteInputError('Menge muss eine endliche Zahl größer als 0 sein');
   if (quantity > Number.MAX_SAFE_INTEGER) throw new BillingNoteInputError('Menge ist zu groß');
+  const unit = boundedText(input.unit === undefined ? 'Stunde' : input.unit, 'Einheit', MAX_BILLING_NOTE_UNIT_LENGTH);
+  if (durationMinutes !== null && (quantity !== canonicalQuantity || unit !== 'Stunde')) {
+    throw new BillingNoteInputError('Dauer muss zur gerundeten Stundenmenge und zur Einheit Stunde passen.');
+  }
+  const projectId = input.projectId == null ? null : parsePositiveId(input.projectId, 'Projekt-ID');
 
   return {
     customerId: parseCustomerId(input.customerId),
     serviceDate,
     description: boundedText(input.description, 'Beschreibung', MAX_BILLING_NOTE_DESCRIPTION_LENGTH),
     quantity,
-    unit: boundedText(input.unit === undefined ? 'Stunde' : input.unit, 'Einheit', MAX_BILLING_NOTE_UNIT_LENGTH),
+    unit,
+    durationMinutes,
+    projectId,
   };
 }
 
@@ -142,7 +161,7 @@ export async function claimBillingNotesForInvoice(
   if (new Set(ids).size !== ids.length) throw new BillingNoteClaimError('Leistungsnotizen dürfen nicht doppelt angegeben werden', 400);
 
   const notes = await tx.billingNote.findMany({ where: { id: { in: ids }, userId: options.userId } });
-  if (notes.length !== ids.length) throw new BillingNoteClaimError('Leistungsnotiz nicht gefunden', 404);
+  if (notes.length !== ids.length || notes.some(note => note.deletedAt !== null)) throw new BillingNoteClaimError('Leistungsnotiz nicht gefunden', 404);
   if (notes.some(note => note.customerId !== options.customerId)) {
     throw new BillingNoteClaimError('Leistungsnotiz und Rechnung gehören zu unterschiedlichen Kunden', 409);
   }
@@ -160,7 +179,7 @@ export async function claimBillingNotesForInvoice(
   }
 
   const claimed = await tx.billingNote.updateMany({
-    where: { id: { in: ids }, userId: options.userId, customerId: options.customerId, invoiceId: null },
+    where: { id: { in: ids }, userId: options.userId, customerId: options.customerId, invoiceId: null, deletedAt: null },
     data: { invoiceId: options.invoiceId },
   });
   if (claimed.count !== ids.length) {

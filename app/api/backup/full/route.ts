@@ -167,6 +167,7 @@ export async function GET() {
         customers: count('customers'),
         suppliers: count('suppliers'),
         serviceArticles: count('serviceArticles'),
+        serviceProjects: count('serviceProjects'),
         billingNotes: count('billingNotes'),
         templates: count('templates'),
         recurringExpenses: count('recurringExpenses'),
@@ -211,6 +212,7 @@ export async function GET() {
         customersCount: count('customers'),
         suppliersCount: count('suppliers'),
         serviceArticlesCount: count('serviceArticles'),
+        serviceProjectsCount: count('serviceProjects'),
         billingNotesCount: count('billingNotes'),
       },
     });

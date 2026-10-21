@@ -135,7 +135,7 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     await page.keyboard.press('Space'); await expect(declaration).toBeChecked();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
-    expect(await page.evaluate(id => { const active = document.activeElement; return active instanceof HTMLElement && active.getClientRects().length > 0 && !active.closest('[role="dialog"], [role="menu"]') && (active.getAttribute('aria-label') === 'Weitere Aktionen fuer Rechnung ADJUSTMENT-UI-MOBILE-120' || active.dataset.invoicePaymentReturn === String(id) || active.dataset.invoiceReturn === String(id)); }, invoice.id)).toBe(true);
+    await expect.poll(() => page.evaluate(id => { const active = document.activeElement; return active instanceof HTMLElement && active.getClientRects().length > 0 && !active.closest('[role="dialog"], [role="menu"]') && (active.getAttribute('aria-label') === 'Weitere Aktionen fuer Rechnung ADJUSTMENT-UI-MOBILE-120' || active.dataset.invoicePaymentReturn === String(id) || active.dataset.invoiceReturn === String(id)); }, invoice.id)).toBe(true);
     expect(await snapshot(userId, invoice.id)).toEqual(before);
 
     dialog = await openJournalWithKeyboard(page, invoiceNumber);
