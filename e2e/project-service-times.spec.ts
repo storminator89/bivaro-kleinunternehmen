@@ -118,7 +118,7 @@ test('manual project time stays explicit through filters, cancel, retry, invoice
   await dialog.getByLabel('Projekt', { exact: true }).selectOption('');
   await dialog.getByLabel('Beschreibung', { exact: true }).fill('SYNTHETISCH · Freie Menge');
   await dialog.getByLabel('Leistungsdatum', { exact: true }).fill('2026-10-21');
-  await dialog.getByLabel('Menge', { exact: true }).fill('1.5');
+  await dialog.getByRole('spinbutton', { name: 'Menge', exact: true }).fill('1.5');
   await dialog.getByLabel('Einheit', { exact: true }).selectOption('Stunde');
   await dialog.getByRole('button', { name: /Leistungsnotiz hinzufügen/ }).click();
   await expect(dialog.getByRole('heading', { name: 'SYNTHETISCH · Freie Menge', exact: true })).toBeVisible();

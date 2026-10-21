@@ -1373,7 +1373,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/customers');
     await page.getByRole('button', { name: `Leistungsnotizen für ${customerName}` }).click();
-    await expect(page.getByText('Rechnung zugeordnet', { exact: true })).toBeVisible();
+    await expect(page.getByRole('article').filter({ hasText: 'Serverwartung' }).getByText('Rechnung zugeordnet', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Leistungsnotiz Serverwartung löschen' })).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('dialog').screenshot({ path: testInfo.outputPath('billing-notes-reserved.png') });
