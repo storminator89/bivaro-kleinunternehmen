@@ -1,0 +1,2 @@
+-- Explicit capability identity combining project/service capture with durable manual outbox.
+-- Both models are introduced by their preceding independent migrations.

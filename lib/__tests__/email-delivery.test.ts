@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { attachmentSha256 } from '@/lib/email-outbox';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -12,11 +14,14 @@ vi.mock('@/lib/get-user-id', () => ({
   requireUserId: async () => 'mail-owner', UnauthorizedError: class extends Error {},
   unauthorizedResponse: () => new Response(null, { status: 401 }),
 }));
-import { buildDocumentEmailDraft, sendDocumentEmail } from '@/lib/email';
+import { buildDocumentEmailDraft, sendDocumentEmail as durableSendDocumentEmail, type SendEmailRequest } from '@/lib/email';
 import { deleteSmtpSettings, saveSmtpSettings } from '@/lib/smtp-settings';
 import { recordDocumentDelivery } from '@/lib/email-delivery';
 import { updateInvoiceStatus } from '@/lib/invoice-payments';
 import { POST as sendRoute } from '@/app/api/email/send/route';
+
+const syntheticHash = attachmentSha256(Buffer.from('synthetic attachment'));
+const sendDocumentEmail = async (userId: string, request: Omit<SendEmailRequest, 'requestId' | 'attachmentSha256'>) => { const draft = await buildDocumentEmailDraft(userId, request); return durableSendDocumentEmail(userId, { ...request, requestId: randomUUID(), attachmentSha256: syntheticHash, reviewedFrom: draft.from, reviewedReplyTo: draft.replyTo || null }); };
 
 let database: ReturnType<typeof createTestDatabase>;
 let directory: string;
@@ -156,7 +161,7 @@ it('rejects a foreign owner without altering or acknowledging their document', a
   expect(await database.client.auditLog.count({ where: { entityId: String(source.id) } })).toBe(0);
 });
 
-it('reports SMTP acceptance explicitly when the acknowledgement cannot be stored', async () => {
+it('persists SMTP acceptance even when the invoice acknowledgement audit cannot be stored', async () => {
   const source = await invoice();
   state.send.mockResolvedValueOnce({ messageId: 'accepted-but-unrecorded' });
   const callsBefore = state.send.mock.calls.length;
@@ -164,10 +169,10 @@ it('reports SMTP acceptance explicitly when the acknowledgement cannot be stored
   try {
     const response = await sendRoute(new Request('http://localhost/api/email/send', { method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: source.id, documentType: 'invoice', to: 'recipient@test.invalid', subject: 'Test', text: 'Synthetic test' }),
+      body: JSON.stringify({ reviewedFrom: 'sender@test.invalid', reviewedReplyTo: null, requestId: randomUUID(), attachmentSha256: syntheticHash, id: source.id, documentType: 'invoice', to: 'recipient@test.invalid', subject: 'Test', text: 'Synthetic test' }),
     }));
-    expect(response.status).toBe(502);
-    expect(await response.json()).toMatchObject({ code: 'DELIVERY_RECORDING_FAILED', smtpAccepted: true, retryUnsafe: true });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ outbox: { state: 'ACCEPTED', messageId: 'accepted-but-unrecorded' }, warning: expect.any(String) });
     expect(state.send.mock.calls.length - callsBefore).toBe(1);
     expect(await database.client.invoice.findUniqueOrThrow({ where: { id: source.id } })).toMatchObject({ status: 'DRAFT', issuanceState: 'ISSUED' });
   } finally { await database.client.$executeRawUnsafe('DROP TRIGGER fail_delivery_response'); }

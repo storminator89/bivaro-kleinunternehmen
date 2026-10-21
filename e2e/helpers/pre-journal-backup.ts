@@ -17,6 +17,6 @@ export function preJournalBackup(version: '2.0' | '3.0', invoiceNumber: string |
   const manifest = createBackupManifest({ sourceUserId, generatedAt: '2025-03-18T00:00:00.000Z', data });
   manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
   // This synthetic source predates these models; never downgrade a real backup.
-  manifest.modelCoverage = manifest.modelCoverage.filter(entry => !['PaymentJournalEvent', 'PaymentAdjustment', 'PaymentOperation', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod', 'ServiceProject'].includes(entry.model));
+  manifest.modelCoverage = manifest.modelCoverage.filter(entry => !['EmailOutbox', 'EmailOutboxAttempt', 'PaymentJournalEvent', 'PaymentAdjustment', 'PaymentOperation', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod', 'ServiceProject'].includes(entry.model));
   return { version, type: 'json', exportedAt: '2025-03-18T00:00:00.000Z', data, ...(version === '3.0' ? { manifest } : {}) };
 }

@@ -71,6 +71,7 @@ model User {
   paymentAdjustments PaymentAdjustment[]
   paymentOperations PaymentOperation[]
   dataImportBatches DataImportBatch[]
+  emailOutbox EmailOutbox[]
   serviceArticles ServiceArticle[]
   serviceBillingPlans ServiceBillingPlan[]
   serviceBillingPeriods ServiceBillingPeriod[]
@@ -165,6 +166,7 @@ model Invoice {
   paymentAdjustments PaymentAdjustment[] @relation("AdjustedInvoice")
   refundBasisAdjustments PaymentAdjustment[] @relation("RefundBasis")
   billingNotes  BillingNote[]
+  emailOutbox EmailOutbox[]
   reminders     Reminder[]
   customer      Customer? @relation(fields: [customerId], references: [id])
   userId        String
@@ -701,4 +703,59 @@ model PaymentAdjustment {
   @@unique([userId, payoutEvidenceIdentity])
   @@index([userId, invoiceId, id])
   @@index([userId, accountingEffectiveOn])
+}
+
+// Immutable, manually confirmed envelopes. Never a queue or delivery/read proof.
+model EmailOutbox {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  invoiceId Int?
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  sourceInvoiceId Int
+  documentType String
+  requestId String
+  fingerprint String
+  attachmentSha256 String
+  storedFileName String
+  attachmentFileName String
+  from String
+  replyTo String?
+  to String
+  cc String
+  bcc String
+  subject String
+  text String
+  state String @default("PREPARED")
+  currentAttemptId String?
+  processingExpiresAt DateTime?
+  messageId String?
+  errorCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  attempts EmailOutboxAttempt[]
+
+  @@unique([userId, requestId])
+  @@unique([userId, fingerprint])
+  @@index([userId, invoiceId, createdAt])
+  @@index([userId, documentType, attachmentSha256])
+}
+
+// A new explicit retry appends an attempt; previous outcomes are not overwritten.
+model EmailOutboxAttempt {
+  id String @id @default(uuid())
+  outboxId String
+  outbox EmailOutbox @relation(fields: [outboxId], references: [id], onDelete: Restrict)
+  requestId String
+  sequence Int
+  duplicateRiskAcknowledged Boolean @default(false)
+  uncertaintyRecordedAt DateTime?
+  state String
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  messageId String?
+  errorCode String?
+
+  @@unique([outboxId, requestId])
+  @@unique([outboxId, sequence])
 }
