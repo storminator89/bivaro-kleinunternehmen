@@ -1,3 +1,4 @@
+import { ledgerSummary } from '@/lib/payment-journal/service';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { auditCreate, auditDelete } from '@/lib/audit-log';
 /**
@@ -61,6 +62,8 @@ export async function GET(request: NextRequest) {
     const invoices = await prisma.invoice.findMany({
       where: whereClause,
       include: {
+        paymentJournalEvents: { orderBy: { id: 'asc' } },
+        incomes: { include: { cashTransaction: true } },
         customer: {
           select: {
             id: true,
@@ -85,6 +88,9 @@ export async function GET(request: NextRequest) {
 
     // Enrich invoices with additional info
     const enrichedInvoices = invoices.map(invoice => {
+      let summary = null;
+      try { summary = ledgerSummary(invoice); } catch { /* Explicit review, no guessed balance. */ }
+      const canCreateReminder = !!summary && summary.paymentState === 'OPEN';
       const latestReminder = invoice.reminders[0];
       const currentLevel = latestReminder ? latestReminder.reminderLevel : 0;
       const nextLevel = Math.min(currentLevel + 1, 4);
@@ -110,6 +116,10 @@ export async function GET(request: NextRequest) {
         status: invoice.status,
         customer: invoice.customer,
         reminders: invoice.reminders,
+        paymentSummary: summary,
+        openAmount: summary ? Number(summary.openCents) / 100 : null,
+        canCreateReminder,
+        paymentReviewRequired: summary === null,
         currentReminderLevel: currentLevel,
         currentReminderLevelLabel: REMINDER_LEVELS[currentLevel] || 'None',
         nextReminderLevel: nextLevel,
@@ -123,7 +133,7 @@ export async function GET(request: NextRequest) {
     // Calculate statistics
     const stats = {
       totalOverdue: enrichedInvoices.filter(i => i.isOverdue).length,
-      totalAmount: enrichedInvoices.filter(i => i.isOverdue).reduce((sum, i) => sum + (i.totalAmount || 0), 0),
+      totalAmount: enrichedInvoices.filter(i => i.isOverdue).reduce((sum, i) => sum + (i.openAmount ?? 0), 0),
       totalFees: enrichedInvoices.reduce((sum, i) => sum + i.totalFees, 0),
       byLevel: {
         0: enrichedInvoices.filter(i => i.currentReminderLevel === 0 && i.isOverdue).length,
@@ -168,6 +178,8 @@ async function postHandler(request: NextRequest) {
     const invoice = await prisma.invoice.findFirst({
       where: { id: parseInt(invoiceId), userId },
       include: {
+        paymentJournalEvents: true,
+        incomes: true,
         reminders: {
           orderBy: { sentAt: 'desc' },
           take: 1
@@ -185,6 +197,10 @@ async function postHandler(request: NextRequest) {
 
     if (invoice.type !== 'INVOICE' || invoice.status === 'CANCELLED') {
       return apiError('Reminders can only be recorded for open invoices', 409, 'INVOICE_NOT_OPEN');
+    }
+
+    if (invoice.paymentJournalEvents.length > 0 || invoice.incomes.length > 0 || invoice.paidAt) {
+      return apiError('Reminders after a payment require remaining-balance review.', 409, 'PAYMENT_REVIEW_REQUIRED');
     }
 
     // Determine next reminder level

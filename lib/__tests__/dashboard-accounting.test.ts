@@ -181,7 +181,7 @@ describe("dashboard accounting routes", () => {
 
   it("keeps KPI SQL work bounded and excludes quotes from open invoices", async () => {
     const rawQuery = vi.spyOn(database.client, "$queryRaw");
-    const invoiceAggregate = vi.spyOn(database.client.invoice, "aggregate");
+    const invoiceLedger = vi.spyOn(database.client.invoice, "findMany");
     selectQueryCount = 0;
     const response = await getKpis(new Request('http://localhost/api/dashboard/kpis'));
     expect(response.status).toBe(200);
@@ -189,7 +189,10 @@ describe("dashboard accounting routes", () => {
     expect(data.totalRevenue).toBe(1067);
     expect(data.revenueThisMonth).toBe(0);
     expect(data.expensesThisMonth).toBe(0);
-    expect(data.openInvoices).toBe(99);
+    // SENT + unjournaled Income is ambiguous historical evidence, not a
+    // confirmed EUR 99 open balance. Exclude from exact totals and flag review.
+    expect(data.openInvoices).toBe(0);
+    expect(data.openInvoicesReviewRequired).toBe(1);
     expect(data.yearComparison.revenueThisYearTotal).toBe(1067);
     expect(data.yearComparison.expensesThisYearTotal).toBe(0);
     expect(data.yearComparison.expensesLastYearTotal).toBe(3600);
@@ -200,16 +203,58 @@ describe("dashboard accounting routes", () => {
     expect(data.yearComparison.monthlyDataThisYear[6].expenses).toBe(0);
     expect(data.yearComparison.monthlyDataLastYear[6].expenses).toBe(3600);
     expect(rawQuery).toHaveBeenCalledTimes(4);
-    expect(invoiceAggregate).toHaveBeenCalledTimes(1);
-    // Four compact raw projections plus the open-invoice aggregate; the
+    expect(invoiceLedger).toHaveBeenCalledTimes(1);
+    // Four compact raw projections plus the complete validated open ledgers; the
     // complete KPI response stays bounded and does not scale with row count.
     expect(selectQueryCount).toBeGreaterThan(0);
     expect(selectQueryCount).toBeLessThanOrEqual(10);
   });
 
-  it("rejects an export year without an approved form mapping", async () => {
-    const response = await getEurExport(new NextRequest("http://localhost/api/eur-export?year=2026&format=json"));
+  it("rejects an export year without an approved form mapping before reading financial data", async () => {
+    const queriesBeforeExport = selectQueryCount;
+    const response = await getEurExport(new NextRequest("http://localhost/api/eur-export?year=2027&format=json"));
     expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: "Für 2027 ist keine amtlich belegte EÜR-Zuordnung hinterlegt.",
+      supportedYears: [2024, 2025, 2026],
+      alternativeExport: {
+        href: "/handoff?year=2027",
+        previewUrl: "/api/accountant-export?year=2027&preview=1",
+      },
+    });
+    expect(selectQueryCount).toBe(queriesBeforeExport);
+  });
+
+  it("exports the supported 2026 year with paid-date income and prior-year AfA matching the dashboard", async () => {
+    const response = await getEurExport(new NextRequest("http://localhost/api/eur-export?year=2026&format=json"));
+    const dashboardResponse = await getSummary(new NextRequest("http://localhost/api/dashboard/summary?timeRange=thisYear"));
+    expect([response.status, dashboardResponse.status]).toEqual([200, 200]);
+    const { data, warnings } = await response.json();
+    const dashboard = await dashboardResponse.json();
+    // 101 * 10 + 7 legacy ISO income + 20 paid + 30 paid then cancelled;
+    // unpaid 99 remains excluded. Prior-year asset: 3600 / 3 * 50% = 600.
+    for (const result of [data, dashboard]) {
+      expect(result.totalIncome).toBe(1067);
+      expect(result.totalExpense).toBe(600);
+      expect(result.profit).toBe(467);
+    }
+    expect(data).toMatchObject({
+      year: 2026,
+      mappingVersion: "anlage-euer-2026-v1",
+      exportKind: "csv-working-paper",
+      sourceSha256: "03d3033acc5c5a126729e58743128596ae39193759c55b207872da9432b83a8f",
+      controlTotals: { incomeCount: 104, expenseCount: 1, correctionCount: 0, incomeAmount: 1067, expenseAmount: 600, profit: 467 },
+    });
+    // Literal 2026 positions verified against BMF PDF v=4, pages 3–6.
+    expect(data.lines).toEqual([
+      expect.objectContaining({ lineNumber: 12, amount: 1067, type: "income" }),
+      expect.objectContaining({ lineNumber: 34, name: "AfA auf bewegliche Wirtschaftsgüter", amount: 600, type: "expense" }),
+      expect.objectContaining({ lineNumber: 91, amount: 467, type: "result" }),
+    ]);
+    expect(warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("vorläufig Zeile 34"),
+      expect.stringContaining("späteren amtlichen Zeilen 93, 96 und 98 wird hier nicht berechnet"),
+    ]));
   });
 
   it("matches dashboard, EÜR and simulation for a complete year with corrections and prior-year assets", async () => {

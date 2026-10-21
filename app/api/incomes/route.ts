@@ -164,6 +164,7 @@ export async function GET(request: Request) {
               paidAt: true,
             },
           },
+          paymentJournalEvent: { select: { id: true, amountCents: true, paidAt: true, dateCertainty: true, source: true } },
           customer: true,
         },
         skip,
@@ -175,6 +176,7 @@ export async function GET(request: Request) {
     const items = incomes.map(income => ({
       ...income,
       invoiceStatus: income.invoice ? income.invoice.status : undefined,
+      invoicePaidAt: income.invoice?.paidAt ?? null,
       customerName: income.customer ? income.customer.name : undefined,
       invoice: undefined,
       customer: undefined,

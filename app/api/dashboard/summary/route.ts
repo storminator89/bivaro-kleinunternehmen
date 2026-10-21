@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
           description: true,
           taxRelevant: true,
           invoice: { select: { status: true, paidAt: true } },
+          paymentJournalEvent: { select: { id: true, amountCents: true, paidAt: true, dateCertainty: true, source: true } },
         },
       }),
       prisma.expense.findMany({

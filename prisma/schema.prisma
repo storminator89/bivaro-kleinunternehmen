@@ -111,7 +111,7 @@ model Income {
   date        DateTime @default(now())
   customerId  Int?
   customer    Customer? @relation(fields: [customerId], references: [id])
-  invoiceId   Int?     @unique
+  invoiceId   Int?
   taxRelevant Boolean  @default(true)
   invoice     Invoice? @relation(fields: [invoiceId], references: [id])
   userId      String
@@ -120,6 +120,7 @@ model Income {
   paymentJournalEvent PaymentJournalEvent?
 
   @@index([userId, date])
+  @@index([userId, invoiceId])
 }
 
 model Invoice {
@@ -147,8 +148,8 @@ model Invoice {
   convertedFromQuote Invoice? @relation("QuoteConversion", fields: [convertedFromQuoteId], references: [id], onDelete: SetNull)
   convertedInvoice Invoice? @relation("QuoteConversion")
   customerId    Int?
-  income        Income?
-  paymentJournalEvent PaymentJournalEvent?
+  incomes       Income[]
+  paymentJournalEvents PaymentJournalEvent[]
   billingNotes  BillingNote[]
   reminders     Reminder[]
   customer      Customer? @relation(fields: [customerId], references: [id])
@@ -466,13 +467,12 @@ model Supplier {
   @@index([userId, name])
 }
 
-// BPR-010 deliberately supports exactly one full-payment event per invoice.
-// Multi-payment/refund support needs a separately reviewed additive migration.
+// Immutable positive allocations. Refunds/corrections are a separate workflow.
 model PaymentJournalEvent {
   id             Int      @id @default(autoincrement())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  invoiceId      Int      @unique
+  invoiceId      Int
   invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   incomeId       Int?     @unique
   income         Income?  @relation(fields: [incomeId], references: [id], onDelete: Restrict)
@@ -488,4 +488,5 @@ model PaymentJournalEvent {
 
   @@unique([userId, idempotencyKey])
   @@index([userId, paidAt])
+  @@index([userId, invoiceId, id])
 }

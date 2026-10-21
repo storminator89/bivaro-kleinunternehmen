@@ -5,7 +5,7 @@ import type { QueryClient } from '@tanstack/react-query';
  * Inactive lists remain invalidated and refetch when their tab is opened.
  */
 export async function refreshPaymentDashboardLists(queryClient: QueryClient): Promise<void> {
-  await Promise.all(['invoices', 'incomes', 'summary', 'assets', 'year-comparison', 'filter-options'].map(resource =>
+  await Promise.all(['invoices', 'incomes', 'summary', 'assets', 'year-comparison', 'filter-options', 'reminders'].map(resource =>
     queryClient.invalidateQueries({ queryKey: ['dashboard', resource] }, { throwOnError: true }),
   ));
 }

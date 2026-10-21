@@ -95,7 +95,7 @@ describe('handoff accessible rendering and honest scope', () => {
     expect(html).toContain('value="2026"');
     expect(html).toContain('Vorschau laden');
     expect(html).not.toContain('ZIP herunterladen');
-    for (const copy of ['Format 1', 'kein vollständiger GoBD-Prüfexport', 'keine ELSTER-Einreichung', 'Kein DATEV-Format', 'Teilzahlungszuordnungen', 'Zahlungs-/Erstattungsjournal', 'nichts automatisch', 'aria-live="polite"', 'href="/help#export"', 'href="/settings#handoff-settings"']) expect(html).toContain(copy);
+    for (const copy of ['Format 1', 'kein vollständiger GoBD-Prüfexport', 'keine ELSTER-Einreichung', 'Kein DATEV-Format', 'payments.csv', 'historischer Datumsunsicherheit', 'dürfen nicht addiert werden', 'separates Erstattungsjournal', 'nichts automatisch', 'aria-live="polite"', 'href="/help#export"', 'href="/settings#handoff-settings"']) expect(html).toContain(copy);
     expect(html).not.toContain('role="alert"');
   });
   it('offers a labelled two-date form for custom ranges', () => {

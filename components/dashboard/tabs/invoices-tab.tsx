@@ -27,20 +27,27 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { EmailPreviewDialog } from "@/components/dashboard/email-preview-dialog";
 import { Invoice, FilterState } from "@/types/dashboard";
 import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
+import { displayPaymentAmount } from '@/lib/full-payment-form';
 import { formatCurrency } from "@/lib/dashboard-utils";
 
 function canDeleteDraft(invoice: Invoice): boolean {
   return invoice.type !== 'CREDIT_NOTE' && invoice.type !== 'QUOTE'
     && invoice.status === 'DRAFT' && invoice.issuanceState === 'UNISSUED'
-    && !invoice.income && !invoice.paidAt;
+    && !invoice.incomes?.length && !invoice.paymentSummary?.paidCents?.match(/[1-9]/u) && !invoice.paidAt;
 }
 
 function availableInvoiceStatuses(invoice: Invoice): string[] {
-  if (invoice.type === 'CREDIT_NOTE' || invoice.type === 'QUOTE'
-    || invoice.income || invoice.paidAt) return [];
-  if (invoice.status === 'DRAFT') return ['SENT', 'PAID'];
-  if (invoice.status === 'SENT') return ['PAID'];
-  return [];
+  if (invoice.type === 'CREDIT_NOTE' || invoice.type === 'QUOTE' || invoice.status === 'CANCELLED') return [];
+  const options: string[] = [];
+  if (invoice.status === 'DRAFT' && !invoice.incomes?.length && !invoice.paidAt) options.push('SENT');
+  if (invoice.canRecordPayment) options.push('PAID');
+  return options;
+}
+
+function InvoiceBalance({ invoice }: { invoice: Invoice }) {
+  if (invoice.paymentReviewRequired) return <p className="mt-1 text-xs text-caution-foreground">Zahlungsstand prüfen</p>;
+  if (!invoice.paymentSummary) return null;
+  return <p className="mt-1 text-xs text-muted-foreground tabular-nums">Erhalten {displayPaymentAmount(invoice.paymentSummary.paidCents)} · Offen {displayPaymentAmount(invoice.paymentSummary.openCents)}</p>;
 }
 
 type InvoicesTabProps = {
@@ -106,8 +113,8 @@ export function InvoicesTab({
 }: InvoicesTabProps) {
   const [emailInvoice, setEmailInvoice] = React.useState<Invoice | null>(null);
 
-  const paidCount = invoices.filter(invoice => invoice.status === 'PAID').length;
-  const openCount = invoices.filter(invoice => invoice.status === 'SENT' || invoice.status === 'DRAFT').length;
+  const paidCount = invoices.filter(invoice => invoice.paymentSummary?.paid || (invoice.status === 'PAID' && !invoice.paymentReviewRequired)).length;
+  const openCount = invoices.filter(invoice => invoice.status !== 'CANCELLED' && invoice.paymentSummary && !invoice.paymentSummary.paid).length;
 
   const renderInvoiceActions = (invoice: Invoice) => (
 <DropdownMenu>
@@ -143,6 +150,7 @@ export function InvoicesTab({
                                 <Mail className="h-4 w-4 text-notice" />
                                 Per E-Mail senden
                               </DropdownMenuItem>
+                              {invoice.type !== 'CREDIT_NOTE' && <DropdownMenuItem onSelect={() => onStatusChange(invoice.id, 'PAYMENT_HISTORY')}>Zahlungsverlauf ansehen</DropdownMenuItem>}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 disabled={invoice.hasPdfFile === false}
@@ -233,7 +241,7 @@ export function InvoicesTab({
             <fieldset className="min-w-0 space-y-2">
               <legend className="text-xs font-medium text-muted-foreground">Zahlungsstatus</legend>
               <div className="filter-switch" aria-label="Zahlungsstatus">
-                {([{ value: 'all', label: 'Alle' }, { value: 'unpaid', label: 'Offen' }, { value: 'paid', label: 'Bezahlt' }] as const).map(option => (
+                {([{ value: 'all', label: 'Alle' }, { value: 'unpaid', label: 'Offen' }, { value: 'partial', label: 'Teilbezahlt' }, { value: 'paid', label: 'Bezahlt' }] as const).map(option => (
                   <button key={option.value} type="button" className="filter-chip" aria-pressed={filters.paidStatus === option.value} onClick={() => setFilters({ ...filters, paidStatus: option.value })}>{option.label}</button>
                 ))}
               </div>
@@ -301,9 +309,10 @@ export function InvoicesTab({
                   </div>
                   <p className="shrink-0 font-semibold tabular-nums">{invoice.totalAmount != null ? formatCurrency(invoice.totalAmount) : '–'}</p>
                 </div>
-                <StatusBadge status={invoice.status} availableStatuses={availableInvoiceStatuses(invoice)} onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)} />
+                <StatusBadge status={invoice.status} paymentState={invoice.paymentSummary?.paymentState} availableStatuses={availableInvoiceStatuses(invoice)} onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)} />
+                <InvoiceBalance invoice={invoice} />
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => onOpenDetails(invoice)}><Eye className="h-4 w-4" />Details</Button>
+                  <Button variant="outline" size="sm" className="min-h-11" data-invoice-return={invoice.id} onClick={() => onOpenDetails(invoice)}><Eye className="h-4 w-4" />Details</Button>
                   {invoice.hasPdfFile !== false && (
                     <Button variant="outline" size="sm" className="min-h-11" onClick={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}><FileText className="h-4 w-4" />PDF</Button>
                   )}
@@ -385,7 +394,7 @@ export function InvoicesTab({
                         <div className="flex min-w-0 items-center gap-3">
                           <span className="invoice-file-symbol"><DashboardIcon name="invoice-document" size={36} /></span>
                           <div className="min-w-0">
-                            <button type="button" className="min-h-11 text-left font-semibold hover:text-primary hover:underline" onClick={() => onOpenDetails(invoice)} aria-label={`Details zu Rechnung ${invoice.invoiceNumber || invoice.id}`}>{invoice.invoiceNumber || 'Ohne Rechnungsnummer'}</button>
+                            <button type="button" className="min-h-11 text-left font-semibold hover:text-primary hover:underline" data-invoice-return={invoice.id} onClick={() => onOpenDetails(invoice)} aria-label={`Details zu Rechnung ${invoice.invoiceNumber || invoice.id}`}>{invoice.invoiceNumber || 'Ohne Rechnungsnummer'}</button>
                             {invoice.customer?.name && <p className="text-xs font-medium text-foreground">{invoice.customer.name}</p>}
                             <p className="max-w-[20rem] truncate text-xs text-muted-foreground" title={invoice.fileName}>{invoice.fileName.replace(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}_/i, '')}</p>
                           </div>
@@ -395,10 +404,11 @@ export function InvoicesTab({
                         {invoice.totalAmount != null
                           ? formatCurrency(invoice.totalAmount)
                           : <span className="text-muted-foreground italic text-xs">Nicht verfügbar</span>}
+                        <InvoiceBalance invoice={invoice} />
                       </TableCell>
                       <TableCell className="text-center">
                         <StatusBadge
-                          status={invoice.status}
+                          status={invoice.status} paymentState={invoice.paymentSummary?.paymentState}
                           availableStatuses={availableInvoiceStatuses(invoice)}
                           onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)}
                         />
@@ -409,7 +419,7 @@ export function InvoicesTab({
                             variant="ghost"
                             size="sm"
                             className="gap-2"
-                            onClick={() => onOpenDetails(invoice)}
+                            data-invoice-return={invoice.id} onClick={() => onOpenDetails(invoice)}
                           >
                             <Eye className="h-4 w-4" />
                             Details

@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
                     date: true,
                     taxRelevant: true,
                     invoice: { select: { status: true, paidAt: true } },
+                    paymentJournalEvent: { select: { id: true, amountCents: true, paidAt: true, dateCertainty: true, source: true } },
                 },
             }),
             tx.expense.findMany({

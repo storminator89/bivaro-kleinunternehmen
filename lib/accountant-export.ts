@@ -76,6 +76,7 @@ const invoiceSelect = {
 const TEXT_COLUMNS = {
   Expense: ['description', 'category', 'receiptFileName', 'storedReceiptFileName'],
   Income: ['description'],
+  PaymentJournalEvent: ['amountCents', 'currency', 'dateCertainty', 'source', 'reference'],
   Invoice: ['type', 'fileName', 'storedFileName', 'invoiceNumber', 'status', 'issuanceState', 'cancellationReason'],
   CashTransaction: ['type', 'description', 'category', 'receiptNumber'],
   Customer: ['name', 'address', 'zipCode', 'city', 'taxNumber'],
@@ -113,7 +114,7 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
     const cashWhere: Prisma.CashTransactionWhereInput = { userId, date: range };
     const invoiceWhere: Prisma.InvoiceWhereInput = { userId, type: { not: 'QUOTE' }, OR: [
       { invoiceDate: range }, { invoiceDate: null, uploadedAt: range }, { paidAt: range },
-      { income: incomeWhere },
+      { incomes: { some: incomeWhere } },
     ] };
     const counts = await Promise.all([
       tx.expense.count({ where: expenseWhere }), tx.income.count({ where: incomeWhere }),
@@ -143,6 +144,7 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
       } }),
       tx.income.findMany({ where: incomeWhere, orderBy: { id: 'asc' }, select: {
         id: true, description: true, amount: true, date: true, customerId: true, invoiceId: true, taxRelevant: true,
+        paymentJournalEvent: { select: { id: true, amountCents: true, paidAt: true, dateCertainty: true, source: true, reference: true } },
       } }),
       tx.invoice.findMany({ where: invoiceWhere, orderBy: { id: 'asc' }, select: invoiceSelect }),
       tx.cashTransaction.findMany({ where: cashWhere, orderBy: { id: 'asc' }, select: {
@@ -167,6 +169,14 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
         if (row.originalInvoiceId && !seen.has(row.originalInvoiceId)) pending.push(row.originalInvoiceId);
       }
     }
+    const paymentWhere: Prisma.PaymentJournalEventWhereInput = { userId, invoiceId: { in: [...seen] } };
+    recordCount += await tx.paymentJournalEvent.count({ where: paymentWhere }); check();
+    const paymentIds = await tx.paymentJournalEvent.findMany({ where: paymentWhere, select: { id: true } });
+    await reserveSourceText(tx, userId, 'PaymentJournalEvent', paymentIds.map(row => row.id), textBudget);
+    const payments = await tx.paymentJournalEvent.findMany({ where: paymentWhere, orderBy: { id: 'asc' }, select: {
+      id: true, invoiceId: true, incomeId: true, amountCents: true, currency: true, paidAt: true,
+      dateCertainty: true, source: true, reference: true, createdAt: true,
+    } });
     const customerIds = [...new Set([...incomes, ...invoices].flatMap(row => row.customerId ? [row.customerId] : []))];
     const cashBookIds = [...new Set(cashTransactions.map(row => row.cashBookId))];
     await reserveSourceText(tx, userId, 'Customer', customerIds, textBudget);
@@ -178,7 +188,7 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
       tx.cashBook.findMany({ where: { userId, id: { in: cashBookIds } }, orderBy: { id: 'asc' }, select: { id: true, name: true, currency: true } }),
     ]);
     recordCount += customers.length + cashBooks.length; check();
-    return { company, expenses, incomes, invoices, cashTransactions, customers, cashBooks };
+    return { company, expenses, incomes, invoices, payments, cashTransactions, customers, cashBooks };
   });
   const endedAt = new Date().toISOString();
   return { data, info: { id: hashJson(data), startedAt, endedAt, consistency: 'single-read-transaction' as const } };
@@ -197,8 +207,9 @@ verknüpfte Einnahme im Zeitraum. Ursprungsrechnungen von Gutschriften sind als 
 Angebote, nicht gebuchte Eingangsbeleg-Inbox, wiederkehrende Vorlagen und nicht betroffene Stammdaten fehlen bewusst.
 invoiceId/originalInvoiceId/customerId/expenseId/incomeId/cashBookId sind Datenbank-Verknüpfungen,
 keine Konten; nicht jede referenzierte Buchung liegt im Zeitraum. Unaufgelöste Bezüge stehen in warnings.
-Vollzahlungsmodell: eine Rechnung hat derzeit höchstens eine volle Einnahme und paidAt;
-keine Teilzahlungszuordnung/Bankabstimmung, kein eigenständiges Erstattungsjournal. Storno ist keine Rückzahlung.
+Zahlungsmodell: jede bestätigte positive Teilzahlung hat eine eigene Einnahme und unveränderlichen Journalbezug;
+keine Bankabstimmung, kein eigenständiges Erstattungsjournal. Storno ist keine Rückzahlung.
+payments.csv enthält auch historische Nachweise ohne Einnahme; Unsicherheit und fehlende Daten bleiben explizit.
 Die Tabellen sind unterschiedliche Sichten: Rechnung, Einnahme und verknüpfte Kasse NIEMALS addieren;
 dies würde denselben Vorgang doppelt zählen. Entwürfe und steuerlich irrelevante Datensätze bleiben sichtbar.
 Keine automatische EÜR-/Steuerberechnung, Kontierung, AfA-Verteilung oder Abziehbarkeitsbewertung.
@@ -327,7 +338,10 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
     checkRef(row.customerId, customers, 'income', row.id, 'customerId');
     checkRef(row.invoiceId, invoiceIds, 'income', row.id, 'invoiceId');
     const accountingDate = getIncomeAccountingDate({ ...row, invoice });
-    return { ...row, ...money(row.amount, 'income', row.id), accountingDate: formatBusinessDate(accountingDate),
+    return { ...row, paymentJournalEventId: row.paymentJournalEvent?.id ?? null,
+      paymentDate: row.paymentJournalEvent?.paidAt ?? null, paymentDateCertainty: row.paymentJournalEvent?.dateCertainty ?? null,
+      paymentSource: row.paymentJournalEvent?.source ?? null, paymentReference: row.paymentJournalEvent?.reference ?? null,
+      ...money(row.amount, 'income', row.id), accountingDate: formatBusinessDate(accountingDate),
       accountingDateInPeriod: inPeriod(accountingDate), cashRealized: row.invoiceId != null && !invoice ? null : isCashRealizedIncome({ ...row, invoice }),
       invoiceStatus: invoice?.status ?? null, invoicePaidAt: invoice?.paidAt ?? null };
   });
@@ -339,15 +353,21 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
     if (currency !== 'EUR') warnings.push({ code: 'CASH_CURRENCY_NOT_EUR', recordType: 'cashTransaction', recordId: row.id, message: 'Kassenwährung ist nicht EUR oder unbekannt; keine Umrechnung oder EUR-Summierung vornehmen.' });
     return { ...row, currency, ...money(row.amount, 'cashTransaction', row.id), ...money(row.runningBalance, 'cashTransaction', row.id, 'runningBalance') };
   });
-  const records = { company: snapshot.data.company, invoices, expenses, incomes, cashTransactions, customers: snapshot.data.customers, cashBooks: snapshot.data.cashBooks, originals };
+  const payments = snapshot.data.payments.map(row => {
+    if (row.dateCertainty !== 'ACTUAL') warnings.push({ code: 'PAYMENT_DATE_UNCERTAIN', recordType: 'payment', recordId: row.id,
+      message: 'Historischer Zahlungsnachweis: Quelle, Unsicherheit und fehlendes Datum bleiben erhalten; kein erfundenes Ist-Datum.' });
+    return { ...row, paymentDateInPeriod: row.paidAt ? inPeriod(row.paidAt) : null };
+  });
+  const records = { company: snapshot.data.company, invoices, expenses, incomes, payments, cashTransactions, customers: snapshot.data.customers, cashBooks: snapshot.data.cashBooks, originals };
   addEntry('README.txt', Buffer.from(README, 'utf8'), 'metadata');
   addEntry('records.json', Buffer.from(JSON.stringify(records, null, 2), 'utf8'), 'metadata');
-  const tables = { invoices, expenses, incomes, cashTransactions, customers: snapshot.data.customers, cashBooks: snapshot.data.cashBooks, originals };
+  const tables = { invoices, expenses, incomes, payments, cashTransactions, customers: snapshot.data.customers, cashBooks: snapshot.data.cashBooks, originals };
   // Fixed schemas also make an empty package useful and machine-readable.
   const headers: Record<keyof typeof tables, string[]> = {
     invoices: ['id', 'type', 'invoiceNumber', 'invoiceDate', 'uploadedAt', 'dueDate', 'status', 'issuanceState', 'paidAt', 'customerId', 'originalInvoiceId', 'cancellationReason', 'currency', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'documentDateSource', 'documentDateInPeriod', 'paymentDateInPeriod', 'originalFileName', 'originalZipPath'],
     expenses: ['id', 'date', 'description', 'category', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'taxDeductiblePercentage', 'depreciationYears', 'paymentDateSource', 'originalFileName', 'originalZipPath', 'purchaseDocumentId', 'originalSha256'],
-    incomes: ['id', 'date', 'description', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'customerId', 'invoiceId', 'accountingDate', 'accountingDateInPeriod', 'cashRealized', 'invoiceStatus', 'invoicePaidAt'],
+    incomes: ['id', 'date', 'description', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'customerId', 'invoiceId', 'accountingDate', 'accountingDateInPeriod', 'cashRealized', 'invoiceStatus', 'invoicePaidAt', 'paymentJournalEventId', 'paymentDate', 'paymentDateCertainty', 'paymentSource', 'paymentReference'],
+    payments: ['id', 'invoiceId', 'incomeId', 'amountCents', 'currency', 'paidAt', 'dateCertainty', 'source', 'reference', 'createdAt', 'paymentDateInPeriod'],
     cashTransactions: ['id', 'date', 'type', 'description', 'currency', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'runningBalance', 'runningBalanceCents', 'runningBalanceRoundingDifferenceCents', 'category', 'receiptNumber', 'taxRelevant', 'cashBookId', 'expenseId', 'incomeId'],
     customers: ['id', 'name', 'address', 'zipCode', 'city', 'taxNumber'], cashBooks: ['id', 'name', 'currency'],
     originals: ['recordType', 'recordId', 'originalFileName', 'status', 'zipPath', 'purchaseDocumentId', 'originalSha256'],
@@ -367,7 +387,7 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
     format: 'bivaro-accountant-handoff', formatVersion: 1, generatedAt: snapshot.info.endedAt,
     period: { from: period.from, to: period.to, timezone: 'UTC', inclusive: true },
     scope: { purpose: 'bounded accountant working package', dateSelection: 'See README.txt; document and cash views must not be summed',
-      paymentModel: 'single-full-payment-per-invoice; no partial-payment allocation or refund journal',
+      paymentModel: 'immutable-positive-allocations-per-invoice; each Income counted once on actual event date; no refunds',
       excluded: ['quotes', 'unbooked incoming inbox', 'unrelated master data', 'user accounts', 'passwords', 'API keys', 'SMTP/host settings', 'security/access/change logs', 'customer internal notes'],
       datevCertified: false, elsterSubmission: false, completeAuditExport: false, restorableBackup: false },
     snapshot: snapshot.info, moneyPolicy: MONEY_POLICY_VERSION, limits: ACCOUNTANT_EXPORT_LIMITS,

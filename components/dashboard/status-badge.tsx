@@ -9,6 +9,7 @@ import { XCircle } from "lucide-react";
 
 export interface StatusBadgeProps {
   status: string;
+  paymentState?: 'OPEN' | 'PARTIAL' | 'PAID';
   onStatusChange?: (newStatus: string) => void;
   availableStatuses?: string[];
 }
@@ -18,6 +19,8 @@ const statusConfig: {
 } = {
   DRAFT: { label: "Entwurf", color: "bg-muted-foreground", surface: "bg-secondary text-foreground" },
   SENT: { label: "Gesendet", color: "bg-caution", surface: "bg-caution-surface text-caution-foreground" },
+  OPEN: { label: "Offen", color: "bg-caution", surface: "bg-caution-surface text-caution-foreground" },
+  PARTIAL: { label: "Teilbezahlt", color: "bg-notice", surface: "bg-notice-surface text-notice" },
   PAID: { label: "Bezahlt", color: "bg-positive", surface: "bg-positive-surface text-positive-foreground" },
   CANCELLED: { label: "Storniert", color: "bg-critical", surface: "bg-critical-surface text-critical-foreground" },
 };
@@ -25,8 +28,8 @@ const statusConfig: {
 // Statuses that can be changed via dropdown
 const changeableStatuses = ["DRAFT", "SENT", "PAID"];
 
-export function StatusBadge({ status, onStatusChange, availableStatuses }: StatusBadgeProps) {
-  const { label, color, surface } = statusConfig[status] || { label: "Unbekannt", color: "bg-muted-foreground", surface: "bg-secondary text-foreground" };
+export function StatusBadge({ status, paymentState, onStatusChange, availableStatuses }: StatusBadgeProps) {
+  const { label, color, surface } = statusConfig[status !== "CANCELLED" && paymentState ? paymentState : status] || { label: "Unbekannt", color: "bg-muted-foreground", surface: "bg-secondary text-foreground" };
   const options = availableStatuses === undefined
     ? changeableStatuses
     : changeableStatuses.filter((value) => availableStatuses.includes(value));
@@ -63,7 +66,7 @@ export function StatusBadge({ status, onStatusChange, availableStatuses }: Statu
       <DropdownMenuContent>
         {options.map((key) => (
           <DropdownMenuItem key={key} onSelect={() => onStatusChange(key)}>
-            {statusConfig[key].label}
+            {key === "PAID" && paymentState === "PARTIAL" ? "Weitere Zahlung erfassen" : statusConfig[key].label}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

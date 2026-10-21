@@ -229,7 +229,7 @@ async function postHandler(request: Request) {
         const creditNote = await inTransaction(async tx => {
             const current = await tx.invoice.findFirst({
                 where: { id: originalInvoice.id, userId },
-                include: { creditNotes: true, income: true },
+                include: { creditNotes: true, incomes: true },
             });
             if (!current || current.status === 'CANCELLED' || current.creditNotes.length) {
                 throw new Error('Die Rechnung wurde bereits storniert');
@@ -237,7 +237,7 @@ async function postHandler(request: Request) {
             // Legacy paid invoices may have an income date but no paidAt. Keep
             // that realized booking date when the original is cancelled.
             const cancellationPaidAt = current.paidAt ?? (
-                current.status === 'PAID' ? current.income?.date ?? null : null
+                current.status === 'PAID' && current.incomes.length === 1 ? current.incomes[0].date : null
             );
             const reserved = await getNextDocumentNumber(tx, userId, 'CREDIT_NOTE', year);
             if (reserved !== creditNoteNumber) throw new Error('Nummer wurde zwischenzeitlich vergeben. Bitte erneut versuchen.');

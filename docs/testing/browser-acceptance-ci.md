@@ -40,10 +40,15 @@ Hosted run [39548413901](https://github.com/storminator89/bivaro-kleinunternehme
 passed Ghostscript/build and 40 tests but failed the manual PDF receipt preview:
 its response was HTTP 200/PDF while the iframe remained hidden awaiting `onLoad`;
 one subsequent serial case did not run. Playwright documents the default
-headless-shell/PDF navigation limitation. This observation motivates a
-PDF-capable browser check; **headed acceptance is still pending**, not a presumed
-fix or proof that all normal-browser behavior works. If headed mode also fails,
-the preview remains unresolved and needs investigation without weakening tests.
+headless-shell/PDF navigation limitation. That observation motivated the
+PDF-capable headed check. Subsequent headed hosted runs passed on their own
+immutable candidates: [PR 70 run 39549513302, 42/42](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39549513302)
+and [PR 68 run 39549625967, 48/48](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39549625967).
+These are historical results, not acceptance of later source changes. The current
+combined partial-payment/EÜR candidate selects **51 cases; its headed acceptance
+is pending**. No historical pass proves this new candidate or complete fiscal
+correctness. Any later preview failure still requires investigation without
+weakening its assertion.
 
 The runner creates a fresh temporary SQLite fixture and overrides `DATABASE_URL`
 with its absolute path. Its guarded preparation migrates only that fixture. The

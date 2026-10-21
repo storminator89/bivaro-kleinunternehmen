@@ -57,10 +57,16 @@ describe('public buyer and task guidance', () => {
     expect(html).toContain('keine ELSTER-Einreichung');
     expect(html).toContain('2024, 2025 und 2026');
     expect(html).toContain('unbekannte Formularjahre werden abgewiesen');
+    expect(html).toContain('verifizierten Jahreszuordnungen für 2024, 2025, 2026');
+    expect(html).not.toContain('ist auf 2024 und 2025 begrenzt');
     expect(html).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
     expect(html).toContain('Zugang verloren oder Betriebsstörung');
     expect(html).toContain('id="steuerprofil"');
-    expect(html).toContain('Ein eigenes Datumsfeld gibt es dort nicht');
+    expect(html).toContain('das tatsächliche Datum und eine nachvollziehbare Zahlungsreferenz');
+    expect(html).toContain('nach der ersten Zahlung bleiben 80 EUR offen');
+    expect(html).toContain('payments.csv');
+    expect(html).not.toContain('Ein eigenes Datumsfeld gibt es dort nicht');
+    expect(html).not.toContain('aktuellen Buchungszeitpunkt als Zahlungsdatum');
     expect(html).not.toMatch(/mailto:|tel:|kostenlos testen|rechtssicher|GoBD-konform/i);
   });
 

@@ -47,10 +47,10 @@ describe('atomic tenant payment journal', () => {
     const source = await invoice();
     const result = await recordFullPayment('payment-owner', source.id, input());
     expect(result).toMatchObject({ replayed: false, event: { amountCents: '12345', dateCertainty: 'ACTUAL' }, summary: { paid: true, openCents: '0' } });
-    const saved = await database.client.invoice.findUniqueOrThrow({ where: { id: source.id }, include: { income: true, paymentJournalEvent: true } });
-    expect(saved.status).toBe('PAID'); expect(saved.income?.amount).toBe(123.45);
-    expect(saved.income?.date.toISOString()).toBe('2026-10-19T00:00:00.000Z');
-    expect(saved.paymentJournalEvent?.incomeId).toBe(saved.income?.id);
+    const saved = await database.client.invoice.findUniqueOrThrow({ where: { id: source.id }, include: { incomes: true, paymentJournalEvents: true } });
+    expect(saved.status).toBe('PAID'); expect(saved.incomes[0]?.amount).toBe(123.45);
+    expect(saved.incomes[0]?.date.toISOString()).toBe('2026-10-19T00:00:00.000Z');
+    expect(saved.paymentJournalEvents[0]?.incomeId).toBe(saved.incomes[0]?.id);
     expect(await database.client.auditLog.count({ where: { entityId: String(source.id), action: 'PAYMENT_RECEIVED' } })).toBe(1);
   });
   it('parallel same-key retries commit once and replay unchanged', async () => {
@@ -148,9 +148,9 @@ describe('atomic tenant payment journal', () => {
   it.each([null, '', '   ', '  INV-66  '])('uses a nonblank new legacy status reference for invoice number %j', async invoiceNumber => {
     const source = await invoice({ invoiceNumber });
     const paid = await updateInvoiceStatus('payment-owner', source.id, 'PAID', '2026-10-19');
-    const event = await database.client.paymentJournalEvent.findUniqueOrThrow({ where: { invoiceId: source.id } });
+    const event = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { invoiceId: source.id } });
     expect(event).toMatchObject({ reference: invoiceNumber?.trim() || `invoice:${source.id}`,
-      source: 'LEGACY_STATUS', dateCertainty: 'ACTUAL', paidAt: new Date('2026-10-19'), incomeId: paid.income?.id });
+      source: 'LEGACY_STATUS', dateCertainty: 'ACTUAL', paidAt: new Date('2026-10-19'), incomeId: paid.incomes[0]?.id });
     expect(paid.invoiceNumber).toBe(invoiceNumber);
     await updateInvoiceStatus('payment-owner', source.id, 'PAID');
     expect(await database.client.paymentJournalEvent.findUniqueOrThrow({ where: { id: event.id } })).toEqual(event);
@@ -162,8 +162,8 @@ describe('atomic tenant payment journal', () => {
     await expect(updateInvoiceStatus('payment-owner', source.id, 'PAID')).rejects.toMatchObject({ code: 'PAYMENT_DETAILS_REQUIRED' });
     expect(await database.client.paymentJournalEvent.count({ where: { invoiceId: source.id } })).toBe(0);
     const paid = await updateInvoiceStatus('payment-owner', source.id, 'PAID', '2026-10-19');
-    expect(paid.income?.date.toISOString()).toBe('2026-10-19T00:00:00.000Z');
-    expect((await updateInvoiceStatus('payment-owner', source.id, 'PAID')).income?.id).toBe(paid.income?.id);
+    expect(paid.incomes[0]?.date.toISOString()).toBe('2026-10-19T00:00:00.000Z');
+    expect((await updateInvoiceStatus('payment-owner', source.id, 'PAID')).incomes[0]?.id).toBe(paid.incomes[0]?.id);
   });
 });
 

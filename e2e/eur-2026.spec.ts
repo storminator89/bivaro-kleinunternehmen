@@ -131,7 +131,7 @@ for (const year of [2026, 2025]) {
       expect(csv).toContain('keine ELSTER-Einreichung');
       for (const line of body.data.lines) expect(csv).toContain(`${line.lineNumber};${line.name};${line.amount.toFixed(2).replace('.', ',')}`);
       if (is2026) expect(csv).not.toMatch(/\n(?:27|28|33|60|90);/);
-      await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
+      await dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
       await expect(dialog).not.toBeVisible();
     } finally { await prisma.$disconnect(); }
   });

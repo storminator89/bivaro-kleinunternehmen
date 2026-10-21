@@ -147,14 +147,14 @@ describe('invoice numbers and payment lifecycle', () => {
   it('creates one income on payment, preserves its date on retries and blocks reopening', async () => {
     const invoice = await database.client.invoice.create({ data: { userId: 'alice', fileName: 'test.pdf', storedFileName: 'test.pdf', parsedData: {}, totalAmount: 123.45 } });
     const paid = await updateInvoiceStatus('alice', invoice.id, 'PAID', '2026-04-15T12:00:00Z');
-    expect(paid.income?.amount).toBe(123.45);
-    expect(paid.income?.date.toISOString()).toBe('2026-04-15T12:00:00.000Z');
+    expect(paid.incomes[0]?.amount).toBe(123.45);
+    expect(paid.incomes[0]?.date.toISOString()).toBe('2026-04-15T12:00:00.000Z');
     const repeated = await updateInvoiceStatus('alice', invoice.id, 'PAID');
-    expect(repeated.income?.id).toBe(paid.income?.id);
+    expect(repeated.incomes[0]?.id).toBe(paid.incomes[0]?.id);
     expect(repeated.paidAt).toEqual(paid.paidAt);
     await expect(updateInvoiceStatus('alice', invoice.id, 'SENT')).rejects.toThrow('nicht wieder geöffnet');
-    const stillPaid = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { income: true } });
-    expect(stillPaid.income?.id).toBe(paid.income?.id);
+    const stillPaid = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { incomes: true } });
+    expect(stillPaid.incomes[0]?.id).toBe(paid.incomes[0]?.id);
     expect(stillPaid.paidAt).toEqual(paid.paidAt);
     await expect(updateInvoiceStatus('bob', invoice.id, 'PAID')).rejects.toThrow('Rechnung nicht gefunden');
   });
@@ -172,6 +172,6 @@ describe('invoice numbers and payment lifecycle', () => {
 
     // The compatibility payment path now requires an explicit actual date.
     await expect(updateInvoiceStatus('alice', invoice.id, 'PAID', '2026-09-19')).rejects.toThrow('währung');
-    expect(await database.client.income.findUnique({ where: { invoiceId: invoice.id } })).toBeNull();
+    expect(await database.client.income.findFirst({ where: { invoiceId: invoice.id } })).toBeNull();
   });
 });

@@ -1,71 +1,79 @@
-# BPR-010 first-full-payment backend
+# BPR-011 immutable positive payment allocations
 
-This slice supports exactly one full EUR payment per invoice. The invoice unique
-constraint is deliberate; partial payments/refunds need a later reviewed migration.
-No existing invoice, Income, amount or historical date is automatically backfilled.
+An ordinary EUR invoice supports multiple exact positive allocations. Example:
+EUR 120 receives EUR 40 on date A (EUR 80 remaining), then EUR 80 on date B.
+Each allocation has its own immutable journal event and Income projection. Never
+add journal amounts to Income: they are the same cash receipt represented twice.
+Refunds, corrections, advance/final invoices and bank reconciliation are excluded.
 
-## Public contract
+## API and consistency
 
-`POST /api/invoices/:id/payments` (authenticated owner, same-origin mutation):
+`POST /api/invoices/:id/payments` authenticates ownership and same-origin mutation:
 
 ```json
-{"amount":"123.45","currency":"EUR","paidAt":"2026-10-19","source":"MANUAL","reference":"Bank statement 2026-10-19","idempotencyKey":"client-generated-stable-request-id"}
+{"amount":"40.00","currency":"EUR","paidAt":"2026-10-20","source":"MANUAL","reference":"Bank statement","idempotencyKey":"stable-client-request-uuid","expectedPaidCents":"0"}
 ```
 
-Dates use `YYYY-MM-DD`, persisted at UTC midnight. Keep the same key and payload
-when retrying an uncertain request. A successful first write returns 201; identical
-replay returns 200. Both return `{event, summary, replayed}`. Summary contains exact
-string `totalCents`, `paidCents`, `openCents`, `paid`, date certainty and `paidAt`.
-Changed payload/key reuse returns 409 `IDEMPOTENCY_CONFLICT`; partial/overpayment
-returns 400 `FULL_PAYMENT_REQUIRED`. Zero, negative, subcent, unsupported currency,
-unsupported document and unsafe Float-bridge amounts are rejected before writes.
+Dates are actual calendar dates, not today's inferred evidence. Positive cent
+amounts must fit the existing safe Float bridge. A serializable transaction reads
+the complete ledger, validates every event/Income projection, checks the optimistic
+`expectedPaidCents`, then atomically writes Income, event, lifecycle and mandatory
+audit. Retryable SQLite conflicts restart the entire transaction. Same semantic
+key replays return the current whole-ledger summary before baseline validation;
+changed amount/date/reference/source under that key is `IDEMPOTENCY_CONFLICT`.
+The baseline is a precondition, not financial semantic identity.
 
-The single serializable transaction writes one immutable journal event, one linked
-Income projection, derived invoice PAID/paidAt/ISSUED and mandatory financial audit.
-Income remains the existing revenue source. **Do not add journal amounts to Income
-amounts**: these represent the same payment. Cancellation does not delete either.
+Success is 201, replay 200: `{event, summary, replayed}`. Summary has exact canonical
+string `totalCents`, `paidCents`, `openCents`, `paid`, and `paymentState`:
+`OPEN`, `PARTIAL`, `PAID`. Stale distinct requests receive 409
+`PAYMENT_STATE_CHANGED` with current summary. Overpayment receives 409
+`PAYMENT_EXCEEDS_OPEN`. Unexplained historical projections require
+`PAYMENT_REVIEW_REQUIRED`, never a guessed balance. Exhausted transient database
+errors are explicit retryable failures, not success. Per-client FIFO is only an
+optimization; cross-client transactions/preconditions enforce concurrency.
 
-`GET /api/invoices/:id/payments` returns `{currency:"EUR", event, summary, legacyAdoptionRequired, canRecordPayment}` after the same supported-document/currency/money checks as the writer.
-An unadopted legacy PAID row returns `summary:null` rather than falsely reporting
-it as unpaid. It requires explicit review/adoption.
+`GET` returns ordered `events`, `summary`, capability/review flags and a deprecated
+`event` alias only when exactly one event exists (otherwise null). Old full-payment
+requests may omit the baseline only on a consistent empty ledger for the exact
+full total. Legacy status PUT requires an explicit actual date; a partial ledger
+requires the payment dialog instead. Unchanged already-PAID no-ops are retained.
 
-## Historical adoption
+## Lifecycle and accounting
 
-`POST /api/invoices/:id/payments` with only `{"kind":"LEGACY_IMPORT"}` adopts an
-existing PAID invoice once. It never creates an Income or changes invoice paidAt.
-Existing Income is linked unchanged and marked `LEGACY_INCOME`; existing invoice
-paidAt without Income is marked `LEGACY_INVOICE`. These are historical evidence,
-**not confirmation of an actual payment date**: old defaults may themselves be
-uncertain. Without either, paidAt remains null and certainty is `UNKNOWN`. Conflicting
-amount/date evidence is rejected for review. ACTUAL is reserved for explicit new
-payment input. Normal reads and legacy status no-ops do not silently adopt rows.
+The first partial issues the invoice and sets SENT with paidAt=null. Settlement
+sets PAID and the latest actual allocation date, irrespective of submission order.
+Every ACTUAL Income is realized immediately on its event date, including while
+partially paid. Settlement/cancellation never moves earlier periods or deletes
+cash realization. Cancellation is not a refund.
 
-## Compatibility and UI integration
+Legacy PAID without a journal returns unknown summary and explicit adoption/review.
+`{"kind":"LEGACY_IMPORT"}` adopts only full historical evidence once. Existing
+Income and dates remain unchanged; no new Income or dates are synthesized.
+`LEGACY_INCOME`, `LEGACY_INVOICE`, `UNKNOWN` retain historical source/certainty/nulls;
+none is converted to ACTUAL. Conflicting legacy evidence is rejected.
 
-Legacy `PUT /api/invoices` can still mark PAID with explicit `paidAt` (calendar date
-or exact UTC ISO instant). Its deterministic key prevents duplicates. Without a
-new actual date it returns 400 `PAYMENT_DETAILS_REQUIRED`, never guesses today.
-An unchanged already-PAID request remains a no-op. Existing irreversible lifecycle,
-customer, billing-note and cashbook guards are retained.
+## UI and dependent surfaces
 
-The parent must update both existing undated PAID callers before acceptance:
+The dialog offers editable exact amount, explicit date/reference, received/open
+balances, ordered allocation history and deliberate conflict recovery. An
+uncertain write may recover only the exact pending idempotency key. A new equal-
+looking allocation uses a new baseline/key; merely opening history is not success.
+Invoice paid/unpaid/partial filters run before server pagination and counts.
+Reminder totals use remaining balances; partial-invoice reminder preview/send and
+internal creation are blocked until the separate BPR-013 reminder work is ready.
 
-- `components/dashboard/dashboard-content.tsx`: `handleInvoiceStatusChange`.
-- `app/dashboard/reminders/page.tsx`: `handleMarkAsPaid`.
+## Migration, backup and rollback
 
-No frontend is included in this backend package. Browser/mobile/keyboard acceptance
-and integrated full build remain parent gates.
+`20261021043000_add_partial_payments` only replaces the two unique invoice indexes
+with plural indexes. No event/Income backfill or historical financial rewrite.
+Tenant-link and immutable-update/delete triggers remain. Aggregate caps are
+application/restore invariants, not a property of the immutable triggers.
 
-## Backup and immutability
-
-Schema migration `20261020230000_add_payment_journal` is additive. Event edits and
-deletes are rejected by SQLite triggers; owner/invoice/Income linkage is checked
-on insert. No public API updates or deletes journal events.
-
-Backup snapshots include typed `paymentJournalEvents`, hashes and coverage.
-Restore validates amount/date/source/link invariants and remaps tenant-owned IDs;
-merge replays immutable equivalent events without duplicate Income. A target that
-already contains journal events **cannot be overwritten**, even by an old backup:
-use merge or an explicitly empty isolated target. This actionable rejection prevents
-journal loss. Rollback to code unaware of this model requires explicit data/restore
-review; do not drop the table or pretend an old backup contains its history.
+Grouped backup validation retains explicit support for the previous singleton
+journal schema and pre-journal backups. Merge uses verified event/idempotency
+identity and event-specific Income mappings. Replays do not duplicate Income or
+payment audit. Compatible snapshots can advance without regressing more advanced
+targets; ambiguous/divergent histories fail before writes. Journal-bearing targets
+cannot be overwritten, even with old backups. Older application code is not a
+supported rollback once partial allocations exist: never discard immutable history
+or disable its triggers to make it fit a singleton application.
