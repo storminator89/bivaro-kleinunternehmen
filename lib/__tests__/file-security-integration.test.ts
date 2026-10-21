@@ -244,7 +244,27 @@ describe('file and restore security integration', () => {
     const source = await database.client.invoice.findUniqueOrThrow({ where: { id: quote.id } });
     const before = await readFile(storage.getTenantUploadPath('alice', quote.storedFileName));
     const requests = await Promise.all([conversionRequest(quote.id, 'PARALLEL-INVOICE'), conversionRequest(quote.id, 'PARALLEL-INVOICE')]);
-    const responses = await Promise.all(requests.map(request => upload.POST(request)));
+    const initialResponses = await Promise.all(requests.map(request => upload.POST(request)));
+    // Same-tenant parsing is deliberately bounded. Depending on scheduling, one
+    // concurrent request may be refused before either conversion transaction.
+    expect(initialResponses.some(response => response.status === 200)).toBe(true);
+    expect(initialResponses.filter(response => response.status === 429).length).toBeLessThanOrEqual(1);
+    const responses: Response[] = [];
+    for (const response of initialResponses) {
+      if (response.status === 429) {
+        expect(response.headers.get('Retry-After')).toBe('1');
+        expect(await response.json()).toEqual({ error: 'Die Dokumentverarbeitung ist ausgelastet. Bitte später erneut versuchen.' });
+        // Promise.all above settled the first admitted call and released its
+        // real processing slot. Rebuild this consumed request and retry once;
+        // a second refusal or any other status must still fail the test.
+        const retry = await upload.POST(await conversionRequest(quote.id, 'PARALLEL-INVOICE'));
+        expect(retry.status).toBe(200);
+        responses.push(retry);
+      } else {
+        expect(response.status).toBe(200);
+        responses.push(response);
+      }
+    }
     expect(responses.map(response => response.status)).toEqual([200, 200]);
     const invoices = await Promise.all(responses.map(response => response.json()));
     expect(invoices[0].id).toBe(invoices[1].id);

@@ -39,6 +39,14 @@ describe('server-derived invoice balances and pre-pagination filtering', () => {
     expect(settled.items[0]).toMatchObject({ status: 'PAID', canRecordPayment: false, paymentSummary: { paidCents: '12000', openCents: '0', paymentState: 'PAID' }, incomes: [{ amount: 40 }, { amount: 80 }] });
     expect((await read('search=FILTER&paidStatus=partial')).total).toBe(1);
   });
+  it('keeps explicit nullable quote scalars in the invoice ledger DTO without listing private quote responses', async () => {
+    const own = await invoice('DTO-SCALARS');
+    await database.client.invoice.create({ data: { userId: state.userId, type: 'QUOTE', fileName: 'synthetic-quote.pdf', storedFileName: 'synthetic-quote.pdf', invoiceNumber: 'DTO-SCALARS-QUOTE', parsedData: {}, quoteFollowUpOn: '2026-12-31', quoteResponseNote: 'Synthetic private quote response' } });
+    const list = await read('search=DTO-SCALARS');
+    expect(list.total).toBe(1);
+    expect(list.items).toMatchObject([{ id: own.id, type: 'INVOICE', quoteFollowUpOn: null, quoteResponseNote: null, paymentReviewRequired: false, canRecordPayment: true, paymentSummary: { totalCents: '12000', paidCents: '0', openCents: '12000' } }]);
+    expect(JSON.stringify(list)).not.toContain('Synthetic private quote response');
+  });
   it('does not invent unpaid balances for historical or inconsistent financial evidence', async () => {
     const historical = await invoice('REVIEW');
     await database.client.invoice.update({ where: { id: historical.id }, data: { status: 'PAID' } });
