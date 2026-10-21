@@ -58,6 +58,9 @@ export interface EURExportData {
     controlTotals: EURControlTotals;
     corrections: EURCorrectionDetail[];
     sourceReferences: string[];
+    sourceVersion: string;
+    sourceSha256?: string;
+    checkedScope: string;
 }
 
 export interface CategoryEURMapping {

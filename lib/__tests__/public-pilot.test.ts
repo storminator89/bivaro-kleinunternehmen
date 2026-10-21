@@ -55,7 +55,10 @@ describe('public buyer and task guidance', () => {
     expect(html).toContain('Rechnungsimport ist keine automatische Ausgabenbuchung');
     expect(html).toContain('nicht auf „Bezahlt“');
     expect(html).toContain('keine ELSTER-Einreichung');
-    expect(html).toContain('nicht 2026');
+    expect(html).toContain('2024, 2025 und 2026');
+    expect(html).toContain('unbekannte Formularjahre werden abgewiesen');
+    expect(html).toContain('verifizierten Jahreszuordnungen für 2024, 2025, 2026');
+    expect(html).not.toContain('ist auf 2024 und 2025 begrenzt');
     expect(html).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
     expect(html).toContain('Zugang verloren oder Betriebsstörung');
     expect(html).toContain('id="steuerprofil"');

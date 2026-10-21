@@ -1226,6 +1226,14 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.goto('/dashboard?tab=eur');
     await page.getByRole('button', { name: 'EÜR-Übertragungshilfe öffnen', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Anlage EÜR – Übertragungshilfe' });
+    const selectedYear = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/eur-export' && url.searchParams.get('year') === '2025' && url.searchParams.get('format') === 'json';
+    });
+    await dialog.getByRole('combobox').click();
+    await page.getByRole('option', { name: '2025', exact: true }).click();
+    expect((await selectedYear).status()).toBe(200);
+    await expect(dialog.getByRole('combobox')).toHaveText('2025');
     await expect(dialog.getByText('anlage-euer-2025-v1', { exact: false })).toBeVisible();
     const downloadPromise = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'CSV herunterladen' }).click();
@@ -1553,6 +1561,12 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
           await page.screenshot({ path: testInfo.outputPath(`${route === '/' ? 'home' : 'help'}-pilot-${width}.png`), fullPage: true });
         }
       }
+      const paymentHelp = page.getByRole('region', { name: 'Zahlungen und Restbetrag erfassen', exact: true });
+      await expect(paymentHelp).toContainText('Tragen Sie den eingegangenen Betrag, das tatsächliche Datum und eine nachvollziehbare Zahlungsreferenz ein.');
+      await expect(paymentHelp).toContainText('Das Datum wird bewusst nicht mit heute vorbelegt.');
+      await expect(paymentHelp).toContainText('Von 120 EUR erhalten Sie 40 EUR an Datum A und später 80 EUR an Datum B; nach der ersten Zahlung bleiben 80 EUR offen.');
+      await expect(paymentHelp).not.toContainText('Ein eigenes Datumsfeld gibt es dort nicht');
+      await expect(paymentHelp).not.toContainText('aktuellen Buchungszeitpunkt als Zahlungsdatum');
       await expect(page.locator('#steuerprofil')).toContainText('sind nicht dasselbe');
       await expect(page.locator('#umfang')).toContainText('keine ELSTER-Einreichung');
       await expect(page.locator('#zugang')).toContainText('kein öffentlicher Betreiber- oder Supportkontakt');

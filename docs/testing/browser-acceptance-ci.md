@@ -40,10 +40,15 @@ Hosted run [39548413901](https://github.com/storminator89/bivaro-kleinunternehme
 passed Ghostscript/build and 40 tests but failed the manual PDF receipt preview:
 its response was HTTP 200/PDF while the iframe remained hidden awaiting `onLoad`;
 one subsequent serial case did not run. Playwright documents the default
-headless-shell/PDF navigation limitation. This observation motivates a
-PDF-capable browser check; **headed acceptance is still pending**, not a presumed
-fix or proof that all normal-browser behavior works. If headed mode also fails,
-the preview remains unresolved and needs investigation without weakening tests.
+headless-shell/PDF navigation limitation. That observation motivated the
+PDF-capable headed check. Subsequent headed hosted runs passed on their own
+immutable candidates: [PR 70 run 39549513302, 42/42](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39549513302)
+and [PR 68 run 39549625967, 48/48](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39549625967).
+These are historical results, not acceptance of later source changes. The current
+current-main/EÜR candidate selects **59 cases; its headed acceptance
+is pending**. No historical pass proves this new candidate or complete fiscal
+correctness. Any later preview failure still requires investigation without
+weakening its assertion.
 
 The runner creates a fresh temporary SQLite fixture and overrides `DATABASE_URL`
 with its absolute path. Its guarded preparation migrates only that fixture. The
@@ -102,10 +107,15 @@ basenames beneath `${{ runner.temp }}/bivaro-browser-results`:
 - `history-correction-mobile.png`
 - `receipt-draft-mobile.png`
 - `receipt-draft-desktop.png`
+- `eur-2026-working-paper-1440.png`
+- `eur-2026-working-paper-390.png`
+- `eur-2027-handoff-390.png`
+
+This feature branch adds only the three named EÜR captures to the accepted ten-name baseline allowlist. The working-paper captures show the same verified synthetic 2026 result at desktop/mobile widths; the handoff capture shows the actual 2027 fallback destination after edit/reload with its selected year retained. Capture instructions are not proof that images have been produced or visually accepted.
 
 Staging never follows symbolic links and accepts only regular files inside that
 results tree, verifies PNG signatures, and rejects duplicate basenames. More than
-ten files or more than 5 MiB combined skips the entire upload with a warning.
+thirteen files or more than 5 MiB combined skips the entire upload with a warning.
 Only those checked bytes enter a fresh staging directory; the standard
 `actions/upload-artifact` action uploads that directory with **one-day retention**.
 These are synthetic isolated-fixture UI screenshots, not real customer data or
