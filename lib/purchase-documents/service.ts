@@ -8,6 +8,8 @@ import { parsePurchaseBytes, PURCHASE_PARSER_VERSION } from './parser';
 import { originalHash, readPurchaseOriginal, purchaseOriginalName } from './original';
 import { PurchaseDocumentError } from './errors';
 import type { IncomingDocument, IncomingDocumentList, PurchaseParsePreview, PurchaseParseStatus, PurchaseReviewStatus, PurchaseMediaType, PurchaseReviewDraft } from './types';
+import { findPurchaseDuplicateHints } from './duplicates';
+import { isPhotoMedia, type ManualPhotoSnapshot } from './manual-photo-contract';
 import { PURCHASE_PARSE_STATUSES, PURCHASE_REVIEW_STATUSES } from './types';
 
 // Paginated reads must not materialize lineItems (or any full parsedData JSON).
@@ -16,7 +18,7 @@ const SOURCE_METADATA_SELECT = {
   mediaType: true, uploadedAt: true, supplierName: true, invoiceNumber: true, invoiceDate: true,
   currency: true, parseStatus: true, parseErrorCode: true, parserVersion: true, reviewStatus: true,
   revision: true, expenseId: true, approvedAt: true, approvalRequestId: true, approvalFingerprint: true,
-  reviewDraft: true, reviewDraftSavedAt: true, dismissedAt: true, dismissalReason: true, supplierId: true, selectedSupplierSnapshot: true,
+  reviewedSourceSnapshot: true, reviewDraft: true, reviewDraftSavedAt: true, dismissedAt: true, dismissalReason: true, supplierId: true, selectedSupplierSnapshot: true,
 } satisfies Prisma.PurchaseDocumentSelect;
 type SourceMetadata = Prisma.PurchaseDocumentGetPayload<{ select: typeof SOURCE_METADATA_SELECT }>;
 type SourcePreviewSummary = Pick<PurchaseParsePreview, 'grossAmount' | 'parserWarnings' | 'approvalSupported'>
@@ -59,6 +61,8 @@ export function assertSourceState(document: SourceMetadata): void {
   const hasApproval = document.expenseId !== null && document.approvedAt !== null && document.approvalRequestId !== null && document.approvalFingerprint !== null;
   const noApproval = document.expenseId === null && document.approvedAt === null && document.approvalRequestId === null && document.approvalFingerprint === null;
   if (document.reviewStatus === 'BOOKED' ? !hasApproval : !noApproval) throw new PurchaseDocumentError('Belegverknüpfung ist inkonsistent.', 409, 'SOURCE_STATE');
+  const manual = document.reviewedSourceSnapshot;
+  if ((manual != null && (!isPhotoMedia(document.mediaType) || document.reviewStatus !== 'BOOKED' || typeof manual !== 'object' || Array.isArray(manual) || manual.ownerId !== document.userId || manual.originalSha256 !== document.originalSha256)) || (isPhotoMedia(document.mediaType) && document.reviewStatus === 'BOOKED' && manual == null)) throw new PurchaseDocumentError('Manuelle Originalfreigabe ist inkonsistent.', 409, 'SOURCE_STATE');
   const hasSupplier = typeof document.supplierId === 'number' && document.supplierId > 0 && document.selectedSupplierSnapshot !== null && typeof document.selectedSupplierSnapshot === 'object' && !Array.isArray(document.selectedSupplierSnapshot) && document.selectedSupplierSnapshot.id === document.supplierId;
   const noSupplier = document.supplierId === null && document.selectedSupplierSnapshot === null;
   if ((!hasSupplier && !noSupplier) || (document.reviewStatus === 'BOOKED' && !hasSupplier)) throw new PurchaseDocumentError('Lieferantenverknüpfung ist inkonsistent.', 409, 'SOURCE_STATE');
@@ -70,12 +74,13 @@ function previewOf(document: PurchaseDocument): PurchaseParsePreview | null {
 function sourceDto(document: SourceMetadata, preview: SourcePreviewSummary | null, fullPreview: PurchaseParsePreview | null = null): IncomingDocument {
   assertSourceState(document);
   const warnings = [...(preview?.parserWarnings ?? [])];
-  if (!preview) warnings.push({ code: document.parseErrorCode ?? 'PARSE_PENDING', message: document.parseStatus === 'PENDING' ? 'Original archiviert. Extraktion steht aus; bitte erneut auslesen.' : document.mediaType.startsWith('image/') ? 'Foto archiviert. Nur manueller Prüfentwurf, kein OCR und noch keine Ausgabenerfassung aus Fotos.' : document.parseErrorCode === 'NO_EMBEDDED_XML' ? 'Original archiviert. Keine eingebettete E-Rechnungs-XML gefunden; keine OCR.' : 'Original archiviert. Keine sichere strukturierte Extraktion möglich; Original manuell prüfen.' });
+  if (!preview) warnings.push({ code: document.parseErrorCode ?? 'PARSE_PENDING', message: document.parseStatus === 'PENDING' ? 'Original archiviert. Extraktion steht aus; bitte erneut auslesen.' : document.mediaType.startsWith('image/') ? 'Foto archiviert, kein OCR. Manuelle Angaben sind nur Entwürfe; eine Ausgabe erfordert eine getrennte ausdrückliche Original- und Zahlungsfreigabe.' : document.parseErrorCode === 'NO_EMBEDDED_XML' ? 'Original archiviert. Keine eingebettete E-Rechnungs-XML gefunden; keine OCR.' : 'Original archiviert. Keine sichere strukturierte Extraktion möglich; Original manuell prüfen.' });
   if (!preview) warnings.push({ code: 'NOT_VALIDATED', message: 'Original und Extraktion sind nicht auf fachliche Konformität geprüft.' });
   return {
     id: document.id, direction: 'INCOMING', reviewState: document.reviewStatus as PurchaseReviewStatus,
     reviewStatus: document.reviewStatus as PurchaseReviewStatus, parseStatus: document.parseStatus as PurchaseParseStatus,
     validationStatus: 'NOT_VALIDATED', revision: document.revision,
+    reviewedSourceSnapshot: document.reviewedSourceSnapshot as ManualPhotoSnapshot | null,
     reviewDraft: document.reviewDraft as PurchaseReviewDraft | null, reviewDraftSavedAt: document.reviewDraftSavedAt?.toISOString() ?? null,
     originalRef: { id: document.id, fileName: document.originalFileName, sha256: document.originalSha256, bytes: document.originalByteCount, mediaType: document.mediaType as PurchaseMediaType, uploadedAt: document.uploadedAt.toISOString(), downloadUrl: `/api/purchase-documents/${document.id}/original` },
     supplierName: document.supplierName, invoiceNumber: document.invoiceNumber, invoiceDate: document.invoiceDate?.toISOString() ?? null,
@@ -96,20 +101,8 @@ export async function requirePurchaseDocument(userId: string, id: number): Promi
 }
 /** Conservative business hints, not supplier identity. Tenant predicate is never optional. */
 export async function getPurchaseBusinessDuplicates(document: PurchaseDocument): Promise<IncomingDocument['businessDuplicates']> {
-  if (!document.supplierName?.trim() || !document.invoiceNumber?.trim()) return [];
-  const matches = await prisma.$queryRaw<Array<{
-    id: number; supplierName: string | null; invoiceNumber: string | null; invoiceDate: Date | null;
-    currency: string | null; grossAmount: unknown; reviewStatus: PurchaseReviewStatus; revision: number; expenseId: number | null;
-  }>>(Prisma.sql`
-    SELECT "id", "supplierName", "invoiceNumber", "invoiceDate", "currency", "reviewStatus", "revision", "expenseId",
-      CASE WHEN "parseStatus" = 'PARSED' AND json_type("parsedData", '$.grossAmount') = 'text'
-        THEN substr(json_extract("parsedData", '$.grossAmount'), 1, 101) ELSE NULL END AS "grossAmount"
-    FROM "PurchaseDocument"
-    WHERE "userId" = ${document.userId} AND "id" <> ${document.id}
-      AND lower(trim("supplierName")) = lower(trim(${document.supplierName}))
-      AND lower(trim("invoiceNumber")) = lower(trim(${document.invoiceNumber}))
-    ORDER BY "uploadedAt" DESC, "id" DESC LIMIT 51
-  `);
+  const manual = isPhotoMedia(document.mediaType) ? (document.reviewedSourceSnapshot ?? document.reviewDraft) as { supplierName?: string; invoiceNumber?: string } | null : null;
+  const matches = await findPurchaseDuplicateHints(prisma, document.userId, document.id, document.supplierName ?? manual?.supplierName ?? null, document.invoiceNumber ?? manual?.invoiceNumber ?? null);
   return matches.map(match => ({ id: match.id, supplierName: match.supplierName, invoiceNumber: match.invoiceNumber,
     invoiceDate: match.invoiceDate?.toISOString() ?? null, currency: match.currency, totalAmount: exactProjectedGross(match.grossAmount),
     reviewState: match.reviewStatus as PurchaseReviewStatus, revision: match.revision, linkedExpenseId: match.expenseId }));

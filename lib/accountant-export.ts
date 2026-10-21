@@ -1,3 +1,5 @@
+import { isPhotoMedia } from '@/lib/purchase-documents/manual-photo-contract';
+import { stableManualPhotoSnapshot, validateManualPhotoSnapshot } from '@/lib/purchase-documents/manual-photo-review';
 import { Prisma } from '@prisma/client';
 import JSZip from 'jszip';
 import { realpath, lstat } from 'node:fs/promises';
@@ -74,6 +76,7 @@ const invoiceSelect = {
 } satisfies Prisma.InvoiceSelect;
 
 const TEXT_COLUMNS = {
+  PurchaseDocument: ['reviewedSourceSnapshot', 'reviewDraft'],
   Expense: ['description', 'category', 'receiptFileName', 'storedReceiptFileName'],
   Income: ['description'],
   PaymentJournalEvent: ['amountCents', 'currency', 'dateCertainty', 'source', 'reference'],
@@ -135,12 +138,15 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
     for (const [table, rows] of [['Expense', expenseIds], ['Income', incomeIds], ['Invoice', invoiceIds], ['CashTransaction', cashIds]] as const) {
       await reserveSourceText(tx, userId, table, rows.map(row => row.id), textBudget);
     }
+    const sourceIds = expenseIds.length ? await tx.purchaseDocument.findMany({ where: { expenseId: { in: expenseIds.map(row => row.id) } }, select: { id: true, userId: true } }) : [];
+    if (sourceIds.some(source => source.userId !== userId)) throw new AccountantExportError('Originalzuordnung gehört nicht zum ausgewählten Arbeitsbereich.', 409);
+    await reserveSourceText(tx, userId, 'PurchaseDocument', sourceIds.map(row => row.id), textBudget);
     await reserveSourceText(tx, userId, 'Settings', null, textBudget);
     const [expenses, incomes, invoices, cashTransactions, company] = await Promise.all([
       tx.expense.findMany({ where: expenseWhere, orderBy: { id: 'asc' }, select: {
         id: true, description: true, amount: true, date: true, category: true, taxRelevant: true,
         taxDeductiblePercentage: true, depreciationYears: true, receiptFileName: true, storedReceiptFileName: true,
-        purchaseDocument: { select: { id: true, userId: true, storedFileName: true, originalSha256: true, originalByteCount: true, reviewStatus: true } },
+        purchaseDocument: { select: { id: true, userId: true, storedFileName: true, originalSha256: true, originalByteCount: true, reviewStatus: true, mediaType: true, uploadRequestId: true, revision: true, reviewDraft: true, reviewDraftSavedAt: true, reviewedSourceSnapshot: true } },
       } }),
       tx.income.findMany({ where: incomeWhere, orderBy: { id: 'asc' }, select: {
         id: true, description: true, amount: true, date: true, customerId: true, invoiceId: true, taxRelevant: true,
@@ -330,7 +336,12 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
   });
   const expenses = snapshot.data.expenses.map(row => {
     const { storedReceiptFileName: _stored, receiptFileName: originalFileName, amount, purchaseDocument: source, ...rest } = row;
-    return { ...rest, purchaseDocumentId: source?.id ?? null, originalSha256: source?.originalSha256 ?? null, ...money(amount, 'expense', row.id), paymentDateSource: 'expense.date (stored booking/outflow date)', originalFileName,
+    let manualSourceReview = null;
+    if (source && isPhotoMedia(source.mediaType)) {
+      try { manualSourceReview = stableManualPhotoSnapshot(validateManualPhotoSnapshot(source.reviewedSourceSnapshot, source, { amount, date: row.date, description: row.description })); }
+      catch { throw new AccountantExportError('Manuelle Foto-Originalfreigabe stimmt nicht mit der Ausgabe überein.', 409); }
+    }
+    return { ...rest, sourceReviewProvenance: manualSourceReview?.provenance ?? null, manualSourceReview, purchaseDocumentId: source?.id ?? null, originalSha256: source?.originalSha256 ?? null, ...money(amount, 'expense', row.id), paymentDateSource: 'expense.date (stored booking/outflow date)', originalFileName,
       originalZipPath: originalByRecord.get(`expense:${row.id}`)?.zipPath ?? null };
   });
   const incomes = snapshot.data.incomes.map(row => {
@@ -365,7 +376,7 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
   // Fixed schemas also make an empty package useful and machine-readable.
   const headers: Record<keyof typeof tables, string[]> = {
     invoices: ['id', 'type', 'invoiceNumber', 'invoiceDate', 'uploadedAt', 'dueDate', 'status', 'issuanceState', 'paidAt', 'customerId', 'originalInvoiceId', 'cancellationReason', 'currency', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'documentDateSource', 'documentDateInPeriod', 'paymentDateInPeriod', 'originalFileName', 'originalZipPath'],
-    expenses: ['id', 'date', 'description', 'category', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'taxDeductiblePercentage', 'depreciationYears', 'paymentDateSource', 'originalFileName', 'originalZipPath', 'purchaseDocumentId', 'originalSha256'],
+    expenses: ['id', 'date', 'description', 'category', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'taxDeductiblePercentage', 'depreciationYears', 'paymentDateSource', 'originalFileName', 'originalZipPath', 'purchaseDocumentId', 'originalSha256', 'sourceReviewProvenance'],
     incomes: ['id', 'date', 'description', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'customerId', 'invoiceId', 'accountingDate', 'accountingDateInPeriod', 'cashRealized', 'invoiceStatus', 'invoicePaidAt', 'paymentJournalEventId', 'paymentDate', 'paymentDateCertainty', 'paymentSource', 'paymentReference'],
     payments: ['id', 'invoiceId', 'incomeId', 'amountCents', 'currency', 'paidAt', 'dateCertainty', 'source', 'reference', 'createdAt', 'paymentDateInPeriod'],
     cashTransactions: ['id', 'date', 'type', 'description', 'currency', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'runningBalance', 'runningBalanceCents', 'runningBalanceRoundingDifferenceCents', 'category', 'receiptNumber', 'taxRelevant', 'cashBookId', 'expenseId', 'incomeId'],

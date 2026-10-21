@@ -1,3 +1,4 @@
+import type { ManualPhotoConfirmation, ManualPhotoSnapshot } from './manual-photo-contract';
 import type { SupplierDto } from '@/lib/suppliers';
 import type { ParsedEInvoiceParty } from '@/lib/e-invoice-parser';
 
@@ -58,6 +59,7 @@ export type IncomingDocument = {
   parseStatus: PurchaseParseStatus;
   validationStatus: 'NOT_VALIDATED';
   revision: number;
+  reviewedSourceSnapshot?: ManualPhotoSnapshot | null;
   reviewDraft?: PurchaseReviewDraft | null;
   reviewDraftSavedAt?: string | null;
   originalRef: {
@@ -106,6 +108,7 @@ export type PurchaseExpenseApprovalInput = {
   confirmReviewedOriginal: true;
   confirmBuyerBelongsToBusiness: true;
   acknowledgedDuplicates: Array<{ id: number; revision: number }>;
+  manualPhotoReview?: ManualPhotoConfirmation;
 };
 export type PurchaseExpenseApprovalResponse = {
   document: IncomingDocument;

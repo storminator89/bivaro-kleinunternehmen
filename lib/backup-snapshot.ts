@@ -1,3 +1,4 @@
+import { readAnnualContextRevision } from '@/lib/annual-business-context';
 import { prisma } from '@/lib/prisma';
 import { hashBytes, hashJson, redactAuditLog } from '@/lib/backup-manifest';
 import { stat, readFile } from 'node:fs/promises';
@@ -91,6 +92,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       customers,
       suppliers,
       settings,
+      annualBusinessContextRevisions,
       templates,
       recurringExpenses,
       reminders,
@@ -114,6 +116,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       tx.customer.findMany({ where: { userId } }),
       tx.supplier.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.settings.findUnique({ where: { userId } }),
+      tx.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } }),
       tx.invoiceTemplate.findMany({ where: { userId } }),
       tx.recurringExpense.findMany({ where: { userId } }),
       tx.reminder.findMany({ where: { userId } }),
@@ -135,6 +138,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       purchaseDocuments: purchaseDocuments.map((item) => ({ ...item, userId: undefined })),
       customers: customers.map((item) => ({ ...item, userId: undefined })),
       suppliers: suppliers.map((item) => ({ ...item, userId: undefined })),
+      annualBusinessContextRevisions: annualBusinessContextRevisions.map(readAnnualContextRevision),
       settings: settings ? { ...settings, userId: undefined } : null,
       templates: templates.map((item) => ({ ...item, userId: undefined })),
       recurringExpenses: recurringExpenses.map((item) => ({ ...item, userId: undefined })),

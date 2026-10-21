@@ -1,0 +1,6 @@
+.header { flex-wrap: wrap; }
+.header > div { flex: 1 1 18rem; min-width: 0; }
+.header > button { flex: 0 0 auto; }
+@media (max-width: 480px) {
+  .header > button { width: 100%; }
+}

@@ -48,6 +48,22 @@ describe('deliberate purchase expense input', () => {
     const credit = document(); credit.preview = { ...credit.preview!, documentType: 'CREDIT_NOTE' };
     expect(approvalBlockedReason(credit)).toContain('Gutschriften');
   });
+  it('offers manual photo confirmation only for complete saved work and explicit supplier, never treating it as extracted data', () => {
+    const photo = document({ parseStatus: 'FAILED', preview: null, approvalSupported: false, currency: null, totalAmount: null, reviewDraft: { supplierName: 'Photo supplier', invoiceNumber: 'PHOTO-17', invoiceDate: '2025-12-31', paymentDate: '2026-01-01', amount: '0.29', note: 'Unposted saved work' }, reviewDraftSavedAt: '2026-10-21T06:00:00.000Z' });
+    photo.originalRef = { ...photo.originalRef, mediaType: 'image/png' };
+    expect(approvalBlockedReason(photo)).toBeNull();
+    expect(approvalBlockedReason({ ...photo, reviewDraft: null })).toContain('vollständigen Prüfentwurf');
+    expect(approvalBlockedReason({ ...photo, reviewDraftSavedAt: null })).toContain('ausdrücklich speichern');
+    expect(approvalBlockedReason({ ...photo, supplierId: null, selectedSupplierSnapshot: null })).toContain('ausdrücklich auswählen');
+    const html = renderToStaticMarkup(createElement(PurchaseExpenseApproval, { document: photo, onApproved: vi.fn(), onBack: vi.fn(), onReload: vi.fn(), onOpenDuplicate: vi.fn(), onBusyChange: vi.fn(), onPendingChange: vi.fn() }));
+    expect(html).toContain('Manuelle Foto-Originalprüfung, kein OCR'); expect(html).toContain('0,29 EUR');
+    expect(html).toMatch(/id="purchase-expense-date"[^>]*readOnly=""[^>]*value="2026-01-01"/);
+    expect(html).toMatch(/id="purchase-photo-buyer"[^>]*value=""/);
+    for (const id of ['purchase-expense-category', 'purchase-expense-share']) expect(html).toMatch(new RegExp(`id="${id}"[^>]*value=""`));
+    const confirmation = { ...input, manualPhotoReview: { expectedDraft: photo.reviewDraft!, expectedDraftSavedAt: photo.reviewDraftSavedAt!, buyerName: 'Confirmed buyer', currency: 'EUR' as const, documentType: 'INVOICE' as const, confirmSourceOwnership: true as const, confirmExactDraftValues: true as const, confirmOrdinaryInvoice: true as const } };
+    const summary = renderToStaticMarkup(createElement(ApprovalSummary, { input: confirmation }));
+    expect(summary).toContain('Manuelle'); expect(summary).toContain('PHOTO-17'); expect(summary).toContain('31.12.2025'); expect(summary).toContain('Confirmed buyer');
+  });
   it('persists only an opaque UUID keyed by tenant, document and SHA-256 of exact deliberate payload', async () => {
     const { approvalRequestId, ...payload } = input;
     const key = await approvalIdentityKey('tenant-a', 12, payload);
