@@ -16,7 +16,7 @@ const SOURCE_METADATA_SELECT = {
   mediaType: true, uploadedAt: true, supplierName: true, invoiceNumber: true, invoiceDate: true,
   currency: true, parseStatus: true, parseErrorCode: true, parserVersion: true, reviewStatus: true,
   revision: true, expenseId: true, approvedAt: true, approvalRequestId: true, approvalFingerprint: true,
-  dismissedAt: true, dismissalReason: true,
+  dismissedAt: true, dismissalReason: true, supplierId: true, selectedSupplierSnapshot: true,
 } satisfies Prisma.PurchaseDocumentSelect;
 type SourceMetadata = Prisma.PurchaseDocumentGetPayload<{ select: typeof SOURCE_METADATA_SELECT }>;
 type SourcePreviewSummary = Pick<PurchaseParsePreview, 'grossAmount' | 'parserWarnings' | 'approvalSupported'>
@@ -54,11 +54,14 @@ export function expectedRevision(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > 2_147_483_647) throw new PurchaseDocumentError('Aktuelle Belegrevision ist erforderlich.');
   return value;
 }
-function assertSourceState(document: SourceMetadata): void {
+export function assertSourceState(document: SourceMetadata): void {
   if (!PURCHASE_REVIEW_STATUSES.includes(document.reviewStatus as PurchaseReviewStatus) || !PURCHASE_PARSE_STATUSES.includes(document.parseStatus as PurchaseParseStatus)) throw new PurchaseDocumentError('Belegstatus ist inkonsistent.', 409, 'SOURCE_STATE');
   const hasApproval = document.expenseId !== null && document.approvedAt !== null && document.approvalRequestId !== null && document.approvalFingerprint !== null;
   const noApproval = document.expenseId === null && document.approvedAt === null && document.approvalRequestId === null && document.approvalFingerprint === null;
   if (document.reviewStatus === 'BOOKED' ? !hasApproval : !noApproval) throw new PurchaseDocumentError('Belegverknüpfung ist inkonsistent.', 409, 'SOURCE_STATE');
+  const hasSupplier = typeof document.supplierId === 'number' && document.supplierId > 0 && document.selectedSupplierSnapshot !== null && typeof document.selectedSupplierSnapshot === 'object' && !Array.isArray(document.selectedSupplierSnapshot) && document.selectedSupplierSnapshot.id === document.supplierId;
+  const noSupplier = document.supplierId === null && document.selectedSupplierSnapshot === null;
+  if ((!hasSupplier && !noSupplier) || (document.reviewStatus === 'BOOKED' && !hasSupplier)) throw new PurchaseDocumentError('Lieferantenverknüpfung ist inkonsistent.', 409, 'SOURCE_STATE');
 }
 function previewOf(document: PurchaseDocument): PurchaseParsePreview | null {
   if (document.parseStatus !== 'PARSED' || !document.parsedData || typeof document.parsedData !== 'object' || Array.isArray(document.parsedData)) return null;
@@ -76,6 +79,7 @@ function sourceDto(document: SourceMetadata, preview: SourcePreviewSummary | nul
     originalRef: { id: document.id, fileName: document.originalFileName, sha256: document.originalSha256, bytes: document.originalByteCount, mediaType: document.mediaType as 'application/pdf' | 'application/xml', uploadedAt: document.uploadedAt.toISOString(), downloadUrl: `/api/purchase-documents/${document.id}/original` },
     supplierName: document.supplierName, invoiceNumber: document.invoiceNumber, invoiceDate: document.invoiceDate?.toISOString() ?? null,
     currency: document.currency, totalAmount: preview?.grossAmount ?? null,
+    supplierId: document.supplierId, selectedSupplierSnapshot: document.selectedSupplierSnapshot as IncomingDocument['selectedSupplierSnapshot'],
     supplierCandidate: preview?.sellerInfo ?? null, buyerCandidate: preview?.buyerInfo ?? null,
     parserWarnings: warnings, parserVersion: document.parserVersion, parseErrorCode: document.parseErrorCode,
     preview: fullPreview, businessDuplicates: [], linkedExpenseId: document.expenseId,

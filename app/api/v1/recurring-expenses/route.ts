@@ -290,6 +290,8 @@ async function deleteHandler(request: NextRequest) {
       return apiError('Recurring expense not found', 404, 'NOT_FOUND');
     }
 
+    if (await prisma.expense.findFirst({ where: { recurringExpenseId: Number(id), purchaseDocument: { isNot: null } }, select: { id: true } })) return apiError('Recurring template contains an immutable incoming source expense', 409, 'SOURCE_LINKED');
+
     await prisma.recurringExpense.delete({
       where: { id: parseInt(id) },
     });

@@ -12,7 +12,7 @@ function document(overrides: Partial<IncomingDocument> = {}): IncomingDocument {
   return {
     id: 12, direction: 'INCOMING', reviewState: 'REVIEW', reviewStatus: 'REVIEW', parseStatus: 'PARSED', validationStatus: 'NOT_VALIDATED', revision: 2,
     originalRef: { id: 12, fileName: 'eingang.xml', sha256: 'a'.repeat(64), bytes: 100, mediaType: 'application/xml', uploadedAt: '2026-10-20T12:00:00.000Z', downloadUrl: '/api/purchase-documents/12/original' },
-    supplierName: 'Lieferfirma', invoiceNumber: 'RE-42', invoiceDate: '2026-10-01T00:00:00.000Z', currency: 'EUR', totalAmount: '123.45',
+    supplierId: null, selectedSupplierSnapshot: null, supplierName: 'Lieferfirma', invoiceNumber: 'RE-42', invoiceDate: '2026-10-01T00:00:00.000Z', currency: 'EUR', totalAmount: '123.45',
     supplierCandidate: party('Lieferfirma'), buyerCandidate: party('Mein Betrieb'), parserWarnings: [{ code: 'NOT_VALIDATED', message: 'Keine Konformitätsprüfung.' }],
     parserVersion: 'preview-v1', parseErrorCode: null, preview: { extractionStatus: 'PARSED', validationStatus: 'NOT_VALIDATED', format: 'UBL', documentType: 'INVOICE', documentTypeCode: '380', currency: 'EUR', invoiceNumber: 'RE-42', invoiceDate: '2026-10-01T00:00:00.000Z', dueDate: null, grossAmount: '123.45', dueAmount: '100', prepaidAmount: '23.45', roundingAmount: null, netAmount: '100', taxAmount: '23.45', sellerInfo: party('Lieferfirma'), buyerInfo: party('Mein Betrieb'), lineItems: [], parserWarnings: [], approvalSupported: false },
     businessDuplicates: [], linkedExpenseId: null, dismissedAt: null, dismissalReason: null, approvalSupported: false, ...overrides,
@@ -53,8 +53,7 @@ describe('incoming source presentation', () => {
     const html = renderToStaticMarkup(createElement(SourcePreview, { document: doc, onOpen: vi.fn() }));
     expect(html).toContain('Gutschrift'); expect(html).toContain('123,45 USD');
     expect(html).toContain('Zu prüfen · nicht gebucht');
-    expect(html).toContain('noch nicht verfügbar');
-    expect(html).toContain('nicht für die spätere unterstützte Ausgabenerfassung');
+    expect(html).toContain('Gutschriften und andere Dokumenttypen werden hier nicht gebucht');
     expect(html).not.toContain('Als Ausgabe erfassen');
     expect(html).not.toContain('€');
   });
@@ -115,7 +114,7 @@ describe('incoming upload and request guards', () => {
     await expect(incomingJson('/api/purchase-documents')).rejects.toThrow('erneut versuchen');
     expect(fetcher).toHaveBeenCalledWith('/api/purchase-documents', expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }));
   });
-  it('keeps intake separate from all financial mutation routes and exposes a protected workspace', () => {
+  it('keeps intake and source review separate from direct financial mutations and exposes a protected workspace', () => {
     const workspace = readFileSync('components/purchases/incoming-documents-workspace.tsx', 'utf8');
     const review = readFileSync('components/purchases/incoming-document-review.tsx', 'utf8');
     const upload = readFileSync('components/purchases/incoming-upload.tsx', 'utf8');

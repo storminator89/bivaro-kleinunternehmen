@@ -1,5 +1,6 @@
 "use client";
 
+import { ExpenseRowActions } from '@/components/dashboard/expense-row-actions';
 import { LedgerSortControl, SortableLedgerHead } from '@/components/dashboard/ledger-sort-control';
 import { DashboardIcon } from "@/components/brand/dashboard-icon";
 import { ChevronDown } from "lucide-react";
@@ -17,12 +18,6 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Combobox } from "@/components/ui/combobox";
 import { AfaTableDialog } from "@/components/afa-table-dialog";
 import { Expense, FilterState } from "@/types/dashboard";
@@ -508,13 +503,7 @@ export function ExpensesTab({
                   <p className="shrink-0 font-semibold tabular-nums text-critical">{formatCurrency(expense.amount)}</p>
                 </div>
                 <p className="text-xs text-muted-foreground">{expense.taxRelevant ? 'Steuerrelevant' : 'Nicht steuerrelevant'}</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => onEdit(expense)}>Bearbeiten</Button>
-                  {expense.storedReceiptFileName && (
-                    <Button variant="outline" size="sm" className="min-h-11" onClick={() => onViewReceipt(`/api/expenses/download?id=${expense.id}`)}>Beleg ansehen</Button>
-                  )}
-                  <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={isDeleting} onClick={() => onDelete(expense.id)}>Löschen</Button>
-                </div>
+                <ExpenseRowActions expense={expense} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} />
               </article>
             )) : (
               <p className="p-6 text-center text-sm text-muted-foreground">Keine Ausgaben vorhanden. Erfassen Sie oben Ihre erste Ausgabe.</p>
@@ -561,104 +550,7 @@ export function ExpensesTab({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <TooltipProvider>
-                          <div className="flex justify-end space-x-2">
-                            {expense.storedReceiptFileName && (
-                              <>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      aria-label={`Beleg zu ${expense.description} anzeigen`}
-                                      onClick={() => onViewReceipt(`/api/expenses/download?id=${expense.id}`)}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                      </svg>
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Beleg anzeigen</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      aria-label={`Beleg zu ${expense.description} herunterladen`}
-                                      onClick={() => {
-                                        window.open(`/api/expenses/download?id=${expense.id}&download=true`, 'Beleg Download', 'width=800,height=600,scrollbars=yes,resizable=yes');
-                                      }}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4 4m4-4V4" />
-                                      </svg>
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Beleg herunterladen</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </>
-                            )}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  aria-label={`${expense.description} duplizieren`}
-                                  onClick={() => onDuplicate(expense)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h6a2 2 0 002-2v-8a2 2 0 00-2-2h-6a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Duplizieren</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  aria-label={`${expense.description} bearbeiten`}
-                                  onClick={() => onEdit(expense)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Bearbeiten</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  aria-label={`${expense.description} löschen`}
-                                  className="border-critical/30 text-critical hover:bg-critical-surface"
-                                  onClick={() => onDelete(expense.id)}
-                                  disabled={isDeleting}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Löschen</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TooltipProvider>
+                        <ExpenseRowActions expense={expense} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} compact />
                       </TableCell>
                     </TableRow>
                   ))

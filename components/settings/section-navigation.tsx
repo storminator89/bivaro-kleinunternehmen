@@ -9,6 +9,7 @@ export function SettingsSectionNavigation({ isAdmin }: { isAdmin: boolean }) {
       { id: 'email-settings', label: 'E-Mail-Versand', Icon: Mail },
       { id: 'registration-settings', label: 'Registrierung', Icon: ShieldCheck },
     ] : []),
+    { id: 'handoff-settings', label: 'Unterlagen übergeben', Icon: FileCheck },
     { id: 'backup-settings', label: 'Datensicherung', Icon: HardDrive },
     { id: 'access-settings', label: 'API-Zugang', Icon: KeyRound },
     { id: 'audit-settings', label: 'Audit-Log', Icon: History },

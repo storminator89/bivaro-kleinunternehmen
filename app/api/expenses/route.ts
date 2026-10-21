@@ -1,3 +1,4 @@
+import { assertExpenseNotSourceLinked, SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { protectMutation } from '@/lib/request-security';
 import { parseLedgerSort, LedgerSortError } from '@/lib/ledger-sort';
 import { NextResponse, NextRequest } from 'next/server';
@@ -225,6 +226,7 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json(expense);
     }
   } catch (error: unknown) {
+    if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
@@ -302,11 +304,16 @@ export async function GET(request: NextRequest) {
         orderBy: [{ [sort.sortBy]: sort.sortOrder }, { id: sort.sortOrder }],
         skip,
         take: pageSize,
+        include: { purchaseDocument: { select: { id: true, userId: true, reviewStatus: true, storedFileName: true } } },
       }),
       prisma.expense.count({ where }),
     ]);
 
-    return NextResponse.json({ items, total, page, pageSize });
+    const safeItems = items.map(({ purchaseDocument: source, ...expense }) => ({ ...expense,
+      sourceLinked: source !== null,
+      sourceDocumentId: source && source.userId === userId && source.reviewStatus === 'BOOKED' && source.storedFileName === expense.storedReceiptFileName ? source.id : null,
+    }));
+    return NextResponse.json({ items: safeItems, total, page, pageSize });
   } catch (_error: unknown) {
     if (_error instanceof LedgerSortError) {
       return NextResponse.json({ error: _error.message }, { status: 400 });
@@ -380,6 +387,7 @@ async function putHandler(request: Request) {
     const result = await inTransaction(async (tx) => {
       const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
       if (!current) throw new Error('Ausgabe nicht gefunden');
+      await assertExpenseNotSourceLinked(tx, current.id);
       if (current.cashTransaction) throw new Error('Mit dem Kassenbuch verknüpfte Ausgaben müssen dort geändert werden');
       const updated = await tx.expense.update({
         where: { id: parsedId, userId },
@@ -414,6 +422,7 @@ async function putHandler(request: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
@@ -450,6 +459,7 @@ async function deleteHandler(request: Request) {
     await inTransaction(async (tx) => {
       const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
       if (!current) throw new Error('Ausgabe nicht gefunden');
+      await assertExpenseNotSourceLinked(tx, current.id);
       if (current.cashTransaction) throw new Error('Mit dem Kassenbuch verknüpfte Ausgaben müssen dort gelöscht werden');
       await tx.expense.delete({ where: { id: parsedId, userId } });
       await createFinancialAuditLog({
@@ -471,6 +481,7 @@ async function deleteHandler(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
+    if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }

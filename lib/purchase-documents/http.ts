@@ -1,3 +1,4 @@
+import { isRetryableDatabaseError } from '@/lib/db-transaction';
 import { NextResponse } from 'next/server';
 import { UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { RequestBodyLimitError, readRequestBodyWithinLimit } from '@/lib/resource-limits';
@@ -21,7 +22,7 @@ export function purchaseErrorResponse(error: unknown): Response {
     ...(error.existingDocumentId ? { existingDocumentId: error.existingDocumentId, duplicateKind: 'EXACT_FILE' } : {}) }, { status: error.status });
   if (error instanceof RequestBodyLimitError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof ProcessingCapacityError) return NextResponse.json({ error: error.message, code: 'PROCESSING_BUSY' }, { status: error.status, headers: { 'Retry-After': '1' } });
-  if ((error as { code?: string })?.code === 'P2002') return NextResponse.json({ error: 'Beleg wurde gleichzeitig geändert. Bitte erneut laden.', code: 'CONCURRENT_CONFLICT' }, { status: 409 });
+  if (isRetryableDatabaseError(error) || ['P2002', 'P2025'].includes((error as { code?: string })?.code ?? '')) return NextResponse.json({ error: 'Beleg wurde gleichzeitig geändert. Bitte erneut laden.', code: 'CONCURRENT_CONFLICT' }, { status: 409 });
   // Never expose parser errors, raw source, filesystem paths or DB exception strings.
   return NextResponse.json({ error: 'Eingangsbeleg konnte nicht verarbeitet werden.', code: 'INTERNAL_ERROR' }, { status: 500 });
 }

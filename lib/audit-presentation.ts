@@ -3,7 +3,7 @@ import type { AuditAction, AuditEntityType } from '@/lib/audit-log';
 // Exhaustive labels keep the list, detail dialog and filters in sync with the
 // audit writer. Type-only imports do not load server/database code in the UI.
 export const AUDIT_ENTITY_LABELS: Record<AuditEntityType, string> = {
-  Customer: 'Kunde', Invoice: 'Rechnung', PurchaseDocument: 'Eingangsbeleg', Expense: 'Ausgabe', Income: 'Einnahme',
+  Customer: 'Kunde', Supplier: 'Lieferant', Invoice: 'Rechnung', PurchaseDocument: 'Eingangsbeleg', Expense: 'Ausgabe', Income: 'Einnahme',
   Settings: 'Einstellungen', User: 'Benutzer', ApiKey: 'API-Key',
   RecurringExpense: 'Wiederkehrende Ausgabe', Reminder: 'Mahnung',
   InvoiceTemplate: 'Rechnungsvorlage', Backup: 'Datensicherung', Session: 'Sitzung',

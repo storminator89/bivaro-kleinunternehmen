@@ -17,9 +17,11 @@ export type BackupPreview = {
   };
   counts: {
     customers: number;
+    suppliers: number;
     billingNotes: number;
     expenses: number;
     incomes: number;
+    paymentJournalEvents: number;
     invoices: number;
     purchaseDocuments: number;
     templates: number;
@@ -72,9 +74,11 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   const data = candidate.data;
   const counts = {
     customers: countArray(data, 'customers'),
+    suppliers: countArray(data, 'suppliers'),
     billingNotes: countArray(data, 'billingNotes'),
     expenses: countArray(data, 'expenses'),
     incomes: countArray(data, 'incomes'),
+    paymentJournalEvents: countArray(data, 'paymentJournalEvents'),
     invoices: countArray(data, 'invoices'),
     purchaseDocuments: countArray(data, 'purchaseDocuments'),
     templates: countArray(data, 'templates'),

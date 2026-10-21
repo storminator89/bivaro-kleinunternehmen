@@ -1,3 +1,4 @@
+import { assertExpenseNotSourceLinked } from '@/lib/source-linked-expense';
 import { prisma } from '@/lib/prisma';
 import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
@@ -29,6 +30,7 @@ export async function executeRecurringExpenses(userId: string, id?: number, at =
       while (current <= cutoff && processed < remainingBudget) {
         const key = { recurringExpenseId: recurring.id, scheduledDate: current };
         const existing = await tx.expense.findUnique({ where: { recurringExpenseId_scheduledDate: key } });
+        if (existing) await assertExpenseNotSourceLinked(tx, existing.id);
         if (!existing) {
           const created = await tx.expense.create({ data: {
             ...key, userId, description: recurring.description, amount: recurring.amount,

@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import { NextRequest } from 'next/server';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, hashBytes, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
+import { createBackupManifest, hashBytes, CURRENT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
 import type { PurchaseParsePreview } from '@/lib/purchase-documents/types';
 
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null, userId: 'incoming-backup-source', failFinalAudit: false }));
@@ -78,6 +78,13 @@ async function user(id: string) {
 }
 async function sources(id: string) {
   await user(id);
+  const supplier = await database.client.supplier.create({ data: { userId: id, name: 'Explicit chosen supplier', address: 'Historical street 1', postalCode: '12345', city: 'Berlin', country: 'DE', email: 'chosen@supplier.test', phone: '0123456', taxId: 'tax-17', vatId: 'DE123', createdAt: at, updatedAt: at } });
+  const { userId: _owner, createdAt: _created, updatedAt: _updated, ...selectedSupplierSnapshot } = supplier;
+  void _owner; void _created; void _updated;
+  // Master contact changes after approval never rewrite the selected snapshot.
+  await database.client.supplier.update({ where: { id: supplier.id }, data: { name: 'Current supplier name', address: 'Current street 2', revision: 1, updatedAt: at } });
+  await database.client.supplier.create({ data: { userId: id, name: 'Current supplier name', createdAt: at, updatedAt: at } });
+  await database.client.auditLog.create({ data: { userId: id, action: 'CREATE', entityType: 'Supplier', entityId: String(supplier.id), createdAt: at } });
   const created = [];
   for (const [index, reviewStatus] of ['REVIEW', 'DISMISSED', 'BOOKED'].entries()) {
     const bytes = Buffer.from(`%PDF-1.7\noriginal-${id}-${index}`);
@@ -93,7 +100,7 @@ async function sources(id: string) {
       ...(reviewStatus === 'BOOKED' ? { parsedData: preview(), parserVersion: 'purchase-preview-v1', supplierName: 'Supplier', invoiceNumber: 'SUP-17', invoiceDate: at, totalAmount: 119, currency: 'EUR' } : {}),
       reviewStatus, revision: reviewStatus === 'REVIEW' ? 0 : 1,
       expenseId: expense?.id,
-      ...(expense ? { approvalRequestId: randomUUID(), approvalFingerprint: 'a'.repeat(64), approvedAt: at } : {}),
+      ...(expense ? { supplierId: supplier.id, selectedSupplierSnapshot, approvalRequestId: randomUUID(), approvalFingerprint: 'a'.repeat(64), approvedAt: at } : {}),
       ...(reviewStatus === 'DISMISSED' ? { dismissedAt: at, dismissalReason: 'Not for ledger' } : {}),
     } });
     created.push({ ...document, bytes });
@@ -157,6 +164,9 @@ describe('incoming originals backup and restore', () => {
     await database.client.expense.create({ data: { userId: 'incoming-backup-unrelated', description: 'Untouched', amount: 7, date: at } });
     const { bytes, zip, backup } = await exported('incoming-backup-source');
     expect(backup.stats.purchaseDocuments).toBe(3);
+    expect(backup.stats.suppliers).toBe(2);
+    expect(createBackupPreview(backup).counts.suppliers).toBe(2);
+    expect(backup.manifest.modelCoverage.find((entry: { model: string }) => entry.model === 'Supplier')).toMatchObject({ key: 'suppliers', count: 2 });
     expect(createBackupPreview(backup).counts.purchaseDocuments).toBe(3);
     expect(backup.manifest.modelCoverage.find((entry: { model: string }) => entry.model === 'PurchaseDocument')).toMatchObject({ key: 'purchaseDocuments', count: 3 });
     expect(Object.values(zip.files).filter((file) => !file.dir && file.name !== 'backup.json')).toHaveLength(3);
@@ -179,6 +189,11 @@ describe('incoming originals backup and restore', () => {
       expect(actualBytes.equals(source[index].bytes)).toBe(true);
       expect(hashBytes(actualBytes)).toBe(record.originalSha256);
       if (record.expense) {
+        expect(record.supplierId).not.toBe(source[index].supplierId);
+        expect(record.selectedSupplierSnapshot).toEqual({ ...(source[index].selectedSupplierSnapshot as object), id: record.supplierId });
+        const supplier = await database.client.supplier.findUniqueOrThrow({ where: { id: record.supplierId! } });
+        expect(supplier).toMatchObject({ userId: 'incoming-backup-target', name: 'Current supplier name', address: 'Current street 2', revision: 1 });
+        expect(record.parsedData).toEqual(source[index].parsedData);
         expect(record.expense.userId).toBe('incoming-backup-target');
         expect(record.expense.id).not.toBe(source[index].expenseId);
         expect(record.expense.storedReceiptFileName).toBe(record.storedFileName);
@@ -188,6 +203,9 @@ describe('incoming originals backup and restore', () => {
     expect(await database.client.invoice.count({ where: { userId: 'incoming-backup-target' } })).toBe(0);
     expect(await database.client.income.count({ where: { userId: 'incoming-backup-target' } })).toBe(0);
     expect(await database.client.customer.count({ where: { userId: 'incoming-backup-target' } })).toBe(0);
+    expect(await database.client.supplier.count({ where: { userId: 'incoming-backup-target' } })).toBe(2);
+    const supplierAudit = await database.client.auditLog.findFirstOrThrow({ where: { userId: 'incoming-backup-target', action: 'CREATE', entityType: 'Supplier' } });
+    expect(supplierAudit.entityId).toBe(String(restored[2].supplierId));
     expect(await database.client.expense.count({ where: { userId: 'incoming-backup-unrelated' } })).toBe(1);
     const importedAudit = await database.client.auditLog.findFirstOrThrow({ where: { userId: 'incoming-backup-target', action: 'CREATE', entityType: 'PurchaseDocument' } });
     expect(importedAudit.entityId).toBe(String(restored[0].id));
@@ -222,6 +240,7 @@ describe('incoming originals backup and restore', () => {
     const { results } = await response.json();
     expect(results.purchaseDocuments).toEqual({ imported: 0, skipped: 3 });
     expect(results.expenses).toEqual({ imported: 0, skipped: 1 });
+    expect(results.suppliers).toEqual({ imported: 0, skipped: 2 });
     expect(results.files.imported).toBe(0);
     expect(await database.client.purchaseDocument.findMany({ where: { userId: 'incoming-backup-target' } })).toEqual(before);
     expect(await database.client.expense.count({ where: { userId: 'incoming-backup-target' } })).toBe(1);
@@ -290,6 +309,14 @@ describe('incoming originals backup and restore', () => {
   it('rejects invalid states, date rollovers, tenant claims and duplicate hashes/request keys during preview', async () => {
     const { backup } = await exported('incoming-backup-source');
     for (const mutate of [
+      (value: typeof backup) => { value.data.suppliers[0].userId = 'another-tenant'; },
+      (value: typeof backup) => { value.data.suppliers[0].revision = -1; },
+      (value: typeof backup) => { value.data.suppliers[0].createdAt = '2026-02-30T00:00:00.000Z'; },
+      (value: typeof backup) => { value.data.purchaseDocuments[2].supplierId = 999999; },
+      (value: typeof backup) => { value.data.purchaseDocuments[2].selectedSupplierSnapshot.id = value.data.suppliers[1].id; },
+      (value: typeof backup) => { value.data.purchaseDocuments[2].selectedSupplierSnapshot.revision = -1; },
+      (value: typeof backup) => { value.data.purchaseDocuments[2].selectedSupplierSnapshot = null; },
+      (value: typeof backup) => { value.data.purchaseDocuments[2].supplierId = null; },
       (value: typeof backup) => { value.data.purchaseDocuments[0].expenseId = value.data.expenses[0].id; },
       (value: typeof backup) => { value.data.purchaseDocuments[0].invoiceDate = '2026-02-30T00:00:00.000Z'; },
       (value: typeof backup) => { value.data.purchaseDocuments[0].userId = 'another-tenant'; },
@@ -321,11 +348,211 @@ describe('incoming originals backup and restore', () => {
     expect(await database.client.expense.count({ where: { userId: 'incoming-backup-target' } })).toBe(1);
   });
 
+  it('rejects source-linked recurring/scheduled/cash expense components before any restore mutation', async () => {
+    const { backup } = await exported('incoming-backup-source');
+    for (const mutate of [
+      (value: typeof backup) => { value.data.expenses[0].scheduledDate = at.toISOString(); },
+      (value: typeof backup) => {
+        value.data.recurringExpenses = [{ id: 777, description: 'Recurring', amount: 119, interval: 'MONTHLY', dayOfMonth: 20, startDate: at.toISOString(), nextExecution: at.toISOString(), isActive: true }];
+        value.data.expenses[0].recurringExpenseId = 777;
+      },
+      (value: typeof backup) => {
+        value.data.cashBooks = [{ id: 888, name: 'Cash', initialBalance: 200 }];
+        value.data.cashTransactions = [{ id: 889, cashBookId: 888, expenseId: value.data.expenses[0].id, type: 'EXPENSE', amount: 119, description: 'Cash payment', date: at.toISOString(), runningBalance: 81 }];
+      },
+    ]) {
+      const invalid = structuredClone(backup); mutate(invalid); refreshManifest(invalid);
+      expect(() => createBackupPreview(invalid)).toThrow(/Wiederholung, Ausführungstermin oder Kassenbuchung/u);
+      await expect(restore.restoreBackupData({ userId: 'incoming-backup-target', overwrite: true, backup: invalid, resolveFile: async (_kind, name) => readFile(storage.getTenantUploadPath('incoming-backup-source', name)) })).rejects.toThrow(/Wiederholung, Ausführungstermin oder Kassenbuchung/u);
+    }
+    expect(await database.client.expense.count({ where: { userId: 'incoming-backup-target' } })).toBe(1);
+  });
+
+  it('rejects differing selected historical snapshots and identity-mapped supplier edits without duplicate expenses', async () => {
+    const { backup } = await exported('incoming-backup-source');
+    const resolver = async (_kind: string, name: string) => readFile(storage.getTenantUploadPath('incoming-backup-source', name));
+    const changedSnapshot = structuredClone(backup);
+    changedSnapshot.data.purchaseDocuments[2].selectedSupplierSnapshot.address = 'Different historical contact';
+    refreshManifest(changedSnapshot);
+    await expect(restore.restoreBackupData({ userId: 'incoming-backup-target', overwrite: false, backup: changedSnapshot, resolveFile: resolver })).rejects.toThrow(/Kollision/u);
+    const changedMaster = structuredClone(backup);
+    changedMaster.data.suppliers[0].name = 'Changed source master';
+    refreshManifest(changedMaster);
+    await expect(restore.restoreBackupData({ userId: 'incoming-backup-target', overwrite: false, backup: changedMaster, resolveFile: resolver })).rejects.toThrow(/Lieferanten-Kollision/u);
+    expect(await database.client.expense.count({ where: { userId: 'incoming-backup-target' } })).toBe(1);
+    expect(await database.client.supplier.count({ where: { userId: 'incoming-backup-target' } })).toBe(2);
+  });
+
+  it('does not merge supplier identities by equal name or colliding source numeric ID across tenants', async () => {
+    await user('incoming-supplier-collision-target');
+    const existing = await database.client.supplier.create({ data: { userId: 'incoming-supplier-collision-target', name: 'Current supplier name' } });
+    const { backup } = await exported('incoming-backup-source');
+    const originalSupplierId = backup.data.suppliers[0].id;
+    // An independent source database can reuse a target's numeric ID.
+    backup.data.suppliers[0].id = existing.id;
+    const sourceDocument = backup.data.purchaseDocuments.find((record: { supplierId: number }) => record.supplierId === originalSupplierId);
+    sourceDocument.supplierId = existing.id;
+    sourceDocument.selectedSupplierSnapshot.id = existing.id;
+    backup.data.auditLogs.filter((record: { entityType: string; entityId: string }) => record.entityType === 'Supplier' && record.entityId === String(originalSupplierId)).forEach((record: { entityId: string }) => { record.entityId = String(existing.id); });
+    refreshManifest(backup);
+    await restore.restoreBackupData({ userId: 'incoming-supplier-collision-target', overwrite: false, backup, resolveFile: async (_kind, name) => readFile(storage.getTenantUploadPath('incoming-backup-source', name)) });
+    const suppliers = await database.client.supplier.findMany({ where: { userId: 'incoming-supplier-collision-target' } });
+    expect(suppliers).toHaveLength(3);
+    const booked = await database.client.purchaseDocument.findFirstOrThrow({ where: { userId: 'incoming-supplier-collision-target', reviewStatus: 'BOOKED' } });
+    expect(booked.supplierId).not.toBe(existing.id);
+  });
+
+  it('overwrites supplier/source/expense components in dependency order while preserving selected history', async () => {
+    const { backup } = await exported('incoming-backup-source');
+    const result = await restore.restoreBackupData({ userId: 'incoming-backup-target', overwrite: true, backup, resolveFile: async (_kind, name) => readFile(storage.getTenantUploadPath('incoming-backup-source', name)) });
+    expect(result.suppliers).toEqual({ imported: 2, skipped: 0 });
+    expect(result.purchaseDocuments).toEqual({ imported: 3, skipped: 0 });
+    expect(result.expenses).toEqual({ imported: 1, skipped: 0 });
+    const booked = await database.client.purchaseDocument.findFirstOrThrow({ where: { userId: 'incoming-backup-target', reviewStatus: 'BOOKED' } });
+    expect(booked.selectedSupplierSnapshot).toMatchObject({ id: booked.supplierId, name: 'Explicit chosen supplier', address: 'Historical street 1', revision: 0 });
+    const merged = await restore.restoreBackupData({ userId: 'incoming-backup-target', overwrite: false, backup, resolveFile: async (_kind, name) => readFile(storage.getTenantUploadPath('incoming-backup-source', name)) });
+    expect(merged.suppliers).toEqual({ imported: 0, skipped: 2 });
+    expect(merged.purchaseDocuments).toEqual({ imported: 0, skipped: 3 });
+    expect(merged.expenses).toEqual({ imported: 0, skipped: 1 });
+  });
+
+  it('restores supplier-only JSON backups without originals or financial effects', async () => {
+    const { backup } = await exported('incoming-backup-source');
+    backup.type = 'json'; backup.data.purchaseDocuments = []; backup.data.expenses = [];
+    refreshManifest(backup);
+    await user('incoming-supplier-json-target');
+    const result = await restore.restoreBackupData({ userId: 'incoming-supplier-json-target', overwrite: false, backup });
+    expect(result.suppliers).toEqual({ imported: 2, skipped: 0 });
+    expect(await database.client.supplier.count({ where: { userId: 'incoming-supplier-json-target' } })).toBe(2);
+    expect(await database.client.expense.count({ where: { userId: 'incoming-supplier-json-target' } })).toBe(0);
+    expect(await database.client.purchaseDocument.count({ where: { userId: 'incoming-supplier-json-target' } })).toBe(0);
+  });
+
+  it('roundtrips the combined supplier, booked source, immutable payment and every original through full ZIP routes', async () => {
+    const sourceId = 'integrated-source', targetId = 'integrated-target';
+    const originals = await sources(sourceId);
+    await user(targetId);
+    const invoiceBytes = Buffer.from('%PDF-1.7\ncombined payment original\n%%EOF');
+    const storedFileName = await storage.writeTenantFile(sourceId, 'paid-original.pdf', invoiceBytes);
+    const invoice = await database.client.invoice.create({ data: {
+      userId: sourceId, fileName: 'paid-original.pdf', storedFileName, type: 'INVOICE',
+      invoiceNumber: '2026-COMBINED', invoiceDate: at, uploadedAt: at, paidAt: at,
+      totalAmount: 25.01, status: 'PAID', issuanceState: 'ISSUED', parsedData: { currency: 'EUR' },
+    } });
+    const income = await database.client.income.create({ data: {
+      userId: sourceId, invoiceId: invoice.id, amount: 25.01, date: at, description: 'Combined payment', taxRelevant: true,
+    } });
+    const event = await database.client.paymentJournalEvent.create({ data: {
+      userId: sourceId, invoiceId: invoice.id, incomeId: income.id, amountCents: '2501', currency: 'EUR',
+      paidAt: at, dateCertainty: 'ACTUAL', source: 'MANUAL', reference: 'combined reference', idempotencyKey: 'combined-payment', createdAt: at,
+    } });
+    const archive = await exported(sourceId);
+    expect(archive.backup.manifest.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(archive.backup.stats).toMatchObject({ suppliers: 2, purchaseDocuments: 3, expenses: 1, paymentJournalEvents: 1, invoices: 1, incomes: 1 });
+    expect(createBackupPreview(archive.backup).counts).toMatchObject(archive.backup.stats);
+    for (const [model, key, count] of [['Supplier', 'suppliers', 2], ['PurchaseDocument', 'purchaseDocuments', 3], ['PaymentJournalEvent', 'paymentJournalEvents', 1]] as const) {
+      expect(archive.backup.manifest.modelCoverage.find((entry: { model: string }) => entry.model === model)).toMatchObject({ key, count });
+    }
+    const firstResponse = await restoreZip(targetId, archive.bytes);
+    expect(firstResponse.status, await firstResponse.clone().text()).toBe(200);
+    expect((await firstResponse.json()).results).toMatchObject({
+      suppliers: { imported: 2 }, purchaseDocuments: { imported: 3 }, expenses: { imported: 1 },
+      paymentJournalEvents: { imported: 1 }, invoices: { imported: 1 }, incomes: { imported: 1 }, files: { imported: 4 },
+    });
+    const restoredSource = await database.client.purchaseDocument.findFirstOrThrow({ where: { userId: targetId, reviewStatus: 'BOOKED' }, include: { supplier: true, expense: true } });
+    expect(restoredSource.supplierId).not.toBe(originals[2].supplierId);
+    expect(restoredSource.supplier?.userId).toBe(targetId);
+    expect(restoredSource.selectedSupplierSnapshot).toEqual({ ...(originals[2].selectedSupplierSnapshot as object), id: restoredSource.supplierId });
+    expect(restoredSource.approvalFingerprint).toBe(originals[2].approvalFingerprint);
+    expect(restoredSource.expense).toMatchObject({ userId: targetId, amount: 119, storedReceiptFileName: restoredSource.storedFileName });
+    expect(restoredSource.expenseId).not.toBe(originals[2].expenseId);
+    expect(await readFile(storage.getTenantUploadPath(targetId, restoredSource.storedFileName))).toEqual(originals[2].bytes);
+    const restoredEvent = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { userId: targetId }, include: { invoice: true, income: true } });
+    expect(restoredEvent.id).not.toBe(event.id);
+    expect(restoredEvent.invoiceId).not.toBe(invoice.id);
+    expect(restoredEvent.incomeId).not.toBe(income.id);
+    expect(restoredEvent.invoice).toMatchObject({ userId: targetId, status: 'PAID', paidAt: at });
+    expect(restoredEvent.income).toMatchObject({ userId: targetId, invoiceId: restoredEvent.invoiceId, amount: 25.01, date: at });
+    expect(await readFile(storage.getTenantUploadPath(targetId, restoredEvent.invoice.storedFileName))).toEqual(invoiceBytes);
+    const repeated = await restoreZip(targetId, archive.bytes);
+    expect(repeated.status, await repeated.clone().text()).toBe(200);
+    expect((await repeated.json()).results).toMatchObject({
+      suppliers: { imported: 0, skipped: 2 }, purchaseDocuments: { imported: 0, skipped: 3 },
+      expenses: { imported: 0, skipped: 1 }, paymentJournalEvents: { imported: 0, skipped: 1 },
+    });
+    const again = await exported(targetId);
+    const { auditLogs: sourceAuditCount, ...businessCounts } = archive.backup.stats;
+    expect(again.backup.stats).toMatchObject(businessCounts);
+    expect(again.backup.stats.auditLogs).toBeGreaterThan(sourceAuditCount);
+    expect(again.backup.data.purchaseDocuments.find((row: { reviewStatus: string }) => row.reviewStatus === 'BOOKED')).toMatchObject({ expenseId: restoredSource.expenseId, supplierId: restoredSource.supplierId });
+    expect(again.backup.data.paymentJournalEvents[0]).toMatchObject({ invoiceId: restoredEvent.invoiceId, incomeId: restoredEvent.incomeId, amountCents: '2501' });
+    const json = await jsonExport.GET();
+    expect((await json.json()).stats).toMatchObject(businessCounts);
+    const beforeFiles = (await readdir(storage.tenantUploadDir(targetId))).sort();
+    await expect(restore.restoreBackupData({ userId: targetId, backup: archive.backup, overwrite: true, resolveFile: async (_kind, name) => readFile(storage.getTenantUploadPath(sourceId, name)) })).rejects.toThrow(/unveränderliche Zahlungsereignisse/u);
+    expect((await readdir(storage.tenantUploadDir(targetId))).sort()).toEqual(beforeFiles);
+    expect(await database.client.paymentJournalEvent.findUniqueOrThrow({ where: { id: restoredEvent.id } })).toMatchObject({ invoiceId: restoredEvent.invoiceId, incomeId: restoredEvent.incomeId });
+  });
+
+  it.each([
+    [PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, ['PaymentJournalEvent'], 2, 3, 1],
+    [PRE_SUPPLIERS_SCHEMA_VERSION, ['PaymentJournalEvent', 'Supplier'], 0, 1, 0],
+    [PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, ['PaymentJournalEvent', 'Supplier', 'PurchaseDocument'], 0, 0, 0],
+  ] as const)('restores the exact intermediate schema %s with truthful model coverage', async (schemaVersion, excludedModels, supplierCount, documentCount, expenseCount) => {
+    const sourceId = `intermediate-source-${supplierCount}-${documentCount}`;
+    const targetId = `intermediate-target-${supplierCount}-${documentCount}`;
+    await sources(sourceId); await user(targetId);
+    const { backup } = await exported(sourceId);
+    if (!supplierCount) { delete backup.data.suppliers; backup.data.expenses = []; }
+    if (documentCount === 1) backup.data.purchaseDocuments = backup.data.purchaseDocuments.filter((row: { reviewStatus: string }) => row.reviewStatus === 'REVIEW');
+    if (!documentCount) delete backup.data.purchaseDocuments;
+    delete backup.data.paymentJournalEvents;
+    refreshManifest(backup);
+    backup.manifest.schemaVersion = schemaVersion;
+    backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => !(excludedModels as readonly string[]).includes(entry.model));
+    expect(createBackupPreview(backup).counts).toMatchObject({ suppliers: supplierCount, purchaseDocuments: documentCount, expenses: expenseCount, paymentJournalEvents: 0 });
+    const result = await restore.restoreBackupData({ userId: targetId, backup, overwrite: false, resolveFile: async (_kind, name) => readFile(storage.getTenantUploadPath(sourceId, name)) });
+    expect(result).toMatchObject({ suppliers: { imported: supplierCount }, purchaseDocuments: { imported: documentCount }, expenses: { imported: expenseCount }, paymentJournalEvents: { imported: 0 } });
+    expect(await database.client.supplier.count({ where: { userId: targetId } })).toBe(supplierCount);
+    expect(await database.client.purchaseDocument.count({ where: { userId: targetId } })).toBe(documentCount);
+  });
+
+  it.each(['suppliers', 'purchaseDocuments', 'paymentJournalEvents'])('rejects a missing required current section %s even with recomputed zero-count manifest', async (key) => {
+    const { backup } = await exported('integrated-source');
+    delete backup.data[key];
+    refreshManifest(backup);
+    expect(() => createBackupPreview(backup)).toThrow(new RegExp(`erforderlichen Abschnitt: ${key}`, 'u'));
+  });
+
+  it('accepts pre-supplier incoming REVIEW sources without synthesizing contacts and rejects unbound supplier additions', async () => {
+    const { backup } = await exported('incoming-backup-source');
+    backup.data.purchaseDocuments = [backup.data.purchaseDocuments[0]];
+    backup.data.expenses = [];
+    delete backup.data.suppliers;
+    refreshManifest(backup);
+    backup.manifest.schemaVersion = PRE_SUPPLIERS_SCHEMA_VERSION;
+    backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
+    expect(createBackupPreview(backup).counts).toMatchObject({ suppliers: 0, purchaseDocuments: 1 });
+    await user('incoming-pre-supplier-target');
+    const result = await restore.restoreBackupData({ userId: 'incoming-pre-supplier-target', overwrite: false, backup, resolveFile: async (_kind, name) => readFile(storage.getTenantUploadPath('incoming-backup-source', name)) });
+    expect(result.suppliers.imported).toBe(0);
+    expect(result.purchaseDocuments.imported).toBe(1);
+    backup.data.suppliers = [{ id: 17 }];
+    expect(() => restore.validateBackupForRestore(backup)).toThrow(/ungebundenen Lieferanten/u);
+    const { backup: oldBooked } = await exported('incoming-backup-source');
+    delete oldBooked.data.suppliers;
+    oldBooked.data.purchaseDocuments.forEach((record: Record<string, unknown>) => { delete record.supplierId; delete record.selectedSupplierSnapshot; });
+    refreshManifest(oldBooked);
+    oldBooked.manifest.schemaVersion = PRE_SUPPLIERS_SCHEMA_VERSION;
+    oldBooked.manifest.modelCoverage = oldBooked.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
+    expect(() => restore.validateBackupForRestore(oldBooked)).toThrow(/ausdrücklich ausgewählten Lieferanten/u);
+  });
+
   it('accepts genuine pre-inbox v3 manifests as an empty collection but rejects injected unbound sources', async () => {
     const data: Record<string, unknown> = { user: { id: 'old-source' }, auditLogs: [], invoiceNumberCounters: [] };
     const manifest = createBackupManifest({ sourceUserId: 'old-source', generatedAt: at.toISOString(), data });
     manifest.schemaVersion = PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION;
-    manifest.modelCoverage = manifest.modelCoverage.filter((entry) => entry.model !== 'PurchaseDocument');
+    manifest.modelCoverage = manifest.modelCoverage.filter((entry) => entry.model !== 'PurchaseDocument' && entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
     expect(() => validateBackupManifest(manifest, data)).not.toThrow();
     const old = { version: '3.0', type: 'json', manifest, data };
     expect(createBackupPreview(old).counts.purchaseDocuments).toBe(0);

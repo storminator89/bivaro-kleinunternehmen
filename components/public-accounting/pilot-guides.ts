@@ -49,11 +49,12 @@ export const pilotGuides = [
     summary: 'Mit einem abgestimmten Export statt eines versprochenen Direktimports.',
     steps: [
       'Prüfen Sie den gewünschten Zeitraum, Einnahmen, Ausgaben und die dazugehörigen Belege. Gleichen Sie die Summen mit Ihren Unterlagen ab.',
-      'Exportieren Sie die benötigten Tabellen als CSV und die vorhandenen Belege über den Belegexport. Vereinbaren Sie mit Ihrer Steuerkanzlei vorab, welche Dateien und Originale sie benötigt.',
-      'Prüfen Sie bei der EÜR-Übertragungshilfe das unterstützte Steuerjahr und alle Warnungen. Öffnen Sie die exportierten Dateien und kontrollieren Sie Zeitraum, Vollständigkeit und Summen vor der Übergabe.',
+      'Öffnen Sie „Unterlagen übergeben“, wählen Sie ein Kalenderjahr oder höchstens 366 Tage und prüfen Sie die Vorschau mit Zählungen, fehlenden Originalen und Warnungen. Das ZIP-Paket im Bivaro-Format 1 enthält Tabellen und vorhandene unveränderte Originale. Vereinbaren Sie mit Ihrer Steuerkanzlei vorab, welche Unterlagen und welchen sicheren Übergabekanal sie benötigt.',
+      'Prüfen Sie Umfang und Warnungen, bevor Sie den ZIP-Download starten. Öffnen Sie danach die Dateien und README.txt. Stimmen Sie Zeitraum, fehlende Unterlagen und Zahlungsbezüge ab; addieren Sie Rechnungen, Einnahmen und verknüpfte Kassenbewegungen nicht. Es wird nichts automatisch an eine Kanzlei gesendet. Für die separate EÜR-Übertragungshilfe gelten weiterhin deren unterstützte Steuerjahre.',
     ],
-    caution: 'CSV und EÜR-Übertragungshilfe sind Arbeitsunterlagen: keine ELSTER-Einreichung und kein zugesicherter DATEV-Import. Die EÜR-Übertragungshilfe unterstützt derzeit die Jahre 2024 und 2025, nicht 2026. Ein Export ersetzt weder fachliche Prüfung noch eine eigenständige Datensicherung.',
+    caution: 'Das Übergabepaket ist eine begrenzte Arbeitsunterlage, kein vollständiger GoBD-Prüfexport. Ungebuchte Eingangsbelege, Teilzahlungszuordnungen und ein separates Zahlungs-/Erstattungsjournal sind nicht enthalten. Übergabepaket, CSV und EÜR-Übertragungshilfe sind keine ELSTER-Einreichung und kein zugesicherter DATEV-Import. Die EÜR-Übertragungshilfe unterstützt derzeit die Jahre 2024 und 2025, nicht 2026. Ein Export ersetzt weder fachliche Prüfung noch eine eigenständige Datensicherung.',
     links: [
+      { href: '/handoff', label: 'Unterlagen übergeben' },
       { href: '/dashboard?tab=incomes', label: 'Einnahmen öffnen' },
       { href: '/dashboard?tab=expenses', label: 'Ausgaben und Belege öffnen' },
       { href: '/dashboard?tab=eur', label: 'EÜR prüfen' },

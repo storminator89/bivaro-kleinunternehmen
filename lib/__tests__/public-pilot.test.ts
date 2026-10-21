@@ -19,7 +19,7 @@ beforeEach(() => { getToken.mockReset(); getToken.mockResolvedValue(null); });
 
 describe('public buyer and task guidance', () => {
   it('makes only the exact help page public and keeps workspaces and lookalikes guarded', async () => {
-    for (const path of ['/', '/help', '/login', '/register']) {
+    for (const path of ['/', '/help', '/help/access', '/login', '/register']) {
       const response = await proxy(new NextRequest(`http://localhost${path}`));
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Security-Policy')).toContain('nonce-');
@@ -57,10 +57,23 @@ describe('public buyer and task guidance', () => {
     expect(html).toContain('keine ELSTER-Einreichung');
     expect(html).toContain('nicht 2026');
     expect(html).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
-    expect(html).toContain('E-Mail-Self-Service');
+    expect(html).toContain('Zugang verloren oder Betriebsstörung');
     expect(html).toContain('id="steuerprofil"');
     expect(html).toContain('Ein eigenes Datumsfeld gibt es dort nicht');
     expect(html).not.toMatch(/mailto:|tel:|kostenlos testen|rechtssicher|GoBD-konform/i);
+  });
+
+  it('keeps the absent-contact explanation directly within the access section as well as offer details', () => {
+    const help = renderToStaticMarkup(createElement(HelpPage));
+    const access = help.match(/<section id="zugang"[\s\S]*?<\/section>/)?.[0];
+    const offer = help.match(/<section id="angebot"[\s\S]*?<\/section>/)?.[0];
+    for (const section of [access, offer]) {
+      expect(section).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
+      expect(section).toContain('Der Hilfeweg ist noch nicht eingerichtet');
+      expect(section).not.toMatch(/mailto:|tel:/);
+    }
+    const source = readFileSync(new URL('../../app/help/page.tsx', import.meta.url), 'utf8');
+    expect(source).toContain('<a href="#angebot">Bestätigte Angebots- und Kontaktdaten prüfen</a>');
   });
 
   it('reserves sticky-header clearance before hash navigation activates a target', () => {
@@ -89,9 +102,30 @@ describe('public buyer and task guidance', () => {
     expect(shell).toContain('${publicStyles.publicHeader} sticky');
   });
 
+  it('uses native public help-fragment links without changing non-hash navigation', () => {
+    const paths = ['app/page.tsx', 'app/help/page.tsx', 'app/help/access/page.tsx', 'app/register/page.tsx', 'components/app-shell.tsx', 'components/public/offer-summary.tsx'];
+    for (const path of paths) {
+      const source = readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+      // Both literal and guide-generated /help# links must bypass the cache.
+      expect(source, path).not.toMatch(/<Link\b[^>]*\bhref=(?:"\/help#|\{`\/help#)/);
+    }
+    const home = readFileSync(new URL('../../app/page.tsx', import.meta.url), 'utf8');
+    expect(home).toContain('<a href="/help#erste-rechnung">Den ersten Ablauf kennenlernen</a>');
+    expect(home).toContain('<a href={`/help#${guide.id}`}>{guide.title}</a>');
+    expect(home).toContain('<a className={styles.textLink} href={`/help#${guide.id}`}>Anleitung');
+    const shell = readFileSync(new URL('../../components/app-shell.tsx', import.meta.url), 'utf8');
+    expect(shell).toContain('<a href="/help#umfang"');
+    expect(shell).toContain('<a href="/help#angebot"');
+    expect(shell).toContain('<Link href="/help/access"');
+    expect(shell).toContain('<Link href="/help"');
+    const registration = readFileSync(new URL('../../app/register/page.tsx', import.meta.url), 'utf8');
+    expect(registration).toContain('<a href="/help#angebot"');
+    expect(registration).toContain('<Link href="/help/access"');
+  });
+
   it('keeps public help in the shell and removes unconditional registration advertising', () => {
     const shell = readFileSync(new URL('../../components/app-shell.tsx', import.meta.url), 'utf8');
-    expect(shell).toContain("const publicPaths = ['/', '/login', '/register', '/help']");
+    expect(shell).toContain("const publicPaths = ['/', '/login', '/register', '/help', '/help/access']");
     expect(shell).toContain('if (status === "loading" && !isPublicPage)');
     expect(shell).not.toContain('if (status === "loading")');
     expect(shell).toContain('href="/help"');

@@ -49,6 +49,7 @@ function makeBackup() {
       issuanceState: 'UNKNOWN',
       customerId: 10,
     }],
+    suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
     incomes: [],
     apiKeys: [{ id: 30, name: 'old-key', keyPrefix: 'biv_sk_old', scopes: '["read"]', isActive: true, createdAt: '2026-01-01T00:00:00.000Z' }],
     auditLogs: [{

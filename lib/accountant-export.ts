@@ -9,7 +9,7 @@ import { inspectMoneyEUR, MONEY_POLICY_VERSION } from '@/lib/money';
 import { hashBytes, hashJson } from '@/lib/backup-manifest';
 import { BackupFileConsistencyError, BackupFileSizeError, getBackupFileVersion, readStableBackupFile } from '@/lib/backup-snapshot';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
-import { isSafeLegacyFileName, isSafeStoredFileName } from '@/lib/upload-path';
+import { findTenantUploadedFile, isSafeLegacyFileName, isSafeStoredFileName } from '@/lib/upload-path';
 
 export const ACCOUNTANT_EXPORT_LIMITS = {
   maxDays: 366,
@@ -64,7 +64,8 @@ export function accountantCsvCell(value: unknown): string {
 }
 
 type Warning = { code: string; recordType: string; recordId: number | null; message: string };
-type OriginalReference = { recordType: 'invoice' | 'expense'; recordId: number; originalFileName: string | null; status: 'included' | 'missing' | 'not-attached'; zipPath: string | null };
+type IncomingOriginal = { id: number; userId: string; storedFileName: string; originalSha256: string; originalByteCount: number; reviewStatus: string };
+type OriginalReference = { purchaseDocumentId: number | null; originalSha256: string | null; recordType: 'invoice' | 'expense'; recordId: number; originalFileName: string | null; status: 'included' | 'missing' | 'not-attached'; zipPath: string | null };
 
 const invoiceSelect = {
   id: true, type: true, fileName: true, storedFileName: true, invoiceDate: true, uploadedAt: true,
@@ -138,6 +139,7 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
       tx.expense.findMany({ where: expenseWhere, orderBy: { id: 'asc' }, select: {
         id: true, description: true, amount: true, date: true, category: true, taxRelevant: true,
         taxDeductiblePercentage: true, depreciationYears: true, receiptFileName: true, storedReceiptFileName: true,
+        purchaseDocument: { select: { id: true, userId: true, storedFileName: true, originalSha256: true, originalByteCount: true, reviewStatus: true } },
       } }),
       tx.income.findMany({ where: incomeWhere, orderBy: { id: 'asc' }, select: {
         id: true, description: true, amount: true, date: true, customerId: true, invoiceId: true, taxRelevant: true,
@@ -222,11 +224,14 @@ Limits (kein stilles Abschneiden): 10.000 Datensätze; 25 MiB je Original; 2 MiB
 Das Paket enthält vertrauliche Geschäfts-/Personendaten: nur über einen geeigneten sicheren Kanal weitergeben.
 `;
 
-export async function createAccountantExport(userId: string, period: AccountantExportPeriod) {
+/** Preview and download share all selection, original-file and resource checks.
+ * A preview hashes one original at a time but retains no ZIP or compressed bytes.
+ */
+async function buildAccountantExport(userId: string, period: AccountantExportPeriod, preview: boolean, expectedFingerprint?: string) {
   const snapshot = await readAccountantSnapshot(userId, period);
-  const zip = new JSZip();
+  const zip = preview ? null : new JSZip();
   const warnings: Warning[] = [];
-  const entries: { zipPath: string; bytes: number; sha256: string; kind: 'original' | 'metadata' }[] = [];
+  const entries: { zipPath: string; bytes: number; sha256: string; kind: 'original' | 'metadata'; purchaseDocumentId?: number; originalSha256?: string }[] = [];
   const originals: OriginalReference[] = [];
   const sources: { path: string; version: string }[] = [];
   let totalBytes = 0;
@@ -237,11 +242,12 @@ export async function createAccountantExport(userId: string, period: AccountantE
     if (totalBytes > ACCOUNTANT_EXPORT_LIMITS.maxTotalBytes || metadataBytes > ACCOUNTANT_EXPORT_LIMITS.maxMetadataBytes) {
       throw new AccountantExportError('Übergabepaket überschreitet das Größenlimit. Bitte einen kürzeren Zeitraum wählen.', 413);
     }
-    zip.file(zipPath, bytes, { createFolders: false });
+    zip?.file(zipPath, bytes, { createFolders: false });
     entries.push({ zipPath, bytes: bytes.byteLength, sha256: hashBytes(bytes), kind });
   };
-  const addOriginal = async (recordType: 'invoice' | 'expense', recordId: number, storedName: string | null, originalFileName: string | null) => {
-    const ref: OriginalReference = { recordType, recordId, originalFileName, status: 'missing', zipPath: null };
+  const addOriginal = async (recordType: 'invoice' | 'expense', recordId: number, storedName: string | null, originalFileName: string | null, source?: IncomingOriginal | null) => {
+    if (source && (source.userId !== userId || source.reviewStatus !== 'BOOKED' || source.storedFileName !== storedName)) throw new AccountantExportError('Quellenverknüpfung eines Eingangsoriginals ist inkonsistent.', 409);
+    const ref: OriginalReference = { recordType, recordId, originalFileName, status: 'missing', zipPath: null, purchaseDocumentId: source?.id ?? null, originalSha256: source?.originalSha256 ?? null };
     originals.push(ref);
     if (!storedName && recordType === 'expense') {
       ref.status = 'not-attached';
@@ -249,7 +255,7 @@ export async function createAccountantExport(userId: string, period: AccountantE
       return;
     }
     if (storedName && (isSafeStoredFileName(storedName) || isSafeLegacyFileName(storedName))) {
-      const filePath = await findOwnedUploadedFile(userId, storedName);
+      const filePath = source ? await findTenantUploadedFile(userId, storedName) : await findOwnedUploadedFile(userId, storedName);
       if (filePath) {
         try {
           // The shared resolver checks tenant/legacy ownership and lexical paths;
@@ -259,9 +265,11 @@ export async function createAccountantExport(userId: string, period: AccountantE
           }
           const stable = await readStableBackupFile(filePath, Math.min(ACCOUNTANT_EXPORT_LIMITS.maxFileBytes, ACCOUNTANT_EXPORT_LIMITS.maxTotalBytes - totalBytes));
           if (stable) {
+            if (source && (stable.sha256 !== source.originalSha256 || stable.bytes.byteLength !== source.originalByteCount)) throw new AccountantExportError('Integritätsprüfung eines Eingangsoriginals fehlgeschlagen.', 409);
             const extension = storedName.match(/\.([a-zA-Z0-9]{1,16})$/u)?.[1].toLowerCase() ?? 'bin';
             const zipPath = `originals/${recordType}-${recordId}.${extension}`;
             addEntry(zipPath, stable.bytes, 'original');
+            if (source) Object.assign(entries[entries.length - 1], { purchaseDocumentId: source.id, originalSha256: source.originalSha256 });
             ref.status = 'included'; ref.zipPath = zipPath;
             sources.push({ path: filePath, version: stable.sourceVersion });
             return;
@@ -269,14 +277,16 @@ export async function createAccountantExport(userId: string, period: AccountantE
         } catch (error) {
           if (error instanceof BackupFileSizeError) throw new AccountantExportError('Ein Original oder das Paket überschreitet das Größenlimit. Bitte Zeitraum verkürzen.', 413);
           if (error instanceof BackupFileConsistencyError || error instanceof AccountantExportError) throw error;
+          if (source) throw new AccountantExportError('Eingangsoriginal fehlt oder seine Integrität konnte nicht bestätigt werden.', 409);
           // Do not leak private paths or resolver details into the handoff.
         }
       }
     }
+    if (source) throw new AccountantExportError('Eingangsoriginal fehlt oder seine Integrität konnte nicht bestätigt werden.', 409);
     warnings.push({ code: 'ORIGINAL_MISSING', recordType, recordId, message: 'Referenziertes Original fehlt, ist nicht lesbar oder nicht sicher diesem Mandanten zugeordnet.' });
   };
   for (const row of snapshot.data.invoices) await addOriginal('invoice', row.id, row.storedFileName, row.fileName);
-  for (const row of snapshot.data.expenses) await addOriginal('expense', row.id, row.storedReceiptFileName, row.receiptFileName);
+  for (const row of snapshot.data.expenses) await addOriginal('expense', row.id, row.storedReceiptFileName, row.receiptFileName, row.purchaseDocument);
 
   const money = (value: number | null, recordType: string, recordId: number, field = 'amount') => {
     if (value === null) return { [field]: null, [`${field}Cents`]: null, [`${field}RoundingDifferenceCents`]: null };
@@ -308,8 +318,8 @@ export async function createAccountantExport(userId: string, period: AccountantE
       ...money(totalAmount, 'invoice', row.id), originalZipPath: originalByRecord.get(`invoice:${row.id}`)?.zipPath ?? null };
   });
   const expenses = snapshot.data.expenses.map(row => {
-    const { storedReceiptFileName: _stored, receiptFileName: originalFileName, amount, ...rest } = row;
-    return { ...rest, ...money(amount, 'expense', row.id), paymentDateSource: 'expense.date (stored booking/outflow date)', originalFileName,
+    const { storedReceiptFileName: _stored, receiptFileName: originalFileName, amount, purchaseDocument: source, ...rest } = row;
+    return { ...rest, purchaseDocumentId: source?.id ?? null, originalSha256: source?.originalSha256 ?? null, ...money(amount, 'expense', row.id), paymentDateSource: 'expense.date (stored booking/outflow date)', originalFileName,
       originalZipPath: originalByRecord.get(`expense:${row.id}`)?.zipPath ?? null };
   });
   const incomes = snapshot.data.incomes.map(row => {
@@ -336,11 +346,11 @@ export async function createAccountantExport(userId: string, period: AccountantE
   // Fixed schemas also make an empty package useful and machine-readable.
   const headers: Record<keyof typeof tables, string[]> = {
     invoices: ['id', 'type', 'invoiceNumber', 'invoiceDate', 'uploadedAt', 'dueDate', 'status', 'issuanceState', 'paidAt', 'customerId', 'originalInvoiceId', 'cancellationReason', 'currency', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'documentDateSource', 'documentDateInPeriod', 'paymentDateInPeriod', 'originalFileName', 'originalZipPath'],
-    expenses: ['id', 'date', 'description', 'category', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'taxDeductiblePercentage', 'depreciationYears', 'paymentDateSource', 'originalFileName', 'originalZipPath'],
+    expenses: ['id', 'date', 'description', 'category', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'taxDeductiblePercentage', 'depreciationYears', 'paymentDateSource', 'originalFileName', 'originalZipPath', 'purchaseDocumentId', 'originalSha256'],
     incomes: ['id', 'date', 'description', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'customerId', 'invoiceId', 'accountingDate', 'accountingDateInPeriod', 'cashRealized', 'invoiceStatus', 'invoicePaidAt'],
     cashTransactions: ['id', 'date', 'type', 'description', 'currency', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'runningBalance', 'runningBalanceCents', 'runningBalanceRoundingDifferenceCents', 'category', 'receiptNumber', 'taxRelevant', 'cashBookId', 'expenseId', 'incomeId'],
     customers: ['id', 'name', 'address', 'zipCode', 'city', 'taxNumber'], cashBooks: ['id', 'name', 'currency'],
-    originals: ['recordType', 'recordId', 'originalFileName', 'status', 'zipPath'],
+    originals: ['recordType', 'recordId', 'originalFileName', 'status', 'zipPath', 'purchaseDocumentId', 'originalSha256'],
   };
   for (const key of Object.keys(tables) as (keyof typeof tables)[]) {
     const lines = [headers[key].map(accountantCsvCell).join(';')];
@@ -363,10 +373,25 @@ export async function createAccountantExport(userId: string, period: AccountantE
     snapshot: snapshot.info, moneyPolicy: MONEY_POLICY_VERSION, limits: ACCOUNTANT_EXPORT_LIMITS,
     counts: Object.fromEntries(Object.entries(tables).map(([key, rows]) => [key, rows.length])),
     originalCounts: { included: originals.filter(row => row.status === 'included').length, missing: originals.filter(row => row.status === 'missing').length, notAttached: originals.filter(row => row.status === 'not-attached').length },
-    warnings, warningCount: warnings.length, entries,
+    warnings, warningCount: warnings.length, entries: [...entries],
+    // Stable across previews; timestamps are deliberately not part of approval.
+    sourceFingerprint: hashJson({ period: { from: period.from, to: period.to }, snapshotId: snapshot.info.id, entries, warnings }),
   };
+  if (expectedFingerprint && manifest.sourceFingerprint !== expectedFingerprint) {
+    throw new AccountantExportError('Daten oder Originale haben sich seit der Vorschau geändert. Bitte die Vorschau erneut prüfen.', 409);
+  }
   // Manifest deliberately excludes itself from its hash list; its bytes still count against limits.
   addEntry('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'), 'metadata');
-  const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-  return { bytes, filename: `bivaro-uebergabepaket-${period.from}-${period.to}.zip`, warningCount: warnings.length, counts: manifest.counts };
+  const bytes = zip ? await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } }) : null;
+  return { manifest, bytes, filename: `bivaro-uebergabepaket-${period.from}-${period.to}.zip`, warningCount: warnings.length, counts: manifest.counts };
+}
+
+export async function createAccountantExport(userId: string, period: AccountantExportPeriod, expectedFingerprint?: string) {
+  const result = await buildAccountantExport(userId, period, false, expectedFingerprint);
+  return { ...result, bytes: result.bytes! };
+}
+
+export async function previewAccountantExport(userId: string, period: AccountantExportPeriod) {
+  const { bytes: _bytes, ...result } = await buildAccountantExport(userId, period, true);
+  return result;
 }

@@ -27,7 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Öffentliche Seiten ohne Sidebar
-  const publicPaths = ['/', '/login', '/register', '/help'];
+  const publicPaths = ['/', '/login', '/register', '/help', '/help/access'];
   const isPublicPage = publicPaths.includes(pathname);
 
   // Public content must exist during the initial render so native hash links
@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               &copy; {new Date().getFullYear()} Bivaro |
               Alle Beträge werden in Euro (€) angezeigt
             </p>
-            <nav aria-label="Weitere Informationen" className="flex flex-wrap gap-4 text-sm text-muted-foreground"><Link href="/help#umfang" className="underline underline-offset-4">Umfang und Grenzen</Link><Link href="/help#zugang" className="underline underline-offset-4">Zugang und Unterstützung</Link></nav>
+            <nav aria-label="Weitere Informationen" className="flex flex-wrap gap-4 text-sm text-muted-foreground"><a href="/help#umfang" className="underline underline-offset-4">Umfang und Grenzen</a><Link href="/help/access" className="underline underline-offset-4">Zugangshilfe</Link><a href="/help#angebot" className="underline underline-offset-4">Angebot und Quellcode</a></nav>
           </div>
         </footer>
       </div>

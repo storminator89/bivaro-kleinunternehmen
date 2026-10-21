@@ -12,7 +12,7 @@ describe('audit presentation regression #25', () => {
   it('provides a label for every supported entity and action, including security events', () => {
     expect(Object.keys(AUDIT_ENTITY_LABELS).sort()).toEqual(declaredValues('AuditEntityType'));
     expect(Object.keys(AUDIT_ACTION_LABELS).sort()).toEqual(declaredValues('AuditAction'));
-    expect(AUDIT_ENTITY_LABELS).toMatchObject({ Quote: 'Angebot', CashBook: 'Kassenbuch', CashTransaction: 'Kassenbuchung', SecurityEvent: 'Sicherheitsereignis' });
+    expect(AUDIT_ENTITY_LABELS).toMatchObject({ Supplier: 'Lieferant', Quote: 'Angebot', CashBook: 'Kassenbuch', CashTransaction: 'Kassenbuchung', SecurityEvent: 'Sicherheitsereignis' });
     expect(AUDIT_ACTION_LABELS.SECURITY_EVENT).toBe('Sicherheitsereignis');
   });
 

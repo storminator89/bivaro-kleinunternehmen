@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { mkdtemp, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import type { Prisma } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
@@ -50,6 +50,8 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   state.actor = 'accountant-owner';
+  await database.client.purchaseDocument.deleteMany();
+  await database.client.supplier.deleteMany();
   await database.client.cashTransaction.deleteMany();
   await database.client.cashBook.deleteMany();
   await database.client.income.deleteMany();
@@ -104,7 +106,64 @@ describe('bounded calendar and spreadsheet-safe contracts', () => {
   });
 });
 
+async function incomingSource() {
+  const bytes = Buffer.from('<Invoice><ID>EXPORT-SOURCE</ID><IssueDate>2026-01-15</IssueDate><DocumentCurrencyCode>EUR</DocumentCurrencyCode><LegalMonetaryTotal><TaxInclusiveAmount>119.00</TaxInclusiveAmount><PayableAmount>119.00</PayableAmount></LegalMonetaryTotal></Invoice>');
+  const storedFileName = await storage.writeTenantFile('accountant-owner', 'source.xml', bytes);
+  const supplier = await database.client.supplier.create({ data: { userId: 'accountant-owner', name: 'Selected source supplier' } });
+  const { userId: _user, createdAt: _created, updatedAt: _updated, ...selectedSupplierSnapshot } = supplier; void _user; void _created; void _updated;
+  const parsed = await (await import('@/lib/purchase-documents/parser')).parsePurchaseBytes('application/xml', bytes);
+  const expense = await database.client.expense.create({ data: { userId: 'accountant-owner', description: 'Source-linked expense', amount: 119, date: date('2026-01-15'), storedReceiptFileName: storedFileName, receiptFileName: 'source.xml' } });
+  const source = await database.client.purchaseDocument.create({ data: { userId: 'accountant-owner', originalFileName: 'source.xml', storedFileName, originalSha256: createHash('sha256').update(bytes).digest('hex'), originalByteCount: bytes.byteLength, mediaType: 'application/xml', uploadRequestId: randomUUID(), parseStatus: 'PARSED', parsedData: parsed.preview!, reviewStatus: 'BOOKED', expenseId: expense.id, supplierId: supplier.id, selectedSupplierSnapshot, approvalRequestId: randomUUID(), approvalFingerprint: 'a'.repeat(64), approvedAt: date('2026-01-15') } });
+  return { bytes, source, expense };
+}
+
 describe('business snapshot, manifest and original-file isolation', () => {
+  it('hash-checks booked incoming originals and annotates source references without another expense', async () => {
+    const { source, expense, bytes } = await incomingSource(), { zip, manifest, records } = await unpack();
+    expect(records.expenses).toHaveLength(1); expect(records.expenses[0]).toMatchObject({ id: expense.id, purchaseDocumentId: source.id, originalSha256: source.originalSha256 });
+    expect(records.expenses[0]).not.toHaveProperty('purchaseDocument'); expect(records.expenses[0]).not.toHaveProperty('storedReceiptFileName');
+    expect(records.originals[0]).toMatchObject({ recordType: 'expense', recordId: expense.id, purchaseDocumentId: source.id, originalSha256: source.originalSha256, status: 'included' });
+    expect(manifest.entries.find((entry: { kind: string }) => entry.kind === 'original')).toMatchObject({ purchaseDocumentId: source.id, originalSha256: source.originalSha256, sha256: source.originalSha256 });
+    expect(await zip.file(`originals/expense-${expense.id}.xml`)!.async('nodebuffer')).toEqual(bytes);
+    expect(await zip.file('originals.csv')!.async('string')).toContain(source.originalSha256);
+  });
+  it('binds handoff approval to a booked incoming original without relaxing its source hash contract', async () => {
+    const { source, expense, bytes } = await incomingSource();
+    const previewResponse = await route.GET(request('year=2026&preview=1'));
+    expect(previewResponse.status).toBe(200);
+    const preview = await previewResponse.json();
+    expect(preview.manifest.counts).toMatchObject({ expenses: 1, originals: 1 });
+    expect(preview.manifest.entries.find((entry: { kind: string }) => entry.kind === 'original')).toMatchObject({
+      purchaseDocumentId: source.id, originalSha256: source.originalSha256, sha256: source.originalSha256, bytes: bytes.byteLength,
+    });
+    expect(preview.manifest.scope).toMatchObject({ restorableBackup: false, completeAuditExport: false });
+    expect(preview.manifest.scope.excluded).toContain('unbooked incoming inbox');
+    const approved = await route.GET(request(`year=2026&expectedFingerprint=${preview.manifest.sourceFingerprint}`));
+    expect(approved.status).toBe(200);
+    const zip = await JSZip.loadAsync(await approved.arrayBuffer());
+    expect(await zip.file(`originals/expense-${expense.id}.xml`)!.async('nodebuffer')).toEqual(bytes);
+    const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+    expect(manifest.sourceFingerprint).toBe(preview.manifest.sourceFingerprint);
+    await writeFile(storage.getTenantUploadPath('accountant-owner', source.storedFileName), Buffer.from('tampered original'));
+    const compression = vi.spyOn(JSZip.prototype, 'generateAsync');
+    try {
+      const rejected = await route.GET(request(`year=2026&expectedFingerprint=${preview.manifest.sourceFingerprint}`));
+      expect(rejected.status).toBe(409);
+      expect(await rejected.json()).toEqual({ error: expect.stringContaining('Eingangsoriginal') });
+      expect(compression).not.toHaveBeenCalled();
+      // A fresh preview cannot approve a tampered source by adopting its new hash.
+      expect((await route.GET(request('year=2026&preview=1'))).status).toBe(409);
+    } finally { compression.mockRestore(); }
+  });
+  it.each(['missing', 'changed'])('rejects %s incoming original rather than exporting a new hash or missing warning', async condition => {
+    const { source } = await incomingSource(), filePath = storage.getTenantUploadPath('accountant-owner', source.storedFileName);
+    if (condition === 'missing') await rm(filePath); else await writeFile(filePath, Buffer.from('tampered bytes'));
+    const response = await route.GET(request()); expect(response.status).toBe(409); expect(await response.json()).toEqual({ error: expect.stringContaining('Eingangsoriginal') });
+  });
+  it('rejects inconsistent cross-tenant incoming source linkage', async () => {
+    const { source } = await incomingSource(); await database.client.purchaseDocument.update({ where: { id: source.id }, data: { userId: 'accountant-other' } });
+    expect((await route.GET(request())).status).toBe(409);
+  });
   it('keeps inclusive date boundaries, payment dates and credit-note originals; never sums duplicate views', async () => {
     const original = await invoice({ invoiceDate: date('2025-12-10'), uploadedAt: date('2025-12-10'), status: 'CANCELLED', paidAt: date('2026-01-31') });
     const credit = await invoice({ type: 'CREDIT_NOTE', originalInvoiceId: original.id, totalAmount: -12.34, cancellationReason: 'Korrektur', invoiceDate: date('2026-01-31') });
@@ -310,5 +369,81 @@ describe('download API failure and resource boundaries', () => {
     });
     try { expect((await route.GET(request())).status).toBe(409); }
     finally { spy.mockRestore(); }
+  });
+});
+
+describe('guided handoff preview and approved-snapshot download', () => {
+  it('uses the same scope and warnings without constructing or compressing a ZIP', async () => {
+    const storedName = await storage.writeTenantFile('accountant-owner', 'preview.pdf', Buffer.from('UNCHANGED_ORIGINAL'));
+    await invoice({ storedFileName: storedName });
+    await database.client.expense.create({ data: { userId: 'accountant-owner', amount: 1, description: 'PRIVATE_DESCRIPTION_NOT_IN_PREVIEW', date: date('2026-01-01') } });
+    const compression = vi.spyOn(JSZip.prototype, 'generateAsync');
+    try {
+      const response = await route.GET(request('year=2026&preview=1'));
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(response.headers.get('content-disposition')).toBeNull();
+      const body = await response.json();
+      expect(body).not.toHaveProperty('bytes');
+      expect(body).not.toHaveProperty('records');
+      expect(JSON.stringify(body)).not.toContain('PRIVATE_DESCRIPTION_NOT_IN_PREVIEW');
+      expect(JSON.stringify(body)).not.toContain('UNCHANGED_ORIGINAL');
+      expect(body.manifest).toMatchObject({ formatVersion: 1, counts: { invoices: 1, expenses: 1 }, originalCounts: { included: 1, missing: 0, notAttached: 1 } });
+      expect(body.manifest.warnings.some((warning: { code: string }) => warning.code === 'ORIGINAL_NOT_ATTACHED')).toBe(true);
+      expect(body.manifest.sourceFingerprint).toMatch(/^[a-f0-9]{64}$/);
+      expect(body.manifest.entries.some((entry: { zipPath: string }) => entry.zipPath === 'manifest.json')).toBe(false);
+      expect(compression).not.toHaveBeenCalled();
+      expect(await database.client.auditLog.count()).toBe(0);
+      const second = await (await route.GET(request('year=2026&preview=1'))).json();
+      expect(second.manifest.sourceFingerprint).toBe(body.manifest.sourceFingerprint);
+      const download = await route.GET(request(`year=2026&expectedFingerprint=${body.manifest.sourceFingerprint}`));
+      expect(download.status).toBe(200);
+      const zip = await JSZip.loadAsync(await download.arrayBuffer());
+      const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+      expect(manifest.sourceFingerprint).toBe(body.manifest.sourceFingerprint);
+      expect(manifest.counts).toEqual(body.manifest.counts);
+      expect(manifest.warnings).toEqual(body.manifest.warnings);
+      expect(compression).toHaveBeenCalledTimes(1);
+      expect(await database.client.auditLog.count()).toBe(1);
+    } finally { compression.mockRestore(); }
+  });
+
+  it('rejects changed records before compression rather than downloading an unapproved snapshot', async () => {
+    const expense = await database.client.expense.create({ data: { userId: 'accountant-owner', amount: 1, description: 'before', date: date('2026-01-01') } });
+    const preview = await (await route.GET(request('year=2026&preview=1'))).json();
+    await database.client.expense.update({ where: { id: expense.id }, data: { description: 'after' } });
+    const compression = vi.spyOn(JSZip.prototype, 'generateAsync');
+    try {
+      const response = await route.GET(request(`year=2026&expectedFingerprint=${preview.manifest.sourceFingerprint}`));
+      expect(response.status).toBe(409);
+      expect((await response.json()).error).toContain('seit der Vorschau geändert');
+      expect(compression).not.toHaveBeenCalled();
+      expect(await database.client.auditLog.count()).toBe(0);
+    } finally { compression.mockRestore(); }
+  });
+
+  it('also detects changed original bytes with unchanged database records', async () => {
+    const storedName = await storage.writeTenantFile('accountant-owner', 'reviewed.pdf', Buffer.from('before'));
+    await invoice({ storedFileName: storedName });
+    const preview = await (await route.GET(request('year=2026&preview=1'))).json();
+    await writeFile(storage.getTenantUploadPath('accountant-owner', storedName), 'after');
+    const response = await route.GET(request(`year=2026&expectedFingerprint=${preview.manifest.sourceFingerprint}`));
+    expect(response.status).toBe(409);
+    const updated = await (await route.GET(request('year=2026&preview=1'))).json();
+    expect(updated.manifest.sourceFingerprint).not.toBe(preview.manifest.sourceFingerprint);
+  });
+
+  it('keeps authentication, period validation and file-size limits identical for previews', async () => {
+    state.actor = null;
+    expect((await route.GET(request('year=2026&preview=1'))).status).toBe(401);
+    state.actor = 'accountant-owner';
+    for (const query of ['year=2026&preview=0', 'year=2026&preview=1&preview=1', 'year=2026&expectedFingerprint=bad', `year=2026&preview=1&expectedFingerprint=${'a'.repeat(64)}`, 'year=2026&preview=1&userId=accountant-other', 'year=2026&year=2025&preview=1', 'from=2025-01-01&to=2026-01-02&preview=1']) {
+      expect((await route.GET(request(query))).status).toBe(400);
+    }
+    const storedName = await storage.writeTenantFile('accountant-owner', 'large-preview.pdf', Buffer.alloc(0));
+    await truncate(storage.getTenantUploadPath('accountant-owner', storedName), exporter.ACCOUNTANT_EXPORT_LIMITS.maxFileBytes + 1);
+    await invoice({ storedFileName: storedName });
+    expect((await route.GET(request('year=2026&preview=1'))).status).toBe(413);
   });
 });

@@ -719,6 +719,17 @@ export default function SettingsPage() {
         </Card>
       )}
 
+      <Card className={styles.surface} id="handoff-settings">
+        <CardHeader>
+          <CardTitle>Unterlagen übergeben</CardTitle>
+          <CardDescription>Einnahmen, Ausgaben, Rechnungen und vorhandene Originale für Ihre Steuerberatung zusammenstellen.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">Wählen Sie einen Zeitraum und prüfen Sie Zählungen, fehlende Originale und Warnungen vor dem ZIP-Download. Kein DATEV-Format, keine ELSTER-Einreichung und kein vollständiger Prüfexport. Das Paket ersetzt keine Datensicherung.</p>
+          <Button asChild><Link href="/handoff"><FileText aria-hidden="true" />Unterlagen übergeben</Link></Button>
+        </CardContent>
+      </Card>
+
       {/* Backup & Restore */}
       <Card className={`${styles.surface} mt-6`} id="backup-settings">
         <CardHeader>

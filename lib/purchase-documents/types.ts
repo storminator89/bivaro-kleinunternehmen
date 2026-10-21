@@ -1,3 +1,4 @@
+import type { SupplierDto } from '@/lib/suppliers';
 import type { ParsedEInvoiceParty } from '@/lib/e-invoice-parser';
 
 export const PURCHASE_PARSE_STATUSES = ['PENDING', 'PARSED', 'FAILED'] as const;
@@ -69,6 +70,8 @@ export type IncomingDocument = {
   invoiceDate: string | null;
   currency: string | null;
   totalAmount: string | null;
+  supplierId: number | null;
+  selectedSupplierSnapshot: SupplierDto | null;
   supplierCandidate: ParsedEInvoiceParty | null;
   buyerCandidate: ParsedEInvoiceParty | null;
   parserWarnings: PurchaseParserWarning[];
@@ -83,3 +86,25 @@ export type IncomingDocument = {
 };
 export type IncomingDocumentList = { documents: IncomingDocument[]; total: number; page: number; limit: number };
 export type IncomingDocumentResponse = { document: IncomingDocument; replayed?: boolean };
+
+/** Every field is deliberate user input; expenseDate is the actual payment date. */
+export type PurchaseExpenseApprovalInput = {
+  approvalRequestId: string;
+  expectedRevision: number;
+  description: string;
+  amount: string;
+  expenseDate: string;
+  category: string;
+  taxRelevant: boolean;
+  taxDeductiblePercentage: string;
+  depreciationYears: number | null;
+  confirmPaymentDate: true;
+  confirmReviewedOriginal: true;
+  confirmBuyerBelongsToBusiness: true;
+  acknowledgedDuplicates: Array<{ id: number; revision: number }>;
+};
+export type PurchaseExpenseApprovalResponse = {
+  document: IncomingDocument;
+  expense: { id: number; description: string; amount: number; date: string | Date; category: string | null; taxRelevant: boolean; taxDeductiblePercentage: number | null; depreciationYears: number | null };
+  replayed: boolean;
+};

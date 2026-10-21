@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Quote } from "@/components/dashboard/tabs/quotes-tab";
 import { toQuery } from "@/lib/dashboard-utils";
+import { refreshPaymentDashboardLists } from "@/lib/payment-dashboard-refresh";
 import type { Customer, Expense, FilterState, Income, Invoice, TimeRange } from "@/types/dashboard";
 
 type PaginatedResponse<T> = {
@@ -370,6 +371,7 @@ export function useDashboardData({
     loadExpenses,
     loadIncomes,
     loadInvoices,
+    refreshPaymentLists: () => refreshPaymentDashboardLists(queryClient),
     loadQuotes,
   };
 }

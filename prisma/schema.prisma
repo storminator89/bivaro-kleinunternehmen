@@ -63,6 +63,8 @@ model User {
   documentations Documentation[]
   billingNotes BillingNote[]
   purchaseDocuments PurchaseDocument[]
+  suppliers Supplier[]
+  paymentJournalEvents PaymentJournalEvent[]
 }
 
 // Shared, bounded rate-limit state for authentication and other API surfaces.
@@ -115,6 +117,7 @@ model Income {
   userId      String
   user        User     @relation(fields: [userId], references: [id])
   cashTransaction CashTransaction?
+  paymentJournalEvent PaymentJournalEvent?
 
   @@index([userId, date])
 }
@@ -145,6 +148,7 @@ model Invoice {
   convertedInvoice Invoice? @relation("QuoteConversion")
   customerId    Int?
   income        Income?
+  paymentJournalEvent PaymentJournalEvent?
   billingNotes  BillingNote[]
   reminders     Reminder[]
   customer      Customer? @relation(fields: [customerId], references: [id])
@@ -416,6 +420,9 @@ model PurchaseDocument {
   parserVersion       String?
   parseErrorCode      String?
   supplierName        String?
+  supplierId          Int?
+  supplier            Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  selectedSupplierSnapshot Json?
   invoiceNumber       String?
   invoiceDate         DateTime?
   currency            String?
@@ -435,4 +442,50 @@ model PurchaseDocument {
   @@unique([userId, uploadRequestId])
   @@index([userId, reviewStatus, uploadedAt])
   @@index([userId, supplierName, invoiceNumber])
+}
+
+// Explicit tenant-owned purchase-side contacts, never sales Customers.
+model Supplier {
+  id Int @id @default(autoincrement())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  name String
+  address String?
+  postalCode String?
+  city String?
+  country String?
+  email String?
+  phone String?
+  taxId String?
+  vatId String?
+  revision Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  purchaseDocuments PurchaseDocument[]
+
+  @@index([userId, name])
+}
+
+// BPR-010 deliberately supports exactly one full-payment event per invoice.
+// Multi-payment/refund support needs a separately reviewed additive migration.
+model PaymentJournalEvent {
+  id             Int      @id @default(autoincrement())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  invoiceId      Int      @unique
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  incomeId       Int?     @unique
+  income         Income?  @relation(fields: [incomeId], references: [id], onDelete: Restrict)
+  // Canonical positive integer cents, serialized without lossy JSON numbers.
+  amountCents    String
+  currency       String   @default("EUR")
+  paidAt         DateTime?
+  dateCertainty  String
+  source         String
+  reference      String
+  idempotencyKey String
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, paidAt])
 }

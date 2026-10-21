@@ -12,6 +12,10 @@ export type Expense = {
   receiptFileName?: string;
   storedReceiptFileName?: string;
   depreciationYears?: number;
+  /** Any incoming source relation locks generic mutations, even if its metadata is inconsistent. */
+  sourceLinked?: boolean;
+  /** Only a same-tenant, consistent booked source ID may leave the server. */
+  sourceDocumentId?: number | null;
 };
 
 export type Income = {

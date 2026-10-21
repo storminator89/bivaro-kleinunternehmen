@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, FileText, Inbox, Loader2, RefreshCw, Search } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
@@ -27,6 +28,11 @@ export function IncomingDocumentRow({ document, onOpen }: { document: IncomingDo
 }
 
 export function IncomingDocumentsWorkspace() {
+  const { data: session } = useSession();
+  return <IncomingDocumentsWorkspaceContent key={session?.user?.id ?? 'signed-out'} />;
+}
+function IncomingDocumentsWorkspaceContent() {
+  const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -41,6 +47,7 @@ export function IncomingDocumentsWorkspace() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [savedChange, setSavedChange] = useState(false);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
   const returnTarget = useRef<HTMLElement | null>(null);
@@ -54,7 +61,7 @@ export function IncomingDocumentsWorkspace() {
     if (search) query.set('search', search);
     setLoading(true); setLoadError(null);
     incomingJson<IncomingDocumentList>(`/api/purchase-documents?${query}`, { signal: controller.signal })
-      .then(result => { if (!controller.signal.aborted) setData(result); })
+      .then(result => { if (!controller.signal.aborted) { setData(result); setSavedChange(false); } })
       .catch(error => { if (!controller.signal.aborted) setLoadError(errorMessage(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -88,13 +95,13 @@ export function IncomingDocumentsWorkspace() {
         <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="incoming-search">Lieferant, Rechnungsnummer oder Dateiname</Label><div className="flex gap-2"><Input id="incoming-search" type="search" value={searchDraft} onChange={event => setSearchDraft(event.target.value)} maxLength={200} placeholder="Belege durchsuchen" /><Button variant="outline" type="submit" aria-label="Belege suchen"><Search className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Suchen</span></Button></div></div>
         <div className="space-y-2"><Label htmlFor="incoming-filter">Prüfstatus</Label><select id="incoming-filter" value={filter} onChange={event => updateQuery({ reviewStatus: event.target.value === 'REVIEW' ? null : event.target.value, page: null, document: null })} className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:w-48"><option value="REVIEW">Zu prüfen</option><option value="DISMISSED">Verworfen</option><option value="ALL">Alle Belege</option></select></div>
       </form>
-      {loading ? <p role="status" className="flex items-center justify-center gap-2 px-4 py-12 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Belege werden geladen…</p> : loadError ? <div role="alert" className="space-y-3 p-5"><p className="text-sm text-critical-foreground">{loadError}</p><Button variant="outline" onClick={refreshList}>Erneut versuchen</Button></div> : data?.documents.length ? <ul aria-label="Eingangsbelege">{data.documents.map(document => <IncomingDocumentRow key={document.id} document={document} onOpen={openDocument} />)}</ul> : <div className="px-5 py-10 text-center">
+      {loading ? <p role="status" className="flex items-center justify-center gap-2 px-4 py-12 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Belege werden geladen…</p> : loadError ? <div role="alert" className="space-y-3 p-5"><p className="text-sm text-critical-foreground">{savedChange ? `Die Änderung wurde gespeichert, aber die Belegliste konnte nicht aktualisiert werden. Keine erneute Buchung starten. ${loadError}` : loadError}</p><Button variant="outline" onClick={refreshList}>Erneut versuchen</Button></div> : data?.documents.length ? <ul aria-label="Eingangsbelege">{data.documents.map(document => <IncomingDocumentRow key={document.id} document={document} onOpen={openDocument} />)}</ul> : <div className="px-5 py-10 text-center">
         <Inbox className="mx-auto mb-3 size-7 text-muted-foreground" aria-hidden="true" /><h3 className="font-medium">{search ? 'Keine passenden Belege' : filter === 'DISMISSED' ? 'Keine verworfenen Belege' : filter === 'ALL' ? 'Dein Belegeingang ist noch leer' : 'Keine Belege zur Prüfung'}</h3><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{search ? 'Bitte den Suchbegriff oder Prüfstatus ändern. Gesucht wird nach Lieferant, Rechnungsnummer und Dateiname.' : 'Lade oben ein PDF- oder XML-Original hoch. Es bleibt unverändert erhalten und wird nicht automatisch als Ausgabe erfasst.'}</p>
         {search && <Button variant="link" className="mt-2" onClick={() => updateQuery({ search: null, page: null })}>Suche zurücksetzen</Button>}
       </div>}
       {!loading && !loadError && data && (data.total > INCOMING_PAGE_SIZE || page > 1) && <nav aria-label="Belegseiten" className="flex items-center justify-between gap-2 border-t border-border px-4 py-3 sm:px-5"><Button variant="outline" size="icon" aria-label="Vorherige Belegseite" disabled={page <= 1} onClick={() => updateQuery({ page: page === 2 ? null : String(page - 1) })}><ChevronLeft className="size-4" /></Button><p className="text-xs text-muted-foreground">Seite {page} von {Math.max(1, Math.ceil(data.total / data.limit))}</p><Button variant="outline" size="icon" aria-label="Nächste Belegseite" disabled={page * data.limit >= data.total} onClick={() => updateQuery({ page: String(page + 1) })}><ChevronRight className="size-4" /></Button></nav>}
     </section>
     <p className="text-xs text-muted-foreground">Dieser Belegeingang zeigt Originale und ungeprüfte Extraktionsdaten. Keine Konformitätsprüfung, keine Zahlung und keine automatische Übernahme in die Buchhaltung.</p>
-    {selectedId !== null && <IncomingDocumentReview key={selectedId} id={selectedId} onClose={() => updateQuery({ document: null })} onChanged={refreshList} onOpen={openDocument} returnFocus={restoreFocus} />}
+    {selectedId !== null && <IncomingDocumentReview key={`${session?.user?.id ?? 'signed-out'}:${selectedId}`} id={selectedId} onClose={() => updateQuery({ document: null })} onChanged={() => { setSavedChange(true); refreshList(); }} onOpen={openDocument} returnFocus={restoreFocus} />}
   </div>;
 }

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { toast } from "@/components/ui/toaster";
+import { getAccessHelpHref } from "@/lib/access-help";
 import { getSafeLoginCallbackUrl } from "@/lib/login-callback";
 
 export default function LoginPage() {
@@ -144,6 +145,7 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
+          <Link href={getAccessHelpHref(searchParams.get("callbackUrl"))} className="mt-3 flex min-h-11 items-center justify-center rounded-md text-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">Zugang verloren oder Betriebsstörung?</Link>
         </CardContent>
         <CardFooter className="border-t border-border/80 pt-5">
           <div className="w-full text-center text-sm text-muted-foreground">

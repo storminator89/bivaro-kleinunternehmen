@@ -183,6 +183,8 @@ async function deleteHandler(request: Request) {
       return NextResponse.json({ error: 'Wiederkehrende Ausgabe nicht gefunden' }, { status: 404 });
     }
     
+    if (await prisma.expense.findFirst({ where: { recurringExpenseId: Number(id), purchaseDocument: { isNot: null } }, select: { id: true } })) return NextResponse.json({ error: 'Wiederkehrende Vorlage enthält eine unveränderlich verknüpfte Eingangsquelle.', code: 'SOURCE_LINKED' }, { status: 409 });
+
     await prisma.recurringExpense.delete({
       where: { id: Number(id) },
     });

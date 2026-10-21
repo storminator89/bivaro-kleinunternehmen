@@ -22,6 +22,7 @@ afterAll(async () => { await database?.cleanup(); });
 function backup(settings: Record<string, unknown>) {
   const data = {
     user: { id: 'fiscal-backup-source' }, settings,
+    suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
     invoices: [], incomes: [], expenses: [], customers: [], auditLogs: [], invoiceNumberCounters: [],
   };
   return { version: '3.0', data, manifest: createBackupManifest({ sourceUserId: 'fiscal-backup-source', generatedAt: '2026-10-20T00:00:00.000Z', data }) };
@@ -49,7 +50,7 @@ describe('pilot fiscal profile backup compatibility', () => {
   it('accepts pre-profile v3 and legacy v2 settings as UNSET rather than inferring or retaining an unrelated confirmed declaration', async () => {
     const old = backup({ id: 99, companyName: 'Legacy company' });
     old.manifest.schemaVersion = PRE_FISCAL_PROFILE_SCHEMA_VERSION;
-    old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry) => entry.model !== 'PurchaseDocument');
+    old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry) => entry.model !== 'PurchaseDocument' && entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
     expect(() => validateBackupForRestore(old)).not.toThrow();
     await database.client.settings.create({ data: {
       userId: 'fiscal-backup-legacy-target', fiscalTaxRegime: 'STANDARD', fiscalEffectiveFrom: '2025-01-01', fiscalConfirmedAt: new Date(),

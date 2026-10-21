@@ -12,6 +12,7 @@ import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { updateInvoiceStatus, deleteInvoice, InvoicePaymentError } from '@/lib/invoice-payments';
+import { PaymentJournalError } from '@/lib/payment-journal/contract';
 import {
   withApiAuth,
   apiSuccess,
@@ -151,6 +152,7 @@ async function putHandler(request: NextRequest) {
     try {
       invoice = await updateInvoiceStatus(userId, Number(id), status?.toUpperCase(), paidAt, customerId === undefined ? undefined : customerId === null ? null : Number(customerId));
     } catch (error) {
+      if (error instanceof PaymentJournalError) return apiError(error.message, error.status, error.code);
       if (error instanceof InvoicePaymentError) return apiError(error.message, error.status);
       throw error;
     }

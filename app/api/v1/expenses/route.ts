@@ -1,3 +1,4 @@
+import { assertExpenseNotSourceLinked, SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 /**
@@ -96,6 +97,7 @@ function parseCategory(value: unknown, required = false): string | null {
 }
 
 function mutationErrorResponse(error: unknown) {
+  if (error instanceof SourceLinkedExpenseError) return apiError(error.message, error.status, error.code);
   return error instanceof ExpenseMutationError ? apiError(error.message, error.status, error.code) : null;
 }
 
@@ -289,6 +291,7 @@ async function putHandler(request: NextRequest) {
       const result = await inTransaction(async tx => {
         const existing = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
         if (!existing) throw new ExpenseMutationError(404, 'NOT_FOUND', 'Expense not found');
+        await assertExpenseNotSourceLinked(tx, existing.id);
         if (existing.cashTransaction) {
           throw new ExpenseMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
         }
@@ -349,6 +352,7 @@ async function deleteHandler(request: NextRequest) {
       await inTransaction(async tx => {
         const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
         if (!current) throw new ExpenseMutationError(404, 'NOT_FOUND', 'Expense not found');
+        await assertExpenseNotSourceLinked(tx, current.id);
         if (current.cashTransaction) {
           throw new ExpenseMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
         }

@@ -45,6 +45,7 @@ export type AuditAction =
 // Entity types that can be audited
 export type AuditEntityType =
   | 'Customer'
+  | 'Supplier'
   | 'Invoice'
   | 'PurchaseDocument'
   | 'Expense'

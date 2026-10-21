@@ -1,3 +1,5 @@
+import { readPurchaseOriginal } from '@/lib/purchase-documents/original';
+import { PurchaseDocumentError } from '@/lib/purchase-documents/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -105,6 +107,7 @@ export async function GET(request: NextRequest) {
     const expenses = await prisma.expense.findMany({
       where,
       orderBy: { date: 'desc' },
+      include: { purchaseDocument: { select: { id: true, userId: true, storedFileName: true, originalSha256: true, originalByteCount: true, mediaType: true, reviewStatus: true } } },
     });
 
     if (!expenses.length) {
@@ -116,7 +119,7 @@ export async function GET(request: NextRequest) {
 
     const zip = new JSZip();
     const usedFilenames = new Set<string>();
-    const metadataLines: string[] = ['"ID";"Datum";"Beschreibung";"Kategorie";"Betrag";"Dateiname"'];
+    const metadataLines: string[] = ['"ID";"Datum";"Beschreibung";"Kategorie";"Betrag";"Dateiname";"Eingangsbeleg-ID";"Original-SHA256"'];
     const missingFiles: string[] = [];
     let filesAdded = 0;
 
@@ -127,13 +130,15 @@ export async function GET(request: NextRequest) {
 
       const filePath = await findOwnedUploadedFile(userId, expense.storedReceiptFileName);
 
-      if (!filePath) {
+      const source = expense.purchaseDocument;
+      if (source && (source.userId !== userId || source.reviewStatus !== 'BOOKED' || source.storedFileName !== expense.storedReceiptFileName)) throw new PurchaseDocumentError('Quellenverknüpfung ist inkonsistent.', 409, 'SOURCE_STATE');
+      if (!filePath && !source) {
         missingFiles.push(`${expense.id}: ${expense.storedReceiptFileName}`);
         continue;
       }
 
       try {
-        const fileBuffer = await fs.readFile(filePath);
+        const fileBuffer = source ? await readPurchaseOriginal(source) : await fs.readFile(filePath!);
         const filename = createSafeFilename(
           expense.receiptFileName || '',
           `${expense.id}_${expense.storedReceiptFileName}`,
@@ -149,8 +154,11 @@ export async function GET(request: NextRequest) {
           expense.category ? `"${sanitizeCsvField(expense.category)}"` : '""',
           formatCurrency(expense.amount),
           `"${filename}"`,
+          source ? String(source.id) : '',
+          source?.originalSha256 ?? '',
         ].join(';'));
       } catch (_error) {
+        if (source) throw _error;
         console.error(`Fehler beim Lesen der Datei ${filePath}:`, _error);
         missingFiles.push(`${expense.id}: ${expense.storedReceiptFileName}`);
       }
@@ -183,6 +191,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof PurchaseDocumentError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
