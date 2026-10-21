@@ -137,6 +137,27 @@ describe('adjustment fields and immutable history presentation', () => {
     const html = renderToStaticMarkup(createElement(PaymentAdjustmentPanel, { invoiceId: 7, tenantId: 'user', journal: readPaymentAdjustmentPreflight(journal(true), 7), disabled: false, loading: false, onEditingChange: vi.fn(), onBusyChange: vi.fn(), onReload: vi.fn(), onRecorded: vi.fn() }));
     for (const content of ['Noch zu erstatten', '80,00', 'Hier wird niemals Geld überwiesen', 'Steuerliche Zuordnung: prüfpflichtig, nicht fachlich freigegeben']) expect(html).toContain(content);
   });
+  it('lets every adjustment action wrap naturally at mobile widths without clipping or shortening safety copy', () => {
+    const html = renderToStaticMarkup(createElement(PaymentAdjustmentPanel, { invoiceId: 7, tenantId: 'user', journal: readPaymentAdjustmentPreflight(journal(true), 7), disabled: false, loading: false, onEditingChange: vi.fn(), onBusyChange: vi.fn(), onReload: vi.fn(), onRecorded: vi.fn() }));
+    expect(html).toContain('class="min-w-0 space-y-4');
+    const entry = html.match(/<button\b[^>]*>Korrektur \/ Erstattung dokumentieren<\/button>/)?.[0];
+    expect(entry).toBeDefined();
+    const classes = entry?.match(/class="([^"]*)"/)?.[1].split(/\s+/) ?? [];
+    for (const name of ['h-auto', 'min-h-11', 'min-w-0', 'max-w-full', 'w-full', 'whitespace-normal', 'break-words', 'leading-snug']) expect(classes).toContain(name);
+    for (const name of ['h-11', 'whitespace-nowrap', 'truncate', 'overflow-hidden']) expect(classes).not.toContain(name);
+    const panel = readFileSync('components/payments/payment-adjustment-panel.tsx', 'utf8');
+    const buttons = panel.match(/<Button\b[^>]*>/g) ?? [];
+    expect(buttons).toHaveLength(6);
+    for (const button of buttons) expect(button).toContain('adjustmentActionClassName');
+    for (const copy of ['Erstattung verbindlich dokumentieren', 'Korrektur verbindlich speichern', 'Unverändert erneut bestätigen', 'Aktuellen Journalstand geprüft', 'Zurück zum Zahlungseingang']) expect(panel).toContain(copy);
+    expect(panel).toContain('<fieldset disabled={locked} className="min-w-0');
+    expect(panel).toMatch(/<select\b[^>]*className="min-h-11 w-full min-w-0/);
+    const history = renderToStaticMarkup(createElement(PaymentHistory, { events: [original] }));
+    expect(history).toContain('aria-label="Zahlungsverlauf" class="min-w-0"');
+    const dialog = readFileSync('components/dashboard/full-payment-dialog.tsx', 'utf8');
+    expect(dialog).toMatch(/<DialogContent className="[^"]*grid-cols-1/);
+    expect(panel).not.toMatch(/overflow-(?:x-)?(?:hidden|clip)|truncate/);
+  });
   it('keeps monetary axes and fiscal limitation visible while disclosing only optional explanation', () => {
     const html = renderToStaticMarkup(createElement(PaymentAdjustmentPanel, { invoiceId: 7, tenantId: 'user', journal: readPaymentAdjustmentPreflight(journal(true), 7), disabled: false, loading: false, onEditingChange: vi.fn(), onBusyChange: vi.fn(), onReload: vi.fn(), onRecorded: vi.fn() }));
     const primaryContent = html.slice(0, html.indexOf('<details'));

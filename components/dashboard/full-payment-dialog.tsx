@@ -248,7 +248,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) close(); }}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg" showCloseButton={!isSubmitting && !adjustmentBusy}
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-1 overflow-y-auto sm:max-w-lg" showCloseButton={!isSubmitting && !adjustmentBusy}
         onOpenAutoFocus={(event) => { event.preventDefault(); dateRef.current?.focus(); }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();

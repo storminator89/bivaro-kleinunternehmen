@@ -5,7 +5,7 @@ import type { PaymentAdjustmentEvent } from '@/lib/payment-adjustment-form';
 /** One readable card per immutable allocation, at every viewport size. */
 export function PaymentHistory({ events, adjustments = [] }: { events: PaymentHistoryEvent[]; adjustments?: PaymentAdjustmentEvent[] }) {
   if (events.length === 0) return null;
-  return <section aria-label="Zahlungsverlauf">
+  return <section aria-label="Zahlungsverlauf" className="min-w-0">
     <details open={events.length <= 2} className="rounded-xl border bg-muted/10 px-4">
     <summary className="min-h-11 cursor-pointer py-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"><span className="font-semibold">Zahlungsverlauf</span><span className="ml-2 text-muted-foreground">{events.length} {events.length === 1 ? 'Eingang' : 'Eingänge'}{adjustments.length > 0 ? ` · ${adjustments.length} ${adjustments.length === 1 ? 'Folgebeleg' : 'Folgebelege'}` : ''}</span></summary>
     <ol className="space-y-3 pb-4">{events.map(event => <li key={event.id} className="rounded-lg border bg-card p-3 text-sm">
