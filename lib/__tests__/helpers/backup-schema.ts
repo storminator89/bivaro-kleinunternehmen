@@ -1,4 +1,4 @@
-import { backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
+import { backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
 /** Construct a genuine pre-CSV fixture, rather than relabelling a future schema. */
 export function stripCsvCatalogForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
   stripEmptyPaymentAdjustmentsForLegacy(backup);
@@ -36,6 +36,10 @@ export function stripEmptyServiceBillingForLegacy(backup: { data: Record<string,
 export function stripEmptyPaymentAdjustmentsForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
   stripEmptyProjectServiceTimesForLegacy(backup);
   if (!backupSchemaSupportsEmailOutbox(backup.manifest.schemaVersion)) backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => !['EmailOutbox', 'EmailOutboxAttempt'].includes(entry.model));
+  if (!backupSchemaSupportsPurchaseValidation(backup.manifest.schemaVersion) && (backup.data.purchaseValidationReports === undefined || (Array.isArray(backup.data.purchaseValidationReports) && backup.data.purchaseValidationReports.length === 0))) {
+    delete backup.data.purchaseValidationReports;
+    backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => entry.model !== 'PurchaseValidationReport');
+  }
   if (backupSchemaSupportsPaymentAdjustments(backup.manifest.schemaVersion)) return;
   for (const [key, model] of [['paymentAdjustments', 'PaymentAdjustment'], ['paymentOperations', 'PaymentOperation']]) {
     const value = backup.data[key];
@@ -47,7 +51,7 @@ export function stripEmptyPaymentAdjustmentsForLegacy(backup: { data: Record<str
 }
 export function legacyPaymentData<T extends Record<string, unknown>>(data: T): T {
   const copy = { ...data };
-  for (const key of ['paymentAdjustments', 'paymentOperations']) if (Array.isArray(copy[key]) && (copy[key] as unknown[]).length === 0) delete copy[key];
+  for (const key of ['purchaseValidationReports', 'paymentAdjustments', 'paymentOperations']) if (Array.isArray(copy[key]) && (copy[key] as unknown[]).length === 0) delete copy[key];
   if (Array.isArray(copy.serviceProjects) && copy.serviceProjects.length === 0) delete copy.serviceProjects;
   if (Array.isArray(copy.billingNotes)) Object.assign(copy, { billingNotes: copy.billingNotes.map(note => {
     const item = { ...note };

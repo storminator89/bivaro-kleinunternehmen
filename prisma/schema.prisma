@@ -65,6 +65,7 @@ model User {
   serviceProjects ServiceProject[]
   billingNotes BillingNote[]
   purchaseDocuments PurchaseDocument[]
+  purchaseValidationReports PurchaseValidationReport[]
   suppliers Supplier[]
   aiProviderSettings AiProviderSettings?
   paymentJournalEvents PaymentJournalEvent[]
@@ -758,4 +759,25 @@ model EmailOutboxAttempt {
 
   @@unique([outboxId, requestId])
   @@unique([outboxId, sequence])
+}
+
+// Append-only technical evidence. Tenant+original hash is the authoritative source
+// identity across restore; numeric document ID is an informational snapshot only.
+model PurchaseValidationReport {
+  id String @id @default(uuid())
+  stableKey String
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  originalSha256 String
+  sourceDocumentIdAtCheck Int
+  requestId String
+  fingerprint String
+  provenance String @default("LOCAL") // LOCAL, IMPORTED_HISTORIC
+  report Json
+  checkedAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([userId, stableKey])
+  @@unique([userId, requestId])
+  @@index([userId, originalSha256, checkedAt])
 }

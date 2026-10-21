@@ -1,3 +1,4 @@
+import { validationReportsFromBackup, restoreValidationReports } from '@/lib/purchase-documents/validation-backup';
 import { validatePaymentAdjustmentBackup, paymentAdjustmentValues, sameAdjustmentEvidence } from '@/lib/payment-adjustment-backup';
 import { validateReminderBackupFields, restoredReminderKey } from '@/lib/reminder-backup';
 import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
@@ -29,6 +30,7 @@ import {
   CURRENT_BACKUP_VERSION,
   CURRENT_SCHEMA_VERSION,
   backupSchemaSupportsReminderBalance,
+  backupSchemaSupportsPurchaseValidation,
   backupSchemaSupportsServiceBilling,
   backupSchemaSupportsProjectServiceTimes,
   validateProjectServiceBackupFields,
@@ -1027,6 +1029,8 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   validateBackupReferences(data, sets);
   validateSuppliers(data, manifest);
   validatePurchaseDocuments(data, manifest, root.type === 'full');
+  try { validationReportsFromBackup(data, version !== LEGACY_BACKUP_VERSION && backupSchemaSupportsPurchaseValidation(manifest?.schemaVersion)); }
+  catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Technische Prüfberichtshistorie ist ungültig'); }
   validatePaymentJournalBackup(data, version, manifest?.schemaVersion);
   try { validatePaymentAdjustmentBackup(data, manifest?.schemaVersion); } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zahlungsberichtigungsgraph ungültig'); }
   const invariantValidation: RestoreInvariantValidation = { issues: [], truncated: false };
@@ -1270,7 +1274,7 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
   await tx.invoice.deleteMany({ where: { userId } });
   await tx.customer.deleteMany({ where: { userId } });
   await tx.settings.deleteMany({ where: { userId } });
-  // AuditLog is intentionally preserved as an immutable restore trail.
+  // AuditLog and PurchaseValidationReport are intentionally preserved as immutable history.
 }
 
 function purchaseOriginalIdentity(record: JsonRecord): string {
@@ -1365,6 +1369,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
   const result = resultTemplate(overwrite);
   result.warnings.push(...validationWarnings);
   const documents = asArray(data, 'purchaseDocuments');
+  const validationReports = validationReportsFromBackup(data, backupSchemaSupportsPurchaseValidation(manifest?.schemaVersion));
+  if (validationReports.length) result.warnings.push('Technische Eingangsprüfberichte werden ausschließlich als historische Nachweise übernommen. Keine erneute Prüfung und keine aktuelle Freigabe.');
   if (documents.length > 0 && !resolveFile) {
     throw new BackupValidationError('Eingangsbeleg-Originale erfordern ein vollständiges ZIP-Backup; JSON-Metadaten allein sind nicht wiederherstellbar.');
   }
@@ -2232,6 +2238,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         usedFiles.add(storedFileName);
         result.purchaseDocuments.imported += 1;
       }
+
+      try { await restoreValidationReports(tx, userId, validationReports); }
+      catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Prüfberichtskonflikt'); }
 
       for (const income of incomes) {
         const sourceId = asOptionalInt(income.id, 'income.id')!;

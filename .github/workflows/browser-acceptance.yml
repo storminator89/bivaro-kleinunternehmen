@@ -45,7 +45,7 @@ jobs:
       - name: Install and verify PDF and virtual display dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ghostscript xvfb xauth
+          sudo apt-get install -y --no-install-recommends ghostscript xvfb xauth default-jre-headless util-linux
           command -v gs
           command -v Xvfb
           command -v xvfb-run
@@ -53,10 +53,15 @@ jobs:
           gs --version
           xauth -V
 
+      - name: Install hash-pinned official offline invoice validator
+        run: node scripts/einvoice-validation/install-runtime.mjs "${{ runner.temp }}/bivaro-einvoice"
+
       # Use the supported runner: it owns a fresh temporary database and cleanup.
       # Security hardening remains in CI / Security checks (see testing docs).
       - name: Run the complete functional suite
         timeout-minutes: 25
+        env:
+          BIVARO_EINVOICE_ASSETS: ${{ runner.temp }}/bivaro-einvoice
         run: >-
           xvfb-run --auto-servernum npm run test:e2e --
           --headed
@@ -122,6 +127,8 @@ jobs:
               'project-services-workbench-desktop-1440.png',
               'project-services-selection-mobile-390.png',
               'incoming-queue-mobile-390.png',
+              'incoming-validation-desktop-1440.png',
+              'incoming-validation-mobile-390.png',
               'mocked-email-accepted-1440.png',
               'mocked-email-unknown-390.png',
           }

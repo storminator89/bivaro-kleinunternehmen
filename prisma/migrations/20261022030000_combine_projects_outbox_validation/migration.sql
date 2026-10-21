@@ -1,0 +1,2 @@
+-- Exact capability identity only. Preserve all prior standalone and pairwise
+-- identities; additive model migrations and their immutable evidence remain unchanged.

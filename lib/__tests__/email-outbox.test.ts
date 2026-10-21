@@ -17,7 +17,7 @@ import { attachmentSha256, readEmailOutbox, listEmailOutbox, classifyEmailTransp
 import { GET as outboxRoute } from '@/app/api/email/outbox/route';
 import { POST as retryRoute } from '@/app/api/email/outbox/[id]/retry/route';
 import { POST as sendRoute } from '@/app/api/email/send/route';
-import { stripEmptyProjectServiceTimesForLegacy } from './helpers/backup-schema';
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 import { createBackupManifest, validateBackupManifest, CURRENT_SCHEMA_VERSION, PAYMENT_ADJUSTMENT_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { restoreBackupData } from '@/lib/backup-restore';
@@ -330,7 +330,7 @@ it('excludes runtime from current backups and rejects imported/replayed outbox d
   const old = { ...manifest, schemaVersion: PAYMENT_ADJUSTMENT_SCHEMA_VERSION,
     modelCoverage: manifest.modelCoverage.filter(x => !x.model.startsWith('EmailOutbox')) };
   const oldData = structuredClone(snapshot.data);
-  stripEmptyProjectServiceTimesForLegacy({ data: oldData, manifest: old });
+  stripEmptyPaymentAdjustmentsForLegacy({ data: oldData, manifest: old });
   expect(validateBackupManifest(old, oldData).schemaVersion).toBe(PAYMENT_ADJUSTMENT_SCHEMA_VERSION);
 });
 

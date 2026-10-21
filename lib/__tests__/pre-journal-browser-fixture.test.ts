@@ -11,16 +11,24 @@ describe('real-browser historical restore fixtures keep their exact original cap
     expect(createBackupPreview(backup)).toMatchObject({ version, counts: { invoices: 1, incomes: 1 } });
     expect(backup.data).not.toHaveProperty('paymentAdjustments');
     expect(backup.data).not.toHaveProperty('paymentOperations');
-    expect(backup.manifest?.modelCoverage.some(entry => ['PaymentAdjustment', 'PaymentOperation'].includes(entry.model))).not.toBe(true);
+    expect(backup.data).not.toHaveProperty('purchaseValidationReports');
+    expect(backup.data).not.toHaveProperty('emailOutbox');
+    expect(backup.data).not.toHaveProperty('emailOutboxAttempts');
+    expect(backup.manifest?.modelCoverage.some(entry => ['EmailOutbox', 'EmailOutboxAttempt', 'PurchaseValidationReport', 'PaymentAdjustment', 'PaymentOperation'].includes(entry.model))).not.toBe(true);
   });
-  it('rejects a historical identity falsely advertising even empty new payment models', () => {
+  it.each([['PaymentAdjustment', 'paymentAdjustments', 'included'], ['PurchaseValidationReport', 'purchaseValidationReports', 'included'], ['EmailOutbox', 'emailOutbox', 'excluded'], ['EmailOutboxAttempt', 'emailOutboxAttempts', 'excluded']] as const)('rejects a historical identity falsely advertising the later %s model', (model, key, mode) => {
     const backup = preJournalBackup('3.0');
-    backup.manifest!.modelCoverage.push({ model: 'PaymentAdjustment', key: 'paymentAdjustments', mode: 'included', count: 0, sha256: '0'.repeat(64) });
+    backup.manifest!.modelCoverage.push({ model, key, mode, count: 0, sha256: '0'.repeat(64) });
     expect(() => createBackupPreview(backup)).toThrow();
   });
-  it.each(['paymentAdjustments', 'paymentOperations'])('does not let the fixture conversion weaken rejection of %s in a historical payload', key => {
+  it.each(['paymentAdjustments', 'paymentOperations', 'purchaseValidationReports'])('does not let the fixture conversion weaken rejection of %s in a historical payload', key => {
     const backup = preJournalBackup('3.0');
     Object.assign(backup.data, { [key]: [] });
     expect(() => createBackupPreview(backup)).toThrow(/Älteres Backupschema/);
+  });
+  it.each(['emailOutbox', 'emailOutboxAttempts'])('never imports target-only runtime %s arrays', key => {
+    const backup = preJournalBackup('3.0');
+    Object.assign(backup.data, { [key]: [] });
+    expect(() => createBackupPreview(backup)).toThrow(/Versandaufträge/);
   });
 });

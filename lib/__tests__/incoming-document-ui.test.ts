@@ -77,7 +77,9 @@ describe('incoming source presentation', () => {
     expect(html).toContain('Bruttobetrag laut Original · ungeprüft');
     expect(html).toContain('Restbetrag laut Original');
     expect(html).toContain('100,00 EUR');
-    expect(html).toContain('Nicht validiert');
+    expect(html).toContain('Steuerliche Freigabe');
+    expect(html).toContain('Nicht erfolgt');
+    expect(html).not.toContain('<dt>Konformitätsprüfung</dt>');
   });
   it('retains unsupported credit notes and foreign currency visibly, without booking claims or action', () => {
     const doc = document({ currency: 'USD', approvalSupported: false });

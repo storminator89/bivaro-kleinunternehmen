@@ -127,6 +127,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   }
   if (Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(document => document && typeof document === 'object' && (document as Record<string, unknown>).aiExtraction != null)) warnings.push('KI-Herkunft bleibt erhalten. Unterbrochene Analysen werden nicht fortgesetzt; Provider-Verbindungsdaten sind ausgeschlossen, vorhandene Ziel-Einstellungen bleiben unverändert.');
   if (counts.serviceProjects > 0) warnings.push('Projekte, archivierte Zustände und manuell erfasste Minuten bleiben erhalten. Bestehende Leistungsnotizen und Rechnungszuordnungen werden beim Zusammenführen nicht überschrieben.');
+  if (Array.isArray(data.purchaseValidationReports) && data.purchaseValidationReports.length > 0) warnings.push(`${data.purchaseValidationReports.length} technische Eingangsprüfberichte werden nur als historische Nachweise übernommen. Keine aktuelle technische oder steuerliche Freigabe; keine automatische erneute Prüfung.`);
   if (counts.serviceBillingPlans > 0) warnings.push('Servicepläne und erledigte Perioden bleiben erhalten. Wiederherstellen erzeugt, versendet oder verbucht keine Rechnungen; abweichende Periodenidentitäten werden nicht überschrieben.');
   if (counts.apiKeys > 0) {
     warnings.push('API-Schlüssel werden aus Sicherheitsgründen ohne geheime Schlüssel wiederhergestellt und müssen neu erstellt werden.');
