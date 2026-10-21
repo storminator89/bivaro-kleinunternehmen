@@ -1,5 +1,6 @@
 "use client";
 
+import Link from 'next/link';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Dialog,
@@ -41,7 +42,7 @@ import {
     Building2
 } from "lucide-react";
 import { EURExportData, UnmappedCategory } from '@/types/eur-export';
-import { getSupportedEURYears } from '@/lib/eur-line-mapping';
+import { getEURYearContract, getSupportedEURYears } from '@/lib/eur-line-mapping';
 
 interface EURElsterExportDialogProps {
     isOpen: boolean;
@@ -142,6 +143,8 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
         }
     };
 
+    const previewContract = previewData ? getEURYearContract(previewData.data.year) : null;
+
     // Group lines by type
     const groupedLines = {
         income: previewData?.data.lines.filter(l => l.type === 'income') || [],
@@ -173,6 +176,9 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                             <span className="font-medium text-foreground">Mappingversion:</span> {previewData.data.mappingVersion}
                             <span className="mx-2">·</span>
                             <span>Kontrollsummen: {previewData.data.controlTotals.incomeCount} Einnahmen, {previewData.data.controlTotals.expenseCount} Ausgaben</span>
+                            <p className="mt-2 break-words"><span className="font-medium text-foreground">Quellenversion:</span> {previewData.data.sourceVersion}</p>
+                            {previewData.data.sourceSha256 && <p className="mt-1 break-all text-xs">Quellen-SHA256: {previewData.data.sourceSha256}</p>}
+                            <p className="mt-1">{previewData.data.checkedScope}</p>
                         </div>
                     )}
                 </DialogHeader>
@@ -210,6 +216,12 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                             </div>
                         )}
                     </div>
+
+                    <p className="text-sm text-muted-foreground">
+                        Kein passendes Formularjahr? Das <Link className="underline" href={`/handoff?year=${selectedYear}`}>
+                            begrenzte Rohdaten-/Kanzleipaket
+                        </Link> erlaubt auch andere Kalenderjahre, ohne amtliche EÜR-Zeilenzuordnung. Zeitraum und Warnungen dort vor dem Download prüfen.
+                    </p>
 
                     {/* Loading State */}
                     {isLoading && (
@@ -295,7 +307,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                         </div>
                                         <p className={`text-xs mt-1 ${previewData.data.profit >= 0 ? 'text-blue-600/70' : 'text-amber-600/70'
                                             }`}>
-                                            Zeile 90 der Anlage EÜR
+                                            Zeile {previewContract?.roles.intermediateResult} der Anlage EÜR
                                         </p>
                                     </CardContent>
                                 </Card>
@@ -324,7 +336,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                         <span className="font-semibold">Nicht zugeordnete Kategorien</span>
                                     </div>
                                     <p className="text-sm text-orange-600 dark:text-orange-500 mb-3">
-                                        Diese Kategorien sind noch nicht belastbar zugeordnet. Sie werden vorläufig zu Zeile 60 (übrige unbeschränkt abziehbare Betriebsausgaben) gerechnet und müssen geprüft werden:
+                                        Diese Kategorien sind noch nicht belastbar zugeordnet. Sie werden vorläufig zu Zeile {previewContract?.roles.fallbackExpense} (übrige unbeschränkt abziehbare Betriebsausgaben) gerechnet und müssen geprüft werden:
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         {previewData.unmappedCategories.map((cat, i) => (
@@ -488,8 +500,8 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                                 }`} />
                                         </div>
                                         <div>
-                                            <span className="font-mono text-sm text-muted-foreground">Zeile 90</span>
-                                            <p className="font-semibold text-lg">Vereinfachter Überschuss für Zeile 90</p>
+                                            <span className="font-mono text-sm text-muted-foreground">Zeile {previewContract?.roles.intermediateResult}</span>
+                                            <p className="font-semibold text-lg">Vereinfachter Überschuss für Zeile {previewContract?.roles.intermediateResult}</p>
                                         </div>
                                     </div>
                                     <div className={`text-4xl font-bold ${previewData.data.profit >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300'
@@ -509,7 +521,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
                                         <p className="font-semibold mb-1">Hinweis zum Export-Format</p>
                                         <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
                                             Die CSV-Datei verwendet das deutsche Format (Semikolon als Trennzeichen, Komma als Dezimaltrennzeichen)
-                                            und kann in Excel geöffnet und von einer fachkundigen Person übertragen werden. Die späteren amtlichen Ergebniszeilen 92, 95 und 97 werden hier nicht vollständig ermittelt. Eine ELSTER-Einreichung findet hier nicht statt.
+                                            und kann in Excel geöffnet und von einer fachkundigen Person übertragen werden. Die späteren amtlichen Ergebniszeilen {previewContract?.laterResultRowsLabel} werden hier nicht vollständig ermittelt. Eine ELSTER-Einreichung findet hier nicht statt.
                                         </p>
                                     </div>
                                 </div>

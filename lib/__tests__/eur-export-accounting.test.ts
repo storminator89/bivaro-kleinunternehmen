@@ -38,9 +38,9 @@ describe('versioned EÜR working paper', () => {
     expect(isDateInCalendarYear('2025-12-31', 2025)).toBe(true);
   });
 
-  it('blocks unverified years and uses the official 2025 row numbers', () => {
-    expect(getSupportedEURYears()).toEqual([2024, 2025]);
-    expect(isSupportedEURYear(2026)).toBe(false);
+  it('blocks future unverified years and retains the official 2025 row numbers', () => {
+    expect(getSupportedEURYears()).toEqual([2024, 2025, 2026]);
+    expect(isSupportedEURYear(2027)).toBe(false);
     expect(getEURLineForCategoryForYear('Wareneinkauf', 2025)).toBe(27);
     expect(getEURLineDefinition(90, 2025)?.type).toBe('result');
   });

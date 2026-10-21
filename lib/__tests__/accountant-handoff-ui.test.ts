@@ -131,10 +131,11 @@ describe('handoff accessible rendering and honest scope', () => {
     expect(html).toContain('Alle Warnungen stehen in manifest.json');
     expect(html).not.toContain('Warnung 50');
   });
-  it('makes the handoff discoverable from the export help guide with unchanged EÜR caveats', () => {
+  it('makes the handoff discoverable from the export help guide with bounded, year-versioned EÜR caveats', () => {
     const guide = pilotGuides.find(value => value.id === 'export')!;
     expect(guide.links.some(link => link.href === '/handoff')).toBe(true);
-    expect(guide.caution).toContain('2024 und 2025, nicht 2026');
+    expect(guide.caution).toContain('2024, 2025 und 2026');
+    expect(guide.caution).toContain('unbekannte Formularjahre werden abgewiesen');
     expect(guide.caution).toContain('kein vollständiger GoBD-Prüfexport');
   });
 });

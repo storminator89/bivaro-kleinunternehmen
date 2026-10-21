@@ -17,8 +17,7 @@ import {
     getDefaultExpenseLineForYear,
     generateElsterCSV,
     getEURLineDefinition,
-    getEURMappingVersion,
-    getEURSourceReferences,
+    getEURYearContract,
     getSupportedEURYears,
     isSupportedEURYear,
 } from '@/lib/eur-line-mapping';
@@ -35,7 +34,7 @@ import {
 function parseYear(value: string | null): number | null {
     if (!value || !/^\d{4}$/.test(value)) return null;
     const year = Number(value);
-    return Number.isSafeInteger(year) ? year : null;
+    return Number.isSafeInteger(year) && year >= 1000 ? year : null;
 }
 
 export async function GET(request: NextRequest) {
@@ -44,7 +43,7 @@ export async function GET(request: NextRequest) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { searchParams } = new URL(request.url);
-        const year = parseYear(searchParams.get('year'));
+        const year = searchParams.getAll('year').length === 1 ? parseYear(searchParams.get('year')) : null;
         const format = searchParams.get('format') || 'csv';
         if (year === null) {
             return NextResponse.json({ error: 'Bitte ein gültiges vierstelliges Veranlagungsjahr angeben.' }, { status: 400 });
@@ -53,11 +52,18 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({
                 error: `Für ${year} ist keine amtlich belegte EÜR-Zuordnung hinterlegt.`,
                 supportedYears: getSupportedEURYears(),
+                alternativeExport: {
+                    href: `/handoff?year=${year}`,
+                    previewUrl: `/api/accountant-export?year=${year}&preview=1`,
+                    description: 'Begrenztes Rohdaten-/Kanzleipaket für dieses Kalenderjahr ohne amtliche EÜR-Zeilenzuordnung; Vorschau und Warnungen vor Download prüfen.',
+                },
             }, { status: 400 });
         }
         if (format !== 'json' && format !== 'csv') {
             return NextResponse.json({ error: 'Format muss json oder csv sein.' }, { status: 400 });
         }
+
+        const yearContract = getEURYearContract(year);
 
         // Read all inputs from one database snapshot so the control totals,
         // line rows and metadata cannot describe different moments in time.
@@ -113,10 +119,10 @@ export async function GET(request: NextRequest) {
             if (mappedDefinition?.type !== 'expense') lineNumber = null;
             if ((expense.depreciationYears ?? 0) > 0 && amount !== 0) {
                 // The current data model does not distinguish land,
-                // intangible and movable assets. Row 33 is therefore a
+                // intangible and movable assets. The year-specific movable row is a
                 // provisional working-paper row requiring review.
-                lineNumber = 33;
-                warnings.push(`AfA-Buchung ${expense.id} wurde mangels Anlageart vorläufig Zeile 33 (bewegliche Wirtschaftsgüter) zugeordnet; bitte Anlageverzeichnis prüfen.`);
+                lineNumber = yearContract.roles.movableDepreciation;
+                warnings.push(`AfA-Buchung ${expense.id} wurde mangels Anlageart vorläufig Zeile ${yearContract.roles.movableDepreciation} (bewegliche Wirtschaftsgüter) zugeordnet; bitte Anlageverzeichnis prüfen.`);
             }
 
             if (lineNumber === null) {
@@ -163,9 +169,9 @@ export async function GET(request: NextRequest) {
         if (lineIncomeTotal !== totalIncome || lineExpenseTotal !== totalExpense) {
             warnings.push(`Kontrollsummenabweichung: Zeilen Einnahmen ${lineIncomeTotal.toFixed(2)} / ${totalIncome.toFixed(2)}, Ausgaben ${lineExpenseTotal.toFixed(2)} / ${totalExpense.toFixed(2)}. Export vor Übertragung prüfen.`);
         }
-        const resultLine = getEURLineDefinition(90, year);
+        const resultLine = getEURLineDefinition(yearContract.roles.intermediateResult, year);
         eurLines.push({
-            lineNumber: 90,
+            lineNumber: yearContract.roles.intermediateResult,
             name: resultLine?.name || 'Berechneter Überschuss (Übertrag)',
             amount: profit,
             type: 'result',
@@ -177,14 +183,14 @@ export async function GET(request: NextRequest) {
             count: data.count,
         }));
         if (unmappedCategoriesArray.length > 0) {
-            warnings.push(`${unmappedCategoriesArray.length} Kategorie(n) ohne belastbare Zuordnung; vor Übertragung bitte prüfen (vorläufig Zeile 60).`);
+            warnings.push(`${unmappedCategoriesArray.length} Kategorie(n) ohne belastbare Zuordnung; vor Übertragung bitte prüfen (vorläufig Zeile ${yearContract.roles.fallbackExpense}).`);
         }
         if (corrections.length > 0) {
             warnings.push(`${corrections.length} negative Korrektur(en) wurden mit Originalvorzeichen übernommen; Erstattungsgrund und Ursprungsbeleg prüfen.`);
         }
-        warnings.push('Der ausgewiesene Betrag ist ein vereinfachter Überschuss für den Übertrag in Zeile 90 (Summe/Differenz der Zeilen 76 bis 89). Die vollständige steuerpflichtige Ergebnisermittlung der späteren amtlichen Zeilen 92, 95 und 97 wird hier nicht berechnet.');
+        warnings.push(yearContract.resultCaveat);
 
-        const mappingVersion = getEURMappingVersion(year)!;
+        const mappingVersion = yearContract.mappingVersion;
         const exportData: EURExportData = {
             year,
             mappingVersion,
@@ -205,7 +211,10 @@ export async function GET(request: NextRequest) {
                 profit,
             },
             corrections,
-            sourceReferences: getEURSourceReferences(year),
+            sourceReferences: yearContract.sourceReferences,
+            sourceVersion: yearContract.sourceVersion,
+            sourceSha256: yearContract.sourceSha256,
+            checkedScope: yearContract.checkedScope,
         };
 
         await auditExport(userId, 'EURExport' as AuditEntityType, {
@@ -219,6 +228,10 @@ export async function GET(request: NextRequest) {
 
         const csvContent = generateElsterCSV(eurLines, year, settings?.companyName || undefined, settings?.taxNumber || undefined, {
             mappingVersion,
+            sourceVersion: yearContract.sourceVersion,
+            sourceSha256: yearContract.sourceSha256,
+            checkedScope: yearContract.checkedScope,
+            sourceReferences: yearContract.sourceReferences,
             corrections,
             warnings,
         });

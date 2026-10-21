@@ -1,0 +1,158 @@
+name: Browser acceptance
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  functional:
+    name: Full functional Chromium acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+
+      # PDF generation needs gs; real PDF preview needs headed Chromium/Xvfb.
+      - name: Install and verify PDF and virtual display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ghostscript xvfb xauth
+          command -v gs
+          command -v Xvfb
+          command -v xvfb-run
+          command -v xauth
+          gs --version
+          xauth -V
+
+      # Use the supported runner: it owns a fresh temporary database and cleanup.
+      # Security hardening remains in CI / Security checks (see testing docs).
+      - name: Run the complete functional suite
+        timeout-minutes: 25
+        run: >-
+          xvfb-run --auto-servernum npm run test:e2e --
+          --headed
+          --workers=1
+          --retries=0
+          --forbid-only
+          --global-timeout=1200000
+          --reporter=github
+          --trace=off
+          --output="${{ runner.temp }}/bivaro-browser-results"
+
+      - name: Stage only allowlisted synthetic screenshots
+        id: stage-visuals
+        if: ${{ always() }}
+        continue-on-error: true
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import stat
+          import tempfile
+
+          allowed = {
+              'partial-payments-1440-two-events.png',
+              'partial-payments-390-two-events.png',
+              'partial-reminder-guard-1440.png',
+              'partial-reminder-guard-390.png',
+              'eur-2026-working-paper-1440.png',
+              'eur-2026-working-paper-390.png',
+              'eur-2027-handoff-390.png',
+          }
+          limit = 5 * 1024 * 1024
+          root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
+
+          def skip(reason):
+              print(f'::warning::Optional synthetic screenshots skipped: {reason}.')
+              raise SystemExit(0)
+
+          if root.is_symlink() or not root.is_dir():
+              skip('results directory unavailable or unsafe')
+          root = root.resolve()
+          matches = []
+          for directory, subdirs, files in os.walk(root, followlinks=False):
+              subdirs[:] = [name for name in subdirs if not (Path(directory) / name).is_symlink()]
+              for name in files:
+                  if name not in allowed:
+                      continue
+                  source = Path(directory) / name
+                  info = source.lstat()
+                  if not stat.S_ISREG(info.st_mode) or not source.resolve().is_relative_to(root):
+                      skip('an allowlisted path is not a safe regular file')
+                  matches.append((source, info))
+          if not matches:
+              skip('no allowlisted images were produced')
+          if len(matches) > 7 or len({source.name for source, _ in matches}) != len(matches):
+              skip('file count exceeds seven or basenames are duplicated')
+          if sum(info.st_size for _, info in matches) > limit:
+              skip('combined size exceeds 5 MiB')
+
+          images = {}
+          for source, expected in matches:
+              fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+              with os.fdopen(fd, 'rb') as handle:
+                  current = os.fstat(handle.fileno())
+                  if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (expected.st_dev, expected.st_ino):
+                      skip('an image changed during staging')
+                  data = handle.read(limit + 1)
+              images[source.name] = data
+              if sum(map(len, images.values())) > limit:
+                  skip('combined read size exceeds 5 MiB')
+              if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+                  skip('an allowlisted file is not a PNG')
+          staging = Path(tempfile.mkdtemp(prefix='bivaro-synthetic-visuals-', dir=os.environ['RUNNER_TEMP']))
+          for name, data in images.items():
+              (staging / name).write_bytes(data)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'directory={staging}\nready=true\n')
+          print(f'Staged {len(images)} synthetic PNG files ({sum(map(len, images.values()))} bytes).')
+          PY
+
+      - name: Upload optional synthetic visual evidence
+        id: upload-visuals
+        if: ${{ always() && steps.stage-visuals.outputs.ready == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: partial-payments-synthetic-visuals
+          path: ${{ steps.stage-visuals.outputs.directory }}
+          retention-days: 1
+          if-no-files-found: warn
+          include-hidden-files: false
+          compression-level: 0
+
+      - name: Warn if optional evidence could not be delivered
+        if: ${{ always() && (steps.stage-visuals.outcome == 'failure' || steps.upload-visuals.outcome == 'failure') }}
+        run: echo '::warning::Optional synthetic visual evidence unavailable. Inspect the staging/upload error (including any artifact quota error); limits were not changed. The functional test result remains authoritative.'
