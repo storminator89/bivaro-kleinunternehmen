@@ -88,7 +88,7 @@ export async function adoptLegacyPaidInvoice(userId: string, invoiceId: number) 
     const dateCertainty = invoice.income ? 'LEGACY_INCOME' : invoice.paidAt ? 'LEGACY_INVOICE' : 'UNKNOWN';
     const event = await tx.paymentJournalEvent.create({ data: { userId, invoiceId, incomeId: invoice.income?.id ?? null,
       amountCents: cents.toString(), currency: 'EUR', paidAt, dateCertainty, source: 'LEGACY_IMPORT',
-      reference: invoice.invoiceNumber ?? `invoice:${invoiceId}`, idempotencyKey: `legacy-import:invoice:${invoiceId}` } });
+      reference: invoice.invoiceNumber?.trim() || `invoice:${invoiceId}`, idempotencyKey: `legacy-import:invoice:${invoiceId}` } });
     await auditPayment(tx, userId, invoiceId, invoice.invoiceNumber, { paymentJournalEventId: event.id, amountCents: event.amountCents, paidAt, dateCertainty, incomeId: event.incomeId }, true);
     return { event, summary: paymentSummary(invoice.totalAmount!, event), replayed: false };
   });

@@ -145,6 +145,17 @@ describe('atomic tenant payment journal', () => {
     expect(await database.client.income.findUnique({ where: { id: result.event.incomeId! } })).not.toBeNull();
     await expect(recordFullPayment('payment-owner', source.id, input())).rejects.toMatchObject({ status: 409 });
   });
+  it.each([null, '', '   ', '  INV-66  '])('uses a nonblank new legacy status reference for invoice number %j', async invoiceNumber => {
+    const source = await invoice({ invoiceNumber });
+    const paid = await updateInvoiceStatus('payment-owner', source.id, 'PAID', '2026-10-19');
+    const event = await database.client.paymentJournalEvent.findUniqueOrThrow({ where: { invoiceId: source.id } });
+    expect(event).toMatchObject({ reference: invoiceNumber?.trim() || `invoice:${source.id}`,
+      source: 'LEGACY_STATUS', dateCertainty: 'ACTUAL', paidAt: new Date('2026-10-19'), incomeId: paid.income?.id });
+    expect(paid.invoiceNumber).toBe(invoiceNumber);
+    await updateInvoiceStatus('payment-owner', source.id, 'PAID');
+    expect(await database.client.paymentJournalEvent.findUniqueOrThrow({ where: { id: event.id } })).toEqual(event);
+    expect(await database.client.income.count({ where: { invoiceId: source.id } })).toBe(1);
+  });
   it('keeps normal draft/sent lifecycle and rejects ambiguous PAID without inventing a date', async () => {
     const source = await invoice({ status: 'DRAFT', issuanceState: 'UNISSUED' });
     expect((await updateInvoiceStatus('payment-owner', source.id, 'SENT')).status).toBe('SENT');
@@ -157,6 +168,20 @@ describe('atomic tenant payment journal', () => {
 });
 
 describe('explicit legacy payment adoption', () => {
+  it.each([null, '', '   ', '  INV-66  '])('uses a nonblank new legacy adoption reference for invoice number %j without inventing finances', async invoiceNumber => {
+    const userId = `payment-adopt-number-${++next}`;
+    await database.client.user.create({ data: { id: userId, email: `${userId}@test.invalid`, password: 'fixture' } });
+    const source = await invoice({ userId, invoiceNumber, status: 'PAID', paidAt: null });
+    const adopted = await adoptLegacyPaidInvoice(userId, source.id);
+    expect(adopted.event).toMatchObject({ reference: invoiceNumber?.trim() || `invoice:${source.id}`,
+      source: 'LEGACY_IMPORT', dateCertainty: 'UNKNOWN', paidAt: null, incomeId: null });
+    const replay = await adoptLegacyPaidInvoice(userId, source.id);
+    expect(replay.replayed).toBe(true);
+    expect(replay.event).toEqual(adopted.event);
+    expect(await database.client.invoice.findUniqueOrThrow({ where: { id: source.id } })).toEqual(source);
+    expect(await database.client.income.count({ where: { invoiceId: source.id } })).toBe(0);
+    expect(await database.client.auditLog.count({ where: { entityId: String(source.id), action: 'IMPORT' } })).toBe(1);
+  });
   it('adopts unknown historical dates once, without creating an Income or changing finances', async () => {
     const source = await invoice({ status: 'PAID', paidAt: null });
     const results = await Promise.all([adoptLegacyPaidInvoice('payment-owner', source.id), adoptLegacyPaidInvoice('payment-owner', source.id)]);
