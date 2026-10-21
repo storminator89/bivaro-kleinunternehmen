@@ -41,6 +41,14 @@ jobs:
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
 
+      # Factur-X generation executes gs; Playwright's dependencies do not include it.
+      - name: Install and verify PDF runtime dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ghostscript
+          command -v gs
+          gs --version
+
       # Use the supported runner: it owns a fresh temporary database and cleanup.
       # Security hardening remains in CI / Security checks (see testing docs).
       - name: Run the complete functional suite
