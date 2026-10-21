@@ -1,10 +1,26 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PDFDocument } from 'pdf-lib';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
+
+async function expectUnobscuredReview(node: Locator, textOnly = false) {
+  await expect.poll(() => node.evaluate((element, textOnly) => {
+    const range = window.document.createRange();
+    range.selectNodeContents(element);
+    const rect = textOnly ? range.getBoundingClientRect() : element.getBoundingClientRect();
+    const dialog = element.closest('[role="dialog"]')?.getBoundingClientRect();
+    if (!dialog || rect.width <= 0 || rect.height <= 0 || rect.top < Math.max(0, dialog.top) + 8 || rect.bottom > Math.min(window.innerHeight, dialog.bottom) - 8 || rect.left < dialog.left + 8 || rect.right > dialog.right - 8) return false;
+    const insetX = Math.min(8, rect.width / 4), insetY = Math.min(8, rect.height / 4);
+    const points = [[rect.left + insetX, rect.top + insetY], [rect.right - insetX, rect.top + insetY], [rect.left + insetX, rect.bottom - insetY], [rect.right - insetX, rect.bottom - insetY], [rect.left + rect.width / 2, rect.top + rect.height / 2]];
+    return points.every(([x, y]) => {
+      const hit = window.document.elementFromPoint(x, y);
+      return hit !== null && (hit === element || element.contains(hit));
+    });
+  }, textOnly)).toBe(true);
+}
 
 // Authored acceptance only: run with the existing isolated full-browser runner.
 // Seed synthetic identity only; every invoice/payment/reminder uses a real API.
@@ -65,7 +81,28 @@ for (const width of [1440, 390]) test(`prepares a confirmed rest-balance reminde
     await expect(dialog.getByLabel('Geprüfter Zahlungsstand')).toContainText('80,00');
     await expect(dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true }).getByRole('listitem')).toHaveCount(1);
     await expect(dialog).not.toContainText('keinen Zahlungseingang');
-    await dialog.getByRole('checkbox').check();
+    // Check the real dialog heading, then capture the review core before any export.
+    await dialog.evaluate(node => node.scrollTo({ top: 0, behavior: 'instant' }));
+    await expectUnobscuredReview(dialog.getByRole('heading', { name: /vorbereiten$/ }), true);
+    const balance = dialog.getByLabel('Geprüfter Zahlungsstand', { exact: true });
+    await balance.evaluate(node => {
+      const container = node.closest('[role="dialog"]');
+      if (!container) throw new Error('Expected review dialog');
+      container.scrollBy({ top: node.getBoundingClientRect().top - container.getBoundingClientRect().top - 24, behavior: 'instant' });
+    });
+    for (const value of await balance.locator('dt, dd').all()) await expectUnobscuredReview(value, true);
+    const reviewedSubject = dialog.getByRole('region', { name: 'Geprüfter Mahnentwurf', exact: true }).getByRole('heading', { name: new RegExp(invoiceNumber) });
+    await expectUnobscuredReview(reviewedSubject, true);
+    await page.screenshot({ path: testInfo.outputPath(`confirmed-reminder-${width}.png`), fullPage: false });
+    // Options and lower confirmation/actions are separate scroll regions, not a full-modal capture claim.
+    const confirmation = dialog.getByRole('checkbox');
+    await confirmation.scrollIntoViewIfNeeded();
+    await expectUnobscuredReview(confirmation);
+    await confirmation.check();
+    for (const control of [dialog.getByRole('button', { name: 'Textentwurf herunterladen', exact: true }), dialog.getByRole('button', { name: 'Mahnung intern erfassen', exact: true }), dialog.getByRole('button', { name: 'Abbrechen', exact: true })]) {
+      await control.scrollIntoViewIfNeeded();
+      await expectUnobscuredReview(control);
+    }
     const downloaded = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Textentwurf herunterladen', exact: true }).click();
     const file = await downloaded;
@@ -74,7 +111,6 @@ for (const width of [1440, 390]) test(`prepares a confirmed rest-balance reminde
     expect(await readFile(local!, 'utf8')).toContain('Zahlbetrag: 80,00 €');
     expect(await snapshot(userId, invoice.id)).toEqual(before);
     expect(emailRequests).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`confirmed-reminder-${width}.png`), fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
     // A genuine second fixture allocation invalidates the reviewed 80 EUR version.

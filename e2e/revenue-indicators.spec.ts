@@ -1,8 +1,21 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
+
+async function expectUnobscuredBasis(node: Locator) {
+  await expect.poll(() => node.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const headerBottom = window.document.querySelector('.app-topbar')?.getBoundingClientRect().bottom ?? 0;
+    if (rect.width <= 0 || rect.height <= 0 || rect.top < headerBottom + 8 || rect.bottom > window.innerHeight - 8 || rect.left < 0 || rect.right > window.innerWidth) return false;
+    const points = [[rect.left + 1, rect.top + 1], [rect.right - 1, rect.top + 1], [rect.left + 1, rect.bottom - 1], [rect.right - 1, rect.bottom - 1], [rect.left + rect.width / 2, rect.top + rect.height / 2]];
+    return points.every(([x, y]) => {
+      const hit = window.document.elementFromPoint(x, y);
+      return hit !== null && (hit === element || element.contains(hit));
+    });
+  })).toBe(true);
+}
 
 // Authored for the isolated hosted acceptance runner; never production data.
 // Do not run a native local browser/build for this work package.
@@ -86,11 +99,18 @@ test('revenue indicators preserve unknown/zero, included external share, correct
       await term.scrollIntoViewIfNeeded();
       await expect(term).toBeInViewport();
     }
-    await panel.locator('dl').evaluate(node => {
-      const header = document.querySelector('.app-topbar');
-      window.scrollBy({ top: node.getBoundingClientRect().top - (header?.getBoundingClientRect().bottom ?? 0) - 16, behavior: 'instant' });
+    const currentBasis = panel.locator('dl > div').first();
+    await currentBasis.evaluate(node => {
+      const headerBottom = window.document.querySelector('.app-topbar')?.getBoundingClientRect().bottom ?? 0;
+      window.scrollTo({ top: window.scrollY + node.getBoundingClientRect().top - headerBottom - 24, behavior: 'instant' });
     });
-    await expect(panel.getByText(`In Bivaro erfasste Einnahmen · ${year}`, { exact: true })).toBeVisible();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    const currentLabel = currentBasis.locator('dt');
+    const currentAmount = currentBasis.locator('dd').first();
+    await expect(currentLabel).toHaveText(`In Bivaro erfasste Einnahmen · ${year}`);
+    await expect(currentAmount).toHaveText('1.234,56 €');
+    await expectUnobscuredBasis(currentLabel);
+    await expectUnobscuredBasis(currentAmount);
     if (width === 390 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`revenue-indicators-amounts-${width}.png`), fullPage: false });
   }
   await page.goto('/steuer-simulation');
