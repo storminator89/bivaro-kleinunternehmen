@@ -1,10 +1,13 @@
 import { REMINDER_BALANCE_SCHEMA_VERSION, validateReminderBackupFields } from '@/lib/reminder-backup';
 import { createHash } from 'node:crypto';
+import { durationToQuantity, validateDurationMinutes } from '@/lib/service-duration';
+import { parseServiceCaptureKey, serviceCaptureFingerprint } from '@/lib/service-capture';
 
 export const CURRENT_BACKUP_VERSION = '3.0';
 export const LEGACY_BACKUP_VERSION = '2.0';
 /** Exact combined capability identity. Historical standalone and union identities never gain features. */
-export const CURRENT_SCHEMA_VERSION = '20261021150000_add_payment_adjustments';
+export const CURRENT_SCHEMA_VERSION = '20261021160000_add_project_service_times';
+export const PAYMENT_ADJUSTMENTS_SCHEMA_VERSION = '20261021150000_add_payment_adjustments';
 export const RECURRING_BALANCE_DAILY_SCHEMA_VERSION = '20261021140000_combine_recurring_balance_daily_context';
 export const GROWTH_AI_REMINDER_SCHEMA_VERSION = '20261021120000_combine_growth_ai_reminder_context';
 export const RECURRING_SERVICE_SCHEMA_VERSION = '20261021094500_recurring_service_drafts';
@@ -20,25 +23,29 @@ export const PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021054000_add_purc
 export const PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_DATA_IMPORT_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_ANNUAL_CONTEXT_SCHEMA_VERSION = PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
-export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
-export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
+export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
+export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
 /** Closed registry: new unions add identities; timestamps never infer capabilities. */
-export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean; recurringServiceDrafts: boolean; paymentAdjustments: boolean }>> = Object.freeze({
-  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true }),
-  [RECURRING_BALANCE_DAILY_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: false }),
-  [GROWTH_AI_REMINDER_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [RECURRING_SERVICE_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: false, recurringServiceDrafts: true, paymentAdjustments: false }),
-  [GROWTH_AI_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [GROWTH_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [AI_RECEIPT_EXTRACTION_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: true, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [REMINDER_BALANCE_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: true, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [DATA_IMPORT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: true, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [QUOTE_WORKFLOW_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: true, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
-  [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false }),
+export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean; recurringServiceDrafts: boolean; paymentAdjustments: boolean; projectServiceTimes: boolean }>> = Object.freeze({
+  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true }),
+  [PAYMENT_ADJUSTMENTS_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: false }),
+  [RECURRING_BALANCE_DAILY_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: false, projectServiceTimes: false }),
+  [GROWTH_AI_REMINDER_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [RECURRING_SERVICE_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: false, recurringServiceDrafts: true, paymentAdjustments: false, projectServiceTimes: false }),
+  [GROWTH_AI_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [GROWTH_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [AI_RECEIPT_EXTRACTION_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: true, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [REMINDER_BALANCE_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: true, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [DATA_IMPORT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: true, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [QUOTE_WORKFLOW_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: true, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
+  [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false }),
 });
+export function backupSchemaSupportsProjectServiceTimes(schemaVersion?: string): boolean {
+  return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.projectServiceTimes === true;
+}
 export function backupSchemaSupportsPaymentAdjustments(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.paymentAdjustments === true;
 }
@@ -164,6 +171,7 @@ const COVERAGE = [
   { model: 'InvoiceTemplate', key: 'templates', mode: 'included' as const },
   { model: 'RecurringExpense', key: 'recurringExpenses', mode: 'included' as const },
   { model: 'Reminder', key: 'reminders', mode: 'included' as const },
+  { model: 'ServiceProject', key: 'serviceProjects', mode: 'included' as const },
   { model: 'BillingNote', key: 'billingNotes', mode: 'included' as const },
   { model: 'ApiKey', key: 'apiKeys', mode: 'metadata-only' as const, reason: 'Hash and usable secret are deliberately excluded; re-key required.' },
   { model: 'ApiLog', key: 'apiLogs', mode: 'excluded' as const, reason: 'Operational API telemetry is not tenant business state.' },
@@ -201,6 +209,85 @@ export function validatePurchaseDocumentBackupFields(document: Record<string, un
     if (field === 'reviewedSourceSnapshot' && (document[field] == null || backupSchemaSupportsManualPhotoApproval(schemaVersion))) continue;
     if (!PURCHASE_DOCUMENT_BACKUP_FIELDS.has(field)) throw new Error(`${label}: Nicht unterstütztes Eingangsbelegfeld; Wiederherstellung würde Quelldaten verlieren.`);
   }
+}
+
+const BILLING_NOTE_BACKUP_FIELDS = new Set(['id', 'userId', 'customerId', 'serviceDate', 'description', 'quantity', 'unit', 'invoiceId', 'createdAt', 'updatedAt']);
+const PROJECT_SERVICE_NOTE_BACKUP_FIELDS = new Set(['projectId', 'durationMinutes', 'captureKey', 'captureFingerprint', 'deletedAt']);
+const SERVICE_PROJECT_BACKUP_FIELDS = new Set(['id', 'userId', 'customerId', 'name', 'archivedAt', 'createdAt', 'updatedAt']);
+
+/** Closed additive boundary shared by manifests, previews and legacy restores. */
+export function validateProjectServiceBackupFields(data: BackupManifestData, schemaVersion?: string): void {
+  const supported = backupSchemaSupportsProjectServiceTimes(schemaVersion);
+  if (!supported && Object.hasOwn(data, 'serviceProjects')) throw new Error('Älteres Backupschema darf keinen serviceProjects-Abschnitt enthalten');
+  if (supported && !Array.isArray(data.serviceProjects)) throw new Error('Backup-Daten enthalten keinen erforderlichen Abschnitt: serviceProjects');
+  const sourceUserId = (data.user as Record<string, unknown> | undefined)?.id;
+  const owned = (row: Record<string, unknown>, label: string) => {
+    if (row.userId !== undefined && row.userId !== sourceUserId) throw new Error(`${label}.userId gehört nicht zur Backup-Quelle`);
+  };
+  const requiredDate = (value: unknown, label: string) => {
+    if (!(value instanceof Date) && (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value))) throw new Error(`${label} ist ungültig`);
+    const date = value instanceof Date ? value : new Date(value as string);
+    if (Number.isNaN(date.getTime()) || (typeof value === 'string' && date.toISOString() !== value)) throw new Error(`${label} ist ungültig`);
+  };
+  if (Array.isArray(data.serviceProjects)) data.serviceProjects.forEach((value, index) => {
+    const label = `serviceProjects[${index}]`;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} muss ein Objekt sein`);
+    const project = value as Record<string, unknown>;
+    if (Object.keys(project).some(field => !SERVICE_PROJECT_BACKUP_FIELDS.has(field))) throw new Error(`${label}: Nicht unterstütztes Projektfeld`);
+    owned(project, label);
+    for (const field of ['id', 'customerId']) if (typeof project[field] !== 'number' || !Number.isSafeInteger(project[field]) || Number(project[field]) <= 0) throw new Error(`${label}.${field} ist ungültig`);
+    if (typeof project.name !== 'string' || !project.name.trim() || project.name.length > 120 || project.name !== project.name.trim()) throw new Error(`${label}.name ist ungültig`);
+    if (!Object.hasOwn(project, 'archivedAt') || project.archivedAt === undefined) throw new Error(`${label}.archivedAt muss explizit nullable sein`);
+    for (const field of ['createdAt', 'updatedAt']) requiredDate(project[field], `${label}.${field}`);
+    if (project.archivedAt !== null) requiredDate(project.archivedAt, `${label}.archivedAt`);
+  });
+  const captureKeys = new Set<string>();
+  if (Array.isArray(data.billingNotes)) data.billingNotes.forEach((value, index) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return; // Scalar shape is checked by restore.
+    const note = value as Record<string, unknown>;
+    const label = `billingNotes[${index}]`;
+    owned(note, label);
+    for (const field of Object.keys(note)) {
+      if (PROJECT_SERVICE_NOTE_BACKUP_FIELDS.has(field)) {
+        if (!supported) throw new Error(`${label}.${field}: Älteres Backupschema unterstützt keine Projekt-, Zeit- oder Erfassungsfelder`);
+      } else if (!BILLING_NOTE_BACKUP_FIELDS.has(field)) throw new Error(`${label}: Nicht unterstütztes Leistungsnotizfeld`);
+    }
+    if (!supported) return;
+    for (const field of PROJECT_SERVICE_NOTE_BACKUP_FIELDS) if (!Object.hasOwn(note, field) || note[field] === undefined) throw new Error(`${label}.${field} muss explizit nullable sein`);
+    if (note.projectId !== null && (typeof note.projectId !== 'number' || !Number.isSafeInteger(note.projectId) || note.projectId <= 0)) throw new Error(`${label}.projectId ist ungültig`);
+    if (note.durationMinutes !== null) {
+      let minutes: number;
+      try { minutes = validateDurationMinutes(note.durationMinutes); } catch { throw new Error(`${label}.durationMinutes ist ungültig`); }
+      if (note.quantity !== durationToQuantity(minutes) || note.unit !== 'Stunde') throw new Error(`${label}.durationMinutes widerspricht quantity oder unit (Stunde)`);
+    }
+    if ((note.captureKey === null) !== (note.captureFingerprint === null)) throw new Error(`${label}: captureKey und captureFingerprint müssen gemeinsam nullable sein`);
+    if (note.deletedAt !== null) {
+      requiredDate(note.deletedAt, `${label}.deletedAt`);
+      if (note.captureKey === null || note.invoiceId !== null) throw new Error(`${label}.deletedAt benötigt einen Erfassungsnachweis ohne Rechnungszuordnung`);
+    }
+    if (note.captureKey !== null) {
+      let key: string | null;
+      try { key = parseServiceCaptureKey(note.captureKey); }
+      catch { throw new Error(`${label}.captureKey ist keine kanonische UUID`); }
+      if (key === null || key !== note.captureKey) throw new Error(`${label}.captureKey ist keine kanonische UUID`);
+      if (typeof note.captureFingerprint !== 'string' || !/^[a-f0-9]{64}$/u.test(note.captureFingerprint)) throw new Error(`${label}.captureFingerprint ist kein SHA-256-Hash`);
+      if (captureKeys.has(key)) throw new Error(`${label}.captureKey ist im Backup nicht eindeutig`);
+      captureKeys.add(key);
+      let fingerprint: string;
+      try {
+        if (typeof note.customerId !== 'number' || !Number.isSafeInteger(note.customerId) || note.customerId <= 0
+          || !(note.serviceDate instanceof Date || typeof note.serviceDate === 'string')
+          || typeof note.description !== 'string' || typeof note.quantity !== 'number' || !Number.isFinite(note.quantity)
+          || typeof note.unit !== 'string') throw new Error('invalid-capture-fields');
+        fingerprint = serviceCaptureFingerprint({
+          customerId: note.customerId, projectId: note.projectId as number | null,
+          serviceDate: note.serviceDate, description: note.description, quantity: note.quantity,
+          unit: note.unit, durationMinutes: note.durationMinutes as number | null,
+        });
+      } catch { throw new Error(`${label}.captureFingerprint kann nicht aus den Quell-Leistungsdaten geprüft werden`); }
+      if (fingerprint !== note.captureFingerprint) throw new Error(`${label}.captureFingerprint widerspricht den Quell-Leistungsdaten`);
+    }
+  });
 }
 
 function canonicalize(value: unknown): unknown {
@@ -328,7 +415,8 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   }
   if (!Array.isArray(value.modelCoverage)) throw new Error('Backup-Manifest enthält keine Modellabdeckung');
   const expectedCoverage = COVERAGE.filter((entry) =>
-    (backupSchemaSupportsPaymentAdjustments(value.schemaVersion) || !['PaymentAdjustment', 'PaymentOperation'].includes(entry.model))
+    (backupSchemaSupportsProjectServiceTimes(value.schemaVersion) || entry.model !== 'ServiceProject')
+    && (backupSchemaSupportsPaymentAdjustments(value.schemaVersion) || !['PaymentAdjustment', 'PaymentOperation'].includes(entry.model))
     && (backupSchemaSupportsServiceBilling(value.schemaVersion) || !['ServiceBillingPlan', 'ServiceBillingPeriod'].includes(entry.model))
     && (entry.model !== 'AiProviderSettings' || backupSchemaSupportsAiExtraction(value.schemaVersion))
     && (backupSchemaSupportsDataImport(value.schemaVersion) || !['DataImportBatch', 'ServiceArticle'].includes(entry.model))
@@ -337,6 +425,7 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
     && (SUPPLIER_SCHEMAS.includes(value.schemaVersion!) || entry.model !== 'Supplier')
     && (backupSchemaSupportsPaymentJournal(value.schemaVersion!) || entry.model !== 'PaymentJournalEvent')
     && (entry.model !== 'AnnualBusinessContextRevision' || (backupSchemaSupportsAnnualContext(value.schemaVersion) && data.annualBusinessContextRevisions !== undefined)));
+  validateProjectServiceBackupFields(data, value.schemaVersion);
   if (!backupSchemaSupportsPaymentAdjustments(value.schemaVersion) && (data.paymentAdjustments !== undefined || data.paymentOperations !== undefined)) throw new Error('Älteres Backupschema darf keine Zahlungsberichtigungs- oder Finanzaktionsfelder enthalten');
   if (!backupSchemaSupportsServiceBilling(value.schemaVersion) && (coverageCount(data, 'serviceBillingPlans') > 0 || coverageCount(data, 'serviceBillingPeriods') > 0)) throw new Error('Älteres Backupschema darf keine wiederkehrenden Servicepläne oder Periodenidentitäten enthalten');
   if (data.aiProviderSettings !== undefined || data.aiProviderSecrets !== undefined) throw new Error('Provider-Konfiguration und Schlüsselmaterial sind kein wiederherstellbares Geschäftsbackup');
@@ -368,7 +457,7 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   // An absent section is not evidence of an empty collection, even if an attacker
   // recomputes a zero-count coverage entry without a data hash.
   for (const entry of expectedCoverage) {
-    if (['PaymentAdjustment', 'PaymentOperation', 'Supplier', 'PurchaseDocument', 'PaymentJournalEvent', 'ServiceArticle', 'ServiceBillingPlan', 'ServiceBillingPeriod'].includes(entry.model) && !Array.isArray(data[entry.key])) {
+    if (['ServiceProject', 'PaymentAdjustment', 'PaymentOperation', 'Supplier', 'PurchaseDocument', 'PaymentJournalEvent', 'ServiceArticle', 'ServiceBillingPlan', 'ServiceBillingPeriod'].includes(entry.model) && !Array.isArray(data[entry.key])) {
       throw new Error(`Backup-Daten enthalten keinen erforderlichen Abschnitt: ${entry.key}`);
     }
   }

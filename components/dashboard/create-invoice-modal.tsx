@@ -1,6 +1,7 @@
 "use client";
 import type { ServiceBillingDraftSeed } from "@/lib/service-billing";
 import { ServiceArticlePicker } from "@/components/dashboard/service-article-picker";
+import { ProjectServiceSelection, type ProjectServiceNote } from "@/components/dashboard/project-service-selection";
 
 import salesStyles from "@/components/dashboard/sales-workspace.module.css";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -46,6 +47,7 @@ interface InvoiceItem {
   taxCategory?: 'S' | 'E' | 'Z';
   exemptionReason?: string;
   billingNoteId?: number;
+  billingNoteSource?: ProjectServiceNote;
 }
 
 function stripBillingNoteAssociation(item: InvoiceItem): InvoiceItem {
@@ -61,15 +63,6 @@ function stripBillingNoteAssociation(item: InvoiceItem): InvoiceItem {
 }
 
 type NoteVisibility = 'EDITOR' | 'SEND' | 'BOTH';
-
-interface BillingNote {
-  id: number;
-  customerId: number;
-  serviceDate: string;
-  description: string;
-  quantity: number;
-  unit: string;
-}
 
 interface Settings extends DocumentFiscalSettings {
   companyName?: string;
@@ -116,6 +109,7 @@ export function CreateInvoiceModal({
   fromDraft,
   presentation = "dialog",
 }: CreateInvoiceModalProps) {
+  const isServiceDraft = Boolean(fromDraft);
   const [draftToken, setDraftToken] = useState(fromDraft?.draftToken ?? "");
   const [draftSaveMessage, setDraftSaveMessage] = useState("");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -131,7 +125,8 @@ export function CreateInvoiceModal({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
-  const [billingNotes, setBillingNotes] = useState<BillingNote[]>([]);
+  const [billingNotes, setBillingNotes] = useState<ProjectServiceNote[]>([]);
+  const [billingNotesReload, setBillingNotesReload] = useState(0);
   const [isBillingNotesLoading, setIsBillingNotesLoading] = useState(false);
   const [billingNotesError, setBillingNotesError] = useState<string | null>(null);
   const [customerChangeMessage, setCustomerChangeMessage] = useState<string | null>(null);
@@ -200,6 +195,7 @@ export function CreateInvoiceModal({
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previewUrlRef = useRef<string | null>(null);
   const previewGenerationRef = useRef(0);
+  const billingNotesRequestRef = useRef(0);
   const wasOpenRef = useRef(false);
   const appliedQuoteRef = useRef<number | null>(null);
   const appliedDraftRef = useRef<number | null>(null);
@@ -211,6 +207,7 @@ export function CreateInvoiceModal({
 
     appliedQuoteRef.current = null;
     appliedDraftRef.current = null;
+    billingNotesRequestRef.current += 1;
     setDraftSaveMessage("");
     setCustomerAddress("");
     setInvoiceNumber("");
@@ -222,6 +219,7 @@ export function CreateInvoiceModal({
     setSelectedCustomer(null);
     setSelectedCustomerId(null);
     setBillingNotes([]);
+    setBillingNotesReload(0);
     setIsBillingNotesLoading(false);
     setBillingNotesError(null);
     setCustomerChangeMessage(null);
@@ -317,7 +315,7 @@ export function CreateInvoiceModal({
   }, [fromQuote?.customerId, fromDraft?.customerId, isOpen, resetEditorState]);
 
   useEffect(() => {
-    if (!selectedCustomerId || fromDraft) {
+    if (!isOpen || !selectedCustomerId || isServiceDraft) {
       setBillingNotes([]);
       setBillingNotesError(null);
       setIsBillingNotesLoading(false);
@@ -325,31 +323,34 @@ export function CreateInvoiceModal({
     }
 
     let isActive = true;
+    const controller = new AbortController();
+    const requestId = ++billingNotesRequestRef.current;
     setIsBillingNotesLoading(true);
     setBillingNotesError(null);
-    fetch(`/api/billing-notes?customerId=${selectedCustomerId}`, { cache: 'no-store' })
+    fetch(`/api/billing-notes?customerId=${selectedCustomerId}`, { cache: 'no-store', signal: controller.signal })
       .then(async response => {
         const data = await response.json().catch(() => null);
         if (!response.ok) throw new Error(data?.error || 'Leistungsnotizen konnten nicht geladen werden.');
         return Array.isArray(data) ? data : Array.isArray(data?.notes) ? data.notes : [];
       })
       .then(data => {
-        if (isActive) setBillingNotes(data);
+        if (isActive && requestId === billingNotesRequestRef.current) setBillingNotes(data.filter((note: ProjectServiceNote) => note.customerId === selectedCustomerId));
       })
       .catch(error => {
-        if (isActive) {
+        if (isActive && requestId === billingNotesRequestRef.current) {
           setBillingNotes([]);
           setBillingNotesError(error instanceof Error ? error.message : 'Leistungsnotizen konnten nicht geladen werden.');
         }
       })
       .finally(() => {
-        if (isActive) setIsBillingNotesLoading(false);
+        if (isActive && requestId === billingNotesRequestRef.current) setIsBillingNotesLoading(false);
       });
 
     return () => {
       isActive = false;
+      controller.abort();
     };
-  }, [selectedCustomerId, fromDraft]);
+  }, [selectedCustomerId, isServiceDraft, isOpen, billingNotesReload]);
 
   // Pre-fill from quote when converting
   useEffect(() => {
@@ -512,6 +513,7 @@ export function CreateInvoiceModal({
   }, [invoiceNumber]);
 
   const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    billingNotesRequestRef.current += 1;
     const customerId = e.target.value;
     const customer = customers.find(c => c.id.toString() === customerId);
     const hadSelectedBillingNotes = items.some(item => item.billingNoteId !== undefined);
@@ -574,16 +576,14 @@ export function CreateInvoiceModal({
     const newItems = [...items];
     // A billing note belongs to exactly one imported row. Duplicating a row
     // creates a manual row so the note cannot be reserved twice.
-    newItems.splice(index + 1, 0, { ...itemToDuplicate, billingNoteId: undefined });
+    newItems.splice(index + 1, 0, stripBillingNoteAssociation(itemToDuplicate));
     setItems(newItems);
   };
 
-  const isBillingNoteSelected = (noteId: number) => items.some(item => item.billingNoteId === noteId);
-
-  const toggleBillingNote = (note: BillingNote, checked: boolean) => {
+  const toggleBillingNote = (note: ProjectServiceNote, checked: boolean) => {
     if (fromDraft) { setBillingNotesError('Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden.'); return; }
+    if (note.customerId !== selectedCustomerId) return;
     if (checked) {
-      if (isBillingNoteSelected(note.id)) return;
       const importedItem: InvoiceItem = {
         description: note.description,
         quantity: note.quantity,
@@ -591,8 +591,11 @@ export function CreateInvoiceModal({
         unit: note.unit,
         taxRate: taxMode === 'standard' ? 19 : 0,
         billingNoteId: note.id,
+        billingNoteSource: note,
       };
       setItems(current => {
+        // Repeated clicks cannot create two claims before the next render.
+        if (current.some(item => item.billingNoteId === note.id)) return current;
         const onlyBlankRow = current.length === 1
           && current[0].billingNoteId === undefined
           && !current[0].description.trim()
@@ -1365,7 +1368,7 @@ export function CreateInvoiceModal({
         city: buyerCountry === 'DE' ? undefined : buyerCity.trim(),
         email: buyerEmail.trim() || undefined,
       },
-      // Keep editor-only billingNoteId out of the generated PDF/XML payload.
+      // Keep editor-only note claims and source snapshots out of PDF/XML.
       items: items.map((item, index) => ({
         description: item.description,
         quantity: item.quantity,
@@ -1773,44 +1776,27 @@ export function CreateInvoiceModal({
             {/* Unreserved service notes */}
             {fromDraft && <p className="rounded-md border bg-muted/30 p-3 text-sm" role="note">Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden; dort werden die Notizen beim Erstellen der Rechnungsdatei eindeutig zugeordnet.</p>}
             {selectedCustomerId && !fromDraft && (
-              <section className="space-y-3 rounded-md border border-primary/20 bg-primary/5 p-3" aria-labelledby="billing-notes-title">
-                <div>
-                  <Label id="billing-notes-title" className="text-sm font-medium">Leistungsnotizen übernehmen</Label>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Wählen Sie unreservierte Leistungen aus. Der Einzelpreis bleibt zunächst 0,00 € und wird von Ihnen festgelegt.
-                  </p>
-                </div>
-                {isBillingNotesLoading ? (
-                  <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Leistungsnotizen werden geladen …
-                  </p>
-                ) : billingNotesError ? (
-                  <p className="text-sm text-destructive" role="alert">{billingNotesError}</p>
-                ) : billingNotes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Keine unreservierten Leistungsnotizen vorhanden.</p>
-                ) : (
-                  <div className="grid gap-2">
-                    {billingNotes.map(note => (
-                      <label key={note.id} className="flex min-w-0 cursor-pointer items-start gap-3 rounded-md border bg-background p-3 text-sm hover:bg-muted/50">
-                        <input
-                          type="checkbox"
-                          checked={isBillingNoteSelected(note.id)}
-                          onChange={event => toggleBillingNote(note, event.target.checked)}
-                          className="mt-1 h-4 w-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                          aria-label={`Leistungsnotiz ${note.description} übernehmen`}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{note.description}</span>
-                          <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {new Date(`${note.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString('de-DE')} · {note.quantity} {note.unit}
-                          </span>
-                        </span>
-                        <span className="shrink-0 tabular-nums text-xs text-muted-foreground">0,00 € / Einheit</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </section>
+              <ProjectServiceSelection
+                key={selectedCustomerId}
+                customerName={selectedCustomer?.name || `Kunde #${selectedCustomerId}`}
+                notes={billingNotes}
+                selected={items.flatMap(item => item.billingNoteId === undefined ? [] : [{
+                  id: item.billingNoteId,
+                  source: item.billingNoteSource ?? null,
+                  description: item.description,
+                  quantity: item.quantity,
+                  unit: item.unit,
+                  unitPrice: item.unitPrice,
+                  taxRate: item.taxRate,
+                  taxCategory: item.taxCategory,
+                }])}
+                loading={isBillingNotesLoading}
+                error={billingNotesError}
+                taxMode={taxMode}
+                taxReady={taxReady}
+                onToggle={toggleBillingNote}
+                onRetry={() => setBillingNotesReload(value => value + 1)}
+              />
             )}
 
             {/* Items Table */}

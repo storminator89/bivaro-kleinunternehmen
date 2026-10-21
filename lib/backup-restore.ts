@@ -5,6 +5,7 @@ import { sameServiceBillingInvoice, validateServiceBillingBackup } from '@/lib/s
 import { annualContextAppendAfter, readAnnualContextRevision, validateAnnualContextHistory } from '@/lib/annual-business-context';
 import { CUSTOMER_FIELD_LIMITS, customerBusinessIdentity } from '@/lib/customer-field-contract';
 import { readServiceArticle, serviceArticleNameKey } from '@/lib/service-articles';
+import { serviceCaptureFingerprint } from '@/lib/service-capture';
 import { QUOTE_WORKFLOW_SCHEMAS } from '@/lib/backup-manifest';
 import { parseQuoteWorkflowUpdate } from '@/lib/quote-workflow';
 import { formatMoneyEUR, parseMoneyEUR } from '@/lib/money';
@@ -29,6 +30,8 @@ import {
   CURRENT_SCHEMA_VERSION,
   backupSchemaSupportsReminderBalance,
   backupSchemaSupportsServiceBilling,
+  backupSchemaSupportsProjectServiceTimes,
+  validateProjectServiceBackupFields,
   FULL_PAYMENT_JOURNAL_SCHEMA_VERSION,
   LEGACY_BACKUP_VERSION,
   manifestWarning,
@@ -92,6 +95,7 @@ type RestoreResult = {
   customers: { imported: number; skipped: number };
   suppliers: { imported: number; skipped: number };
   serviceArticles: { imported: number; skipped: number };
+  serviceProjects: { imported: number; skipped: number };
   billingNotes: { imported: number; skipped: number };
   expenses: { imported: number; skipped: number };
   incomes: { imported: number; skipped: number };
@@ -125,7 +129,7 @@ type ValidatedBackup = {
 
 const ARRAY_KEYS = [
   'customers', 'suppliers', 'serviceArticles', 'expenses', 'incomes', 'paymentJournalEvents', 'paymentAdjustments', 'paymentOperations', 'invoices', 'purchaseDocuments', 'templates',
-  'billingNotes', 'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
+  'serviceProjects', 'billingNotes', 'recurringExpenses', 'reminders', 'cashBooks', 'cashTransactions',
   'documentations', 'apiKeys', 'auditLogs',
 ] as const;
 
@@ -277,7 +281,15 @@ function validateBackupReferences(data: JsonRecord, sets: Record<string, Set<num
     check(transaction.incomeId, 'incomes', `cashTransactions[${index}].incomeId`);
   }
 
+  for (const [index, project] of asArray(data, 'serviceProjects').entries()) {
+    check(project.customerId, 'customers', `serviceProjects[${index}].customerId`);
+  }
   for (const [index, note] of asArray(data, 'billingNotes').entries()) {
+    check(note.projectId, 'serviceProjects', `billingNotes[${index}].projectId`);
+    if (note.projectId != null) {
+      const project = asArray(data, 'serviceProjects').find(candidate => candidate.id === note.projectId);
+      if (project?.customerId !== note.customerId) throw new BackupValidationError(`billingNotes[${index}].projectId muss zur angegebenen Kunden-ID gehören`);
+    }
     check(note.customerId, 'customers', `billingNotes[${index}].customerId`);
     check(note.invoiceId, 'invoices', `billingNotes[${index}].invoiceId`);
     const customerId = asOptionalInt(note.customerId, `billingNotes[${index}].customerId`);
@@ -888,6 +900,8 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
     warnings.push(manifestWarning(LEGACY_BACKUP_VERSION)!);
   }
 
+  try { validateProjectServiceBackupFields(data, manifest?.schemaVersion); }
+  catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Projekt- und Zeitdaten ungültig'); }
   const arrays = Object.fromEntries(ARRAY_KEYS.map((key) => [key, asArray(data, key)]));
   if (version === LEGACY_BACKUP_VERSION && arrays.serviceArticles.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine ungebundenen Artikel enthalten');
   if (version === LEGACY_BACKUP_VERSION && arrays.suppliers.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine ungebundenen Lieferanten enthalten');
@@ -1033,6 +1047,7 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     customers: { imported: 0, skipped: 0 },
     suppliers: { imported: 0, skipped: 0 },
     serviceArticles: { imported: 0, skipped: 0 },
+    serviceProjects: { imported: 0, skipped: 0 },
     billingNotes: { imported: 0, skipped: 0 },
     expenses: { imported: 0, skipped: 0 },
     incomes: { imported: 0, skipped: 0 },
@@ -1108,6 +1123,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
   customers: Map<number, number>;
   suppliers: Map<number, number>;
   serviceArticles: Map<number, number>;
+  serviceProjects: Map<number, number>;
   billingNotes: Map<number, number>;
   expenses: Map<number, number>;
   incomes: Map<number, number>;
@@ -1137,6 +1153,7 @@ function mapAuditEntityId(entityType: string, sourceEntityId: string | null, map
     Customer: maps.customers,
     Supplier: maps.suppliers,
     ServiceArticle: maps.serviceArticles,
+    ServiceProject: maps.serviceProjects,
     BillingNote: maps.billingNotes,
     Expense: maps.expenses,
     Income: maps.incomes,
@@ -1167,6 +1184,23 @@ function auditImportKey(backupId: string, sourceUserId: string | undefined, sour
 
 function billingNoteImportKey(sourceUserId: string | undefined, sourceNoteId: number): string {
   return `${sourceUserId ?? 'unknown-source'}:billing-note:${sourceNoteId}`;
+}
+
+function serviceProjectImportKey(sourceUserId: string, sourceProjectId: number): string {
+  return JSON.stringify(['service-project', sourceUserId, sourceProjectId]);
+}
+
+async function validateProjectTimeOverwrite(tx: Prisma.TransactionClient, userId: string, schemaVersion?: string): Promise<void> {
+  if (await tx.billingNote.count({ where: { userId, invoiceId: { not: null }, OR: [{ projectId: { not: null } }, { durationMinutes: { not: null } }] } }) > 0) {
+    throw new BackupValidationError('Abgerechnete Projekt- oder Zeitnotizen dürfen nicht überschrieben oder wieder geöffnet werden. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
+  }
+  if (await tx.billingNote.count({ where: { userId, captureKey: { not: null } } }) > 0) {
+    throw new BackupValidationError('Dauerhafte Leistungs-Erfassungsnachweise dürfen nicht überschrieben oder gelöscht werden. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
+  }
+  if (!backupSchemaSupportsProjectServiceTimes(schemaVersion) && (await tx.serviceProject.count({ where: { userId } }) > 0
+    || await tx.billingNote.count({ where: { userId, OR: [{ projectId: { not: null } }, { durationMinutes: { not: null } }] } }) > 0)) {
+    throw new BackupValidationError('Dieses ältere Backup enthält keine vollständigen Projekt- und Zeitdaten. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
+  }
 }
 
 function parseObject(value: unknown): Record<string, unknown> | null {
@@ -1222,6 +1256,7 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
   await tx.serviceArticle.deleteMany({ where: { userId } });
   await tx.dataImportBatch.deleteMany({ where: { userId } });
   await tx.billingNote.deleteMany({ where: { userId } });
+  await tx.serviceProject.deleteMany({ where: { userId } });
   await tx.invoice.deleteMany({ where: { userId } });
   await tx.customer.deleteMany({ where: { userId } });
   await tx.settings.deleteMany({ where: { userId } });
@@ -1394,6 +1429,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     const serviceBillingPlans = asArray(data, 'serviceBillingPlans');
     const serviceBillingPeriods = asArray(data, 'serviceBillingPeriods');
     const reminders = asArray(data, 'reminders');
+    const serviceProjects = asArray(data, 'serviceProjects');
     const billingNotes = asArray(data, 'billingNotes');
     const cashBooks = asArray(data, 'cashBooks');
     const cashTransactions = asArray(data, 'cashTransactions');
@@ -1416,6 +1452,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
     // Reject known immutable-target conflicts before resolving or staging any
     // files. Repeat these checks inside the write transaction to cover races.
+    if (overwrite) await validateProjectTimeOverwrite(prisma, userId, manifest?.schemaVersion);
     if (overwrite && await prisma.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
     if (overwrite && await prisma.serviceBillingPlan.count({ where: { userId } }) > 0) throw new BackupValidationError('Wiederkehrende Servicepläne und bestätigte Periodenidentitäten dürfen nicht überschrieben werden. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
     if (overwrite && await prisma.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
@@ -1488,6 +1525,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         addCounterValue(preservedCounterValues, key.slice(0, separator), Number(key.slice(separator + 1)), value);
       }
 
+      if (overwrite) await validateProjectTimeOverwrite(tx, userId, manifest?.schemaVersion);
       if (overwrite && await tx.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
       if (overwrite && await tx.serviceBillingPlan.count({ where: { userId } }) > 0) throw new BackupValidationError('Wiederkehrende Servicepläne und bestätigte Periodenidentitäten dürfen nicht überschrieben werden. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
       if (overwrite && await tx.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
@@ -1544,6 +1582,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const paymentJournalMap = new Map<number, number>();
       const templateMap = new Map<number, number>();
       const reminderMap = new Map<number, number>();
+      const serviceProjectMap = new Map<number, number>();
       const billingNoteMap = new Map<number, number>();
       const cashTransactionMap = new Map<number, number>();
       const documentationMap = new Map<number, number>();
@@ -1552,6 +1591,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const mappedJournalInvoices = new Set<number>();
       const existingAuditImportRows = new Map<string, { id: number; entityId: string | null; metadata: string | null }>();
       const existingSupplierImports = new Map<string, { entityId: string | null }>();
+      const existingProjectImports = new Map<string, { entityId: string | null }>();
       const existingBillingNoteImports = new Map<string, { id: number; entityId: string | null; metadata: string | null }>();
       const existingAuditRows = await tx.auditLog.findMany({ where: { userId }, orderBy: { id: 'asc' }, select: { id: true, action: true, entityType: true, entityId: true, metadata: true, newValues: true } });
       for (const row of existingAuditRows) {
@@ -1584,11 +1624,19 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         if (row.action === 'RESTORE' && row.entityType === 'Supplier' && isRecord(provenance)
           && provenance.sourceEntityType === 'Supplier' && provenance.targetTenantId === userId
           && typeof provenance.importKey === 'string') existingSupplierImports.set(provenance.importKey, row);
-        if (row.action === 'RESTORE' && row.entityType === 'BillingNote'
-          && typeof provenance === 'object' && provenance !== null
-          && (provenance as Record<string, unknown>).sourceEntityType === 'BillingNote'
-          && typeof (provenance as Record<string, unknown>).importKey === 'string') {
-          existingBillingNoteImports.set((provenance as Record<string, unknown>).importKey as string, row);
+        if (row.action === 'RESTORE' && row.entityType === 'ServiceProject' && isRecord(provenance)
+          && provenance.sourceEntityType === 'ServiceProject' && provenance.targetTenantId === userId
+          && typeof provenance.importKey === 'string') {
+          const prior = existingProjectImports.get(provenance.importKey);
+          if (prior && prior.entityId !== row.entityId) throw new BackupValidationError('Mehrdeutige persistierte Projekt-Quellidentität im Ziel');
+          existingProjectImports.set(provenance.importKey, row);
+        }
+        if (row.action === 'RESTORE' && row.entityType === 'BillingNote' && isRecord(provenance)
+          && provenance.sourceEntityType === 'BillingNote' && provenance.targetTenantId === userId
+          && typeof provenance.importKey === 'string') {
+          const prior = existingBillingNoteImports.get(provenance.importKey);
+          if (prior && prior.entityId !== row.entityId) throw new BackupValidationError('Mehrdeutige persistierte Leistungsnotiz-Quellidentität im Ziel');
+          existingBillingNoteImports.set(provenance.importKey, row);
         }
       }
 
@@ -1739,6 +1787,34 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           customerMap.set(sourceId, created.id);
           result.customers.imported += 1;
         }
+      }
+
+      // Project identity is the source tenant + row ID, never the editable name.
+      // A merge retains target name/archive history, but never moves a project.
+      for (const project of serviceProjects) {
+        const sourceId = Number(project.id);
+        if (!sourceUserId) throw new BackupValidationError('Projekte benötigen eine eindeutige Backup-Quellidentität');
+        const customerId = relationMapValue(customerMap, project.customerId, 'serviceProject.customerId')!;
+        const importKey = serviceProjectImportKey(sourceUserId, sourceId);
+        const prior = overwrite ? undefined : existingProjectImports.get(importKey);
+        const targetId = prior?.entityId ? asOptionalInt(prior.entityId, 'serviceProject.targetId') : !overwrite && sourceUserId === userId ? sourceId : null;
+        const existing = targetId === null ? null : await tx.serviceProject.findFirst({ where: { id: targetId, userId } });
+        if (prior && !existing) throw new BackupValidationError('Persistierte Projekt-Quellidentität verweist auf ein fehlendes Zielprojekt');
+        if (existing) {
+          if (existing.customerId !== customerId || existing.createdAt.toISOString() !== asDate(project.createdAt, 'serviceProject.createdAt')!.toISOString()) throw new BackupValidationError('Projekt-Quellidentität widerspricht der unveränderlichen Kunden- oder Entstehungshistorie');
+          serviceProjectMap.set(sourceId, existing.id);
+          result.serviceProjects.skipped += 1;
+          continue;
+        }
+        const created = await tx.serviceProject.create({ data: {
+          userId, customerId, name: String(project.name), archivedAt: asDate(project.archivedAt, 'serviceProject.archivedAt'),
+          createdAt: asDate(project.createdAt, 'serviceProject.createdAt')!, updatedAt: asDate(project.updatedAt, 'serviceProject.updatedAt')!,
+        } });
+        serviceProjectMap.set(sourceId, created.id);
+        result.serviceProjects.imported += 1;
+        const metadata = JSON.stringify({ backupImport: { importKey, backupId, sourceUserId, sourceEntityType: 'ServiceProject', sourceEntityId: String(sourceId), targetTenantId: userId, entityMapping: 'mapped' } });
+        await tx.auditLog.create({ data: { userId, action: 'RESTORE', entityType: 'ServiceProject', entityId: String(created.id), entityName: created.name, metadata } });
+        existingProjectImports.set(importKey, { entityId: String(created.id) });
       }
 
       // Portable plan keys are scoped to the target owner; internal row IDs are
@@ -1964,20 +2040,33 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       for (const note of billingNotes) {
         const sourceId = asOptionalInt(note.id, 'billingNote.id')!;
         const importKey = billingNoteImportKey(sourceUserId, sourceId);
-        const existingImported = overwrite ? undefined : existingBillingNoteImports.get(importKey);
-        if (existingImported?.entityId) {
-          const existingId = asOptionalInt(existingImported.entityId, `billingNotes[${sourceId}].targetId`);
-          const existingNote = existingId === null
-            ? null
-            : await tx.billingNote.findFirst({ where: { id: existingId, userId }, select: { id: true } });
-          if (existingNote) {
-            billingNoteMap.set(sourceId, existingNote.id);
-            result.billingNotes.skipped += 1;
-            continue;
-          }
-        }
         const customerId = relationMapValue(customerMap, note.customerId, 'billingNote.customerId');
         if (!customerId) throw new BackupValidationError('billingNote.customerId fehlt');
+        const projectId = relationMapValue(serviceProjectMap, note.projectId, 'billingNote.projectId');
+        const durationMinutes = note.durationMinutes == null ? null : Number(note.durationMinutes);
+        const command = {
+          customerId, projectId, durationMinutes,
+          serviceDate: asBusinessDate(note.serviceDate, 'billingNote.serviceDate'),
+          description: asRequiredString(note.description, 'billingNote.description', 500),
+          quantity: asBillingQuantity(note.quantity, 'billingNote.quantity'),
+          unit: asOptionalString(note.unit, 'billingNote.unit', 100) ?? 'Stunde',
+        };
+        const captureKey = note.captureKey == null ? null : String(note.captureKey);
+        // Source hashes were checked before writes. Only numeric relationships
+        // change on restore; preserve the receipt key and command fields exactly.
+        const captureFingerprint = captureKey === null ? null : serviceCaptureFingerprint(command);
+        const deletedAt = asDate(note.deletedAt, 'billingNote.deletedAt');
+        const existingImported = overwrite ? undefined : existingBillingNoteImports.get(importKey);
+        const existingId = existingImported?.entityId
+          ? asOptionalInt(existingImported.entityId, `billingNotes[${sourceId}].targetId`)
+          : !overwrite && sourceUserId === userId ? sourceId : null;
+        const existingIdentityNote = existingId === null ? null : await tx.billingNote.findFirst({ where: { id: existingId, userId } });
+        if (existingImported && !existingIdentityNote) throw new BackupValidationError('Persistierte Leistungsnotiz-Quellidentität verweist auf eine fehlende Zielnotiz');
+        const existingReceiptNote = captureKey === null ? null : await tx.billingNote.findUnique({ where: { userId_captureKey: { userId, captureKey } } });
+        if (existingIdentityNote && existingReceiptNote && existingIdentityNote.id !== existingReceiptNote.id) {
+          throw new BackupValidationError('Erfassungsnachweis-Kollision: Quellidentität und Erfassungsschlüssel verweisen auf unterschiedliche Leistungsnotizen');
+        }
+        const existingNote = existingIdentityNote ?? existingReceiptNote;
         const invoiceId = relationMapValue(invoiceMap, note.invoiceId, 'billingNote.invoiceId');
         if (invoiceId !== null) {
           const targetInvoice = await tx.invoice.findFirst({ where: { id: invoiceId, userId, type: 'INVOICE' }, select: { customerId: true } });
@@ -1985,13 +2074,34 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
             throw new BackupValidationError('billingNote.invoiceId muss zur angegebenen Kunden-ID gehören');
           }
         }
+        if (existingNote) {
+          if (existingNote.customerId !== customerId || existingNote.projectId !== projectId || existingNote.durationMinutes !== durationMinutes
+            || existingNote.quantity !== command.quantity || existingNote.unit !== command.unit
+            || existingNote.description !== command.description || existingNote.serviceDate.toISOString() !== command.serviceDate.toISOString()
+            || (existingIdentityNote && existingNote.createdAt.toISOString() !== asDate(note.createdAt, 'billingNote.createdAt', existingNote.createdAt)!.toISOString())) {
+            throw new BackupValidationError('Leistungsnotiz-Quellidentität widerspricht der unveränderlichen Kunden-, Projekt- oder Leistungshistorie');
+          }
+          if (existingNote.captureKey !== captureKey || existingNote.captureFingerprint !== captureFingerprint
+            || (captureKey !== null && serviceCaptureFingerprint(existingNote) !== captureFingerprint)) {
+            throw new BackupValidationError('Erfassungsnachweis-Kollision: Schlüssel, Fingerabdruck und tatsächliche Ziel-Leistungsdaten stimmen nicht überein');
+          }
+          if (deletedAt !== null && existingNote.deletedAt === null) {
+            throw new BackupValidationError('Gelöschter Quell-Erfassungsnachweis kollidiert mit einer aktiven Zielnotiz. Zielentscheidung separat prüfen; Zusammenführen verändert oder öffnet keine Erfassungsnachweise.');
+          }
+          if (invoiceId !== null && existingNote.invoiceId !== invoiceId) {
+            // Importing a source invoice while leaving its matching receipt open
+            // would make the same activity billable again. Never silently link,
+            // orphan or replace either branch of this lifecycle conflict.
+            throw new BackupValidationError('Rechnungszuordnung der Quelle widerspricht dem Ziel-Erfassungsnachweis. Zusammenführen wurde vollständig abgebrochen; keine Leistung wird erneut geöffnet oder automatisch zugeordnet.');
+          }
+          // An older open source preserves a later target claim/tombstone;
+          // a source claim is accepted only for the same mapped target invoice.
+          billingNoteMap.set(sourceId, existingNote.id);
+          result.billingNotes.skipped += 1;
+          continue;
+        }
         const created = await tx.billingNote.create({ data: {
-          customerId,
-          serviceDate: asBusinessDate(note.serviceDate, 'billingNote.serviceDate'),
-          description: asRequiredString(note.description, 'billingNote.description', 500),
-          quantity: asBillingQuantity(note.quantity, 'billingNote.quantity'),
-          unit: asOptionalString(note.unit, 'billingNote.unit', 100) ?? 'Stunde',
-          invoiceId,
+          ...command, captureKey, captureFingerprint, deletedAt, invoiceId,
           createdAt: asDate(note.createdAt, 'billingNote.createdAt', new Date())!,
           updatedAt: asDate(note.updatedAt, 'billingNote.updatedAt', new Date())!,
           userId,
@@ -2490,6 +2600,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         customers: customerMap,
         suppliers: supplierMap,
         serviceArticles: serviceArticleMap,
+        serviceProjects: serviceProjectMap,
         billingNotes: billingNoteMap,
         expenses: expenseMap,
         incomes: incomeMap,

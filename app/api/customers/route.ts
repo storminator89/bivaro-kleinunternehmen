@@ -173,10 +173,16 @@ async function deleteHandler(request: Request) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    const billingNoteCount = await prisma.billingNote.count({ where: { customerId: customer.id, userId } });
+    const projectCount = await prisma.serviceProject.count({ where: { customerId: customer.id, userId } });
+    if (projectCount > 0) return NextResponse.json({ error: 'Kunden mit Projekten müssen für den Leistungsverlauf erhalten bleiben.' }, { status: 409 });
+
+    const billingNoteCount = await prisma.billingNote.count({ where: { customerId: customer.id, userId, deletedAt: null } });
     if (billingNoteCount > 0) {
       return NextResponse.json({ error: 'Kunden mit Leistungsnotizen können nicht gelöscht werden' }, { status: 409 });
     }
+
+    const receiptCount = await prisma.billingNote.count({ where: { customerId: customer.id, userId, deletedAt: { not: null } } });
+    if (receiptCount > 0) return NextResponse.json({ error: 'Entfernte Leistungen behalten ihren Erfassungsnachweis. Der zugehörige Kunde muss erhalten bleiben.' }, { status: 409 });
 
     await prisma.customer.delete({
       where: { id: Number(id), userId },

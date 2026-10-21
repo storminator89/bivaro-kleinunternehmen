@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ServiceWorkbench } from '@/components/customers/service-workbench';
 import styles from "@/components/dashboard/sales-workspace.module.css";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ClipboardList, Loader2, Trash2 } from "lucide-react";
+import { ClipboardList, Loader2 } from "lucide-react";
 
 type Customer = {
   id: number;
@@ -49,18 +50,6 @@ type Customer = {
 };
 
 type NoteVisibility = 'EDITOR' | 'SEND' | 'BOTH';
-
-type BillingNote = {
-  id: number;
-  customerId: number;
-  serviceDate: string;
-  description: string;
-  quantity: number;
-  unit: string;
-  invoiceId?: number | null;
-};
-
-const BILLING_UNITS = ['Stück', 'Stunde', 'Tag', 'Pauschal'] as const;
 
 // Helper to generate initials
 const getInitials = (name: string) => {
@@ -262,212 +251,6 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
     </Dialog>
   );
 };
-
-type BillingNotesDialogProps = {
-  customer: Customer | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-};
-
-function BillingNotesDialog({ customer, open, onOpenChange }: BillingNotesDialogProps) {
-  const [notes, setNotes] = useState<BillingNote[]>([]);
-  const [serviceDate, setServiceDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [description, setDescription] = useState('');
-  const [quantity, setQuantity] = useState('1');
-  const [unit, setUnit] = useState('Stück');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const notesRequestRef = useRef(0);
-
-  const loadNotes = useCallback(async () => {
-    if (!customer) return;
-    const requestId = notesRequestRef.current + 1;
-    notesRequestRef.current = requestId;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/billing-notes?customerId=${customer.id}&includeLinked=true`, { cache: 'no-store' });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || 'Leistungsnotizen konnten nicht geladen werden.');
-      if (notesRequestRef.current === requestId) {
-        setNotes(Array.isArray(data) ? data : Array.isArray(data?.notes) ? data.notes : []);
-      }
-    } catch (loadError) {
-      if (notesRequestRef.current === requestId) {
-        setError(loadError instanceof Error ? loadError.message : 'Leistungsnotizen konnten nicht geladen werden.');
-      }
-    } finally {
-      if (notesRequestRef.current === requestId) setIsLoading(false);
-    }
-  }, [customer]);
-
-  useEffect(() => {
-    if (open && customer) {
-      setServiceDate(new Date().toISOString().slice(0, 10));
-      setDescription('');
-      setQuantity('1');
-      setUnit('Stück');
-      void loadNotes();
-    }
-  }, [loadNotes, open, customer]);
-
-  const handleAdd = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!customer || !description.trim()) return;
-    const parsedQuantity = Number(quantity);
-    if (!serviceDate || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-      setError('Bitte geben Sie ein gültiges Datum und eine Menge größer als 0 ein.');
-      return;
-    }
-
-    setIsSaving(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/billing-notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customer.id,
-          serviceDate,
-          description: description.trim(),
-          quantity: parsedQuantity,
-          unit: unit.trim() || 'Stück',
-        }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || 'Leistungsnotiz konnte nicht gespeichert werden.');
-      setDescription('');
-      setQuantity('1');
-      await loadNotes();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Leistungsnotiz konnte nicht gespeichert werden.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('Diese unreservierte Leistungsnotiz löschen?')) return;
-    setDeletingId(id);
-    setError(null);
-    try {
-      const response = await fetch(`/api/billing-notes?id=${id}`, { method: 'DELETE' });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || 'Leistungsnotiz konnte nicht gelöscht werden.');
-      setNotes(current => current.filter(note => note.id !== id));
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Leistungsnotiz konnte nicht gelöscht werden.');
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Leistungsnotizen: {customer?.name || 'Kunde'}</DialogTitle>
-          <DialogDescription>
-            Offene Leistungen können später beim Erstellen einer Rechnung übernommen werden. Zugeordnete Notizen bleiben hier nachvollziehbar.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleAdd} className="grid gap-3 rounded-lg border bg-muted/20 p-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="billing-note-description">Beschreibung</Label>
-            <Input id="billing-note-description" value={description} onChange={event => setDescription(event.target.value)} placeholder="z. B. Wartung" required />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-[9rem_7rem_minmax(0,1fr)_auto] sm:items-end">
-            <div className="space-y-1.5">
-              <Label htmlFor="billing-note-date">Leistungsdatum</Label>
-              <Input id="billing-note-date" type="date" value={serviceDate} onChange={event => setServiceDate(event.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="billing-note-quantity">Menge</Label>
-              <Input id="billing-note-quantity" type="number" min="0.000001" step="any" value={quantity} onChange={event => setQuantity(event.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="billing-note-unit">Einheit</Label>
-              <select
-                id="billing-note-unit"
-                value={unit}
-                onChange={event => setUnit(event.target.value)}
-                className="flex min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring"
-                required
-              >
-                {BILLING_UNITS.map(option => <option key={option} value={option}>{option}</option>)}
-              </select>
-            </div>
-            <Button type="submit" disabled={isSaving || !description.trim()}>
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : 'Hinzufügen'}
-              <span className="sr-only">Leistungsnotiz hinzufügen</span>
-            </Button>
-          </div>
-        </form>
-
-        {error && <p className="text-sm font-medium text-destructive" role="alert">{error}</p>}
-        {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Leistungsnotizen werden geladen …
-          </div>
-        ) : notes.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Noch keine Leistungsnotizen vorhanden.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Datum</TableHead>
-                  <TableHead>Beschreibung</TableHead>
-                  <TableHead className="text-right">Menge</TableHead>
-                  <TableHead>Einheit</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-12"><span className="sr-only">Aktion</span></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {notes.map(note => (
-                  <TableRow key={note.id}>
-                    <TableCell>{new Date(`${note.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString('de-DE')}</TableCell>
-                    <TableCell className="max-w-[16rem] whitespace-normal">{note.description}</TableCell>
-                    <TableCell className="text-right tabular-nums">{note.quantity}</TableCell>
-                    <TableCell>{note.unit}</TableCell>
-                    <TableCell>
-                      {note.invoiceId ? (
-                        <div className="flex flex-col items-start gap-1">
-                          <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                            Rechnung zugeordnet
-                          </span>
-                          <a
-                            href={`/api/invoices/download?id=${note.invoiceId}`}
-                            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                          >
-                            Rechnung öffnen
-                          </a>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Offen</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {!note.invoiceId && (
-                        <Button type="button" variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDelete(note.id)} disabled={deletingId === note.id} aria-label={`Leistungsnotiz ${note.description} löschen`}>
-                          {deletingId === note.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -817,7 +600,7 @@ export default function CustomersPage() {
           )}
         </div>
       </div>
-      <BillingNotesDialog
+      <ServiceWorkbench
         customer={notesCustomer}
         open={Boolean(notesCustomer)}
         onOpenChange={(open) => {
