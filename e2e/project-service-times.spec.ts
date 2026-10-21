@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Locator } from '@playwright/test';
+import { expect, test, type Page, type Locator, type Dialog } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
@@ -19,10 +19,36 @@ async function fixture(page: Page) {
   await expect(page).toHaveURL(/\/dashboard/);
   expect((await page.request.post('/api/settings', { data: {
     companyName: 'Synthetischer Dienstleister', companyAddress: 'Teststraße 1\n10115 Berlin',
-    email: 'synthetic@example.test', taxNumber: '123/456/78901',
+    email: 'synthetic@example.test', telephone: '+49 301234567',
+    taxNumber: '123/456/78901', iban: 'DE89370400440532013000',
     fiscalTaxRegime: 'SMALL_BUSINESS', fiscalEffectiveFrom: '2020-01-01',
   } })).ok()).toBe(true);
   return { userId: user.id, customer, other };
+}
+
+// Observe validation alerts as well as real upload/download: an incomplete
+// synthetic issuer must fail with its actual message, not an opaque timeout.
+async function createXmlInvoice(page: Page) {
+  let rejectUnexpectedDialog!: (error: Error) => void;
+  const unexpectedDialog = new Promise<never>((_, reject) => { rejectUnexpectedDialog = reject; });
+  const observeDialog = (dialog: Dialog) => {
+    const message = dialog.message().slice(0, 1200);
+    void dialog.dismiss().catch(() => undefined);
+    rejectUnexpectedDialog(new Error(`Unexpected XML creation dialog: ${message}`));
+  };
+  page.on('dialog', observeDialog);
+  try {
+    const [saved] = await Promise.race([
+      Promise.all([
+        page.waitForResponse(response => new URL(response.url()).pathname === '/api/invoices/upload' && response.request().method() === 'POST'),
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: 'XML erstellen', exact: true }).click(),
+      ]),
+      unexpectedDialog,
+    ]);
+    expect(saved.ok(), await saved.text()).toBe(true);
+    return saved.json();
+  } finally { page.off('dialog', observeDialog); }
 }
 
 async function noFinancialWrites(userId: string, invoiceCount = 0) {
@@ -217,11 +243,7 @@ test('manual project time stays explicit through filters, cancel, retry, invoice
   await expect(selection).toContainText(/142,50\s*€ Positionsnetto/);
   await page.getByRole('combobox', { name: 'Ausgabeformat', exact: true }).selectOption('xml-only');
   await page.getByLabel('Käuferreferenz / Leitweg-ID', { exact: false }).fill('SYNTHETIC-PROJECT-ORDER');
-  const savedInvoice = page.waitForResponse(response => new URL(response.url()).pathname === '/api/invoices/upload' && response.request().method() === 'POST');
-  const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'XML erstellen', exact: true }).click();
-  const saved = await savedInvoice; expect(saved.ok(), await saved.text()).toBe(true);
-  const invoice = await saved.json(); await download;
+  const invoice = await createXmlInvoice(page);
   await noFinancialWrites(userId, 1);
   expect((await prisma.billingNote.findUniqueOrThrow({ where: { id: timed.id } })).invoiceId).toBe(invoice.id);
   const originalResponse = await page.request.get(`/api/invoices/download?id=${invoice.id}`);
