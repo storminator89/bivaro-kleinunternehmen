@@ -11,6 +11,8 @@
 .sectionHeading p, .sectionHeading > span { color: var(--color-muted); font-size: var(--text-xs); line-height: 1.6; }
 .sectionHeading p { margin-top: var(--space-2xs); }
 .sectionHeading > span { flex-shrink: 0; }
+.taxSection { padding: var(--space-md); }
+.taxSection .sectionHeading { margin-bottom: var(--space-sm); }
 .select { min-height: 2.75rem; width: 100%; min-width: 0; border: 1px solid var(--color-rule); border-radius: var(--radius-input); background: var(--color-paper); padding: var(--space-xs) var(--space-sm); font-size: var(--text-sm); }
 .select:hover:not(:disabled) { border-color: var(--color-rule-2); }
 .select:disabled { opacity: .55; cursor: not-allowed; }
@@ -80,11 +82,15 @@
 .reminderHistory summary { cursor: pointer; padding: var(--space-xs) 0; font-size: var(--text-sm); font-weight: 500; }
 .reminderHistory article { padding: var(--space-sm) 0; display: grid; gap: var(--space-xs); border-bottom: 1px solid var(--color-rule); }
 .reminderDesktop { display: none; }
-.invoiceEditor :global(.invoice-editor-header) { padding-bottom: var(--space-lg); border-bottom: 1px solid var(--color-rule); margin-bottom: var(--space-lg); }
+.invoiceEditor :global(.invoice-editor-header) { padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-rule); margin-bottom: var(--space-md); }
+.invoiceEditor :global(.invoice-section), .invoiceEditor :global(.invoice-summary-body) { padding: var(--space-md); }
+.invoiceEditor :global(.invoice-section-heading) { margin-bottom: var(--space-md); }
+.invoiceEditor :global(.invoice-template-drawer) { padding-bottom: 0; background: transparent; border: 0; }
+.invoiceEditor :global(.invoice-template-drawer summary) { padding-inline: 0; }
 .invoiceEditor :global(.invoice-section-heading p) { display: none; }
 .invoiceEditor :global(.invoice-line) { padding-top: var(--space-lg); padding-bottom: var(--space-lg); }
 .invoiceEditor :global(.invoice-line textarea[id^="invoice-item-description"]) { font-weight: 500; }
-.invoiceEditor :global(.invoice-template-drawer) { border-style: solid; background: var(--color-paper); }
+.invoiceEditor :global(.invoice-template-drawer) { background: transparent; }
 @media (min-width: 640px) {
   .collectionSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .collectionSummary > div { border-right: 1px solid var(--color-rule); }

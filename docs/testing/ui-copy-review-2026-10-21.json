@@ -1,0 +1,1073 @@
+{
+  "date": "2026-10-21",
+  "baseCommit": "107e06d65042859731920fc3d9d837555d0537d1",
+  "workState": "release source prepared on codex/minimal-ui-copy-20261021; final commit is recorded by Git history",
+  "scope": {
+    "pageRoutes": 27,
+    "additionalDashboardTabs": 6,
+    "reviewedViews": 33,
+    "newUpstreamRoute": "/bank-csv"
+  },
+  "designPlan": {
+    "skill": "frontend-design",
+    "palette": [
+      "#FFFFFF",
+      "#F3F7FA",
+      "#12202C",
+      "#006B46",
+      "#06251F"
+    ],
+    "type": [
+      "Inter",
+      "Newsreader",
+      "Geist Mono"
+    ],
+    "layout": "Bestehende Seitenstruktur und Komponenten; klare Titel und Aktionen, Fachdetails bei Bedarf aufklappen.",
+    "principles": [
+      "Keine Bedienungsprosa, die Titel oder Schaltflächen wiederholt.",
+      "Erforderliche Labels, Fehler, Folgen und Entscheidungsgrenzen erhalten.",
+      "Fachunterlagen und API-Beispiele bleiben lesbar."
+    ],
+    "selfCritique": "Kürze darf Datenlücken, irreversible Buchungen, Kosten oder Steuer-Voraussetzungen nicht verschweigen. Diese Aussagen wurden separat gegen Quellcode und bestehende Tests geprüft."
+  },
+  "browserReview": {
+    "method": "Seiten einzeln mit CUA geöffnet, DOM und Screenshots geprüft; nach Änderungen erneut angesehen.",
+    "environment": "Isolierte lokale Instanz, neue temporäre SQLite-Datenbank, synthetischer Bestand; keine Repository- oder Produktionsdatenbank.",
+    "viewports": [
+      {
+        "width": 934,
+        "height": 986,
+        "scope": "Seitenrundgang; scrollbarabhängige Breite 933–948."
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "scope": "Anmeldung, Registrierung, Dashboard, Ausgaben, Rechnungseditor, Übergabe und Kunden."
+      },
+      {
+        "width": 1440,
+        "height": 1000,
+        "scope": "Desktop mit Seitenleiste: Ausgaben, Import, Übergabe; abschließende Produktionsansichten."
+      },
+      {
+        "width": 1265,
+        "height": 779,
+        "scope": "Abschließende Produktionsansichten: Dashboard, Rechnungseditor und Übergabe; Übergabe zusätzlich dunkel."
+      }
+    ],
+    "pages": [
+      {
+        "route": "/",
+        "browserInspected": true,
+        "change": "Hero, Ablauf, Umfang und Zugang gekürzt; Angebotsstatus und Quellcode erreichbar."
+      },
+      {
+        "route": "/login",
+        "browserInspected": true,
+        "change": "Werbetext und Formular-Einleitung entfernt; knappe Zugangshilfe."
+      },
+      {
+        "route": "/register",
+        "browserInspected": true,
+        "change": "Konto- und Bootstrap-Hinweise gekürzt; Passwortregeln und Administrator-Folge erhalten."
+      },
+      {
+        "route": "/help",
+        "browserInspected": true,
+        "change": "Vier Aufgaben auf kurze Schritte reduziert; Grenzen je Aufgabe aufklappbar, stabile Sprungziele."
+      },
+      {
+        "route": "/help/access",
+        "browserInspected": true,
+        "change": "Wiederherstellung und Störung auf konkrete Schritte reduziert; keine Kontenabfrage oder neue Resetfunktion."
+      },
+      {
+        "route": "/dashboard",
+        "browserInspected": true,
+        "change": "Einrichtung und Tageshinweise gekürzt; Umsatzdetails zunächst geschlossen."
+      },
+      {
+        "route": "/dashboard?tab=invoices",
+        "browserInspected": true,
+        "change": "Einleitung, Servicehinweis und Leerzustand gekürzt; seitenbezogene Zählungen erhalten."
+      },
+      {
+        "route": "/dashboard?tab=quotes",
+        "browserInspected": true,
+        "change": "Aufgabenübersicht und Leerzustand gekürzt; manuelle Statusführung erkennbar."
+      },
+      {
+        "route": "/dashboard?tab=incomes",
+        "browserInspected": true,
+        "change": "Doppelte Einleitung und Formular-Unterzeile entfernt; Listen- und Feldbeschriftungen erhalten."
+      },
+      {
+        "route": "/dashboard?tab=expenses",
+        "browserInspected": true,
+        "change": "Doppelte Einleitung und Formular-Unterzeile entfernt; Filter bei mittleren Breiten umgebrochen."
+      },
+      {
+        "route": "/dashboard?tab=eur",
+        "browserInspected": true,
+        "change": "Einleitung und doppelte Kostenbeschreibung entfernt; vorläufiges Ergebnis und Datenumfang erhalten."
+      },
+      {
+        "route": "/dashboard?tab=gwg",
+        "browserInspected": true,
+        "change": "Einleitung und doppelte Leerzustandsbeschreibung entfernt; Auswahlgrenzen erhalten."
+      },
+      {
+        "route": "/dashboard/invoices/new",
+        "browserInspected": true,
+        "change": "Editor-Einleitung und doppelte Erklärungen gekürzt; Steuerfall, Bestätigung und Erstellungssperre erhalten."
+      },
+      {
+        "route": "/dashboard/quotes/new",
+        "browserInspected": true,
+        "change": "Editor-Einleitungen entfernt; Steuerfall und Netto-Preisbasis erhalten."
+      },
+      {
+        "route": "/dashboard/today",
+        "browserInspected": true,
+        "change": "Kurzstatus statt technischer Ablaufbeschreibung; Teilumfang bleibt erkennbar."
+      },
+      {
+        "route": "/dashboard/reminders",
+        "browserInspected": true,
+        "change": "Einleitung und Teilzahlungs-Hinweis gekürzt; kein Versand und Restbetragsprüfung erhalten."
+      },
+      {
+        "route": "/cashbook",
+        "browserInspected": true,
+        "change": "Einleitung und doppelte Bereichsbeschreibungen entfernt; Kasse und Bestände unmittelbar sichtbar."
+      },
+      {
+        "route": "/customers",
+        "browserInspected": true,
+        "change": "Titel, Leerzustand und Formularhilfe gekürzt; interne Notizen weiterhin als intern gekennzeichnet."
+      },
+      {
+        "route": "/customers/articles",
+        "browserInspected": true,
+        "change": "Netto-Preisbasis kurz gefasst, Leerzustand reduziert und Navigationsbezeichnung ergänzt."
+      },
+      {
+        "route": "/customers/import",
+        "browserInspected": true,
+        "change": "Dateiauswahl und Formathilfe gekürzt; Vorschau, Dublettenregeln und Bestätigung erhalten."
+      },
+      {
+        "route": "/expenses/[id]",
+        "browserInspected": true,
+        "change": "Schreibgeschützte Detailansicht gekürzt; Belegbindung und steuerliche Unsicherheit erhalten. Synthetische Ausgabe /expenses/1 geprüft."
+      },
+      {
+        "route": "/handoff",
+        "browserInspected": true,
+        "change": "Zeitraumwahl kompakt; Paketdetails, Prüfsumme und optionale Empfangsnotiz aufklappbar; konkrete Warnungen erhalten."
+      },
+      {
+        "route": "/history",
+        "browserInspected": true,
+        "change": "Einleitung und Folgebeleg-Erklärung gekürzt; Begrenzung der Historie erkennbar und Navigationsbezeichnung ergänzt."
+      },
+      {
+        "route": "/purchases",
+        "browserInspected": true,
+        "change": "Uploadgrenzen verdichtet; Datenweitergabe und mögliche KI-Kosten vor Upload sichtbar."
+      },
+      {
+        "route": "/service-billing",
+        "browserInspected": true,
+        "change": "Serviceübersicht und Editor gekürzt; keine automatische Rechnungsstellung und Folgen der Bestätigung erhalten."
+      },
+      {
+        "route": "/settings",
+        "browserInspected": true,
+        "change": "Firmendaten, Steuerprofil, Jahreskontext, KI, SMTP, Registrierung, Übergabe, Backup und Zielkarten einzeln geprüft und gekürzt."
+      },
+      {
+        "route": "/settings/api-keys",
+        "browserInspected": true,
+        "change": "Doppelte API-Einführung entfernt, CORS-Hinweis reduziert; Schlüssel- und Berechtigungsfelder erhalten."
+      },
+      {
+        "route": "/settings/api-keys/docs",
+        "browserInspected": true,
+        "change": "Tautologische Abschnittseinleitungen entfernt; API-Verträge, Limits und Beispiele erhalten."
+      },
+      {
+        "route": "/settings/audit-logs",
+        "browserInspected": true,
+        "change": "Einleitung auf erfasste Aktivitäten mit begrenzter Protokollabdeckung reduziert."
+      },
+      {
+        "route": "/settings/documentation",
+        "browserInspected": true,
+        "change": "Seiten- und Abschnittseinleitungen gekürzt; eigentlicher Dokumentinhalt als Fachunterlage erhalten."
+      },
+      {
+        "route": "/steuer-simulation",
+        "browserInspected": true,
+        "change": "Einleitung und Parameter-Erklärungen gekürzt; Empfehlungen bei fehlender, ladender oder unterjähriger Datenbasis gesperrt."
+      },
+      {
+        "route": "/users",
+        "browserInspected": true,
+        "change": "Titel und Einleitung reduziert; Rollen, Zugriff und Passwortregeln erhalten."
+      }
+    ]
+  },
+  "bugsFixed": [
+    {
+      "area": "Steuersimulation",
+      "problem": "Optimierungshinweise wurden trotz fehlender/ladender oder unterjähriger Datenbasis aus Null-Ersatzwerten abgeleitet.",
+      "fix": "Hinweise nur bei geladener jährlicher Datenbasis und gültigen Eingaben; neutrale Leerempfehlung.",
+      "regressionTests": "lib/__tests__/financial-input-regressions.test.ts: loading, failed, partial-year."
+    },
+    {
+      "area": "Testisolierung",
+      "problem": "HTTP-Regression für Zahlungsanpassungen erbte NEXTAUTH_URL aus der lokalen Umgebung und erreichte statt Authentifizierung nur den Origin-Guard.",
+      "fix": "Test setzt seinen erwarteten Ursprung explizit und stellt die Umgebung danach wieder her."
+    }
+  ],
+  "coverage": {
+    "testsRemoved": 0,
+    "approach": "Textprüfungen auf kurze Aussagen aktualisiert; Steuer-, Zahlungs-, Berechtigungs-, Export- und Wiederholungsprüfungen beibehalten. Tastaturprüfungen öffnen die zunächst geschlossenen Umsatzdetails und berücksichtigen den neuen Prüfsummen-Tastaturstopp. Optionale Empfangsnotiz bleibt zunächst geschlossen und wird nach Download bedienbar."
+  },
+  "checks": {
+    "lint": "passed, zero warnings, combined source",
+    "unitIntegration": {
+      "status": "passed",
+      "filesPassed": 157,
+      "filesSkipped": 1,
+      "testsPassed": 1942,
+      "testsSkipped": 1,
+      "skipReason": "Explizit nicht aktivierter Performance-Benchmark; keine funktionalen Tests entfernt.",
+      "source": "combined local UI + origin/main 32f7753",
+      "durationSeconds": 52.45
+    },
+    "productionBuild": "passed, combined source",
+    "functionalChromium": {
+      "status": "passed",
+      "testsPassed": 85,
+      "testsFailed": 0,
+      "retries": 0,
+      "duration": "4.0 min",
+      "runner": "npm run test:e2e, isolated fixture, headed Chromium/Xvfb, port 3135",
+      "scope": "Combined UI changes, origin/main bank CSV feature, documentation print and all existing functional suites"
+    },
+    "targetedRegression": {
+      "status": "passed",
+      "filesPassed": 3,
+      "testsPassed": 86,
+      "scope": "Steuersimulation, Umsatzindikatoren und Übergabe nach abschließender Textpräzisierung."
+    },
+    "typeScript": "passed in production build",
+    "settingsDisclosureRegression": {
+      "status": "passed",
+      "files": 4,
+      "tests": 43,
+      "scope": "SMTP settings, STARTTLS protection, AI settings and incoming-document UI; final disclosure-state fixes."
+    },
+    "preIntegrationVerification": {
+      "status": "passed",
+      "filesPassed": 153,
+      "filesSkipped": 1,
+      "testsPassed": 1802,
+      "testsSkipped": 1,
+      "skipReason": "Explizit nicht aktivierter Performance-Benchmark; keine funktionalen Tests entfernt.",
+      "finalSourceRun": "2026-10-21 23:00:47 Europe/Berlin, 50.94 s"
+    },
+    "diffWhitespace": "passed"
+  },
+  "evidence": [
+    "evidence/ui-copy-review-2026-10-21/invoice-density-desktop.jpg",
+    "evidence/ui-copy-review-2026-10-21/hallmark-login-mobile.jpg",
+    "evidence/ui-copy-review-2026-10-21/hallmark-settings-fiscal-mobile.jpg",
+    "evidence/ui-copy-review-2026-10-21/hallmark-api-keys-mobile.jpg",
+    "evidence/ui-copy-review-2026-10-21/hallmark-documentation-mobile.jpg",
+    "evidence/ui-copy-review-2026-10-21/hallmark-incoming-review.jpg"
+  ],
+  "limitations": [
+    "Manuelle Prüfung der Seiten und ausgewählter Dialoge; keine Behauptung, jede denkbare Datenkombination visuell geprüft zu haben.",
+    "Texte innerhalb fachlicher Dokumente, Rechnungsdateien und API-Verträge wurden nicht pauschal gelöscht.",
+    "Deployment und Wiederherstellungsnachweis werden getrennt vom geprüften Quellstand protokolliert."
+  ],
+  "secondPass": {
+    "request": "Radikale Reduktion sichtbarer Erklärungstexte mit Hallmark; Screenshot Rechnung als konkreter Mangel.",
+    "designSystem": "Bestehendes design.md / BIVARO 2.0; keine Themenrotation.",
+    "expectedModifiedFiles": [
+      "app/cashbook/page.tsx",
+      "app/customers/articles/page.tsx",
+      "app/customers/import/page.tsx",
+      "app/customers/page.tsx",
+      "app/dashboard/reminders/page.tsx",
+      "app/help/access/page.tsx",
+      "app/help/page.tsx",
+      "app/login/page.tsx",
+      "app/page.tsx",
+      "app/register/page.tsx",
+      "app/settings/api-keys/docs/page.tsx",
+      "app/settings/api-keys/page.tsx",
+      "app/settings/audit-logs/page.tsx",
+      "app/settings/documentation/page.tsx",
+      "app/settings/page.tsx",
+      "app/steuer-simulation/page.tsx",
+      "app/users/page.tsx",
+      "components/daily-actions/daily-actions-workspace.tsx",
+      "components/dashboard/create-invoice-modal.tsx",
+      "components/dashboard/dashboard-client.tsx",
+      "components/dashboard/dashboard-content.tsx",
+      "components/dashboard/document-tax-profile-fields.tsx",
+      "components/dashboard/editors/quote-editor.tsx",
+      "components/dashboard/revenue-indicators.tsx",
+      "components/dashboard/sales-workspace.module.css",
+      "components/dashboard/tabs/eur-tab.tsx",
+      "components/dashboard/tabs/expenses-tab.tsx",
+      "components/dashboard/tabs/gwg-tab.tsx",
+      "components/dashboard/tabs/incomes-tab.tsx",
+      "components/dashboard/tabs/invoices-tab.tsx",
+      "components/dashboard/tabs/quotes-tab.tsx",
+      "components/handoff/handoff-acknowledgement.tsx",
+      "components/handoff/handoff-model.ts",
+      "components/handoff/handoff-review.tsx",
+      "components/handoff/handoff-tasks.tsx",
+      "components/handoff/handoff-workspace.tsx",
+      "components/history/invoice-history-workspace.tsx",
+      "components/onboarding/fiscal-profile-settings.tsx",
+      "components/onboarding/getting-started.tsx",
+      "components/public-accounting/pilot-access.tsx",
+      "components/public-accounting/pilot-guides.ts",
+      "components/public/offer-summary.tsx",
+      "components/purchases/ai-receipt-ui.ts",
+      "components/purchases/expense-detail.tsx",
+      "components/purchases/incoming-ai-extraction.tsx",
+      "components/purchases/incoming-document-review.tsx",
+      "components/purchases/incoming-document-ui.ts",
+      "components/purchases/incoming-documents-workspace.tsx",
+      "components/purchases/incoming-photo-preview.tsx",
+      "components/purchases/incoming-review-draft.tsx",
+      "components/purchases/incoming-upload.tsx",
+      "components/purchases/purchase-expense-approval.tsx",
+      "components/purchases/purchase-expense-ui.ts",
+      "components/purchases/supplier-contact-panel.tsx",
+      "components/service-billing/service-billing-types.ts",
+      "components/service-billing/service-billing-workspace.tsx",
+      "components/service-billing/service-plan-editor.tsx",
+      "components/settings/ai-provider-settings.tsx",
+      "components/settings/annual-business-context.tsx",
+      "components/settings/code-example.tsx",
+      "components/settings/copy-admin-text.ts",
+      "components/settings/section-navigation.tsx",
+      "components/settings/smtp-settings.tsx"
+    ],
+    "expectedCreatedFiles": [
+      "e2e/documentation-print.spec.ts"
+    ],
+    "expectedDeletedFiles": [],
+    "status": "verified",
+    "skills": [
+      "/home/pmeyhoefer/.codex/skills/frontend-design/SKILL.md",
+      "/home/pmeyhoefer/.codex/skills/hallmark/SKILL.md"
+    ],
+    "implementedChanges": [
+      "Rechnung und Angebot: kompakter Kopf mit Zurück-Symbol, kurze Auswahlfelder, Profilstatus, Steuererklärungen auf Abruf; bedingte Bestätigungen und Erstellungs-Sperren unverändert.",
+      "Einrichtung standardmäßig geschlossen. Einnahme-/Ausgabeformular öffnet direkt über Hauptaktion; doppelte geschlossene Eintragskarte entfällt.",
+      "Angebotsaufgaben als kompakte Filterzeile statt drei erklärender Karten.",
+      "Keine Null-Aufgabenzeilen bei der Übergabe; positiver Klärbedarf bleibt mit konkreten Beleglinks sichtbar. Vollständigkeitsprüfung wird nicht behauptet.",
+      "KI, SMTP, CORS, Wiederherstellung und zusätzliche Prüfstände auf Abruf. Kosten- und Übermittlungsfreigaben stehen weiterhin vor dem tatsächlichen Aufruf.",
+      "Öffentliche Formulare ohne Slogan-Spalten; Hilfeschritte gekürzt, Zusatzinformationen auf Abruf.",
+      "Dokumentation auf dem Bildschirm zunächst geschlossen; vollständiger Inhalt bleibt für die Druckausgabe gemountet."
+    ],
+    "reviewedViews": 32,
+    "responsiveChecks": {
+      "workspaces": [
+        {
+          "route": "/dashboard",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard?tab=invoices",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard?tab=quotes",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard?tab=incomes",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard?tab=expenses",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard?tab=eur",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard?tab=gwg",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard/invoices/new",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard/quotes/new",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/steuer-simulation",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/customers/import",
+          "clipped": [],
+          "scroll": 320,
+          "width": 320
+        },
+        {
+          "route": "/cashbook",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/customers",
+          "clipped": [],
+          "scroll": 320,
+          "width": 320
+        },
+        {
+          "route": "/customers/articles",
+          "clipped": [],
+          "scroll": 320,
+          "width": 320
+        },
+        {
+          "route": "/dashboard/today",
+          "clipped": [],
+          "scroll": 320,
+          "width": 320
+        },
+        {
+          "route": "/dashboard/reminders",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/history",
+          "clipped": [],
+          "scroll": 320,
+          "width": 320
+        },
+        {
+          "route": "/purchases",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/service-billing",
+          "clipped": [],
+          "scroll": 320,
+          "width": 320
+        },
+        {
+          "route": "/handoff",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/expenses/1",
+          "clipped": [],
+          "scroll": 305,
+          "width": 320
+        },
+        {
+          "route": "/dashboard",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard?tab=invoices",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard?tab=quotes",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard?tab=incomes",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard?tab=expenses",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard?tab=eur",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard?tab=gwg",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard/invoices/new",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard/quotes/new",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/steuer-simulation",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/customers/import",
+          "clipped": [],
+          "scroll": 375,
+          "width": 375
+        },
+        {
+          "route": "/cashbook",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/customers",
+          "clipped": [],
+          "scroll": 375,
+          "width": 375
+        },
+        {
+          "route": "/customers/articles",
+          "clipped": [],
+          "scroll": 375,
+          "width": 375
+        },
+        {
+          "route": "/dashboard/today",
+          "clipped": [],
+          "scroll": 375,
+          "width": 375
+        },
+        {
+          "route": "/dashboard/reminders",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/history",
+          "clipped": [],
+          "scroll": 375,
+          "width": 375
+        },
+        {
+          "route": "/purchases",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/service-billing",
+          "clipped": [],
+          "scroll": 375,
+          "width": 375
+        },
+        {
+          "route": "/handoff",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/expenses/1",
+          "clipped": [],
+          "scroll": 360,
+          "width": 375
+        },
+        {
+          "route": "/dashboard",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard?tab=invoices",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard?tab=quotes",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard?tab=incomes",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard?tab=expenses",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard?tab=eur",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard?tab=gwg",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard/invoices/new",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard/quotes/new",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/steuer-simulation",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/customers/import",
+          "clipped": [],
+          "scroll": 414,
+          "width": 414
+        },
+        {
+          "route": "/cashbook",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/customers",
+          "clipped": [],
+          "scroll": 414,
+          "width": 414
+        },
+        {
+          "route": "/customers/articles",
+          "clipped": [],
+          "scroll": 414,
+          "width": 414
+        },
+        {
+          "route": "/dashboard/today",
+          "clipped": [],
+          "scroll": 414,
+          "width": 414
+        },
+        {
+          "route": "/dashboard/reminders",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/history",
+          "clipped": [],
+          "scroll": 414,
+          "width": 414
+        },
+        {
+          "route": "/purchases",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/service-billing",
+          "clipped": [],
+          "scroll": 414,
+          "width": 414
+        },
+        {
+          "route": "/handoff",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/expenses/1",
+          "clipped": [],
+          "scroll": 399,
+          "width": 414
+        },
+        {
+          "route": "/dashboard",
+          "clipped": [],
+          "scroll": 753,
+          "width": 768
+        },
+        {
+          "route": "/dashboard?tab=invoices",
+          "clipped": [],
+          "scroll": 753,
+          "width": 768
+        },
+        {
+          "route": "/dashboard?tab=quotes",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/dashboard?tab=incomes",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/dashboard?tab=expenses",
+          "clipped": [],
+          "scroll": 753,
+          "width": 768
+        },
+        {
+          "route": "/dashboard?tab=eur",
+          "clipped": [],
+          "scroll": 753,
+          "width": 768
+        },
+        {
+          "route": "/dashboard?tab=gwg",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/dashboard/invoices/new",
+          "clipped": [],
+          "scroll": 753,
+          "width": 768
+        },
+        {
+          "route": "/dashboard/quotes/new",
+          "clipped": [],
+          "scroll": 753,
+          "width": 768
+        },
+        {
+          "route": "/steuer-simulation",
+          "clipped": [],
+          "scroll": 753,
+          "width": 768
+        },
+        {
+          "route": "/customers/import",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/cashbook",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/customers",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/customers/articles",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/dashboard/today",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/dashboard/reminders",
+          "clipped": [],
+          "scroll": 753,
+          "width": 768
+        },
+        {
+          "route": "/history",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/purchases",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/service-billing",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/handoff",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        },
+        {
+          "route": "/expenses/1",
+          "clipped": [],
+          "scroll": 768,
+          "width": 768
+        }
+      ],
+      "settingsEvidence": "evidence/ui-copy-review-2026-10-21/responsive-settings.json",
+      "publicEvidence": "evidence/ui-copy-review-2026-10-21/responsive-public.json"
+    },
+    "additionalBugsFixed": [
+      "Mobile Kopfzeile: fehlendes min-width:0 am Titelcontainer führte zu abgeschnittenen Nachbaraktionen. Titel kann nun innerhalb seiner verfügbaren Breite gekürzt werden.",
+      "API-/Dokumentationsraster: implizite Mindestbreiten verbreiterten bei 320 px Teile auf rund 700 px. Explizite minmax(0,1fr)-Spalten und min-width:0 beheben die abgeschnittenen Inhalte.",
+      "SMTP: Nach Speichern/Neuladen remountete die eingeklappte Konfiguration und schloss den aktiven Arbeitsbereich. Ein eigener Offen-Zustand bleibt über den Status-Reload erhalten; E2E prüft die weiterhin sichtbaren Felder nach beiden Speichervorgängen.",
+      "KI-Einstellungen: Gespeicherten Stand laden behält die geöffneten Konfigurations- und Testbereiche bei. Die Kostenfreigabe wird weiterhin zurückgesetzt, der Schlüssel bleibt verborgen; eigener E2E-Schritt prüft dies ohne zusätzliche Anbieter-Anfrage.",
+      "KI-Belegprüfung: Nach fehlgeschlagener Analyse schloss das Löschen des Fehlers beim Status-Reload die Details. Separater Offen-Zustand erhält den Arbeitsbereich; neue Ergebnisse/Fehler öffnen ihn. E2E prüft die sichtbare, zurückgesetzte Kostenfreigabe vor dem bewussten zweiten Versuch."
+    ],
+    "removedObsoleteStyles": {
+      "symbol": "taxRouteLinks",
+      "file": "components/public-accounting/accounting-workspaces.module.css",
+      "proof": "Nach Entfernung der redundanten Sprungnavigation ergab die repositoryweite Referenzsuche keine verbleibende Verwendung. Genau vier zugehörige CSS-Regeln entfernt; keine Laufzeitfunktion oder Tests entfernt."
+    },
+    "coverage": {
+      "testsRemoved": 0,
+      "unitIntegration": {
+        "passed": 1942,
+        "skipped": 1,
+        "filesPassed": 157,
+        "filesSkipped": 1
+      },
+      "newRegression": "e2e/documentation-print.spec.ts",
+      "copyAssertionChanges": "Interne Marker wie UNCHANGED/UNREVIEWED nicht mehr als UI-Pflichttext geprüft; die finanzielle Freigabegrenze bleibt über klare Aussagen und bestehende Parser-/API-Verträge geprüft. Native Detailbereiche werden im Browser vor Interaktion gezielt geöffnet.",
+      "handOffRetention": "Hinweis, dass Empfangsnotizen weder im ZIP noch Backup liegen, kurz erhalten statt die Prüfung zu entfernen.",
+      "functionalChromium": {
+        "passed": 85,
+        "failed": 0
+      }
+    },
+    "selfCritique": {
+      "philosophy": 5,
+      "hierarchy": 5,
+      "execution": 4,
+      "specificity": 5,
+      "restraint": 5,
+      "variety": 4,
+      "system": "Bestehendes design.md bleibt maßgeblich; keine Themenrotation."
+    },
+    "actualModifiedFiles": [
+      ".hallmark/log.json",
+      "app/cashbook/page.tsx",
+      "app/customers/articles/page.tsx",
+      "app/customers/import/page.tsx",
+      "app/customers/page.tsx",
+      "app/dashboard/reminders/page.tsx",
+      "app/help/access/page.tsx",
+      "app/help/page.tsx",
+      "app/login/page.tsx",
+      "app/page.tsx",
+      "app/register/page.tsx",
+      "app/settings/api-keys/docs/page.tsx",
+      "app/settings/api-keys/page.tsx",
+      "app/settings/audit-logs/page.tsx",
+      "app/settings/documentation/page.tsx",
+      "app/settings/page.tsx",
+      "app/steuer-simulation/page.tsx",
+      "app/users/page.tsx",
+      "components/app-shell.tsx",
+      "components/daily-actions/daily-actions-workspace.tsx",
+      "components/dashboard/create-invoice-modal.tsx",
+      "components/dashboard/csv-import-wizard.tsx",
+      "components/dashboard/dashboard-activity-feed.tsx",
+      "components/dashboard/dashboard-client.tsx",
+      "components/dashboard/dashboard-content.tsx",
+      "components/dashboard/document-tax-profile-fields.tsx",
+      "components/dashboard/editors/quote-editor.tsx",
+      "components/dashboard/revenue-indicators.tsx",
+      "components/dashboard/sales-workspace.module.css",
+      "components/dashboard/tabs/eur-tab.tsx",
+      "components/dashboard/tabs/expenses-tab.tsx",
+      "components/dashboard/tabs/gwg-tab.tsx",
+      "components/dashboard/tabs/incomes-tab.tsx",
+      "components/dashboard/tabs/invoices-tab.tsx",
+      "components/dashboard/tabs/quotes-tab.tsx",
+      "components/handoff/handoff-acknowledgement.tsx",
+      "components/handoff/handoff-review.tsx",
+      "components/handoff/handoff-tasks.tsx",
+      "components/handoff/handoff-workspace.tsx",
+      "components/handoff/handoff.module.css",
+      "components/history/invoice-history-workspace.tsx",
+      "components/onboarding/fiscal-profile-settings.tsx",
+      "components/onboarding/getting-started.tsx",
+      "components/onboarding/onboarding.module.css",
+      "components/page-header.tsx",
+      "components/public-accounting/accounting-workspaces.module.css",
+      "components/public-accounting/pilot-access.tsx",
+      "components/public-accounting/pilot-guides.ts",
+      "components/public-accounting/pilot-public.module.css",
+      "components/public-accounting/public-accounting.module.css",
+      "components/public/offer-summary.tsx",
+      "components/purchases/expense-detail.tsx",
+      "components/purchases/incoming-ai-extraction.tsx",
+      "components/purchases/incoming-document-review.tsx",
+      "components/purchases/incoming-documents-workspace.tsx",
+      "components/purchases/incoming-photo-preview.tsx",
+      "components/purchases/incoming-review-draft.tsx",
+      "components/purchases/incoming-upload.tsx",
+      "components/purchases/purchase-expense-approval.tsx",
+      "components/purchases/supplier-contact-panel.tsx",
+      "components/service-billing/service-billing-workspace.tsx",
+      "components/service-billing/service-plan-editor.tsx",
+      "components/settings/admin-workspace.module.css",
+      "components/settings/ai-provider-settings.tsx",
+      "components/settings/annual-business-context.tsx",
+      "components/settings/section-navigation.tsx",
+      "components/settings/smtp-settings.tsx",
+      "design.md",
+      "e2e/accountant-guide.spec.ts",
+      "e2e/ai-receipt-ui.spec.ts",
+      "e2e/annual-business-context.spec.ts",
+      "e2e/auth-dashboard-invoice.spec.ts",
+      "e2e/csv-onboarding.spec.ts",
+      "e2e/daily-actions.spec.ts",
+      "e2e/eur-2026.spec.ts",
+      "e2e/legacy-restore-identity.spec.ts",
+      "e2e/manual-photo-expense.spec.ts",
+      "e2e/partial-payments.spec.ts",
+      "e2e/payment-adjustment-boundaries.spec.ts",
+      "e2e/public-help-fragments.spec.ts",
+      "e2e/receipt-review-drafts.spec.ts",
+      "e2e/revenue-indicators.spec.ts",
+      "e2e/service-billing.spec.ts",
+      "hooks/use-page-title.ts",
+      "lib/__tests__/access-help.test.ts",
+      "lib/__tests__/accountant-handoff-ui.test.ts",
+      "lib/__tests__/document-tax-profile-ui.test.ts",
+      "lib/__tests__/expense-row-actions.test.ts",
+      "lib/__tests__/financial-input-regressions.test.ts",
+      "lib/__tests__/handoff-readiness.test.ts",
+      "lib/__tests__/incoming-document-ui.test.ts",
+      "lib/__tests__/onboarding-ui.test.ts",
+      "lib/__tests__/payment-adjustment-form.test.ts",
+      "lib/__tests__/payment-adjustments.test.ts",
+      "lib/__tests__/public-offer.test.ts",
+      "lib/__tests__/public-pilot.test.ts",
+      "lib/__tests__/purchase-expense-ui.test.ts",
+      "lib/__tests__/reminders-qa31-32.test.ts",
+      "lib/__tests__/revenue-indicators.test.ts"
+    ],
+    "evidenceAdded": [
+      "evidence/ui-copy-review-2026-10-21/invoice-density-mobile.jpg"
+    ]
+  },
+  "firstPassEvidence": [
+    "evidence/ui-copy-review-2026-10-21/login.jpg",
+    "evidence/ui-copy-review-2026-10-21/expenses-desktop.jpg",
+    "evidence/ui-copy-review-2026-10-21/expenses-mobile.jpg",
+    "evidence/ui-copy-review-2026-10-21/handoff-desktop.jpg",
+    "evidence/ui-copy-review-2026-10-21/dashboard-desktop.jpg"
+  ],
+  "upstreamIntegration": {
+    "date": "2026-10-21",
+    "previousHead": "107e06d65042859731920fc3d9d837555d0537d1",
+    "newHead": "32f77530965020eac957fc172d2d57009334b39d",
+    "remote": "origin/main",
+    "commitsIntegrated": 3,
+    "feature": "Bank-CSV read-only preview and invoice suggestions (#91)",
+    "method": "fast-forward origin/main, then apply preserved local stash",
+    "conflicts": 0,
+    "snapshotFiles": 117,
+    "missingSnapshotFiles": [],
+    "mergedFiles": [
+      "components/dashboard/tabs/invoices-tab.tsx",
+      "hooks/use-page-title.ts"
+    ],
+    "otherSnapshotFilesByteIdentical": 115,
+    "backupDirectory": "/tmp/bivaro-pre-sync-CzeRtF",
+    "gitStashRetained": true,
+    "workState": "uncommitted",
+    "verification": "passed: 1942 unit/integration tests, 85 functional browser tests, production build, lint, diff check",
+    "browserReview": {
+      "newRoute": "/bank-csv",
+      "desktop": "evidence/ui-copy-review-2026-10-21/merged-bank-csv-desktop.jpg",
+      "existingEditorPreserved": "/dashboard/invoices/new"
+    },
+    "testAdaptations": [
+      "Gekürzten Zahlungsprüfhinweis gegen den tatsächlich sichtbaren Hinweis auf den Zahlungsnachweis geprüft.",
+      "Manuelle Ausgabenerfassung öffnet den sichtbaren Hauptbutton; der entfernte doppelte Einstieg wird nicht mehr angeklickt. PDF-/Bildvorschau, Änderbarkeit und unveränderte Download-Bytes bleiben vollständig geprüft."
+    ]
+  }
+}

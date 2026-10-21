@@ -26,11 +26,11 @@ test('saved mobile photo needs explicit source/payment confirmation and safely r
     await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('img', { name: /Unverändertes Foto-Original/ })).toBeVisible();
-    await dialog.getByLabel('Lieferant laut eigener Prüfung', { exact: true }).fill('Foto Lieferant');
-    await dialog.getByLabel('Rechnungsnummer im Entwurf', { exact: true }).fill('PHOTO-PAID-17');
-    await dialog.getByLabel('Rechnungsdatum im Entwurf', { exact: true }).fill('2025-12-31');
-    await dialog.getByLabel('Tatsächliches Zahlungsdatum im Entwurf', { exact: true }).fill('2026-01-01');
-    await dialog.getByLabel('Bruttobetrag im Entwurf (EUR)', { exact: true }).fill('0,29');
+    await dialog.getByLabel('Lieferant', { exact: true }).fill('Foto Lieferant');
+    await dialog.getByLabel('Rechnungsnummer', { exact: true }).fill('PHOTO-PAID-17');
+    await dialog.getByLabel('Rechnungsdatum', { exact: true }).fill('2025-12-31');
+    await dialog.getByLabel('Zahlungsdatum', { exact: true }).fill('2026-01-01');
+    await dialog.getByLabel('Bruttobetrag (EUR)', { exact: true }).fill('0,29');
     await expect(dialog.getByRole('button', { name: 'Als Ausgabe erfassen', exact: true })).toBeDisabled();
     expect(await prisma.expense.count({ where: { userId: user.id } })).toBe(0);
     await dialog.getByRole('button', { name: 'Prüfentwurf speichern', exact: true }).click();
@@ -42,7 +42,7 @@ test('saved mobile photo needs explicit source/payment confirmation and safely r
     await dialog.getByRole('button', { name: 'Für diesen Beleg auswählen', exact: true }).click();
     await expect(dialog.getByRole('button', { name: 'Als Ausgabe erfassen', exact: true })).toBeEnabled();
     await dialog.getByRole('button', { name: 'Als Ausgabe erfassen', exact: true }).click();
-    await expect(dialog.getByText('Manuelle Foto-Originalprüfung, keine automatische Buchung.', { exact: false })).toBeVisible();
+    await expect(dialog.getByText('Angaben aus dem gespeicherten Prüfentwurf am Foto prüfen. Änderungen dort speichern.', { exact: true })).toBeVisible();
     await expect(dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true })).toHaveValue('2026-01-01');
     await expect(dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true })).toHaveAttribute('readonly', '');
     await dialog.getByLabel('Empfänger / Käufer laut Foto-Original', { exact: true }).fill('Mein synthetischer Betrieb');
@@ -51,6 +51,7 @@ test('saved mobile photo needs explicit source/payment confirmation and safely r
     await dialog.getByLabel('Steuerlich berücksichtigen?', { exact: true }).selectOption('no');
     await dialog.getByLabel('Betrieblicher / abziehbarer Anteil in %', { exact: true }).fill('75');
     await dialog.getByRole('button', { name: 'Weiter zur Bestätigung', exact: true }).click();
+    await expect(dialog.getByText('Manuelle Foto-Originalprüfung · keine Extraktion', { exact: true })).toBeVisible();
     const final = dialog.getByRole('button', { name: 'Zahlung bestätigen und Ausgabe erfassen', exact: true });
     await expect(final).toBeDisabled();
     for (const id of ['purchase-photo-owned', 'purchase-photo-exact', 'purchase-photo-ordinary', 'purchase-reviewed', 'purchase-buyer']) await dialog.locator(`#${id}`).check();

@@ -30,6 +30,7 @@ async function isolatedAccount(page: Page) {
 
 async function previewInSettings(page: Page, backup: unknown, name: string) {
   await page.goto('/settings');
+  await page.locator('#backup-settings summary', { hasText: 'Backup wiederherstellen' }).click();
   await expect(page.getByRole('checkbox', { name: 'Bestehende Daten überschreiben', exact: true })).not.toBeChecked();
   const previewed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/backup/preview' && response.request().method() === 'POST');
   await page.locator('#restore-file').setInputFiles({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });

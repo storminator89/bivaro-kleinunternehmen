@@ -1,0 +1,142 @@
+[
+  {
+    "route": "/",
+    "targetWidth": 320,
+    "scroll": 303,
+    "width": 320,
+    "words": 70
+  },
+  {
+    "route": "/login",
+    "targetWidth": 320,
+    "scroll": 303,
+    "width": 320,
+    "words": 8
+  },
+  {
+    "route": "/register",
+    "targetWidth": 320,
+    "scroll": 303,
+    "width": 320,
+    "words": 13
+  },
+  {
+    "route": "/help",
+    "targetWidth": 320,
+    "scroll": 303,
+    "width": 320,
+    "words": 211
+  },
+  {
+    "route": "/help/access",
+    "targetWidth": 320,
+    "scroll": 303,
+    "width": 320,
+    "words": 66
+  },
+  {
+    "route": "/",
+    "targetWidth": 768,
+    "scroll": 751,
+    "width": 768,
+    "words": 76
+  },
+  {
+    "route": "/login",
+    "targetWidth": 768,
+    "scroll": 768,
+    "width": 768,
+    "words": 8
+  },
+  {
+    "route": "/register",
+    "targetWidth": 768,
+    "scroll": 751,
+    "width": 768,
+    "words": 13
+  },
+  {
+    "route": "/help",
+    "targetWidth": 768,
+    "scroll": 751,
+    "width": 768,
+    "words": 205
+  },
+  {
+    "route": "/help/access",
+    "targetWidth": 768,
+    "scroll": 751,
+    "width": 768,
+    "words": 66
+  },
+  {
+    "route": "/",
+    "targetWidth": 375,
+    "scroll": 358,
+    "width": 374,
+    "words": 76
+  },
+  {
+    "route": "/login",
+    "targetWidth": 375,
+    "scroll": 358,
+    "width": 374,
+    "words": 8
+  },
+  {
+    "route": "/register",
+    "targetWidth": 375,
+    "scroll": 358,
+    "width": 374,
+    "words": 13
+  },
+  {
+    "route": "/help",
+    "targetWidth": 375,
+    "scroll": 358,
+    "width": 374,
+    "words": 211
+  },
+  {
+    "route": "/help/access",
+    "targetWidth": 375,
+    "scroll": 358,
+    "width": 374,
+    "words": 66
+  },
+  {
+    "route": "/",
+    "targetWidth": 414,
+    "scroll": 397,
+    "width": 414,
+    "words": 76
+  },
+  {
+    "route": "/login",
+    "targetWidth": 414,
+    "scroll": 397,
+    "width": 414,
+    "words": 8
+  },
+  {
+    "route": "/register",
+    "targetWidth": 414,
+    "scroll": 397,
+    "width": 414,
+    "words": 13
+  },
+  {
+    "route": "/help",
+    "targetWidth": 414,
+    "scroll": 397,
+    "width": 414,
+    "words": 211
+  },
+  {
+    "route": "/help/access",
+    "targetWidth": 414,
+    "scroll": 397,
+    "width": 414,
+    "words": 66
+  }
+]

@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import styles from "@/components/settings/admin-workspace.module.css";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -227,15 +227,15 @@ export default function AuditLogsPage() {
       <div className={styles.page}>
         {/* Back Link */}
         <Link
-          href="/settings"
+          href="/settings" aria-label="Zurück zu Einstellungen"
           className={styles.back}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Zurück zu Einstellungen
+          Einstellungen
         </Link>
 
         {/* Header */}
-        <PageHeader title="Audit-Log" description="Protokoll der erfassten Änderungen und Aktivitäten. Die Abdeckung ist begrenzt; einige Ereignisse werden bestmöglich protokolliert." section="System" />
+        <PageHeader title="Audit-Log" />
 
         {/* Filters */}
         <Card className={`${styles.surface} ${styles.filterSurface}`}>
@@ -250,7 +250,7 @@ export default function AuditLogsPage() {
               <div>
                 <Label htmlFor="entityType">Bereich</Label>
                 <Select value={entityType} onValueChange={setEntityType}>
-                  <SelectTrigger id="entityType">
+                  <SelectTrigger id="entityType" className="w-full">
                     <SelectValue placeholder="Alle Bereiche" />
                   </SelectTrigger>
                   <SelectContent>
@@ -265,7 +265,7 @@ export default function AuditLogsPage() {
               <div>
                 <Label htmlFor="action">Aktion</Label>
                 <Select value={action} onValueChange={setAction}>
-                  <SelectTrigger id="action">
+                  <SelectTrigger id="action" className="w-full">
                     <SelectValue placeholder="Alle Aktionen" />
                   </SelectTrigger>
                   <SelectContent>
@@ -313,10 +313,7 @@ export default function AuditLogsPage() {
         {/* Logs Table */}
         <Card className={styles.surface}>
           <CardHeader>
-            <CardTitle>Aktivitäten</CardTitle>
-            <CardDescription>
-              {pagination ? `${pagination.total} Einträge gefunden` : 'Laden...'}
-            </CardDescription>
+            <CardTitle>Aktivitäten <span className="ml-2 text-sm font-normal text-muted-foreground">Auszug · {pagination ? pagination.total : '—'}</span></CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -328,9 +325,7 @@ export default function AuditLogsPage() {
               <div className="text-center py-12">
                 <History className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
                 <h3 className="text-lg font-medium mb-2">Keine Einträge gefunden</h3>
-                <p className="text-sm text-muted-foreground">
-                  Es wurden keine Audit-Log-Einträge für die gewählten Filter gefunden.
-                </p>
+
               </div>
             ) : (
               <>

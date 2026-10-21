@@ -1,0 +1,146 @@
+[
+  {
+    "clippedControls": 0,
+    "route": "/settings",
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/api-keys",
+    "scroll": 375,
+    "width": 375
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/api-keys/docs",
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/audit-logs",
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/documentation",
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "clippedControls": 0,
+    "route": "/users",
+    "scroll": 375,
+    "width": 375
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings",
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/api-keys",
+    "scroll": 414,
+    "width": 414
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/api-keys/docs",
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/audit-logs",
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/documentation",
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "clippedControls": 0,
+    "route": "/users",
+    "scroll": 414,
+    "width": 414
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings",
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/api-keys",
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/api-keys/docs",
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/audit-logs",
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/documentation",
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "clippedControls": 0,
+    "route": "/users",
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings",
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/api-keys",
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/api-keys/docs",
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/audit-logs",
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "clippedControls": 0,
+    "route": "/settings/documentation",
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "clippedControls": 0,
+    "route": "/users",
+    "scroll": 320,
+    "width": 320
+  }
+]

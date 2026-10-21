@@ -1,0 +1,506 @@
+[
+  {
+    "route": "/dashboard",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard?tab=invoices",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard?tab=quotes",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard?tab=incomes",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard?tab=expenses",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard?tab=eur",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard?tab=gwg",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard/invoices/new",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard/quotes/new",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/steuer-simulation",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/customers/import",
+    "clipped": [],
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/cashbook",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/customers",
+    "clipped": [],
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/customers/articles",
+    "clipped": [],
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/dashboard/today",
+    "clipped": [],
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/dashboard/reminders",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/history",
+    "clipped": [],
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/purchases",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/service-billing",
+    "clipped": [],
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/handoff",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/expenses/1",
+    "clipped": [],
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "route": "/dashboard",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard?tab=invoices",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard?tab=quotes",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard?tab=incomes",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard?tab=expenses",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard?tab=eur",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard?tab=gwg",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard/invoices/new",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard/quotes/new",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/steuer-simulation",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/customers/import",
+    "clipped": [],
+    "scroll": 375,
+    "width": 375
+  },
+  {
+    "route": "/cashbook",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/customers",
+    "clipped": [],
+    "scroll": 375,
+    "width": 375
+  },
+  {
+    "route": "/customers/articles",
+    "clipped": [],
+    "scroll": 375,
+    "width": 375
+  },
+  {
+    "route": "/dashboard/today",
+    "clipped": [],
+    "scroll": 375,
+    "width": 375
+  },
+  {
+    "route": "/dashboard/reminders",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/history",
+    "clipped": [],
+    "scroll": 375,
+    "width": 375
+  },
+  {
+    "route": "/purchases",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/service-billing",
+    "clipped": [],
+    "scroll": 375,
+    "width": 375
+  },
+  {
+    "route": "/handoff",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/expenses/1",
+    "clipped": [],
+    "scroll": 360,
+    "width": 375
+  },
+  {
+    "route": "/dashboard",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard?tab=invoices",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard?tab=quotes",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard?tab=incomes",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard?tab=expenses",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard?tab=eur",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard?tab=gwg",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard/invoices/new",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard/quotes/new",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/steuer-simulation",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/customers/import",
+    "clipped": [],
+    "scroll": 414,
+    "width": 414
+  },
+  {
+    "route": "/cashbook",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/customers",
+    "clipped": [],
+    "scroll": 414,
+    "width": 414
+  },
+  {
+    "route": "/customers/articles",
+    "clipped": [],
+    "scroll": 414,
+    "width": 414
+  },
+  {
+    "route": "/dashboard/today",
+    "clipped": [],
+    "scroll": 414,
+    "width": 414
+  },
+  {
+    "route": "/dashboard/reminders",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/history",
+    "clipped": [],
+    "scroll": 414,
+    "width": 414
+  },
+  {
+    "route": "/purchases",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/service-billing",
+    "clipped": [],
+    "scroll": 414,
+    "width": 414
+  },
+  {
+    "route": "/handoff",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/expenses/1",
+    "clipped": [],
+    "scroll": 399,
+    "width": 414
+  },
+  {
+    "route": "/dashboard",
+    "clipped": [],
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "route": "/dashboard?tab=invoices",
+    "clipped": [],
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "route": "/dashboard?tab=quotes",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/dashboard?tab=incomes",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/dashboard?tab=expenses",
+    "clipped": [],
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "route": "/dashboard?tab=eur",
+    "clipped": [],
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "route": "/dashboard?tab=gwg",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/dashboard/invoices/new",
+    "clipped": [],
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "route": "/dashboard/quotes/new",
+    "clipped": [],
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "route": "/steuer-simulation",
+    "clipped": [],
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "route": "/customers/import",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/cashbook",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/customers",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/customers/articles",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/dashboard/today",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/dashboard/reminders",
+    "clipped": [],
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "route": "/history",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/purchases",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/service-billing",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/handoff",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/expenses/1",
+    "clipped": [],
+    "scroll": 768,
+    "width": 768
+  }
+]

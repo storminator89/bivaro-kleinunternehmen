@@ -176,13 +176,13 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
 
   const loginQuery = (() => { try { return handoffPeriodQuery(selection).toString(); } catch { return ''; } })();
   return <div className={styles.workspace}>
-    <PageHeader title="Unterlagen übergeben" description="Zeitraum wählen, Umfang und Warnungen prüfen, dann ein ZIP-Paket für Ihre Steuerberatung herunterladen." actions={<Button asChild variant="outline"><Link href="/settings#handoff-settings"><ArrowLeft aria-hidden="true" />Einstellungen</Link></Button>} />
+    <PageHeader title="Unterlagen übergeben" description="Bivaro-ZIP · Kein DATEV-/ELSTER-Export oder Backup." actions={<Button asChild variant="outline"><Link href="/settings#handoff-settings"><ArrowLeft aria-hidden="true" />Einstellungen</Link></Button>} />
     <ol className={styles.steps} aria-label="Schritte zur Übergabe"><li aria-current={!preview ? 'step' : undefined}><span>1</span>Zeitraum wählen</li><li aria-current={preview ? 'step' : undefined}><span>2</span>Paket prüfen und herunterladen</li></ol>
     <div className={styles.layout}>
       <section className={styles.sheet} aria-labelledby={preview ? 'handoff-review-heading' : 'handoff-period-heading'}>
         {!preview ? <>
-          <h2 id="handoff-period-heading" ref={selectionHeading} tabIndex={-1}>Welchen Zeitraum möchten Sie übergeben?</h2>
-          <p className={styles.muted}>Ein Kalenderjahr oder ein eigener Zeitraum von höchstens 366 Tagen. Alle Datumsgrenzen gelten einschließlich, nach UTC-Kalendertagen.</p>
+          <h2 id="handoff-period-heading" ref={selectionHeading} tabIndex={-1}>Zeitraum</h2>
+          {selection.mode === 'range' && <p className={styles.muted}>Maximal 366 Tage, einschließlich Anfang und Ende (UTC).</p>}
           <form onSubmit={loadPreview} aria-busy={busy === 'preview'}>
             <fieldset disabled={Boolean(busy)} className={styles.periodFields}>
               <legend className="sr-only">Zeitraum festlegen</legend>
@@ -190,40 +190,40 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
                 <label><input type="radio" name="period-mode" value="year" checked={selection.mode === 'year'} onChange={() => changeSelection({ mode: 'year' })} />Kalenderjahr</label>
                 <label><input type="radio" name="period-mode" value="range" checked={selection.mode === 'range'} onChange={() => changeSelection({ mode: 'range' })} />Eigener Zeitraum</label>
               </div>
-              {selection.mode === 'year' ? <div className={styles.yearField}><Label htmlFor="handoff-year">Kalenderjahr</Label><Input id="handoff-year" name="year" type="text" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} placeholder={currentYear} required value={selection.year} onChange={event => changeSelection({ year: event.target.value })} aria-describedby="handoff-year-help" /><p id="handoff-year-help" className={styles.muted}>Vom 1. Januar bis 31. Dezember. Auch 2026 kann als Übergabepaket exportiert werden; dies ist keine EÜR-Übertragungshilfe.</p></div>
+              {selection.mode === 'year' ? <div className={styles.yearField}><Label htmlFor="handoff-year">Kalenderjahr</Label><Input id="handoff-year" name="year" type="text" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} placeholder={currentYear} required value={selection.year} onChange={event => changeSelection({ year: event.target.value })} /></div>
               : <div className={styles.dateFields}><div><Label htmlFor="handoff-from">Von einschließlich</Label><Input id="handoff-from" name="from" type="date" min="0001-01-01" max="9999-12-31" required value={selection.from} onChange={event => changeSelection({ from: event.target.value })} /></div><div><Label htmlFor="handoff-to">Bis einschließlich</Label><Input id="handoff-to" name="to" type="date" min={selection.from || '0001-01-01'} max="9999-12-31" required value={selection.to} onChange={event => changeSelection({ to: event.target.value })} /></div></div>}
             </fieldset>
             <div className={styles.actions}><Button type="submit" disabled={Boolean(busy)}>{busy === 'preview' ? <><Loader2 aria-hidden="true" className="animate-spin" />Vorschau wird erstellt</> : <><RotateCcw aria-hidden="true" />Vorschau laden</>}</Button>{busy && <Button type="button" variant="outline" onClick={cancel}>Abbrechen</Button>}</div>
           </form>
-          <p className={styles.muted}>Die Vorschau prüft auch vorhandene Originaldateien. Sie lädt noch kein ZIP herunter und verändert keine Buchungen.</p>
+
         </> : <>
           <h2 id="handoff-review-heading" ref={reviewHeading} tabIndex={-1}>Paket prüfen und herunterladen</h2>
           {readiness && <HandoffTasks preview={preview} readiness={readiness} />}
           <HandoffReview preview={preview} />
           <div className={styles.approval}>
-            <label><input type="checkbox" checked={acknowledged} disabled={Boolean(busy)} onChange={event => setAcknowledged(event.target.checked)} /><span>Ich habe den begrenzten Umfang und die angezeigten Warnungen geprüft. Das Paket ist keine Bestätigung fachlicher Vollständigkeit.</span></label>
-            <p className={styles.muted}>Der Download prüft die Daten und Originale erneut. Bei Änderungen müssen Sie eine neue Vorschau bestätigen.</p>
+            <label><input type="checkbox" checked={acknowledged} disabled={Boolean(busy)} onChange={event => setAcknowledged(event.target.checked)} /><span>Ich habe Umfang und Warnungen geprüft. Fachliche Vollständigkeit ist nicht bestätigt.</span></label>
+
           </div>
           <div className={styles.actions}><Button type="button" disabled={!acknowledged || Boolean(busy)} onClick={download}>{busy === 'download' ? <><Loader2 aria-hidden="true" className="animate-spin" />ZIP wird erstellt</> : <><Download aria-hidden="true" />ZIP herunterladen</>}</Button>{busy ? <Button type="button" variant="outline" onClick={cancel}>Abbrechen</Button> : <Button type="button" variant="outline" onClick={editPeriod}><ArrowLeft aria-hidden="true" />Zeitraum ändern</Button>}</div>
-          <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => loadPreview()}><RotateCcw aria-hidden="true" />Prüfaufgaben und Vorschau aktualisieren</Button>
+          <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => loadPreview()}><RotateCcw aria-hidden="true" />Vorschau aktualisieren</Button>
           <HandoffAcknowledgement key={preview.manifest.sourceFingerprint} preview={preview} downloadStarted={downloadStarted} />
         </>}
         {error && <div role="alert" tabIndex={-1} ref={errorHeading} className={styles.error}><AlertTriangle aria-hidden="true" /><div><strong>{preview ? 'Download nicht gestartet' : 'Vorschau nicht verfügbar'}</strong><p>{error.message}</p>{error.login && <Link href={`/login?callbackUrl=${encodeURIComponent(`/handoff${loginQuery ? `?${loginQuery}` : ''}`)}`}>Erneut anmelden</Link>}{!error.login && <p>Ihre Zeitraum-Auswahl bleibt erhalten. {!preview ? 'Laden Sie die Vorschau erneut.' : 'Sie können den Download erneut versuchen.'}</p>}</div></div>}
         <p role="status" aria-live="polite" className={styles.status}>{busy ? (busy === 'preview' ? 'Die Vorschau und Originaldateien werden geprüft.' : 'Das bestätigte ZIP-Paket wird erstellt. Bitte warten oder abbrechen.') : notice}</p>
       </section>
-      <aside className={styles.scope} aria-labelledby="handoff-scope-title">
-        <h2 id="handoff-scope-title">Was Sie übergeben</h2>
+      <details className={styles.scope}>
+        <summary id="handoff-scope-title">Paketinhalt und Grenzen</summary>
         <p>Ein begrenztes Arbeitspaket im Bivaro-Format 2, kein Direktimport in eine Kanzleisoftware.</p>
         <ul><li>Einnahmen, Ausgaben, Rechnungen und Gutschriften sowie Kassenbewegungen als CSV und JSON.</li><li>Zugehörige Kunden und Kassenbücher, vorhandene unveränderte Originaldateien.</li><li>Eine Paketbeschreibung sowie manifest.json mit Zählungen, Warnungen und Datei-Prüfsummen.</li></ul>
         <details><summary>Wie wird der Zeitraum ausgewählt?</summary><p>Ausgaben und Kassenbewegungen folgen ihrem gespeicherten Datum. Einnahmen folgen dem gespeicherten Datum oder dem Zahlungsdatum der eigenen verknüpften Rechnung. Rechnungen folgen Rechnungs-/ersatzweise Uploaddatum, Zahlung oder verknüpfter Einnahme. Ursprungsrechnungen von Gutschriften können als Kontext außerhalb des Zeitraums enthalten sein. Die genauen Regeln stehen in README.txt.</p></details>
-        <h3>Bewusste Grenzen</h3>
+        <details><summary>Grenzen und ausgeschlossene Daten</summary>
         <p>Kein DATEV-Format oder zugesicherter DATEV-Import, keine ELSTER-Einreichung, kein vollständiger GoBD-Prüfexport und kein wiederherstellbares Backup.</p>
         <p>Nicht enthalten: Angebote, ungebuchte Eingangsbelege, wiederkehrende Vorlagen und nicht betroffene Stammdaten. Original-Zahlungsnachweise stehen in payments.csv, einschließlich historischer Datumsunsicherheit; Korrekturen und tatsächliche Erstattungen in adjustments.csv. Dies sind operative Nachweise, keine freigegebene Steuer-/EÜR-Zuordnung. Einnahme und Zahlungsnachweis bilden denselben Eingang ab und dürfen nicht addiert werden.</p>
         <p>Passwörter, API-Schlüssel, SMTP-/Hosteinstellungen und Sicherheitslogs werden nicht exportiert.</p>
-        <h3>Sie entscheiden über die Übergabe</h3>
-        <p>Das ZIP wird nur auf Ihr Gerät heruntergeladen. Es wird nichts automatisch an eine Kanzlei oder einen anderen Dienst gesendet. Nutzen Sie für vertrauliche Geschäfts- und Personendaten einen abgestimmten sicheren Übergabekanal.</p>
+        </details><h3>Sichere Übergabe</h3>
+        <p>ZIP selbst über einen abgestimmten sicheren Kanal übergeben. Kein automatischer Versand.</p>
         <Link href="/help#export">Export und Grenzen nachlesen</Link>
-      </aside>
+      </details>
     </div>
   </div>;
 }

@@ -133,7 +133,7 @@ export function InvoicesTab({
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-64">
-                              {invoice.serviceDraftEditable && <><DropdownMenuItem asChild><Link href={`/dashboard/invoices/new?draftId=${invoice.id}`}>Entwurf bearbeiten</Link></DropdownMenuItem><p className="px-2 py-1.5 text-xs text-muted-foreground">Serviceentwurf ohne Rechnungsdatei. Zuerst im Editor prüfen; noch kein Versand und keine Zahlung möglich.</p><DropdownMenuSeparator /></>}
+                              {invoice.serviceDraftEditable && <><DropdownMenuItem asChild><Link href={`/dashboard/invoices/new?draftId=${invoice.id}`}>Entwurf bearbeiten</Link></DropdownMenuItem><p className="px-2 py-1.5 text-xs text-muted-foreground">Entwurf zuerst prüfen und Rechnungsdatei erstellen.</p><DropdownMenuSeparator /></>}
                               <DropdownMenuItem
                                 disabled={invoice.hasPdfFile === false}
                                 onSelect={() => onViewReceipt(`/api/invoices/download?id=${invoice.id}`)}
@@ -204,7 +204,7 @@ export function InvoicesTab({
   return (
     <div className={`invoice-workspace space-y-5 ${styles.records}`}>
       <section className="invoice-summary" aria-label="Rechnungsübersicht">
-        <div className="invoice-summary-intro"><span className="summary-symbol"><DashboardIcon name="nav-invoices" size={52} /></span><div><p className="text-sm font-medium">Ihr Rechnungsbestand</p><p className="mt-1 text-xs text-muted-foreground">Alle Treffer · Zahlungsstatus der aktuellen Seite</p></div></div>
+        <div className="invoice-summary-intro"><span className="summary-symbol"><DashboardIcon name="nav-invoices" size={52} /></span><div><p className="text-sm font-medium">Ihr Rechnungsbestand</p></div></div>
         <dl className="invoice-summary-values">
           <div><dt>Rechnungen im Ergebnis</dt><dd>{isLoading || isError ? '—' : total}</dd></div>
           <div><dt><CheckCheck aria-hidden="true" />Bezahlt auf dieser Seite</dt><dd className="text-positive">{isLoading || isError ? '—' : paidCount}</dd></div>
@@ -212,7 +212,7 @@ export function InvoicesTab({
         </dl>
       </section>
       <section aria-label="Wiederkehrende Serviceleistungen" className="flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-4 py-4 sm:px-5">
-        <div className="min-w-0"><h2 className="text-sm font-semibold">Regelmäßige Betreuung oder Wartung?</h2><p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">Servicepläne merken den nächsten Zeitraum vor. Du prüfst und erzeugst bewusst genau einen Rechnungsentwurf — ohne automatischen Versand.</p></div>
+        <div className="min-w-0"><h2 className="text-sm font-semibold">Wiederkehrende Leistungen</h2></div>
         <Button asChild variant="outline"><Link href="/service-billing">Servicepläne öffnen</Link></Button>
       </section>
       <section aria-label="Bankumsätze prüfen" className="flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-4 py-4 sm:px-5">
@@ -232,7 +232,7 @@ export function InvoicesTab({
           <div className="min-w-0 space-y-2">
             <Label htmlFor="invoiceFile">Rechnungsdatei auswählen</Label>
             <Input id="invoiceFile" type="file" accept=".pdf,.xml,application/pdf,application/xml,text/xml" onChange={onFileChange} disabled={isUploading} className="h-auto min-h-11 cursor-pointer py-2 file:mr-3 file:rounded file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-foreground" aria-describedby="invoice-upload-help" />
-            <p id="invoice-upload-help" className="text-xs leading-5 text-muted-foreground">Die Rechnungsdaten werden automatisch aus der Datei übernommen.</p>
+            <span id="invoice-upload-help" className="sr-only">Rechnungsdaten aus Datei übernehmen.</span>
           </div>
           <Button onClick={onFileUpload} disabled={!selectedFile || isUploading} className="md:mb-7" aria-busy={isUploading}>
             {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Upload className="mr-2 h-4 w-4" aria-hidden="true" />}
@@ -333,7 +333,7 @@ export function InvoicesTab({
                 </div>
               </article>
             )) : (
-              <p className="p-6 text-center text-sm text-muted-foreground">{filters.searchTerm || filters.paidStatus !== 'all' || filters.dateRange !== 'all' ? 'Keine passenden Rechnungen. Ändern Sie die Suche oder setzen Sie die Filter zurück.' : 'Noch keine Rechnungen. Erstellen Sie Ihre erste Rechnung oder importieren Sie eine E-Rechnung.'}</p>
+              <p className="p-6 text-center text-sm text-muted-foreground">{filters.searchTerm || filters.paidStatus !== 'all' || filters.dateRange !== 'all' ? 'Keine passenden Rechnungen.' : 'Noch keine Rechnungen.'}</p>
             )}
           </div>
           <div className="hidden overflow-x-auto p-6 xl:block">

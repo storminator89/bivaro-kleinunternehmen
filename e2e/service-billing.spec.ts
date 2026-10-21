@@ -63,13 +63,13 @@ test('reviews one recurring period, recovers lost responses, edits the same draf
     const servicePlanEntry = page.getByRole('link', { name: 'Servicepläne öffnen', exact: true });
     await expect(servicePlanEntry).toHaveAttribute('href', '/service-billing');
     await servicePlanEntry.click(); await expect(page).toHaveURL(/\/service-billing$/);
-    await expect(page.getByRole('heading', { name: 'Wiederkehrende Leistungen einmal vorbereiten', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Noch keine Servicepläne', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Ersten Serviceplan anlegen', exact: true }).click();
     const form = page.getByRole('dialog', { name: 'Neuer Serviceplan', exact: true });
     await form.getByLabel('Planname', { exact: true }).fill('SYNTHETISCH · IT-Betreuung monatlich');
     await form.getByLabel('Kunde', { exact: true }).selectOption(String(customerId));
-    await form.getByLabel('Beginn des ersten Zeitraums', { exact: true }).fill('2000-01-31');
-    await form.getByLabel('Steuer-Modus des Plans', { exact: true }).selectOption('standard');
+    await form.getByLabel('Erster Zeitraum ab', { exact: true }).fill('2000-01-31');
+    await form.getByLabel('Umsatzsteuer', { exact: true }).selectOption('standard');
     await form.getByRole('button', { name: 'Aus Artikelkatalog übernehmen', exact: true }).click();
     await form.getByRole('button', { name: 'Synthetische IT-Betreuung als Position übernehmen', exact: true }).click();
     await expect(form.getByLabel('Leistungsbeschreibung 1', { exact: true })).toHaveValue('Synthetischer Wartungsservice');
@@ -89,7 +89,7 @@ test('reviews one recurring period, recovers lost responses, edits the same draf
     const stored = await prisma.serviceBillingPlan.findFirstOrThrow({ where: { userId } });
     const card = page.getByRole('article', { name: 'Serviceplan SYNTHETISCH · IT-Betreuung monatlich', exact: true });
     await expect(card.getByText('31.01.2000 – 28.02.2000', { exact: true })).toBeVisible();
-    await expect(card).toContainText('Keine automatische Nachholung.');
+    await expect(card).toContainText('Zeitraum liegt zurück: einzeln prüfen oder überspringen.');
     await card.getByRole('button', { name: 'Entwurf vorbereiten', exact: true }).click();
     const review = page.getByRole('dialog', { name: 'Einen Rechnungsentwurf vorbereiten?', exact: true });
     await expect(review.getByRole('button', { name: 'Nur diesen Entwurf anlegen', exact: true })).toBeDisabled();
@@ -162,7 +162,7 @@ test('reviews one recurring period, recovers lost responses, edits the same draf
     await editing.getByLabel('Netto-Preis 1 (€)', { exact: true }).fill('99.00');
     await editing.getByRole('button', { name: 'Serviceplan speichern', exact: true }).click(); await expect(editing).toBeHidden();
     expect((await prisma.invoice.findUniqueOrThrow({ where: { id: draftId } })).parsedData).toEqual(savedDraft.parsedData);
-    await card.locator('summary').click(); await viewport(page, 1440, 1000);
+    await card.locator('summary').filter({ hasText: 'Bearbeitete Zeiträume' }).click(); await viewport(page, 1440, 1000);
     const existingDraftLink = card.getByRole('link', { name: 'Entwurf bearbeiten', exact: true });
     await expect(existingDraftLink).toHaveAttribute('href', `/dashboard/invoices/new?draftId=${draftId}`);
     await card.evaluate(node => {
@@ -186,7 +186,7 @@ test('keeps error inputs, rejects stale edits and leaves future periods read-onl
     await viewport(page, 390, 844); await page.goto('/service-billing');
     const card = page.getByRole('article', { name: 'Serviceplan SYNTHETISCH · Jahreswartung', exact: true });
     await expect(card.getByRole('button', { name: 'Entwurf vorbereiten', exact: true })).toBeDisabled();
-    await expect(card).toContainText('Der Zeitraum beginnt in der Zukunft.');
+    await expect(card).toContainText('Ab Beginn prüfbar.');
     await card.getByRole('button', { name: 'Plan bearbeiten', exact: true }).click();
     const editing = page.getByRole('dialog', { name: 'Serviceplan bearbeiten', exact: true });
     await editing.getByLabel('Planname', { exact: true }).fill('Unbestätigte synthetische Änderung'); await page.keyboard.press('Escape'); await expect(editing).toBeHidden();

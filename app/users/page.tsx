@@ -15,7 +15,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -193,7 +193,7 @@ export default function UsersPage() {
 
   return (
     <div className={`${styles.workspace} space-y-6`}>
-      <PageHeader title="Benutzerverwaltung" description="Verwalten Sie die Benutzerzugriffe für die Anwendung." section="System" actions={<>
+      <PageHeader title="Benutzer" actions={<>
 <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -204,9 +204,7 @@ export default function UsersPage() {
           <DialogContent className={styles.dialog}>
             <DialogHeader>
               <DialogTitle>Neuen Benutzer hinzufügen</DialogTitle>
-              <DialogDescription>
-                Erstellen Sie einen neuen Benutzerzugang.
-              </DialogDescription>
+              <DialogDescription className="sr-only">Benutzerzugang anlegen.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddUser}>
               <div className="grid gap-4 py-4">
@@ -269,9 +267,7 @@ export default function UsersPage() {
           <DialogContent className={styles.dialog}>
             <DialogHeader>
               <DialogTitle>Benutzer bearbeiten</DialogTitle>
-              <DialogDescription>
-                Ändern Sie die Daten des Benutzers. Lassen Sie das Passwort leer, um es nicht zu ändern.
-              </DialogDescription>
+              <DialogDescription className="sr-only">Benutzerdaten ändern.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleUpdateUser}>
               <div className="grid gap-4 py-4">
@@ -308,7 +304,7 @@ export default function UsersPage() {
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-password">Neues Passwort (optional)</Label>
+                  <Label htmlFor="edit-password">Neues Passwort (leer = behalten)</Label>
                   <Input
                     id="edit-password"
                     type="password"
@@ -333,10 +329,7 @@ export default function UsersPage() {
 
       <Card className={styles.surface}>
         <CardHeader>
-          <CardTitle>Benutzer</CardTitle>
-          <CardDescription>
-            {users.length} {users.length === 1 ? "registrierter Zugang" : "registrierte Zugänge"}. Rollen und Zugriffsstatus im Überblick.
-          </CardDescription>
+          <CardTitle>Zugänge <span className="ml-2 text-sm font-normal text-muted-foreground">{users.length}</span></CardTitle>
         </CardHeader>
         <CardContent>
           <Table className={styles.recordTable}>

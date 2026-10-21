@@ -48,11 +48,11 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
     await expect(dialog.getByText('150%', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Foto verkleinern', exact: true }).click();
     await expect(dialog.getByRole('heading', { name: 'Prüfentwurf · nicht gebucht', exact: true })).toBeVisible();
-    await dialog.getByLabel('Lieferant laut eigener Prüfung', { exact: true }).fill('Foto Lieferant');
-    await dialog.getByLabel('Rechnungsnummer im Entwurf', { exact: true }).fill('PHOTO-17');
-    await dialog.getByLabel('Rechnungsdatum im Entwurf', { exact: true }).fill('2026-10-20');
-    await dialog.getByLabel('Tatsächliches Zahlungsdatum im Entwurf', { exact: true }).fill('2026-10-21');
-    await dialog.getByLabel('Bruttobetrag im Entwurf (EUR)', { exact: true }).fill('119,00');
+    await dialog.getByLabel('Lieferant', { exact: true }).fill('Foto Lieferant');
+    await dialog.getByLabel('Rechnungsnummer', { exact: true }).fill('PHOTO-17');
+    await dialog.getByLabel('Rechnungsdatum', { exact: true }).fill('2026-10-20');
+    await dialog.getByLabel('Zahlungsdatum', { exact: true }).fill('2026-10-21');
+    await dialog.getByLabel('Bruttobetrag (EUR)', { exact: true }).fill('119,00');
     await dialog.getByLabel('Prüfnotiz', { exact: true }).fill('Mobil geprüft; Entwurf, noch keine Ausgabe.');
     await expect(dialog.getByText('Ungespeicherte Änderungen', { exact: true })).toBeVisible();
     page.once('dialog', prompt => prompt.dismiss());
@@ -68,9 +68,9 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
     expect(source).toMatchObject({ reviewStatus: 'REVIEW', expenseId: null, parseErrorCode: 'PHOTO_MANUAL_REVIEW', reviewDraft: { amount: '119', paymentDate: '2026-10-21' } });
     expect(parseMoneyEUR((source.reviewDraft as { amount: string }).amount, { mode: 'strict' })).toBe(BigInt(11900));
     await page.reload();
-    await expect(dialog.getByLabel('Lieferant laut eigener Prüfung', { exact: true })).toHaveValue('Foto Lieferant');
-    await expect(dialog.getByLabel('Bruttobetrag im Entwurf (EUR)', { exact: true })).toHaveValue('119');
-    expect(parseMoneyEUR(await dialog.getByLabel('Bruttobetrag im Entwurf (EUR)', { exact: true }).inputValue(), { mode: 'strict' })).toBe(BigInt(11900));
+    await expect(dialog.getByLabel('Lieferant', { exact: true })).toHaveValue('Foto Lieferant');
+    await expect(dialog.getByLabel('Bruttobetrag (EUR)', { exact: true })).toHaveValue('119');
+    expect(parseMoneyEUR(await dialog.getByLabel('Bruttobetrag (EUR)', { exact: true }).inputValue(), { mode: 'strict' })).toBe(BigInt(11900));
     // Interrupted dismissal: the already-open confirmation must freeze draft edits/save.
     await dialog.getByRole('button', { name: 'Beleg verwerfen', exact: true }).click();
     await expect(dialog.getByLabel('Prüfnotiz', { exact: true })).toBeDisabled();

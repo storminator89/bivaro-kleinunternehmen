@@ -20,10 +20,10 @@ describe('owner-reviewed public offer schema', () => {
     for (const field of ['providerName', 'operatingModel', 'price', 'supportContact', 'documents', 'source'] as const) expect(offer[field]).toBeNull();
     const output = html();
     expect(output).toContain('Konzept – kein verbindliches Angebot');
-    expect(output).toContain('Kein bestätigter Preis');
+    expect(output).toContain('Preis und Steuerdarstellung noch offen');
     expect(output).toContain('keine Laufzeitzuordnung');
     expect(output).toContain('AGPL-3.0-only');
-    expect(output).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
+    expect(output).toContain('Kein Supportkontakt hinterlegt');
     expect(output).not.toMatch(/mailto:|tel:|<form|<button|checkout\/|FICTIONAL|FIKTIV/);
   });
 
@@ -102,7 +102,7 @@ describe('owner-reviewed public offer schema', () => {
       const offer = parsePublicOffer({ ...fixture, source });
       expect(offer.source).toBeNull();
       expect(offer.complete).toBe(false);
-      expect(html(offer)).toContain('noch nicht hinterlegt');
+      expect(html(offer)).toContain('Quellcode-Zuordnung zum laufenden Release noch offen');
     }
     expect(parsePublicOffer({ ...fixture, documents: { ...fixture.documents, privacy: 'not-a-url' } }).documents).toBeNull();
   });

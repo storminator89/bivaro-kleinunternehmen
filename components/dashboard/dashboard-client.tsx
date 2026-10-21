@@ -88,7 +88,7 @@ export function DashboardClient() {
   return (
     <div className="dashboard-layout">
       <DashboardHeader data={data} />
-      <p role="note" className="rounded-lg border p-3 text-sm text-muted-foreground">Operative Zahlungsübersicht: Eingänge abzüglich Fehlerkorrekturen und tatsächlich dokumentierter Erstattungen. Kennzahlen und Jahresgrafiken sind keine fachlich freigegebene EÜR oder Steuergröße; steuerliche Zuordnung prüfpflichtig, nicht freigegeben.</p>
+      <p role="note" className="text-xs text-muted-foreground">Zahlungsübersicht · steuerlich ungeprüft.</p>
       <div className="dashboard-analysis-grid">
       {data.yearComparison && (
         <YearComparison

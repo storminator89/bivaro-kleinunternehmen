@@ -42,14 +42,14 @@ export function HandoffAcknowledgement({ preview, downloadStarted }: { preview: 
     } catch { setError('Empfangsnotiz nicht als gespeichert bestätigt. Prüfen Sie nach erneutem Laden den Stand, bevor Sie es erneut versuchen.'); }
     finally { gate.current = false; setBusy(false); }
   }
-  return <section className={styles.manualNote} aria-labelledby="handoff-receipt-title">
-    <h3 id="handoff-receipt-title">Nach dem Download: sichere Übergabe selbst prüfen</h3>
-    <ol><li>ZIP öffnen und README.txt, manifest.json sowie enthaltene Originale prüfen.</li><li>Mit Ihrer Kanzlei einen sicheren Kanal und das nutzbare Format abstimmen. Kein Passwort teilen.</li><li>Paket selbst übergeben und Empfang außerhalb von Bivaro klären. Erst dann optional eine eigene Notiz speichern.</li></ol>
-    <p>Bivaro versendet nichts und kann weder Zustellung, Empfang noch fachliche Annahme prüfen. Ein gestarteter Download ist kein Empfangsnachweis.</p>
-    {savedAt ? <p aria-live="polite"><strong>Von Ihnen manuell als empfangen notiert:</strong> {new Date(savedAt).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC. Keine Bestätigung durch eine Kanzlei.</p> : loaded ? <p>Für diesen Paketstand ist derzeit keine gespeicherte Empfangsnotiz verfügbar. Das beweist nicht, dass nie eine Übergabe stattgefunden hat.</p> : !error && <p aria-live="polite">Empfangsnotiz wird geladen…</p>}
-    <div className={styles.approval}><label><input type="checkbox" checked={checked} disabled={!downloadStarted || busy} onChange={event => setChecked(event.target.checked)} /><span>Ich habe den Empfang selbst außerhalb von Bivaro geprüft und möchte dies als eigene Notiz zu diesem Paketstand festhalten.</span></label><Button type="button" variant="outline" disabled={!downloadStarted || !checked || busy} onClick={save}>{busy ? 'Notiz wird gespeichert' : 'Manuelle Empfangsnotiz speichern'}</Button></div>
+  return <details className={styles.manualNote} open={downloadStarted}>
+    <summary id="handoff-receipt-title">Empfang notieren (optional)</summary>
+
+    <p>Download ist kein Empfangsnachweis. Zustellung und Annahme selbst prüfen.</p>
+    {savedAt ? <p aria-live="polite"><strong>Von Ihnen manuell als empfangen notiert:</strong> {new Date(savedAt).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC. Keine Bestätigung durch eine Kanzlei.</p> : loaded ? <p>Keine Empfangsnotiz für diesen Paketstand vorhanden; Übergabe unbekannt.</p> : !error && <p aria-live="polite">Empfangsnotiz wird geladen…</p>}
+    <div className={styles.approval}><label><input type="checkbox" checked={checked} disabled={!downloadStarted || busy} onChange={event => setChecked(event.target.checked)} /><span>Ich habe den Empfang außerhalb von Bivaro geprüft und notiere ihn selbst.</span></label><Button type="button" variant="outline" disabled={!downloadStarted || !checked || busy} onClick={save}>{busy ? 'Notiz wird gespeichert' : 'Manuelle Empfangsnotiz speichern'}</Button></div>
     {!downloadStarted && <p className={styles.muted}>Nach dem ZIP-Download verfügbar. Ein Download allein speichert keine Empfangsnotiz.</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    <p className={styles.muted}>Die Notiz wird in Bivaros Protokolldaten gespeichert und hier für denselben Paketstand angezeigt. Die Aufbewahrung ist begrenzt; sie ist nicht Teil des Übergabe-ZIP oder eines garantierten Backup-/Restore-Nachweises. Bewahren Sie externe Empfangsbelege separat auf.</p>
-  </section>;
+    <p className={styles.muted}>Notiz nur im App-Protokoll, begrenzt aufbewahrt. Nicht im ZIP oder Backup. Empfangsnachweis separat sichern.</p>
+  </details>;
 }

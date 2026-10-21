@@ -42,12 +42,15 @@ test('revenue indicators preserve unknown/zero, included external share, correct
   await expect(page).toHaveURL(/\/dashboard/);
   const before = await financialSnapshot();
   const panel = page.getByRole('region', { name: `Umsatzdatenbasis ${year}`, exact: true });
+  const disclosure = page.getByText(`Umsatzindikatoren · ${year}`, { exact: true }).locator('..');
+  await expect(panel).toBeHidden();
+  await disclosure.focus(); await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
   await expect(panel).toContainText('Keine zum angezeigten Zeitraum gültige eigene Erklärung');
   await expect(panel).toContainText('Gesamtumsatz des Unternehmens');
   await expect(panel).toContainText('Unbekannt');
   await expect(panel).toContainText('1.234,56');
   await expect(page.getByText('Sofort steuerpflichtig!', { exact: true })).toHaveCount(0);
-  const disclosure = page.getByText(`Umsatzindikatoren · ${year}`, { exact: true }).locator('..');
   await disclosure.focus(); await page.keyboard.press('Enter');
   await expect(panel).toBeHidden();
   await page.keyboard.press('Enter'); await expect(panel).toBeVisible();
@@ -64,6 +67,7 @@ test('revenue indicators preserve unknown/zero, included external share, correct
   await section.getByRole('button', { name: 'Kontextrevision speichern', exact: true }).click();
   await expect(section.getByRole('status')).toContainText('Revision 1 gespeichert');
   await page.goto('/dashboard');
+  await disclosure.click();
   await expect(panel).toContainText('Teilweise selbst erklärt');
   await expect(panel).toContainText('Davon außerhalb Bivaro: 0,00 €');
   await expect(panel).toContainText('Revision 1');
@@ -78,6 +82,7 @@ test('revenue indicators preserve unknown/zero, included external share, correct
   await expect(section.getByRole('status')).toContainText('Revision 2 gespeichert');
   // Back is read-only; reload establishes that the latest saved revision wins.
   await page.goBack(); await page.reload();
+  await disclosure.click();
   await expect(panel).toContainText('Revision 2');
   await expect(panel).toContainText('Als vollständig selbst erklärt');
   await expect(panel).toContainText('24.000,00');
@@ -124,8 +129,9 @@ test('revenue indicators preserve unknown/zero, included external share, correct
     if (width === 390 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`revenue-indicators-amounts-${width}.png`), fullPage: false });
   }
   await page.goto('/steuer-simulation');
+  await page.getByText('Datenbasis und Grenzen', { exact: true }).click();
   await expect(page.getByText('Nur In-App-Buchungen;', { exact: false })).toBeVisible();
-  await expect(page.getByText('Keine Aussage zum Kleinunternehmerstatus.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Kleinunternehmerstatus ungeprüft.', { exact: false })).toBeVisible();
   expect(await financialSnapshot()).toEqual(before);
   expect(await prisma.annualBusinessContextRevision.count({ where: { userId: user.id } })).toBe(2);
 });

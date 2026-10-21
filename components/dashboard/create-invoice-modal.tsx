@@ -1571,35 +1571,17 @@ export function CreateInvoiceModal({
   const editorContent = (
     <>
         <DialogHeader className="invoice-editor-header pb-2 text-left">
-          {isPage && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              className="w-fit gap-2 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Zu den Rechnungen
-            </Button>
-          )}
           <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-2">
+            <div className="flex min-w-0 items-center gap-2">
+              {isPage && <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Zu den Rechnungen" className="shrink-0 text-muted-foreground"><ArrowLeft className="size-4" aria-hidden="true" /></Button>}
               {isPage ? (
                 <h1 className="[overflow-wrap:anywhere] text-2xl font-semibold tracking-tight sm:text-3xl">
-                  Rechnung erstellen
+                  Neue Rechnung
                 </h1>
               ) : (
                 <DialogTitle>Rechnung erstellen</DialogTitle>
               )}
-              {isPage ? (
-                <p className="max-w-[65ch] text-sm text-muted-foreground">
-                  Erfassen Sie Empfänger, Leistungsdaten und Positionen. Bivaro prüft die E-Rechnungsdaten vor dem Speichern.
-                </p>
-              ) : (
-                <DialogDescription>
-                  Erstellen Sie eine ZUGFeRD-PDF-Rechnung oder eine eigenständige E-Rechnungs-XML.
-                </DialogDescription>
-              )}
+              {!isPage && <DialogDescription className="sr-only">ZUGFeRD-PDF oder XRechnung-XML erstellen.</DialogDescription>}
             </div>
             <Button
               type="button"
@@ -1624,7 +1606,7 @@ export function CreateInvoiceModal({
           </div>
         </DialogHeader>
 
-        {fromDraft && <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm"><p className="font-medium">Serviceentwurf · {fromDraft.parsedData.periodStart} bis {fromDraft.parsedData.periodEnd}</p><p className="mt-1 text-muted-foreground">Positionen sind frei bearbeitbar. „Entwurf speichern“ behält diese Rechnung ohne Datei und Nummer. Erst die bewusste Dateierstellung übernimmt die geprüften Rechnungsdaten in denselben Datensatz; kein automatischer Versand und keine Einnahme.</p></div>}
+        {fromDraft && <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm"><p className="font-medium">Serviceentwurf · {fromDraft.parsedData.periodStart} bis {fromDraft.parsedData.periodEnd}</p><details className="mt-2 text-xs text-muted-foreground"><summary className="cursor-pointer">Zum Entwurf</summary><p className="pt-2">„Entwurf speichern“ erzeugt weder Datei noch Nummer. Die Dateierstellung aktualisiert denselben Datensatz; kein Versand und keine Einnahme.</p></details></div>}
         <div className="invoice-editor-grid">
           <div className="invoice-editor-main">
             <DocumentTaxProfileFields id="invoice" settings={settings} issueDate={date} selection={taxSelection} acknowledged={taxAcknowledged} onAcknowledged={setTaxAcknowledged} onModeChange={handleTaxModeChange} taxCase={taxCase} onTaxCaseChange={setTaxCase} foreignAddress={foreignAddress} domesticConfirmed={domesticConfirmed} onDomesticConfirmed={setDomesticConfirmed} />
@@ -1710,7 +1692,6 @@ export function CreateInvoiceModal({
                   <div className="rounded-md border border-amber-200 bg-amber-50/70 p-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20" role="note">
                     <p className="font-medium text-amber-950 dark:text-amber-100">Interner Kundenhinweis</p>
                     <p className="mt-1 whitespace-pre-wrap text-amber-900/80 dark:text-amber-200/80">{selectedCustomer.internalNote}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">Wird nicht in PDF, XML oder E-Mail übernommen.</p>
                   </div>
                 )}
 
@@ -1771,7 +1752,7 @@ export function CreateInvoiceModal({
             )}
 
             {/* Unreserved service notes */}
-            {fromDraft && <p className="rounded-md border bg-muted/30 p-3 text-sm" role="note">Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden; dort werden die Notizen beim Erstellen der Rechnungsdatei eindeutig zugeordnet.</p>}
+            {fromDraft && <p className="text-xs text-muted-foreground" role="note">Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Dafür eine neue Rechnung erstellen.</p>}
             {selectedCustomerId && !fromDraft && (
               <section className="space-y-3 rounded-md border border-primary/20 bg-primary/5 p-3" aria-labelledby="billing-notes-title">
                 <div>
@@ -2033,17 +2014,12 @@ export function CreateInvoiceModal({
                 value={outputMode}
                 onChange={(e) => setOutputMode(e.target.value as InvoiceOutputMode)}
               >
-                <option value="zugferd-pdf">ZUGFeRD-PDF mit eingebetteter XML</option>
-                <option value="xml-only">Nur XRechnung-XML (ohne PDF)</option>
+                <option value="zugferd-pdf">ZUGFeRD-PDF + XML</option>
+                <option value="xml-only">XRechnung-XML</option>
               </select>
-              <p className="text-xs text-muted-foreground mt-2">
-                {outputMode === 'xml-only'
-                  ? 'Erstellt eine eigenständige XRechnung-CII-XML-Datei. Sie wird gespeichert, heruntergeladen und kann danach mit dem E-Rechnungs-Viewer angesehen werden.'
-                  : 'Erstellt eine PDF-Rechnung mit eingebetteter strukturierter XML-Datei für ZUGFeRD/Factur-X.'}
-              </p>
             </section>
 
-        {!taxReady && <p id="invoice-tax-blocker" className="text-xs"><a href="#invoice-tax-heading" className="underline underline-offset-4">Steuerbehandlung und unterstützten Steuerfall oben klären</a>, bevor Sie die Rechnung erstellen.</p>}
+        {!taxReady && <p id="invoice-tax-blocker" className="text-xs"><a href="#invoice-tax-heading" className="underline underline-offset-4">Steuerbehandlung bestätigen</a>.</p>}
         <DialogFooter className={isPage ? "invoice-create-actions" : undefined}>
           <Button type="button" variant="outline" onClick={onClose} disabled={isSavingDraft || isGenerating}>Abbrechen</Button>
           {fromDraft && <Button type="button" variant="outline" onClick={saveServiceDraft} disabled={isSavingDraft || isGenerating || !taxMode}>{isSavingDraft ? 'Speichere Entwurf …' : 'Entwurf speichern'}</Button>}
@@ -2054,7 +2030,6 @@ export function CreateInvoiceModal({
           </Button>
         </DialogFooter>
         {draftSaveMessage && <p role="status" className="text-sm">{draftSaveMessage}</p>}
-                <p className="text-xs text-muted-foreground">Die Rechnung wird gespeichert und heruntergeladen. Die E-Rechnungsdaten werden vorab geprüft.</p>
               </div>
             </section>
           {/* Preview Section */}

@@ -27,6 +27,8 @@ export function IncomingAiExtraction({ document, locked, onDocument, onRefresh, 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'run' | 'apply' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => { if (job || error) setExpanded(true); }, [job, error]);
   const [costAccepted, setCostAccepted] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [needsStatusCheck, setNeedsStatusCheck] = useState(false);
@@ -65,10 +67,10 @@ export function IncomingAiExtraction({ document, locked, onDocument, onRefresh, 
   const pending = job?.status === 'queued' || job?.status === 'running';
   const differentConfig = !!job && !!settings && job.configRevision !== settings.configurationRevision;
   const mayRun = !needsStatusCheck && settings?.enabled && settings.configured && supported && document.reviewState === 'REVIEW' && (!job || differentConfig || job.status === 'failed' || job.status === 'unknown');
-  return <section aria-labelledby="incoming-ai-heading" className="mb-5 border-y border-border py-4">
-    <h3 id="incoming-ai-heading" className="flex items-center gap-2 font-semibold"><ScanText className="size-4 shrink-0" aria-hidden="true" />Optionales KI-Auslesen</h3>
+  return <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} aria-labelledby="incoming-ai-heading" className="mb-5 border-y border-border py-2">
+    <summary className="min-h-11 cursor-pointer py-3"><h3 id="incoming-ai-heading" className="inline-flex items-center gap-2 font-semibold"><ScanText className="size-4 shrink-0" aria-hidden="true" />Optionales KI-Auslesen</h3></summary>
     <p role="status" className="mt-2 flex items-center gap-2 text-sm font-medium">{(loading || busy || pending) && <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />}{busy === 'run' ? 'KI analysiert · Original bereits gespeichert' : busy === 'apply' ? 'Vorschläge werden in leere Entwurfsfelder übernommen…' : loading ? 'KI-Status wird geladen…' : aiStatusLabel(job?.status ?? null)}</p>
-    <p className="mt-1 text-xs text-muted-foreground">Das gespeicherte Original bleibt unabhängig von der Analyse verfügbar. Auch nach Verlassen dieses Dialogs zuerst den Status prüfen, nicht blind erneut starten.</p>
+    <p className="mt-1 text-xs text-muted-foreground">Original bleibt erhalten. Vor Wiederholung den Status prüfen.</p>
     {error && <p role="alert" className="mt-3 border-l-2 border-destructive pl-3 text-sm text-destructive">{error}</p>}
     {job?.errorCode && !error && <p className="mt-3 text-sm text-caution-foreground">{aiRequestError(0, { code: job.errorCode })}</p>}
     {!loading && !supported && <p className="mt-3 text-sm text-muted-foreground">XML wird über eingebettete Rechnungsdaten ausgelesen. Keine zusätzliche kostenpflichtige KI-Analyse vorgesehen.</p>}
@@ -83,5 +85,5 @@ export function IncomingAiExtraction({ document, locked, onDocument, onRefresh, 
     {mayRun && !loading && <div className="mt-4 space-y-3 text-sm"><p className="break-words">Beleginhalte werden an <strong className="break-all">{settings.baseUrl}</strong> gesendet · Modell {settings.model}. Anbietergebühren möglich, Höhe unbekannt.</p><label className="flex min-h-11 items-start gap-3"><input type="checkbox" checked={costAccepted} disabled={locked || !!busy} onChange={event => setCostAccepted(event.target.checked)} className="mt-1 size-4 shrink-0 accent-primary" /><span>Übermittlung und mögliche Kosten für diese {job ? 'erneute ' : ''}Analyse freigeben.</span></label><Button disabled={locked || !!busy || !costAccepted} onClick={() => void mutate('run')}>{differentConfig ? 'Mit aktueller Konfiguration analysieren' : job ? 'KI-Analyse bewusst wiederholen' : 'Diesen Beleg mit KI auslesen'}</Button></div>}
     {locked && <p className="mt-3 text-xs text-muted-foreground">KI-Aktionen gesperrt: eigene Eingaben zuerst speichern oder die offene Belegaktion abschließen. Es wird nichts überschrieben.</p>}
     <Button className="mt-3" variant="ghost" disabled={!!busy || loading} onClick={() => { setCostAccepted(false); setRefresh(value => value + 1); }}>Nur KI-Status aktualisieren</Button>
-  </section>;
+  </details>;
 }

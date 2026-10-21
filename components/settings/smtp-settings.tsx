@@ -5,7 +5,7 @@ import { AlertCircle, CheckCircle2, KeyRound, Loader2, Mail, RotateCcw, Save, Se
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -51,6 +51,7 @@ export function SmtpSettings() {
   const [form, setForm] = useState<SmtpForm>(emptyForm);
   const [current, setCurrent] = useState<SmtpResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configurationOpen, setConfigurationOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -151,10 +152,7 @@ export function SmtpSettings() {
           <Mail className="h-5 w-5" />
           <CardTitle>SMTP-Versand</CardTitle>
         </div>
-        <CardDescription>
-          Konfigurieren Sie den Mailserver für Rechnungen, Angebote und Mahnungen.
-          Diese Konfiguration gilt für alle Konten. Passwörter werden nie angezeigt.
-        </CardDescription>
+
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -166,8 +164,8 @@ export function SmtpSettings() {
           <>
             <div className="mb-5 flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-sm">
               {current?.configured ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-amber-600" />}
-              <span className="font-medium">{current?.configured ? "SMTP ist konfiguriert" : "SMTP ist nicht vollständig konfiguriert"}</span>
-              <span className="text-muted-foreground">Quelle: {sourceLabel(current?.source || "none")}</span>
+              <span className="font-medium">{current?.configured ? "Eingerichtet" : "Nicht eingerichtet"}</span>
+              {current?.source && current.source !== "none" && <span className="text-muted-foreground">{sourceLabel(current.source)}</span>}
               {current?.passwordConfigured && <span className="text-muted-foreground">· Passwort gespeichert</span>}
             </div>
 
@@ -186,7 +184,8 @@ export function SmtpSettings() {
               </Alert>
             )}
 
-            <form onSubmit={saveSettings} className="space-y-5">
+            <details open={configurationOpen} onToggle={event => setConfigurationOpen(event.currentTarget.open)}><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">SMTP konfigurieren</summary>
+            <form onSubmit={saveSettings} className="space-y-4">
               <fieldset disabled={saving || removing} className="space-y-5">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_9rem]">
                 <div className="space-y-2">
@@ -203,7 +202,7 @@ export function SmtpSettings() {
                 <div className="space-y-1">
                   <Label htmlFor="smtp-secure">TLS-Modus</Label>
                   <p className="text-sm text-muted-foreground">
-                    {form.secure ? "Direktes TLS (implizit), typischerweise Port 465." : "STARTTLS erforderlich, typischerweise Port 587."}
+                    {form.secure ? "Direkt · Port 465" : "STARTTLS · Port 587"}
                   </p>
                 </div>
                 <Switch id="smtp-secure" checked={form.secure} onCheckedChange={checked => updateField("secure", checked)} />
@@ -240,14 +239,15 @@ export function SmtpSettings() {
               </fieldset>
             </form>
 
-            <div className="mt-5 flex items-start gap-2 text-xs text-muted-foreground">
+            <details className="mt-3 text-xs text-muted-foreground"><summary className="min-h-11 cursor-pointer py-3 font-medium">Konfigurationsquelle</summary><div className="flex items-start gap-2">
               {current?.source === "environment" ? <Server className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
               <p>
                 {current?.source === "environment"
                   ? "Die aktuelle Konfiguration kommt vom Server. Beim Speichern wird eine Datenbank-Konfiguration angelegt."
                   : "Die Datenbank-Konfiguration überschreibt die Serverkonfiguration. Entfernen stellt den Serverwert wieder her."}
               </p>
-            </div>
+            </div></details>
+            </details>
           </>
         )}
       </CardContent>

@@ -558,12 +558,11 @@ export function QuoteEditor({
     return (
         <section aria-labelledby="quote-editor-title" className={cn(styles.editor, variant === "dialog" && styles.dialogEditor)}>
             <header className={styles.editorHeader}>
-                <div>
-                    <Button variant="ghost" className="mb-2 gap-2 px-0 text-muted-foreground" onClick={onCancel}>
-                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />Zurück zu Angeboten
+                <div className="flex min-w-0 items-center gap-2">
+                    <Button variant="ghost" size="icon" aria-label="Zurück zu Angeboten" className="shrink-0 text-muted-foreground" onClick={onCancel}>
+                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     {variant === "page" ? <h1 id="quote-editor-title">Neues Angebot</h1> : <h2 id="quote-editor-title">Angebot erstellen</h2>}
-                    <p>Leistungen anbieten, Konditionen festhalten und als PDF versenden.</p>
                 </div>
                 <Button variant="outline" onClick={() => setShowPreview(!showPreview)} aria-pressed={showPreview} className="gap-2">
                     {showPreview ? <><EyeOff className="h-4 w-4" aria-hidden="true" />Vorschau ausblenden</> : <><Eye className="h-4 w-4" aria-hidden="true" />Live-Vorschau</>}
@@ -573,7 +572,7 @@ export function QuoteEditor({
                 <div className={styles.editorMain}>
                     <DocumentTaxProfileFields id="quote" settings={settings} issueDate={date} selection={taxSelection} acknowledged={taxAcknowledged} onAcknowledged={setTaxAcknowledged} onModeChange={handleTaxModeChange} taxCase={taxCase} onTaxCaseChange={setTaxCase} />
                     <section className={styles.section} aria-labelledby="quote-recipient-title">
-                        <div className={styles.sectionHeading}><div><h2 id="quote-recipient-title">Empfänger</h2><p>Vorhandenen Kontakt übernehmen oder Anschrift direkt eingeben.</p></div></div>
+                        <div className={styles.sectionHeading}><div><h2 id="quote-recipient-title">Empfänger</h2></div></div>
                         <div className="space-y-3">
                             <Label htmlFor="quote-customer-select">Gespeicherter Kunde</Label>
                             <select id="quote-customer-select" className={styles.select} onChange={handleCustomerSelect} defaultValue="" aria-label="Gespeicherten Kunden auswählen">
@@ -593,7 +592,7 @@ export function QuoteEditor({
                         </div>
                     </section>
                     <section className={styles.section} aria-labelledby="quote-items-title">
-                        <div className={styles.sectionHeading}><div><h2 id="quote-items-title">Positionen</h2><p>Preise verstehen sich als Nettobeträge.</p></div><span>{items.length} {items.length === 1 ? "Position" : "Positionen"}</span></div>
+                        <div className={styles.sectionHeading}><h2 id="quote-items-title">Positionen · netto</h2><span>{items.length} {items.length === 1 ? "Position" : "Positionen"}</span></div>
                         <ServiceArticlePicker onSelect={article => setItems(current => {
                             const next = { description: article.description, quantity: 1, unitPrice: article.unitPrice, unit: article.unit, taxRate: taxMode === 'standard' ? 19 : 0 };
                             return current.length === 1 && !current[0].description.trim() && current[0].unitPrice === 0 ? [next] : [...current, next];
@@ -622,13 +621,12 @@ export function QuoteEditor({
                         <div className={styles.totalBody}>
                             <dl className={styles.totals}><div><dt>Nettobetrag</dt><dd>{displayAmount(netTotal)}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayAmount(taxTotal)}</dd></div></dl>
                             {validUntil && <p className={styles.railNote}>Gültig bis {new Date(`${validUntil}T12:00:00`).toLocaleDateString('de-DE')}</p>}
-                            {!taxReady && <p id="quote-tax-blocker" className={styles.railNote}><a href="#quote-tax-heading" className="underline underline-offset-4">Steuerbehandlung und unterstützten Steuerfall oben klären</a>, bevor Sie das Angebot erstellen.</p>}
+                            {!taxReady && <p id="quote-tax-blocker" className={styles.railNote}><a href="#quote-tax-heading" className="underline underline-offset-4">Steuerbehandlung bestätigen</a>.</p>}
                             <Button className="w-full" onClick={handleGenerateAndSave} aria-describedby={!taxReady ? "quote-tax-blocker" : undefined} disabled={!taxReady || isGenerating || !customerAddress || !quoteNumber} aria-busy={isGenerating} aria-label={isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}>{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isGenerating ? "Erstelle Angebot..." : <><span className="sm:hidden">Angebot erstellen</span><span className="hidden sm:inline">Angebot erstellen & speichern</span></>}</Button>
-                            <p className={styles.railNote}>Das fertige PDF wird gespeichert und heruntergeladen.</p>
                             <Button variant="ghost" className="w-full" onClick={onCancel}>Abbrechen</Button>
                         </div>
                     </section>
-                    {showPreview && <section className={styles.preview} aria-label="Angebots-Vorschau"><div className={styles.sectionHeading}><h2>PDF-Vorschau</h2><Button variant="ghost" onClick={generatePreview} disabled={isGeneratingPreview || !taxReady} aria-label="Vorschau aktualisieren">{isGeneratingPreview ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}</Button></div><div className={styles.previewFrame}>{previewUrl ? <iframe src={previewUrl} title="Angebotsvorschau" /> : <div role="status">{isGeneratingPreview ? "Vorschau wird generiert..." : !taxReady ? "Bitte zuerst Steuerbehandlung und Steuerfall bestätigen." : "Füllen Sie das Formular aus, um die Vorschau zu sehen."}</div>}</div><p className={styles.railNote}>Aktualisiert sich automatisch bei Änderungen.</p></section>}
+                    {showPreview && <section className={styles.preview} aria-label="Angebots-Vorschau"><div className={styles.sectionHeading}><h2>PDF-Vorschau</h2><Button variant="ghost" onClick={generatePreview} disabled={isGeneratingPreview || !taxReady} aria-label="Vorschau aktualisieren">{isGeneratingPreview ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}</Button></div><div className={styles.previewFrame}>{previewUrl ? <iframe src={previewUrl} title="Angebotsvorschau" /> : <div role="status">{isGeneratingPreview ? "Vorschau wird generiert..." : !taxReady ? "Bitte zuerst Steuerbehandlung und Steuerfall bestätigen." : "Füllen Sie das Formular aus, um die Vorschau zu sehen."}</div>}</div></section>}
                 </aside>
             </div>
         </section>

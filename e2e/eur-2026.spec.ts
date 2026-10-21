@@ -239,7 +239,7 @@ test('rejects 2027 official rows and opens the real bounded handoff without repl
     await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
     expect((await loaded).status()).toBe(200);
     await expect(page.getByRole('heading', { name: 'Paket prüfen und herunterladen', exact: true })).toBeVisible();
-    await expect(page.getByText('01.01.2027 bis 31.12.2027 · beide Tage eingeschlossen', { exact: true })).toBeVisible();
+    await expect(page.getByText('01.01.2027 bis 31.12.2027', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
     await expect(page).toHaveURL(/\/handoff\?year=2027$/);
     await page.getByRole('button', { name: 'Zeitraum ändern', exact: true }).click();

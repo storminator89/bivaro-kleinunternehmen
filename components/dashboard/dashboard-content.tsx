@@ -832,9 +832,7 @@ export function DashboardContent() {
   return (
     <div className="dashboard-workbench space-y-6">
         <PageHeader
-          title={tabParam ? ({ expenses: "Ausgaben", incomes: "Einnahmen", invoices: "Rechnungen", quotes: "Angebote", eur: "Einnahmenüberschussrechnung", gwg: "GWG-Verzeichnis" }[activeTab] ?? "Buchhaltung") : "Buchhaltung"}
-          description={tabParam ? ({ expenses: "Belege erfassen, Ausgaben zuordnen und Zahlungen nachvollziehen.", incomes: "Zahlungseingänge erfassen und Einnahmen im Blick behalten.", invoices: "Rechnungen verwalten, Zahlungsstatus prüfen und Originalbelege öffnen.", quotes: "Angebote vorbereiten und direkt in Rechnungen übernehmen.", eur: "Einnahmen und Ausgaben für Ihren Berichtszeitraum auswerten.", gwg: "Geringwertige Wirtschaftsgüter und Abschreibungen verwalten." }[activeTab] ?? "") : "Belege erfassen, Angebote versenden und offene Rechnungen im Blick behalten."}
-          section={!tabParam ? "Übersicht" : activeTab === "invoices" || activeTab === "quotes" ? "Verkauf" : activeTab === "eur" || activeTab === "gwg" ? "Auswertungen" : "Buchhaltung"}
+          title={tabParam ? ({ expenses: "Ausgaben", incomes: "Einnahmen", invoices: "Rechnungen", quotes: "Angebote", eur: "EÜR", gwg: "GWG-Verzeichnis" }[activeTab] ?? "Buchhaltung") : "Buchhaltung"}
           date={<time dateTime={formatLocalBusinessDate(new Date())}>{new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</time>}
           actions={<>
             {(!tabParam || activeTab === 'expenses' || activeTab === 'incomes') && <>
@@ -908,7 +906,7 @@ export function DashboardContent() {
           </>
         ) : (
         <div className="space-y-4">
-        {searchParams.has("document") && ["invoices", "quotes"].includes(activeTab) && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 text-sm"><p>Gezielt geöffnetes Dokument · Die bestehenden Aktionen bleiben unverändert.</p><div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link href="/dashboard/today">Zur Tagesübersicht</Link></Button><Button variant="outline" asChild><Link href={`/dashboard?tab=${activeTab}`}>Alle Dokumente anzeigen</Link></Button></div></div>}
+        {searchParams.has("document") && ["invoices", "quotes"].includes(activeTab) && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 text-sm"><p>Ausgewähltes Dokument</p><div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link href="/dashboard/today">Zur Tagesübersicht</Link></Button><Button variant="outline" asChild><Link href={`/dashboard?tab=${activeTab}`}>Alle Dokumente anzeigen</Link></Button></div></div>}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
           {/* Ausgaben Tab */}
           <TabsContent value="expenses" className="space-y-6">

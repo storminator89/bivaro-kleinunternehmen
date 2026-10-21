@@ -6,7 +6,7 @@ import { copyAdminText } from "@/components/settings/copy-admin-text";
 import styles from "@/components/settings/admin-workspace.module.css";
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,23 +32,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { 
-  Key, 
-  Plus, 
-  Trash2, 
-  Copy, 
-  Check, 
+import {
+  Plus,
+  Trash2,
+  Copy,
+  Check,
   AlertTriangle,
   Eye,
   EyeOff,
-  Shield,
   Clock,
   Activity,
   ArrowLeft,
   BookOpen,
   Globe,
+  ChevronDown,
   X,
-  Info
 } from "lucide-react";
 import Link from "next/link";
 
@@ -82,7 +80,7 @@ export default function ApiKeysPage() {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState("");
   const [showKey, setShowKey] = useState(false);
-  
+
   // Form states
   const [keyName, setKeyName] = useState("");
   const [selectedScopes, setSelectedScopes] = useState<string[]>(["read", "write"]);
@@ -137,7 +135,7 @@ export default function ApiKeysPage() {
 
   const handleCreateKey = async () => {
     if (!keyName.trim()) return;
-    
+
     setIsCreating(true);
     try {
       const res = await fetch("/api/api-keys", {
@@ -244,7 +242,7 @@ export default function ApiKeysPage() {
   // CORS Handlers
   const handleAddOrigin = async () => {
     if (!newOrigin.trim()) return;
-    
+
     setAddingOrigin(true);
     setCorsError(null);
     try {
@@ -292,15 +290,15 @@ export default function ApiKeysPage() {
     <div className={styles.workspace}>
       <div className={styles.page}>
         {/* Back Link */}
-        <Link 
-          href="/settings" 
+        <Link
+          href="/settings" aria-label="Zurück zu Einstellungen"
           className={styles.back}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Zurück zu Einstellungen
+          Einstellungen
         </Link>
 
-        <PageHeader title="API-Schlüssel" description="Verwalten Sie API-Schlüssel für den Zugriff auf die REST-API." section="System" actions={<>
+        <PageHeader title="API-Schlüssel" actions={<>
 <div className={styles.headerActions}>
             <Button variant="outline" asChild>
               <Link href="/settings/api-keys/docs">
@@ -308,69 +306,29 @@ export default function ApiKeysPage() {
                 API-Dokumentation
               </Link>
             </Button>
-            <Button onClick={() => setIsCreateModalOpen(true)}>
+            <Button onClick={() => setIsCreateModalOpen(true)} aria-label="Neuen API-Key erstellen">
               <Plus className="h-4 w-4 mr-2" />
-              Neuen API-Key erstellen
+              Schlüssel erstellen
             </Button>
           </div>
 </>} />
 
-        <dl className={styles.summary} aria-label="API-Zugänge im Überblick">
-          <div><dt>Gespeicherte Schlüssel</dt><dd>{isLoading ? "—" : apiKeys.length}</dd></div>
-          <div><dt>Aktiv und nicht abgelaufen</dt><dd>{isLoading ? "—" : apiKeys.filter((key) => key.isActive && !isExpired(key.expiresAt)).length}</dd></div>
-        </dl>
 
-        {/* Info Card */}
-        <Card className={styles.note}>
-          <CardContent className="pt-6">
-            <div className="flex gap-4">
-              <Shield className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-              <div className="space-y-2 text-sm">
-                <p className="font-medium text-blue-900 dark:text-blue-100">API-Dokumentation</p>
-                <p className="text-blue-800 dark:text-blue-200">
-                  Verwenden Sie die API mit dem Header <code className="bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">Authorization: Bearer YOUR_API_KEY</code> oder <code className="bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">X-API-Key: YOUR_API_KEY</code>
-                </p>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <code className="text-xs bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded">GET /api/v1/customers</code>
-                  <code className="text-xs bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded">GET /api/v1/expenses</code>
-                  <code className="text-xs bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded">GET /api/v1/incomes</code>
-                  <code className="text-xs bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded">GET /api/v1/invoices</code>
-                </div>
-                <div className="mt-3">
-                  <Link 
-                    href="/settings/api-keys/docs" 
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
-                  >
-                    <BookOpen className="h-3 w-3" />
-                    Vollständige API-Dokumentation ansehen →
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* API Keys Table */}
         <Card className={styles.surface}>
           <CardHeader>
-            <CardTitle>Aktive API-Schlüssel</CardTitle>
-            <CardDescription>
-              {apiKeys.length} von maximal 10 API-Schlüsseln verwendet
-            </CardDescription>
+            <CardTitle>Schlüssel <span className="ml-2 text-sm font-normal text-muted-foreground">{apiKeys.length}/10 · {apiKeys.filter(key => key.isActive && !isExpired(key.expiresAt)).length} aktiv</span></CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="text-center py-8 text-muted-foreground">Laden...</div>
             ) : apiKeys.length === 0 ? (
-              <div className="text-center py-12">
-                <Key className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-medium mb-2">Keine API-Schlüssel</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Erstellen Sie Ihren ersten API-Schlüssel, um die REST-API zu nutzen.
-                </p>
-                <Button onClick={() => setIsCreateModalOpen(true)}>
+              <div className="flex flex-wrap items-center justify-between gap-4 py-5">
+                <h3 className="text-sm text-muted-foreground">Noch keine Schlüssel</h3>
+                <Button onClick={() => setIsCreateModalOpen(true)} aria-label="API-Key erstellen">
                   <Plus className="h-4 w-4 mr-2" />
-                  API-Key erstellen
+                  Erstellen
                 </Button>
               </div>
             ) : (
@@ -396,10 +354,10 @@ export default function ApiKeysPage() {
                       <TableCell data-label="Berechtigungen">
                         <div className="flex gap-1 flex-wrap">
                           {key.scopes.map((scope) => (
-                            <span 
-                              key={scope} 
+                            <span
+                              key={scope}
                               className={`text-xs px-2 py-0.5 rounded-full ${
-                                scope === 'delete' 
+                                scope === 'delete'
                                   ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                                   : scope === 'write'
                                   ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
@@ -487,31 +445,9 @@ export default function ApiKeysPage() {
 
         {/* CORS Settings Card */}
         <Card className={`${styles.surface} mt-6`}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              CORS-Einstellungen
-            </CardTitle>
-            <CardDescription>
-              Konfigurieren Sie, von welchen Domains aus auf Ihre API zugegriffen werden darf.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* Info Box */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
-              <div className="flex gap-3">
-                <Info className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">
-                    Was ist CORS?
-                  </p>
-                  <p className="text-amber-700 dark:text-amber-300">
-                    Cross-Origin Resource Sharing (CORS) kontrolliert, welche Websites Ihre API aufrufen dürfen. 
-                    Fügen Sie hier die Domains hinzu, von denen aus Ihre externen Anwendungen auf die API zugreifen sollen.
-                  </p>
-                </div>
-              </div>
-            </div>
+          <details className="group">
+            <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-semibold"><Globe className="h-5 w-5" aria-hidden="true" />CORS-Einstellungen<ChevronDown className="ml-auto h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden="true" /></summary>
+          <CardContent className="px-0 pb-0 pt-3">
 
             {corsLoading ? (
               <div className="text-center py-4 text-muted-foreground">Laden...</div>
@@ -540,7 +476,7 @@ export default function ApiKeysPage() {
                   <Label className="text-sm mb-2 block">
                     Ihre erlaubten Origins ({corsOrigins.length}/20)
                   </Label>
-                  
+
                   {corsOrigins.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-2">
                       Keine zusätzlichen Origins konfiguriert.
@@ -578,8 +514,8 @@ export default function ApiKeysPage() {
                     onKeyDown={(e) => e.key === 'Enter' && handleAddOrigin()}
                     className="flex-1"
                   />
-                  <Button 
-                    onClick={handleAddOrigin} 
+                  <Button
+                    onClick={handleAddOrigin}
                     disabled={addingOrigin || !newOrigin.trim()}
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -595,17 +531,18 @@ export default function ApiKeysPage() {
                 )}
 
                 {/* Examples */}
-                <div className="text-xs text-muted-foreground space-y-1 pt-2">
-                  <p className="font-medium">Beispiele für gültige Origins:</p>
+                <details className="text-xs text-muted-foreground space-y-1 pt-2">
+                  <summary className="min-h-11 cursor-pointer py-3 font-medium">CORS-Hinweise</summary><p>Gilt für Browserzugriffe. API-Schlüssel bleiben erforderlich.</p>
                   <ul className="list-disc list-inside space-y-0.5">
                     <li><code className="bg-muted px-1 rounded">https://meine-app.de</code></li>
                     <li><code className="bg-muted px-1 rounded">https://app.firma.com</code></li>
                     <li><code className="bg-muted px-1 rounded">http://localhost:8080</code> (für Entwicklung)</li>
                   </ul>
-                </div>
+                </details>
               </div>
             )}
           </CardContent>
+          </details>
         </Card>
 
         {/* Create Modal */}
@@ -613,9 +550,7 @@ export default function ApiKeysPage() {
           <DialogContent className={styles.dialog}>
             <DialogHeader>
               <DialogTitle>Neuen API-Schlüssel erstellen</DialogTitle>
-              <DialogDescription>
-                Erstellen Sie einen neuen API-Schlüssel für den Zugriff auf die REST-API.
-              </DialogDescription>
+              <DialogDescription className="sr-only">API-Zugang einrichten.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
@@ -626,9 +561,7 @@ export default function ApiKeysPage() {
                   value={keyName}
                   onChange={(e) => setKeyName(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Ein beschreibender Name, um den Key später identifizieren zu können.
-                </p>
+
               </div>
 
               <div className="space-y-2">
@@ -649,9 +582,7 @@ export default function ApiKeysPage() {
                     </Button>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Wählen Sie die Berechtigungen für diesen API-Key.
-                </p>
+
               </div>
 
               <div className="space-y-2">
@@ -660,16 +591,14 @@ export default function ApiKeysPage() {
                   <Input
                     id="expiresInDays"
                     type="number"
-                    placeholder="90"
+                    placeholder="Unbegrenzt"
                     value={expiresInDays}
                     onChange={(e) => setExpiresInDays(e.target.value)}
-                    className="w-24"
+                    className="w-36"
                   />
                   <span className="text-sm text-muted-foreground">Tage</span>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Leer lassen für unbegrenzte Gültigkeit.
-                </p>
+
               </div>
             </div>
             <DialogFooter>
@@ -692,18 +621,16 @@ export default function ApiKeysPage() {
                 API-Schlüssel erstellt
               </DialogTitle>
             </DialogHeader>
-            
+
             <div className="space-y-4 py-4">
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                 <div className="flex gap-3">
                   <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Wichtig: Kopieren Sie den Schlüssel jetzt!
+                      Jetzt kopieren · nur einmal sichtbar
                     </p>
-                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                      Der vollständige API-Schlüssel wird aus Sicherheitsgründen nur einmal angezeigt.
-                    </p>
+
                   </div>
                 </div>
               </div>

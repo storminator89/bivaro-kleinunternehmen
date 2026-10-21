@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import styles from "@/components/settings/admin-workspace.module.css";
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,6 @@ import {
     RefreshCw,
     CheckCircle2,
     AlertCircle,
-    Info,
     Server,
 } from "lucide-react";
 import Link from "next/link";
@@ -110,7 +109,7 @@ export default function DocumentationPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['allgemeine-beschreibung']));
+    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         loadDocumentation();
@@ -218,15 +217,15 @@ export default function DocumentationPage() {
             <div className={`${styles.page} print:max-w-none print:px-8`}>
                 {/* Back Link - hide in print */}
                 <Link
-                    href="/settings"
+                    href="/settings" aria-label="Zurück zu Einstellungen"
                     className={`${styles.back} print:hidden`}
                 >
                     <ArrowLeft className="h-4 w-4 mr-2" />
-                    Zurück zu Einstellungen
+                    Einstellungen
                 </Link>
 
                 {/* Header */}
-                <PageHeader title="GoBD Verfahrensdokumentation" description="Dokumentation des Buchführungsverfahrens gemäß GoBD." section="System" actions={<>
+                <PageHeader title="Dokumentation" actions={<>
 <div className={`${styles.headerActions} print:hidden`}>
                             <Button variant="outline" onClick={exportAsPDF}>
                                 <Download className="h-4 w-4 mr-2" />
@@ -282,6 +281,13 @@ export default function DocumentationPage() {
 
                 {data && (
                     <div className={styles.documentLayout}>
+                        <details className={`${styles.mobileNav} print:hidden`}><summary>Abschnitt wählen</summary><nav aria-label="Mobile Dokumentationsabschnitte">
+                            <a href="#gobd-company">Unternehmensdaten</a>
+                            <a href="#gobd-system">System-Information</a>
+                            {data.content.sections.map((section) => (
+                                <a key={section.id} href={`#gobd-${section.id}`} aria-label={section.title} title={section.title} onClick={() => setExpandedSections((previous) => new Set([...previous, section.id]))}>{section.title.replace(/^\d+\.\s*/, "").replace("Allgemeine Beschreibung", "Überblick").replace("Anwenderdokumentation", "Anwendung").replace("Technische Systemdokumentation", "Technik").replace("Betriebsdokumentation", "Betrieb")}</a>
+                            ))}
+                        </nav></details>
                         <nav className={`${styles.toc} print:hidden`} aria-label="Dokumentationsabschnitte">
                             <a href="#gobd-company">Unternehmensdaten</a>
                             <a href="#gobd-system">System-Information</a>
@@ -297,9 +303,6 @@ export default function DocumentationPage() {
                                     <Building2 className="h-5 w-5" />
                                     Unternehmensdaten
                                 </CardTitle>
-                                <CardDescription>
-                                    Grundlegende Informationen zum Unternehmen
-                                </CardDescription>
                             </CardHeader>
                             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
@@ -353,9 +356,6 @@ export default function DocumentationPage() {
                                     System-Information
                                     <Badge variant="secondary" className="ml-2 text-xs">Auto-generiert</Badge>
                                 </CardTitle>
-                                <CardDescription>
-                                    Automatisch erfasste technische Informationen
-                                </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -373,14 +373,6 @@ export default function DocumentationPage() {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <div className="text-sm text-muted-foreground mb-2">Verfügbare Funktionen:</div>
-                                    <div className="flex flex-wrap gap-1">
-                                        {data.content.systemInfo?.features?.map((feature, idx) => (
-                                            <Badge key={idx} variant="outline" className="text-xs">{feature}</Badge>
-                                        ))}
-                                    </div>
-                                </div>
                             </CardContent>
                         </Card>
 
@@ -409,10 +401,10 @@ export default function DocumentationPage() {
                                                     )}
                                                 </div>
                                             </CardTitle>
-                                            <CardDescription>{section.description}</CardDescription>
+
                                         </CardHeader>
                                     </CollapsibleTrigger>
-                                    <CollapsibleContent className="print:block">
+                                    <CollapsibleContent forceMount className={styles.docSectionContent}>
                                         <CardContent>
                                             {section.isAutoGenerated ? (
                                                 <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -420,10 +412,7 @@ export default function DocumentationPage() {
                                                         className="p-4 bg-muted/30 rounded-lg text-sm print:bg-transparent print:p-0"
                                                         dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(section.content) }}
                                                     />
-                                                    <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1 print:hidden">
-                                                        <Info className="h-3 w-3" />
-                                                        Dieser Abschnitt wird automatisch generiert und aktualisiert sich bei Änderungen.
-                                                    </p>
+
                                                 </div>
                                             ) : (
                                                 <>

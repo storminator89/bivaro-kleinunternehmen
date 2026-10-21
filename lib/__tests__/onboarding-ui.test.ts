@@ -14,8 +14,8 @@ describe('onboarding server-rendered accessibility and copy', () => {
     expect((html.match(/type="radio"/gu) || []).length).toBe(3);
     expect(html).toMatch(/<input(?=[^>]*value="UNSET")(?=[^>]*checked="")[^>]*>/u);
     expect(html).not.toContain('type="date"');
-    expect(html).toContain('nicht automatisch Kleinunternehmer');
-    expect(html).toContain('keine Steuerberatung');
+    expect(html).toContain('Kleingewerbe ≠ Kleinunternehmer');
+    expect(html).toContain('Bivaro prüft die Voraussetzungen nicht');
     expect(html).toContain('href="/help#steuerprofil"');
   });
   it('rehydrates saved standard regime and date while requiring a new deliberate confirmation', () => {
@@ -24,18 +24,18 @@ describe('onboarding server-rendered accessibility and copy', () => {
     expect(html).toContain('value="2026-01-01"');
     expect(html).toContain('type="checkbox"');
     expect(html).not.toMatch(/type="checkbox"[^>]*checked=""/u);
-    expect(html).toContain('keine Änderung alter Belege');
+    expect(html).toContain('Bestehende Belege bleiben unverändert');
   });
   it('points each incomplete start step to a real action without marking export done', () => {
     const html = renderToStaticMarkup(createElement(GettingStartedChecklist, { settings: {}, invoiceCount: 0, hasCustomer: false }));
-    expect(html).toContain('0 von 3 Startschritten');
+    expect(html).toContain('0 / 3 gespeichert');
     expect(html).toContain('aria-current="step"');
     for (const href of ['/settings#company-settings', '/settings#fiscal-profile', '/customers', '/dashboard/invoices/new', '/help#export']) expect(html).toContain(`href="${href}"`);
-    expect(html).toContain('keine Prüfung auf steuerliche oder rechtliche Vollständigkeit');
+    expect(html).toContain('Steuerprofil einrichten');
   });
   it('uses persisted evidence and keeps export/help accessible after the first invoice', () => {
     const html = renderToStaticMarkup(createElement(GettingStartedChecklist, { settings: { ...fiscal, companyName: 'Muster', companyAddress: 'Straße 1', taxNumber: '123' }, invoiceCount: 1, hasCustomer: true }));
-    expect(html).toContain('3 von 3 Startschritten');
+    expect(html).toContain('3 / 3 gespeichert');
     expect(html).toContain('href="/help#export"');
     expect(html).not.toContain('<details open=""');
     expect(html).not.toContain('Einrichtung vollständig');

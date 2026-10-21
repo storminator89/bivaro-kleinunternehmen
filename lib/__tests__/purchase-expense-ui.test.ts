@@ -26,7 +26,7 @@ describe('deliberate purchase expense input', () => {
     const html = renderToStaticMarkup(createElement(PurchaseExpenseApproval, { document: document(), onApproved: vi.fn(), onBack: vi.fn(), onReload: vi.fn(), onOpenDuplicate: vi.fn(), onBusyChange: vi.fn(), onPendingChange: vi.fn() }));
     for (const id of ['purchase-expense-date', 'purchase-expense-category', 'purchase-expense-share']) expect(html).toMatch(new RegExp(`id="${id}"[^>]*value=""`));
     expect(html).toContain('<option value="" selected="">Bitte ausdrücklich wählen</option>');
-    expect(html).toContain('keine Bestätigung der rechtlichen Abziehbarkeit'); expect(html).toContain('Noch nicht bezahlt?');
+    expect(html).toContain('Abziehbarkeit und private Nutzung selbst prüfen'); expect(html).toContain('Nur vollständig bezahlte Belege');
     expect(html).not.toContain('value="100"');
   });
   it('shows the actual confirmed payment date and share in the final summary', () => {
@@ -56,7 +56,7 @@ describe('deliberate purchase expense input', () => {
     expect(approvalBlockedReason({ ...photo, reviewDraftSavedAt: null })).toContain('ausdrücklich speichern');
     expect(approvalBlockedReason({ ...photo, supplierId: null, selectedSupplierSnapshot: null })).toContain('ausdrücklich auswählen');
     const html = renderToStaticMarkup(createElement(PurchaseExpenseApproval, { document: photo, onApproved: vi.fn(), onBack: vi.fn(), onReload: vi.fn(), onOpenDuplicate: vi.fn(), onBusyChange: vi.fn(), onPendingChange: vi.fn() }));
-    expect(html).toContain('Manuelle Foto-Originalprüfung, keine automatische Buchung'); expect(html).toContain('0,29 EUR');
+    expect(html).toContain('Angaben aus dem gespeicherten Prüfentwurf am Foto prüfen'); expect(html).toContain('0,29 EUR');
     expect(html).toMatch(/id="purchase-expense-date"[^>]*readOnly=""[^>]*value="2026-01-01"/);
     expect(html).toMatch(/id="purchase-photo-buyer"[^>]*value=""/);
     for (const id of ['purchase-expense-category', 'purchase-expense-share']) expect(html).toMatch(new RegExp(`id="${id}"[^>]*value=""`));
@@ -99,7 +99,7 @@ describe('deliberate purchase expense input', () => {
 describe('contact and actual saved expense presentation', () => {
   it('offers only explicit contact creation and selection with no automatic identity match or deletion action', () => {
     const html = renderToStaticMarkup(createElement(SupplierContactPanel, { document: document(), onSelected: vi.fn(), onBack: vi.fn() }));
-    expect(html).toContain('keinen automatischen Abgleich'); expect(html).toContain('Kontakt neu anlegen');
+    expect(html).toContain('Identität ungeprüft'); expect(html).toContain('Kontakt neu anlegen');
     expect(html).not.toContain('Löschen');
     const source = readFileSync('components/purchases/supplier-contact-panel.tsx', 'utf8');
     expect(source).toContain('expectedRevision: document.revision');
