@@ -31,6 +31,11 @@ it('adds adjustment capability without rewriting any original finance row or ori
     await client.$disconnect();
     cpSync(path.join(source, 'migrations', migration), path.join(prismaDirectory, 'migrations', migration), { recursive: true });
     deploy(); deploy();
+    // The supported startup boundary must see no physical drift. In
+    // particular, the composite command FK must be represented in Prisma.
+    expect(execFileSync(process.execPath, [path.resolve('node_modules/prisma/build/index.js'), 'migrate', 'diff', `--from-url=${url}`, `--to-schema-datamodel=${path.join(prismaDirectory, 'schema.prisma')}`, '--exit-code'], {
+      env: { ...process.env, DATABASE_URL: url }, cwd: directory, encoding: 'utf8', stdio: 'pipe', timeout: 60_000,
+    })).toContain('No difference detected');
     expect(await client.invoice.findUniqueOrThrow({ where: { id: invoice.id } })).toEqual(invoice);
     expect(await client.income.findUniqueOrThrow({ where: { id: income.id } })).toEqual(income);
     expect(await client.paymentJournalEvent.findUniqueOrThrow({ where: { id: root.id } })).toEqual(root);

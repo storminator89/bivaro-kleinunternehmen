@@ -784,13 +784,14 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await submit.focus();
       await page.keyboard.press('Enter');
       await saved;
-      await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
+      const savedConfirmation = dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) });
+      await expect(savedConfirmation).toBeVisible();
       await expect(dialog.getByRole('alert')).toHaveText('Die Zahlung ist gespeichert, aber die Listen konnten nicht aktualisiert werden. Nicht erneut buchen.');
       expect(blockedReads).toBeGreaterThan(0);
       expect(postCount).toBe(2);
       await expect(submit).toHaveCount(0);
       await expect(dialog).toContainText('31.12.2024');
-      await expect(dialog.getByRole('status')).toBeFocused();
+      await expect(savedConfirmation).toBeFocused();
       expect(savedPayload).toMatchObject({ amount: '123.45', currency: 'EUR', paidAt: '2024-12-31', source: 'MANUAL', reference: `Synthetic statement ${workspace} 2024-12-31` });
       expect(savedPayload?.idempotencyKey).toMatch(/^[\da-f-]{36}$/iu);
       expect(savedPayload).toEqual(firstAttemptPayload); // An unchanged retry keeps its request identity.

@@ -640,6 +640,7 @@ model PaymentOperation {
   idempotencyKey String
   kind String
   createdAt DateTime @default(now())
+  adjustment PaymentAdjustment?
   @@unique([userId, idempotencyKey])
 }
 
@@ -664,6 +665,7 @@ model PaymentAdjustment {
   cancellationInvoice Invoice? @relation("RefundBasis", fields: [cancellationInvoiceId], references: [id], onDelete: Restrict)
   basisSnapshot Json?
   idempotencyKey String
+  operation PaymentOperation @relation(fields: [userId, idempotencyKey], references: [userId, idempotencyKey], onDelete: Restrict, onUpdate: Restrict)
   semanticFingerprint String
   contractVersion Int @default(2)
   recordedAt DateTime @default(now())

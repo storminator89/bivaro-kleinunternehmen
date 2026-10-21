@@ -68,4 +68,11 @@ describe('payment dialog focus return stays with the same invoice', () => {
     const browser = readFileSync('e2e/auth-dashboard-invoice.spec.ts', 'utf8');
     expect(browser).toContain("name: 'Zahlungsstatus: Offen', exact: true })).toBeFocused()");
   });
+  it('keeps the browser focus assertion on the saved payment confirmation rather than every live status', () => {
+    const browser = readFileSync('e2e/auth-dashboard-invoice.spec.ts', 'utf8');
+    expect(browser).toContain("const savedConfirmation = dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) });");
+    expect(browser).toContain('await expect(savedConfirmation).toBeVisible();');
+    expect(browser).toContain('await expect(savedConfirmation).toBeFocused();');
+    expect(browser).not.toContain("await expect(dialog.getByRole('status')).toBeFocused();");
+  });
 });
