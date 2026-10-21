@@ -19,7 +19,7 @@ export function DashboardActivityFeed({ activities }: { activities: DashboardAct
         <span className="activity-description"><strong>{activity.description}</strong><span>{new Date(activity.date).toLocaleDateString('de-DE')} · {label}</span></span>
         <span className={`activity-amount ${reducing ? 'text-critical' : 'text-positive'}`}>{formatCurrency(reducing ? -Math.abs(activity.amount) : activity.amount)}</span>
       </Link></li>;
-    })}</ul> : <p className="p-6 text-sm text-muted-foreground">Noch keine Buchungen. Erfassen Sie Ihre erste Einnahme oder Ausgabe.</p>}
+    })}</ul> : <p className="p-6 text-sm text-muted-foreground">Noch keine Buchungen.</p>}
     <footer><Link href="/dashboard?tab=invoices">Rechnungen verwalten<ChevronRight aria-hidden="true" /></Link></footer>
   </section>;
 }

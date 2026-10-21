@@ -29,7 +29,7 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     await page.goto('/login'); await page.getByLabel('E-Mail').fill(email); await page.getByLabel('Passwort', { exact: true }).fill(password);
     await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click(); await expect(page).toHaveURL(/\/dashboard/);
     await page.goto('/dashboard/today');
-    await expect(page.getByRole('heading', { name: 'Aktuell kein nächster Schritt aus diesen Quellen', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Keine offenen Schritte', exact: true })).toBeVisible();
 
     const invoice = await pdfDocument(page, 'invoices', 'SYNTHETIC-DAILY-PARTIAL');
     expect((await page.request.put('/api/invoices', { data: { id: invoice.id, status: 'SENT' } })).status()).toBe(200);
@@ -78,7 +78,7 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     await page.setViewportSize({ width: 390, height: 844 });
     await list.getByRole('link', { name: 'Rechnung prüfen: SYNTHETIC-DAILY-PARTIAL', exact: true }).focus(); await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`tab=invoices&document=${invoice.id}`));
-    await expect(page.getByText('Gezielt geöffnetes Dokument', { exact: false })).toBeVisible();
+    await expect(page.getByText('Ausgewähltes Dokument', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: 'Details', exact: true }).filter({ visible: true }).click();
     const invoiceDialog = page.getByRole('dialog', { name: 'Rechnungsdetails', exact: true });
     await expect(invoiceDialog.getByText('80,00 €', { exact: true })).toBeVisible();

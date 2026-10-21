@@ -150,13 +150,13 @@ export function ExpensesTab({
   const hasFilters = Boolean(filters.searchTerm || filters.dateRange !== 'all' || filters.taxRelevant !== 'all' || filters.category || filters.hasReceipt !== 'all');
   return (
     <div className="bookkeeping-workspace space-y-6">
-      <details id="expense-entry" className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
+      <details id="expense-entry" hidden={!entryOpen} className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-6">
-          <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><DashboardIcon name="tile-expenses" size={44} /></span><span><span className="block text-sm font-semibold">Neue Ausgabe</span><span className="block text-xs text-muted-foreground">Geschäftlichen Vorgang erfassen</span></span></span>
+          <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><DashboardIcon name="tile-expenses" size={44} /></span><span><span className="block text-sm font-semibold">Neue Ausgabe</span></span></span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         </summary>
         <div className="border-t p-4 sm:p-6">
-          {onOpenRecurringExpenses && <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Steuerlich relevante Ausgaben werden in der EÜR berücksichtigt.</p><Button variant="outline" size="sm" onClick={onOpenRecurringExpenses}>Wiederkehrende Ausgaben</Button></div>}
+          {onOpenRecurringExpenses && <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Button variant="outline" size="sm" onClick={onOpenRecurringExpenses}>Wiederkehrende Ausgaben</Button></div>}
           <form onSubmit={onSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -192,7 +192,7 @@ export function ExpensesTab({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category" className="text-sm font-medium">Kategorie (EÜR-optimiert)</Label>
+                <Label htmlFor="category" className="text-sm font-medium">Kategorie</Label>
                 <Combobox
                   id="category"
                   value={newExpense.category}
@@ -201,9 +201,7 @@ export function ExpensesTab({
                   placeholder="z.B. Bürobedarf, Telefon, Werbung..."
                   allowCustom={true}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Wählen Sie eine Kategorie für die automatische EÜR-Zuordnung
-                </p>
+
               </div>
               <div className="space-y-2">
                 <Label htmlFor="receipt" className="text-sm font-medium">Beleg hochladen (optional)</Label>
@@ -223,16 +221,14 @@ export function ExpensesTab({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <span className="text-foreground font-medium">
-                      {expenseReceipt ? expenseReceipt.name : 'Klicken Sie hier, um eine Datei auszuwählen'}
+                      {expenseReceipt ? expenseReceipt.name : 'Datei auswählen'}
                     </span>
                     <span className="text-sm text-muted-foreground mt-1">
-                      Unterstützt wird: PDF, JPG, PNG
+                      PDF · JPG · PNG
                     </span>
                   </Label>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Bei geschäftlichen Ausgaben hilft der Beleg bei der Steuererklärung
-                </p>
+
               </div>
               <div className="flex items-center space-x-2 h-full pt-6">
                 <div className="relative inline-flex items-center">
@@ -259,9 +255,7 @@ export function ExpensesTab({
                     onChange={(e) => setNewExpense({ ...newExpense, taxDeductiblePercentage: parseInt(e.target.value) || 0 })}
                     placeholder="100"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Geschäftlicher Anteil
-                  </p>
+
                 </div>
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -278,7 +272,7 @@ export function ExpensesTab({
                     placeholder="Optional (z.B. 3)"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Für Wirtschaftsgüter über 800€ (netto). Unter 800€: Feld leer lassen.
+                    Bis 800 € netto: leer lassen.
                   </p>
                 </div>
               </div>
@@ -300,7 +294,7 @@ export function ExpensesTab({
         <div className="px-6 pt-6 pb-4 border-b">
           <LedgerListHeading icon="nav-expenses" isLoading={isLoading} isError={isError} title="Ihre Ausgaben" total={total} amounts={isError || isLoading ? [] : expenses.map(item => item.amount)} />
           <div className="ledger-filters">
-            <div className="ledger-filter-grid grid gap-4 md:grid-cols-5">
+            <div className="ledger-filter-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {/* Category Filter */}
               <div>
                 <Label htmlFor="expense-category-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Kategorie</Label>
@@ -425,7 +419,7 @@ export function ExpensesTab({
             </div>
 
             {/* Filter Actions */}
-            <div className="flex flex-col gap-3 mt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
               <div className="ledger-result-summary">
                 <div className="text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">{expenses.length}</span> Ausgaben auf dieser Seite
@@ -506,7 +500,7 @@ export function ExpensesTab({
                 <ExpenseRowActions expense={expense} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} />
               </article>
             )) : (
-              <p className="p-6 text-center text-sm text-muted-foreground">Keine Ausgaben vorhanden. Erfassen Sie oben Ihre erste Ausgabe.</p>
+              <p className="p-6 text-center text-sm text-muted-foreground">Noch keine Ausgaben.</p>
             )}
           </div>
           <div className="hidden overflow-x-auto p-6 xl:block">

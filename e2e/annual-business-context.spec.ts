@@ -105,7 +105,7 @@ test('optional annual context preserves unknown/zero, corrections, conflict, dir
     for (const id of ['annual-year', 'annual-effective', 'annual-founding', 'annual-turnover', 'annual-external', 'annual-completeness', 'annual-source']) {
       await alignBelowHeader(section.locator(`#${id}`));
     }
-    await alignBelowHeader(section.getByRole('heading', { name: 'Optionaler Jahreskontext', exact: true }));
+    await alignBelowHeader(section.getByRole('heading', { name: 'Jahreskontext (optional)', exact: true }));
     for (const id of ['annual-year', 'annual-effective', 'annual-founding']) {
       await expect.poll(() => unobscuredInViewport(section.locator(`#${id}`))).toBe(true);
     }
@@ -119,7 +119,7 @@ test('optional annual context preserves unknown/zero, corrections, conflict, dir
   await captureAnnualViewport('annual-context-desktop.png');
   await page.goto('/dashboard');
   await page.goBack();
-  await expect(section.getByRole('heading', { name: 'Optionaler Jahreskontext', exact: true })).toBeVisible();
+  await expect(section.getByRole('heading', { name: 'Jahreskontext (optional)', exact: true })).toBeVisible();
   if (await section.getByRole('button', { name: 'Jahreskontext öffnen', exact: true }).count()) await section.getByRole('button', { name: 'Jahreskontext öffnen', exact: true }).click();
   await expect(section.getByLabel('Gesamtumsatz im Vorjahr (EUR)', { exact: true })).toHaveValue('10.00');
   expect(await (await page.request.get('/api/settings')).json()).toEqual(settingsBefore);

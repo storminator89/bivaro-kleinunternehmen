@@ -33,6 +33,6 @@ export function IncomingPhotoPreview({ document }: { document: IncomingDocument 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={url} alt={`Unverändertes Foto-Original: ${document.originalRef.fileName}`} className="block h-auto max-w-none" style={{ width: `${zoom * 100}%` }} onError={() => setError('Das Foto kann nicht angezeigt werden. Original herunterladen oder Vorschau erneut laden.')} />
     </div>}
-    <p className="mt-2 text-xs text-muted-foreground">Ein Foto pro Beleg. Zum Lesen vergrößern und in der Ansicht verschieben; weitere Seiten als eigene Originale hinzufügen. Kein OCR und keine automatische Buchung.</p>
+    <p className="mt-2 text-xs text-muted-foreground">Eine Seite je Beleg. Weitere Seiten separat hinzufügen. Keine automatische Buchung.</p>
   </section>;
 }

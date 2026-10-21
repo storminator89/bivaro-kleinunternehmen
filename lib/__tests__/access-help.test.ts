@@ -48,12 +48,12 @@ describe('anonymous access-help foundation', () => {
     const first = renderToStaticMarkup(await AccessHelpPage(props));
     const second = renderToStaticMarkup(await AccessHelpPage(props));
     expect(second).toBe(first);
-    expect(first).toContain('prüft nicht, ob ein Konto existiert');
-    expect(first).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
-    expect(first).toContain('keinen öffentlichen Wiederherstellungsweg');
-    expect(first).toContain('E-Mail-Self-Service');
-    expect(first).toContain('niemals Ihr bisheriges Passwort');
-    expect(first).toContain('vollständige Backups');
+    expect(first).toContain('Ihre Identität und Berechtigung unabhängig prüfen');
+    expect(first).toContain('Kein Supportkontakt hinterlegt');
+    expect(first).toContain('Wiederherstellung muss mit dem Betreiber gesondert autorisiert werden');
+    expect(first).toContain('keinen Resetlink per E-Mail');
+    expect(first).toContain('Keine Passwörter');
+    expect(first).toContain('Geschäftsdaten');
     expect(first).toContain('href="/login?callbackUrl=%2Fdashboard%3Ftab%3Dexpenses"');
     expect(first).not.toMatch(/mailto:|tel:|<form|<input|resetToken|localStorage/);
     const malicious = renderToStaticMarkup(await AccessHelpPage({ searchParams: Promise.resolve({ callbackUrl: '//evil.invalid' }) }));
@@ -68,7 +68,7 @@ describe('anonymous access-help foundation', () => {
     // Next 16 learns the initial location hash, then appends the destination
     // hash again when revisiting its cached route. These two public help links
     // deliberately perform fresh document navigations, not Link interception.
-    expect(source).toContain('<a href="/help#angebot">Angebot und Zuständigkeit prüfen</a>');
+    expect(source).toContain('<a href="/help#angebot">Betreiber und Angebot</a>');
     expect(source).toContain('<a className={styles.textLink} href="/help#zugang">Zur Aufgabenhilfe</a>');
     expect(source).not.toMatch(/<Link[^>]+href="\/help#/);
     const output = renderToStaticMarkup(await AccessHelpPage({ searchParams: Promise.resolve({}) }));

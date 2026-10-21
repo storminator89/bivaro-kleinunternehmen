@@ -219,6 +219,15 @@ describe('issue #29: numeric assumption validation', () => {
     expect(calculateIncomeTax).not.toHaveBeenCalled();
   });
 
+  it.each(['loading', 'failed', 'partial-year'])('does not suggest tax optimizations from an unavailable or unsupported basis (%s)', state => {
+    hooks.states[0] = state === 'failed' ? null : buildTaxSummary({ year: 2026, timeRange: state === 'partial-year' ? 'last3Months' : 'thisYear', incomes: [], expenses: [] });
+    hooks.states[1] = state === 'loading';
+    hooks.states[2] = state === 'failed' ? 'Daten nicht verfügbar' : null;
+    const panel = nodes(simulation()).find(node => node.props['aria-labelledby'] === 'recommendations-heading')!;
+    expect(text(panel)).toContain('vollständiges Steuerjahr');
+    expect(nodes(panel).filter(node => node.type === 'li')).toHaveLength(0);
+  });
+
   it('keeps a genuinely loaded zero distinct from unavailable fiscal data', () => {
     hooks.states[0] = buildTaxSummary({ year: 2026, timeRange: 'thisYear', incomes: [], expenses: [] });
     hooks.states[1] = false;
@@ -245,7 +254,7 @@ describe('issue #29: numeric assumption validation', () => {
     expect(text(tree)).toContain('Bitte korrigieren Sie die markierten Eingaben');
     expect(text(tree)).toContain('nicht berechnet');
     expect(text(tree)).not.toContain('Hohe Grenzsteuerbelastung');
-    expect(text(tree)).not.toContain('Aktuelle Struktur wirkt effizient');
+    expect(text(tree)).not.toContain('Keine weiteren Hinweise');
     expect(calculateIncomeTax).not.toHaveBeenCalled();
     expect(calculateChurchTax).not.toHaveBeenCalled();
     expect(calculateTradeTaxDetails).not.toHaveBeenCalled();

@@ -17,10 +17,10 @@ export function SettingsSectionNavigation({ isAdmin }: { isAdmin: boolean }) {
     { id: 'procedure-settings', label: 'Dokumentation', Icon: FileCheck },
   ];
   const links = items.map(({ id, label, Icon }) => (
-    <a key={id} href={`#${id}`}><Icon aria-hidden="true" /><span>{label}</span></a>
+    <a key={id} href={`#${id}`} aria-label={label}><Icon aria-hidden="true" /><span>{id === 'handoff-settings' ? 'Übergabe' : label}</span></a>
   ));
   return <>
-    <nav className={styles.sectionNav} aria-label="Einstellungsbereiche"><p>In den Einstellungen</p>{links}</nav>
+    <nav className={styles.sectionNav} aria-label="Einstellungsbereiche"><p>Bereiche</p>{links}</nav>
     <details className={styles.mobileNav}>
       <summary>Bereich wechseln<ChevronDown aria-hidden="true" /></summary>
       <nav aria-label="Mobile Einstellungsbereiche">{links}</nav>

@@ -9,7 +9,7 @@ import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { toast } from "@/components/ui/toaster";
 import { getAccessHelpHref } from "@/lib/access-help";
 import { getSafeLoginCallbackUrl } from "@/lib/login-callback";
@@ -61,21 +61,10 @@ export default function LoginPage() {
 
   return (
     <div className={styles.authLayout}>
-      <div className={styles.authStory}>
-        <h2 className="min-w-0 [overflow-wrap:anywhere]">
-          Buchhaltung, die den nächsten Schritt zeigt.
-        </h2>
-        <p className="mt-6 max-w-sm text-lg leading-8 text-muted-foreground">
-          Rechnungen, Belege und Auswertungen bleiben in einem klaren Arbeitsablauf verbunden.
-        </p>
-        <dl><div><dt>Erfassen</dt><dd>Belege und Geschäftsvorgänge direkt zuordnen.</dd></div><div><dt>Überblicken</dt><dd>Offene Rechnungen und Ergebnisse im Blick behalten.</dd></div><div><dt>Weiterarbeiten</dt><dd>Mit Ihren vorhandenen Daten dort fortfahren, wo Sie aufgehört haben.</dd></div></dl>
-      </div>
-
       <Card className={styles.authCard}>
         <CardHeader className="space-y-4 pb-5">
           <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.03em]">Willkommen zurück</h1>
-            <CardDescription className="mt-2">Melden Sie sich mit Ihren Zugangsdaten an.</CardDescription>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em]">Anmelden</h1>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
@@ -145,11 +134,11 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-          <Link href={getAccessHelpHref(searchParams.get("callbackUrl"))} className="mt-3 flex min-h-11 items-center justify-center rounded-md text-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">Zugang verloren oder Betriebsstörung?</Link>
+          <Link href={getAccessHelpHref(searchParams.get("callbackUrl"))} className="mt-3 flex min-h-11 items-center justify-center rounded-md text-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">Probleme beim Anmelden?</Link>
         </CardContent>
         <CardFooter className="border-t border-border/80 pt-5">
           <div className="w-full text-center text-sm text-muted-foreground">
-            Sie haben noch kein Konto?{" "}
+
             <Link href="/register" className="font-medium text-foreground hover:underline">
               Registrieren
             </Link>

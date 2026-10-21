@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-10-21",
+    "scope": "app",
+    "macrostructure": "Ledger workspace / compact editors / progressive disclosure",
+    "theme": "BIVARO Design System 2.0",
+    "enrichment": "none",
+    "brief": "Radikal weniger sichtbare Erklärungen auf allen Seiten; kurze Statuswerte und Felder, Konfigurationen auf Abruf, Finanz- und Druckverträge erhalten."
+  },
+  {
     "date": "2026-10-17",
     "scope": "app",
     "macrostructure": "Ledger Workbench / four financial metrics / tabular management / grouped editors",

@@ -12,14 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
   Key,
-  Shield,
   Zap,
   FileJson,
   Users,
   Receipt,
   TrendingUp,
   TrendingDown,
-  AlertCircle,
   Clock,
   ChevronRight,
   ExternalLink,
@@ -339,7 +337,7 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
       examples: {
         get: `curl -X GET "https://ihre-domain.de/api/v1/settings" \\
   -H "Authorization: Bearer biv_sk_IhrApiKey"`,
-        post: `# Hinweis: Einstellungen können aus Sicherheitsgründen 
+        post: `# Hinweis: Einstellungen können aus Sicherheitsgründen
 # nur über das Web-Interface geändert werden.
 # POST, PUT und DELETE sind nicht verfügbar.`,
         response: `{
@@ -369,28 +367,19 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
           className={styles.back}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Zurück zu API-Schlüssel
+          API-Schlüssel
         </Link>
 
         {/* Header */}
-        <PageHeader title="API-Dokumentation" description="REST API v1 für die Integration externer Systeme." section="System" actions={<>
-<div className={styles.headerActions}>
-            <Badge variant="outline" className="gap-1">
-              <Zap className="h-3 w-3" />
-              REST API
-            </Badge>
-            <Badge variant="outline" className="gap-1">
-              <FileJson className="h-3 w-3" />
-              JSON
-            </Badge>
-            <Badge variant="outline" className="gap-1">
-              <Shield className="h-3 w-3" />
-              API-Key Auth
-            </Badge>
-          </div>
-</>} />
+        <PageHeader title="API-Dokumentation" />
 
         <div className={styles.documentLayout}>
+          <details className={styles.mobileNav}><summary>Abschnitt wählen</summary><nav aria-label="Mobile API-Dokumentationsbereiche">
+            <a href="#api-quickstart">Schnellstart</a><a href="#api-auth">Authentifizierung</a>
+            <a href="#api-limits">Rate Limiting</a><a href="#api-cors">CORS</a>
+            <a href="#api-response">Antwortformat</a><a href="#api-status">Statuscodes</a>
+            <a href="#api-endpoints">Endpunkte</a><a href="#api-query">Query-Parameter</a><a href="#api-openapi">OpenAPI</a>
+          </nav></details>
           <nav className={styles.toc} aria-label="API-Dokumentationsbereiche">
             <a href="#api-quickstart">Schnellstart</a><a href="#api-auth">Authentifizierung</a>
             <a href="#api-limits">Rate Limiting</a><a href="#api-cors">CORS</a>
@@ -405,49 +394,13 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
               <Zap className="h-5 w-5 text-primary" />
               Schnellstart
             </CardTitle>
-            <CardDescription>
-              In 3 Schritten zur ersten API-Anfrage
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                  1
-                </div>
-                <div>
-                  <p className="font-medium">API-Key erstellen</p>
-                  <p className="text-sm text-muted-foreground">
-                    Erstellen Sie einen API-Key unter{" "}
-                    <Link href="/settings/api-keys" className="text-primary hover:underline">
-                      Einstellungen → API-Keys
-                    </Link>
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                  2
-                </div>
-                <div>
-                  <p className="font-medium">Key sicher speichern</p>
-                  <p className="text-sm text-muted-foreground">
-                    Der vollständige Key wird nur einmal angezeigt
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                  3
-                </div>
-                <div>
-                  <p className="font-medium">API aufrufen</p>
-                  <p className="text-sm text-muted-foreground">
-                    Key im Header mitsenden
-                  </p>
-                </div>
-              </div>
-            </div>
+          <CardContent>
+            <ol className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+              <li><Link href="/settings/api-keys" className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4">1. Schlüssel erstellen</Link></li>
+              <li>2. Sicher verwahren</li>
+              <li>3. Im Authorization-Header senden</li>
+            </ol>
           </CardContent>
         </Card>
 
@@ -458,18 +411,12 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
               <Key className="h-5 w-5" />
               Authentifizierung
             </CardTitle>
-            <CardDescription>
-              Alle API-Anfragen müssen authentifiziert werden
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Sie können den API-Key auf zwei Arten übermitteln:
-            </p>
 
             <div className="space-y-4">
               <div>
-                <h4 className="font-medium mb-2">Option 1: Authorization Header (empfohlen)</h4>
+                <h4 className="font-medium mb-2">Authorization (empfohlen)</h4>
                 <CodeBlock
                   code='Authorization: Bearer biv_sk_IhrApiKey...'
                   id="auth1"
@@ -477,7 +424,7 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
               </div>
 
               <div>
-                <h4 className="font-medium mb-2">Option 2: X-API-Key Header</h4>
+                <h4 className="font-medium mb-2">X-API-Key</h4>
                 <CodeBlock
                   code='X-API-Key: biv_sk_IhrApiKey...'
                   id="auth2"
@@ -485,17 +432,7 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
               </div>
             </div>
 
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mt-4">
-              <div className="flex gap-3">
-                <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-yellow-800 dark:text-yellow-200">Sicherheitshinweis</p>
-                  <p className="text-yellow-700 dark:text-yellow-300 mt-1">
-                    Teilen Sie Ihren API-Key niemals öffentlich. Speichern Sie ihn sicher als Umgebungsvariable.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">Schlüssel geheim halten; als Umgebungsvariable speichern.</p>
           </CardContent>
         </Card>
 
@@ -506,9 +443,6 @@ curl -X POST "https://ihre-domain.de/api/v1/invoices/upload" \\
               <Clock className="h-5 w-5" />
               Rate Limiting
             </CardTitle>
-            <CardDescription>
-              Schutz vor Überlastung der API
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-6">
@@ -543,33 +477,11 @@ X-RateLimit-Reset: 1732738800`}
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5" />
-              CORS (Cross-Origin Resource Sharing)
+              CORS
             </CardTitle>
-            <CardDescription>
-              Konfiguration für browserbasierte API-Zugriffe
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Wenn Sie die API von einer Browser-Anwendung (z.B. React, Vue, JavaScript) aufrufen möchten,
-              müssen Sie die Domain Ihrer Anwendung als erlaubte Origin konfigurieren.
-            </p>
-
-            <div className={styles.inlineNote}>
-              <div className="flex gap-3">
-                <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-blue-800 dark:text-blue-200">Origins konfigurieren</p>
-                  <p className="text-blue-700 dark:text-blue-300 mt-1">
-                    Fügen Sie Ihre erlaubten Origins unter{" "}
-                    <Link href="/settings/api-keys" className="underline hover:no-underline">
-                      Einstellungen → API-Keys → CORS-Einstellungen
-                    </Link>
-                    {" "}hinzu.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <Link href="/settings/api-keys" className="inline-flex min-h-11 items-center text-sm text-primary underline underline-offset-4">Browser-Origin freigeben</Link>
 
             <div>
               <h4 className="font-medium mb-2">Standard-Origins (immer erlaubt)</h4>
@@ -607,18 +519,7 @@ Access-Control-Max-Age: 86400`}
               />
             </div>
 
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mt-4">
-              <div className="flex gap-3">
-                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-amber-800 dark:text-amber-200">Server-zu-Server Aufrufe</p>
-                  <p className="text-amber-700 dark:text-amber-300 mt-1">
-                    Bei Server-zu-Server Aufrufen (z.B. von Node.js, Python, PHP) ist CORS nicht relevant.
-                    CORS gilt nur für Anfragen aus dem Browser.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">Nur für Browseranfragen. Serveraufrufe benötigen keine CORS-Freigabe.</p>
           </CardContent>
         </Card>
 
@@ -629,9 +530,6 @@ Access-Control-Max-Age: 86400`}
               <FileJson className="h-5 w-5" />
               Response-Format
             </CardTitle>
-            <CardDescription>
-              Einheitliches JSON-Format für alle Antworten
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="success">
@@ -794,9 +692,6 @@ Access-Control-Max-Age: 86400`}
         <Card id="api-query" className={`${styles.surface} mt-8`}>
           <CardHeader>
             <CardTitle>Allgemeine Query-Parameter</CardTitle>
-            <CardDescription>
-              Diese Parameter können bei GET-Anfragen verwendet werden
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -854,9 +749,7 @@ Access-Control-Max-Age: 86400`}
                 <FileJson className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-blue-900 dark:text-blue-100">OpenAPI 3.0 Spezifikation</p>
-                  <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
-                    Vollständige API-Dokumentation im OpenAPI-Format für Swagger UI oder andere Tools.
-                  </p>
+
                 </div>
               </div>
               <Button variant="outline" asChild>
@@ -869,15 +762,6 @@ Access-Control-Max-Age: 86400`}
           </CardContent>
         </Card>
 
-        {/* Footer */}
-        <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
-          <p>
-            Fragen zur API? Erstellen Sie einen API-Key unter{" "}
-            <Link href="/settings/api-keys" className="text-primary hover:underline">
-              Einstellungen → API-Keys
-            </Link>
-          </p>
-        </div>
           </div>
         </div>
       </div>

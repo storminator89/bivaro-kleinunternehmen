@@ -135,7 +135,7 @@ describe('QA #32: internal recording and manual email copy', () => {
     expect(source).not.toContain('Empfehlung:');
     expect(source).not.toContain('Verzugszinsen:');
     expect(source).not.toContain('§ 286');
-    expect(source).toContain('Gebühren starten bei 0 EUR und werden weder empfohlen noch berechnet.');
+    expect(source).toContain('Gebühren und Mahnstufe selbst prüfen.');
     expect(source).toContain('setInvoiceToPay(invoice)');
     expect(source).toContain('<FullPaymentDialog');
     expect(source).toContain('onSuccess={handlePaymentSuccess}');

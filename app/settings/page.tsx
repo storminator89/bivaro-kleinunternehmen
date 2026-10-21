@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsSectionNavigation } from "@/components/settings/section-navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle, Key, ChevronRight, History, FileText } from "lucide-react";
 import {
@@ -477,7 +477,7 @@ export default function SettingsPage() {
 
   if (loadError) {
     return <div className={`${styles.workspace} space-y-6`}>
-      <PageHeader title="Einstellungen" description="Firmendaten und Steuerprofil verwalten." section="System" />
+      <PageHeader title="Einstellungen" />
       <Alert variant="destructive"><AlertTitle>Einstellungen nicht geladen</AlertTitle><AlertDescription>Ihre gespeicherten Angaben konnten nicht geladen werden. Laden Sie sie erneut, bevor Sie Änderungen vornehmen.</AlertDescription></Alert>
       <Button type="button" onClick={() => setLoadAttempt(previous => previous + 1)}>Erneut laden</Button>
     </div>;
@@ -485,7 +485,7 @@ export default function SettingsPage() {
 
   return (
     <div className={`${styles.workspace} space-y-6`}>
-      <PageHeader title="Einstellungen" description="Verwalten Sie Ihre Firmendaten und Rechnungseinstellungen." section="System" />
+      <PageHeader title="Einstellungen" />
 
       <div className={styles.settingsLayout}><SettingsSectionNavigation isAdmin={isAdmin} /><div className={styles.settingsContent}>
       <form id="company-settings" onSubmit={handleSubmit}>
@@ -493,9 +493,6 @@ export default function SettingsPage() {
         <Card className={styles.surface}>
           <CardHeader>
             <CardTitle>Rechnungsdaten</CardTitle>
-            <CardDescription>
-              Diese Informationen erscheinen auf Ihren generierten Rechnungen.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <fieldset className={styles.fieldGroup}><legend>Unternehmen & Kontakt</legend>
@@ -595,9 +592,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Diese Daten werden für den QR-Code und die Fußzeile verwendet.
-              </p>
             </div>
 
             </fieldset>
@@ -705,17 +699,11 @@ export default function SettingsPage() {
               <Shield className="h-5 w-5" />
               <CardTitle>Admin-Einstellungen</CardTitle>
             </div>
-            <CardDescription>
-              Diese Einstellungen sind nur für Administratoren sichtbar.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className={styles.registration}>
               <div className="space-y-0.5">
                 <Label htmlFor="allow-registration">Benutzerregistrierung erlauben</Label>
-                <p className="text-sm text-muted-foreground">
-                  Wenn aktiviert, können sich neue Benutzer registrieren.
-                </p>
               </div>
               <Switch
                 id="allow-registration"
@@ -728,14 +716,12 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      <Card className={styles.surface} id="handoff-settings">
+      <Card className={`${styles.surface} ${styles.destination}`} id="handoff-settings">
         <CardHeader>
           <CardTitle>Unterlagen übergeben</CardTitle>
-          <CardDescription>Einnahmen, Ausgaben, Rechnungen und vorhandene Originale für Ihre Steuerberatung zusammenstellen.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">Wählen Sie einen Zeitraum und prüfen Sie Zählungen, fehlende Originale und Warnungen vor dem ZIP-Download. Kein DATEV-Format, keine ELSTER-Einreichung und kein vollständiger Prüfexport. Das Paket ersetzt keine Datensicherung.</p>
-          <Button asChild><Link href="/handoff"><FileText aria-hidden="true" />Unterlagen übergeben</Link></Button>
+          <Button asChild><Link href="/handoff" aria-label="Unterlagen übergeben"><FileText aria-hidden="true" />Öffnen</Link></Button>
         </CardContent>
       </Card>
 
@@ -746,9 +732,6 @@ export default function SettingsPage() {
             <Database className="h-5 w-5" />
             <CardTitle>Datensicherung</CardTitle>
           </div>
-          <CardDescription>
-            Sichern Sie Ihre Daten oder stellen Sie ein Backup wieder her.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {backupMessage && (
@@ -766,10 +749,8 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Backup erstellen */}
             <div className="space-y-3">
-              <h4 className="font-medium">Backup erstellen (JSON)</h4>
-              <p className="text-sm text-muted-foreground">
-                Laden Sie alle Ihre Daten als JSON-Datei herunter.
-              </p>
+              <h4 className="font-medium">JSON · Ohne Dateien</h4>
+
               <Button
                 onClick={handleBackupDownload}
                 disabled={backupLoading}
@@ -791,10 +772,8 @@ export default function SettingsPage() {
 
             {/* Vollständiges Backup */}
             <div className="space-y-3">
-              <h4 className="font-medium">Vollständiges Backup (ZIP)</h4>
-              <p className="text-sm text-muted-foreground">
-                Inkl. Rechnungs-PDFs, Belege und Logo.
-              </p>
+              <h4 className="font-medium">ZIP · Mit Dateien</h4>
+
               <Button
                 onClick={handleFullBackupDownload}
                 disabled={fullBackupLoading}
@@ -816,8 +795,8 @@ export default function SettingsPage() {
           </div>
 
           {/* Wiederherstellungs-Bereich */}
-          <div className="border-t pt-6 mt-6">
-            <h4 className="font-medium mb-4">Backup wiederherstellen</h4>
+          <details className="border-t pt-3">
+            <summary className="min-h-11 cursor-pointer py-3 font-medium">Backup wiederherstellen</summary>
 
             {/* Überschreib-Modus Option - gilt für alle Restore-Optionen */}
             <div className={`mb-4 p-4 rounded-lg border-2 ${overwriteMode ? 'bg-destructive/10 border-destructive' : 'bg-muted/30 border-muted'}`}>
@@ -837,7 +816,7 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground mt-1">
                     {overwriteMode
                       ? '⚠️ Alle bestehenden Daten werden vor dem Import gelöscht!'
-                      : 'Standardmäßig werden bereits vorhandene Einträge übersprungen (Merge-Modus).'}
+                      : 'Vorhandene Einträge überspringen.'}
                   </p>
                 </div>
               </div>
@@ -872,7 +851,7 @@ export default function SettingsPage() {
                     </>
                   )}
                 </Button>
-                <p className="text-xs text-muted-foreground mt-1 text-center">.json Datei</p>
+
               </div>
 
               <div>
@@ -902,7 +881,7 @@ export default function SettingsPage() {
                     </>
                   )}
                 </Button>
-                <p className="text-xs text-muted-foreground mt-1 text-center">.zip Datei (inkl. Dateien)</p>
+
               </div>
             </div>
 
@@ -977,14 +956,7 @@ export default function SettingsPage() {
                 </AlertDescription>
               </Alert>
             )}
-          </div>
-
-          <div className="border-t pt-4">
-            <p className="text-xs text-muted-foreground">
-              <strong>Hinweis:</strong> Aktivieren Sie "Bestehende Daten überschreiben" für ein komplettes Restore.
-              Das vollständige Backup kann bei vielen Dateien größer werden.
-            </p>
-          </div>
+          </details>
         </CardContent>
       </Card>
 
@@ -995,23 +967,12 @@ export default function SettingsPage() {
             <Key className="h-5 w-5" />
             <CardTitle>API-Zugang</CardTitle>
           </div>
-          <CardDescription>
-            Verwalten Sie API-Schlüssel für den Zugriff externer Systeme auf Ihre Daten.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm">
-                Erstellen Sie API-Keys, um die REST-API von externen Anwendungen aus zu nutzen.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Endpoints: /api/v1/customers, /api/v1/expenses, /api/v1/incomes, /api/v1/invoices
-              </p>
-            </div>
             <Button variant="outline" asChild>
-              <Link href="/settings/api-keys">
-                API-Keys verwalten
+              <Link href="/settings/api-keys" aria-label="API-Keys verwalten">
+                Öffnen
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
@@ -1026,23 +987,12 @@ export default function SettingsPage() {
             <History className="h-5 w-5" />
             <CardTitle>Audit-Log</CardTitle>
           </div>
-          <CardDescription>
-            Protokoll der erfassten Änderungen und Aktivitäten.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm">
-                Sehen Sie, wer erfasste Änderungen vorgenommen hat. Die Abdeckung ist begrenzt; einige Ereignisse werden bestmöglich protokolliert.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Kunden, Rechnungen, Ausgaben, Einnahmen, Einstellungen und mehr
-              </p>
-            </div>
             <Button variant="outline" asChild>
-              <Link href="/settings/audit-logs">
-                Audit-Log anzeigen
+              <Link href="/settings/audit-logs" aria-label="Audit-Log anzeigen">
+                Öffnen
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
@@ -1057,23 +1007,12 @@ export default function SettingsPage() {
             <FileText className="h-5 w-5" />
             <CardTitle>GoBD Verfahrensdokumentation</CardTitle>
           </div>
-          <CardDescription>
-            Dokumentation des Buchführungsverfahrens gemäß GoBD-Anforderungen.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm">
-                Erstellen und verwalten Sie Ihre Verfahrensdokumentation mit automatisch generierter Systembeschreibung.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Inkl. PDF-Export und Versionsverlauf
-              </p>
-            </div>
             <Button variant="outline" asChild>
-              <Link href="/settings/documentation">
-                Dokumentation öffnen
+              <Link href="/settings/documentation" aria-label="Dokumentation öffnen">
+                Öffnen
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>

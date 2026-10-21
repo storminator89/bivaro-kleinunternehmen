@@ -150,6 +150,12 @@ test('manual project time stays explicit through filters, cancel, retry, invoice
     await dialog.getByRole('button', { name: 'Filter zurücksetzen', exact: true }).click();
   }
   await page.keyboard.press('Escape'); await expect(dialog).toBeHidden(); await expect(opener).toBeFocused();
+  // The same customer has distinct responsive opener nodes. Also exercise
+  // mobile → desktop and the visible close button, not just Escape.
+  await opener.click();
+  await geometry(page, 1440);
+  await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
+  await expect(dialog).toBeHidden(); await expect(opener).toBeFocused();
   await noFinancialWrites(userId);
 
   await page.goto('/dashboard/invoices/new');

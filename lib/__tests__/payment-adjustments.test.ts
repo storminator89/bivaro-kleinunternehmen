@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
 import { readInvoicePaymentJournal, recordFullPayment, adoptLegacyPaidInvoice } from '@/lib/payment-journal/service';
@@ -17,6 +17,8 @@ import { createCashTransaction } from '@/lib/cashbook-service';
 import { adjustmentFingerprint } from '@/lib/payment-journal/adjustment-evidence';
 import { reminderBalance } from '@/lib/reminder-workbench';
 import { ownedInvoice } from '@/lib/payment-journal/service';
+afterEach(() => vi.unstubAllEnvs());
+
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null, userId: 'adjustment-owner' as string | null }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
 vi.mock('@/lib/get-user-id', () => {
@@ -330,6 +332,7 @@ describe('operational append-only adjustment contract', () => {
     expect(readPaymentAdjustmentPreflight(wire(await readInvoicePaymentJournal(owner, invoice.id)), invoice.id).ledger).toMatchObject({ refundedCents: '4000', netRetainedCents: '6000', refundDueCents: '6000', collectibleOpenCents: '0' });
   });
   it('authenticates and same-origin protects the adjustment HTTP contract, validates fields, and replays once', async () => {
+    vi.stubEnv('NEXTAUTH_URL', 'http://localhost');
     const { POST } = await import('@/app/api/invoices/[id]/payments/adjustments/route');
     const { invoice, payment } = await paid();
     const input = await command(invoice.id, payment.id);

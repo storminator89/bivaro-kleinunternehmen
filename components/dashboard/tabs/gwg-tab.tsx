@@ -146,14 +146,13 @@ export function GWGTab({ expensesAll, selectedTimeRange, onExport }: GWGTabProps
             <DashboardIcon name="nav-assets" size={40} />
             <div>
               <p className="font-medium">Keine GWG-Anschaffungen gefunden</p>
-              <p className="mt-1 text-sm text-muted-foreground">Im gewählten Zeitraum gibt es keine steuerrelevanten Ausgaben innerhalb der GWG-Grenzen.</p>
             </div>
           </div>
         )}
 
         <div className="flex items-start gap-2 border-t bg-muted/20 px-4 py-4 text-xs text-muted-foreground sm:px-6">
           <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>Das Verzeichnis dient als Nachweis gemäß § 6 Abs. 2 EStG und listet passende Ausgaben automatisch.</p>
+          <p>Automatisch aus passenden Ausgaben · § 6 Abs. 2 EStG.</p>
         </div>
       </section>
     </div>

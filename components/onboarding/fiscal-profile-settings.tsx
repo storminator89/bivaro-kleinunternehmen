@@ -10,10 +10,10 @@ import type { FiscalProfile, FiscalProfileSelection, FiscalTaxRegime } from '@/l
 import { fiscalSelectionPayload, isFiscalSelectionChanged } from './setup-state';
 import styles from './onboarding.module.css';
 
-const choices: { value: FiscalTaxRegime; title: string; description: string }[] = [
-  { value: 'SMALL_BUSINESS', title: 'Kleinunternehmerregelung (§ 19 UStG)', description: 'Ich habe geklärt, dass ich die Kleinunternehmerregelung anwende. Für passende Umsätze wird keine Umsatzsteuer ausgewiesen.' },
-  { value: 'STANDARD', title: 'Regelbesteuerung', description: 'Ich habe geklärt, dass ich nicht die Kleinunternehmerregelung anwende. Steuersatz und Behandlung prüfe ich für jeden Beleg.' },
-  { value: 'UNSET', title: 'Noch nicht geklärt', description: 'Ich möchte die Einordnung zuerst klären. Bivaro trifft keine Auswahl für mich.' },
+const choices: { value: FiscalTaxRegime; title: string }[] = [
+  { value: 'SMALL_BUSINESS', title: 'Kleinunternehmerregelung (§ 19 UStG)' },
+  { value: 'STANDARD', title: 'Regelbesteuerung' },
+  { value: 'UNSET', title: 'Noch nicht geklärt' },
 ];
 
 export function FiscalProfileSettings({ initialProfile }: { initialProfile: FiscalProfile }) {
@@ -75,17 +75,17 @@ export function FiscalProfileSettings({ initialProfile }: { initialProfile: Fisc
 
   return <section id="fiscal-profile" className={styles.panel} aria-labelledby="fiscal-profile-title">
     <header className={styles.header}>
-      <div><h2 id="fiscal-profile-title">Ihr Steuerprofil</h2><p>Wählen Sie bewusst, wie Sie umsatzsteuerlich eingeordnet sind. „Kleingewerbe“ bedeutet nicht automatisch Kleinunternehmer nach § 19 UStG.</p></div>
+      <div><h2 id="fiscal-profile-title">Steuerprofil</h2></div>
     </header>
     <form onSubmit={save} className={styles.body} noValidate>
       <fieldset disabled={saving} aria-describedby="fiscal-boundaries">
-        <legend className={styles.legend}>Welche Einordnung haben Sie geklärt?</legend>
+        <legend className={styles.legend}>Umsatzsteuer</legend>
         <div className={styles.options}>
           {choices.map(choice => <label key={choice.value} className={styles.option}>
-            <input type="radio" name="fiscalTaxRegime" value={choice.value} checked={selection.fiscalTaxRegime === choice.value}
+            <input type="radio" name="fiscalTaxRegime" aria-label={choice.title} value={choice.value} checked={selection.fiscalTaxRegime === choice.value}
               aria-invalid={Boolean(errors.fiscalTaxRegime)} aria-describedby={errors.fiscalTaxRegime ? 'fiscal-regime-error' : undefined}
               onChange={() => { setSelection(previous => ({ fiscalTaxRegime: choice.value, fiscalEffectiveFrom: choice.value === 'UNSET' ? null : previous.fiscalEffectiveFrom })); setConfirmed(false); setErrors({}); setMessage(''); }} />
-            <span><strong>{choice.title}</strong><span>{choice.description}</span></span>
+            <span><strong>{choice.value === 'SMALL_BUSINESS' ? 'Kleinunternehmer (§ 19)' : choice.title}</strong></span>
           </label>)}
         </div>
         {errors.fiscalTaxRegime && <p id="fiscal-regime-error" className={styles.error}>{errors.fiscalTaxRegime}</p>}
@@ -95,7 +95,7 @@ export function FiscalProfileSettings({ initialProfile }: { initialProfile: Fisc
             <Input id="fiscalEffectiveFrom" name="fiscalEffectiveFrom" type="date" min="1900-01-01" value={selection.fiscalEffectiveFrom ?? ''}
               aria-invalid={Boolean(errors.fiscalEffectiveFrom)} aria-describedby="fiscal-date-help fiscal-date-error"
               onChange={event => { setSelection(previous => ({ ...previous, fiscalEffectiveFrom: event.target.value || null })); setConfirmed(false); setErrors({}); setMessage(''); }} />
-            <p id="fiscal-date-help" className={styles.description}>Ab welchem Datum gilt Ihre geklärte Einordnung? Das ist nicht automatisch Ihr Gründungsdatum.</p>
+
             <p id="fiscal-date-error" className={styles.error}>{errors.fiscalEffectiveFrom}</p>
           </div>
           <label className={styles.confirmation}>
@@ -105,14 +105,14 @@ export function FiscalProfileSettings({ initialProfile }: { initialProfile: Fisc
           {errors.confirmation && <p id="fiscal-confirmation-error" className={styles.error}>{errors.confirmation}</p>}
         </>}
       </fieldset>
-      <div className={styles.notice} id="fiscal-boundaries"><strong>Ihre Einordnung, keine automatische Steuerprüfung</strong>Bivaro bietet keine Steuerberatung und ermittelt weder Ihre Berechtigung noch einen Wechsel automatisch. Das Profil ist eine Vorgabe für neue Rechnungen ab dem Gültigkeitsdatum, keine Änderung alter Belege. Sonderfälle und passende Steuersätze müssen Sie gesondert prüfen. <Link className={styles.link} href="/help#steuerprofil">Einordnung und Grenzen verstehen</Link></div>
-      <p className={styles.status}>Gespeichert: {saved.fiscalTaxRegime === 'UNSET' ? 'Noch nicht geklärt' : `${saved.fiscalTaxRegime === 'SMALL_BUSINESS' ? 'Kleinunternehmerregelung (§ 19 UStG)' : 'Regelbesteuerung'} · gültig ab ${saved.fiscalEffectiveFrom?.split('-').reverse().join('.')}`}. {saved.fiscalConfirmedAt && 'Von Ihnen bestätigt; keine fachliche Prüfung durch Bivaro.'}</p>
+      <details className="text-xs text-muted-foreground"><summary className="min-h-11 cursor-pointer py-3 font-medium">Steuerhinweise</summary><div id="fiscal-boundaries" className="space-y-2 pb-3"><p>Kleingewerbe ≠ Kleinunternehmer nach § 19 UStG. Bivaro prüft die Voraussetzungen nicht.</p><p id="fiscal-date-help">Gültigkeitsdatum der Einordnung, nicht automatisch das Gründungsdatum.</p><p>Vorgabe für neue Rechnungen ab Gültigkeitsdatum. Bestehende Belege bleiben unverändert. Berechtigung, Wechsel und Sonderfälle fachlich klären.</p><Link className={styles.link} href="/help#steuerprofil">Mehr erfahren</Link></div></details>
+      <p className={styles.status}>Gespeichert: {saved.fiscalTaxRegime === 'UNSET' ? 'Noch nicht geklärt' : `${saved.fiscalTaxRegime === 'SMALL_BUSINESS' ? 'Kleinunternehmerregelung (§ 19 UStG)' : 'Regelbesteuerung'} · gültig ab ${saved.fiscalEffectiveFrom?.split('-').reverse().join('.')}`}.</p>
       <div aria-live="polite" aria-atomic="true">{message && <p className={styles.status}>{message}</p>}</div>
       {Object.keys(errors).length > 0 && <p role="alert" className={styles.error}>{errors.save || 'Das Steuerprofil wurde nicht gespeichert. Bitte prüfen Sie die markierten Angaben.'}</p>}
       <div className={styles.actions}>
-        <p>{changed ? 'Ungespeicherte Änderungen' : 'Keine ungespeicherten Änderungen'}</p>
+        {changed && <p>Ungespeicherte Änderungen</p>}
         <Button type="button" variant="outline" onClick={cancel} disabled={saving || (!changed && !confirmed)}>Verwerfen</Button>
-        <Button type="submit" disabled={saving || !changed}>{saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}{saving ? 'Wird gespeichert…' : selection.fiscalTaxRegime === 'UNSET' ? 'Einordnung zurücksetzen' : 'Steuerprofil speichern'}</Button>
+        <Button type="submit" aria-label={saving ? 'Wird gespeichert…' : selection.fiscalTaxRegime === 'UNSET' ? 'Einordnung zurücksetzen' : 'Steuerprofil speichern'} disabled={saving || !changed}>{saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}{saving ? 'Wird gespeichert…' : selection.fiscalTaxRegime === 'UNSET' ? 'Zurücksetzen' : 'Speichern'}</Button>
       </div>
     </form>
   </section>;

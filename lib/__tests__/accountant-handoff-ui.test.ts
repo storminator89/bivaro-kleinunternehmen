@@ -115,7 +115,7 @@ describe('handoff accessible rendering and honest scope', () => {
     expect(html).toContain('value="2026"');
     expect(html).toContain('Vorschau laden');
     expect(html).not.toContain('ZIP herunterladen');
-    for (const copy of ['Format 2', 'kein vollständiger GoBD-Prüfexport', 'keine ELSTER-Einreichung', 'Kein DATEV-Format', 'payments.csv', 'adjustments.csv', 'historischer Datumsunsicherheit', 'dürfen nicht addiert werden', 'keine freigegebene Steuer-/EÜR-Zuordnung', 'nichts automatisch', 'aria-live="polite"', 'href="/help#export"', 'href="/settings#handoff-settings"']) expect(html).toContain(copy);
+    for (const copy of ['Format 2', 'kein vollständiger GoBD-Prüfexport', 'keine ELSTER-Einreichung', 'Kein DATEV-Format', 'payments.csv', 'adjustments.csv', 'historischer Datumsunsicherheit', 'dürfen nicht addiert werden', 'keine freigegebene Steuer-/EÜR-Zuordnung', 'Kein automatischer Versand', 'aria-live="polite"', 'href="/help#export"', 'href="/settings#handoff-settings"']) expect(html).toContain(copy);
     expect(html).not.toContain('Format 1'); expect(html).not.toContain('separates Erstattungsjournal');
     expect(html).not.toContain('role="alert"');
   });
@@ -124,23 +124,23 @@ describe('handoff accessible rendering and honest scope', () => {
     expect((html.match(/type="date"/gu) ?? []).length).toBe(2);
     expect(html).toContain('for="handoff-from"');
     expect(html).toContain('for="handoff-to"');
-    expect(html).toContain('höchstens');
+    expect(html).toContain('Maximal 366 Tage');
   });
   it('makes an empty period explicit without inventing completeness', () => {
     const html = renderToStaticMarkup(createElement(HandoffReview, { preview }));
     expect(html).toContain('Keine Datensätze');
     expect(html).toContain('keine Vollständigkeitsprüfung');
     expect(html).toContain('Keine technischen Warnungen');
-    expect(html).toContain('Addieren Sie diese Tabellen nicht');
-    expect(html).toContain('UNCHANGED'); expect(html).toContain('keine steuerliche Freigabe');
+    expect(html).toContain('desselben Vorgangs nicht addieren');
+    expect(html).toContain('Steuerlich ungeprüft');
   });
   it('shows original payment and adjustment counts with an always-visible unreviewed fiscal limitation', () => {
     const adjusted: HandoffPreview = { ...preview, manifest: { ...preview.manifest, fiscalMappingStatus: 'UNREVIEWED', counts: { ...preview.manifest.counts, payments: 3, adjustments: 2 } } };
     const html = renderToStaticMarkup(createElement(HandoffReview, { preview: readHandoffPreview(adjusted) }));
     expect(html).toContain('<dt>Original-Zahlungsnachweise</dt><dd>3</dd>');
     expect(html).toContain('<dt>Korrektur- und Erstattungsnachweise</dt><dd>2</dd>');
-    expect(html).toContain('<strong>Steuerlich nicht freigegeben</strong> (UNREVIEWED)');
-    expect(html).toContain('vor EÜR oder Steuerexport fachlich prüfen');
+    expect(html).toContain('<strong>Steuerlich nicht freigegeben.</strong>');
+    expect(html).toContain('Korrekturen und Erstattungen prüfen');
     expect(html.indexOf('Steuerlich nicht freigegeben')).toBeLessThan(html.indexOf('Originaldateien'));
     expect(html).toContain('Manifestversion 2'); expect(html).toContain('Zahlungsvertrag 2');
     expect(html).not.toContain('Keine Datensätze');
@@ -154,7 +154,7 @@ describe('handoff accessible rendering and honest scope', () => {
     } } }));
     expect(html).toContain('2 Originale fehlen');
     expect(html).toContain('1 Warnung');
-    expect(html).toContain('nicht als vollständig geprüft');
+    expect(html).toContain('Originale vor Übergabe klären');
     expect(html).toContain('expense #4');
     expect(html).toContain('Original fehlt.');
     expect(html).not.toContain('Keine technischen Warnungen');
@@ -170,10 +170,10 @@ describe('handoff accessible rendering and honest scope', () => {
     const guide = pilotGuides.find(value => value.id === 'export')!;
     expect(guide.links.some(link => link.href === '/handoff')).toBe(true);
     expect(guide.caution).toContain('2024, 2025 und 2026');
-    expect(guide.caution).toContain('unbekannte Formularjahre werden abgewiesen');
-    expect(guide.caution).toContain('kein vollständiger GoBD-Prüfexport');
-    expect(guide.steps.join(' ')).toContain('Bivaro-Format 2');
-    for (const copy of ['payments.csv', 'adjustments.csv', 'steuerlich ungeprüft (UNREVIEWED)', 'dürfen nicht addiert werden', 'Ungebuchte Eingangsbelege sind nicht enthalten']) expect(guide.caution).toContain(copy);
+    expect(guide.caution).toContain('unbekannte Jahre werden abgewiesen');
+    expect(guide.caution).toContain('Kein vollständiger GoBD-Prüfexport');
+    expect(guide.caution).toContain('Bivaro-Format 2');
+    for (const copy of ['payments.csv', 'adjustments.csv', 'steuerlich ungeprüfte Korrekturen und Erstattungen (UNREVIEWED)', 'Keine Addition von Rechnung, Einnahme und Zahlung', 'Ungebuchte Eingangsbelege fehlen']) expect(guide.caution).toContain(copy);
     expect(guide.caution).not.toContain('separates Erstattungsjournal');
   });
 });

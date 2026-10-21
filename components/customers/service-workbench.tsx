@@ -84,6 +84,7 @@ async function requestJson<T>(url: string, init: RequestInit | undefined, fallba
 
 export function ServiceWorkbench({ customer, open, onOpenChange }: ServiceWorkbenchProps) {
   const openerRef = useRef<HTMLElement | null>(null);
+  const openerCustomerIdRef = useRef<number | null>(null);
   const pendingRef = useRef(false);
   return (
     <Dialog open={open} onOpenChange={nextOpen => {
@@ -96,19 +97,32 @@ export function ServiceWorkbench({ customer, open, onOpenChange }: ServiceWorkbe
         onOpenAutoFocus={() => {
           const active = document.activeElement;
           openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+          openerCustomerIdRef.current = customer?.id ?? null;
         }}
         onCloseAutoFocus={event => {
           const opener = openerRef.current;
-          if (opener?.isConnected) {
+          // Closing clears customer; retain its identity and reject hidden responsive duplicates.
+          const customerId = openerCustomerIdRef.current;
+          const usable = (element: HTMLElement | null): element is HTMLElement => Boolean(element
+            && customerId !== null && element.dataset.serviceWorkbenchReturn === String(customerId)
+            && element.isConnected && element.getClientRects().length > 0
+            && getComputedStyle(element).visibility === 'visible'
+            && !element.matches(':disabled, [aria-disabled="true"]')
+            && !element.closest('[inert], [hidden], [role="dialog"], [role="menu"]'));
+          const target = usable(opener) ? opener : customerId !== null && Number.isSafeInteger(customerId) && customerId > 0
+            ? Array.from(document.querySelectorAll<HTMLElement>(`[data-service-workbench-return="${customerId}"]`)).find(usable)
+            : null;
+          if (target) {
             event.preventDefault();
-            opener.focus();
+            target.focus();
           }
           openerRef.current = null;
+          openerCustomerIdRef.current = null;
         }}
       >
         <DialogHeader className={styles.header}>
           <DialogTitle className="pr-7 leading-snug">Leistungsnotizen: {customer?.name || 'Kunde'}</DialogTitle>
-          <DialogDescription>Leistung erfassen · Bestand prüfen · im Rechnungseditor übernehmen.</DialogDescription>
+          <DialogDescription className="sr-only">Offene Leistungen zur späteren Übernahme in eine Rechnung.</DialogDescription>
         </DialogHeader>
         {open && customer && <CustomerServices key={customer.id} customerId={customer.id} onPendingChange={pending => { pendingRef.current = pending; }} />}
       </DialogContent>

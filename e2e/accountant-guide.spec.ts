@@ -29,9 +29,12 @@ async function source(page: Page, dated: boolean) {
 async function load(page: Page) {
   await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
   await expect(page.locator('#handoff-review-heading')).toBeFocused();
+  const receipt = page.locator('details:has(> #handoff-receipt-title)');
+  await expect(receipt).not.toHaveAttribute('open', '');
+  await page.locator('#handoff-receipt-title').click();
 }
-const approval = (page: Page) => page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ });
-const noteCheck = (page: Page) => page.getByRole('checkbox', { name: /Ich habe den Empfang selbst außerhalb/ });
+const approval = (page: Page) => page.getByRole('checkbox', { name: /Ich habe Umfang und Warnungen/ });
+const noteCheck = (page: Page) => page.getByRole('checkbox', { name: /Ich habe den Empfang außerhalb/ });
 const noteSave = (page: Page) => page.getByRole('button', { name: 'Manuelle Empfangsnotiz speichern', exact: true });
 
 test('guides real unresolved originals through back, refreshed review, ZIP and an honest manual receipt note', async ({ page }, testInfo) => {
@@ -48,7 +51,7 @@ test('guides real unresolved originals through back, refreshed review, ZIP and a
   await expect(page.getByRole('heading', { name: '1 fehlende Originaldatei im Paket', exact: true })).toBeVisible();
   await expect(noteCheck(page)).toBeDisabled();
   await expect(noteSave(page)).toBeDisabled();
-  await expect(page.getByText('Für diesen Paketstand ist derzeit keine gespeicherte Empfangsnotiz verfügbar.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Keine Empfangsnotiz für diesen Paketstand vorhanden; Übergabe unbekannt.', { exact: false })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('accountant-guide-1440-readiness.png'), fullPage: true, animations: 'disabled' });
   const link = page.getByRole('link', { name: `Beleg #${dated.id}: dated-synthetic-guide.xml`, exact: true });
   await link.focus(); await page.keyboard.press('Enter');
@@ -65,7 +68,8 @@ test('guides real unresolved originals through back, refreshed review, ZIP and a
   await expect(page).toHaveURL(/\/handoff\?year=2037$/);
   await expect(page.getByRole('textbox', { name: 'Kalenderjahr', exact: true })).toHaveValue('2037');
   await load(page);
-  await expect(page.getByRole('heading', { name: '0 offene Eingangsbelege im Zeitraum', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '0 offene Eingangsbelege im Zeitraum', exact: true })).toBeHidden();
+  await expect(page.getByRole('link', { name: `Beleg #${dated.id}: dated-synthetic-guide.xml`, exact: true })).toHaveCount(0);
   await approval(page).check();
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: 'ZIP herunterladen', exact: true }).click();
@@ -78,7 +82,7 @@ test('guides real unresolved originals through back, refreshed review, ZIP and a
   expect(manifest.scope.restorableBackup).toBe(false);
   expect(await prisma.auditLog.count({ where: { userId, entityType: 'AccountantHandoff' } })).toBe(0);
   await expect(noteCheck(page)).toBeEnabled();
-  await expect(page.getByText('Ein gestarteter Download ist kein Empfangsnachweis.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Download ist kein Empfangsnachweis.', { exact: false })).toBeVisible();
   await noteCheck(page).check();
   const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/handoff-acknowledgement' && response.request().method() === 'POST');
   await noteSave(page).click(); expect((await saved).status()).toBe(201);
@@ -121,7 +125,7 @@ test('keeps an unsupported empty year, handles readiness retry and stale preview
   await expect(page.getByRole('textbox', { name: 'Kalenderjahr', exact: true })).toHaveValue('2091');
   await load(page);
   await expect(page.getByText('Keine Datensätze im gewählten Zeitraum.', { exact: false })).toBeVisible();
-  await expect(page.getByText('keine Vollständigkeitsprüfung Ihrer Unterlagen', { exact: false })).toBeVisible();
+  await expect(page.getByText('Vollständigkeit ungeprüft', { exact: false })).toBeVisible();
   await approval(page).check();
   expect((await page.request.post('/api/incomes', { data: { description: 'SYNTHETIC GUIDE changed after preview', amount: '0.01', date: '2091-01-02' } })).ok()).toBe(true);
   let downloads = 0; page.on('download', () => downloads++);
@@ -134,7 +138,7 @@ test('keeps an unsupported empty year, handles readiness retry and stale preview
   await expect(approval(page)).not.toBeChecked();
   await expect(noteSave(page)).toBeDisabled();
   await approval(page).check();
-  await page.getByRole('button', { name: 'Prüfaufgaben und Vorschau aktualisieren', exact: true }).click();
+  await page.getByRole('button', { name: 'Vorschau aktualisieren', exact: true }).click();
   await expect(approval(page)).not.toBeChecked();
   await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

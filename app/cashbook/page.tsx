@@ -2,7 +2,7 @@
 
 import { PageHeader } from "@/components/page-header";
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -481,7 +481,7 @@ export default function CashBookPage() {
     return (
         <div className={`${styles.cashWorkspace} space-y-6`}>
             {/* Header */}
-            <PageHeader title="Kassenbuch" description="Bargeldbuchführung gemäß § 146 AO." section="Buchhaltung" actions={<>
+            <PageHeader title="Kassenbuch" actions={<>
 <div className="flex flex-wrap gap-2">
                     <Button
                         onClick={() => setShowNewCashBookModal(true)}
@@ -510,10 +510,6 @@ export default function CashBookPage() {
                     <CardContent className="flex flex-col items-center justify-center py-12">
                         <BookOpen className="h-8 w-8 text-muted-foreground mb-4" aria-hidden="true" />
                         <h3 className="text-xl font-semibold mb-2">Kein Kassenbuch vorhanden</h3>
-                        <p className="text-muted-foreground mb-4 text-center max-w-md">
-                            Erstellen Sie Ihr erstes Kassenbuch, um Bareinnahmen und -ausgaben
-                            ordnungsgemäß zu dokumentieren.
-                        </p>
                         <Button onClick={() => setShowNewCashBookModal(true)}>
                             <Plus className="h-4 w-4 mr-2" />
                             Kassenbuch erstellen
@@ -542,7 +538,7 @@ export default function CashBookPage() {
                         <span>{selectedCashBook?.transactionCount ?? 0} Buchungen insgesamt · Anfangsbestand {formatCurrency(selectedCashBook?.initialBalance || 0)}</span>
                     </div>
                     <div className={styles.cashDaySummary}>
-                        <div><h2>{dateFilter ? `Bewegungen am ${format(new Date(`${dateFilter}T12:00:00`), 'dd.MM.yyyy', { locale: de })}` : 'Bewegungen im ausgewählten Tageszeitraum'}</h2><p>Für die ausgewählte Kasse</p></div>
+                        <div><h2>{dateFilter ? `Bewegungen am ${format(new Date(`${dateFilter}T12:00:00`), 'dd.MM.yyyy', { locale: de })}` : 'Bewegungen im ausgewählten Tageszeitraum'}</h2></div>
                         <dl><div><dt><ArrowUpCircle aria-hidden="true" />Einnahmen</dt><dd>{formatCurrency(dailyBalance?.totalIncome || 0)}</dd></div><div><dt><ArrowDownCircle aria-hidden="true" />Ausgaben</dt><dd>{formatCurrency(dailyBalance?.totalExpense || 0)}</dd></div></dl>
                         <button type="button" onClick={() => setActiveTab('tagesabschluss')}>Tagesübersicht öffnen<span aria-hidden="true">→</span></button>
                     </div>
@@ -581,9 +577,6 @@ export default function CashBookPage() {
                         <Card className={styles.journalPanel}>
                             <CardHeader>
                                 <CardTitle>Kassenbuchungen</CardTitle>
-                                <CardDescription>
-                                    Alle Bargeldbewegungen in chronologischer Reihenfolge
-                                </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className={styles.desktopJournal}>
@@ -721,9 +714,6 @@ export default function CashBookPage() {
                                 <div className={styles.dailyHeader}>
                                     <div>
                                         <CardTitle>Tagesübersicht</CardTitle>
-                                        <CardDescription>
-                                            Kassenbestand und Bewegungen für einen Tag
-                                        </CardDescription>
                                     </div>
                                     <div className="flex gap-2 items-center">
                                         <Label htmlFor="date-filter">Datum:</Label>
@@ -859,9 +849,7 @@ export default function CashBookPage() {
                                     <Calculator className="h-5 w-5" />
                                     Kassensturz
                                 </CardTitle>
-                                <CardDescription>
-                                    Vergleichen Sie den gezählten Bargeldbestand mit dem Sollbestand im System
-                                </CardDescription>
+
                             </CardHeader>
                             <CardContent className={styles.cashCountContent}>
                                 <div className="space-y-6">
@@ -998,8 +986,8 @@ export default function CashBookPage() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Neues Kassenbuch erstellen</DialogTitle>
-                        <DialogDescription>
-                            Erstellen Sie ein neues Kassenbuch für die Bargeldbuchführung
+                        <DialogDescription className="sr-only">
+                            Name und Anfangsbestand festlegen.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -1031,9 +1019,7 @@ export default function CashBookPage() {
                                 value={newCashBook.initialBalance}
                                 onChange={(e) => setNewCashBook({ ...newCashBook, initialBalance: e.target.value })}
                             />
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Der Bargeldbestand bei Eröffnung des Kassenbuchs
-                            </p>
+
                         </div>
                     </div>
                     <DialogFooter>
@@ -1053,7 +1039,7 @@ export default function CashBookPage() {
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Neue Kassenbuchung</DialogTitle>
-                        <DialogDescription>
+                        <DialogDescription className="sr-only">
                             Erfassen Sie eine Bar-Einnahme oder -Ausgabe
                         </DialogDescription>
                     </DialogHeader>

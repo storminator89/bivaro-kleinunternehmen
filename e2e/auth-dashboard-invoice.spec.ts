@@ -264,8 +264,11 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       fiscalTaxRegime: 'UNSET', fiscalEffectiveFrom: null, fiscalConfirmedAt: null,
     });
     await page.goto('/dashboard/invoices/new');
-    await expect(page.getByLabel('Umsatzsteuerbehandlung dieses Dokuments', { exact: true })).toHaveValue('');
-    await expect(page.getByText('Bivaro nimmt § 19 nicht automatisch an.', { exact: false })).toBeVisible();
+    await expect(page.getByLabel('Umsatzsteuer', { exact: true })).toHaveValue('');
+    await expect(page.getByText('Profil fehlt', { exact: true })).toBeVisible();
+    await page.locator('section[aria-labelledby="invoice-tax-heading"] summary').click();
+    await expect(page.getByText('Kein gültiges Steuerprofil für dieses Datum.', { exact: false })).toBeVisible();
+    await page.locator('section[aria-labelledby="invoice-tax-heading"] summary').click();
     await expect(page.getByRole('button', { name: 'PDF erstellen', exact: true })).toBeDisabled();
     await expect(page.getByText('Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', { exact: true })).toHaveCount(0);
 
@@ -301,7 +304,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     test.setTimeout(60_000);
     await signIn(page);
     await page.goto('/dashboard/invoices/new');
-    const taxMode = page.getByLabel('Umsatzsteuerbehandlung dieses Dokuments', { exact: true });
+    const taxMode = page.getByLabel('Umsatzsteuer', { exact: true });
     const create = page.getByRole('button', { name: 'PDF erstellen', exact: true });
     await expect(taxMode).toHaveValue('standard');
     await expect(page.locator('#invoice-item-tax-0')).toHaveValue('19');
@@ -311,16 +314,18 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByRole('complementary', { name: 'Rechnungsübersicht' })).toContainText('119,00');
     await page.getByLabel('Rechnungsdatum', { exact: true }).fill('2025-12-31');
     await expect(taxMode).toHaveValue('');
+    await page.locator('section[aria-labelledby="invoice-tax-heading"] summary').click();
     await expect(page.getByText('Das Firmenprofil gilt erst ab 2026-01-01', { exact: false })).toBeVisible();
+    await page.locator('section[aria-labelledby="invoice-tax-heading"] summary').click();
     await taxMode.selectOption('standard');
-    const acknowledgement = page.getByRole('checkbox', { name: /Ich habe diese Steuerbehandlung für dieses Dokument geprüft/ });
+    const acknowledgement = page.getByRole('checkbox', { name: /Steuerbehandlung für dieses Dokument bestätigen/ });
     await expect(acknowledgement).not.toBeChecked();
     await expect(create).toBeDisabled();
     await acknowledgement.check();
     await expect(create).toBeEnabled();
     await page.getByLabel('Steuerfall', { exact: true }).selectOption('reverse-charge');
     await expect(create).toBeDisabled();
-    await expect(page.getByRole('alert').filter({ hasText: 'Dieser Steuerfall wird nicht unterstützt.' })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'Nicht unterstützt. Vorschau und Erstellung sind gesperrt.' })).toBeVisible();
     await page.getByLabel('Steuerfall', { exact: true }).selectOption('domestic');
     await expect(create).toBeEnabled();
     await page.locator('#invoice-item-tax-0').fill('7');
@@ -351,7 +356,10 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.getByLabel('Rechnungsvorlage auswählen', { exact: true }).selectOption(String(template.id));
     await expect(taxMode).toHaveValue('standard');
     await expect(page.locator('#invoice-item-tax-0')).toHaveValue('7');
+    await expect(page.getByText('Vorlage', { exact: true })).toBeVisible();
+    await page.locator('section[aria-labelledby="invoice-tax-heading"] summary').click();
     await expect(page.getByText('Steuerangaben aus der Vorlage bleiben erhalten.', { exact: false })).toBeVisible();
+    await page.locator('section[aria-labelledby="invoice-tax-heading"] summary').click();
     await page.getByLabel('Rechnungsdatum', { exact: true }).fill('2026-02-01');
     await expect(page.locator('#invoice-item-tax-0')).toHaveValue('7');
     await expect(page.getByRole('complementary', { name: 'Rechnungsübersicht' })).toContainText('107,00');
@@ -368,7 +376,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
 
     await expect(page).toHaveURL(/\/dashboard\/invoices\/new/);
-    await expect(page.getByRole('heading', { name: 'Rechnung erstellen', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Neue Rechnung', level: 1 })).toBeVisible();
     await page.locator('#invoice-item-description-0').fill('Designprüfung');
     await page.locator('#invoice-item-quantity-0').fill('2');
     await page.locator('#invoice-item-price-0').fill('125.50');
@@ -396,8 +404,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.getByRole('main').getByRole('button', { name: 'Anmelden' }).click();
     await expect(page).toHaveURL(/\/dashboard/);
     await page.goto('/dashboard/quotes/new');
-    await page.getByLabel('Umsatzsteuerbehandlung dieses Dokuments', { exact: true }).selectOption('standard');
-    await page.getByRole('checkbox', { name: /Ich habe diese Steuerbehandlung für dieses Dokument geprüft/ }).check();
+    await page.getByLabel('Umsatzsteuer', { exact: true }).selectOption('standard');
+    await page.getByRole('checkbox', { name: /Steuerbehandlung für dieses Dokument bestätigen/ }).check();
     await page.getByLabel('Empfänger (Name & Anschrift)', { exact: true }).fill('Designfixture Kunde\nTestweg 1\n10115 Berlin');
     await page.getByLabel('Angebotsnummer', { exact: true }).fill('E2E-DESIGN-QUOTE');
     await page.locator('#quote-item-0-description').fill('Designprüfung\nMit mehrzeiliger Beschreibung');
@@ -489,6 +497,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await page.screenshot({ path: testInfo.outputPath('settings-workspace-' + width + '.png'), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('#smtp-versand summary').filter({ hasText: 'SMTP konfigurieren' }).click();
     await page.locator('#smtp-host').fill('smtp.example.test');
     await page.locator('#smtp-port').fill('587');
     await page.locator('#smtp-from').fill('rechnung@example.test');
@@ -497,9 +506,11 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.locator('#smtp-password').fill(syntheticPassword);
     await page.getByRole('button', { name: 'SMTP speichern', exact: true }).click();
     await expect(page.getByText('SMTP-Konfiguration gespeichert.', { exact: true })).toBeVisible();
+    await expect(page.locator('#smtp-host')).toBeVisible();
     await expect(page.locator('#smtp-password')).toHaveValue('');
 
     await page.reload();
+    await page.locator('#smtp-versand summary').filter({ hasText: 'SMTP konfigurieren' }).click();
     await expect(page.locator('#smtp-host')).toHaveValue('smtp.example.test');
     await expect(page.locator('#smtp-password')).toHaveValue('');
     await expect(page.getByText('· Passwort gespeichert', { exact: true })).toBeVisible();
@@ -507,6 +518,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.locator('#smtp-secure').click();
     await page.getByRole('button', { name: 'SMTP speichern', exact: true }).click();
     await expect(page.getByText('SMTP-Konfiguration gespeichert.', { exact: true })).toBeVisible();
+    await expect(page.locator('#smtp-host')).toBeVisible();
     const response = await page.request.get('/api/settings/smtp');
     expect(response.ok()).toBe(true);
     const configuration = await response.json();
@@ -550,6 +562,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect(preserved.items.some((item: { id: number }) => item.id === income.id)).toBe(true);
 
     await page.goto('/settings');
+    await page.locator('#backup-settings summary', { hasText: 'Backup wiederherstellen' }).click();
     await page.locator('#restore-file').setInputFiles({
       name: 'untrusted-backup.json', mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify({ version: '2.0', confirmOverwrite: true, data: {
@@ -576,8 +589,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
 
     await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
     await page.getByRole('combobox', { name: 'Ausgabeformat', exact: true }).selectOption('xml-only');
-    await page.getByLabel('Umsatzsteuerbehandlung').selectOption('standard');
-    await page.getByRole('checkbox', { name: /Ich habe diese Steuerbehandlung für dieses Dokument geprüft/ }).check();
+    await page.getByLabel('Umsatzsteuer').selectOption('standard');
+    await page.getByRole('checkbox', { name: /Steuerbehandlung für dieses Dokument bestätigen/ }).check();
     await page.getByLabel('Empfänger (Name & Anschrift)').fill('E2E Kunde\nBuchhaltung\nKundenweg 2\n10115 Berlin');
     await page.getByLabel('E-Mail des Empfängers', { exact: false }).fill('kunde@example.test');
     await page.locator('#invoice-item-description-0').fill('Leistung 19 Prozent');
@@ -1216,6 +1229,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect(summary.annualBasis).toBe(true);
     expect(summary.profit).toBe(45.67);
     await expect(page.getByRole('heading', { name: 'Gewinn laut EÜR' })).toBeVisible();
+    await page.getByText('Datenbasis und Grenzen', { exact: true }).click();
     await expect(page.getByText('Zeitraum: Steuerjahr 2025', { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('tax-annual.png'), fullPage: true });
     await page.getByRole('button', { name: 'Nebenberuflich', exact: true }).click();
@@ -1229,7 +1243,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     }
     await page.getByRole('button', { name: 'Standardwerte', exact: true }).click();
     await page.getByLabel('Analysezeitraum').selectOption('last3Months');
-    await expect(page.getByRole('alert').filter({ hasText: 'keine endgültige Steuerlast' })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'Keine Berechnung für diesen Zeitraum oder Verlustfall.' })).toBeVisible();
     await expect(page.getByText('nicht berechnet', { exact: true }).first()).toBeVisible();
     await page.goto('/dashboard?tab=eur');
     await page.getByRole('button', { name: 'EÜR-Übertragungshilfe öffnen', exact: true }).click();
@@ -1265,16 +1279,17 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const privateNote = 'INTERN: Bestellnummer vor Versand prüfen';
     const customerName = 'E2E Billing Assistant';
     await page.goto('/customers');
-    await page.getByRole('button', { name: 'Neuen Kunden anlegen' }).click();
+    await page.getByRole('button', { name: 'Neuer Kunde' }).click();
     await page.locator('#name').fill(customerName);
     await page.locator('#email').fill('billing@example.test');
     await page.locator('#address').fill('Kundenweg 2');
     await page.locator('#zipCode').fill('10115');
     await page.locator('#city').fill('Berlin');
+    await page.getByText('Interner Hinweis', { exact: true }).click();
     await page.locator('#internalNote').fill(privateNote);
     await page.locator('#noteVisibility').selectOption('BOTH');
     const customerSaved = page.waitForResponse(r => r.url().endsWith('/api/customers') && r.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Kunden anlegen', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Neuer Kunde', exact: true }).getByRole('button', { name: 'Kunden anlegen', exact: true }).click();
     const customerResponse = await customerSaved;
     expect(customerResponse.ok()).toBe(true);
     // Verify persistence through the real read API; Chromium's browser-response
@@ -1569,30 +1584,30 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
           await page.screenshot({ path: testInfo.outputPath(`${route === '/' ? 'home' : 'help'}-pilot-${width}.png`), fullPage: true });
         }
       }
-      const paymentHelp = page.getByRole('region', { name: 'Zahlungen und Restbetrag erfassen', exact: true });
-      await expect(paymentHelp).toContainText('Tragen Sie den eingegangenen Betrag, das tatsächliche Datum und eine nachvollziehbare Zahlungsreferenz ein.');
-      await expect(paymentHelp).toContainText('Das Datum wird bewusst nicht mit heute vorbelegt.');
-      await expect(paymentHelp).toContainText('Von 120 EUR erhalten Sie 40 EUR an Datum A und später 80 EUR an Datum B; nach der ersten Zahlung bleiben 80 EUR offen.');
+      const paymentHelp = page.getByRole('region', { name: 'Zahlung erfassen', exact: true });
+      await expect(paymentHelp).toContainText('Betrag, tatsächliches Datum und Referenz eingeben und verbindlich bestätigen.');
+      await expect(paymentHelp).toContainText('Geldeingang anhand des Zahlungsnachweises prüfen.');
+      await expect(paymentHelp).toContainText('Jede Teilzahlung erzeugt eine Einnahme am Zahlungsdatum; nicht zusätzlich manuell erfassen.');
       await expect(paymentHelp).not.toContainText('Ein eigenes Datumsfeld gibt es dort nicht');
       await expect(paymentHelp).not.toContainText('aktuellen Buchungszeitpunkt als Zahlungsdatum');
-      await expect(page.locator('#steuerprofil')).toContainText('sind nicht dasselbe');
+      await expect(page.locator('#steuerprofil')).toContainText('≠');
       await expect(page.locator('#umfang')).toContainText('keine ELSTER-Einreichung');
-      await expect(page.locator('#zugang')).toContainText('kein öffentlicher Betreiber- oder Supportkontakt');
+      await expect(page.locator('#zugang')).toContainText('Kein Supportkontakt');
       // Tab rather than click proves the first workflow link is keyboard reachable.
       await page.goto('/');
-      const firstGuide = page.getByRole('link', { name: 'Den ersten Ablauf kennenlernen', exact: true });
+      const firstGuide = page.getByRole('link', { name: 'Erste Rechnung', exact: true });
       for (let index = 0; index < 20 && !(await firstGuide.evaluate(element => element === document.activeElement)); index++) await page.keyboard.press('Tab');
       await expect(firstGuide).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(/\/help#erste-rechnung$/);
-      const protectedLink = page.getByRole('link', { name: 'Firmendaten öffnen', exact: true });
+      const protectedLink = page.getByRole('link', { name: 'Firmendaten', exact: true });
       await protectedLink.focus();
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(/\/login\?callbackUrl=/);
       expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe('/settings');
       // A redirected document can expose its URL before the login form is ready.
       await page.waitForLoadState('load');
-      await expect(page.getByRole('heading', { name: 'Willkommen zurück', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Anmelden', exact: true })).toBeVisible();
       await page.getByLabel('E-Mail').fill(testUser.email);
       await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
       const authenticated = page.waitForResponse(response => response.url().includes('/api/auth/callback/credentials') && response.request().method() === 'POST');
@@ -1641,7 +1656,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(dialog.getByText('Zu prüfen · nicht gebucht', { exact: true })).toBeVisible();
     await expect(dialog.getByText('119,00 EUR', { exact: true })).toHaveCount(2);
     await expect(dialog.getByRole('button', { name: 'Als Ausgabe erfassen', exact: true })).toBeDisabled();
-    await expect(dialog.getByRole('region', { name: 'Gewählter Lieferantenkontakt', exact: true })).toContainText('Noch kein Kontakt ausdrücklich ausgewählt.');
+    await expect(dialog.getByRole('region', { name: 'Gewählter Lieferantenkontakt', exact: true })).toContainText('Noch nicht zugeordnet.');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('incoming-review-390.png'), fullPage: true, animations: 'disabled' });
@@ -1732,7 +1747,11 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/handoff$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Unterlagen übergeben' })).toBeVisible();
+    await expect(page.getByText('Bivaro-ZIP · Kein DATEV-/ELSTER-Export oder Backup.', { exact: true })).toBeVisible();
+    await page.getByText('Paketinhalt und Grenzen', { exact: true }).click();
+    await page.getByText('Grenzen und ausgeschlossene Daten', { exact: true }).click();
     await expect(page.getByText('Kein DATEV-Format oder zugesicherter DATEV-Import', { exact: false })).toBeVisible();
+    await page.getByText('Paketinhalt und Grenzen', { exact: true }).click();
     await page.getByRole('textbox', { name: 'Kalenderjahr', exact: true }).fill('2041');
     let downloadCount = 0;
     page.on('download', () => downloadCount++);
@@ -1750,7 +1769,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const downloadButton = page.getByRole('button', { name: 'ZIP herunterladen', exact: true });
     await expect(downloadButton).toBeDisabled();
     expect(downloadCount).toBe(0);
-    await page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ }).check();
+    await page.getByRole('checkbox', { name: /Ich habe Umfang und Warnungen/ }).check();
     // Hold only the real ZIP request: repeated activation must not start a second request.
     let zipRequests = 0;
     let releaseZip!: () => void;
@@ -1796,7 +1815,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.getByRole('button', { name: 'Zeitraum ändern', exact: true }).click();
     await expect(page.locator('#handoff-period-heading')).toBeFocused();
     await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
-    await expect(page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Ich habe Umfang und Warnungen/ })).not.toBeChecked();
     await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
     await page.reload();
     await expect(page.getByRole('textbox', { name: 'Kalenderjahr', exact: true })).toHaveValue('2041');
@@ -1836,12 +1855,14 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.keyboard.press('Enter');
     await expect(page.locator('#handoff-review-heading')).toBeFocused();
     await expect(page.getByText('Keine Datensätze im gewählten Zeitraum.', { exact: false })).toBeVisible();
-    await expect(page.getByText('Keine technischen Warnungen in dieser Vorschau.', { exact: false })).toBeVisible();
+    await expect(page.getByText('Keine technischen Warnungen.', { exact: false })).toBeVisible();
     await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('handoff-mobile-empty-390.png'), fullPage: true });
     await page.keyboard.press('Tab');
-    await expect(page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ })).toBeFocused();
+    await expect(page.locator('summary', { hasText: 'Paketstand und Prüfsumme' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('checkbox', { name: /Ich habe Umfang und Warnungen/ })).toBeFocused();
     await page.keyboard.press('Space');
     await page.keyboard.press('Tab');
     const downloaded = page.waitForEvent('download');
@@ -1867,7 +1888,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.goto('/handoff?year=2043');
     await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
     await expect(page.locator('#handoff-review-heading')).toBeFocused();
-    await page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ }).check();
+    await page.getByRole('checkbox', { name: /Ich habe Umfang und Warnungen/ }).check();
     expect((await page.request.post('/api/incomes', { data: { description: 'HANDOFF changed after preview', amount: 7.89, date: '2043-01-02' } })).ok()).toBe(true);
     let downloads = 0;
     page.on('download', () => downloads++);
@@ -1879,7 +1900,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByRole('textbox', { name: 'Kalenderjahr', exact: true })).toHaveValue('2043');
     expect(downloads).toBe(0);
     await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
-    await expect(page.getByRole('checkbox', { name: /Ich habe den begrenzten Umfang/ })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Ich habe Umfang und Warnungen/ })).not.toBeChecked();
     await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
     await page.screenshot({ path: testInfo.outputPath('handoff-drift-new-approval.png'), fullPage: true });
   });
@@ -2165,7 +2186,9 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     for (const receipt of receipts) {
       await page.goto('/dashboard?tab=expenses');
       const entry = page.locator('#expense-entry');
-      if (!await entry.evaluate(element => (element as HTMLDetailsElement).open)) await entry.locator('summary').click();
+      await expect(entry).toBeHidden();
+      await page.getByRole('button', { name: 'Ausgabe erfassen', exact: true }).click();
+      await expect(entry).toBeVisible();
       const description = `Synthetischer manueller ${receipt.mimeType === 'application/pdf' ? 'PDF' : 'Bild'}-Beleg`;
       await entry.getByLabel('Beschreibung', { exact: true }).fill(description);
       await entry.getByLabel('Betrag (€)', { exact: true }).fill('12.34');
@@ -2236,20 +2259,21 @@ test.describe('anonymous access and offer foundation', () => {
     try {
       const target = '/dashboard?tab=invoices&year=2026&status=open';
       await page.goto(`/login?${new URLSearchParams({ callbackUrl: target })}`);
-      await expect(page.getByRole('heading', { name: 'Willkommen zurück', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Anmelden', exact: true })).toBeVisible();
       await page.getByLabel('E-Mail', { exact: true }).fill('private-access-probe@example.test');
       await page.getByLabel('Passwort', { exact: true }).fill('PRIVATE-ACCESS-PASSWORD-NOT-SENT');
-      const help = page.getByRole('link', { name: 'Zugang verloren oder Betriebsstörung?', exact: true });
+      const help = page.getByRole('link', { name: 'Probleme beim Anmelden?', exact: true });
       // Reach the actual help link from the password field using the keyboard.
       for (let index = 0; index < 8 && !(await help.evaluate(element => element === document.activeElement)); index++) await page.keyboard.press('Tab');
       await expect(help).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(/\/help\/access\?callbackUrl=/);
       expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe(target);
-      await expect(page.getByRole('heading', { name: 'Zugang verloren oder Bivaro nicht erreichbar?', exact: true })).toBeVisible();
-      await expect(page.getByRole('main')).toContainText('prüft nicht, ob ein Konto existiert');
-      await expect(page.getByRole('main')).toContainText('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
-      await expect(page.getByRole('main')).toContainText('Ein E-Mail-Self-Service, Resetlink oder garantierter Wiederherstellungsdienst existiert hier nicht');
+      await expect(page.getByRole('heading', { name: 'Zugangshilfe', exact: true })).toBeVisible();
+      await page.getByText('Wiederherstellung und Sicherheit', { exact: true }).click();
+      await expect(page.getByRole('main')).toContainText('Identität und Berechtigung unabhängig prüfen');
+      await expect(page.getByRole('main')).toContainText('Kein Supportkontakt hinterlegt');
+      await expect(page.getByRole('main')).toContainText('Es gibt keinen Resetlink per E-Mail');
       await expect(page.getByRole('main')).toContainText('Sitzungscookies, API-Schlüssel, Einmalcodes');
       await expect(page.getByRole('main').locator('input, textarea, select, form, input[type="file"]')).toHaveCount(0);
       await expect(page.getByRole('main').locator('a[href^="mailto:"], a[href^="tel:"]')).toHaveCount(0);
@@ -2259,7 +2283,7 @@ test.describe('anonymous access and offer foundation', () => {
         await page.screenshot({ path: testInfo.outputPath(`access-help-${width}.png`), fullPage: true });
       }
       await page.reload();
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Zugang verloren oder Bivaro nicht erreichbar?');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Zugangshilfe');
       expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe(target);
       const helpDocument = await page.content();
       expect(helpDocument).not.toMatch(/private-access-probe|PRIVATE-ACCESS-PASSWORD-NOT-SENT|e2e-secret-for-local-tests-only|e2e-bootstrap-token-for-isolated-fixtures-only/);
@@ -2270,28 +2294,28 @@ test.describe('anonymous access and offer foundation', () => {
       await page.screenshot({ path: testInfo.outputPath('access-help-return-focused-360.png'), fullPage: true });
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(/\/login\?callbackUrl=/);
-      await expect(page.getByRole('heading', { name: 'Willkommen zurück', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Anmelden', exact: true })).toBeVisible();
       expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe(target);
       await expect(page.getByLabel('Passwort', { exact: true })).toHaveValue('');
       await page.goBack();
-      await expect(page.getByRole('heading', { name: 'Zugang verloren oder Bivaro nicht erreichbar?', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Zugangshilfe', exact: true })).toBeVisible();
       await page.goForward();
-      await expect(page.getByRole('heading', { name: 'Willkommen zurück', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Anmelden', exact: true })).toBeVisible();
 
       for (const callback of ['https://outside.example.invalid/steal', '//outside.example.invalid/steal', '/dashboard?tab=invoices&token=PRIVATE-CALLBACK-TOKEN#PRIVATE-FRAGMENT']) {
         await page.goto(`/login?${new URLSearchParams({ callbackUrl: callback })}`);
-        await page.getByRole('link', { name: 'Zugang verloren oder Betriebsstörung?', exact: true }).click();
-        await expect(page.getByRole('heading', { name: 'Zugang verloren oder Bivaro nicht erreichbar?', exact: true })).toBeVisible();
+        await page.getByRole('link', { name: 'Probleme beim Anmelden?', exact: true }).click();
+        await expect(page.getByRole('heading', { name: 'Zugangshilfe', exact: true })).toBeVisible();
         const expected = callback.startsWith('/dashboard?') ? '/dashboard?tab=invoices' : '/dashboard';
         expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe(expected);
         // Client navigation retains the prior document's inline RSC scripts; verify
         // the active help surface, then the newly requested sanitized document.
         expect(await page.getByRole('main').innerHTML()).not.toMatch(/PRIVATE-CALLBACK-TOKEN|PRIVATE-FRAGMENT|outside\.example\.invalid/);
         await page.reload();
-        await expect(page.getByRole('heading', { name: 'Zugang verloren oder Bivaro nicht erreichbar?', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Zugangshilfe', exact: true })).toBeVisible();
         expect(await page.content()).not.toMatch(/PRIVATE-CALLBACK-TOKEN|PRIVATE-FRAGMENT|outside\.example\.invalid/);
         await page.getByRole('link', { name: 'Zurück zur Anmeldung', exact: true }).click();
-        await expect(page.getByRole('heading', { name: 'Willkommen zurück', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Anmelden', exact: true })).toBeVisible();
         expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe(expected);
         expect(new URL(page.url()).origin).toBe(new URL(baseURL!).origin);
       }
@@ -2312,12 +2336,13 @@ test.describe('anonymous access and offer foundation', () => {
       await page.goto('/');
       const compact = page.locator('#angebot');
       await expect(compact).toContainText('Konzept – kein verbindliches Angebot');
-      await expect(compact).toContainText('Kein bestätigter Preis und keine voreingestellte Betriebsvariante');
-      await compact.getByRole('link', { name: 'Leistung, Kosten, Kontakt und Quellcode prüfen', exact: true }).click();
+      await expect(compact).toContainText('Preis und Betriebsmodell noch offen');
+      await compact.getByRole('link', { name: 'Angebot, Kontakt und Quellcode', exact: true }).click();
       await expect(page).toHaveURL(/\/help#angebot$/);
       const offer = page.locator('#angebot');
+      await offer.getByText('Angebotsdetails', { exact: true }).click();
       await expect(offer.getByRole('heading', { name: 'Angebot und Verantwortung', exact: true })).toBeVisible();
-      for (const copy of ['Konzept – kein verbindliches Angebot', 'concept-unconfigured-v1', 'keine Angabe zur laufenden Softwareversion', 'Anbieter noch nicht bestätigt', 'Betriebsmodell noch offen; keine Variante voreingestellt', 'Kein bestätigter Preis; keine Aussage zu kostenloser Nutzung', 'keine rechtliche Freigabe', 'kein öffentlicher Betreiber- oder Supportkontakt hinterlegt', 'AGPL-3.0-only', 'zum laufenden Auslieferungsstand bestätigter Source-/Lizenzlink ist noch nicht hinterlegt', 'Kein Onlineabschluss']) await expect(offer).toContainText(copy);
+      for (const copy of ['Konzept – kein verbindliches Angebot', 'concept-unconfigured-v1', 'Keine Softwareversion', 'Anbieter noch nicht bestätigt', 'Betriebsmodell noch offen; keine Variante voreingestellt', 'Preis und Steuerdarstellung noch offen', 'keine rechtliche Freigabe', 'Kein Supportkontakt hinterlegt', 'AGPL-3.0-only', 'Quellcode-Zuordnung zum laufenden Release noch offen', 'Kein Onlineabschluss']) await expect(offer).toContainText(copy);
       await expect(offer.locator('form, input, select, button, a[href^="mailto:"], a[href^="tel:"]')).toHaveCount(0);
       await expect(offer).not.toContainText(/FIKTIVE TESTFIRMA|FICTIONAL-SOURCE|12,34/);
       const repository = offer.getByRole('link', { name: 'Projekt-Repository (keine Laufzeitzuordnung)', exact: true });
@@ -2334,22 +2359,23 @@ test.describe('anonymous access and offer foundation', () => {
         await offer.screenshot({ path: testInfo.outputPath(`offer-concept-${width}.png`) });
       }
       await page.reload();
+      await offer.getByText('Angebotsdetails', { exact: true }).click();
       await expect(offer).toContainText('concept-unconfigured-v1');
       const access = offer.getByRole('link', { name: 'Zugang verloren oder Betriebsstörung', exact: true });
       await access.focus();
       await expect(access).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(/\/help\/access$/);
-      await expect(page.getByRole('heading', { name: 'Zugang verloren oder Bivaro nicht erreichbar?', exact: true })).toBeVisible();
-      await page.getByRole('link', { name: 'Angebot und Zuständigkeit prüfen', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Zugangshilfe', exact: true })).toBeVisible();
+      await page.getByRole('link', { name: 'Betreiber und Angebot', exact: true }).click();
       await expect(page).toHaveURL(/\/help#angebot$/);
       await expect(offer).toContainText('Konzept – kein verbindliches Angebot');
       await offer.getByRole('link', { name: 'Zugang verloren oder Betriebsstörung', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'Zugang verloren oder Bivaro nicht erreichbar?', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Zugangshilfe', exact: true })).toBeVisible();
       await page.getByRole('link', { name: 'Zur Aufgabenhilfe', exact: true }).click();
       await expect(page).toHaveURL(/\/help#zugang$/);
-      await expect(page.locator('#zugang')).toContainText('kein öffentlicher Betreiber- oder Supportkontakt');
-      await page.locator('#zugang').getByRole('link', { name: 'Bestätigte Angebots- und Kontaktdaten prüfen', exact: true }).click();
+      await expect(page.locator('#zugang')).toContainText('Kein Supportkontakt');
+      await page.locator('#zugang').getByRole('link', { name: 'Angebot und Kontakt', exact: true }).click();
       await expect(page).toHaveURL(/\/help#angebot$/);
       await expect(offer.getByRole('heading', { name: 'Angebot und Verantwortung', exact: true })).toBeVisible();
       expect(await (await page.request.get('/api/auth/session')).json()).toEqual({});

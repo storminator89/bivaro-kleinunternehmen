@@ -11,7 +11,7 @@ test('returns from cached first-workflow help through the brand and home CTA to 
   await expect(page.locator('#erste-rechnung-title')).toBeVisible();
   await page.getByRole('link', { name: 'Bivaro Startseite', exact: true }).click();
   await expect(page).toHaveURL(`${origin}/`);
-  const workflow = page.getByRole('link', { name: 'Den ersten Ablauf kennenlernen', exact: true });
+  const workflow = page.getByRole('link', { name: 'Erste Rechnung', exact: true });
   await expect(workflow).toHaveAttribute('href', '/help#erste-rechnung');
   await workflow.click();
   await expect(page).toHaveURL(expected);

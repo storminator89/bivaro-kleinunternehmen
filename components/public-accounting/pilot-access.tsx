@@ -33,11 +33,11 @@ export function PilotAccess() {
   }, [status, attempt]);
 
   const copy = status === 'authenticated'
-    ? { title: 'Ihr Arbeitsbereich ist erreichbar', description: 'Sie sind angemeldet. Die Aufgabenhilfe bleibt auch während Ihrer Arbeit verfügbar.', href: '/dashboard', label: 'Dashboard öffnen' }
+    ? { title: 'Angemeldet', description: '', href: '/dashboard', label: 'Dashboard öffnen' }
     : publicAccessCopy[access];
 
   return <div className={styles.access}>
-    <div aria-live="polite"><h3>{copy.title}</h3><p>{copy.description}</p></div>
+    <div aria-live="polite"><h3>{copy.title}</h3>{copy.description && <p>{copy.description}</p>}</div>
     <div className={styles.actions}>
       <Button asChild><Link href={copy.href}>{copy.label}</Link></Button>
       {status === 'unauthenticated' && access === 'unavailable' && <Button variant="outline" onClick={() => { setAccess('checking'); setAttempt(value => value + 1); }}>Status erneut prüfen</Button>}

@@ -54,7 +54,7 @@ test('customer template, mapping, cancellation, lost response replay and reload 
     expect(await prisma.customer.count({ where: { userId } })).toBe(0);
     await page.getByRole('link', { name: 'CSV importieren', exact: true }).click(); await upload(page, csv);
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Mit Ihren vorhandenen Daten starten', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Datei auswählen', exact: true })).toBeVisible();
     expect(await prisma.customer.count({ where: { userId } })).toBe(0);
     await upload(page, csv);
     const customerRow = previewRow(page, 'Kunden', 'Zeile 2 · Synthetische Werkstatt');
@@ -85,7 +85,7 @@ test('article CSV makes exact reusable positions without changing unknown fiscal
   try {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/customers/articles'); await page.getByRole('link', { name: 'CSV importieren', exact: true }).click();
-    await expect(page.getByLabel('Was möchten Sie importieren?', { exact: true })).toHaveValue('articles');
+    await expect(page.getByLabel('Datenart', { exact: true })).toHaveValue('articles');
     await upload(page, 'Name;Beschreibung;Einheit;Preis;Preisbasis;Steuersatz\nSynthetische Wartung;Wartung vor Ort;Stunde;119,00;GROSS;19\nUnbekannter Preis;Nicht null;Stück;;NET;0\nKostenfreie Prüfung;Prüfung ohne Preis;Stück;0;NET;0');
     const maintenance = previewRow(page, 'Artikel und Leistungen', 'Zeile 2 · Synthetische Wartung');
     const unknown = previewRow(page, 'Artikel und Leistungen', 'Zeile 3 · Unbekannter Preis');

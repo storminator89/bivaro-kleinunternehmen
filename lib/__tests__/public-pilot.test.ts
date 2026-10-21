@@ -44,26 +44,26 @@ describe('public buyer and task guidance', () => {
     }
     expect(html).not.toContain('href="/register"');
     expect(html).not.toContain('href="/dashboard');
-    expect(html).toContain('keine interaktive Demo');
-    expect(html).toContain('keinen Checkout');
+    expect(html).toContain('Beispielansicht mit Demodaten');
+    expect(html).toContain('Kein Onlineabschluss');
   });
 
   it('publishes concrete task help with incoming/outgoing and export limitations', () => {
     const html = renderToStaticMarkup(createElement(HelpPage));
     expect(pilotGuides.map(guide => guide.id)).toEqual(['erste-rechnung', 'zahlung', 'belege', 'export']);
-    expect(html).toContain('automatisch. Erfassen Sie denselben Geldeingang nicht zusätzlich');
-    expect(html).toContain('Rechnungsimport ist keine automatische Ausgabenbuchung');
-    expect(html).toContain('nicht auf „Bezahlt“');
+    expect(html).toContain('Jede Teilzahlung erzeugt eine Einnahme am Zahlungsdatum; nicht zusätzlich manuell erfassen');
+    expect(html).toContain('Ein E-Rechnungsimport bucht keine Ausgabe');
+    expect(html).toContain('nicht als eigene Ausgangsrechnung auf „Bezahlt“');
     expect(html).toContain('keine ELSTER-Einreichung');
     expect(html).toContain('2024, 2025 und 2026');
-    expect(html).toContain('unbekannte Formularjahre werden abgewiesen');
+    expect(html).toContain('unbekannte Jahre werden abgewiesen');
     expect(html).toContain('verifizierten Jahreszuordnungen für 2024, 2025, 2026');
     expect(html).not.toContain('ist auf 2024 und 2025 begrenzt');
-    expect(html).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
+    expect(html).toContain('Kein Supportkontakt hinterlegt');
     expect(html).toContain('Zugang verloren oder Betriebsstörung');
     expect(html).toContain('id="steuerprofil"');
-    expect(html).toContain('das tatsächliche Datum und eine nachvollziehbare Zahlungsreferenz');
-    expect(html).toContain('nach der ersten Zahlung bleiben 80 EUR offen');
+    expect(html).toContain('tatsächliches Datum und Referenz eingeben');
+    expect(html).toContain('Restbetrag und Zahlungsverlauf prüfen');
     expect(html).toContain('payments.csv');
     expect(html).not.toContain('Ein eigenes Datumsfeld gibt es dort nicht');
     expect(html).not.toContain('aktuellen Buchungszeitpunkt als Zahlungsdatum');
@@ -75,12 +75,12 @@ describe('public buyer and task guidance', () => {
     const access = help.match(/<section id="zugang"[\s\S]*?<\/section>/)?.[0];
     const offer = help.match(/<section id="angebot"[\s\S]*?<\/section>/)?.[0];
     for (const section of [access, offer]) {
-      expect(section).toContain('kein öffentlicher Betreiber- oder Supportkontakt hinterlegt');
-      expect(section).toContain('Der Hilfeweg ist noch nicht eingerichtet');
+      expect(section).toContain('Kein Supportkontakt hinterlegt');
+      expect(section).toContain('Ohne Ansprechpartner ist hier keine betreute Wiederherstellung verfügbar');
       expect(section).not.toMatch(/mailto:|tel:/);
     }
     const source = readFileSync(new URL('../../app/help/page.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('<a href="#angebot">Bestätigte Angebots- und Kontaktdaten prüfen</a>');
+    expect(source).toContain('<a href="#angebot">Angebot und Kontakt</a>');
   });
 
   it('reserves sticky-header clearance before hash navigation activates a target', () => {
@@ -117,9 +117,9 @@ describe('public buyer and task guidance', () => {
       expect(source, path).not.toMatch(/<Link\b[^>]*\bhref=(?:"\/help#|\{`\/help#)/);
     }
     const home = readFileSync(new URL('../../app/page.tsx', import.meta.url), 'utf8');
-    expect(home).toContain('<a href="/help#erste-rechnung">Den ersten Ablauf kennenlernen</a>');
-    expect(home).toContain('<a href={`/help#${guide.id}`}>{guide.title}</a>');
-    expect(home).toContain('<a className={styles.textLink} href={`/help#${guide.id}`}>Anleitung');
+    expect(home).toContain('<a href="/help#erste-rechnung">Erste Rechnung</a>');
+    expect(home).toContain('<a href={`/help#${guide.id}`}>{guide.title}');
+    expect(home.match(/<a href=\{`\/help#\$\{guide\.id\}`\}/g)).toHaveLength(1);
     const shell = readFileSync(new URL('../../components/app-shell.tsx', import.meta.url), 'utf8');
     expect(shell).toContain('<a href="/help#umfang"');
     expect(shell).toContain('<a href="/help#angebot"');
@@ -144,7 +144,7 @@ describe('truthful registration CTA', () => {
   it('offers registration only for an existing explicitly open installation', () => {
     expect(registrationAccessState({ isFirstUser: false, allowRegistration: true, bootstrapRequired: false })).toBe('open');
     expect(publicAccessCopy.open.href).toBe('/register');
-    expect(publicAccessCopy.open.description).toContain('keine Bestellung');
+    expect(publicAccessCopy.open.description).toContain('kein Kauf');
   });
 
   it('does not market administrator bootstrap or a closed installation as customer signup', () => {

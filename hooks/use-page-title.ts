@@ -13,6 +13,9 @@ const STATIC_TITLES: Record<string, string> = {
   "/service-billing": "Servicepläne",
   "/bank-csv": "Bank-CSV prüfen",
   "/customers": "Kunden",
+  "/customers/articles": "Artikel und Leistungen",
+  "/customers/import": "CSV-Import",
+  "/history": "Rechnungshistorie",
   "/settings": "Einstellungen",
   "/handoff": "Unterlagen übergeben",
   "/settings/api-keys": "API-Schlüssel",
@@ -20,7 +23,7 @@ const STATIC_TITLES: Record<string, string> = {
   "/settings/audit-logs": "Audit-Log",
   "/settings/documentation": "Dokumentation",
   "/steuer-simulation": "Steuer-Simulation",
-  "/users": "Benutzerverwaltung",
+  "/users": "Benutzer",
 };
 
 const DASHBOARD_TAB_TITLES: Record<string, string> = {

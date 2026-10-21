@@ -47,3 +47,8 @@
   .actions button { flex: 1; }
   .actions p { flex-basis: 100%; }
 }
+
+.compactChecklist .summary { padding-block: var(--space-md); }
+.compactChecklist .body { padding-bottom: var(--space-md); }
+.compactChecklist .rows { margin-top: 0; }
+.compactChecklist .row { align-items: center; padding-block: var(--space-xs); }

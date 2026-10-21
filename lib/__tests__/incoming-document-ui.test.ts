@@ -42,14 +42,14 @@ describe('incoming source presentation', () => {
     const doc = document({ reviewDraft: { supplierName: '<script>draft</script>', invoiceNumber: 'PHOTO-17', invoiceDate: '2026-10-20', paymentDate: '2026-10-21', amount: '0.29', note: 'Draft, not a payment' }, reviewDraftSavedAt: '2026-10-21T10:00:00.000Z' });
     doc.originalRef = { ...doc.originalRef, mediaType: 'image/png' };
     const html = renderToStaticMarkup(createElement(IncomingReviewDraft, { document: doc, onSaved: vi.fn(), onDirtyChange: vi.fn(), onBusyChange: vi.fn() }));
-    expect(html).toContain('Prüfentwurf · nicht gebucht'); expect(html).toContain('manuelle Original- und Zahlungsprüfung ausdrücklich bestätigt'); expect(html).toContain('Keine automatische Speicherung');
+    expect(html).toContain('Prüfentwurf · nicht gebucht'); expect(html).toContain('Erst die abschließende Bestätigung bucht die Ausgabe'); expect(html).toContain('keine automatische Speicherung');
     expect(html).not.toContain('type="checkbox"'); expect(html).not.toContain('<script>draft</script>'); expect(html).toContain('&lt;script&gt;draft&lt;/script&gt;');
     const historical = renderToStaticMarkup(createElement(IncomingSavedDraft, { document: { ...doc, reviewState: 'DISMISSED' } }));
     expect(historical).toContain('keine Buchungsbestätigung'); expect(historical).not.toContain('<input'); expect(historical).toContain('0.29');
     const row = renderToStaticMarkup(createElement(IncomingDocumentRow, { document: { ...doc, supplierName: null, invoiceNumber: null, invoiceDate: null }, onOpen: vi.fn() }));
     expect(row).toContain('Entwurf:'); expect(row).toContain('Prüfentwurf gespeichert'); expect(row).toContain('Entwurfsdatum');
     const source = renderToStaticMarkup(createElement(SourcePreview, { document: { ...doc, preview: null, parseStatus: 'FAILED', approvalSupported: false }, onOpen: vi.fn() }));
-    expect(source).toContain('ausdrücklicher manueller Freigabe'); expect(source).not.toContain('korrektes PDF');
+    expect(source).toContain('Original und Zahlung bestätigen'); expect(source).not.toContain('korrektes PDF');
   });
   it('locks draft edits/save while dismissal is open and blocks interrupted dirty/in-flight review mutations', () => {
     const clean = { busy: false, draftDirty: false, draftBusy: false, hasPending: false };
@@ -73,7 +73,7 @@ describe('incoming source presentation', () => {
     const html = renderToStaticMarkup(createElement(SourcePreview, { document: document(), onOpen: vi.fn() }));
     expect(html).toMatch(/aria-label="Lieferant \/ Verkäufer"[\s\S]*?Lieferfirma/);
     expect(html).toMatch(/aria-label="Empfänger \/ Käufer"[\s\S]*?Mein Betrieb/);
-    expect(html).toContain('nicht als Kunden angelegt');
+    expect(html).toContain('Ausgelesene Angaben am Original prüfen');
     expect(html).toContain('Bruttobetrag laut Original · ungeprüft');
     expect(html).toContain('Restbetrag laut Original');
     expect(html).toContain('100,00 EUR');
@@ -97,8 +97,8 @@ describe('incoming source presentation', () => {
   });
   it('explains plain PDF extraction failure while preserving the original', () => {
     const html = renderToStaticMarkup(createElement(SourcePreview, { document: document({ parseStatus: 'FAILED', parseErrorCode: 'NO_EMBEDDED_XML', preview: null, totalAmount: null }), onOpen: vi.fn() }));
-    expect(html).toContain('vollständige Original bleibt erhalten');
-    expect(html).toContain('Optional den eingerichteten KI-Anbieter');
+    expect(html).toContain('Original erhalten');
+    expect(html).toContain('manuell prüfen oder KI nutzen');
     expect(html).not.toContain('Kein OCR');
     expect(html).not.toContain('0,00');
   });
@@ -112,7 +112,7 @@ describe('incoming source presentation', () => {
   it('treats business matches as hints and links to the separate existing original', () => {
     const doc = document({ businessDuplicates: [{ id: 9, supplierName: 'Lieferfirma', invoiceNumber: 'RE-42', invoiceDate: null, currency: 'EUR', totalAmount: '123.45', reviewState: 'REVIEW', revision: 1, linkedExpenseId: null }] });
     const html = renderToStaticMarkup(createElement(SourcePreview, { document: doc, onOpen: vi.fn() }));
-    expect(html).toContain('kein Nachweis'); expect(html).toContain('Beleg #9');
+    expect(html).toContain('mögliche Dublette'); expect(html).toContain('Beleg #9');
   });
 });
 
