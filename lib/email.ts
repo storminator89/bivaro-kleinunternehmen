@@ -1,3 +1,4 @@
+import { reminderBalance, normalizeReminderOptions, composeReminderText } from '@/lib/reminder-workbench';
 import { readFile } from 'fs/promises';
 import { basename, extname } from 'path';
 import type { SendMailOptions } from 'nodemailer';
@@ -175,7 +176,8 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
     const invoiceNumber = loaded.invoice.invoiceNumber || loaded.invoice.fileName;
     const levelLabel = REMINDER_LEVEL_LABELS[reminder.reminderLevel ?? 1] || REMINDER_LEVEL_LABELS[1];
     const paymentDueDate = addDays(new Date(), reminder.dueDays ?? 14);
-    const total = (loaded.invoice.totalAmount || 0) + (reminder.fee || 0);
+    const balance = reminderBalance(loaded.invoice);
+    const options = normalizeReminderOptions(reminder);
 
     return {
       documentType: request.documentType,
@@ -184,20 +186,7 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
       replyTo,
       to: recipient,
       subject: `${levelLabel} zu Rechnung ${invoiceNumber}`,
-      text: [
-        `Sehr geehrte Damen und Herren,`,
-        '',
-        `zu unserer Rechnung ${invoiceNumber} konnten wir bislang keinen Zahlungseingang feststellen.`,
-        loaded.invoice.dueDate ? `Die Rechnung war fällig am ${formatDate(loaded.invoice.dueDate)}.` : '',
-        `Bitte überweisen Sie den offenen Betrag${reminder.fee ? ` inklusive Mahngebühr` : ''} in Höhe von ${formatCurrency(total)} bis spätestens ${formatDate(paymentDueDate)}.`,
-        '',
-        reminder.notes ? `Hinweis: ${reminder.notes}` : '',
-        '',
-        `Die ursprüngliche Rechnung finden Sie nochmals im Anhang.`,
-        '',
-        `Mit freundlichen Grüßen`,
-        companyName,
-      ].filter((line) => line !== '').join('\n'),
+      text: composeReminderText(invoiceNumber, balance, options, companyName, paymentDueDate),
       attachmentFileName: loaded.attachmentFileName,
       attachmentUrl: loaded.attachmentUrl,
       documentLabel: `${levelLabel} zu Rechnung ${invoiceNumber}`,
@@ -351,14 +340,15 @@ async function loadEmailDocument(userId: string, request: EmailDraftRequest): Pr
     throw new Error('Dokument nicht gefunden');
   }
 
-  // Partial-invoice reminder composition is intentionally deferred to BPR-013.
-  // Block both preview and send, including stale composed messages, rather
-  // than knowingly demand the original total after receiving an allocation.
+  // Partial reminders use the dedicated fresh-preview/text-download workbench.
+  // SMTP remains fail-closed until a durable delivery/outbox contract exists.
+  // This also rejects stale OPEN previews after a payment, before transport creation.
   if (request.documentType === 'reminder' && (invoice.type !== 'INVOICE'
     || !['DRAFT', 'SENT'].includes(invoice.status) || invoice.paymentJournalEvents.length > 0
     || invoice.incomes.length > 0 || invoice.paidAt)) {
     throw new Error('Mahnungen für Rechnungen mit Zahlungsnachweisen sind gesperrt. Bitte Restbetrag und Zahlungsjournal prüfen.');
   }
+  if (request.documentType === 'reminder') reminderBalance(invoice);
   const sanitizedFileName = basename(invoice.storedFileName);
   const attachmentPath = await findOwnedUploadedFile(userId, sanitizedFileName);
   if (!attachmentPath) {
@@ -399,6 +389,7 @@ async function getDocumentInvoice(userId: string, request: EmailDraftRequest) {
       paymentJournalEvents: true,
       incomes: {
         include: {
+          cashTransaction: true,
           customer: {
             select: { id: true, name: true, email: true },
           },
@@ -545,13 +536,6 @@ function addDays(date: Date, days: number) {
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('de-DE').format(date);
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(value);
 }
 
 function textToHtml(text: string) {

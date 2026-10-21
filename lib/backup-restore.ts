@@ -1,3 +1,4 @@
+import { validateReminderBackupFields, restoredReminderKey } from '@/lib/reminder-backup';
 import { annualContextAppendAfter, readAnnualContextRevision, validateAnnualContextHistory } from '@/lib/annual-business-context';
 import { CUSTOMER_FIELD_LIMITS, customerBusinessIdentity } from '@/lib/customer-field-contract';
 import { readServiceArticle, serviceArticleNameKey } from '@/lib/service-articles';
@@ -22,6 +23,7 @@ import { documentNumberPrefix, maximumDocumentSequence, type DocumentType } from
 import { validateRecurringValues } from '@/lib/recurring-schedule';
 import {
   CURRENT_BACKUP_VERSION,
+  backupSchemaSupportsReminderBalance,
   FULL_PAYMENT_JOURNAL_SCHEMA_VERSION,
   LEGACY_BACKUP_VERSION,
   manifestWarning,
@@ -898,6 +900,10 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   validateDateFields(arrays.templates, 'templates', ['createdAt', 'updatedAt']);
   validateDateFields(arrays.recurringExpenses, 'recurringExpenses', ['startDate', 'endDate', 'lastExecuted', 'nextExecution', 'createdAt', 'updatedAt']);
   validateDateFields(arrays.reminders, 'reminders', ['sentAt', 'dueDate', 'createdAt']);
+  arrays.reminders.forEach((reminder, index) => {
+    try { validateReminderBackupFields(reminder, version !== LEGACY_BACKUP_VERSION && backupSchemaSupportsReminderBalance(manifest?.schemaVersion), `reminders[${index}]`); }
+    catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Mahnungsdaten sind ungültig.'); }
+  });
   validateDateFields(arrays.cashBooks, 'cashBooks', ['createdAt', 'updatedAt']);
   validateDateFields(arrays.cashTransactions, 'cashTransactions', ['date', 'createdAt', 'updatedAt']);
   validateDateFields(arrays.documentations, 'documentations', ['createdAt', 'updatedAt']);
@@ -1373,6 +1379,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
     // Reject known immutable-target conflicts before resolving or staging any
     // files. Repeat these checks inside the write transaction to cover races.
+    if (overwrite && await prisma.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
     if (overwrite && await prisma.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
     const sourceContext = validateAnnualContextHistory(data.annualBusinessContextRevisions);
     const targetContext = (await prisma.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } })).map(readAnnualContextRevision);
@@ -1441,6 +1448,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         addCounterValue(preservedCounterValues, key.slice(0, separator), Number(key.slice(separator + 1)), value);
       }
 
+      if (overwrite && await tx.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
       if (overwrite && await tx.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
       if (overwrite && await tx.paymentJournalEvent.count({ where: { userId } }) > 0) {
         throw new BackupValidationError('Überschreiben würde unveränderliche Zahlungsereignisse löschen. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
@@ -2105,12 +2113,46 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         }
       }
 
+      // Resolve both original command keys and imported portable identities without
+      // rewriting immutable rows. Own backups and A→B→A exports are the same history.
+      const existingConfirmedReminders = await tx.reminder.findMany({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } });
+      const existingReminderByIdentity = new Map<string, (typeof existingConfirmedReminders)[number]>();
+      for (const existing of existingConfirmedReminders) {
+        let identity: string;
+        try { identity = restoredReminderKey(existing.idempotencyKey, userId, existing.id); }
+        catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Bestehende Mahnherkunft ist ungültig.'); }
+        if (existingReminderByIdentity.has(identity)) throw new BackupValidationError('Bestehende bestätigte Mahnungen enthalten mehrdeutige Quellidentitäten. Bitte die unveränderliche Historie separat prüfen.');
+        existingReminderByIdentity.set(identity, existing);
+      }
       for (const reminder of reminders) {
         const sourceId = asOptionalInt(reminder.id, 'reminder.id');
         const invoiceId = relationMapValue(invoiceMap, reminder.invoiceId, 'reminder.invoiceId');
         if (!invoiceId) throw new BackupValidationError('reminder.invoiceId fehlt');
+        const sourceKey = asOptionalString(reminder.idempotencyKey, 'reminder.idempotencyKey', 128);
+        let idempotencyKey: string | null = null;
+        if (reminder.balanceSnapshot != null) {
+          if (sourceId === null || !sourceUserId?.trim()) throw new BackupValidationError('Bestätigte Mahnung benötigt stabile Quellherkunft.');
+          try { idempotencyKey = restoredReminderKey(sourceKey, sourceUserId, sourceId); }
+          catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Ungültige Mahnherkunft.'); }
+        }
+        const snapshot = reminder.balanceSnapshot == null ? Prisma.DbNull : asJson(reminder.balanceSnapshot, 'reminder.balanceSnapshot');
+        const prior = idempotencyKey ? existingReminderByIdentity.get(idempotencyKey) : null;
+        if (prior) {
+          if (prior.invoiceId !== invoiceId || hashJson(prior.balanceSnapshot) !== hashJson(reminder.balanceSnapshot)
+            || prior.reminderLevel !== (asOptionalInt(reminder.reminderLevel, 'reminder.reminderLevel') ?? 1)
+            || prior.fee !== (asOptionalFinite(reminder.fee, 'reminder.fee') ?? 0)
+            || prior.notes !== asOptionalString(reminder.notes, 'reminder.notes', 5_000)
+            || prior.dueDate.toISOString() !== asDate(reminder.dueDate, 'reminder.dueDate')?.toISOString()
+            || prior.createdAt.toISOString() !== asDate(reminder.createdAt, 'reminder.createdAt')?.toISOString()
+            || prior.sentAt.toISOString() !== asDate(reminder.sentAt, 'reminder.sentAt')?.toISOString()) throw new BackupValidationError('Wiederhergestellte Mahnidentität widerspricht bestehender Restbetragsbestätigung.');
+          if (sourceId !== null) reminderMap.set(sourceId, prior.id);
+          result.reminders.skipped += 1;
+          continue;
+        }
         const created = await tx.reminder.create({ data: {
           invoiceId,
+          idempotencyKey,
+          balanceSnapshot: snapshot,
           reminderLevel: asOptionalInt(reminder.reminderLevel, 'reminder.reminderLevel') ?? 1,
           sentAt: asDate(reminder.sentAt, 'reminder.sentAt', new Date())!,
           dueDate: asDate(reminder.dueDate, 'reminder.dueDate', new Date())!,
@@ -2120,6 +2162,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           userId,
         } });
         if (sourceId !== null) reminderMap.set(sourceId, created.id);
+        if (idempotencyKey) existingReminderByIdentity.set(idempotencyKey, created);
         result.reminders.imported += 1;
       }
 

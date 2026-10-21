@@ -10,7 +10,7 @@ export class InvoicePaymentError extends Error {
 export async function deleteInvoice(userId: string, id: number) {
   if (!Number.isSafeInteger(id) || id <= 0) throw new InvoicePaymentError('Ungültige Rechnungs-ID');
   await inTransaction(async tx => {
-    const invoice = await tx.invoice.findFirst({ where: { id, userId, type: 'INVOICE' }, include: { incomes: { include: { cashTransaction: true } } } });
+    const invoice = await tx.invoice.findFirst({ where: { id, userId, type: 'INVOICE' }, include: { incomes: { include: { cashTransaction: true } }, reminders: { select: { balanceSnapshot: true } } } });
     if (!invoice) throw new InvoicePaymentError('Rechnung nicht gefunden', 404);
     if (invoice.type !== 'INVOICE') {
       throw new InvoicePaymentError('Dieser Beleg kann nicht gelöscht werden', 409);
@@ -21,6 +21,7 @@ export async function deleteInvoice(userId: string, id: number) {
     if (invoice.status !== 'DRAFT' || invoice.issuanceState !== 'UNISSUED') {
       throw new InvoicePaymentError('Ausgestellte oder nicht eindeutig ungeausfertigte Rechnungen können nicht gelöscht werden', 409);
     }
+    if (invoice.reminders.some(reminder => reminder.balanceSnapshot != null)) throw new InvoicePaymentError('Die Rechnung hat eine bestätigte Mahn-Restbetragshistorie und kann nicht gelöscht werden.', 409);
     if (invoice.paidAt) throw new InvoicePaymentError('Die Rechnung hat einen Zahlungsnachweis und kann nicht gelöscht werden', 409);
     if (invoice.incomes.length > 0) throw new InvoicePaymentError('Die Rechnung hat bereits eine Einnahme und kann nicht gelöscht werden', 409);
     await tx.invoice.delete({ where: { id, userId } });

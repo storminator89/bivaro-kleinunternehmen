@@ -1,6 +1,7 @@
+import { reminderBalance, recordReminder, ReminderWorkbenchError } from '@/lib/reminder-workbench';
 import { ledgerSummary } from '@/lib/payment-journal/service';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
-import { auditCreate, auditDelete } from '@/lib/audit-log';
+import { auditDelete } from '@/lib/audit-log';
 /**
  * API v1 - Reminders Endpoint
  * 
@@ -80,6 +81,7 @@ export async function GET(request: NextRequest) {
             dueDate: true,
             fee: true,
             notes: true,
+            balanceSnapshot: true,
           },
         },
       },
@@ -90,7 +92,9 @@ export async function GET(request: NextRequest) {
     const enrichedInvoices = invoices.map(invoice => {
       let summary = null;
       try { summary = ledgerSummary(invoice); } catch { /* Explicit review, no guessed balance. */ }
-      const canCreateReminder = !!summary && summary.paymentState === 'OPEN';
+      let balance = null;
+      try { balance = reminderBalance(invoice); } catch { /* Fail closed. */ }
+      const canCreateReminder = balance !== null && balance.paidCents === '0';
       const latestReminder = invoice.reminders[0];
       const currentLevel = latestReminder ? latestReminder.reminderLevel : 0;
       const nextLevel = Math.min(currentLevel + 1, 4);
@@ -117,9 +121,11 @@ export async function GET(request: NextRequest) {
         customer: invoice.customer,
         reminders: invoice.reminders,
         paymentSummary: summary,
+        balanceVersion: balance?.balanceVersion ?? null,
         openAmount: summary ? Number(summary.openCents) / 100 : null,
         canCreateReminder,
-        paymentReviewRequired: summary === null,
+        canPrepareBalanceReminder: balance !== null,
+        paymentReviewRequired: balance === null,
         currentReminderLevel: currentLevel,
         currentReminderLevelLabel: REMINDER_LEVELS[currentLevel] || 'None',
         nextReminderLevel: nextLevel,
@@ -167,80 +173,19 @@ async function postHandler(request: NextRequest) {
       return apiError('Invalid JSON body', 400, 'INVALID_JSON');
     }
 
-    const { invoiceId, reminderLevel, fee, notes, dueDays } = body;
-
-    // Validation
-    if (!invoiceId) {
-      return apiError('Invoice ID is required', 400, 'VALIDATION_ERROR');
+    const { invoiceId, ...input } = body;
+    if (!Number.isSafeInteger(Number(invoiceId)) || Number(invoiceId) <= 0) return apiError('Invoice ID is required', 400, 'VALIDATION_ERROR');
+    // Replay must precede eligibility: settlement cannot invalidate a successful command.
+    const existing = await prisma.invoice.findFirst({ where: { id: Number(invoiceId), userId }, select: { status: true } });
+    let reminder;
+    try { reminder = await recordReminder(userId, Number(invoiceId), input); }
+    catch (error) {
+      if (error instanceof ReminderWorkbenchError) {
+        if (existing?.status === 'PAID' && error.code === 'INVOICE_NOT_OPEN') return apiError('Cannot create reminder for paid invoice', 400, 'INVOICE_PAID');
+        return apiError(error.message, error.status, error.code);
+      }
+      throw error;
     }
-
-    // Check if invoice exists and belongs to user
-    const invoice = await prisma.invoice.findFirst({
-      where: { id: parseInt(invoiceId), userId },
-      include: {
-        paymentJournalEvents: true,
-        incomes: true,
-        reminders: {
-          orderBy: { sentAt: 'desc' },
-          take: 1
-        }
-      },
-    });
-
-    if (!invoice) {
-      return apiError('Invoice not found', 404, 'NOT_FOUND');
-    }
-
-    if (invoice.status === 'PAID') {
-      return apiError('Cannot create reminder for paid invoice', 400, 'INVOICE_PAID');
-    }
-
-    if (invoice.type !== 'INVOICE' || invoice.status === 'CANCELLED') {
-      return apiError('Reminders can only be recorded for open invoices', 409, 'INVOICE_NOT_OPEN');
-    }
-
-    if (invoice.paymentJournalEvents.length > 0 || invoice.incomes.length > 0 || invoice.paidAt) {
-      return apiError('Reminders after a payment require remaining-balance review.', 409, 'PAYMENT_REVIEW_REQUIRED');
-    }
-
-    // Determine next reminder level
-    const lastReminder = invoice.reminders[0];
-    const nextLevel = reminderLevel || (lastReminder ? Math.min(lastReminder.reminderLevel + 1, 4) : 1);
-
-    if (nextLevel < 1 || nextLevel > 4) {
-      return apiError('Reminder level must be between 1 and 4', 400, 'VALIDATION_ERROR');
-    }
-
-    // Calculate due date (default: 14 days)
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + (dueDays || 14));
-
-    const reminder = await prisma.reminder.create({
-      data: {
-        invoiceId: parseInt(invoiceId),
-        reminderLevel: nextLevel,
-        fee: fee ? parseFloat(fee) : 0,
-        notes: notes?.trim() || null,
-        dueDate,
-        userId,
-      },
-      include: {
-        invoice: {
-          select: {
-            id: true,
-            invoiceNumber: true,
-            totalAmount: true,
-            customer: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-    });
-    await auditCreate(userId, 'Reminder', reminder);
 
     const response = apiSuccess({
       id: reminder.id,
@@ -252,6 +197,8 @@ async function postHandler(request: NextRequest) {
       sentAt: reminder.sentAt,
       dueDate: reminder.dueDate,
       invoice: reminder.invoice,
+      balanceSnapshot: reminder.balanceSnapshot,
+      replayed: reminder.replayed,
     });
 
     response.headers.set('Location', `/api/v1/reminders?invoiceId=${invoiceId}`);
@@ -285,6 +232,7 @@ async function deleteHandler(request: NextRequest) {
       return apiError('Reminder not found', 404, 'NOT_FOUND');
     }
 
+    if (existing.balanceSnapshot != null) return apiError('Confirmed balance reminders are immutable.', 409, 'IMMUTABLE_REMINDER');
     await prisma.reminder.delete({
       where: { id: parseInt(id) },
     });

@@ -26,6 +26,11 @@ export async function GET(request: Request) {
         const statusFilter = url.searchParams.get('status') || '';
 
         const where: Prisma.InvoiceWhereInput = { userId, type: 'QUOTE' };
+        const documentId = url.searchParams.get('document');
+        if (documentId !== null) {
+            if (!/^[1-9]\d*$/.test(documentId) || !Number.isSafeInteger(Number(documentId))) return NextResponse.json({ error: 'Ungültige Dokument-ID' }, { status: 400 });
+            where.id = Number(documentId);
+        }
 
         const today = quoteBusinessToday();
         const open = { status: { in: ['DRAFT', 'SENT'] }, convertedInvoice: { is: null } };
@@ -44,7 +49,7 @@ export async function GET(request: Request) {
                     OR: [
                         { fileName: { contains: search } },
                         { invoiceNumber: { contains: search } },
-                        { customer: { name: { contains: search } } },
+                        { customer: { userId, name: { contains: search } } },
                     ],
                 },
             ];
@@ -54,7 +59,7 @@ export async function GET(request: Request) {
             prisma.invoice.findMany({
                 where,
                 orderBy: statusFilter === 'FOLLOW_UP' ? [{ quoteFollowUpOn: 'asc' }, { id: 'asc' }] : statusFilter === 'NEEDS_RESPONSE' ? [{ validUntil: 'asc' }, { id: 'asc' }] : { uploadedAt: 'desc' },
-                include: { customer: true, convertedInvoice: { select: { id: true } } },
+                include: { customer: { select: { id: true, name: true, userId: true } }, convertedInvoice: { select: { id: true } } },
                 skip,
                 take: pageSize,
             }),
@@ -62,7 +67,11 @@ export async function GET(request: Request) {
             ...QUOTE_ACTION_FILTERS.map(key => prisma.invoice.count({ where: { userId, type: 'QUOTE', ...actionFilters[key] } })),
         ]);
 
-        return NextResponse.json({ items, total, page, pageSize, workflowDate: today, workflowCounts: { FOLLOW_UP: followUp, NEEDS_RESPONSE: needsResponse, READY_TO_INVOICE: readyToInvoice } });
+        const ownedItems = items.map(({ customer, ...quote }) => ({
+            ...quote,
+            customer: customer?.userId === userId ? { id: customer.id, name: customer.name } : null,
+        }));
+        return NextResponse.json({ items: ownedItems, total, page, pageSize, workflowDate: today, workflowCounts: { FOLLOW_UP: followUp, NEEDS_RESPONSE: needsResponse, READY_TO_INVOICE: readyToInvoice } });
     } catch (error) {
         if (error instanceof UnauthorizedError) return unauthorizedResponse();
         throw error;

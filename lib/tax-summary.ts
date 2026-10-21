@@ -26,7 +26,10 @@ export type TaxSummary = {
   year: SupportedTaxYear;
   timeRange: TaxSummaryPeriod;
   annualBasis: boolean;
+  /** Complete server query, not a declaration of business-wide completeness. */
   complete: true;
+  inputScope: "IN_APP_ONLY";
+  externalDataIncluded: false;
   ruleVersion: string;
   ruleSource: string;
   generatedAt: string;
@@ -122,7 +125,8 @@ export function buildTaxSummary(input: TaxSummaryInput): TaxSummary {
   );
 
   const warnings: string[] = [
-    "Die Summary basiert auf dem vollständigen serverseitig geladenen Datenstand.",
+    "Alle passenden In-App-Buchungen wurden serverseitig geladen. Das bestätigt nicht die Vollständigkeit Ihrer Unternehmensdaten; externe Einnahmen und Ausgaben sind nicht enthalten.",
+    "Optionale Jahreskontextangaben werden weder zum Gewinn addiert noch als Simulationsparameter oder Steuerstatus verwendet.",
     "Das Regelpaket ist auf eine natürliche Person mit Einzelveranlagung und einen Betrieb begrenzt; Zusammenveranlagung, Sonder-/Auslandseinkünfte und komplexe Verlustfälle sind nicht enthalten.",
   ];
   if (!annualBasis) {
@@ -137,6 +141,8 @@ export function buildTaxSummary(input: TaxSummaryInput): TaxSummary {
     timeRange,
     annualBasis,
     complete: true,
+    inputScope: "IN_APP_ONLY",
+    externalDataIncluded: false,
     ruleVersion: `de-tax-${rules.year}-limited-v1`,
     ruleSource: rules.source,
     generatedAt: new Date().toISOString(),

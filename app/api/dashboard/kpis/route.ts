@@ -1,3 +1,5 @@
+import { readAnnualContextRevision } from '@/lib/annual-business-context';
+import { buildRevenueIndicatorBasis } from '@/lib/revenue-indicators';
 import { ledgerSummary } from '@/lib/payment-journal/service';
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -222,7 +224,7 @@ export async function GET(request: Request) {
 
     // Four compact raw projections plus the open-invoice aggregate replace
     // loading every income and expense row into Node.js.
-    const [incomeRows, expenseRows, recentIncomes, recentExpenses, openInvoices] = await Promise.all([
+    const [incomeRows, expenseRows, recentIncomes, recentExpenses, openInvoices, annualContext] = await Promise.all([
       prisma.$queryRaw<MonthlyAggregateRow[]>(buildMonthlyAggregateQuery(
         "Income",
         userId,
@@ -245,6 +247,7 @@ export async function GET(request: Request) {
         where: { userId, type: 'INVOICE', status: { in: ['DRAFT', 'SENT'] } },
         include: { incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } } },
       }),
+      prisma.annualBusinessContextRevision.findMany({ where: { userId, contextYear: currentYear }, orderBy: { revision: 'asc' } }),
     ]);
 
     let openCents = BigInt(0);
@@ -291,6 +294,7 @@ export async function GET(request: Request) {
       totalRevenue,
       totalExpenses,
       recentActivities,
+      revenueBasis: buildRevenueIndicatorBasis({ year: currentYear, inAppRevenue: revenueThisYearToDate, previousYearInAppRevenue: sumRows(incomeRows, currentYear - 1), history: annualContext.map(readAnnualContextRevision), now: today }),
       yearComparison: {
         currentYear: selectedYear,
         lastYear: selectedYear - 1,
@@ -310,7 +314,7 @@ export async function GET(request: Request) {
         monthlyDataThisYear: buildMonthlyData(selectedYear, incomeRows, expenseRows),
         monthlyDataLastYear: buildMonthlyData(selectedYear - 1, incomeRows, expenseRows),
       },
-    });
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     if (error instanceof UnauthorizedError) return unauthorizedResponse();
     console.error("Fehler beim Laden der KPI-Daten:", error);

@@ -508,13 +508,15 @@ export default function SteuerSimulationPage() {
         </details>}
         {!taxDataSupported && summary && (
           <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Für diesen Datenstand wird keine endgültige Steuerlast angezeigt. Die Simulation unterstützt nur vollständige Jahreszeiträume ohne Verlust, Verlustvortrag oder Verlustrücktrag.
+            Für diesen Datenstand wird keine endgültige Steuerlast angezeigt. Die Simulation unterstützt nur Jahresansichten ohne Verlust, Verlustvortrag oder Verlustrücktrag; die Vollständigkeit außerhalb Bivaro wird nicht geprüft.
           </div>
         )}
 
         <section className="tax-source-context" aria-labelledby="overview-heading">
-          <div className="tax-source-profit"><span className="tax-source-label">Datenbasis · EÜR</span><h2 id="overview-heading">Gewinn laut EÜR</h2><strong>{loading ? '—' : formatCurrency(profit)}</strong><p>Vor Steuern · steuerrelevante Buchungen</p></div>
+          <div className="tax-source-profit"><span className="tax-source-label">Datenbasis · In-App-EÜR · {taxYear}</span><h2 id="overview-heading">Gewinn laut EÜR</h2><strong>{loading ? '—' : formatCurrency(profit)}</strong><p>Vor Steuern · steuerrelevante Buchungen</p></div>
           <dl><div><dt>Betriebseinnahmen</dt><dd>{loading ? '—' : formatCurrency(totalIncome)}</dd></div><div><dt>Betriebsausgaben</dt><dd>{loading ? '—' : formatCurrency(totalExpenses)}</dd></div><div><dt>Buchungen</dt><dd>{loading ? '—' : summary?.sourceCount ?? 0}</dd></div></dl>
+          <p className="tax-source-period">Nur In-App-Buchungen; externe Einnahmen und Ausgaben nicht enthalten. Eigene Jahreskontextangaben werden nicht addiert. Keine Aussage zum Kleinunternehmerstatus.</p>
+          {!loading && summary && <p className="tax-source-period">Geladene Daten für Regeljahr {summary.year} · Stand {new Date(summary.dataAsOf).toLocaleString("de-DE")} · Regelpaket {summary.ruleVersion}. Ihre veränderbaren Annahmen stehen im Parameterbereich.</p>}
           <p className="tax-source-period">Zeitraum: {selectedTimeRange === "thisYear" ? `Steuerjahr ${taxYear}` : selectedTimeRange === "lastYear" ? `Steuerjahr ${taxYear - 1}` : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}</p>
         </section>
         <div className="tax-mobile-result"><span>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}<strong>{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</strong></span><a href="#simulation-result">Zum Ergebnis<ArrowUpRight aria-hidden="true" /></a></div>

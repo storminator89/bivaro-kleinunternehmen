@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { RevenueIndicatorBasis } from "@/lib/revenue-indicators";
 import type { YearComparisonData } from "@/types/dashboard";
 import { DashboardHeader } from "./dashboard-header";
 import { DashboardActivityFeed } from "./dashboard-activity-feed";
@@ -28,6 +29,7 @@ interface KpiData {
   totalRevenue: number;
   totalExpenses: number;
   recentActivities: Activity[];
+  revenueBasis?: RevenueIndicatorBasis;
   yearComparison?: YearComparisonData;
 }
 

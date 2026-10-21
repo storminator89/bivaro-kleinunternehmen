@@ -275,6 +275,11 @@ model Reminder {
   createdAt     DateTime  @default(now())
   userId        String
   user          User      @relation(fields: [userId], references: [id])
+  // User-confirmed rest-balance evidence; never modifies the source invoice.
+  idempotencyKey String?
+  balanceSnapshot Json?
+
+  @@unique([userId, idempotencyKey])
 }
 
 // API Key for external REST API access

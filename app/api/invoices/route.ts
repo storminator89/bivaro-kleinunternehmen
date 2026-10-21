@@ -167,6 +167,11 @@ export async function GET(request: Request) {
     const dateRange = url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
 
     const where: Prisma.InvoiceWhereInput = { userId, type: { not: 'QUOTE' } };
+    const documentId = url.searchParams.get('document');
+    if (documentId !== null) {
+        if (!/^[1-9]\d*$/.test(documentId) || !Number.isSafeInteger(Number(documentId))) return NextResponse.json({ error: 'Ungültige Dokument-ID' }, { status: 400 });
+        where.id = Number(documentId);
+    }
 
     // Financial filters are applied to the validated complete ledger below,
     // before pagination and count. A partial allocation is never fully paid.

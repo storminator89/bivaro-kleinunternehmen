@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 const STATIC_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/dashboard/today": "Heute erledigen",
   "/dashboard/reminders": "Mahnwesen",
   "/dashboard/invoices/new": "Neue Rechnung",
   "/dashboard/quotes/new": "Neues Angebot",
