@@ -23,6 +23,7 @@ export type BackupPreview = {
     expenses: number;
     incomes: number;
     paymentJournalEvents: number;
+    annualBusinessContextRevisions: number;
     invoices: number;
     purchaseDocuments: number;
     templates: number;
@@ -80,6 +81,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     expenses: countArray(data, 'expenses'),
     incomes: countArray(data, 'incomes'),
     paymentJournalEvents: countArray(data, 'paymentJournalEvents'),
+    annualBusinessContextRevisions: countArray(data, 'annualBusinessContextRevisions'),
     invoices: countArray(data, 'invoices'),
     purchaseDocuments: countArray(data, 'purchaseDocuments'),
     templates: countArray(data, 'templates'),

@@ -9,7 +9,7 @@ import { withProcessingSlot } from '@/lib/processing-limit';
 import JSZip from 'jszip';
 import { NextRequest } from 'next/server';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, hashBytes, CURRENT_SCHEMA_VERSION, PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
+import { createBackupManifest, hashBytes, CURRENT_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
 import type { PurchaseParsePreview } from '@/lib/purchase-documents/types';
 
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null, userId: 'incoming-backup-source', failFinalAudit: false }));
@@ -130,6 +130,59 @@ function refreshManifest(backup: ReturnType<typeof JSON.parse>) {
 }
 
 describe('incoming originals backup and restore', () => {
+  it('rejects relabeled manual source evidence and future metadata before reading files or mutating tenants', async () => {
+    const sourceUser = 'unsupported-evidence-source', targetUser = 'unsupported-evidence-target';
+    await sources(sourceUser); await user(targetUser);
+    await database.client.settings.create({ data: { userId: targetUser, companyName: 'Preserve target settings' } });
+    await database.client.annualBusinessContextRevision.create({ data: { userId: targetUser, revision: 1, contextYear: 2026, effectiveFrom: '2026-01-01', foundingYear: null, previousYearTurnoverCents: null, previousYearExternalTurnoverCents: null, completeness: 'UNKNOWN', sourceNote: 'Preserve target declaration' } });
+    const { backup: original } = await exported(sourceUser);
+    const sourceBefore = await database.client.purchaseDocument.findMany({ where: { userId: sourceUser }, orderBy: { id: 'asc' } });
+    const targetBefore = await readBackupSnapshot(targetUser);
+    const sourceFiles = await Promise.all(sourceBefore.map(async document => [document.storedFileName, await readFile(storage.getTenantUploadPath(sourceUser, document.storedFileName))] as const));
+    const resolver = vi.fn(async () => { throw new Error('Preflight must reject before resolving originals'); });
+    for (const schemaVersion of [ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_ANNUAL_CONTEXT_SCHEMA_VERSION]) {
+      for (const [mediaType, reviewStatus] of [['image/png', 'REVIEW'], ['image/jpeg', 'DISMISSED'], ['application/pdf', 'REVIEW'], ['application/xml', 'DISMISSED'], ['application/pdf', 'BOOKED'], ['application/xml', 'BOOKED']] as const) {
+        const backup = structuredClone(original);
+        delete backup.data.annualBusinessContextRevisions;
+        const document = backup.data.purchaseDocuments.find((document: { reviewStatus: string }) => document.reviewStatus === reviewStatus);
+        expect(document).toBeTruthy();
+        const previousName = document.storedFileName;
+        document.mediaType = mediaType;
+        document.storedFileName = `${randomUUID()}.${mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/png' ? 'png' : mediaType === 'application/xml' ? 'xml' : 'pdf'}`;
+        document.originalFileName = `synthetic.${document.storedFileName.split('.').at(-1)}`;
+        if (mediaType.startsWith('image/')) { document.parseStatus = 'FAILED'; document.parseErrorCode = 'PHOTO_MANUAL_REVIEW'; document.parsedData = null; }
+        else { document.parseStatus = 'PARSED'; document.parseErrorCode = null; document.parsedData = preview(); }
+        for (const entry of backup.manifest.fileManifest) if (entry.sourceName === previousName) entry.sourceName = document.storedFileName;
+        for (const expense of backup.data.expenses) if (expense.storedReceiptFileName === previousName) expense.storedReceiptFileName = document.storedFileName;
+        refreshManifest(backup); backup.manifest.schemaVersion = schemaVersion;
+        // The same metadata graph without unsupported evidence is admissible;
+        // rejection below is not an unrelated invalid relationship/media state.
+        expect(() => createBackupPreview(backup)).not.toThrow();
+        document.reviewedSourceSnapshot = { provenance: 'MANUAL_PHOTO_REVIEW', originalSha256: document.originalSha256, snapshotVersion: 1 };
+        refreshManifest(backup); backup.manifest.schemaVersion = schemaVersion;
+        expect(() => validateBackupManifest(backup.manifest, backup.data)).toThrow(/reviewedSourceSnapshot/);
+        expect(() => createBackupPreview(backup)).toThrow(/reviewedSourceSnapshot/);
+        for (const overwrite of [false, true]) await expect(restore.restoreBackupData({ userId: targetUser, backup, overwrite, resolveFile: resolver })).rejects.toThrow(/reviewedSourceSnapshot/);
+      }
+    }
+    for (const field of ['reviewedSourceSnapshotAt', 'reviewedSourceSnapshotRevision', 'futureApprovalEvidence']) {
+      const backup = structuredClone(original); backup.data.purchaseDocuments[0][field] = { retained: 'must not be silently lost' }; refreshManifest(backup);
+      expect(() => createBackupPreview(backup)).toThrow(/Nicht unterstütztes Eingangsbelegfeld/);
+    }
+    // Legacy v2 bypasses manifest checks but must still reject the same evidence.
+    const legacy = structuredClone(original); legacy.data.purchaseDocuments[0].reviewedSourceSnapshot = { provenance: 'MANUAL_PHOTO_REVIEW' };
+    expect(() => restore.validateBackupForRestore({ version: '2.0', type: 'full', data: legacy.data })).toThrow();
+    // Explicit null and absent evidence carry no information to discard.
+    const emptySnapshot = structuredClone(original); emptySnapshot.data.purchaseDocuments[0].reviewedSourceSnapshot = null; refreshManifest(emptySnapshot);
+    expect(() => createBackupPreview(emptySnapshot)).not.toThrow();
+    expect(resolver).not.toHaveBeenCalled();
+    expect(await database.client.purchaseDocument.findMany({ where: { userId: sourceUser }, orderBy: { id: 'asc' } })).toEqual(sourceBefore);
+    expect((await readBackupSnapshot(targetUser)).data).toEqual(targetBefore.data);
+    expect(await database.client.purchaseDocument.count({ where: { userId: targetUser } })).toBe(0);
+    expect(await readdir(path.join(root, 'data', 'uploads', targetUser)).catch(error => { if (error.code === 'ENOENT') return []; throw error; })).toEqual([]);
+    for (const [name, bytes] of sourceFiles) expect(await readFile(storage.getTenantUploadPath(sourceUser, name))).toEqual(bytes);
+  });
+
   it('roundtrips actual JPG/PNG intake and explicit saved drafts with target ownership and zero ledger effects', async () => {
     const sourceUser = 'photo-draft-source', targetUser = 'photo-draft-target';
     await user(sourceUser); await user(targetUser); state.userId = sourceUser;
@@ -223,6 +276,8 @@ describe('incoming originals backup and restore', () => {
     const source = 'prior-photo-source', target = 'prior-photo-target'; await sources(source); await user(target);
     const archive = await exported(source);
     for (const document of archive.backup.data.purchaseDocuments) { delete document.reviewDraft; delete document.reviewDraftSavedAt; delete document.reviewDraftSearch; }
+    // Build a genuine historical fixture, not a relabeled current snapshot.
+    delete archive.backup.data.annualBusinessContextRevisions;
     refreshManifest(archive.backup); archive.backup.manifest.schemaVersion = PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION;
     expect(createBackupPreview(archive.backup).counts.purchaseDocuments).toBe(3);
     await restore.restoreBackupData({ userId: target, backup: archive.backup, overwrite: false, resolveFile: async (kind, sourceName) => {
@@ -611,6 +666,7 @@ describe('incoming originals backup and restore', () => {
     if (documentCount === 1) backup.data.purchaseDocuments = backup.data.purchaseDocuments.filter((row: { reviewStatus: string }) => row.reviewStatus === 'REVIEW');
     if (!documentCount) delete backup.data.purchaseDocuments;
     delete backup.data.paymentJournalEvents;
+    delete backup.data.annualBusinessContextRevisions;
     refreshManifest(backup);
     backup.manifest.schemaVersion = schemaVersion;
     backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => !(excludedModels as readonly string[]).includes(entry.model));
@@ -633,6 +689,7 @@ describe('incoming originals backup and restore', () => {
     backup.data.purchaseDocuments = [backup.data.purchaseDocuments[0]];
     backup.data.expenses = [];
     delete backup.data.suppliers;
+    delete backup.data.annualBusinessContextRevisions;
     refreshManifest(backup);
     backup.manifest.schemaVersion = PRE_SUPPLIERS_SCHEMA_VERSION;
     backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
@@ -646,6 +703,7 @@ describe('incoming originals backup and restore', () => {
     const { backup: oldBooked } = await exported('incoming-backup-source');
     delete oldBooked.data.suppliers;
     oldBooked.data.purchaseDocuments.forEach((record: Record<string, unknown>) => { delete record.supplierId; delete record.selectedSupplierSnapshot; });
+    delete oldBooked.data.annualBusinessContextRevisions;
     refreshManifest(oldBooked);
     oldBooked.manifest.schemaVersion = PRE_SUPPLIERS_SCHEMA_VERSION;
     oldBooked.manifest.modelCoverage = oldBooked.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');

@@ -57,6 +57,8 @@ export function incomingResponseError(status: number, body: unknown): IncomingRe
   if (duplicate) return new IncomingRequestError('Dieses Original ist bereits im Belegeingang. Es wurde kein zweiter Beleg angelegt.', status, duplicate);
   const codes: Record<string, string> = {
     INVALID_IMAGE: 'Foto ist beschädigt oder zu groß: höchstens 10 MB, 24 Megapixel und 12.000 Pixel je Kante. Einseitiges JPG/PNG wählen.',
+    PHOTO_DRAFT_REQUIRED: 'Foto: vollständigen Prüfentwurf mit Rechnungsangaben, EUR-Betrag und tatsächlichem Zahlungsdatum ausdrücklich speichern.',
+    PHOTO_DRAFT_CHANGED: 'Der gespeicherte Fotoentwurf hat sich geändert. Belegstatus neu laden, aktuelle Angaben bewusst prüfen und erneut bestätigen.',
     ORIGINAL_INTEGRITY: 'Das Original fehlt oder seine Integrität ist nicht bestätigt. Bitte nicht auf Grundlage dieser Vorschau weiterarbeiten.',
     REVISION_CONFLICT: 'Der Beleg wurde inzwischen geändert. Bitte neu laden, bevor du fortfährst.',
     STATE_CONFLICT: 'Der Belegstatus hat sich geändert. Bitte neu laden.',

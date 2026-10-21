@@ -1,10 +1,16 @@
+import { completePhotoDraft, isPhotoMedia } from '@/lib/purchase-documents/manual-photo-contract';
 import { parseBusinessDate } from '@/lib/business-date';
 import { parseMoneyEUR, formatMoneyEUR } from '@/lib/money';
 import type { IncomingDocument, PurchaseExpenseApprovalInput } from '@/lib/purchase-documents/types';
 
 export function approvalBlockedReason(document: IncomingDocument): string | null {
   if (document.reviewState !== 'REVIEW') return 'Nur offene Belege können erfasst werden. Verworfene Belege zuerst wieder öffnen.';
-  if (document.originalRef.mediaType.startsWith('image/')) return 'Foto archiviert: Prüfentwurf speichern und später fortsetzen. Eine verknüpfte Ausgabenerfassung aus Fotos ist noch nicht verfügbar; gespeicherte Angaben bestätigen keine Zahlung.';
+  if (isPhotoMedia(document.originalRef.mediaType)) {
+    try { completePhotoDraft(document.reviewDraft); } catch { return 'Foto: vollständigen Prüfentwurf ausdrücklich speichern (Lieferant, Rechnungsnummer/-datum, Zahlungsdatum und EUR-Bruttobetrag).'; }
+    if (!document.reviewDraftSavedAt) return 'Prüfentwurf vor der manuellen Foto-Freigabe ausdrücklich speichern.';
+    if (!document.supplierId || !document.selectedSupplierSnapshot) return 'Bitte zuerst einen Lieferantenkontakt ausdrücklich auswählen. Der gespeicherte Fotoentwurf ist noch keine Buchungsbestätigung.';
+    return null;
+  }
   if (document.parseStatus !== 'PARSED' || !document.preview) return 'Für diesen Beleg fehlen unterstützte strukturierte Rechnungsdaten. Original prüfen; gegebenenfalls ein korrektes PDF mit eingebettetem XML oder eine XML-Rechnung hochladen.';
   if (document.preview.documentType !== 'INVOICE') return 'Gutschriften und andere Dokumenttypen werden hier nicht gebucht. Sie benötigen einen eigenen geprüften Korrektur- oder Erstattungsablauf.';
   if (document.currency !== 'EUR') return 'Nur EUR-Rechnungen werden unterstützt. Keine automatische Währungsumrechnung.';

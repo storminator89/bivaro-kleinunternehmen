@@ -92,6 +92,10 @@ jobs:
               'history-correction-mobile.png',
               'receipt-draft-mobile.png',
               'receipt-draft-desktop.png',
+              'manual-photo-confirmation-mobile.png',
+              'manual-photo-expense-desktop.png',
+              'annual-context-mobile.png',
+              'annual-context-desktop.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
@@ -116,8 +120,8 @@ jobs:
                   matches.append((source, info))
           if not matches:
               skip('no allowlisted images were produced')
-          if len(matches) > 10 or len({source.name for source, _ in matches}) != len(matches):
-              skip('file count exceeds ten or basenames are duplicated')
+          if len(matches) > 14 or len({source.name for source, _ in matches}) != len(matches):
+              skip('file count exceeds fourteen or basenames are duplicated')
           if sum(info.st_size for _, info in matches) > limit:
               skip('combined size exceeds 5 MiB')
 

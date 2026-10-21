@@ -52,6 +52,7 @@ model User {
   invoices  Invoice[]
   customers Customer[]
   settings  Settings?
+  annualBusinessContextRevisions AnnualBusinessContextRevision[]
   templates InvoiceTemplate[]
   recurringExpenses RecurringExpense[]
   reminders Reminder[]
@@ -428,6 +429,7 @@ model PurchaseDocument {
   invoiceDate         DateTime?
   currency            String?
   totalAmount         Float?
+  reviewedSourceSnapshot Json?
   reviewDraftSearch   String?
   reviewDraft         Json?
   reviewDraftSavedAt  DateTime?
@@ -492,4 +494,23 @@ model PaymentJournalEvent {
   @@unique([userId, idempotencyKey])
   @@index([userId, paidAt])
   @@index([userId, invoiceId, id])
+}
+
+// Optional annual context only; never read by invoice/tax classification code.
+model AnnualBusinessContextRevision {
+  id Int @id @default(autoincrement())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  revision Int
+  contextYear Int
+  effectiveFrom String
+  foundingYear Int?
+  previousYearTurnoverCents String?
+  previousYearExternalTurnoverCents String?
+  completeness String
+  sourceNote String
+  declaredAt DateTime @default(now())
+
+  @@unique([userId, revision])
+  @@index([userId, contextYear, revision])
 }

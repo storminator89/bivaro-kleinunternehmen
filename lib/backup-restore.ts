@@ -1,9 +1,12 @@
+import { annualContextAppendAfter, readAnnualContextRevision, validateAnnualContextHistory } from '@/lib/annual-business-context';
 import { formatMoneyEUR, parseMoneyEUR } from '@/lib/money';
 import { EMPTY_FISCAL_PROFILE, validateFiscalProfileInput } from '@/lib/fiscal-profile';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { readFile } from 'fs/promises';
+import { isPhotoMedia, type ManualPhotoSnapshot } from '@/lib/purchase-documents/manual-photo-contract';
+import { stableManualPhotoSnapshot, validateManualPhotoSnapshot } from '@/lib/purchase-documents/manual-photo-review';
 import { parsePurchaseReviewDraft } from '@/lib/purchase-documents/review-draft';
 import { originalByteLimit, purchaseOriginalName, detectPurchaseContainer, readPurchaseOriginal } from '@/lib/purchase-documents/original';
 import { getBackupFileVersion } from '@/lib/backup-snapshot';
@@ -20,6 +23,7 @@ import {
   hashJson,
   redactAuditLog,
   validateBackupManifest,
+  validatePurchaseDocumentBackupFields,
   type BackupManifest,
 } from '@/lib/backup-manifest';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
@@ -78,6 +82,7 @@ type RestoreResult = {
   expenses: { imported: number; skipped: number };
   incomes: { imported: number; skipped: number };
   paymentJournalEvents: { imported: number; skipped: number };
+  annualBusinessContextRevisions: { imported: number; skipped: number };
   invoices: { imported: number; skipped: number };
   purchaseDocuments: { imported: number; skipped: number };
   templates: { imported: number; skipped: number };
@@ -703,6 +708,8 @@ function validatePurchaseDocuments(data: JsonRecord, manifest?: BackupManifest, 
   const sourceUserId = manifest?.sourceUserId ?? (isRecord(data.user) ? data.user.id : undefined);
   for (const [index, document] of documents.entries()) {
     const label = `purchaseDocuments[${index}]`;
+    try { validatePurchaseDocumentBackupFields(document, label, manifest?.schemaVersion); }
+    catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : `${label}: Nicht unterstützte Eingangsbelegdaten`); }
     if (document.userId !== undefined && document.userId !== sourceUserId) throw new BackupValidationError(`${label}.userId gehört nicht zum Quellmandanten`);
     const originalFileName = asRequiredString(document.originalFileName, `${label}.originalFileName`, 240);
     if (/[\u0000-\u001f\u007f]/u.test(originalFileName)) throw new BackupValidationError(`${label}.originalFileName enthält Steuerzeichen`);
@@ -784,7 +791,7 @@ function validatePurchaseDocuments(data: JsonRecord, manifest?: BackupManifest, 
       try { const draft = parsePurchaseReviewDraft(document.reviewDraft); if (hashJson(draft) !== hashJson(document.reviewDraft)) throw new Error(); }
       catch { throw new BackupValidationError(`${label}.reviewDraft ist ungültig`); }
     }
-    if (media.startsWith('image/') && (document.parseStatus === 'PARSED' || (document.parseStatus === 'FAILED' && parseErrorCode !== 'PHOTO_MANUAL_REVIEW') || document.reviewStatus === 'BOOKED')) throw new BackupValidationError(`${label}: Fotos sind ausschließlich ungebuchte manuelle Prüfentwürfe`);
+    if (media.startsWith('image/') && (document.parseStatus === 'PARSED' || (document.parseStatus === 'FAILED' && parseErrorCode !== 'PHOTO_MANUAL_REVIEW'))) throw new BackupValidationError(`${label}: Fotos dürfen keine vorgetäuschte Extraktion enthalten`);
     const supplierId = asOptionalInt(document.supplierId, `${label}.supplierId`);
     const snapshot = document.selectedSupplierSnapshot == null ? null : asRecord(document.selectedSupplierSnapshot, `${label}.selectedSupplierSnapshot`);
     if ((supplierId === null) !== (snapshot === null) || (supplierId !== null && (!suppliers.has(supplierId) || typeof document.supplierId !== 'number'))) throw new BackupValidationError(`${label}.supplierId enthält keine eindeutige Lieferantenzuordnung`);
@@ -792,6 +799,7 @@ function validatePurchaseDocuments(data: JsonRecord, manifest?: BackupManifest, 
       validateSupplierContact(snapshot, `${label}.selectedSupplierSnapshot`);
       if (snapshot.id !== supplierId || Object.keys(snapshot).some((key) => !['id', 'revision', ...Object.keys(SUPPLIER_CONTACT_LIMITS)].includes(key))) throw new BackupValidationError(`${label}.selectedSupplierSnapshot entspricht nicht der Lieferantenzuordnung`);
     }
+    if (document.reviewedSourceSnapshot != null && (!isPhotoMedia(media) || document.reviewStatus !== 'BOOKED')) throw new BackupValidationError(`${label}: Manueller Foto-Snapshot darf nur bei freigegebenen Fotos vorliegen`);
     const expenseId = asOptionalInt(document.expenseId, `${label}.expenseId`);
     const approvedAt = sourceDate(document.approvedAt, `${label}.approvedAt`);
     const approvalRequestId = asOptionalString(document.approvalRequestId, `${label}.approvalRequestId`, 36);
@@ -800,9 +808,16 @@ function validatePurchaseDocuments(data: JsonRecord, manifest?: BackupManifest, 
     const dismissalReason = asOptionalString(document.dismissalReason, `${label}.dismissalReason`, 2_000);
     if (document.reviewStatus === 'BOOKED') {
       if (supplierId === null || !snapshot) throw new BackupValidationError(`${label}: Gebuchte Eingangsbelege benötigen einen ausdrücklich ausgewählten Lieferanten und historischen Snapshot; alte Buchungen ohne Lieferantenzuordnung können nicht automatisch ergänzt werden`);
-      if (expenseId === null || !approvedAt || !approvalRequestId || !UUID_PATTERN.test(approvalRequestId) || !approvalFingerprint || !SHA256_PATTERN.test(approvalFingerprint) || document.parseStatus !== 'PARSED' || dismissedAt || dismissalReason) throw new BackupValidationError(`${label} enthält einen inkonsistenten Buchungszustand`);
+      if (expenseId === null || !approvedAt || !approvalRequestId || !UUID_PATTERN.test(approvalRequestId) || !approvalFingerprint || !SHA256_PATTERN.test(approvalFingerprint) || (!isPhotoMedia(media) && document.parseStatus !== 'PARSED') || dismissedAt || dismissalReason) throw new BackupValidationError(`${label} enthält einen inkonsistenten Buchungszustand`);
       const expense = expenses.get(expenseId);
       if (!expense || expenseIds.has(expenseId) || expense.storedReceiptFileName !== document.storedFileName || (expense.userId !== undefined && expense.userId !== sourceUserId)) throw new BackupValidationError(`${label}.expenseId enthält keinen eindeutigen Originalbezug`);
+      if (isPhotoMedia(media)) {
+        try { validateManualPhotoSnapshot(document.reviewedSourceSnapshot, {
+          userId: sourceUserId as string, uploadRequestId: requestId, originalSha256: hash, originalByteCount: bytes!, mediaType: media, revision: revision!,
+          reviewDraft: document.reviewDraft, reviewDraftSavedAt: draftDate, reviewedSourceSnapshot: document.reviewedSourceSnapshot,
+        }, { amount: expense.amount as number, date: sourceDate(expense.date, 'manualExpense.date', true)!, description: expense.description as string }); }
+        catch { throw new BackupValidationError(`${label}: Manuelle Foto-Freigabe stimmt nicht mit Eigentümer, Original, Entwurfsstand oder Ausgabe überein`); }
+      }
       if (expense.recurringExpenseId != null || expense.scheduledDate != null
         || asArray(data, 'cashTransactions').some((entry) => asOptionalInt(entry.expenseId, 'cashTransaction.expenseId') === expenseId)) throw new BackupValidationError(`${label}.expenseId darf nicht mit Wiederholung, Ausführungstermin oder Kassenbuchung verknüpft sein`);
       if (full && manifest) {
@@ -941,6 +956,8 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
     counterKeys.add(key);
   }
 
+  try { validateAnnualContextHistory(data.annualBusinessContextRevisions); } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Jahreskontexthistorie ist ungültig'); }
+  if (version === LEGACY_BACKUP_VERSION && Array.isArray(data.annualBusinessContextRevisions) && data.annualBusinessContextRevisions.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine Jahreskontexthistorie enthalten');
   if (data.settings !== undefined && data.settings !== null) fiscalProfileForRestore(asRecord(data.settings, 'settings'));
   validateBackupReferences(data, sets);
   validateSuppliers(data, manifest);
@@ -968,6 +985,7 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     expenses: { imported: 0, skipped: 0 },
     incomes: { imported: 0, skipped: 0 },
     paymentJournalEvents: { imported: 0, skipped: 0 },
+    annualBusinessContextRevisions: { imported: 0, skipped: 0 },
     invoices: { imported: 0, skipped: 0 },
     purchaseDocuments: { imported: 0, skipped: 0 },
     templates: { imported: 0, skipped: 0 },
@@ -1149,6 +1167,7 @@ function purchaseSourceFingerprint(record: JsonRecord, supplierMap?: Map<number,
     linked: record.expenseId !== null && record.expenseId !== undefined,
     supplierId: supplierMap ? relationMapValue(supplierMap, record.supplierId, 'purchaseDocument.supplierId') : record.supplierId ?? null,
     selectedSupplierSnapshot: remapSupplierSnapshot(record.selectedSupplierSnapshot, supplierMap),
+    reviewedSourceSnapshot: record.reviewedSourceSnapshot == null ? null : stableManualPhotoSnapshot(record.reviewedSourceSnapshot as ManualPhotoSnapshot),
   });
 }
 
@@ -1278,6 +1297,14 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       result.warnings.push(`${apiKeys.length} API-Schlüssel wurden nicht übernommen; aus Sicherheitsgründen müssen neue Schlüssel erstellt werden.`);
     }
 
+    // Reject known immutable-target conflicts before resolving or staging any
+    // files. Repeat these checks inside the write transaction to cover races.
+    if (overwrite && await prisma.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
+    const sourceContext = validateAnnualContextHistory(data.annualBusinessContextRevisions);
+    const targetContext = (await prisma.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } })).map(readAnnualContextRevision);
+    try { annualContextAppendAfter(targetContext, sourceContext); }
+    catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Jahreskontext-Konflikt'); }
+
     // A merge may keep an existing component only if its original is still
     // usable. Metadata equality alone must not preserve a missing/tampered file.
     if (!overwrite && documents.length > 0) {
@@ -1338,10 +1365,26 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         addCounterValue(preservedCounterValues, key.slice(0, separator), Number(key.slice(separator + 1)), value);
       }
 
+      if (overwrite && await tx.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
       if (overwrite && await tx.paymentJournalEvent.count({ where: { userId } }) > 0) {
         throw new BackupValidationError('Überschreiben würde unveränderliche Zahlungsereignisse löschen. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
       }
+      // Context history is immutable even in overwrite mode. Validate the exact
+      // shared prefix before mutating anything; legacy absence never means delete.
+      const incomingContext = validateAnnualContextHistory(data.annualBusinessContextRevisions);
+      const existingContext = (await tx.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } })).map(readAnnualContextRevision);
+      let appendContext: typeof incomingContext;
+      try { appendContext = annualContextAppendAfter(existingContext, incomingContext); }
+      catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Jahreskontext-Konflikt'); }
+      if (existingContext.length > incomingContext.length) result.warnings.push('Bestehende neuere Jahreskontexthistorie wurde bewahrt; das Backup ersetzt oder bestätigt keine fehlenden Angaben.');
       if (overwrite) await deleteUserData(tx, userId);
+      result.annualBusinessContextRevisions.skipped = incomingContext.length - appendContext.length;
+      result.annualBusinessContextRevisions.imported = appendContext.length;
+      for (const context of appendContext) {
+        const { version: _version, provenance: _provenance, ...record } = context;
+        void _version; void _provenance;
+        await tx.annualBusinessContextRevision.create({ data: { userId, ...record, declaredAt: new Date(record.declaredAt) } });
+      }
       const existingPaymentEvents = await tx.paymentJournalEvent.findMany({ where: { userId } });
       const existingPaymentByKey = new Map(existingPaymentEvents.map((event) => [event.idempotencyKey, event]));
       const existingPaymentById = new Map(existingPaymentEvents.map((event) => [event.id, event]));
@@ -1789,6 +1832,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           invoiceDate: sourceDate(document.invoiceDate, 'purchaseDocument.invoiceDate'),
           currency: asOptionalString(document.currency, 'purchaseDocument.currency', 3),
           totalAmount: asOptionalFinite(document.totalAmount, 'purchaseDocument.totalAmount'),
+          reviewedSourceSnapshot: document.reviewedSourceSnapshot == null ? Prisma.DbNull : asJson({ ...asRecord(document.reviewedSourceSnapshot, 'reviewedSourceSnapshot'), ownerId: userId }, 'reviewedSourceSnapshot'),
           reviewDraft: document.reviewDraft == null ? Prisma.DbNull : asJson(document.reviewDraft, 'purchaseDocument.reviewDraft'),
           reviewDraftSearch: document.reviewDraft == null ? null : [parsePurchaseReviewDraft(document.reviewDraft).supplierName, parsePurchaseReviewDraft(document.reviewDraft).invoiceNumber].filter(Boolean).join(' · '),
           reviewDraftSavedAt: sourceDate(document.reviewDraftSavedAt, 'purchaseDocument.reviewDraftSavedAt'),

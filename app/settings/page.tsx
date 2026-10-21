@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert";
 import Link from "next/link";
 import { SmtpSettings } from "@/components/settings/smtp-settings";
+import { AnnualBusinessContextSettings } from "@/components/settings/annual-business-context";
 import { FiscalProfileSettings } from "@/components/onboarding/fiscal-profile-settings";
 import { EMPTY_FISCAL_PROFILE, readFiscalProfile } from "@/lib/fiscal-profile";
 import type { FiscalProfile } from "@/lib/fiscal-profile";
@@ -41,6 +42,7 @@ type RestorePreview = {
     counts: {
       customers: number;
       billingNotes: number;
+      annualBusinessContextRevisions?: number;
       expenses: number;
       incomes: number;
       invoices: number;
@@ -686,6 +688,7 @@ export default function SettingsPage() {
       </form>
 
       <FiscalProfileSettings initialProfile={fiscalProfile} />
+      <AnnualBusinessContextSettings />
 
       {isAdmin && <div id="email-settings" className={styles.smtpPanel}><SmtpSettings /></div>}
 
@@ -918,6 +921,7 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                       <span>Kunden: {restorePreview.preview.counts.customers}</span>
                       <span>Leistungsnotizen: {restorePreview.preview.counts.billingNotes}</span>
+                      <span>Jahreskontextrevisionen: {restorePreview.preview.counts.annualBusinessContextRevisions ?? 0}</span>
                       <span>Ausgaben: {restorePreview.preview.counts.expenses}</span>
                       <span>Einnahmen: {restorePreview.preview.counts.incomes}</span>
                       <span>Rechnungen: {restorePreview.preview.counts.invoices}</span>

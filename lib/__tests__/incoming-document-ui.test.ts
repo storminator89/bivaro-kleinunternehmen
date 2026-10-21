@@ -42,14 +42,14 @@ describe('incoming source presentation', () => {
     const doc = document({ reviewDraft: { supplierName: '<script>draft</script>', invoiceNumber: 'PHOTO-17', invoiceDate: '2026-10-20', paymentDate: '2026-10-21', amount: '0.29', note: 'Draft, not a payment' }, reviewDraftSavedAt: '2026-10-21T10:00:00.000Z' });
     doc.originalRef = { ...doc.originalRef, mediaType: 'image/png' };
     const html = renderToStaticMarkup(createElement(IncomingReviewDraft, { document: doc, onSaved: vi.fn(), onDirtyChange: vi.fn(), onBusyChange: vi.fn() }));
-    expect(html).toContain('Prüfentwurf · nicht gebucht'); expect(html).toContain('noch nicht mit einer Ausgabe verknüpft'); expect(html).toContain('Keine automatische Speicherung');
+    expect(html).toContain('Prüfentwurf · nicht gebucht'); expect(html).toContain('manuelle Original- und Zahlungsprüfung ausdrücklich bestätigt'); expect(html).toContain('Keine automatische Speicherung');
     expect(html).not.toContain('type="checkbox"'); expect(html).not.toContain('<script>draft</script>'); expect(html).toContain('&lt;script&gt;draft&lt;/script&gt;');
     const historical = renderToStaticMarkup(createElement(IncomingSavedDraft, { document: { ...doc, reviewState: 'DISMISSED' } }));
     expect(historical).toContain('keine Buchungsbestätigung'); expect(historical).not.toContain('<input'); expect(historical).toContain('0.29');
     const row = renderToStaticMarkup(createElement(IncomingDocumentRow, { document: { ...doc, supplierName: null, invoiceNumber: null, invoiceDate: null }, onOpen: vi.fn() }));
     expect(row).toContain('Entwurf:'); expect(row).toContain('Prüfentwurf gespeichert'); expect(row).toContain('Entwurfsdatum');
     const source = renderToStaticMarkup(createElement(SourcePreview, { document: { ...doc, preview: null, parseStatus: 'FAILED', approvalSupported: false }, onOpen: vi.fn() }));
-    expect(source).toContain('Ausgabenerfassung aus Fotos'); expect(source).not.toContain('korrektes PDF');
+    expect(source).toContain('ausdrücklicher manueller Freigabe'); expect(source).not.toContain('korrektes PDF');
   });
   it('locks draft edits/save while dismissal is open and blocks interrupted dirty/in-flight review mutations', () => {
     const clean = { busy: false, draftDirty: false, draftBusy: false, hasPending: false };

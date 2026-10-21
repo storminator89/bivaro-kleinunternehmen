@@ -1,0 +1,3 @@
+-- Capability identity for the reviewed combined photo/annual release.
+-- Both additive tables/columns are created by their original migrations.
+-- No data is rewritten or reinterpreted.
