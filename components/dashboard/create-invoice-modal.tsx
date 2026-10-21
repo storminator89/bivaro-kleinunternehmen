@@ -1,4 +1,5 @@
 "use client";
+import { ServiceArticlePicker } from "@/components/dashboard/service-article-picker";
 
 import salesStyles from "@/components/dashboard/sales-workspace.module.css";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -1772,6 +1773,10 @@ export function CreateInvoiceModal({
             {/* Items Table */}
             <section className="invoice-section invoice-positions" aria-labelledby="invoice-positions-title">
               <header className="invoice-section-heading"><div><p>Leistungen</p><h2 id="invoice-positions-title">Positionen</h2></div><span>{items.length} {items.length === 1 ? "Position" : "Positionen"}</span></header>
+              <ServiceArticlePicker onSelect={article => setItems(current => {
+                const next = { description: article.description, quantity: 1, unitPrice: article.unitPrice, unit: article.unit, taxRate: taxMode === 'standard' ? 19 : 0 };
+                return current.length === 1 && !current[0].description.trim() && current[0].unitPrice === 0 ? [next] : [...current, next];
+              })} />
               <div className="invoice-line-list">
                 <div className="divide-y">
                   {items.map((item, index) => (
@@ -1806,6 +1811,7 @@ export function CreateInvoiceModal({
                           value={item.unit}
                           onChange={(e) => updateItem(index, 'unit', e.target.value)}
                         >
+                          {!['Stück', 'Stunde', 'Tag', 'Pauschal'].includes(item.unit) && <option value={item.unit}>{item.unit}</option>}
                           <option value="Stück">Stück</option>
                           <option value="Stunde">Stunde</option>
                           <option value="Tag">Tag</option>

@@ -44,6 +44,7 @@ type RestorePreview = {
       customers: number;
       billingNotes: number;
       annualBusinessContextRevisions?: number;
+      serviceArticles: number;
       expenses: number;
       incomes: number;
       invoices: number;
@@ -924,6 +925,7 @@ export default function SettingsPage() {
                       <span>Kunden: {restorePreview.preview.counts.customers}</span>
                       <span>Leistungsnotizen: {restorePreview.preview.counts.billingNotes}</span>
                       <span>Jahreskontextrevisionen: {restorePreview.preview.counts.annualBusinessContextRevisions ?? 0}</span>
+                      <span>Artikel und Leistungen: {restorePreview.preview.counts.serviceArticles}</span>
                       <span>Ausgaben: {restorePreview.preview.counts.expenses}</span>
                       <span>Einnahmen: {restorePreview.preview.counts.incomes}</span>
                       <span>Rechnungen: {restorePreview.preview.counts.invoices}</span>

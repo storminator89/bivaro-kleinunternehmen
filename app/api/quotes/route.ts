@@ -1,3 +1,5 @@
+import { quoteBusinessToday, QUOTE_ACTION_FILTERS, type QuoteActionFilter } from '@/lib/quote-workflow';
+import { parseBusinessDate } from '@/lib/business-date';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
@@ -25,9 +27,16 @@ export async function GET(request: Request) {
 
         const where: Prisma.InvoiceWhereInput = { userId, type: 'QUOTE' };
 
-        if (statusFilter && statusFilter !== 'all') {
-            where.status = statusFilter;
-        }
+        const today = quoteBusinessToday();
+        const open = { status: { in: ['DRAFT', 'SENT'] }, convertedInvoice: { is: null } };
+        const actionFilters: Record<QuoteActionFilter, Prisma.InvoiceWhereInput> = {
+            FOLLOW_UP: { ...open, quoteFollowUpOn: { lte: today } },
+            NEEDS_RESPONSE: { status: 'SENT', convertedInvoice: { is: null }, validUntil: { lt: parseBusinessDate(today) } },
+            READY_TO_INVOICE: { status: 'ACCEPTED', convertedInvoice: { is: null } },
+        };
+        const isActionFilter = QUOTE_ACTION_FILTERS.includes(statusFilter as QuoteActionFilter);
+        if (isActionFilter) Object.assign(where, actionFilters[statusFilter as QuoteActionFilter]);
+        else if (statusFilter && statusFilter !== 'all') where.status = statusFilter;
 
         if (search) {
             where.AND = [
@@ -35,23 +44,25 @@ export async function GET(request: Request) {
                     OR: [
                         { fileName: { contains: search } },
                         { invoiceNumber: { contains: search } },
+                        { customer: { name: { contains: search } } },
                     ],
                 },
             ];
         }
 
-        const [items, total] = await Promise.all([
+        const [items, total, followUp, needsResponse, readyToInvoice] = await Promise.all([
             prisma.invoice.findMany({
                 where,
-                orderBy: { uploadedAt: 'desc' },
+                orderBy: statusFilter === 'FOLLOW_UP' ? [{ quoteFollowUpOn: 'asc' }, { id: 'asc' }] : statusFilter === 'NEEDS_RESPONSE' ? [{ validUntil: 'asc' }, { id: 'asc' }] : { uploadedAt: 'desc' },
                 include: { customer: true, convertedInvoice: { select: { id: true } } },
                 skip,
                 take: pageSize,
             }),
             prisma.invoice.count({ where }),
+            ...QUOTE_ACTION_FILTERS.map(key => prisma.invoice.count({ where: { userId, type: 'QUOTE', ...actionFilters[key] } })),
         ]);
 
-        return NextResponse.json({ items, total, page, pageSize });
+        return NextResponse.json({ items, total, page, pageSize, workflowDate: today, workflowCounts: { FOLLOW_UP: followUp, NEEDS_RESPONSE: needsResponse, READY_TO_INVOICE: readyToInvoice } });
     } catch (error) {
         if (error instanceof UnauthorizedError) return unauthorizedResponse();
         throw error;

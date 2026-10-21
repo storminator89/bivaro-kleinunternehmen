@@ -105,3 +105,15 @@ describe('quote conversion actions (#23)', () => {
     expect(conversionActions({ ...quoteFixture, status })).toHaveLength(0);
   });
 });
+
+describe('quote source-linked result and response gates', () => {
+  it('offers the real linked invoice history independently of the manual quote response', () => {
+    const links = findElements(quoteTree({ ...quoteFixture, status: 'DRAFT', convertedInvoice: { id: 42 } }), element => element.props.href === '/history?invoiceId=42');
+    expect(links).toHaveLength(2);
+  });
+  it('keeps the explicit response path but does not offer a new conversion for an elapsed sent offer', () => {
+    const quote = { ...quoteFixture, status: 'SENT', validUntil: '2000-01-01' };
+    expect(conversionActions(quote)).toHaveLength(0);
+    expect(findElements(quoteTree(quote), element => element.props.children === 'Rückmeldung & Nachfassen')).toHaveLength(2);
+  });
+});

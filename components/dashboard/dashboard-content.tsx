@@ -44,8 +44,16 @@ export function DashboardContent() {
   const tabParam = searchParams.get('tab');
 
   // State Definitionen
-  const [quotesStatusFilter, setQuotesStatusFilter] = useState('all');
-  const [quotesSearchTerm, setQuotesSearchTerm] = useState('');
+  const quotesStatusFilter = searchParams.get('quoteStatus') || 'all';
+  const quotesSearchTerm = searchParams.get('quoteSearch') || '';
+  function updateQuoteFilter(key: 'quoteStatus' | 'quoteSearch', value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (!value || value === 'all') params.delete(key); else params.set(key, value);
+    const url = `${window.location.pathname}?${params.toString()}`;
+    if (key === 'quoteSearch') router.replace(url, { scroll: false }); else router.push(url, { scroll: false });
+  }
+  const setQuotesStatusFilter = (value: string) => updateQuoteFilter('quoteStatus', value);
+  const setQuotesSearchTerm = (value: string) => updateQuoteFilter('quoteSearch', value);
 
   // Tabs-State - Tab-Namen normalisieren (income -> incomes)
   const normalizeTab = (tab: string | null) => {
@@ -206,6 +214,8 @@ export function DashboardContent() {
     quotesPageSize,
     quotesTotal,
     quotesTotalPages,
+    quotesWorkflowCounts,
+    quotesWorkflowDate,
     quotesIsFetching,
     quotesIsError,
     setExpensesPage,
@@ -695,8 +705,10 @@ export function DashboardContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: quoteId, status: newStatus }),
       });
-      if (res.ok) await loadQuotes(quotesPage, quotesPageSize);
+      if (!res.ok) { const result = await res.json().catch(() => ({})); throw new Error(result.error || 'Angebotsstatus konnte nicht gespeichert werden.'); }
+      await loadQuotes(quotesPage, quotesPageSize);
     } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Angebotsstatus konnte nicht gespeichert werden.');
       console.error('Error updating quote status:', err);
     }
   };
@@ -1040,6 +1052,8 @@ export function DashboardContent() {
             <QuotesTab
               isLoading={quotesIsFetching}
               isError={quotesIsError}
+              workflowCounts={quotesWorkflowCounts}
+              workflowDate={quotesWorkflowDate}
               quotes={quotes}
               total={quotesTotal}
               page={quotesPage}
@@ -1051,6 +1065,11 @@ export function DashboardContent() {
               onPageSizeChange={setQuotesPageSize}
               onStatusFilterChange={(s) => { setQuotesStatusFilter(s); }}
               onSearchChange={(t) => { setQuotesSearchTerm(t); }}
+              onResetFilters={() => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.delete('quoteSearch'); params.delete('quoteStatus');
+                router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+              }}
               onOpenCreateModal={() => router.push('/dashboard/quotes/new')}
               onStatusChange={handleQuoteStatusChange}
               onConvertToInvoice={handleConvertToInvoice}

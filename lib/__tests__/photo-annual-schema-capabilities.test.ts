@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ANNUAL_CONTEXT_SCHEMA_VERSION, BACKUP_FEATURE_CAPABILITIES, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, backupSchemaSupportsAiExtraction, backupSchemaSupportsAnnualContext, backupSchemaSupportsManualPhotoApproval, createBackupManifest, validateBackupManifest, validatePurchaseDocumentBackupFields } from '@/lib/backup-manifest';
+import { ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, backupSchemaSupportsAiExtraction, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, backupSchemaSupportsDataImport, QUOTE_WORKFLOW_SCHEMAS, BACKUP_FEATURE_CAPABILITIES, CURRENT_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, backupSchemaSupportsAnnualContext, backupSchemaSupportsManualPhotoApproval, createBackupManifest, validateBackupManifest, validatePurchaseDocumentBackupFields } from '@/lib/backup-manifest';
 
 const annual = { version: 1, revision: 1, provenance: 'USER_DECLARED', declaredAt: '2026-10-21T01:02:03.004Z', contextYear: 2026, effectiveFrom: '2026-01-01', foundingYear: null, previousYearTurnoverCents: null, previousYearExternalTurnoverCents: null, completeness: 'UNKNOWN', sourceNote: 'Synthetic own records' };
-const emptyData = () => ({ suppliers: [], expenses: [], incomes: [], invoices: [], purchaseDocuments: [] as Record<string, unknown>[], paymentJournalEvents: [], auditLogs: [], invoiceNumberCounters: [] });
+const emptyData = () => ({ suppliers: [], expenses: [], incomes: [], invoices: [], purchaseDocuments: [] as Record<string, unknown>[], serviceArticles: [], paymentJournalEvents: [], auditLogs: [], invoiceNumberCounters: [] });
 const packed = (data: Record<string, unknown>, schemaVersion: string) => {
-  const manifest = createBackupManifest({ sourceUserId: 'synthetic-schema-source', generatedAt: annual.declaredAt, data });
-  return { ...manifest, schemaVersion, modelCoverage: backupSchemaSupportsAiExtraction(schemaVersion) ? manifest.modelCoverage : manifest.modelCoverage.filter(entry => entry.model !== 'AiProviderSettings') };
+  const manifest = { ...createBackupManifest({ sourceUserId: 'synthetic-schema-source', generatedAt: annual.declaredAt, data }), schemaVersion };
+  if (!backupSchemaSupportsDataImport(schemaVersion)) manifest.modelCoverage = manifest.modelCoverage.filter(row => !['ServiceArticle', 'DataImportBatch'].includes(row.model));
+  if (!backupSchemaSupportsAiExtraction(schemaVersion)) manifest.modelCoverage = manifest.modelCoverage.filter(row => row.model !== 'AiProviderSettings');
+  return manifest;
 };
 
 describe('immutable standalone and combined backup capability identities', () => {
@@ -14,11 +16,15 @@ describe('immutable standalone and combined backup capability identities', () =>
     [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, true, false],
     [ANNUAL_CONTEXT_SCHEMA_VERSION, false, true],
     [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, true, true],
+    [DATA_IMPORT_SCHEMA_VERSION, false, false],
+    [QUOTE_WORKFLOW_SCHEMA_VERSION, false, false],
+    [GROWTH_SCHEMA_VERSION, true, true],
+    [AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, true, true],
     [CURRENT_SCHEMA_VERSION, true, true],
   ] as const)('preserves exact photo/annual semantics under %s', (schema, photo, context) => {
     expect(backupSchemaSupportsManualPhotoApproval(schema)).toBe(photo);
     expect(backupSchemaSupportsAnnualContext(schema)).toBe(context);
-    expect(backupSchemaSupportsAiExtraction(schema)).toBe(schema === CURRENT_SCHEMA_VERSION);
+    expect(backupSchemaSupportsAiExtraction(schema)).toBe(schema === CURRENT_SCHEMA_VERSION || schema === AI_RECEIPT_EXTRACTION_SCHEMA_VERSION);
     expect(Object.isFrozen(BACKUP_FEATURE_CAPABILITIES[schema])).toBe(true);
     const empty = emptyData(); expect(() => validateBackupManifest(packed(empty, schema), empty)).not.toThrow();
     const annualData = { ...emptyData(), annualBusinessContextRevisions: [annual] };
@@ -31,17 +37,52 @@ describe('immutable standalone and combined backup capability identities', () =>
     else expect(() => validatePurchaseDocumentBackupFields(evidence, 'source', schema)).toThrow(/reviewedSourceSnapshot/);
     expect(() => validatePurchaseDocumentBackupFields({ futureApprovalEvidence: true }, 'source', schema)).toThrow(/Nicht unterstütztes Eingangsbelegfeld/);
   });
-  it('requires a genuine pre-journal fixture to omit only unavailable journal and provider coverage', () => {
+  it.each([
+    [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, false, false],
+    [MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, false, false],
+    [ANNUAL_CONTEXT_SCHEMA_VERSION, false, false],
+    [COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, false, false],
+    [DATA_IMPORT_SCHEMA_VERSION, true, false],
+    [QUOTE_WORKFLOW_SCHEMA_VERSION, false, true],
+    [GROWTH_SCHEMA_VERSION, true, true],
+    [AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, false, false],
+    [CURRENT_SCHEMA_VERSION, true, true],
+  ] as const)('keeps exact catalog and quote capabilities separate under %s', (schema, catalog, quote) => {
+    expect(backupSchemaSupportsDataImport(schema)).toBe(catalog);
+    expect(QUOTE_WORKFLOW_SCHEMAS.includes(schema)).toBe(quote);
+    const articleData = { ...emptyData(), serviceArticles: [{ id: 1, name: 'Synthetic catalog evidence' }] };
+    const articleManifest = packed(articleData, schema);
+    if (catalog) expect(() => validateBackupManifest(articleManifest, articleData)).not.toThrow();
+    else expect(() => validateBackupManifest(articleManifest, articleData)).toThrow(/Artikel/);
+    const quoteData = { ...emptyData(), invoices: [{ type: 'QUOTE', quoteFollowUpOn: '2026-12-31', quoteResponseNote: 'Manual owner response, not acceptance' }] };
+    const quoteManifest = packed(quoteData, schema);
+    if (quote) expect(() => validateBackupManifest(quoteManifest, quoteData)).not.toThrow();
+    else expect(() => validateBackupManifest(quoteManifest, quoteData)).toThrow(/Angebots-Wiedervorlage/);
+    // Same numeric timestamp does not confer either exact schema's capabilities.
+    expect(backupSchemaSupportsDataImport(`${schema}_unknown`)).toBe(false);
+    expect(QUOTE_WORKFLOW_SCHEMAS.includes(`${schema}_unknown`)).toBe(false);
+  });
+  it.each(Object.keys(BACKUP_FEATURE_CAPABILITIES))('rejects non-null AI evidence under every non-AI identity %s', schema => {
+    const supportsAi = schema === AI_RECEIPT_EXTRACTION_SCHEMA_VERSION || schema === CURRENT_SCHEMA_VERSION;
+    expect(backupSchemaSupportsAiExtraction(schema)).toBe(supportsAi);
+    for (const field of ['aiExtraction', 'aiDraftProvenance', 'aiApprovedSnapshot']) {
+      const evidence = { [field]: { retained: 'synthetic evidence' } };
+      if (supportsAi) expect(() => validatePurchaseDocumentBackupFields(evidence, 'source', schema)).not.toThrow();
+      else expect(() => validatePurchaseDocumentBackupFields(evidence, 'source', schema)).toThrow(/KI-Herkunft/);
+      expect(() => validatePurchaseDocumentBackupFields({ [field]: null }, 'source', schema)).not.toThrow();
+    }
+  });
+  it('requires a genuine pre-journal fixture to omit unavailable journal, provider and catalog coverage', () => {
     const data = emptyData();
     const current = createBackupManifest({ sourceUserId: 'synthetic-schema-source', generatedAt: annual.declaredAt, data });
     const malformed = { ...current, schemaVersion: PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, modelCoverage: current.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent') };
     expect(() => validateBackupManifest(malformed, data)).toThrow(/Modelleintrag|Modell/);
-    const historical = { ...malformed, modelCoverage: malformed.modelCoverage.filter(entry => entry.model !== 'AiProviderSettings') };
+    const historical = { ...malformed, modelCoverage: malformed.modelCoverage.filter(entry => !['AiProviderSettings', 'ServiceArticle', 'DataImportBatch'].includes(entry.model)) };
     expect(() => validateBackupManifest(historical, data)).not.toThrow();
-    expect(historical.modelCoverage).toEqual(current.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent' && entry.model !== 'AiProviderSettings'));
+    expect(historical.modelCoverage).toEqual(current.modelCoverage.filter(entry => !['PaymentJournalEvent', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch'].includes(entry.model)));
   });
   it('never guesses future, CSV, quote or EÜR capabilities and keeps legacy absence harmless', () => {
-    expect(Object.keys(BACKUP_FEATURE_CAPABILITIES).sort()).toEqual([PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION].sort());
+    expect(new Set(Object.keys(BACKUP_FEATURE_CAPABILITIES)).size).toBe(9);
     for (const schema of [undefined, 'future', '20261021090000_csv', '20261021100000_quotes']) {
       expect(backupSchemaSupportsAnnualContext(schema)).toBe(false); expect(backupSchemaSupportsManualPhotoApproval(schema)).toBe(false);
       expect(() => validatePurchaseDocumentBackupFields({ reviewedSourceSnapshot: {} }, 'source', schema)).toThrow(/reviewedSourceSnapshot/);

@@ -4,6 +4,7 @@
  * honest: pass (46) · chrome: pass (47) · tokens: pass (48) · mobile: pass (34, 49–57)
  */
 "use client";
+import { ServiceArticlePicker } from "@/components/dashboard/service-article-picker";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -593,6 +594,10 @@ export function QuoteEditor({
                     </section>
                     <section className={styles.section} aria-labelledby="quote-items-title">
                         <div className={styles.sectionHeading}><div><h2 id="quote-items-title">Positionen</h2><p>Preise verstehen sich als Nettobeträge.</p></div><span>{items.length} {items.length === 1 ? "Position" : "Positionen"}</span></div>
+                        <ServiceArticlePicker onSelect={article => setItems(current => {
+                            const next = { description: article.description, quantity: 1, unitPrice: article.unitPrice, unit: article.unit, taxRate: taxMode === 'standard' ? 19 : 0 };
+                            return current.length === 1 && !current[0].description.trim() && current[0].unitPrice === 0 ? [next] : [...current, next];
+                        })} />
                         <div className={styles.lines}>
                             {items.map((item, index) => <fieldset key={index} className={styles.line}>
                                 <legend className="sr-only">Position {index + 1}</legend>
@@ -600,7 +605,7 @@ export function QuoteEditor({
                                 <div className="space-y-2"><Label htmlFor={`quote-item-${index}-description`}>Beschreibung</Label><Textarea id={`quote-item-${index}-description`} value={item.description} onChange={e => updateItem(index, 'description', e.target.value)} placeholder="Leistung / Produkt" className="min-h-20" /></div>
                                 <div className={styles.lineFields}>
                                     <div className="space-y-2"><Label htmlFor={`quote-item-${index}-quantity`}>Menge</Label><Input id={`quote-item-${index}-quantity`} type="number" min="0" step="0.01" value={item.quantity} onChange={e => updateItem(index, 'quantity', e.target.value)} className="text-right tabular-nums" /></div>
-                                    <div className="space-y-2"><Label htmlFor={`quote-item-${index}-unit`}>Einheit</Label><select id={`quote-item-${index}-unit`} className={styles.select} value={item.unit} onChange={e => updateItem(index, 'unit', e.target.value)}><option value="Stück">Stück</option><option value="Stunde">Stunde</option><option value="Tag">Tag</option><option value="Pauschal">Pauschal</option></select></div>
+                                    <div className="space-y-2"><Label htmlFor={`quote-item-${index}-unit`}>Einheit</Label><select id={`quote-item-${index}-unit`} className={styles.select} value={item.unit} onChange={e => updateItem(index, 'unit', e.target.value)}>{!['Stück', 'Stunde', 'Tag', 'Pauschal'].includes(item.unit) && <option value={item.unit}>{item.unit}</option>}<option value="Stück">Stück</option><option value="Stunde">Stunde</option><option value="Tag">Tag</option><option value="Pauschal">Pauschal</option></select></div>
                                     <div className="space-y-2"><Label htmlFor={`quote-item-${index}-unit-price`}>Einzelpreis</Label><Input id={`quote-item-${index}-unit-price`} type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateItem(index, 'unitPrice', e.target.value)} className="text-right tabular-nums" /></div>
                                     <div className="space-y-2"><Label htmlFor={`quote-item-${index}-tax`}>Steuer (%)</Label><Input id={`quote-item-${index}-tax`} type="number" min="0" step="1" disabled={!taxMode || taxMode === 'small-business'} value={item.taxRate} onChange={e => updateItem(index, 'taxRate', e.target.value)} className="text-right tabular-nums" /></div>
                                 </div>

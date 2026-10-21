@@ -1,0 +1,3 @@
+-- Explicit combined customer/catalog/quote and accepted photo/annual capability identity.
+-- All additive tables and columns remain owned by their original migrations.
+-- No source, payment, fiscal or annual data is rewritten.

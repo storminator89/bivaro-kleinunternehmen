@@ -67,6 +67,8 @@ model User {
   suppliers Supplier[]
   aiProviderSettings AiProviderSettings?
   paymentJournalEvents PaymentJournalEvent[]
+  dataImportBatches DataImportBatch[]
+  serviceArticles ServiceArticle[]
 }
 
 // Shared, bounded rate-limit state for authentication and other API surfaces.
@@ -142,6 +144,8 @@ model Invoice {
   issuanceState String    @default("UNKNOWN") // UNKNOWN, UNISSUED, ISSUED
   paidAt        DateTime?
   validUntil    DateTime? // Gültig bis (nur für Angebote/QUOTE)
+  quoteFollowUpOn String? // YYYY-MM-DD, private in-app task; QUOTE only
+  quoteResponseNote String? // User-declared response/context, never an acceptance proof
   originalInvoiceId Int?  // Referenz zur Originalrechnung (bei Gutschriften)
   originalInvoice   Invoice? @relation("CreditNotes", fields: [originalInvoiceId], references: [id])
   creditNotes       Invoice[] @relation("CreditNotes")
@@ -160,6 +164,7 @@ model Invoice {
 
   @@unique([userId, invoiceNumber])
   @@index([userId, type, uploadedAt])
+  @@index([userId, type, quoteFollowUpOn])
   @@index([userId, status])
 }
 
@@ -517,6 +522,39 @@ model AnnualBusinessContextRevision {
 
   @@unique([userId, revision])
   @@index([userId, contextYear, revision])
+}
+
+// Operational replay receipts. Business records remain customers/templates and
+// already participate in tenant backups; receipts are not business documents.
+model DataImportBatch {
+  id Int @id @default(autoincrement())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId String
+  fingerprint String
+  kind String
+  result Json
+  createdAt DateTime @default(now())
+
+  @@unique([userId, requestId])
+}
+
+// Reusable sales lines. This is catalog data, never a fiscal profile or document.
+model ServiceArticle {
+  id Int @id @default(autoincrement())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  nameKey String
+  description String
+  unit String
+  unitPriceCents String
+  sourcePriceCents String
+  sourcePriceBasis String
+  taxRate String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, nameKey])
 }
 
 // Per-tenant optional AI configuration. Entire model is excluded from business backups.
