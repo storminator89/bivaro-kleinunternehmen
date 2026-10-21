@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -136,16 +137,34 @@ describe('money migration report', () => {
 
   it('does not weaken an already read-only connection when Prisma cannot start its transaction', async () => {
     const fixture = createFixture();
+    const before = createHash('sha256').update(readFileSync(fixture.databasePath)).digest('hex');
+    // query_only and TEMP tables belong to a physical connection, not the pool.
+    // Pin this fixture so both safety observations must inspect that connection.
     // eslint-disable-next-line no-restricted-syntax -- isolated temporary fixture needs its own target.
-    const client = new PrismaClient({ datasources: { db: { url: fixture.url } } });
+    const client = new PrismaClient({ datasources: { db: { url: `${fixture.url}?connection_limit=1` } } });
     try {
+      await client.$executeRawUnsafe('CREATE TEMP TABLE readonly_connection_witness (marker TEXT NOT NULL)');
+      await client.$executeRawUnsafe("INSERT INTO readonly_connection_witness VALUES ('original-connection')");
       await client.$executeRawUnsafe('PRAGMA query_only = ON');
+      const initial = await client.$queryRawUnsafe<Array<{ query_only: number; marker: string }>>(
+        'SELECT query_only, marker FROM pragma_query_only CROSS JOIN temp.readonly_connection_witness',
+      );
+      expect(Number(initial[0].query_only)).toBe(1);
+      expect(initial[0].marker).toBe('original-connection');
+      await expect(client.$executeRawUnsafe('UPDATE Expense SET amount = 999 WHERE id = 1'))
+        .rejects.toThrow(/readonly|read-only/i);
       await expect(createMoneyMigrationReport(client)).rejects.toThrow(/readonly|read-only/i);
-      const state = await client.$queryRawUnsafe<Array<{ query_only: number }>>('PRAGMA query_only');
+      const state = await client.$queryRawUnsafe<Array<{ query_only: number; marker: string }>>(
+        'SELECT query_only, marker FROM pragma_query_only CROSS JOIN temp.readonly_connection_witness',
+      );
       expect(Number(state[0].query_only)).toBe(1);
+      expect(state[0].marker).toBe('original-connection');
+      await expect(client.$executeRawUnsafe('UPDATE Expense SET amount = 999 WHERE id = 1'))
+        .rejects.toThrow(/readonly|read-only/i);
     } finally {
       await client.$disconnect();
     }
+    expect(createHash('sha256').update(readFileSync(fixture.databasePath)).digest('hex')).toBe(before);
   });
 
   it('stops before materialising more than the configured report bound', async () => {

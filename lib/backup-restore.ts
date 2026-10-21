@@ -1537,8 +1537,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const existing = identityMatches[0]
           ? await tx.invoice.findFirst({ where: { id: identityMatches[0].invoiceId, userId } })
           : invoiceNumber ? await tx.invoice.findFirst({ where: { userId, invoiceNumber } }) : null;
+        // Numeric IDs, filenames and equal amounts do not establish document
+        // identity across restores. Keep accepted legacy no-write protection;
+        // partial histories additionally require a verified event identity.
         if (!sourcePayments.length && !invoiceNumber?.trim() && existingPaymentEvents.length) {
-          throw new BackupValidationError('Altes Backup ohne Zahlungsidentitäten enthält keine eindeutige Rechnungsidentität für das journalisierte Ziel.');
+          throw new BackupValidationError('Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.');
         }
         if (sourcePayments.length && !invoiceNumber?.trim() && existingPaymentEvents.length && !identityMatches.length) {
           throw new BackupValidationError('Zahlungshistorie ohne eindeutige Rechnungsidentität kann nicht mit einem journalisierten Ziel zusammengeführt werden.');

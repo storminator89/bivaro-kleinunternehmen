@@ -262,7 +262,7 @@ describe('partial-payment backup identity and grouped invariants', () => {
     const old = fixture([120], [dateA]);
     old.data.paymentJournalEvents = []; old.data.invoices[0].invoiceNumber = '';
     const before = await readBackupSnapshot('partial-unidentified-old');
-    await expect(apply('partial-unidentified-old', { version: '2.0', data: old.data })).rejects.toThrow(/keine eindeutige Rechnungsidentität/u);
+    await expect(apply('partial-unidentified-old', { version: '2.0', data: old.data })).rejects.toThrow('Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.');
     expect(hashJson((await readBackupSnapshot('partial-unidentified-old')).data)).toBe(hashJson(before.data));
   });
 
@@ -292,7 +292,7 @@ describe('partial-payment backup identity and grouped invariants', () => {
       amountCents: '12000', currency: 'EUR', paidAt: income.date, source: 'LEGACY_IMPORT', dateCertainty: 'LEGACY_INCOME',
       reference: 'Explicit historical adoption', idempotencyKey: 'adopted-unnamed-once' } });
     const before = await readBackupSnapshot('partial-old-adopted-unnamed');
-    await expect(apply('partial-old-adopted-unnamed', backup)).rejects.toThrow(/keine eindeutige Rechnungsidentität/u);
+    await expect(apply('partial-old-adopted-unnamed', backup)).rejects.toThrow('Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.');
     expect(hashJson((await readBackupSnapshot('partial-old-adopted-unnamed')).data)).toBe(hashJson(before.data));
   });
 
