@@ -121,6 +121,7 @@ jobs:
               'bank-csv-results-mobile-390.png',
               'project-services-workbench-desktop-1440.png',
               'project-services-selection-mobile-390.png',
+              'incoming-queue-mobile-390.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'

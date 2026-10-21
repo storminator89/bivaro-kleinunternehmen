@@ -22,10 +22,13 @@ async function postHandler(request: NextRequest) {
     const file = form.get('file');
     if (!(file instanceof File) || form.getAll('file').length !== 1 || form.getAll('uploadRequestId').length !== 1) throw new PurchaseDocumentError('Genau eine Datei und ein Uploadschlüssel sind erforderlich.');
     const requestId = parseUploadRequestId(form.get('uploadRequestId'));
+    // Only an explicit opt-out is accepted; an upload cannot grant provider consent.
+    const analysisModes = form.getAll('analysisMode');
+    if (analysisModes.length > 1 || (analysisModes.length === 1 && analysisModes[0] !== 'manual')) throw new PurchaseDocumentError('Ungültiger Auswertungsmodus.');
     if (file.size > MAX_INVOICE_UPLOAD_BYTES) throw new PurchaseDocumentError('Datei überschreitet das Größenlimit.', 413, 'FILE_SIZE');
     const bytes = Buffer.from(await file.arrayBuffer());
     const mediaType = await withProcessingSlot(userId, () => detectPurchaseContainer(file, bytes), requestId);
-    const result = await intakePurchaseDocument({ userId, requestId, originalFileName: file.name, mediaType, bytes });
+    const result = await intakePurchaseDocument({ userId, requestId, originalFileName: file.name, mediaType, bytes, ...(analysisModes.length === 1 ? { analysisMode: 'manual' as const } : {}) });
     return NextResponse.json(result, { status: result.replayed ? 200 : 201 });
   } catch (error) { return purchaseErrorResponse(error); }
 }

@@ -182,7 +182,7 @@ async function saveParseResult(document: PurchaseDocument, bytes: Buffer): Promi
       metadata: { actorId: document.userId, tenantId: document.userId, operation: 'purchase-document.parse', originalReference: document.originalSha256, reason: 'structured preview only; no posting' } }, tx);
   });
 }
-export async function intakePurchaseDocument(input: { userId: string; requestId: string; originalFileName: string; mediaType: PurchaseMediaType; bytes: Buffer }): Promise<{ document: IncomingDocument; replayed: boolean }> {
+export async function intakePurchaseDocument(input: { userId: string; requestId: string; originalFileName: string; mediaType: PurchaseMediaType; bytes: Buffer; analysisMode?: 'manual' }): Promise<{ document: IncomingDocument; replayed: boolean }> {
   const sha256 = originalHash(input.bytes);
   const replay = await findReplay(input.userId, input.requestId, sha256);
   if (replay) return { document: await purchaseDocumentDetail(input.userId, replay.id), replayed: true };
@@ -214,8 +214,10 @@ export async function intakePurchaseDocument(input: { userId: string; requestId:
   // New originals only: a replay must never spend again. Upload success is independent
   // from the persisted optional AI outcome; no automatic retry on failure.
   try {
-    const { automaticallyExtractNewPurchase } = await import('./ai-extraction');
-    await automaticallyExtractNewPurchase(input.userId, created.id);
+    if (input.analysisMode !== 'manual') {
+      const { automaticallyExtractNewPurchase } = await import('./ai-extraction');
+      await automaticallyExtractNewPurchase(input.userId, created.id);
+    }
   } catch { /* An unavailable optional analyzer must not turn a durable upload into a failure. */ }
   return { document: await purchaseDocumentDetail(input.userId, created.id), replayed: false };
 }

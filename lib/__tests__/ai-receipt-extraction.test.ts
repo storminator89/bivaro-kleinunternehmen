@@ -190,6 +190,18 @@ describe('durable optional AI draft capture',()=>{
     const invalid=await route.POST(new NextRequest(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({expectedRevision:1,expectedConfigVersion:1,acknowledgeCost:true})}),context);expect(invalid.status).toBe(400);
     const csrf=await route.POST(new NextRequest(url,{method:'POST',headers:{origin:'https://evil.invalid','content-type':'application/json'},body:JSON.stringify({expectedRevision:1,expectedConfigVersion:1,expectedConfigRevision:state.revision,acknowledgeCost:true})}),context);expect(csrf.status).toBe(403);expect(state.calls).toBe(0);
   });
+  it('manual batch intake bypasses automatic paid analysis even when the provider and global automation are enabled',async()=>{
+    state.auto=true;
+    const sharp=(await import('sharp')).default;
+    const bytes=await sharp({create:{width:23,height:20,channels:3,background:'#fff'}}).png().toBuffer();
+    const input={userId:'ai-owner',requestId:randomUUID(),originalFileName:'synthetic-manual-batch.png',mediaType:'image/png' as const,bytes,analysisMode:'manual' as const};
+    const original=await service.intakePurchaseDocument(input);
+    expect(original.replayed).toBe(false);expect(original.document.reviewDraft).toBeNull();expect(original.document.parseStatus).toBe('FAILED');expect(state.calls).toBe(0);
+    expect(await extraction.getPurchaseAiExtraction('ai-owner',original.document.id)).toBeNull();
+    const replay=await service.intakePurchaseDocument(input);expect(replay.replayed).toBe(true);expect(state.calls).toBe(0);
+    // Merely retrying the saved original without the opt-out must not enqueue a delayed paid analysis.
+    await service.intakePurchaseDocument({...input,analysisMode:undefined});expect(state.calls).toBe(0);
+  });
   it('automatic extraction requires NEW intake + explicit opt-in, and upload replay never spends again',async()=>{
     const sharp=(await import('sharp')).default;
     const bytes=await sharp({create:{width:20,height:20,channels:3,background:'#fff'}}).png().toBuffer();const requestId=randomUUID();
