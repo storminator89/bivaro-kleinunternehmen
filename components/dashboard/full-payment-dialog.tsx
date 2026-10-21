@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { paymentDialogReturnTarget } from '@/lib/payment-dialog-focus';
 import { PaymentHistory } from '@/components/payments/payment-history';
 import { formatBusinessDateDisplay } from '@/lib/business-date';
 import { displayPaymentAmount, paymentAttempt, paymentFailure, paymentIdentityStorageKey, paymentPendingStorageKey, paymentInputCents, readPaymentEvents, readConfirmedPayment, readPaymentPreflight, recoverConfirmedPayment, validatePaymentFields, type ConfirmedPayment, type PaymentDraft, type PaymentPreflight, type PaymentHistoryEvent } from '@/lib/full-payment-form';
@@ -234,12 +235,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
         onOpenAutoFocus={(event) => { event.preventDefault(); dateRef.current?.focus(); }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          const previous = returnFocusRef.current;
-          if (previous?.isConnected && previous !== document.body) previous.focus();
-          else {
-            const fallback = Array.from(document.querySelectorAll<HTMLElement>(`[data-invoice-return="${invoice.id}"], #invoice-search, main button`)).find(element => element.getClientRects().length > 0 && !element.closest('[role="dialog"]'));
-            fallback?.focus();
-          }
+          paymentDialogReturnTarget(invoice.id, returnFocusRef.current)?.focus({ preventScroll: true });
         }}
         onEscapeKeyDown={(event) => { if (submitting.current) event.preventDefault(); }}
         onPointerDownOutside={(event) => { if (submitting.current) event.preventDefault(); }}>

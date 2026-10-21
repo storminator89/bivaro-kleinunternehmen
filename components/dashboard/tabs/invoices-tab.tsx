@@ -311,7 +311,7 @@ export function InvoicesTab({
                   </div>
                   <p className="shrink-0 font-semibold tabular-nums">{invoice.totalAmount != null ? formatCurrency(invoice.totalAmount) : '–'}</p>
                 </div>
-                <StatusBadge status={invoice.status} paymentState={invoice.paymentSummary?.paymentState} availableStatuses={availableInvoiceStatuses(invoice)} onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)} />
+                <StatusBadge paymentReturnId={invoice.id} status={invoice.status} paymentState={invoice.paymentSummary?.paymentState} availableStatuses={availableInvoiceStatuses(invoice)} onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)} />
                 <InvoiceBalance invoice={invoice} />
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" className="min-h-11" data-invoice-return={invoice.id} onClick={() => onOpenDetails(invoice)}><Eye className="h-4 w-4" />Details</Button>
@@ -410,6 +410,7 @@ export function InvoicesTab({
                       </TableCell>
                       <TableCell className="text-center">
                         <StatusBadge
+                          paymentReturnId={invoice.id}
                           status={invoice.status} paymentState={invoice.paymentSummary?.paymentState}
                           availableStatuses={availableInvoiceStatuses(invoice)}
                           onStatusChange={(newStatus) => onStatusChange(invoice.id, newStatus)}
