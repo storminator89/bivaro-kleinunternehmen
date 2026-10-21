@@ -164,7 +164,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByRole('heading', { name: 'Letzte Aktivitäten', exact: true })).toBeVisible();
     // Generated artwork must load without breaking text labels or navigation.
     const sidebarIcons = page.locator('aside [data-bivaro-icon^="nav-"]');
-    await expect(sidebarIcons).toHaveCount(16);
+    await expect(sidebarIcons).toHaveCount(17);
+    await expect(page.locator('aside').getByRole('link', { name: 'Heute erledigen', exact: true })).toHaveAttribute('href', '/dashboard/today');
     await expect(page.locator('aside').getByRole('link', { name: 'Rechnungshistorie', exact: true })).toHaveAttribute('href', '/history');
     await expect(page.locator('aside').getByRole('link', { name: 'Belegeingang', exact: true })).toHaveAttribute('href', '/purchases');
     await expect(page.locator('.dashboard-metrics [data-bivaro-icon^="tile-"]')).toHaveCount(4);
