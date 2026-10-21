@@ -35,6 +35,7 @@ const COMMANDS: CommandItem[] = [
   // Navigation
   { id: "nav-dashboard", label: "Dashboard öffnen", group: "Navigation", icon: "nav-dashboard", keywords: ["start", "übersicht", "home"], action: ({ router, close }) => { router.push("/dashboard"); close(); } },
   { id: "nav-incomes", label: "Einnahmen", group: "Navigation", icon: "nav-incomes", keywords: ["umsatz", "rechnung"], action: ({ router, close }) => { router.push("/dashboard?tab=incomes"); close(); } },
+  { id: "nav-purchases", label: "Belegeingang", group: "Navigation", icon: "nav-expenses", keywords: ["eingangsrechnung", "lieferant", "original", "upload"], action: ({ router, close }) => { router.push("/purchases"); close(); } },
   { id: "nav-expenses", label: "Ausgaben", group: "Navigation", icon: "nav-expenses", keywords: ["beleg", "kosten"], action: ({ router, close }) => { router.push("/dashboard?tab=expenses"); close(); } },
   { id: "nav-invoices", label: "Rechnungen", group: "Navigation", icon: "nav-invoices", action: ({ router, close }) => { router.push("/dashboard?tab=invoices"); close(); } },
   { id: "nav-cashbook", label: "Kassenbuch", group: "Navigation", icon: "nav-cashbook", action: ({ router, close }) => { router.push("/cashbook"); close(); } },

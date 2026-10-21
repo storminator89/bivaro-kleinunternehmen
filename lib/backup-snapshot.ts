@@ -66,6 +66,7 @@ export async function readStableBackupFile(filePath: string, maxBytes?: number):
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
+  if (maxBytes !== undefined && bytes.byteLength > maxBytes) throw new BackupFileSizeError();
   const after = await getBackupFileVersion(filePath);
   if (!after) return null;
   if (before !== after) throw new BackupFileConsistencyError();
@@ -84,8 +85,11 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       user,
       expenses,
       incomes,
+      paymentJournalEvents,
       invoices,
+      purchaseDocuments,
       customers,
+      suppliers,
       settings,
       templates,
       recurringExpenses,
@@ -104,8 +108,11 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       }),
       tx.expense.findMany({ where: { userId } }),
       tx.income.findMany({ where: { userId } }),
+      tx.paymentJournalEvent.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.invoice.findMany({ where: { userId } }),
+      tx.purchaseDocument.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.customer.findMany({ where: { userId } }),
+      tx.supplier.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.settings.findUnique({ where: { userId } }),
       tx.invoiceTemplate.findMany({ where: { userId } }),
       tx.recurringExpense.findMany({ where: { userId } }),
@@ -123,8 +130,11 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       user: { id: user?.id, email: user?.email, name: user?.name },
       expenses: expenses.map((item) => ({ ...item, userId: undefined })),
       incomes: incomes.map((item) => ({ ...item, userId: undefined })),
+      paymentJournalEvents: paymentJournalEvents.map((item) => ({ ...item, userId: undefined })),
       invoices: invoices.map((item) => ({ ...item, userId: undefined })),
+      purchaseDocuments: purchaseDocuments.map((item) => ({ ...item, userId: undefined })),
       customers: customers.map((item) => ({ ...item, userId: undefined })),
+      suppliers: suppliers.map((item) => ({ ...item, userId: undefined })),
       settings: settings ? { ...settings, userId: undefined } : null,
       templates: templates.map((item) => ({ ...item, userId: undefined })),
       recurringExpenses: recurringExpenses.map((item) => ({ ...item, userId: undefined })),

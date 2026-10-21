@@ -36,10 +36,13 @@ async function postHandler(request: NextRequest) {
         backupType: 'json',
         overwriteMode: overwrite,
         importedCustomers: results.customers.imported,
+        importedSuppliers: results.suppliers.imported,
         importedBillingNotes: results.billingNotes.imported,
         importedExpenses: results.expenses.imported,
         importedIncomes: results.incomes.imported,
+        importedPaymentJournalEvents: results.paymentJournalEvents.imported,
         importedInvoices: results.invoices.imported,
+        importedPurchaseDocuments: results.purchaseDocuments.imported,
       },
     });
 

@@ -81,6 +81,20 @@ export type ParsedEInvoice = {
   rawXml: string;
 };
 
+/** Exact source lexemes captured before the legacy Number-based extraction. */
+export type EInvoiceExactDecimals = {
+  grossAmount: string | null;
+  prepaidAmount: string | null;
+  roundingAmount: string | null;
+  dueAmount: string | null;
+  netAmount: string | null;
+  taxAmount: string | null;
+  lineTotalAmount: string | null;
+  chargeTotalAmount: string | null;
+  allowanceTotalAmount: string | null;
+  lineItems: Array<{ quantity: string | null; unitPrice: string | null; amount: string | null; taxRate: string | null }>;
+};
+
 type PdfAttachment = {
   name: string;
   data: Uint8Array;
@@ -623,7 +637,40 @@ export async function extractEmbeddedEInvoiceXml(pdfBuffer: Buffer): Promise<str
   return null;
 }
 
-export async function parseEInvoiceXml(xmlContent: string): Promise<ParsedEInvoice> {
+function exactCiiDecimals(root: unknown): EInvoiceExactDecimals {
+  const trade = getPath(root, 'SupplyChainTradeTransaction');
+  const totals = getPath(trade, 'ApplicableHeaderTradeSettlement.SpecifiedTradeSettlementHeaderMonetarySummation');
+  return {
+    grossAmount: getText(totals, 'GrandTotalAmount'), prepaidAmount: getText(totals, 'TotalPrepaidAmount'),
+    roundingAmount: getText(totals, 'RoundingAmount'), dueAmount: getText(totals, 'DuePayableAmount'),
+    netAmount: getText(totals, 'TaxBasisTotalAmount'), taxAmount: getText(totals, 'TaxTotalAmount'),
+    lineTotalAmount: getText(totals, 'LineTotalAmount'), chargeTotalAmount: getText(totals, 'ChargeTotalAmount'),
+    allowanceTotalAmount: getText(totals, 'AllowanceTotalAmount'),
+    lineItems: toArray(getPath(trade, 'IncludedSupplyChainTradeLineItem')).filter(Boolean).map(line => ({
+      quantity: getText(line, 'SpecifiedLineTradeDelivery.BilledQuantity'),
+      unitPrice: getText(line, 'SpecifiedLineTradeAgreement.NetPriceProductTradePrice.ChargeAmount'),
+      amount: getText(line, 'SpecifiedLineTradeSettlement.SpecifiedTradeSettlementLineMonetarySummation.LineTotalAmount'),
+      taxRate: getText(line, 'SpecifiedLineTradeSettlement.ApplicableTradeTax.RateApplicablePercent'),
+    })),
+  };
+}
+function exactUblDecimals(root: unknown, rootType: 'Invoice' | 'CreditNote'): EInvoiceExactDecimals {
+  const totals = getPath(root, 'LegalMonetaryTotal');
+  return {
+    grossAmount: getText(totals, 'TaxInclusiveAmount'), prepaidAmount: getText(totals, 'PrepaidAmount'),
+    roundingAmount: getText(totals, 'PayableRoundingAmount'), dueAmount: getText(totals, 'PayableAmount'),
+    netAmount: getText(totals, 'TaxExclusiveAmount'), taxAmount: getText(root, 'TaxTotal.TaxAmount'),
+    lineTotalAmount: getText(totals, 'LineExtensionAmount'), chargeTotalAmount: getText(totals, 'ChargeTotalAmount'),
+    allowanceTotalAmount: getText(totals, 'AllowanceTotalAmount'),
+    lineItems: toArray(getPath(root, rootType === 'CreditNote' ? 'CreditNoteLine' : 'InvoiceLine')).filter(Boolean).map(line => ({
+      quantity: asText(getPath(line, 'InvoicedQuantity') ?? getPath(line, 'CreditedQuantity')),
+      unitPrice: getText(line, 'Price.PriceAmount'), amount: getText(line, 'LineExtensionAmount'),
+      taxRate: firstText(line, ['Item.ClassifiedTaxCategory.Percent', 'TaxTotal.TaxSubtotal.TaxCategory.Percent']),
+    })),
+  };
+}
+
+async function parseEInvoiceXmlSource(xmlContent: string, captureExact: boolean): Promise<{ parsed: ParsedEInvoice; exactDecimals: EInvoiceExactDecimals | null }> {
   if (Buffer.byteLength(xmlContent, 'utf8') > MAX_XML_INPUT_BYTES) throw new RequestBodyLimitError('XML ist zu groß');
   const rawXml = xmlContent.trim();
   if (!rawXml.startsWith('<')) {
@@ -633,20 +680,35 @@ export async function parseEInvoiceXml(xmlContent: string): Promise<ParsedEInvoi
   const parsedXml = await parseStringPromise(rawXml, { explicitArray: false, trim: true }) as XmlObject;
   const ciiRoot = getChild(parsedXml, 'CrossIndustryInvoice');
   if (ciiRoot && getPath(ciiRoot, 'SupplyChainTradeTransaction')) {
-    return parseCiiInvoice(ciiRoot, rawXml);
+    const exactDecimals = captureExact ? exactCiiDecimals(ciiRoot) : null;
+    return { parsed: parseCiiInvoice(ciiRoot, rawXml), exactDecimals };
   }
 
   const ublRoot = getChild(parsedXml, 'Invoice');
   if (ublRoot && getPath(ublRoot, 'LegalMonetaryTotal')) {
-    return parseUblInvoice(ublRoot, rawXml, 'Invoice');
+    const exactDecimals = captureExact ? exactUblDecimals(ublRoot, 'Invoice') : null;
+    return { parsed: parseUblInvoice(ublRoot, rawXml, 'Invoice'), exactDecimals };
   }
 
   const creditNoteRoot = getChild(parsedXml, 'CreditNote');
   if (creditNoteRoot && getPath(creditNoteRoot, 'LegalMonetaryTotal')) {
-    return parseUblInvoice(creditNoteRoot, rawXml, 'CreditNote');
+    const exactDecimals = captureExact ? exactUblDecimals(creditNoteRoot, 'CreditNote') : null;
+    return { parsed: parseUblInvoice(creditNoteRoot, rawXml, 'CreditNote'), exactDecimals };
   }
 
   throw new Error('Unbekannte E-Rechnungsstruktur. Unterstützt werden ZUGFeRD/Factur-X CII und XRechnung-UBL.');
+}
+
+/** Legacy consumers retain their existing Number-based shape and behavior. */
+export async function parseEInvoiceXml(xmlContent: string): Promise<ParsedEInvoice> {
+  return (await parseEInvoiceXmlSource(xmlContent, false)).parsed;
+}
+
+/** Incoming review must use these source strings, never reconstruct decimals from Number. */
+export async function parseEInvoiceXmlWithExactDecimals(xmlContent: string): Promise<{ parsed: ParsedEInvoice; exactDecimals: EInvoiceExactDecimals }> {
+  const result = await parseEInvoiceXmlSource(xmlContent, true);
+  if (!result.exactDecimals) throw new Error('Exact source decimal extraction unavailable');
+  return { parsed: result.parsed, exactDecimals: result.exactDecimals };
 }
 
 /**

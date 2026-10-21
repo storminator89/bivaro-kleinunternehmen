@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactNode } from 'react';
 import { getSafeLoginCallbackUrl } from '@/lib/login-callback';
 
@@ -29,7 +29,10 @@ beforeEach(() => {
   state.params = new URLSearchParams();
   state.replace.mockReset();
   state.signIn.mockReset().mockResolvedValue({ ok: true, error: null });
+  vi.stubGlobal('window', { location: { replace: state.replace } });
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('login callback destinations (#20)', () => {
   it.each(['/customers', '/dashboard?tab=incomes&new=1', '/customers?search=A%20B#details'])('preserves safe destination %s', path => {
@@ -44,7 +47,7 @@ describe('login callback destinations (#20)', () => {
     expect(getSafeLoginCallbackUrl(path)).toBe('/dashboard');
   });
 
-  it('passes the safe callback to signIn and returns there after success', async () => {
+  it('passes the safe callback to signIn and starts a fresh document navigation after success', async () => {
     state.params.set('callbackUrl', '/customers?search=Acme#details');
     await findSubmit(LoginPage())!({ preventDefault: vi.fn() });
     expect(state.signIn).toHaveBeenCalledWith('credentials', expect.objectContaining({

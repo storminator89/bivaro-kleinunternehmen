@@ -1,3 +1,4 @@
+import { assertExpenseNotSourceLinked, SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { Prisma } from '@prisma/client';
 import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
@@ -111,6 +112,7 @@ export async function createCashTransaction(userId: string, body: Record<string,
     if (expenseId) {
       const expense = await tx.expense.findFirst({ where: { id: expenseId, userId }, select: { amount: true, date: true, cashTransaction: { select: { id: true } } } });
       if (!expense) throw new CashbookError('Ausgabe nicht gefunden', 404);
+      try { await assertExpenseNotSourceLinked(tx, expenseId); } catch (error) { if (error instanceof SourceLinkedExpenseError) throw new CashbookError(error.message, 409); throw error; }
       if (expense.cashTransaction) throw new CashbookError('Ausgabe ist bereits mit dem Kassenbuch verknüpft', 409);
       if (cents(expense.amount) !== cents(amount) || !sameBusinessDate(expense.date, date)) {
         throw new CashbookError('Betrag und Datum müssen mit der verknüpften Ausgabe übereinstimmen', 409);
@@ -153,6 +155,7 @@ export async function updateCashTransaction(userId: string, id: number, body: Re
   const result = await inTransaction(async tx => {
     const old = await tx.cashTransaction.findFirst({ where: { id, userId } });
     if (!old) throw new CashbookError('Buchung nicht gefunden', 404);
+    if (old.expenseId) { try { await assertExpenseNotSourceLinked(tx, old.expenseId); } catch (error) { if (error instanceof SourceLinkedExpenseError) throw new CashbookError(error.message, 409); throw error; } }
     if ((old.incomeId || old.expenseId) && (data.amount !== undefined || data.type !== undefined || data.date !== undefined)) {
       throw new CashbookError('Verknüpfte Buchungen müssen zusammen mit dem Beleg korrigiert werden', 409);
     }
@@ -175,6 +178,7 @@ export async function deleteCashTransaction(userId: string, id: number) {
   await inTransaction(async tx => {
     const entry = await tx.cashTransaction.findFirst({ where: { id, userId } });
     if (!entry) throw new CashbookError('Buchung nicht gefunden', 404);
+    if (entry.expenseId) { try { await assertExpenseNotSourceLinked(tx, entry.expenseId); } catch (error) { if (error instanceof SourceLinkedExpenseError) throw new CashbookError(error.message, 409); throw error; } }
     await tx.cashTransaction.delete({ where: { id, userId } });
     await recalculateCashBalances(tx, entry.cashBookId, userId, entry.date);
     await createFinancialAuditLog({

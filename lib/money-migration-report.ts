@@ -65,12 +65,14 @@ export const PRISMA_MONEY_COLUMNS: readonly MoneyColumn[] = [
 
 /** Float fields intentionally excluded from the EUR money inventory. */
 export const PRISMA_MONEY_FLOAT_EXCLUSIONS = [
+  { model: 'PurchaseDocument', field: 'totalAmount', reason: 'derived informational source estimate; may be non-EUR and is never an approved ledger value; exact lexical amounts in parsedData/original must be revalidated before posting' },
   { model: 'BillingNote', field: 'quantity', reason: 'service quantity, not a currency amount' },
   { model: 'Expense', field: 'taxDeductiblePercentage', reason: 'percentage, not a currency amount' },
   { model: 'RecurringExpense', field: 'taxDeductiblePercentage', reason: 'percentage, not a currency amount' },
 ] as const;
 /** JSON can contain historical document amounts, but has no typed money field. */
 export const PRISMA_MONEY_JSON_EXCLUSIONS = [
+  { model: 'PurchaseDocument', field: 'parsedData', reason: 'unapproved multi-currency extraction with exact source decimal strings; never included in EUR ledger migration sums or used as posting authority without original revalidation' },
   { model: 'Invoice', field: 'parsedData', reason: 'embedded amounts require the BV-013 snapshot contract' },
 ] as const;
 export const MAX_MONEY_REPORT_ROWS = 100_000;

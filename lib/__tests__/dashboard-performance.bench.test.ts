@@ -104,7 +104,7 @@ async function measureKpi(expectedRows: number): Promise<Measurement> {
   selectQueryCount = 0;
   const rssBefore = process.memoryUsage().rss;
   const started = performance.now();
-  const response = await getKpis();
+  const response = await getKpis(new Request('http://localhost/api/dashboard/kpis'));
   const body = await response.text();
   const elapsed = performance.now() - started;
   const rssAfter = process.memoryUsage().rss;
@@ -135,7 +135,7 @@ benchmark("dashboard KPI performance baseline (opt-in)", () => {
       try {
         await seed(size);
         // Warm up the route once; only the following seven calls are reported.
-        const warmup = await getKpis();
+        const warmup = await getKpis(new Request('http://localhost/api/dashboard/kpis'));
         expect(warmup.status).toBe(200);
         expect(await warmup.json()).toMatchObject({ totalRevenue: size, totalExpenses: size });
 

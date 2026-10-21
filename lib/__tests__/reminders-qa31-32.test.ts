@@ -109,8 +109,8 @@ describe('QA #31: only open invoices are eligible for reminders', () => {
     expect(beforePayment.invoices).toHaveLength(1);
     expect(beforePayment.stats).toMatchObject({ totalOverdue: 1, totalAmount: 297.5, totalFees: 5 });
 
-    // This is the unchanged invoice-payment service used by PUT /api/invoices,
-    // which the reminder page still invokes for its explicit paid action.
+    // The dated compatibility service and the shared full-payment dialog both
+    // preserve the reminder lifecycle after an explicit actual payment date.
     const paid = await updateInvoiceStatus('reminder-owner', invoice.id, 'PAID', '2026-10-20T12:00:00Z');
     expect(paid.income).toMatchObject({ invoiceId: invoice.id, amount: 297.5, taxRelevant: true, customerId: customer.id });
     expect((await listReminders()).invoices).toEqual([]);
@@ -132,7 +132,10 @@ describe('QA #32: internal recording and manual email copy', () => {
     expect(source).toContain('Kopieren oder Öffnen im E-Mail-Client versendet noch keine E-Mail.');
     expect(source).toContain('onClick={handleOpenMailClient}');
     expect(source).toContain('window.open(`mailto:${email}?subject=${subject}&body=${body}`');
-    expect(source).toContain("fetch('/api/invoices'");
-    expect(source).toContain("JSON.stringify({ id: invoiceId, status: 'PAID' })");
+    expect(source).toContain('setInvoiceToPay(invoice)');
+    expect(source).toContain('<FullPaymentDialog');
+    expect(source).toContain('onSuccess={handlePaymentSuccess}');
+    expect(source).toContain("fetch('/api/reminders?includeAll=true', { cache: 'no-store' })");
+    expect(source).not.toContain("JSON.stringify({ id: invoiceId, status: 'PAID' })");
   });
 });

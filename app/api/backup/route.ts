@@ -17,8 +17,11 @@ export async function GET() {
     await auditBackup(userId, 'BACKUP', {
       expensesCount: count('expenses'),
       incomesCount: count('incomes'),
+      paymentJournalEventsCount: count('paymentJournalEvents'),
       invoicesCount: count('invoices'),
+      purchaseDocumentsCount: count('purchaseDocuments'),
       customersCount: count('customers'),
+      suppliersCount: count('suppliers'),
       billingNotesCount: count('billingNotes'),
       recurringExpensesCount: count('recurringExpenses'),
       remindersCount: count('reminders'),
@@ -34,8 +37,11 @@ export async function GET() {
         backupType: 'json',
         expensesCount: count('expenses'),
         incomesCount: count('incomes'),
+        paymentJournalEventsCount: count('paymentJournalEvents'),
         invoicesCount: count('invoices'),
+        purchaseDocumentsCount: count('purchaseDocuments'),
         customersCount: count('customers'),
+        suppliersCount: count('suppliers'),
         billingNotesCount: count('billingNotes'),
       },
     });
@@ -44,6 +50,9 @@ export async function GET() {
     const backup = {
       version: CURRENT_BACKUP_VERSION,
       type: 'json',
+      warnings: count('purchaseDocuments') > 0
+        ? ['Eingangsbeleg-Originale sind nicht eingebettet; zur Wiederherstellung ist ein vollständiges ZIP-Backup erforderlich.']
+        : [],
       exportedAt,
       manifest: createBackupManifest({ sourceUserId: userId, generatedAt: exportedAt, data, snapshot: snapshot.info }),
       user: data.user,
@@ -51,8 +60,11 @@ export async function GET() {
       stats: {
         expenses: count('expenses'),
         incomes: count('incomes'),
+        paymentJournalEvents: count('paymentJournalEvents'),
         invoices: count('invoices'),
+        purchaseDocuments: count('purchaseDocuments'),
         customers: count('customers'),
+        suppliers: count('suppliers'),
         billingNotes: count('billingNotes'),
         templates: count('templates'),
         recurringExpenses: count('recurringExpenses'),

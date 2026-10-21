@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PRISMA_MONEY_COLUMNS,
   PRISMA_MONEY_FLOAT_EXCLUSIONS,
+  PRISMA_MONEY_JSON_EXCLUSIONS,
   createMoneyMigrationReport,
 } from '../money-migration-report';
 
@@ -52,6 +53,16 @@ describe('money migration report', () => {
     const moneyFields = PRISMA_MONEY_COLUMNS.map(column => `${column.model}.${column.field}`);
     const excludedFields = PRISMA_MONEY_FLOAT_EXCLUSIONS.map(column => `${column.model}.${column.field}`);
     expect(floatFields.sort()).toEqual([...moneyFields, ...excludedFields].sort());
+  });
+
+  it('explicitly excludes unapproved multi-currency incoming estimates from EUR ledger control sums', () => {
+    expect(PRISMA_MONEY_COLUMNS.some(column => column.model === 'PurchaseDocument')).toBe(false);
+    expect(PRISMA_MONEY_FLOAT_EXCLUSIONS).toContainEqual(expect.objectContaining({
+      model: 'PurchaseDocument', field: 'totalAmount', reason: expect.stringMatching(/informational.*non-EUR.*never an approved ledger/),
+    }));
+    expect(PRISMA_MONEY_JSON_EXCLUSIONS).toContainEqual(expect.objectContaining({
+      model: 'PurchaseDocument', field: 'parsedData', reason: expect.stringMatching(/exact source decimal strings/),
+    }));
   });
 
   it('covers every Prisma money Float and reads a temporary fixture transactionally', async () => {

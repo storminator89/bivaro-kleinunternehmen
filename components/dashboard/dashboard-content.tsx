@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
+import { GettingStarted } from "@/components/onboarding/getting-started";
 import { toast } from 'sonner';
 import React, { useEffect, useState } from 'react';
 import { Plus, ArrowDownLeft, ArrowUpRight } from "lucide-react";
@@ -21,6 +22,7 @@ import {
   CreditNoteModal
 } from "@/components/dashboard/modals";
 import { RecurringExpensesModal } from "@/components/dashboard/modals/recurring-expenses-modal";
+import { FullPaymentDialog } from "@/components/dashboard/full-payment-dialog";
 import {
   Expense,
   Income,
@@ -68,6 +70,7 @@ export function DashboardContent() {
   const [itemToEdit, setItemToEdit] = useState<DashboardEditData | null>(null);
   const [invoiceDetailsModalOpen, setInvoiceDetailsModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [invoiceToPay, setInvoiceToPay] = useState<Pick<Invoice, 'id' | 'invoiceNumber' | 'fileName'> | null>(null);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
   const [_error, _setError] = useState<string | null>(null);
@@ -216,6 +219,7 @@ export function DashboardContent() {
     loadExpenses,
     loadIncomes,
     loadInvoices,
+    refreshPaymentLists,
     loadQuotes,
   } = useDashboardData({
     filters,
@@ -636,6 +640,16 @@ export function DashboardContent() {
 
   const handleInvoiceStatusChange = async (id: number | undefined, newStatus: string) => {
     if (id === undefined) return;
+    if (newStatus === 'PAID') {
+      const invoice = invoices.find(item => item.id === id);
+      const income = incomes.find(item => item.invoiceId === id);
+      // An unchanged historical PAID row is not silently adopted or booked again.
+      if (invoice?.status === 'PAID' || income?.invoiceStatus === 'PAID') return;
+      // Let the status menu close and restore its trigger before the dialog
+      // takes focus, so cancellation has a live keyboard return target.
+      window.requestAnimationFrame(() => setInvoiceToPay(invoice ?? { id, fileName: `#${id}` }));
+      return;
+    }
     try {
       const response = await fetch('/api/invoices', {
         method: 'PUT',
@@ -876,7 +890,10 @@ export function DashboardContent() {
         />
 
         {!tabParam ? (
-          <DashboardClient />
+          <>
+            <GettingStarted />
+            <DashboardClient />
+          </>
         ) : (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
           {/* Ausgaben Tab */}
@@ -1046,6 +1063,12 @@ export function DashboardContent() {
         )}
 
         {/* Rechnungsdetails-Modal */}
+        {invoiceToPay && <FullPaymentDialog
+          key={invoiceToPay.id}
+          invoice={invoiceToPay}
+          onClose={() => setInvoiceToPay(null)}
+          onSuccess={refreshPaymentLists}
+        />}
         {invoiceDetailsModalOpen && selectedInvoice && (
           <InvoiceDetailsModal
             isOpen={invoiceDetailsModalOpen}

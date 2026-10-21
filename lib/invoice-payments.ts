@@ -1,6 +1,7 @@
 import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
-import { getEInvoiceBookingRejection } from '@/lib/e-invoice-parser';
+import { recordFullPaymentInTransaction } from '@/lib/payment-journal/service';
+import { paymentDate, PaymentJournalError } from '@/lib/payment-journal/contract';
 
 export class InvoicePaymentError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -82,14 +83,16 @@ export async function updateInvoiceStatus(
       || (old.status === 'SENT' && nextStatus === 'DRAFT')) {
       throw new InvoicePaymentError('Ausgestellte Rechnungen können nicht wieder geöffnet werden; bitte stornieren Sie sie über eine Gutschrift.', 409);
     }
-    const paymentDate = nextStatus === 'PAID' ? new Date(paidAt ?? old.paidAt ?? new Date()) : null;
     if (nextStatus !== 'PAID' && paidAt != null) throw new InvoicePaymentError('Zahlungsdatum erfordert den Status PAID');
-    if (old.status === 'PAID' && paidAt != null
-      && old.paidAt?.getTime() !== paymentDate?.getTime()) {
+    const explicitPaymentDate = paidAt == null ? null : paymentDate(paidAt, true);
+    if (old.status === 'PAID' && explicitPaymentDate
+      && old.paidAt?.getTime() !== explicitPaymentDate.getTime()) {
       throw new InvoicePaymentError('Das Zahlungsdatum einer gebuchten Zahlung kann nicht nachträglich geändert werden.', 409);
     }
+    // Never turn a missing historical date into today's date.
+    const nextPaidAt = nextStatus === 'PAID' ? explicitPaymentDate ?? old.paidAt : null;
     const paidDateChanged = nextStatus === 'PAID'
-      && (old.paidAt?.getTime() ?? null) !== (paymentDate?.getTime() ?? null);
+      && (old.paidAt?.getTime() ?? null) !== (nextPaidAt?.getTime() ?? null);
     const customerChanged = customerId !== undefined && customerId !== old.customerId;
     if (customerChanged && old.billingNotes.length > 0) {
       throw new InvoicePaymentError('Der Kunde einer Rechnung mit Leistungsnotizen kann nicht geändert werden.', 409);
@@ -99,36 +102,27 @@ export async function updateInvoiceStatus(
     if (old.income && changed) {
       throw new InvoicePaymentError('Die Rechnung ist bereits als Einnahme gebucht und kann nicht erneut verändert werden.', 409);
     }
-    let invoice;
-    if (!changed) {
-      invoice = await tx.invoice.findUniqueOrThrow({ where: { id }, include: { income: true, customer: true } });
-    } else {
-      invoice = await tx.invoice.update({ where: { id, userId }, data: {
+    if (changed && nextStatus === 'PAID') {
+      if (!explicitPaymentDate) {
+        throw new PaymentJournalError('Bitte die tatsächliche Zahlung mit Betrag, Datum und Bezug über den Zahlungsdialog erfassen.', 400, 'PAYMENT_DETAILS_REQUIRED');
+      }
+      if (customerChanged) await tx.invoice.update({ where: { id, userId }, data: { customerId } });
+      await recordFullPaymentInTransaction(tx, userId, id, {
+        amount: old.totalAmount!, currency: 'EUR', paidAt: paidAt!, source: 'LEGACY_STATUS',
+        reference: old.invoiceNumber ?? `invoice:${id}`, idempotencyKey: `legacy-status:invoice:${id}`,
+      });
+    } else if (changed) {
+      await tx.invoice.update({ where: { id, userId }, data: {
         status: nextStatus,
-        paidAt: paymentDate,
         ...(customerId !== undefined ? { customerId } : {}),
-        ...(nextStatus === 'PAID' || nextStatus === 'SENT' ? { issuanceState: 'ISSUED' } : {}),
+        ...(nextStatus === 'SENT' ? { issuanceState: 'ISSUED' } : {}),
       } });
     }
-    if (changed && nextStatus === 'PAID') {
-      const importRejection = await getEInvoiceBookingRejection(invoice.parsedData);
-      if (importRejection) {
-        throw new InvoicePaymentError(`Die Zahlung kann nicht gebucht werden: ${importRejection}`, 409);
-      }
-      if (invoice.totalAmount === null || !Number.isFinite(invoice.totalAmount) || invoice.totalAmount < 0) {
-        throw new InvoicePaymentError('Für die Zahlung ist ein gültiger Rechnungsbetrag erforderlich');
-      }
-      const data = { amount: invoice.totalAmount, date: paymentDate!, customerId: invoice.customerId };
-      await tx.income.upsert({ where: { invoiceId: id },
-        create: { ...data, userId, invoiceId: id, description: `Rechnung ${invoice.invoiceNumber ?? id}`, taxRelevant: true },
-        update: data,
-      });
-    }
     const persisted = await tx.invoice.findUniqueOrThrow({ where: { id }, include: { income: true, customer: true } });
-    if (changed) {
+    if (changed && nextStatus !== 'PAID') {
       await createFinancialAuditLog({
         userId,
-        action: nextStatus === 'PAID' ? 'PAYMENT_RECEIVED' : 'STATUS_CHANGED',
+        action: 'STATUS_CHANGED',
         entityType: 'Invoice',
         entityId: id,
         entityName: persisted.invoiceNumber ?? undefined,
@@ -137,9 +131,9 @@ export async function updateInvoiceStatus(
         metadata: {
           actorId: userId,
           tenantId: userId,
-          operation: nextStatus === 'PAID' ? 'invoice.payment' : 'invoice.status-change',
+          operation: 'invoice.status-change',
           originalReference: persisted.invoiceNumber ?? `invoice:${id}`,
-          reason: nextStatus === 'PAID' ? 'payment recorded' : `status changed to ${nextStatus}`,
+          reason: `status changed to ${nextStatus}`,
         },
       }, tx);
     }

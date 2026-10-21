@@ -1,3 +1,4 @@
+import { SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -16,6 +17,7 @@ async function postHandler(request: Request) {
     }
     return NextResponse.json(await executeRecurringExpenses(userId, id));
   } catch (error) {
+    if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
@@ -69,6 +71,7 @@ export async function GET() {
       items: itemsWithCount,
     });
   } catch (error) {
+    if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }

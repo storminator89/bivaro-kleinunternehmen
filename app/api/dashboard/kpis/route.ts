@@ -187,13 +187,13 @@ function buildRecentExpenseQuery(userId: string) {
   `;
 }
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   try {
     const userId = await requireUserId();
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth();
-    const yearParam = request ? new URL(request.url).searchParams.get('year') : null;
+    const yearParam = new URL(request.url).searchParams.get('year');
     const selectedYear = yearParam === null ? currentYear : Number(yearParam);
     if (yearParam !== null && (!/^\d{4}$/.test(yearParam) || !Number.isInteger(selectedYear) || selectedYear < 1900 || selectedYear > currentYear)) {
       return NextResponse.json({ error: `Das Vergleichsjahr muss zwischen 1900 und ${currentYear} liegen.` }, { status: 400 });

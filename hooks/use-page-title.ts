@@ -8,8 +8,10 @@ const STATIC_TITLES: Record<string, string> = {
   "/dashboard/invoices/new": "Neue Rechnung",
   "/dashboard/quotes/new": "Neues Angebot",
   "/cashbook": "Kassenbuch",
+  "/purchases": "Belegeingang",
   "/customers": "Kunden",
   "/settings": "Einstellungen",
+  "/handoff": "Unterlagen übergeben",
   "/settings/api-keys": "API-Schlüssel",
   "/settings/api-keys/docs": "API-Dokumentation",
   "/settings/audit-logs": "Audit-Log",
@@ -38,6 +40,8 @@ export function usePageTitle(): string {
     if (tab && DASHBOARD_TAB_TITLES[tab]) return DASHBOARD_TAB_TITLES[tab];
     return "Dashboard";
   }
+
+  if (/^\/expenses\/[1-9]\d*$/.test(pathname)) return "Ausgabe ansehen";
 
   return STATIC_TITLES[pathname] ?? "Bivaro";
 }

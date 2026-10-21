@@ -181,6 +181,7 @@ export default function RegisterPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-0">
+          <p className="mb-5 text-sm leading-6 text-muted-foreground">Ein Konto für diese Installation ist kein Kauf und keine neue Firmeninstanz. <a href="/help#angebot" className="underline underline-offset-4">Angebotsstatus und Zuständigkeit prüfen</a>. Bei verlorenem Zugang nutzen Sie die <Link href="/help/access" className="underline underline-offset-4">Zugangshilfe</Link>, nicht ein neues Konto.</p>
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {error && (
               <div

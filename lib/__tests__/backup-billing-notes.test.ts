@@ -61,6 +61,7 @@ function makeBackup(options: { sourceUserId?: string; mismatchedInvoiceCustomer?
       createdAt: '2026-01-02T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
     }] : [])],
+    suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
     incomes: [],
     auditLogs: [],
     invoiceNumberCounters: [],
@@ -209,12 +210,12 @@ describe('billing-note backup compatibility', () => {
     const backup = makeBackup();
     const { billingNotes: _billingNotes, ...legacyData } = backup.data;
     const legacy = { ...backup, data: legacyData };
-    legacy.manifest.modelCoverage = legacy.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote');
+    legacy.manifest.modelCoverage = legacy.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote' && entry.model !== 'PurchaseDocument' && entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
     legacy.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION;
     expect(() => restore.validateBackupForRestore(legacy)).not.toThrow();
 
     const injected = makeBackup();
-    injected.manifest.modelCoverage = injected.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote');
+    injected.manifest.modelCoverage = injected.manifest.modelCoverage.filter((entry) => entry.model !== 'BillingNote' && entry.model !== 'PaymentJournalEvent');
     injected.manifest.schemaVersion = PRE_BILLING_NOTES_SCHEMA_VERSION;
     expect(() => restore.validateBackupForRestore(injected)).toThrow(/ungebundenen BillingNotes/u);
   });

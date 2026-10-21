@@ -11,6 +11,8 @@ import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFP
 import QRCode from 'qrcode';
 import { generateZugferdXml, validateZugferdData, SMALL_BUSINESS_EXEMPTION_REASON, type ZugferdData } from "@/lib/zugferd-generator";
 import { calculateInvoiceAmounts } from "@/lib/invoice-calculation";
+import { DocumentTaxProfileFields } from "@/components/dashboard/document-tax-profile-fields";
+import { type DocumentFiscalSettings, type DocumentTaxMode, type DocumentTaxSelection, type DocumentTaxCase, preservedDocumentTaxMode, resolveDocumentTaxState, isSupportedDocumentTaxCase, hasUnsupportedDocumentTaxCategory } from "@/lib/document-tax-profile";
 import PriceHistory from "@/components/dashboard/price-history";
 import { ArrowLeft, Copy, Eye, EyeOff, FileText, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 
@@ -22,7 +24,8 @@ interface CreateInvoiceModalProps {
   fromQuote?: {
     id: number;
     parsedData: {
-      items?: Array<{ description: string; quantity: number; unitPrice: number; unit: string; taxRate: number }>;
+      items?: InvoiceItem[];
+      taxMode?: DocumentTaxMode;
       notes?: string;
       customerAddress?: string;
     };
@@ -65,7 +68,7 @@ interface BillingNote {
   unit: string;
 }
 
-interface Settings {
+interface Settings extends DocumentFiscalSettings {
   companyName?: string;
   companyAddress?: string;
   taxNumber?: string;
@@ -134,7 +137,10 @@ export function CreateInvoiceModal({
   const [newTemplateName, setNewTemplateName] = useState("");
   const [generatedRequestId, setGeneratedRequestId] = useState<string | null>(null);
   const [outputMode, setOutputMode] = useState<InvoiceOutputMode>('zugferd-pdf');
-  const [taxMode, setTaxMode] = useState<'small-business' | 'standard'>('small-business');
+  const [taxSelection, setTaxSelection] = useState<DocumentTaxSelection | null>(null);
+  const [taxAcknowledged, setTaxAcknowledged] = useState(false);
+  const [taxCase, setTaxCase] = useState<DocumentTaxCase>('domestic');
+  const [domesticConfirmed, setDomesticConfirmed] = useState(false);
   const [buyerReference, setBuyerReference] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [buyerCountry, setBuyerCountry] = useState('DE');
@@ -145,6 +151,41 @@ export function CreateInvoiceModal({
   const [sellerCity, setSellerCity] = useState('');
   const [paymentMeansCode, setPaymentMeansCode] = useState<'30' | '10'>('30');
 
+  const taxState = resolveDocumentTaxState(settings, date, taxSelection, taxAcknowledged);
+  const taxMode = taxState.mode;
+  const foreignAddress = buyerCountry !== 'DE' || sellerCountry !== 'DE';
+  const unsupportedTaxCategory = hasUnsupportedDocumentTaxCategory(items);
+  const taxReady = taxState.ready && !unsupportedTaxCategory && isSupportedDocumentTaxCase(taxCase, foreignAddress, domesticConfirmed);
+
+  const handleTaxModeChange = (mode: DocumentTaxMode | '') => {
+    setTaxSelection({ mode, source: 'manual' });
+    setTaxAcknowledged(false);
+    if (mode === 'small-business') {
+      setItems(current => current.map(item => ({ ...item, taxRate: 0, taxCategory: 'E', exemptionReason: undefined })));
+    } else if (mode === 'standard') {
+      // An explicit change away from §19 resets its exemption. Preserved
+      // template/quote E/Z categories are otherwise not reinterpreted.
+      setItems(current => current.map(item => taxMode === 'small-business'
+        ? { ...item, taxRate: 19, taxCategory: undefined, exemptionReason: undefined }
+        : !taxSelection && !item.taxCategory && item.taxRate === 0
+          ? { ...item, taxRate: 19 }
+          : item));
+    }
+  };
+
+  // Only a fresh, profile-derived document gets company defaults. A template,
+  // converted quote or explicit document decision always wins.
+  useEffect(() => {
+    if (taxState.source !== 'profile') return;
+    setItems(current => current.map(item => taxMode === 'small-business'
+      ? { ...item, taxRate: 0, taxCategory: 'E', exemptionReason: undefined }
+      : (item.taxCategory === 'E' && !item.exemptionReason) || (!item.taxCategory && item.taxRate === 0)
+        ? { ...item, taxRate: 19, taxCategory: undefined, exemptionReason: undefined }
+        : item));
+  }, [taxMode, taxState.source]);
+
+  useEffect(() => { setDomesticConfirmed(false); }, [buyerCountry, sellerCountry]);
+
   // Preview states
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -153,12 +194,14 @@ export function CreateInvoiceModal({
   const previewUrlRef = useRef<string | null>(null);
   const previewGenerationRef = useRef(0);
   const wasOpenRef = useRef(false);
+  const appliedQuoteRef = useRef<number | null>(null);
 
   const resetEditorState = useCallback(() => {
     const today = new Date();
     const in14Days = new Date(today);
     in14Days.setDate(today.getDate() + 14);
 
+    appliedQuoteRef.current = null;
     setCustomerAddress("");
     setInvoiceNumber("");
     setDate(today.toISOString().split('T')[0]);
@@ -180,7 +223,11 @@ export function CreateInvoiceModal({
     setNewTemplateName("");
     setGeneratedRequestId(globalThis.crypto?.randomUUID?.() ?? null);
     setOutputMode('zugferd-pdf');
-    setTaxMode('small-business');
+    setSettings(null);
+    setTaxSelection(null);
+    setTaxAcknowledged(false);
+    setTaxCase('domestic');
+    setDomesticConfirmed(false);
     setBuyerReference('');
     setBuyerEmail('');
     setBuyerCountry('DE');
@@ -214,6 +261,7 @@ export function CreateInvoiceModal({
     if (!wasOpenRef.current) resetEditorState();
     wasOpenRef.current = true;
 
+    let active = true;
     if (isOpen) {
       // Set default due date to 14 days from now
       const today = new Date();
@@ -222,9 +270,9 @@ export function CreateInvoiceModal({
       setDueDate(in14Days.toISOString().split('T')[0]);
       setDeliveryDate(today.toISOString().split('T')[0]);
 
-      fetch("/api/settings")
-        .then(res => res.json())
-        .then(data => setSettings(data))
+      fetch("/api/settings", { cache: "no-store" })
+        .then(res => { if (!res.ok) throw new Error("Firmenprofil konnte nicht geladen werden"); return res.json(); })
+        .then(data => { if (active) setSettings(data); })
         .catch(err => console.error("Failed to load settings", err));
 
       fetch("/api/customers")
@@ -253,6 +301,7 @@ export function CreateInvoiceModal({
 
       fetchTemplates();
     }
+    return () => { active = false; };
   }, [fromQuote?.customerId, isOpen, resetEditorState]);
 
   useEffect(() => {
@@ -292,7 +341,8 @@ export function CreateInvoiceModal({
 
   // Pre-fill from quote when converting
   useEffect(() => {
-    if (isOpen && fromQuote) {
+    if (isOpen && fromQuote && appliedQuoteRef.current !== fromQuote.id) {
+      appliedQuoteRef.current = fromQuote.id;
       const pd = fromQuote.parsedData;
       if (pd.items && pd.items.length > 0) {
         // Quote/template data is not allowed to carry a billing-note claim
@@ -302,9 +352,11 @@ export function CreateInvoiceModal({
           unit: item.unit || "Stück",
           taxRate: item.taxRate ?? 0,
         })));
-        // Legacy quotes have no tax mode; taxable lines need the standard editor.
-        setTaxMode(pd.items.some(item => item.taxRate > 0) ? 'standard' : 'small-business');
+        // A zero-tax legacy quote is ambiguous, never an implicit §19 decision.
+        setTaxSelection({ mode: preservedDocumentTaxMode(pd), source: 'quote' });
+        setTaxAcknowledged(false);
       }
+      if (!pd.items?.length) setTaxSelection({ mode: preservedDocumentTaxMode(pd), source: 'quote' });
       if (pd.notes) setNotes(pd.notes);
       if (pd.customerAddress) setCustomerAddress(pd.customerAddress);
     }
@@ -329,7 +381,7 @@ export function CreateInvoiceModal({
   };
 
   const handleSaveTemplate = async () => {
-    if (!newTemplateName.trim()) return;
+    if (!newTemplateName.trim() || !taxReady) return;
 
     const templateData = {
       items: items.map(stripBillingNoteAssociation),
@@ -374,7 +426,8 @@ export function CreateInvoiceModal({
           taxRate: item.taxRate ?? 0
         })));
       }
-      setTaxMode(data.taxMode ?? (data.items?.some(item => item.taxRate > 0) ? 'standard' : 'small-business'));
+      setTaxSelection({ mode: preservedDocumentTaxMode(data), source: 'template' });
+      setTaxAcknowledged(false);
       if (data.notes !== undefined) setNotes(data.notes);
       if (data.includeQRCode !== undefined) setIncludeQRCode(data.includeQRCode);
       // Add other fields if needed
@@ -444,7 +497,7 @@ export function CreateInvoiceModal({
         const manualItems = current.filter(item => item.billingNoteId === undefined);
         return manualItems.length > 0
           ? manualItems
-          : [{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }];
+          : [{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: taxMode === 'standard' ? 19 : 0 }];
       });
       setCustomerChangeMessage('Der Kunde wurde geändert. Zugeordnete Leistungsnotizen wurden entfernt und müssen für den neuen Kunden erneut ausgewählt werden.');
     } else {
@@ -475,7 +528,7 @@ export function CreateInvoiceModal({
   };
 
   const addItem = () => {
-    setItems([...items, { description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
+    setItems([...items, { description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: taxMode === 'standard' ? 19 : 0 }]);
   };
 
   const updateItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
@@ -512,7 +565,7 @@ export function CreateInvoiceModal({
         quantity: note.quantity,
         unitPrice: 0,
         unit: note.unit,
-        taxRate: 0,
+        taxRate: taxMode === 'standard' ? 19 : 0,
         billingNoteId: note.id,
       };
       setItems(current => {
@@ -529,7 +582,7 @@ export function CreateInvoiceModal({
       const remaining = current.filter(item => item.billingNoteId !== note.id);
       return remaining.length > 0
         ? remaining
-        : [{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }];
+        : [{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: taxMode === 'standard' ? 19 : 0 }];
     });
   };
 
@@ -539,6 +592,7 @@ export function CreateInvoiceModal({
 
   // Core PDF generation function (returns PDF bytes, used by both preview and final generation)
   const generatePDFBytes = useCallback(async (forPreview: boolean = false): Promise<Uint8Array> => {
+    if (!taxReady) throw new Error("Bitte zuerst Steuerbehandlung und unterstützten Steuerfall bestätigen.");
     const pdfDoc = await PDFDocument.create();
     const pageSize: [number, number] = [595.28, 841.89]; // A4 portrait in PDF points
     let page = pdfDoc.addPage(pageSize);
@@ -1172,11 +1226,11 @@ export function CreateInvoiceModal({
     });
 
     return await pdfDoc.save();
-  }, [customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode, formatCurrency, taxMode, buyerReference, paymentMeansCode, sellerCountry, buyerCountry, buyerPostcode, buyerCity, sellerPostcode, sellerCity]);
+  }, [customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode, formatCurrency, taxMode, taxReady, buyerReference, paymentMeansCode, sellerCountry, buyerCountry, buyerPostcode, buyerCity, sellerPostcode, sellerCity]);
 
   // Generate preview with debouncing
   const generatePreview = useCallback(async () => {
-    if (!showPreview) return;
+    if (!showPreview || !taxReady) return;
 
     const generationId = previewGenerationRef.current + 1;
     previewGenerationRef.current = generationId;
@@ -1205,7 +1259,7 @@ export function CreateInvoiceModal({
         setIsGeneratingPreview(false);
       }
     }
-  }, [showPreview, generatePDFBytes]);
+  }, [showPreview, generatePDFBytes, taxReady]);
 
   // Debounced preview update
   useEffect(() => {
@@ -1240,7 +1294,7 @@ export function CreateInvoiceModal({
   }, []);
 
   useEffect(() => {
-    if (showPreview) return;
+    if (showPreview && taxReady) return;
 
     previewGenerationRef.current += 1;
     if (previewTimeoutRef.current) {
@@ -1253,9 +1307,10 @@ export function CreateInvoiceModal({
     }
     setPreviewUrl(null);
     setIsGeneratingPreview(false);
-  }, [showPreview]);
+  }, [showPreview, taxReady]);
 
   const buildZugferdData = (): ZugferdData => {
+    if (!taxMode || !taxReady) throw new Error("Bitte zuerst Steuerbehandlung und unterstützten Steuerfall bestätigen.");
     const amounts = calculateInvoiceAmounts(items);
     return {
       invoiceNumber,
@@ -1393,6 +1448,7 @@ export function CreateInvoiceModal({
   };
 
   const createInvoiceFile = async () => {
+    if (!taxReady) return;
     setIsGenerating(true);
     try {
       const zugferdData = buildZugferdData();
@@ -1528,6 +1584,8 @@ export function CreateInvoiceModal({
 
         <div className="invoice-editor-grid">
           <div className="invoice-editor-main">
+            <DocumentTaxProfileFields id="invoice" settings={settings} issueDate={date} selection={taxSelection} acknowledged={taxAcknowledged} onAcknowledged={setTaxAcknowledged} onModeChange={handleTaxModeChange} taxCase={taxCase} onTaxCaseChange={setTaxCase} foreignAddress={foreignAddress} domesticConfirmed={domesticConfirmed} onDomesticConfirmed={setDomesticConfirmed} />
+            {unsupportedTaxCategory && <p role="alert" className="rounded-md border border-destructive/40 p-3 text-sm">Das übernommene Dokument enthält eine nicht unterstützte Steuerkategorie, etwa Reverse Charge. Eine Erstellung als einfacher Inlandsfall ist gesperrt. Bitte fachlich klären; die ursprünglichen Angaben bleiben erhalten.</p>}
             <details className="invoice-template-drawer"><summary>Rechnungsvorlagen</summary>            {/* Template Section */}
             <section className={isPage ? "invoice-template space-y-3" : "mb-2 rounded-md border bg-muted/30 p-3"} aria-labelledby="invoice-template-title">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1553,7 +1611,7 @@ export function CreateInvoiceModal({
                     onChange={(e) => setNewTemplateName(e.target.value)}
                     className="text-sm"
                   />
-                  <Button type="button" size="sm" onClick={handleSaveTemplate}>Vorlage speichern</Button>
+                  <Button type="button" size="sm" onClick={handleSaveTemplate} disabled={!taxReady}>Vorlage speichern</Button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -1625,7 +1683,7 @@ export function CreateInvoiceModal({
                 <Label htmlFor="invoice-buyer-email">E-Mail des Empfängers{outputMode === 'xml-only' ? ' (Pflichtfeld)' : ''}</Label>
                 <Input id="invoice-buyer-email" type="email" value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)} placeholder="rechnung@kunde.de" />
                 <Label htmlFor="invoice-buyer-country">Land des Empfängers (ISO-Code)</Label>
-                <Input id="invoice-buyer-country" value={buyerCountry} maxLength={2} onChange={e => setBuyerCountry(e.target.value.toUpperCase())} placeholder="DE" />
+                <Input id="invoice-buyer-country" value={buyerCountry} maxLength={2} onChange={e => { setBuyerCountry(e.target.value.toUpperCase()); setDomesticConfirmed(false); }} placeholder="DE" />
                 {buyerCountry !== 'DE' && (
                   <div className="grid grid-cols-2 gap-2">
                     <div><Label htmlFor="invoice-buyer-postcode">PLZ des Empfängers</Label><Input id="invoice-buyer-postcode" value={buyerPostcode} onChange={e => setBuyerPostcode(e.target.value)} /></div>
@@ -1772,7 +1830,7 @@ export function CreateInvoiceModal({
                           id={`invoice-item-tax-${index}`}
                           type="number"
                           step="any"
-                          disabled={taxMode === 'small-business' || item.taxCategory === 'E' || item.taxCategory === 'Z'}
+                          disabled={!taxMode || taxMode === 'small-business' || item.taxCategory === 'E' || item.taxCategory === 'Z'}
                           value={item.taxRate}
                           onChange={(e) => updateItem(index, 'taxRate', e.target.value)}
                           placeholder="0"
@@ -1896,32 +1954,12 @@ export function CreateInvoiceModal({
             </section>
             <section className="invoice-section" aria-labelledby="invoice-format-details"><header className="invoice-section-heading"><div><p>Elektronische Rechnung</p><h2 id="invoice-format-details">Steuer und Referenzen</h2></div></header>            <div className="invoice-export-fields grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="invoice-tax-mode">Umsatzsteuerbehandlung</Label>
-                <select
-                  id="invoice-tax-mode"
-                  className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={taxMode}
-                  onChange={e => {
-                    const mode = e.target.value as typeof taxMode;
-                    setTaxMode(mode);
-                    if (mode === 'small-business') {
-                      setItems(current => current.map(item => ({ ...item, taxRate: 0, taxCategory: 'E', exemptionReason: undefined })));
-                    } else {
-                      setItems(current => current.map(item => ({ ...item, taxCategory: undefined, exemptionReason: undefined })));
-                    }
-                  }}
-                >
-                  <option value="small-business">Kleinunternehmer (§ 19 UStG)</option>
-                  <option value="standard">Steuer je Position festlegen</option>
-                </select>
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="invoice-buyer-reference">Käuferreferenz / Leitweg-ID{outputMode === 'xml-only' ? ' (Pflichtfeld)' : ''}</Label>
                 <Input id="invoice-buyer-reference" value={buyerReference} onChange={e => setBuyerReference(e.target.value)} placeholder="Vom Rechnungsempfänger vorgegebene Referenz" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="invoice-seller-country">Land des Rechnungsausstellers (ISO-Code)</Label>
-                <Input id="invoice-seller-country" value={sellerCountry} maxLength={2} onChange={e => setSellerCountry(e.target.value.toUpperCase())} placeholder="DE" />
+                <Input id="invoice-seller-country" value={sellerCountry} maxLength={2} onChange={e => { setSellerCountry(e.target.value.toUpperCase()); setDomesticConfirmed(false); }} placeholder="DE" />
                 {sellerCountry !== 'DE' && (
                   <div className="grid grid-cols-2 gap-2">
                     <div><Label htmlFor="invoice-seller-postcode">PLZ des Ausstellers</Label><Input id="invoice-seller-postcode" value={sellerPostcode} onChange={e => setSellerPostcode(e.target.value)} /></div>
@@ -1935,7 +1973,7 @@ export function CreateInvoiceModal({
           </div>
           <aside className="invoice-summary-rail" aria-label="Rechnungsübersicht">
             <section className="invoice-create-summary" aria-labelledby="invoice-total-title">
-              <div className="invoice-total-hero"><p>Rechnungsübersicht · EUR</p><h2 id="invoice-total-title">Gesamtbetrag</h2><div aria-live="polite">{displayedGrossAmount}</div><span>{items.length} {items.length === 1 ? 'Position' : 'Positionen'} · {taxMode === 'small-business' ? 'Kleinunternehmer' : 'Umsatzsteuer je Position'}</span></div>
+              <div className="invoice-total-hero"><p>Rechnungsübersicht · EUR</p><h2 id="invoice-total-title">Gesamtbetrag</h2><div aria-live="polite">{displayedGrossAmount}</div><span>{items.length} {items.length === 1 ? 'Position' : 'Positionen'} · {taxMode === 'small-business' ? 'Kleinunternehmer' : taxMode === 'standard' ? 'Umsatzsteuer je Position' : 'Steuerbehandlung noch offen'}</span></div>
               <div className="invoice-summary-body"><dl><div><dt>Nettobetrag</dt><dd>{displayedNetAmount}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayedTaxAmount}</dd></div></dl>
                 {taxMode === 'small-business' && <p className="text-xs text-muted-foreground">Keine Umsatzsteuer gemäß § 19 UStG.</p>}
             <section className={isPage ? "invoice-output space-y-2" : "rounded-md border border-primary/20 bg-primary/5 p-3"} aria-labelledby="invoice-output-title">
@@ -1956,9 +1994,10 @@ export function CreateInvoiceModal({
               </p>
             </section>
 
+        {!taxReady && <p id="invoice-tax-blocker" className="text-xs"><a href="#invoice-tax-heading" className="underline underline-offset-4">Steuerbehandlung und unterstützten Steuerfall oben klären</a>, bevor Sie die Rechnung erstellen.</p>}
         <DialogFooter className={isPage ? "invoice-create-actions" : undefined}>
           <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
-          <Button type="button" onClick={createInvoiceFile} disabled={isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
+          <Button type="button" onClick={createInvoiceFile} aria-describedby={!taxReady ? "invoice-tax-blocker" : undefined} disabled={!taxReady || isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
             {isGenerating
               ? (outputMode === 'xml-only' ? "Erstelle XML …" : "Erstelle PDF …")
               : (outputMode === 'xml-only' ? "XML erstellen" : "PDF erstellen")}
@@ -1980,7 +2019,7 @@ export function CreateInvoiceModal({
                   variant="ghost"
                   size="sm"
                   onClick={generatePreview}
-                  disabled={isGeneratingPreview}
+                  disabled={isGeneratingPreview || !taxReady}
                   className="gap-1 whitespace-nowrap text-xs"
                 >
                   {isGeneratingPreview ? (
@@ -2012,8 +2051,7 @@ export function CreateInvoiceModal({
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-muted-foreground">
                       <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Füllen Sie das Formular aus,</p>
-                      <p className="text-sm">um die Vorschau zu sehen.</p>
+                      <p className="text-sm">{taxReady ? "Füllen Sie das Formular aus, um die Vorschau zu sehen." : "Bitte zuerst Steuerbehandlung und Steuerfall bestätigen."}</p>
                     </div>
                   </div>
                 )}

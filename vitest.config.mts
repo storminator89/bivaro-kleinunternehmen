@@ -14,6 +14,8 @@ export default defineConfig({
     resolve: {
         alias: {
             '@': path.resolve(import.meta.dirname, './'),
+            // Mirror Next's server marker for node-only component/schema tests.
+            'server-only': path.resolve(import.meta.dirname, 'node_modules/next/dist/compiled/server-only/empty.js'),
         },
     },
 })

@@ -56,12 +56,12 @@ async function postHandler(request: NextRequest) {
       }
     }
 
-    const resolveFile = async (kind: 'invoice' | 'receipt' | 'logo', sourceName: string): Promise<Uint8Array | null> => {
-      const prefix = kind === 'invoice' ? 'invoices' : kind === 'receipt' ? 'receipts' : 'logos';
-      const entry = zip.file(`${prefix}/${sourceName}`);
+    const resolveFile = async (kind: 'invoice' | 'receipt' | 'logo' | 'purchase-document', sourceName: string): Promise<Uint8Array | null> => {
+      const prefix = kind === 'invoice' ? 'invoices' : kind === 'receipt' ? 'receipts' : kind === 'purchase-document' ? 'purchase-documents' : 'logos';
+      const expected = manifest?.fileManifest.find((file) => file.kind === kind && file.sourceName === sourceName);
+      const entry = zip.file(expected?.zipPath ?? `${prefix}/${sourceName}`);
       if (!entry) return null;
       const bytes = await readZipEntryWithinLimit(entry, undefined, zipReadBudget);
-      const expected = manifest?.fileManifest.find((file) => file.kind === kind && file.sourceName === sourceName);
       if (manifest && !expected) throw new BackupValidationError(`Datei ${sourceName} fehlt im Backup-Manifest`);
       if (expected && expected.bytes !== bytes.byteLength) throw new BackupValidationError(`Größe der Datei ${sourceName} stimmt nicht mit dem Backup-Manifest überein`);
       if (expected && hashBytes(bytes) !== expected.sha256) throw new BackupValidationError(`Hash der Datei ${sourceName} stimmt nicht mit dem Backup-Manifest überein`);
@@ -88,10 +88,13 @@ async function postHandler(request: NextRequest) {
         backupType: 'full',
         overwriteMode: overwrite,
         importedCustomers: results.customers.imported,
+        importedSuppliers: results.suppliers.imported,
         importedBillingNotes: results.billingNotes.imported,
         importedExpenses: results.expenses.imported,
         importedIncomes: results.incomes.imported,
+        importedPaymentJournalEvents: results.paymentJournalEvents.imported,
         importedInvoices: results.invoices.imported,
+        importedPurchaseDocuments: results.purchaseDocuments.imported,
         importedFiles: results.files.imported,
       },
     });
