@@ -39,7 +39,7 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
     await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
     await expect(uploadRegion.getByRole('alert')).toContainText('Verbindung');
     expect(await prisma.purchaseDocument.count({ where: { userId: user.id } })).toBe(0);
-    await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
+    await page.getByRole('button', { name: 'Mit gleicher Anfrage abgleichen', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Eingangsbeleg prüfen', exact: true })).toBeVisible();
     await expect(dialog.getByRole('img', { name: /Unverändertes Foto-Original/ })).toBeVisible();

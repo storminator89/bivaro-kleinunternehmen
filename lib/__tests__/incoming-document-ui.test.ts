@@ -159,8 +159,10 @@ describe('incoming upload and request guards', () => {
       expect(source).not.toMatch(/\/api\/(?:invoices|expenses|incomes|customers|cashbook)/);
       expect(source).not.toContain('approve-expense');
     }
-    expect(upload).toContain("form.append('uploadRequestId'");
-    expect(upload).toContain('xhr.upload.onprogress'); expect(upload).toContain('activeRequest.current?.abort()');
+    const uploadTransport = readFileSync('components/purchases/incoming-upload-queue.ts', 'utf8');
+    expect(uploadTransport).not.toContain('/api/expenses'); expect(uploadTransport).not.toContain('approve-expense');
+    expect(uploadTransport).toContain("form.append('uploadRequestId'");
+    expect(uploadTransport).toContain('xhr.upload.onprogress'); expect(uploadTransport).toContain('xhr.abort()');
     expect(review).toContain('expectedRevision: document.revision');
     expect(review).toContain('onOpenAutoFocus'); expect(review).toContain('onCloseAutoFocus');
     expect(shell.match(/const publicPaths = ([^;]+)/)?.[1]).not.toContain('/purchases');
