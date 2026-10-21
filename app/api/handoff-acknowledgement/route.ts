@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const userId = await requireUserId();
     const params = new URL(request.url).searchParams;
     if ([...params.keys()].some(key => params.getAll(key).length !== 1)) throw new AccountantExportError('Ungültiger Paketstand.');
-    const identity = parseHandoffAcknowledgement({ ...Object.fromEntries(params), formatVersion: params.get('formatVersion') === '1' ? 1 : null });
+    const identity = parseHandoffAcknowledgement({ ...Object.fromEntries(params), formatVersion: params.get('formatVersion') === '2' ? 2 : null });
     return NextResponse.json(await readHandoffAcknowledgement(userId, identity), { headers });
   } catch (error) { return failure(error); }
 }

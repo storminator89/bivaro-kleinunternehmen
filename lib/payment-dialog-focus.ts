@@ -1,3 +1,8 @@
+/** A late journal reflow may scroll saved proof only while it still owns focus. */
+export function paymentConfirmationStillOwnsFocus(confirmation: HTMLElement | null, root: Pick<Document, 'activeElement'> = document): confirmation is HTMLElement {
+  return Boolean(confirmation && confirmation.isConnected && confirmation.getClientRects().length > 0 && root.activeElement === confirmation);
+}
+
 /** Resolve each priority separately: a selector union is document-order, not preference-order. */
 export function paymentDialogReturnTarget(invoiceId: number, previous: HTMLElement | null, root: Document = document): HTMLElement | null {
   const usable = (element: HTMLElement | null): element is HTMLElement => Boolean(element

@@ -1,3 +1,4 @@
+import { PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, assertPositiveOnlySnapshot, PaymentAdjustmentConsumerError } from '@/lib/payment-journal/consumer-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
@@ -88,8 +89,10 @@ export async function GET(request: NextRequest) {
 
     // Only accounting columns are selected. In particular, this endpoint does
     // not load invoice parsedData or any receipt contents.
-    const [incomes, expenses] = await prisma.$transaction([
-      prisma.income.findMany({
+    const [incomes, expenses] = await prisma.$transaction(async tx => {
+      await assertPositiveOnlySnapshot(tx, userId);
+      return Promise.all([
+      tx.income.findMany({
         where: { userId },
         select: {
           amount: true,
@@ -100,7 +103,7 @@ export async function GET(request: NextRequest) {
           paymentJournalEvent: { select: { id: true, amountCents: true, paidAt: true, dateCertainty: true, source: true } },
         },
       }),
-      prisma.expense.findMany({
+      tx.expense.findMany({
         where: { userId },
         select: {
           id: true,
@@ -113,7 +116,8 @@ export async function GET(request: NextRequest) {
           depreciationYears: true,
         },
       }),
-    ]);
+      ]);
+    });
 
     const includedIncomes = incomes.filter(isIncludedIncome);
     const incomeInRange = includedIncomes.filter((income) =>
@@ -214,6 +218,7 @@ export async function GET(request: NextRequest) {
       privateDeposits,
     });
   } catch (error) {
+    if (error instanceof PaymentAdjustmentConsumerError) return NextResponse.json(PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, { status: 409 });
     if (error instanceof UnauthorizedError) return unauthorizedResponse();
     console.error("Fehler beim Laden der Dashboard-Auswertung:", error);
     return NextResponse.json(

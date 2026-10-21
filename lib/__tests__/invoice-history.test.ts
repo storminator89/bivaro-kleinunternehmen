@@ -22,6 +22,22 @@ describe('bounded invoice history presentation', () => {
   it('survives malformed legacy JSON and refuses contradictory actor context', () => {
     expect(historyEvent({ id: 1, userId: 'owner', entityId: '2', action: 'UPDATE', createdAt: new Date(), oldValues: 'broken', newValues: '[]', metadata: '{"actorId":"someone-else"}' })).toMatchObject({ actor: 'UNKNOWN', changes: [] });
   });
+  it.each([
+    ['PAYMENT_RECEIVED', 'Eingegangener Betrag (Cent)', 'Tatsächliches Eingangsdatum'],
+    ['PAYMENT_CORRECTION', 'Nie erhaltener Betrag (Cent)', 'Gespeicherter Zahlungsdatumswert'],
+    ['CUSTOMER_REFUND', 'Tatsächlich zurückgezahlter Betrag (Cent)', 'Gespeicherter Zahlungsdatumswert'],
+    ['IMPORT', 'Finanzbelegbetrag (Cent)', 'Gespeicherter Zahlungsdatumswert'],
+    ['UPDATE', 'Finanzbelegbetrag (Cent)', 'Gespeicherter Zahlungsdatumswert'],
+    ['__proto__', 'Finanzbelegbetrag (Cent)', 'Gespeicherter Zahlungsdatumswert'],
+  ])('labels %s evidence without inventing the direction or certainty of another action', (action, amountLabel, dateLabel) => {
+    const event = historyEvent({ id: 1, userId: 'owner', entityId: '2', action, createdAt: new Date('2026-10-21T12:00:00Z'),
+      oldValues: null, newValues: JSON.stringify({ amountCents: '4000', paidAt: '2026-10-01T00:00:00.000Z' }), metadata: null });
+    expect(event.changes).toEqual([
+      { field: 'amountCents', label: amountLabel, before: null, after: '4000' },
+      { field: 'paidAt', label: dateLabel, before: null, after: '2026-10-01T00:00:00.000Z' },
+    ]);
+    expect(JSON.stringify(event)).not.toContain('Berichtigung / tatsächliche Rückzahlung');
+  });
   it('does not infer currency, tax choice, issuance proof or foreign relationship from legacy data', () => {
     const row = { id: 2, invoiceNumber: 'SYNTHETIC', type: 'CREDIT_NOTE', status: 'DRAFT', issuanceState: 'UNKNOWN', invoiceDate: null, uploadedAt: new Date(), totalAmount: 10, parsedData: { company: { iban: 'SECRET' }, taxRate: 0 }, cancellationReason: null, originalInvoiceId: 99 };
     const result = historyDocument(row, new Set([2]));

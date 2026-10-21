@@ -1,15 +1,18 @@
 import { parseBusinessDate } from '@/lib/business-date';
 
 export type HandoffSelection = { mode: 'year' | 'range'; year: string; from: string; to: string };
+export type HandoffCounts = Record<'incomes' | 'expenses' | 'invoices' | 'payments' | 'adjustments' | 'cashTransactions' | 'customers' | 'cashBooks' | 'originals', number>;
 export type HandoffPreview = {
   filename: string;
   manifest: {
     format: 'bivaro-accountant-handoff';
-    formatVersion: 1;
+    formatVersion: 2;
+    paymentContractVersion: 2;
+    fiscalMappingStatus: 'UNCHANGED' | 'UNREVIEWED';
     generatedAt: string;
     sourceFingerprint: string;
     period: { from: string; to: string };
-    counts: Record<string, number>;
+    counts: HandoffCounts;
     originalCounts: { included: number; missing: number; notAttached: number };
     warnings: { code: string; recordType: string; recordId: number | null; message: string }[];
     warningCount: number;
@@ -53,9 +56,11 @@ export function readHandoffPreview(value: unknown): HandoffPreview {
   const m = result.manifest;
   const isCount = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
   if (typeof result.filename !== 'string' || !/^[a-zA-Z0-9._-]+\.zip$/.test(result.filename) || result.filename.includes('..') ||
-      !m || typeof m.generatedAt !== 'string' || !Number.isFinite(Date.parse(m.generatedAt)) || m.format !== 'bivaro-accountant-handoff' || m.formatVersion !== 1 ||
-      !/^[a-f0-9]{64}$/.test(m.sourceFingerprint) || !m.period ||
-      !m.counts || !['incomes', 'expenses', 'invoices', 'cashTransactions', 'customers', 'cashBooks'].every(key => isCount(m.counts[key])) ||
+      !m || typeof m.generatedAt !== 'string' || !Number.isFinite(Date.parse(m.generatedAt)) || m.format !== 'bivaro-accountant-handoff' || m.formatVersion !== 2 || m.paymentContractVersion !== 2 ||
+      typeof m.sourceFingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(m.sourceFingerprint) || !m.period ||
+      !m.counts || typeof m.counts !== 'object' || Array.isArray(m.counts) || !Object.values(m.counts).every(isCount) ||
+      !(['incomes', 'expenses', 'invoices', 'payments', 'adjustments', 'cashTransactions', 'customers', 'cashBooks', 'originals'] as const).every(key => isCount(m.counts[key])) ||
+      m.fiscalMappingStatus !== (m.counts.adjustments > 0 ? 'UNREVIEWED' : 'UNCHANGED') ||
       !m.originalCounts || !Object.values(m.originalCounts).every(isCount) ||
       !isCount(m.originalCounts.included) || !isCount(m.originalCounts.missing) || !isCount(m.originalCounts.notAttached) ||
       !isCount(m.warningCount) || !Array.isArray(m.warnings) || m.warnings.length !== m.warningCount ||

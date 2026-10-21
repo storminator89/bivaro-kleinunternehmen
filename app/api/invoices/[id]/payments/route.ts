@@ -8,15 +8,17 @@ type Context = { params: Promise<{ id: string }> };
 
 function errorResponse(error: unknown) {
   if (error instanceof UnauthorizedError) return unauthorizedResponse();
-  if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code, ...(error.summary ? { summary: error.summary } : {}) }, { status: error.status });
+  if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code, ...(error.summary ? { summary: error.summary } : {}), ...(error.ledgerVersion ? { ledgerVersion: error.ledgerVersion } : {}) }, { status: error.status });
   throw error;
 }
 
-export async function GET(_request: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   try {
     const userId = await requireUserId();
     const { id } = await context.params;
-    return NextResponse.json(await readInvoicePaymentJournal(userId, Number(id)));
+    const journal = await readInvoicePaymentJournal(userId, Number(id));
+    if (journal.adjustments.length && request.headers.get('X-Bivaro-Payment-Contract') !== '2') return NextResponse.json({ error: 'Dieser Zahlungsstand erfordert einen Client mit Zahlungsjournal-Vertrag 2.', code: 'PAYMENT_CAPABILITY_REQUIRED', requiredContract: 2 }, { status: 409 });
+    return NextResponse.json(journal);
   } catch (error) { return errorResponse(error); }
 }
 
@@ -34,7 +36,7 @@ async function postHandler(request: Request, context: Context) {
       if (Object.keys(input).some(key => key !== 'kind')) throw new PaymentJournalError('Legacy-Übernahme akzeptiert keine geänderten Beträge oder historischen Daten.');
       return NextResponse.json(await adoptLegacyPaidInvoice(userId, Number(id)));
     }
-    if (Object.keys(input).some(key => !['amount', 'currency', 'paidAt', 'source', 'reference', 'idempotencyKey', 'expectedPaidCents'].includes(key))) {
+    if (Object.keys(input).some(key => !['amount', 'currency', 'paidAt', 'source', 'reference', 'idempotencyKey', 'expectedPaidCents', 'expectedLedgerVersion'].includes(key))) {
       throw new PaymentJournalError('Nicht unterstützte Zahlungsfelder.');
     }
     if (input.source !== 'MANUAL') throw new PaymentJournalError('Für neue Zahlungen ist die Quelle MANUAL erforderlich.');

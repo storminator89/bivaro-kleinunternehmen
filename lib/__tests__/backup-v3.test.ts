@@ -1,10 +1,11 @@
+import { createBackupManifest } from './helpers/backup';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, redactAuditLog } from '@/lib/backup-manifest';
+import { redactAuditLog } from '@/lib/backup-manifest';
 import { createBackupPreview } from '@/lib/backup-preview';
 import { getNextDocumentNumber } from '@/lib/invoice-numbers';
 

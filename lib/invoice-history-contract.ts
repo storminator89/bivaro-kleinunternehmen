@@ -1,5 +1,5 @@
 /** Small public DTO: never expose raw audit payloads, file paths or bank data. */
-export const HISTORY_ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'CANCELLED', 'STATUS_CHANGED', 'PAYMENT_RECEIVED', 'IMPORT', 'EMAIL_SENT'] as const;
+export const HISTORY_ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'CANCELLED', 'STATUS_CHANGED', 'PAYMENT_RECEIVED', 'PAYMENT_CORRECTION', 'CUSTOMER_REFUND', 'IMPORT', 'EMAIL_SENT'] as const;
 export type HistoryAction = typeof HISTORY_ACTIONS[number];
 export type HistoryPagination = { page: number; pageSize: number; total: number; totalPages: number };
 export type HistoryDocument = {
@@ -19,6 +19,8 @@ export type HistoryDetail = {
   documents: HistoryDocument[]; events: HistoryEvent[]; pagination: HistoryPagination;
   payments: { id: number; amountCents: string; currency: string; paidAt: string | null; dateCertainty: string; source: string }[];
   paymentCount: number;
+  adjustments?: { id: number; originalPaymentId: number; kind: string; amountCents: string; actionDate: string; accountingEffectiveOn: string; recordedAt: string; reason: string; cancellationInvoiceId: number | null; fiscalMappingStatus: 'UNREVIEWED' }[];
+  adjustmentCount?: number;
 };
 export const HISTORY_STATUS: Record<string, string> = { DRAFT: 'Entwurf', SENT: 'Versendet', PAID: 'Bezahlt (Status)', CANCELLED: 'Storniert' };
 export function historyStatusLabel(value: unknown): string | null {

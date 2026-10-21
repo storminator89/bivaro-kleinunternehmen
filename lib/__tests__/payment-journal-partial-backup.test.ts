@@ -1,13 +1,13 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { legacyPaymentData } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
-import {
-  createBackupManifest, CURRENT_SCHEMA_VERSION, FULL_PAYMENT_JOURNAL_SCHEMA_VERSION,
-  hashJson, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION,
-} from '@/lib/backup-manifest';
+import { CURRENT_SCHEMA_VERSION, FULL_PAYMENT_JOURNAL_SCHEMA_VERSION, hashJson, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION,  } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 
 const state = vi.hoisted(() => ({ client: null as ReturnType<typeof createTestDatabase>['client'] | null }));
@@ -128,12 +128,12 @@ describe('partial-payment backup identity and grouped invariants', () => {
 
   it('recognizes the immediately previous full-payment journal schema, including restore and replay', async () => {
     await user('partial-previous');
-    const previous = fixture([120], [dateA]); previous.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(previous);
+    const previous = fixture([120], [dateA]); previous.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(previous); stripCsvCatalogForLegacy(previous);
     expect(() => restore.validateBackupForRestore(previous)).not.toThrow();
     await apply('partial-previous', previous, true);
     const replay = await apply('partial-previous', previous);
     expect(replay.paymentJournalEvents).toEqual({ imported: 0, skipped: 1 });
-    const invalid = fixture(); invalid.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(invalid);
+    const invalid = fixture(); invalid.manifest.schemaVersion = FULL_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(invalid); stripCsvCatalogForLegacy(invalid);
     expect(() => restore.validateBackupForRestore(invalid)).toThrow(/Vollzahlungs-Backup-Schema/u);
   });
 
@@ -184,7 +184,7 @@ describe('partial-payment backup identity and grouped invariants', () => {
     await apply(target, fixture([40], [dateA]), true);
     const old = fixture([120], [dateA]); old.data.paymentJournalEvents = [];
     old.manifest = createBackupManifest({ sourceUserId: 'partial-source', generatedAt: createdAt, data: old.data });
-    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(old);
+    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(old); stripCsvCatalogForLegacy(old);
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry) => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: old.data } : old;
     await apply(empty, backup, true);
@@ -263,7 +263,7 @@ describe('partial-payment backup identity and grouped invariants', () => {
     const old = fixture([120], [dateA]);
     old.data.paymentJournalEvents = []; old.data.invoices[0].invoiceNumber = '';
     const before = await readBackupSnapshot('partial-unidentified-old');
-    await expect(apply('partial-unidentified-old', { version: '2.0', data: old.data })).rejects.toThrow('Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.');
+    await expect(apply('partial-unidentified-old', { version: '2.0', data: legacyPaymentData(old.data) })).rejects.toThrow('Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.');
     expect(hashJson((await readBackupSnapshot('partial-unidentified-old')).data)).toBe(hashJson(before.data));
   });
 
@@ -286,7 +286,7 @@ describe('partial-payment backup identity and grouped invariants', () => {
     await user('partial-old-adopted-unnamed');
     const old = fixture([120], [dateA]);
     old.data.paymentJournalEvents = []; Object.assign(old.data.invoices[0], { invoiceNumber: null });
-    const backup = { version: '2.0', data: old.data };
+    const backup = { version: '2.0', data: legacyPaymentData(old.data) };
     await apply('partial-old-adopted-unnamed', backup, true);
     const income = await database.client.income.findFirstOrThrow({ where: { userId: 'partial-old-adopted-unnamed' } });
     await database.client.paymentJournalEvent.create({ data: { userId: 'partial-old-adopted-unnamed', invoiceId: income.invoiceId!, incomeId: income.id,
@@ -322,7 +322,7 @@ describe('partial-payment backup identity and grouped invariants', () => {
     source.data.invoices[0].invoiceNumber = whitespaceNumber;
     if (kind === 'journal-free') source.data.paymentJournalEvents = [];
     else Object.assign(source.data.paymentJournalEvents[0], { id: 99, idempotencyKey: 'disjoint-whitespace-payment' });
-    const backup = kind === 'journal-free' ? { version: '2.0', data: source.data } : envelope(source.data);
+    const backup = kind === 'journal-free' ? { version: '2.0', data: legacyPaymentData(source.data) } : envelope(source.data);
     const before = await readBackupSnapshot(target);
     await expect(apply(target, backup)).rejects.toThrow(/eindeutige Rechnungsidentität/u);
     expect(source.data.invoices[0].invoiceNumber).toBe(whitespaceNumber);

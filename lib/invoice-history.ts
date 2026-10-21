@@ -50,14 +50,25 @@ export function historyDocument(row: DocumentRow, allowedIds: Set<number>): Hist
     cancellationReason: text(row.cancellationReason, 1000), originalInvoiceId: row.originalInvoiceId !== null && allowedIds.has(row.originalInvoiceId) ? row.originalInvoiceId : null };
 }
 const fields: [string, string, (value: unknown) => string | null][] = [
+  ['amountCents', 'Finanzbelegbetrag (Cent)', value => typeof value === 'string' && /^[1-9][0-9]*$/u.test(value) ? value : null],
+  ['originalPaymentId', 'Unveränderte Originalzahlung', value => Number.isSafeInteger(value) ? String(value) : null],
+  ['reason', 'Begründung', value => text(value, 1000)],
+  ['accountingEffectiveOn', 'Operatives Wirksamkeitsdatum (keine Steuerfreigabe)', value => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null],
   ['status', 'Status', historyStatusLabel],
   ['issuanceState', 'Ausstellungsnachweis', value => value === 'UNKNOWN' ? 'Unbekannt' : value === 'UNISSUED' ? 'Nicht ausgestellt' : value === 'ISSUED' ? 'Ausgestellt' : null],
-  ['paidAt', 'Zahlungsdatum (Statusfeld)', value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null],
+  ['paidAt', 'Gespeicherter Zahlungsdatumswert', value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null],
   ['totalAmount', 'Dokumentbetrag', value => typeof value === 'number' && Number.isFinite(value) ? String(value) : null],
 ];
 export function historyEvent(row: Pick<AuditLog, 'id' | 'userId' | 'entityId' | 'action' | 'createdAt' | 'oldValues' | 'newValues' | 'metadata'>): HistoryEvent {
   const before = object(row.oldValues), after = object(row.newValues), metadata = object(row.metadata);
-  const changes = fields.flatMap(([field, label, format]) => {
+  const changes = fields.flatMap(([field, baseLabel, format]) => {
+    // Identical field names do not make receipts, corrections and refunds the
+    // same movement. Unknown/legacy actions must remain direction-neutral.
+    const label = field === 'amountCents'
+      ? row.action === 'PAYMENT_RECEIVED' ? 'Eingegangener Betrag (Cent)'
+        : row.action === 'PAYMENT_CORRECTION' ? 'Nie erhaltener Betrag (Cent)'
+          : row.action === 'CUSTOMER_REFUND' ? 'Tatsächlich zurückgezahlter Betrag (Cent)' : baseLabel
+      : field === 'paidAt' && row.action === 'PAYMENT_RECEIVED' ? 'Tatsächliches Eingangsdatum' : baseLabel;
     const oldValue = Object.hasOwn(before, field) ? format(before[field]) : null;
     const newValue = Object.hasOwn(after, field) ? format(after[field]) : null;
     return oldValue !== newValue ? [{ field, label, before: oldValue, after: newValue }] : [];
@@ -86,14 +97,17 @@ export async function readInvoiceHistory(userId: string, query: HistoryQuery) {
   const ids = family.map(row => String(row.id));
   const where: Prisma.AuditLogWhereInput = { userId, entityType: { in: ['Invoice', 'CreditNote'] }, entityId: { in: ids }, action: query.action ?? { in: [...HISTORY_ACTIONS] },
     ...(query.from || query.until ? { createdAt: { ...(query.from ? { gte: query.from } : {}), ...(query.until ? { lt: query.until } : {}) } } : {}) };
-  const [events, total, payments, paymentCount] = await prisma.$transaction([
+  const [events, total, payments, paymentCount, adjustments, adjustmentCount] = await prisma.$transaction([
     prisma.auditLog.findMany({ where, select: { id: true, userId: true, entityId: true, action: true, createdAt: true, oldValues: true, newValues: true, metadata: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (query.page - 1) * query.limit, take: query.limit }),
     prisma.auditLog.count({ where }),
     prisma.paymentJournalEvent.findMany({ where: { userId, invoiceId: root.id }, select: { id: true, amountCents: true, currency: true, paidAt: true, dateCertainty: true, source: true }, orderBy: { id: 'desc' }, take: 50 }),
     prisma.paymentJournalEvent.count({ where: { userId, invoiceId: root.id } }),
+    prisma.paymentAdjustment.findMany({ where: { userId, invoiceId: root.id }, select: { id: true, originalPaymentId: true, kind: true, amountCents: true, actionDate: true, accountingEffectiveOn: true, recordedAt: true, reason: true, cancellationInvoiceId: true }, orderBy: { id: 'desc' }, take: 50 }),
+    prisma.paymentAdjustment.count({ where: { userId, invoiceId: root.id } }),
   ]);
   const allowedIds = new Set(family.map(row => row.id));
   return { kind: 'detail' as const, selectedId: selected.id, originalId: root.id, missingOriginal: selected.type === 'CREDIT_NOTE' && parent === null,
     documents: family.map(row => historyDocument(row, allowedIds)), events: events.map(historyEvent), pagination: pagination(query, total),
+    adjustments: adjustments.map(row => ({ ...row, actionDate: row.actionDate.toISOString(), accountingEffectiveOn: row.accountingEffectiveOn.toISOString(), recordedAt: row.recordedAt.toISOString(), fiscalMappingStatus: 'UNREVIEWED' as const })), adjustmentCount,
     payments: payments.map(row => ({ ...row, paidAt: row.paidAt?.toISOString() ?? null })), paymentCount };
 }

@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { paymentDialogReturnTarget } from '@/lib/payment-dialog-focus';
+import { paymentConfirmationStillOwnsFocus, paymentDialogReturnTarget } from '@/lib/payment-dialog-focus';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 
 function element(options: { connected?: boolean; visible?: boolean; disabled?: boolean; inside?: 'dialog' | 'menu' } = {}) {
@@ -21,6 +21,31 @@ function fixture(rows: Record<string, HTMLElement[]>) {
 }
 const trigger = '[data-invoice-payment-return="7"]';
 const anchor = '[data-invoice-return="7"]';
+
+describe('saved payment completion visibility does not take focus back', () => {
+  it('permits a reflow scroll only while the live rendered saved proof still owns focus', () => {
+    const confirmation = element();
+    expect(paymentConfirmationStillOwnsFocus(confirmation, { activeElement: confirmation })).toBe(true);
+    expect(confirmation.focus).not.toHaveBeenCalled();
+  });
+  it('refuses to interfere when the user has advanced to Close, history or another control', () => {
+    const confirmation = element(), userControl = element();
+    for (const activeElement of [userControl, null]) expect(paymentConfirmationStillOwnsFocus(confirmation, { activeElement })).toBe(false);
+    expect(confirmation.focus).not.toHaveBeenCalled(); expect(userControl.focus).not.toHaveBeenCalled();
+  });
+  it.each([{ connected: false }, { visible: false }])('does not scroll unavailable saved proof %j', options => {
+    const confirmation = element(options);
+    expect(paymentConfirmationStillOwnsFocus(confirmation, { activeElement: confirmation })).toBe(false);
+    expect(paymentConfirmationStillOwnsFocus(null, { activeElement: confirmation })).toBe(false);
+  });
+  it('keeps immediate confirmation focus but only conditionally scrolls after journal completion, never refocusing', () => {
+    const dialog = readFileSync('components/dashboard/full-payment-dialog.tsx', 'utf8');
+    expect(dialog).toContain('useEffect(() => { if (confirmed) successRef.current?.focus(); }, [confirmed])');
+    const reflow = dialog.slice(dialog.indexOf('if (!confirmed || isLoading) return;'), dialog.indexOf('}, [confirmed, isLoading, adjustmentJournal])'));
+    expect(reflow).toContain("paymentConfirmationStillOwnsFocus(confirmation)) confirmation.scrollIntoView({ block: 'nearest', inline: 'nearest' })");
+    expect(reflow).not.toContain('.focus(');
+  });
+});
 
 describe('payment dialog focus return stays with the same invoice', () => {
   it('preserves a connected, visible, enabled legitimate invoker without querying other controls', () => {
@@ -67,5 +92,12 @@ describe('payment dialog focus return stays with the same invoice', () => {
     expect(dialog).toContain('paymentDialogReturnTarget(invoice.id, returnFocusRef.current)?.focus({ preventScroll: true })');
     const browser = readFileSync('e2e/auth-dashboard-invoice.spec.ts', 'utf8');
     expect(browser).toContain("name: 'Zahlungsstatus: Offen', exact: true })).toBeFocused()");
+  });
+  it('keeps the browser focus assertion on the saved payment confirmation rather than every live status', () => {
+    const browser = readFileSync('e2e/auth-dashboard-invoice.spec.ts', 'utf8');
+    expect(browser).toContain("const savedConfirmation = dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) });");
+    expect(browser).toContain('await expect(savedConfirmation).toBeVisible();');
+    expect(browser).toContain('await expect(savedConfirmation).toBeFocused();');
+    expect(browser).not.toContain("await expect(dialog.getByRole('status')).toBeFocused();");
   });
 });

@@ -3,10 +3,11 @@ import { parseBusinessDate } from '@/lib/business-date';
 import { parseMoneyEUR } from '@/lib/money';
 
 export type PaymentSummary = Pick<LedgerPaymentSummary, 'totalCents' | 'paidCents' | 'openCents' | 'paid' | 'paymentState'>;
-export type PaymentDraft = { amount: string; amountCents: string; expectedPaidCents: string; paidAt: string; reference: string; idempotencyKey: string; fingerprint: string };
+export type PaymentDraft = { amount: string; amountCents: string; expectedPaidCents: string; expectedLedgerVersion?: string; paidAt: string; reference: string; idempotencyKey: string; fingerprint: string };
 export type PaymentHistoryEvent = { id: number; invoiceId: number; amountCents: string; currency: 'EUR'; paidAt: string | null; source: string; dateCertainty: string; reference: string | null; idempotencyKey: string };
 export type ConfirmedPayment = { amountCents: string; currency: 'EUR'; paidAt: string; reference: string; id: number; summary: PaymentSummary };
-export type PaymentPreflight = { amount: string; amountCents: string; summary: PaymentSummary; events: PaymentHistoryEvent[]; canRecordPayment: boolean };
+export type PaymentLedger = { version: 2; documentState?: string; originalReceivedCents: string; correctedCents: string; validReceivedCents: string; refundedCents: string; netRetainedCents: string; collectibleOpenCents: string; refundDueCents: string };
+export type PaymentPreflight = { amount: string; amountCents: string; summary: PaymentSummary; events: PaymentHistoryEvent[]; canRecordPayment: boolean; ledger?: PaymentLedger; ledgerVersion?: string };
 const reviewMessage = 'Der Rechnungsbetrag oder die Zahlungsdaten sind nicht eindeutig. Bitte Rechnungsdaten und Zahlungsnachweise prüfen. Es wurde keine Zahlung gebucht.';
 
 function record(value: unknown): Record<string, unknown> {
@@ -23,11 +24,23 @@ export function paymentAmountInput(amountCents: string): string {
   const value = cents(amountCents);
   return `${value / BigInt(100)}.${(value % BigInt(100)).toString().padStart(2, '0')}`;
 }
-export function readPaymentSummary(value: unknown): PaymentSummary {
+export function readPaymentLedger(value: unknown): PaymentLedger {
+  const data = record(value);
+  if (data.version !== 2 || (data.documentState !== undefined && !['DRAFT','SENT','PAID','CANCELLED'].includes(String(data.documentState)))) throw new Error(reviewMessage);
+  const original = cents(data.originalReceivedCents), corrected = cents(data.correctedCents), valid = cents(data.validReceivedCents);
+  const refunded = cents(data.refundedCents), retained = cents(data.netRetainedCents), open = cents(data.collectibleOpenCents), due = cents(data.refundDueCents);
+  if (corrected + valid !== original || refunded + retained !== valid || due > retained) throw new Error(reviewMessage);
+  if (data.documentState === 'CANCELLED' ? open !== BigInt(0) || due !== retained : data.documentState !== undefined && (due !== BigInt(0) || refunded !== BigInt(0))) throw new Error(reviewMessage);
+  return { version: 2, ...(data.documentState === undefined ? {} : { documentState: String(data.documentState) }), originalReceivedCents: original.toString(), correctedCents: corrected.toString(), validReceivedCents: valid.toString(), refundedCents: refunded.toString(), netRetainedCents: retained.toString(), collectibleOpenCents: open.toString(), refundDueCents: due.toString() };
+}
+export function readPaymentSummary(value: unknown, ledger?: PaymentLedger): PaymentSummary {
   const data = record(value);
   const total = cents(data.totalCents, true), paid = cents(data.paidCents), open = cents(data.openCents);
   const paymentState = paid === total ? 'PAID' : paid > BigInt(0) ? 'PARTIAL' : 'OPEN';
-  if (paid + open !== total || data.paid !== (open === BigInt(0)) || data.paymentState !== paymentState) throw new Error(reviewMessage);
+  if (paid > total || (ledger ? paid.toString() !== ledger.validReceivedCents || open.toString() !== ledger.collectibleOpenCents || paid + open > total : paid + open !== total)
+    || (ledger?.documentState !== undefined && ledger.documentState !== 'CANCELLED' && paid + open !== total)
+    || (ledger?.documentState === 'PAID' && paid !== total) || (ledger?.documentState === 'SENT' && paid === total) || (ledger?.documentState === 'DRAFT' && paid !== BigInt(0))
+    || data.paid !== (paid === total) || data.paymentState !== paymentState) throw new Error(reviewMessage);
   return { totalCents: total.toString(), paidCents: paid.toString(), openCents: open.toString(), paid: data.paid as boolean, paymentState };
 }
 export function readPaymentEvents(value: unknown): PaymentHistoryEvent[] {
@@ -50,10 +63,12 @@ export function readPaymentPreflight(value: unknown): PaymentPreflight {
   if (data.legacyAdoptionRequired) throw new Error('Historische Zahlungsdaten müssen gesondert geprüft werden; hier wird keine weitere Zahlung gebucht.');
   if (data.reviewRequired) throw new Error(reviewMessage);
   if (data.currency !== 'EUR') throw new Error('Nur eindeutig geprüfte EUR-Rechnungen werden unterstützt. Bitte Rechnungswährung prüfen.');
-  const summary = readPaymentSummary(data.summary);
+  const ledger = data.ledger === undefined ? undefined : readPaymentLedger(data.ledger);
+  const summary = readPaymentSummary(data.summary, ledger);
   const events = readPaymentEvents(data);
-  if (events.reduce((sum, event) => sum + cents(event.amountCents, true), BigInt(0)).toString() !== summary.paidCents) throw new Error(reviewMessage);
-  return { amount: paymentAmountInput(summary.openCents), amountCents: summary.openCents, summary, events, canRecordPayment: data.canRecordPayment === true && !summary.paid };
+  if (events.reduce((sum, event) => sum + cents(event.amountCents, true), BigInt(0)).toString() !== (ledger?.originalReceivedCents ?? summary.paidCents)) throw new Error(reviewMessage);
+  if (ledger && (typeof data.ledgerVersion !== 'string' || !/^[a-f0-9]{64}$/u.test(data.ledgerVersion))) throw new Error(reviewMessage);
+  return { amount: paymentAmountInput(summary.openCents), amountCents: summary.openCents, summary, events, canRecordPayment: data.canRecordPayment === true && !summary.paid && summary.openCents !== '0', ...(ledger ? { ledger, ledgerVersion: data.ledgerVersion as string } : {}) };
 }
 export function validatePaymentFields(paidAt: string, reference: string): string | null {
   try { parseBusinessDate(paidAt); } catch { return 'Bitte das tatsächliche Zahlungsdatum vollständig angeben.'; }
@@ -68,16 +83,16 @@ export function paymentInputCents(amount: string): string {
   return value.toString();
 }
 /** Ledger baseline distinguishes later intentionally identical allocations. */
-export function paymentAttempt(previous: PaymentDraft | null, invoiceId: number, amount: string, paidAt: string, reference: string, uuid: () => string, expectedPaidCents = '0'): PaymentDraft {
+export function paymentAttempt(previous: PaymentDraft | null, invoiceId: number, amount: string, paidAt: string, reference: string, uuid: () => string, expectedPaidCents = '0', expectedLedgerVersion?: string): PaymentDraft {
   cents(expectedPaidCents);
   const amountCents = paymentInputCents(amount);
   const normalizedAmount = paymentAmountInput(amountCents);
-  const fingerprint = JSON.stringify([invoiceId, normalizedAmount, 'EUR', paidAt, reference.trim(), expectedPaidCents]);
-  return { amount: normalizedAmount, amountCents, expectedPaidCents, paidAt, reference, fingerprint, idempotencyKey: previous?.fingerprint === fingerprint ? previous.idempotencyKey : uuid() };
+  const fingerprint = JSON.stringify([invoiceId, normalizedAmount, 'EUR', paidAt, reference.trim(), expectedPaidCents, expectedLedgerVersion ?? null]);
+  return { amount: normalizedAmount, amountCents, expectedPaidCents, ...(expectedLedgerVersion ? { expectedLedgerVersion } : {}), paidAt, reference, fingerprint, idempotencyKey: previous?.fingerprint === fingerprint ? previous.idempotencyKey : uuid() };
 }
 export function readConfirmedPayment(value: unknown, draft: PaymentDraft, invoiceId: number, amountCents = draft.amountCents): ConfirmedPayment {
   const data = record(value), event = record(data.event);
-  const summary = readPaymentSummary(data.summary);
+  const summary = readPaymentSummary(data.summary, data.ledger === undefined ? undefined : readPaymentLedger(data.ledger));
   if (validatePaymentFields(draft.paidAt, draft.reference) !== null
     || typeof event.id !== 'number' || !Number.isSafeInteger(event.id) || event.id <= 0 || event.invoiceId !== invoiceId
     || event.amountCents !== amountCents || event.currency !== 'EUR' || event.dateCertainty !== 'ACTUAL'

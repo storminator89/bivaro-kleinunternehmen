@@ -3,7 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
-import { createBackupManifest, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION } from '../lib/backup-manifest';
+import { preJournalBackup as oldBackup } from './helpers/pre-journal-backup';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
 
 const conflictMessage = 'Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.';
@@ -27,23 +27,6 @@ async function isolatedAccount(page: Page) {
   return { db, userId: user.id };
 }
 
-function oldBackup(version: '2.0' | '3.0', invoiceNumber: string | null = null, withIncome = true) {
-  const sourceUserId = 'synthetic-pre-journal-source';
-  const data = {
-    user: { id: sourceUserId, email: 'source@example.test', name: 'Synthetic old backup' },
-    customers: [], suppliers: [], purchaseDocuments: [], expenses: [],
-    invoices: [{ id: 91, type: 'INVOICE', invoiceNumber, fileName: 'historical-paid.pdf', storedFileName: 'historical-paid.pdf',
-      uploadedAt: '2025-03-01T00:00:00.000Z', invoiceDate: '2025-03-01T00:00:00.000Z', status: 'PAID',
-      totalAmount: 123.45, parsedData: { currency: 'EUR' } }],
-    incomes: withIncome ? [{ id: 92, invoiceId: 91, description: 'Original historical payment', amount: 123.45, date: historicalDate, taxRelevant: true }] : [],
-    templates: [], billingNotes: [], recurringExpenses: [], reminders: [], cashBooks: [], cashTransactions: [],
-    documentations: [], apiKeys: [], auditLogs: [], invoiceNumberCounters: [],
-  };
-  const manifest = createBackupManifest({ sourceUserId, generatedAt: '2025-03-18T00:00:00.000Z', data });
-  manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
-  manifest.modelCoverage = manifest.modelCoverage.filter(entry => !['PaymentJournalEvent', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod'].includes(entry.model));
-  return { version, type: 'json', exportedAt: '2025-03-18T00:00:00.000Z', data, ...(version === '3.0' ? { manifest } : {}) };
-}
 
 async function previewInSettings(page: Page, backup: unknown, name: string) {
   await page.goto('/settings');

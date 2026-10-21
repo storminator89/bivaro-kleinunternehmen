@@ -33,7 +33,8 @@ export async function GET(request: Request) {
       const result = await createAccountantExport(userId, period, expectedFingerprint);
       await auditSecurityEvent(userId, {
         event: 'ACCOUNTANT_HANDOFF_EXPORT', outcome: 'success', severity: 'info',
-        metadata: { formatVersion: 1, from: period.from, to: period.to, counts: result.counts, warningCount: result.warningCount },
+        metadata: { formatVersion: result.manifest.formatVersion, paymentContractVersion: result.manifest.paymentContractVersion,
+          fiscalMappingStatus: result.manifest.fiscalMappingStatus, from: period.from, to: period.to, counts: result.counts, warningCount: result.warningCount },
       });
       return new NextResponse(new Uint8Array(result.bytes), {
         headers: {

@@ -1,8 +1,11 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { legacyPaymentData } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, CURRENT_SCHEMA_VERSION, PRE_FISCAL_PROFILE_SCHEMA_VERSION } from '@/lib/backup-manifest';
+import { CURRENT_SCHEMA_VERSION, PRE_FISCAL_PROFILE_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 import { EMPTY_FISCAL_PROFILE } from '@/lib/fiscal-profile';
 
@@ -50,7 +53,7 @@ describe('pilot fiscal profile backup compatibility', () => {
 
   it('accepts pre-profile v3 and legacy v2 settings as UNSET rather than inferring or retaining an unrelated confirmed declaration', async () => {
     const old = backup({ id: 99, companyName: 'Legacy company' });
-    old.manifest.schemaVersion = PRE_FISCAL_PROFILE_SCHEMA_VERSION; stripCsvCatalogForLegacy(old);
+    old.manifest.schemaVersion = PRE_FISCAL_PROFILE_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(old); stripCsvCatalogForLegacy(old);
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter((entry) => entry.model !== 'PurchaseDocument' && entry.model !== 'Supplier' && entry.model !== 'PaymentJournalEvent');
     expect(() => validateBackupForRestore(old)).not.toThrow();
     await database.client.settings.create({ data: {
@@ -58,7 +61,7 @@ describe('pilot fiscal profile backup compatibility', () => {
     } });
     await restoreBackupData({ userId: 'fiscal-backup-legacy-target', overwrite: false, backup: old });
     expect(await database.client.settings.findUniqueOrThrow({ where: { userId: 'fiscal-backup-legacy-target' } })).toMatchObject(EMPTY_FISCAL_PROFILE);
-    await restoreBackupData({ userId: 'fiscal-backup-legacy-target', overwrite: true, backup: { version: '2.0', data: old.data } });
+    await restoreBackupData({ userId: 'fiscal-backup-legacy-target', overwrite: true, backup: { version: '2.0', data: legacyPaymentData(old.data) } });
     expect(await database.client.settings.findUniqueOrThrow({ where: { userId: 'fiscal-backup-legacy-target' } })).toMatchObject(EMPTY_FISCAL_PROFILE);
   });
 

@@ -1,11 +1,14 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { REMINDER_BALANCE_SCHEMA_VERSION } from '@/lib/reminder-backup';
 import { describe, expect, it } from 'vitest';
-import { ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, backupSchemaSupportsServiceBilling, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, backupSchemaSupportsAiExtraction, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, backupSchemaSupportsDataImport, QUOTE_WORKFLOW_SCHEMAS, BACKUP_FEATURE_CAPABILITIES, CURRENT_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, backupSchemaSupportsAnnualContext, backupSchemaSupportsReminderBalance, backupSchemaSupportsManualPhotoApproval, createBackupManifest, validateBackupManifest, validatePurchaseDocumentBackupFields } from '@/lib/backup-manifest';
+import { ANNUAL_CONTEXT_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, backupSchemaSupportsServiceBilling, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, backupSchemaSupportsAiExtraction, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, backupSchemaSupportsDataImport, QUOTE_WORKFLOW_SCHEMAS, BACKUP_FEATURE_CAPABILITIES, CURRENT_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, backupSchemaSupportsAnnualContext, backupSchemaSupportsReminderBalance, backupSchemaSupportsManualPhotoApproval, validateBackupManifest, validatePurchaseDocumentBackupFields } from '@/lib/backup-manifest';
 
 const annual = { version: 1, revision: 1, provenance: 'USER_DECLARED', declaredAt: '2026-10-21T01:02:03.004Z', contextYear: 2026, effectiveFrom: '2026-01-01', foundingYear: null, previousYearTurnoverCents: null, previousYearExternalTurnoverCents: null, completeness: 'UNKNOWN', sourceNote: 'Synthetic own records' };
 const emptyData = () => ({ suppliers: [], expenses: [], incomes: [], invoices: [], purchaseDocuments: [] as Record<string, unknown>[], serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], paymentJournalEvents: [], auditLogs: [], invoiceNumberCounters: [] });
 const packed = (data: Record<string, unknown>, schemaVersion: string) => {
   const manifest = { ...createBackupManifest({ sourceUserId: 'synthetic-schema-source', generatedAt: annual.declaredAt, data }), schemaVersion };
+  stripEmptyPaymentAdjustmentsForLegacy({ data, manifest });
   if (!backupSchemaSupportsDataImport(schemaVersion)) manifest.modelCoverage = manifest.modelCoverage.filter(row => !['ServiceArticle', 'DataImportBatch'].includes(row.model));
   if (!backupSchemaSupportsServiceBilling(schemaVersion)) manifest.modelCoverage = manifest.modelCoverage.filter(row => !['ServiceBillingPlan', 'ServiceBillingPeriod'].includes(row.model));
   if (!backupSchemaSupportsAiExtraction(schemaVersion)) manifest.modelCoverage = manifest.modelCoverage.filter(row => row.model !== 'AiProviderSettings');
@@ -30,7 +33,7 @@ describe('immutable standalone and combined backup capability identities', () =>
   ] as const)('preserves exact photo/annual semantics under %s', (schema, photo, context) => {
     expect(backupSchemaSupportsManualPhotoApproval(schema)).toBe(photo);
     expect(backupSchemaSupportsAnnualContext(schema)).toBe(context);
-    expect(backupSchemaSupportsAiExtraction(schema)).toBe([CURRENT_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION].includes(schema));
+    expect(backupSchemaSupportsAiExtraction(schema)).toBe([CURRENT_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION].includes(schema));
     expect(Object.isFrozen(BACKUP_FEATURE_CAPABILITIES[schema])).toBe(true);
     const empty = emptyData(); expect(() => validateBackupManifest(packed(empty, schema), empty)).not.toThrow();
     const annualData = { ...emptyData(), annualBusinessContextRevisions: [annual] };
@@ -73,7 +76,7 @@ describe('immutable standalone and combined backup capability identities', () =>
     expect(QUOTE_WORKFLOW_SCHEMAS.includes(`${schema}_unknown`)).toBe(false);
   });
   it.each(Object.keys(BACKUP_FEATURE_CAPABILITIES))('rejects non-null AI evidence under every non-AI identity %s', schema => {
-    const supportsAi = [CURRENT_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION].includes(schema);
+    const supportsAi = [CURRENT_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION].includes(schema);
     expect(backupSchemaSupportsAiExtraction(schema)).toBe(supportsAi);
     for (const field of ['aiExtraction', 'aiDraftProvenance', 'aiApprovedSnapshot']) {
       const evidence = { [field]: { retained: 'synthetic evidence' } };
@@ -86,15 +89,16 @@ describe('immutable standalone and combined backup capability identities', () =>
     const data = emptyData();
     const current = createBackupManifest({ sourceUserId: 'synthetic-schema-source', generatedAt: annual.declaredAt, data });
     const malformed = { ...current, schemaVersion: PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, modelCoverage: current.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent') };
+    stripEmptyPaymentAdjustmentsForLegacy({ data, manifest: malformed });
     expect(() => validateBackupManifest(malformed, data)).toThrow(/Modelleintrag|Modell/);
     const historical = { ...malformed, modelCoverage: malformed.modelCoverage.filter(entry => !['AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod'].includes(entry.model)) };
     expect(() => validateBackupManifest(historical, data)).not.toThrow();
-    expect(historical.modelCoverage).toEqual(current.modelCoverage.filter(entry => !['PaymentJournalEvent', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod'].includes(entry.model)));
+    expect(historical.modelCoverage).toEqual(current.modelCoverage.filter(entry => !['PaymentAdjustment', 'PaymentOperation', 'PaymentJournalEvent', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod'].includes(entry.model)));
   });
   it('never guesses future, CSV, quote or EÜR capabilities and keeps legacy absence harmless', () => {
-    expect(new Set(Object.keys(BACKUP_FEATURE_CAPABILITIES)).size).toBe(13);
-    for (const schema of Object.keys(BACKUP_FEATURE_CAPABILITIES)) expect(backupSchemaSupportsReminderBalance(schema)).toBe([CURRENT_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION].includes(schema));
-    for (const schema of Object.keys(BACKUP_FEATURE_CAPABILITIES)) expect(backupSchemaSupportsServiceBilling(schema)).toBe([CURRENT_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION].includes(schema));
+    expect(new Set(Object.keys(BACKUP_FEATURE_CAPABILITIES)).size).toBe(14);
+    for (const schema of Object.keys(BACKUP_FEATURE_CAPABILITIES)) expect(backupSchemaSupportsReminderBalance(schema)).toBe([CURRENT_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION].includes(schema));
+    for (const schema of Object.keys(BACKUP_FEATURE_CAPABILITIES)) expect(backupSchemaSupportsServiceBilling(schema)).toBe([CURRENT_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION].includes(schema));
     for (const schema of [undefined, 'future', '20261021090000_csv', '20261021100000_quotes']) {
       expect(backupSchemaSupportsAnnualContext(schema)).toBe(false); expect(backupSchemaSupportsManualPhotoApproval(schema)).toBe(false);
       expect(() => validatePurchaseDocumentBackupFields({ reviewedSourceSnapshot: {} }, 'source', schema)).toThrow(/reviewedSourceSnapshot/);

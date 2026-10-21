@@ -18,11 +18,11 @@ let db: ReturnType<typeof createTestDatabase>;
 let readinessRoute: typeof import('@/app/api/handoff-readiness/route');
 let ackRoute: typeof import('@/app/api/handoff-acknowledgement/route');
 let ack: typeof import('@/lib/handoff-acknowledgement');
-const identity = { from: '2037-01-01', to: '2037-12-31', sourceFingerprint: 'a'.repeat(64), formatVersion: 1 };
-const query = new URLSearchParams({ ...identity, formatVersion: '1' });
+const identity = { from: '2037-01-01', to: '2037-12-31', sourceFingerprint: 'a'.repeat(64), formatVersion: 2 };
+const query = new URLSearchParams({ ...identity, formatVersion: '2' });
 const ackRequest = () => new Request(`http://localhost/api/handoff-acknowledgement?${query}`);
 const post = (data: unknown) => ackRoute.POST(new Request('http://localhost/api/handoff-acknowledgement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }));
-const preview: HandoffPreview = { filename: 'test.zip', manifest: { format: 'bivaro-accountant-handoff', formatVersion: 1, generatedAt: '2037-01-01T00:00:00Z', sourceFingerprint: identity.sourceFingerprint, period: { from: identity.from, to: identity.to }, counts: {}, originalCounts: { included: 0, missing: 1, notAttached: 1 }, warnings: [ { code: 'PAYMENT_DATE_UNCERTAIN', recordType: 'payment', recordId: 9, message: 'Unknown' } ], warningCount: 1 } };
+const preview: HandoffPreview = { filename: 'test.zip', manifest: { format: 'bivaro-accountant-handoff', formatVersion: 2, paymentContractVersion: 2, fiscalMappingStatus: 'UNCHANGED', generatedAt: '2037-01-01T00:00:00Z', sourceFingerprint: identity.sourceFingerprint, period: { from: identity.from, to: identity.to }, counts: { incomes: 0, expenses: 0, invoices: 0, payments: 0, adjustments: 0, cashTransactions: 0, customers: 0, cashBooks: 0, originals: 2 }, originalCounts: { included: 0, missing: 1, notAttached: 1 }, warnings: [ { code: 'PAYMENT_DATE_UNCERTAIN', recordType: 'payment', recordId: 9, message: 'Unknown' } ], warningCount: 1 } };
 beforeAll(async () => {
   db = createTestDatabase(); state.client = db.client;
   await db.client.user.createMany({ data: [{ id: 'readiness-owner', email: 'readiness-owner@example.test', password: 'synthetic' }, { id: 'readiness-other', email: 'readiness-other@example.test', password: 'synthetic' }] });
@@ -71,8 +71,8 @@ describe('manual acknowledgement is explicitly self-recorded, bounded and tenant
     const row = await db.client.auditLog.findFirstOrThrow(); expect(row).toMatchObject({ userId: 'readiness-owner', action: 'REVIEW', entityType: 'AccountantHandoff' });
     expect(JSON.parse(row.metadata!)).toEqual({ operation: 'SELF_RECORDED_RECEIPT', ...identity, acknowledgement: 'USER_RECORDED_NOT_VERIFIED' });
     state.actor = 'readiness-other'; expect(await (await ackRoute.GET(ackRequest())).json()).toEqual({ acknowledgedAt: null });
-    expect(await ack.readHandoffAcknowledgement('readiness-owner', { ...identity, sourceFingerprint: 'b'.repeat(64), formatVersion: 1 })).toEqual({ acknowledgedAt: null });
-    await db.client.auditLog.deleteMany(); expect(await ack.readHandoffAcknowledgement('readiness-owner', { ...identity, formatVersion: 1 })).toEqual({ acknowledgedAt: null });
+    expect(await ack.readHandoffAcknowledgement('readiness-owner', { ...identity, sourceFingerprint: 'b'.repeat(64), formatVersion: 2 })).toEqual({ acknowledgedAt: null });
+    await db.client.auditLog.deleteMany(); expect(await ack.readHandoffAcknowledgement('readiness-owner', { ...identity, formatVersion: 2 })).toEqual({ acknowledgedAt: null });
   });
   it('preserves the original confirmation on identical or ambiguous-response retry', async () => {
     const first = await post({ ...identity, selfRecorded: true }); expect(first.status).toBe(201);
@@ -83,6 +83,20 @@ describe('manual acknowledgement is explicitly self-recorded, bounded and tenant
     expect(await db.client.auditLog.count({ where: { entityType: 'AccountantHandoff' } })).toBe(1);
     expect(await (await ackRoute.GET(ackRequest())).json()).toEqual({ acknowledgedAt: original.acknowledgedAt });
   });
+  it('retains historical version-1 notes without treating them as current contract acknowledgement', async () => {
+    const legacy = await db.client.auditLog.create({ data: { userId: 'readiness-owner', action: 'REVIEW', entityType: 'AccountantHandoff',
+      entityId: `${identity.from}:${identity.to}:${identity.sourceFingerprint}`, entityName: 'Manuelle Empfangsnotiz',
+      metadata: JSON.stringify({ operation: 'SELF_RECORDED_RECEIPT', ...identity, formatVersion: 1, acknowledgement: 'USER_RECORDED_NOT_VERIFIED' }),
+      createdAt: new Date('2036-01-01T00:00:00Z') } });
+    expect(await (await ackRoute.GET(ackRequest())).json()).toEqual({ acknowledgedAt: null });
+    expect((await ackRoute.GET(new Request(`http://localhost/api/handoff-acknowledgement?${new URLSearchParams({ ...identity, formatVersion: '1' })}`))).status).toBe(400);
+    const response = await post({ ...identity, selfRecorded: true }); expect(response.status).toBe(201);
+    const saved = await response.json(); expect(saved.acknowledgedAt).not.toBe(legacy.createdAt.toISOString());
+    expect(await db.client.auditLog.findUnique({ where: { id: legacy.id } })).toEqual(legacy);
+    const current = await db.client.auditLog.findFirstOrThrow({ where: { entityId: `v2:${identity.from}:${identity.to}:${identity.sourceFingerprint}` } });
+    expect(JSON.parse(current.metadata!)).toMatchObject({ formatVersion: 2, acknowledgement: 'USER_RECORDED_NOT_VERIFIED' });
+    expect(await db.client.auditLog.count()).toBe(2);
+  });
   it('atomically deduplicates independent-client concurrent requests without a schema uniqueness assumption', async () => {
     // Second independent connection only to this suite's fresh temporary database.
     // eslint-disable-next-line no-restricted-syntax
@@ -90,7 +104,7 @@ describe('manual acknowledgement is explicitly self-recorded, bounded and tenant
     const run = async (client: PrismaClient) => {
       for (let attempt = 0; ; attempt++) {
         try {
-          return await client.$transaction(tx => ack.recordHandoffAcknowledgementInTransaction(tx, 'readiness-owner', { ...identity, formatVersion: 1 }), { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 20_000 });
+          return await client.$transaction(tx => ack.recordHandoffAcknowledgementInTransaction(tx, 'readiness-owner', { ...identity, formatVersion: 2 }), { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 20_000 });
         } catch (error) {
           if (!isRetryableDatabaseError(error) || attempt >= 7) throw error;
           await new Promise(resolve => setTimeout(resolve, 25));
@@ -105,7 +119,7 @@ describe('manual acknowledgement is explicitly self-recorded, bounded and tenant
     } finally { await other.$disconnect(); }
   }, 60_000);
   it('rejects arbitrary metadata, unsupported versions, cross-origin mutation and oversized bodies', async () => {
-    for (const extra of [{ recipient: 'not-allowed' }, { formatVersion: 2 }, { sourceFingerprint: 'invalid' }, { from: '2037-02-30' }]) expect((await post({ ...identity, ...extra, selfRecorded: true })).status).toBe(400);
+    for (const extra of [{ recipient: 'not-allowed' }, { formatVersion: 1 }, { formatVersion: 3 }, { formatVersion: '2' }, { sourceFingerprint: 'invalid' }, { from: '2037-02-30' }]) expect((await post({ ...identity, ...extra, selfRecorded: true })).status).toBe(400);
     expect((await ackRoute.POST(new Request('http://localhost/api/handoff-acknowledgement', { method: 'POST', headers: { Origin: 'https://evil.test', 'Content-Type': 'application/json' }, body: JSON.stringify({ ...identity, selfRecorded: true }) }))).status).toBe(403);
     expect((await post({ text: 'x'.repeat(3000) })).status).toBe(413);
     state.actor = null; expect((await post({ ...identity, selfRecorded: true })).status).toBe(401);

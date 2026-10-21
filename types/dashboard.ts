@@ -1,4 +1,4 @@
-import type { PaymentSummary } from '@/lib/full-payment-form';
+import type { PaymentLedger, PaymentSummary } from '@/lib/full-payment-form';
 import type { LedgerSortBy, LedgerSortOrder } from '@/lib/ledger-sort';
 // Typdefinitionen für das Dashboard
 
@@ -61,6 +61,7 @@ export type Invoice = {
   paidAt?: string | null;
   incomes?: { id: number }[];
   paymentSummary?: PaymentSummary | null;
+  paymentLedger?: PaymentLedger | null;
   paymentReviewRequired?: boolean;
   canRecordPayment?: boolean;
   invoiceDate?: string;

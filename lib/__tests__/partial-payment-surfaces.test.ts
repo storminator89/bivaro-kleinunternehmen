@@ -66,7 +66,7 @@ it('all financial surfaces retain 40/80 in actual periods and expose only exact 
   const handoff = await createAccountantExport('surface-owner', parseAccountantExportPeriod(new URLSearchParams('from=2024-12-01&to=2024-12-31')));
   const zip = await JSZip.loadAsync(handoff.bytes);
   const records = JSON.parse(await zip.file('records.json')!.async('string'));
-  expect(records.incomes).toHaveLength(1); expect(records.incomes[0]).toMatchObject({ amount: '40', accountingDate: '2024-12-31', cashRealized: true, paymentDateCertainty: 'ACTUAL' });
+  expect(records.incomes).toHaveLength(2); expect(records.incomes.filter((row: { contextOnly: boolean }) => !row.contextOnly)).toHaveLength(1); expect(records.incomes[0]).toMatchObject({ amount: '40', accountingDate: '2024-12-31', cashRealized: true, paymentDateCertainty: 'ACTUAL' });
   expect(records.payments).toHaveLength(3);
   expect(records.payments.find((row: { dateCertainty: string }) => row.dateCertainty === 'UNKNOWN')).toMatchObject({ incomeId: null, paidAt: null, source: 'LEGACY_IMPORT', amountCents: '3000', paymentDateInPeriod: null });
   expect(handoff.manifest.warnings.some(row => row.code === 'PAYMENT_DATE_UNCERTAIN')).toBe(true);

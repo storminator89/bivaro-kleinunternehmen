@@ -18,7 +18,7 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   IMPORT: 'Importiert', BACKUP: 'Datensicherung erstellt', RESTORE: 'Wiederhergestellt',
   API_KEY_CREATED: 'API-Key erstellt', API_KEY_REVOKED: 'API-Key widerrufen',
   PASSWORD_CHANGED: 'Passwort geändert', SETTINGS_CHANGED: 'Einstellungen geändert',
-  STATUS_CHANGED: 'Status geändert', PAYMENT_RECEIVED: 'Zahlung erhalten', REVIEW: 'Prüfhinweis',
+  STATUS_CHANGED: 'Status geändert', PAYMENT_RECEIVED: 'Zahlung erhalten', PAYMENT_CORRECTION: 'Nie eingegangene Zahlung berichtigt', CUSTOMER_REFUND: 'Tatsächliche Rückzahlung erfasst', REVIEW: 'Prüfhinweis',
   REMINDER_SENT: 'Mahnung gesendet', EMAIL_SENT: 'E-Mail gesendet', VIEW: 'Angesehen',
   DOWNLOAD: 'Heruntergeladen', CANCELLED: 'Storniert', CONVERTED: 'Umgewandelt',
   AUTH_LOGIN: 'Anmeldung', AUTH_LOGIN_FAILED: 'Anmeldung fehlgeschlagen',

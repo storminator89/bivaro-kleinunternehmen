@@ -11,6 +11,11 @@ const basis = (history: AnnualContextRevision[] = [], year = 2026) => buildReven
 const html = (history: AnnualContextRevision[] = [], year = 2026) => renderToStaticMarkup(createElement(RevenueIndicators, { basis: basis(history, year) }));
 
 describe('read-only revenue indicators with explicit input coverage', () => {
+  it('labels signed payment movements as operational, never fiscal approval', () => {
+    const content = renderToStaticMarkup(createElement(RevenueIndicators, { basis: { ...basis(), inAppRevenue: -10 } }));
+    for (const text of ['Operativer Zahlungssaldo in Bivaro', '-10,00', 'abzüglich Fehlerkorrekturen', 'tatsächlich dokumentierter Erstattungen', 'Steuerliche Zuordnung prüfpflichtig, nicht fachlich freigegeben', 'kein geprüfter Gesamtumsatz nach § 19 UStG']) expect(content).toContain(text);
+    expect(content).not.toContain('Steuerrelevante, berücksichtigte Einnahmen');
+  });
   it('distinguishes absent, partial and self-declared complete context without inferring current completeness', () => {
     expect(basis().context).toBeNull();
     expect(html()).toContain('Jahreskontext fehlt');

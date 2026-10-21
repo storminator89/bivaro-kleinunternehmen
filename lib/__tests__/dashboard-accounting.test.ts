@@ -181,7 +181,6 @@ describe("dashboard accounting routes", () => {
 
   it("keeps KPI SQL work bounded and excludes quotes from open invoices", async () => {
     const rawQuery = vi.spyOn(database.client, "$queryRaw");
-    const invoiceLedger = vi.spyOn(database.client.invoice, "findMany");
     selectQueryCount = 0;
     const response = await getKpis(new Request('http://localhost/api/dashboard/kpis'));
     expect(response.status).toBe(200);
@@ -203,11 +202,10 @@ describe("dashboard accounting routes", () => {
     expect(data.yearComparison.monthlyDataThisYear[6].expenses).toBe(0);
     expect(data.yearComparison.monthlyDataLastYear[6].expenses).toBe(3600);
     expect(rawQuery).toHaveBeenCalledTimes(4);
-    expect(invoiceLedger).toHaveBeenCalledTimes(1);
     // Four compact raw projections plus the complete validated open ledgers; the
     // complete KPI response stays bounded and does not scale with row count.
     expect(selectQueryCount).toBeGreaterThan(0);
-    expect(selectQueryCount).toBeLessThanOrEqual(10);
+    expect(selectQueryCount).toBeLessThanOrEqual(13);
   });
 
   it("rejects an export year without an approved form mapping before reading financial data", async () => {

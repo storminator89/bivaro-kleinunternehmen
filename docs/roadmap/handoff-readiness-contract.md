@@ -1,7 +1,10 @@
 # Guided accountant handoff: bounded readiness contract
 
-The control page at `/handoff` is a review aid for the existing version-1
+The control page at `/handoff` is a review aid for the current version-2
 accountant ZIP, not a second accounting calculation or a completeness approval.
+The preview requires payment contract 2, typed original/adjustment counters and
+an explicit `UNCHANGED` or `UNREVIEWED` fiscal status. Adjustment evidence is not
+a qualified fiscal mapping approval; adjusted EÜR/tax outputs remain blocked.
 The chosen year (including years unsupported by EÜR adapters) or bounded custom
 period remains in the URL. Reload/back restores only this selection; it does not
 restore a checked approval, successful download message or an automatic export.
@@ -40,15 +43,16 @@ not invalidate the package fingerprint; refresh tasks before a handoff.
 
 `GET/POST /api/handoff-acknowledgement` use the validated current user; POST is
 origin protected and bounded to 2 KiB. The accepted identity is only `from`,
-`to`, `sourceFingerprint` (64 lower-case hex characters), and `formatVersion=1`.
+`to`, `sourceFingerprint` (64 lower-case hex characters), and `formatVersion=2`.
 POST also requires `selfRecorded=true`. Unknown keys, invalid periods and
 unsupported versions are rejected. No arbitrary recipient, message or private
-payload is stored or transmitted.
+payload is stored or transmitted. Version-1 notes remain retained but cannot
+acknowledge a version-2 package, even if period and fingerprint match.
 
 An explicit user action creates a required (not best-effort) AuditLog write:
 
 - `action: REVIEW`, `entityType: AccountantHandoff`
-- `entityId: {from}:{to}:{sourceFingerprint}`
+- `entityId: v2:{from}:{to}:{sourceFingerprint}`
 - `entityName: Manuelle Empfangsnotiz`
 - bounded metadata: `operation: SELF_RECORDED_RECEIPT`, the identity above and
   `acknowledgement: USER_RECORDED_NOT_VERIFIED`
@@ -69,7 +73,7 @@ mutex for cross-client safety. First creation returns 201; replay returns 200 wi
 removed by retention or restore, a later deliberate action creates a new note;
 there is no claim of permanent deduplication across removed history.
 
-GET returns the first retained timestamp for the **same user, period and
+GET returns the first retained timestamp for the **same user, format version, period and
 fingerprint**, or null. Null means no note is currently available, not proof
 that no handoff ever occurred. Notes inherit the existing audit-log retention
 and backup/restore limitations. They are not included in the accountant ZIP,

@@ -1,3 +1,4 @@
+import { PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, assertPositiveOnlySnapshot, PaymentAdjustmentConsumerError } from '@/lib/payment-journal/consumer-guard';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { parseLedgerSort, LedgerSortError } from '@/lib/ledger-sort';
 import { NextResponse } from 'next/server';
@@ -151,8 +152,10 @@ export async function GET(request: Request) {
       ];
     }
 
-    const [incomes, total] = await Promise.all([
-      prisma.income.findMany({
+    const [incomes, total] = await prisma.$transaction(async tx => {
+      await assertPositiveOnlySnapshot(tx, userId);
+      return Promise.all([
+      tx.income.findMany({
         where,
         orderBy: [{ [sort.sortBy]: sort.sortOrder }, { id: sort.sortOrder }],
         include: {
@@ -170,8 +173,9 @@ export async function GET(request: Request) {
         skip,
         take: pageSize,
       }),
-      prisma.income.count({ where }),
-    ]);
+      tx.income.count({ where }),
+      ]);
+    });
 
     const items = incomes.map(income => ({
       ...income,
@@ -184,6 +188,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ items, total, page, pageSize });
   } catch (error) {
+    if (error instanceof PaymentAdjustmentConsumerError) return NextResponse.json(PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, { status: 409 });
     if (error instanceof LedgerSortError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

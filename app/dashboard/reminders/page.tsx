@@ -3,6 +3,7 @@
 import { PageHeader } from "@/components/page-header";
 import { ReminderWorkbenchDialog } from "@/components/dashboard/reminder-workbench-dialog";
 import { FullPaymentDialog } from "@/components/dashboard/full-payment-dialog";
+import { notifyPaymentDashboardRefresh } from '@/lib/payment-dashboard-refresh';
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from "@/components/dashboard/sales-workspace.module.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -145,6 +146,7 @@ export default function RemindersPage() {
   };
 
   const handlePaymentSuccess = async () => {
+    notifyPaymentDashboardRefresh();
     const response = await fetch('/api/reminders?includeAll=true', { cache: 'no-store' });
     if (!response.ok) throw new Error('Mahnwesen konnte nicht aktualisiert werden.');
     const data = await response.json();

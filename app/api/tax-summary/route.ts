@@ -1,3 +1,4 @@
+import { PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, assertPositiveOnlySnapshot, PaymentAdjustmentConsumerError } from '@/lib/payment-journal/consumer-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from "@/lib/get-user-id";
@@ -40,8 +41,10 @@ export async function GET(request: NextRequest) {
     // Fetch only accounting projections. The query intentionally has no
     // pagination: this endpoint is the complete server-side aggregation
     // source and returns only the compact summary DTO to the browser.
-    const [incomes, expenses] = await prisma.$transaction([
-      prisma.income.findMany({
+    const [incomes, expenses] = await prisma.$transaction(async tx => {
+      await assertPositiveOnlySnapshot(tx, userId);
+      return Promise.all([
+      tx.income.findMany({
         where: { userId },
         select: {
           amount: true,
@@ -52,7 +55,7 @@ export async function GET(request: NextRequest) {
           paymentJournalEvent: { select: { id: true, amountCents: true, paidAt: true, dateCertainty: true, source: true } },
         },
       }),
-      prisma.expense.findMany({
+      tx.expense.findMany({
         where: { userId },
         select: {
           id: true,
@@ -65,7 +68,8 @@ export async function GET(request: NextRequest) {
           depreciationYears: true,
         },
       }),
-    ]);
+      ]);
+    });
 
     const summary = buildTaxSummary({
       year,
@@ -77,6 +81,7 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {
+    if (error instanceof PaymentAdjustmentConsumerError) return NextResponse.json(PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, { status: 409 });
     if (error instanceof UnauthorizedError) return unauthorizedResponse();
     if (error instanceof Error && (error.message === "Ungültiges Veranlagungsjahr" || error.message.startsWith("Nicht unterstütztes"))) {
       return NextResponse.json({ error: error.message }, { status: 400 });

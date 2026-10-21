@@ -69,7 +69,7 @@ test('treats a later deliberate equal amount/date/reference as a distinct alloca
       const state = baseline === '0' ? 'Offen' : 'Teilbezahlt';
       await row.getByRole('button', { name: `Zahlungsstatus: ${state}`, exact: true }).click();
       await page.getByRole('menuitem', { name: baseline === '0' ? 'Bezahlt' : 'Weitere Zahlung erfassen', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+      const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
       await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toHaveCount(0);
       const submit = dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true });
       await expect(submit).toBeEnabled();
@@ -84,7 +84,9 @@ test('treats a later deliberate equal amount/date/reference as a distinct alloca
       expect(payload).toMatchObject({ amount: '40.00', paidAt: '2025-01-02', expectedPaidCents: baseline, reference: 'Same date and reference, separate real receipts' });
       payloads.push(payload);
       await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
-      await expect(dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true }).getByRole('listitem')).toHaveCount(payloads.length);
+      const history = dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true });
+      if (payloads.length > 2) await history.locator('summary').first().click();
+      await expect(history.getByRole('listitem')).toHaveCount(payloads.length);
       await dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
     }
     expect(new Set(payloads.map(payload => payload.idempotencyKey)).size).toBe(3);

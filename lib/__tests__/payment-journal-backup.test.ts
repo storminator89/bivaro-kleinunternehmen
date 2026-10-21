@@ -1,10 +1,13 @@
+import { stripEmptyPaymentAdjustmentsForLegacy } from './helpers/backup-schema';
+import { legacyPaymentData } from './helpers/backup-schema';
+import { createBackupManifest } from './helpers/backup';
 import { stripCsvCatalogForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION } from '@/lib/backup-manifest';
+import { PRE_PAYMENT_JOURNAL_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 import { adoptLegacyPaidInvoice } from '@/lib/payment-journal/service';
 
@@ -138,7 +141,7 @@ describe('immutable payment journal backup', () => {
     older.data.paymentJournalEvents = [];
     older.data.invoices[0].paidAt = initial.data.invoices[0].paidAt;
     const source = envelope(older.data);
-    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(source); stripCsvCatalogForLegacy(source);
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: older.data } : source;
     expect(() => restore.validateBackupForRestore(backup)).not.toThrow();
@@ -159,7 +162,7 @@ describe('immutable payment journal backup', () => {
     const before = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { userId: target } });
     const older = makeBackup(); older.data.paymentJournalEvents = [];
     const source = envelope(older.data);
-    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(source); stripCsvCatalogForLegacy(source);
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: older.data } : source;
     await expect(restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile })).rejects.toThrow(/ohne Zahlungsidentitäten/u);
@@ -178,7 +181,7 @@ describe('immutable payment journal backup', () => {
     const older = makeBackup();
     const data = { ...older.data, invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber })), paymentJournalEvents: [] };
     const source = envelope(data);
-    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(source); stripCsvCatalogForLegacy(source);
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data } : source;
     await restore.restoreBackupData({ userId: target, backup, overwrite: true, resolveFile });
@@ -199,13 +202,13 @@ describe('immutable payment journal backup', () => {
     await user(target);
     const older = makeBackup();
     const data = { ...older.data, invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber: null })), paymentJournalEvents: [] };
-    await restore.restoreBackupData({ userId: target, backup: { version: '2.0', data }, overwrite: true, resolveFile });
+    await restore.restoreBackupData({ userId: target, backup: { version: '2.0', data: legacyPaymentData(data) }, overwrite: true, resolveFile });
     const invoice = await database.client.invoice.findFirstOrThrow({ where: { userId: target } });
     await adoptLegacyPaidInvoice(target, invoice.id);
     const before = await readBackupSnapshot(target);
     const whitespaceData = { ...data, invoices: data.invoices.map(row => ({ ...row, invoiceNumber: '   ' })) };
     const source = envelope(whitespaceData);
-    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(source);
+    source.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(source); stripCsvCatalogForLegacy(source);
     source.manifest.modelCoverage = source.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     const backup = version === '2.0' ? { version, data: whitespaceData } : source;
     await expect(restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile })).rejects.toThrow(/eindeutige.*Rechnungsidentität/u);
@@ -221,7 +224,7 @@ describe('immutable payment journal backup', () => {
     const older = makeBackup();
     older.data.invoices[0].invoiceNumber = '2026-unrelated';
     older.data.incomes[0].description = 'Unrelated invoice';
-    const backup = { version: '2.0', data: { ...older.data, paymentJournalEvents: [] } };
+    const backup = { version: '2.0', data: legacyPaymentData({ ...older.data, paymentJournalEvents: [] }) };
     const result = await restore.restoreBackupData({ userId: target, backup, overwrite: false, resolveFile });
     expect(result.invoices).toEqual({ imported: 1, skipped: 0 });
     expect(result.incomes).toEqual({ imported: 1, skipped: 0 });
@@ -238,7 +241,7 @@ describe('immutable payment journal backup', () => {
     const older = makeBackup();
     const data = { ...older.data, customers: [{ id: 55, name: 'Must roll back' }],
       invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber: '' })), paymentJournalEvents: [] };
-    await expect(restore.restoreBackupData({ userId: target, backup: { version: '2.0', data }, overwrite: false, resolveFile })).rejects.toThrow(/eindeutige.*Rechnungsidentität/u);
+    await expect(restore.restoreBackupData({ userId: target, backup: { version: '2.0', data: legacyPaymentData(data) }, overwrite: false, resolveFile })).rejects.toThrow(/eindeutige.*Rechnungsidentität/u);
     expect((await readBackupSnapshot(target)).data).toEqual(before.data);
   });
 
@@ -247,7 +250,7 @@ describe('immutable payment journal backup', () => {
     await user(target);
     const older = makeBackup();
     const data = { ...older.data, invoices: older.data.invoices.map(invoice => ({ ...invoice, invoiceNumber: null })), paymentJournalEvents: [] };
-    const result = await restore.restoreBackupData({ userId: target, backup: { version: '2.0', data }, overwrite: false, resolveFile });
+    const result = await restore.restoreBackupData({ userId: target, backup: { version: '2.0', data: legacyPaymentData(data) }, overwrite: false, resolveFile });
     expect(result.invoices).toEqual({ imported: 1, skipped: 0 });
     expect(result.incomes).toEqual({ imported: 1, skipped: 0 });
     expect(await database.client.paymentJournalEvent.count({ where: { userId: target } })).toBe(0);
@@ -256,10 +259,10 @@ describe('immutable payment journal backup', () => {
   it('rejects destructive overwrite of journal targets, including pre-journal backup versions', async () => {
     const before = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { userId: 'journal-target' } });
     const old = envelope({ serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], user: { id: 'journal-source' }, customers: [], expenses: [], incomes: [], invoices: [], auditLogs: [], invoiceNumberCounters: [] });
-    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(old);
+    old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(old); stripCsvCatalogForLegacy(old);
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     expect(() => restore.validateBackupForRestore(old)).not.toThrow();
-    for (const backup of [old, makeBackup(), { version: '2.0', data: old.data }]) {
+    for (const backup of [old, makeBackup(), { version: '2.0', data: legacyPaymentData(old.data) }]) {
       await expect(restore.restoreBackupData({ userId: 'journal-target', backup, overwrite: true, resolveFile })).rejects.toThrow(/unveränderliche Zahlungsereignisse/u);
     }
     expect(await database.client.paymentJournalEvent.findUniqueOrThrow({ where: { id: before.id } })).toEqual(before);
@@ -292,8 +295,8 @@ describe('immutable payment journal backup', () => {
 
   it('rejects unmanifested legacy event arrays and pre-journal manifest injection', () => {
     const backup = makeBackup();
-    expect(() => restore.validateBackupForRestore({ version: '2.0', data: backup.data })).toThrow(/Legacy-Backups/u);
-    backup.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripCsvCatalogForLegacy(backup);
+    expect(() => restore.validateBackupForRestore({ version: '2.0', data: legacyPaymentData(backup.data) })).toThrow(/Legacy-Backups/u);
+    backup.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(backup); stripCsvCatalogForLegacy(backup);
     backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     expect(() => restore.validateBackupForRestore(backup)).toThrow(/ungebundenen Zahlungsereignisse/u);
   });

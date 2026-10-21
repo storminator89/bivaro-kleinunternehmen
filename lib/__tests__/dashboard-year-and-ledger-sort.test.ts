@@ -75,9 +75,11 @@ describe('year comparison API', () => {
     expect(selected.yearComparison.monthlyDataThisYear).toHaveLength(12);
     expect(selected.yearComparison.monthlyDataThisYear[11]).toMatchObject({ revenue: 200, expenses: 20 });
     expect(selected.yearComparison.monthlyDataLastYear[11].revenue).toBe(50);
-    const { yearComparison: _baselineComparison, ...baselineKpis } = baseline;
-    const { yearComparison: _selectedComparison, ...selectedKpis } = selected;
+    const { yearComparison: _baselineComparison, operationalMovements: baselineMovements, ...baselineKpis } = baseline;
+    const { yearComparison: _selectedComparison, operationalMovements: selectedMovements, ...selectedKpis } = selected;
     expect(selectedKpis).toEqual(baselineKpis);
+    expect(selectedMovements.allTime).toEqual(baselineMovements.allTime);
+    expect(selectedMovements.selectedYear.netMovementCents).toBe(String(Math.round(selected.yearComparison.revenueThisYearTotal * 100)));
   });
 
   it('keeps invoice receipts in the payment year and excludes unpaid and private income', async () => {

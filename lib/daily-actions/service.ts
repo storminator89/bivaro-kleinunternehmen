@@ -39,7 +39,7 @@ export async function readDailyActions(userId: string, now = new Date()): Promis
     const [invoices, quotes, receipts] = await Promise.all([
     tx.invoice.findMany({
       where: { userId, type: 'INVOICE', status: 'SENT', dueDate: { lt: nextDay } },
-      include: { customer: { select: { name: true, userId: true } }, incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } } },
+      include: { customer: { select: { name: true, userId: true } }, incomes: { include: { cashTransaction: true } }, paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } } },
       orderBy: [{ dueDate: 'asc' }, { id: 'asc' }], take: SOURCE_LIMIT + 1,
     }),
     tx.invoice.findMany({

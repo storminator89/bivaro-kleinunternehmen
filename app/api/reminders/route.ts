@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       where: whereClause,
       include: {
         customer: true,
-        paymentJournalEvents: { orderBy: { id: 'asc' } },
+        paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } },
         incomes: {
           include: {
             cashTransaction: true,

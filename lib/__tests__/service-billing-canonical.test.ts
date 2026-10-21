@@ -64,6 +64,7 @@ describe('canonical no-file service planning shape', () => {
     ['originalInvoice', { id: 2 }], ['convertedFromQuote', { id: 2 }], ['convertedInvoice', { id: 2 }],
     ['creditNotes', [{ id: 2 }]], ['reminders', [{ id: 2 }]], ['billingNotes', [{ id: 2 }]],
     ['incomes', [{ id: 2 }]], ['paymentJournalEvents', [{ id: 2 }]],
+    ['paymentAdjustments', [{ id: 2 }]], ['refundBasisAdjustments', [{ id: 2 }]],
     ['rawXml', '<Invoice/>'], ['_uploadRequest', { id: 'original-upload' }], ['issuedAt', '2026-10-21'],
     ['customer', { id: 2, userId: 'synthetic-owner' }], ['customer', { id: 1, userId: 'other-owner' }],
   ])('rejects available nonplanning row evidence %s', (field, value) => {
@@ -73,7 +74,7 @@ describe('canonical no-file service planning shape', () => {
     const draft = nativeDraft();
     const receipt = { id: 'receipt', userId: draft.userId, invoiceId: draft.id, planId: 'plan', action: 'GENERATED', periodIndex: 0, periodStart: '2026-01-31', periodEnd: '2026-02-27',
       plan: { id: 'plan', userId: draft.userId, stableKey: draft.parsedData._serviceBillingDraft.planStableKey } };
-    expect(isUnrenderedServiceBillingDraft({ ...draft, serviceBillingPeriod: receipt, creditNotes: [], reminders: [], billingNotes: [], incomes: [], paymentJournalEvents: [] })).toBe(true);
+    expect(isUnrenderedServiceBillingDraft({ ...draft, serviceBillingPeriod: receipt, creditNotes: [], reminders: [], billingNotes: [], incomes: [], paymentJournalEvents: [], paymentAdjustments: [], refundBasisAdjustments: [] })).toBe(true);
     for (const broken of [{ ...receipt, invoiceId: 2 }, { ...receipt, userId: 'other-owner' }, { ...receipt, periodIndex: 1 }, { ...receipt, periodEnd: '2026-02-28' }, { ...receipt, action: 'SKIPPED' }, { ...receipt, plan: { ...receipt.plan, userId: 'other-owner' } }, { ...receipt, plan: { ...receipt.plan, stableKey: 'other-plan' } }]) {
       expect(isUnrenderedServiceBillingDraft({ ...draft, serviceBillingPeriod: broken })).toBe(false);
     }

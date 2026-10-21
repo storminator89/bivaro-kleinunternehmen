@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { QueryFeedback } from '@/components/dashboard/query-feedback';
 import { quoteBusinessToday } from '@/lib/quote-workflow';
 import type { DailyAction, DailyActions } from '@/lib/daily-actions/contract';
+import { PAYMENT_DASHBOARD_REFRESH_EVENT } from '@/lib/payment-dashboard-refresh';
 
 export function dailyActionAmount(cents: string | null): string {
   if (cents === null) return 'Nicht verfügbar';
@@ -52,6 +53,11 @@ function DailyActionsContent({ compact }: { compact: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const refreshPayments = () => setAttempt(value => value + 1);
+    window.addEventListener(PAYMENT_DASHBOARD_REFRESH_EVENT, refreshPayments);
+    return () => window.removeEventListener(PAYMENT_DASHBOARD_REFRESH_EVENT, refreshPayments);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setError(false); setData(null);

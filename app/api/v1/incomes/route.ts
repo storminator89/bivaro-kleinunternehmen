@@ -1,3 +1,4 @@
+import { hasPaymentAdjustments, PAYMENT_ADJUSTMENT_REVIEW_RESPONSE } from '@/lib/payment-journal/consumer-guard';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
  * API v1 - Incomes Endpoint
@@ -124,8 +125,10 @@ export async function GET(request: NextRequest) {
       where.description = { contains: search };
     }
 
-    const [incomes, total] = await Promise.all([
-      prisma.income.findMany({
+    const snapshot = await prisma.$transaction(async tx => {
+      if (await hasPaymentAdjustments(userId, tx)) return null;
+      return Promise.all([
+      tx.income.findMany({
         where,
         orderBy: { date: 'desc' },
         skip,
@@ -146,8 +149,11 @@ export async function GET(request: NextRequest) {
           },
         },
       }),
-      prisma.income.count({ where }),
-    ]);
+      tx.income.count({ where }),
+      ]);
+    });
+    if (!snapshot) return apiError(PAYMENT_ADJUSTMENT_REVIEW_RESPONSE.error, 409, PAYMENT_ADJUSTMENT_REVIEW_RESPONSE.code);
+    const [incomes, total] = snapshot;
 
     const response = apiSuccess(incomes, {
       page,

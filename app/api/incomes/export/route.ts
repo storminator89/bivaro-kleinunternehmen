@@ -1,3 +1,4 @@
+import { PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, assertPositiveOnlySnapshot, PaymentAdjustmentConsumerError } from '@/lib/payment-journal/consumer-guard';
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -89,7 +90,9 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const where: Prisma.IncomeWhereInput = await parseFilters(url);
 
-    const incomes = await prisma.income.findMany({
+    const incomes = await prisma.$transaction(async tx => {
+      await assertPositiveOnlySnapshot(tx, userId);
+      return tx.income.findMany({
       where,
       orderBy: { date: 'desc' },
       include: {
@@ -97,6 +100,7 @@ export async function GET(request: NextRequest) {
         paymentJournalEvent: true,
         customer: true,
       },
+      });
     });
 
     const items = incomes as (Prisma.IncomeGetPayload<{
@@ -180,6 +184,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof PaymentAdjustmentConsumerError) return NextResponse.json(PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }

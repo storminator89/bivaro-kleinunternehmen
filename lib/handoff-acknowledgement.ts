@@ -3,20 +3,21 @@ import type { Prisma } from '@prisma/client';
 import { inTransaction } from '@/lib/db-transaction';
 import { AccountantExportError, parseAccountantExportPeriod } from '@/lib/accountant-export';
 
-export type HandoffAcknowledgementIdentity = { from: string; to: string; sourceFingerprint: string; formatVersion: 1 };
+export type HandoffAcknowledgementIdentity = { from: string; to: string; sourceFingerprint: string; formatVersion: 2 };
 export function parseHandoffAcknowledgement(value: unknown): HandoffAcknowledgementIdentity {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AccountantExportError('Ungültiger Paketstand.');
   const data = value as Record<string, unknown>;
   if (Object.keys(data).some(key => !['from', 'to', 'sourceFingerprint', 'formatVersion'].includes(key)) ||
-      typeof data.from !== 'string' || typeof data.to !== 'string' || data.formatVersion !== 1 ||
+      typeof data.from !== 'string' || typeof data.to !== 'string' || data.formatVersion !== 2 ||
       typeof data.sourceFingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(data.sourceFingerprint)) throw new AccountantExportError('Ungültiger Paketstand.');
   const period = parseAccountantExportPeriod(new URLSearchParams({ from: data.from, to: data.to }));
-  return { from: period.from, to: period.to, sourceFingerprint: data.sourceFingerprint, formatVersion: 1 };
+  return { from: period.from, to: period.to, sourceFingerprint: data.sourceFingerprint, formatVersion: 2 };
 }
 const scope = (userId: string, identity: HandoffAcknowledgementIdentity) => ({
   userId, action: 'REVIEW', entityType: 'AccountantHandoff',
   // Period is in the identity as well as bounded metadata; the lookup never trusts a client tenant ID.
-  entityId: `${identity.from}:${identity.to}:${identity.sourceFingerprint}`,
+  // Earlier package notes remain retained, but never attest the new evidence contract.
+  entityId: `v${identity.formatVersion}:${identity.from}:${identity.to}:${identity.sourceFingerprint}`,
 });
 export async function readHandoffAcknowledgement(userId: string, identity: HandoffAcknowledgementIdentity) {
   const row = await prisma.auditLog.findFirst({ where: scope(userId, identity), orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdAt: true } });

@@ -45,8 +45,10 @@ function availableInvoiceStatuses(invoice: Invoice): string[] {
   return options;
 }
 
-function InvoiceBalance({ invoice }: { invoice: Invoice }) {
+export function InvoiceBalance({ invoice }: { invoice: Invoice }) {
   if (invoice.paymentReviewRequired) return <p className="mt-1 text-xs text-caution-foreground">Zahlungsstand prüfen</p>;
+  if (invoice.status === 'CANCELLED') return <p className="mt-1 text-xs text-muted-foreground tabular-nums">{invoice.paymentLedger ? <>Tatsächlich erstattet {displayPaymentAmount(invoice.paymentLedger.refundedCents)} · Noch zu erstatten {displayPaymentAmount(invoice.paymentLedger.refundDueCents)}</> : 'Erstattungsstand prüfen'}</p>;
+  if (invoice.paymentLedger?.correctedCents && invoice.paymentLedger.correctedCents !== '0') return <p className="mt-1 text-xs text-muted-foreground tabular-nums">Gültig erhalten {displayPaymentAmount(invoice.paymentLedger.validReceivedCents)} · Nie erhalten / korrigiert {displayPaymentAmount(invoice.paymentLedger.correctedCents)} · Offen {displayPaymentAmount(invoice.paymentLedger.collectibleOpenCents)}</p>;
   if (!invoice.paymentSummary) return null;
   return <p className="mt-1 text-xs text-muted-foreground tabular-nums">Erhalten {displayPaymentAmount(invoice.paymentSummary.paidCents)} · Offen {displayPaymentAmount(invoice.paymentSummary.openCents)}</p>;
 }
@@ -114,7 +116,7 @@ export function InvoicesTab({
 }: InvoicesTabProps) {
   const [emailInvoice, setEmailInvoice] = React.useState<Invoice | null>(null);
 
-  const paidCount = invoices.filter(invoice => invoice.paymentSummary?.paid || (invoice.status === 'PAID' && !invoice.paymentReviewRequired)).length;
+  const paidCount = invoices.filter(invoice => invoice.status !== 'CANCELLED' && (invoice.paymentSummary?.paid || (invoice.status === 'PAID' && !invoice.paymentReviewRequired))).length;
   const openCount = invoices.filter(invoice => invoice.status !== 'CANCELLED' && invoice.paymentSummary && !invoice.paymentSummary.paid).length;
 
   const renderInvoiceActions = (invoice: Invoice) => (

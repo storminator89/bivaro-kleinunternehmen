@@ -1,10 +1,11 @@
+import { createBackupManifest } from './helpers/backup';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { createTestDatabase } from './helpers/database';
 import { BackupFileSizeError, getBackupFileVersion, readBackupSnapshot, readStableBackupFile } from '@/lib/backup-snapshot';
-import { createBackupManifest, validateBackupManifest } from '@/lib/backup-manifest';
+import { validateBackupManifest } from '@/lib/backup-manifest';
 
 const state = vi.hoisted(() => ({ client: null as ReturnType<typeof createTestDatabase>['client'] | null }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));

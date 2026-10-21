@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import type { Prisma } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
+import { readHandoffPreview } from '@/components/handoff/handoff-model';
 
 const state = vi.hoisted(() => ({ client: null as ReturnType<typeof createTestDatabase>['client'] | null, actor: 'accountant-owner' as string | null }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
@@ -230,7 +231,7 @@ describe('business snapshot, manifest and original-file isolation', () => {
     expect(await zip.file(originalPath)!.async('string')).toBe('OWN ORIGINAL\x00bytes');
     expect(records.originals[0]).toMatchObject({ status: 'included', zipPath: originalPath, originalFileName: '../../=Danger;"name.pdf' });
     expect(Object.keys(zip.files).every(name => !name.includes('..') && !name.startsWith('/'))).toBe(true);
-    expect(manifest.formatVersion).toBe(1);
+    expect(manifest.formatVersion).toBe(2);
     expect(manifest.period).toEqual({ from: '2026-01-01', to: '2026-01-31', timezone: 'UTC', inclusive: true });
     expect(manifest.originalCounts).toEqual({ included: 1, missing: 0, notAttached: 0 });
     expect(manifest.counts.invoices).toBe(records.invoices.length);
@@ -316,6 +317,7 @@ describe('download API failure and resource boundaries', () => {
     const logs = await database.client.auditLog.findMany();
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({ userId: 'accountant-owner', action: 'SECURITY_EVENT', entityType: 'SecurityEvent', entityName: 'ACCOUNTANT_HANDOFF_EXPORT' });
+    expect(JSON.parse(logs[0].metadata!)).toMatchObject({ formatVersion: 2, paymentContractVersion: 2, fiscalMappingStatus: 'UNCHANGED' });
     expect(logs[0].oldValues).toBeNull();
     const zip = await JSZip.loadAsync(await response.arrayBuffer());
     expect(Object.keys(zip.files)).not.toContain('auditLogs.json');
@@ -386,11 +388,12 @@ describe('guided handoff preview and approved-snapshot download', () => {
       expect(response.headers.get('x-content-type-options')).toBe('nosniff');
       expect(response.headers.get('content-disposition')).toBeNull();
       const body = await response.json();
+      expect(readHandoffPreview(body)).toBe(body);
       expect(body).not.toHaveProperty('bytes');
       expect(body).not.toHaveProperty('records');
       expect(JSON.stringify(body)).not.toContain('PRIVATE_DESCRIPTION_NOT_IN_PREVIEW');
       expect(JSON.stringify(body)).not.toContain('UNCHANGED_ORIGINAL');
-      expect(body.manifest).toMatchObject({ formatVersion: 1, counts: { invoices: 1, expenses: 1 }, originalCounts: { included: 1, missing: 0, notAttached: 1 } });
+      expect(body.manifest).toMatchObject({ formatVersion: 2, counts: { invoices: 1, expenses: 1 }, originalCounts: { included: 1, missing: 0, notAttached: 1 } });
       expect(body.manifest.warnings.some((warning: { code: string }) => warning.code === 'ORIGINAL_NOT_ATTACHED')).toBe(true);
       expect(body.manifest.sourceFingerprint).toMatch(/^[a-f0-9]{64}$/);
       expect(body.manifest.entries.some((entry: { zipPath: string }) => entry.zipPath === 'manifest.json')).toBe(false);

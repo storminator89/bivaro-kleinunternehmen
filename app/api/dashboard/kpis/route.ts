@@ -1,3 +1,5 @@
+import { PaymentJournalError } from '@/lib/payment-journal/contract';
+import { operationalIncomeEntriesSql } from '@/lib/payment-journal/accounting-source';
 import { readAnnualContextRevision } from '@/lib/annual-business-context';
 import { buildRevenueIndicatorBasis } from '@/lib/revenue-indicators';
 import { hasServiceBillingDraftMarker, isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
@@ -17,10 +19,15 @@ type MonthlyAggregateRow = {
   total: number | bigint;
   currentYearToDate: number | bigint;
   lastYearToDate: number | bigint;
+  originalReceivedCents?: number | bigint;
+  correctedCents?: number | bigint;
+  refundedCents?: number | bigint;
 };
 
 type RecentIncomeRow = {
-  id: number;
+  id: number | bigint;
+  movementKind: 'RECEIPT' | 'PAYMENT_CORRECTION' | 'CUSTOMER_REFUND';
+  invoiceId: number | bigint | null;
   description: string;
   amount: number | bigint;
   bookingDate: bigint | number;
@@ -39,6 +46,8 @@ type RecentActivity = {
   amount: number;
   date: Date;
   type: "income" | "expense";
+  movementKind?: 'RECEIPT' | 'PAYMENT_CORRECTION' | 'CUSTOMER_REFUND';
+  invoiceId?: number | null;
 };
 
 function sumRows(rows: MonthlyAggregateRow[], year?: number): number {
@@ -55,6 +64,16 @@ function sumToDate(rows: MonthlyAggregateRow[], field: "currentYearToDate" | "la
 function monthTotal(rows: MonthlyAggregateRow[], year: number, month: number): number {
   const row = rows.find((item) => Number(item.year) === year && Number(item.month) === month);
   return Number(row?.total ?? 0);
+}
+
+function operationalMovementTotals(rows: MonthlyAggregateRow[], year?: number) {
+  const sum = (key: 'originalReceivedCents' | 'correctedCents' | 'refundedCents') => rows.filter(row => year === undefined || Number(row.year) === year).reduce((total, row) => {
+    const value = row[key] ?? 0;
+    if (typeof value === 'number' && !Number.isSafeInteger(value)) throw new Error('Operative Gesamtsumme überschreitet die sichere Centdarstellung.');
+    return total + BigInt(value);
+  }, BigInt(0));
+  const original = sum('originalReceivedCents'), corrected = sum('correctedCents'), refunded = sum('refundedCents');
+  return { originalReceivedCents: original.toString(), correctedCents: corrected.toString(), validReceivedCents: (original-corrected).toString(), refundedCents: refunded.toString(), netMovementCents: (original-corrected-refunded).toString() };
 }
 
 function toDate(value: bigint | number): Date {
@@ -101,87 +120,29 @@ function buildMonthlyAggregateQuery(
   lastYearStartMs: number,
   sameDayLastYearMs: number,
 ) {
-  const isIncome = table === "Income";
-  const source = isIncome
-    ? Prisma.sql`
-        FROM "Income" AS entry
-        LEFT JOIN "Invoice" AS invoice ON invoice."id" = entry."invoiceId"
-        LEFT JOIN "PaymentJournalEvent" AS payment ON payment."incomeId" = entry."id"
-          AND payment."userId" = entry."userId" AND payment."invoiceId" = entry."invoiceId"
-        WHERE entry."userId" = ${userId}
-          AND entry."taxRelevant" = 1
-          AND (
-            entry."invoiceId" IS NULL
-            OR invoice."id" IS NULL
-            OR (payment."dateCertainty" = 'ACTUAL' AND payment."paidAt" IS NOT NULL)
-            OR invoice."status" = 'PAID'
-            OR (invoice."status" = 'CANCELLED' AND invoice."paidAt" IS NOT NULL)
-          )
-      `
-    : Prisma.sql`
-        FROM "Expense" AS entry
-        WHERE entry."userId" = ${userId}
-      `;
-  const rawBookingDate = isIncome
-    ? Prisma.sql`CASE
-        WHEN payment."dateCertainty" = 'ACTUAL' AND payment."paidAt" IS NOT NULL THEN payment."paidAt"
-        WHEN invoice."status" IN ('PAID', 'CANCELLED') AND invoice."paidAt" IS NOT NULL
-          THEN invoice."paidAt"
-        ELSE entry."date"
-      END`
-    : Prisma.sql`entry."date"`;
-  const bookingDate = normalizeDateTimeToEpochMs(rawBookingDate);
-
-  return Prisma.sql`
-    WITH entries AS (
-      SELECT entry."amount" AS amount, ${bookingDate} AS bookingDate
-      ${source}
-    )
-    SELECT
-      strftime('%Y', datetime(entries.bookingDate / 1000.0, 'unixepoch', 'localtime')) AS year,
-      strftime('%m', datetime(entries.bookingDate / 1000.0, 'unixepoch', 'localtime')) AS month,
-      COALESCE(SUM(CAST(entries.amount AS REAL)), 0.0) AS total,
-      COALESCE(SUM(CASE
-        WHEN entries.bookingDate >= ${currentYearStartMs} AND entries.bookingDate < ${nowPlusOneMs}
-          THEN CAST(entries.amount AS REAL) ELSE 0.0 END), 0.0) AS "currentYearToDate",
-      COALESCE(SUM(CASE
-        WHEN entries.bookingDate >= ${lastYearStartMs} AND entries.bookingDate < ${sameDayLastYearMs}
-          THEN CAST(entries.amount AS REAL) ELSE 0.0 END), 0.0) AS "lastYearToDate"
-    FROM entries
-    GROUP BY year, month
-    ORDER BY year, month
-  `;
+  if (table === 'Income') return Prisma.sql`
+    WITH entries AS (${operationalIncomeEntriesSql(userId)})
+    SELECT strftime('%Y',datetime(bookingDate/1000.0,'unixepoch')) AS year,
+      strftime('%m',datetime(bookingDate/1000.0,'unixepoch')) AS month,
+      SUM(amountCents)/100.0 AS total,
+      SUM(CASE WHEN movementKind='RECEIPT' THEN amountCents ELSE 0 END) AS originalReceivedCents,
+      SUM(CASE WHEN movementKind='PAYMENT_CORRECTION' THEN -amountCents ELSE 0 END) AS correctedCents,
+      SUM(CASE WHEN movementKind='CUSTOMER_REFUND' THEN -amountCents ELSE 0 END) AS refundedCents,
+      SUM(CASE WHEN bookingDate>=${currentYearStartMs} AND bookingDate<${nowPlusOneMs} THEN amountCents ELSE 0 END)/100.0 AS "currentYearToDate",
+      SUM(CASE WHEN bookingDate>=${lastYearStartMs} AND bookingDate<${sameDayLastYearMs} THEN amountCents ELSE 0 END)/100.0 AS "lastYearToDate"
+    FROM entries GROUP BY year,month ORDER BY year,month`;
+  const bookingDate = normalizeDateTimeToEpochMs(Prisma.sql`entry."date"`);
+  return Prisma.sql`WITH entries AS (SELECT entry.amount,${bookingDate} AS bookingDate FROM "Expense" entry WHERE entry."userId"=${userId})
+    SELECT strftime('%Y',datetime(bookingDate/1000.0,'unixepoch')) AS year,strftime('%m',datetime(bookingDate/1000.0,'unixepoch')) AS month,
+    COALESCE(SUM(amount),0.0) AS total,
+    COALESCE(SUM(CASE WHEN bookingDate>=${currentYearStartMs} AND bookingDate<${nowPlusOneMs} THEN amount ELSE 0.0 END),0.0) AS "currentYearToDate",
+    COALESCE(SUM(CASE WHEN bookingDate>=${lastYearStartMs} AND bookingDate<${sameDayLastYearMs} THEN amount ELSE 0.0 END),0.0) AS "lastYearToDate"
+    FROM entries GROUP BY year,month ORDER BY year,month`;
 }
 
 function buildRecentIncomeQuery(userId: string) {
-  const bookingDate = normalizeDateTimeToEpochMs(Prisma.sql`CASE
-    WHEN payment."dateCertainty" = 'ACTUAL' AND payment."paidAt" IS NOT NULL THEN payment."paidAt"
-        WHEN invoice."status" IN ('PAID', 'CANCELLED') AND invoice."paidAt" IS NOT NULL
-      THEN invoice."paidAt"
-    ELSE entry."date"
-  END`);
-  return Prisma.sql`
-    SELECT
-      entry."id" AS id,
-      entry."description" AS description,
-      entry."amount" AS amount,
-      ${bookingDate} AS "bookingDate"
-    FROM "Income" AS entry
-    LEFT JOIN "Invoice" AS invoice ON invoice."id" = entry."invoiceId"
-        LEFT JOIN "PaymentJournalEvent" AS payment ON payment."incomeId" = entry."id"
-          AND payment."userId" = entry."userId" AND payment."invoiceId" = entry."invoiceId"
-    WHERE entry."userId" = ${userId}
-      AND entry."taxRelevant" = 1
-      AND (
-        entry."invoiceId" IS NULL
-        OR invoice."id" IS NULL
-        OR (payment."dateCertainty" = 'ACTUAL' AND payment."paidAt" IS NOT NULL)
-            OR invoice."status" = 'PAID'
-        OR (invoice."status" = 'CANCELLED' AND invoice."paidAt" IS NOT NULL)
-      )
-    ORDER BY "bookingDate" DESC, entry."id" DESC
-    LIMIT 5
-  `;
+  return Prisma.sql`WITH entries AS (${operationalIncomeEntriesSql(userId)})
+    SELECT id,description,amountCents/100.0 AS amount,bookingDate,movementKind,invoiceId FROM entries ORDER BY bookingDate DESC,id DESC LIMIT 5`;
 }
 
 function buildRecentExpenseQuery(userId: string) {
@@ -225,8 +186,8 @@ export async function GET(request: Request) {
 
     // Four compact raw projections plus the open-invoice aggregate replace
     // loading every income and expense row into Node.js.
-    const [incomeRows, expenseRows, recentIncomes, recentExpenses, openInvoices, annualContext] = await Promise.all([
-      prisma.$queryRaw<MonthlyAggregateRow[]>(buildMonthlyAggregateQuery(
+    const [incomeRows, expenseRows, recentIncomes, recentExpenses, openInvoices, annualContext, adjustedInvoices] = await prisma.$transaction(async tx => Promise.all([
+      tx.$queryRaw<MonthlyAggregateRow[]>(buildMonthlyAggregateQuery(
         "Income",
         userId,
         currentYearStartMs,
@@ -234,7 +195,7 @@ export async function GET(request: Request) {
         lastYearStartMs,
         sameDayLastYearMs,
       )),
-      prisma.$queryRaw<MonthlyAggregateRow[]>(buildMonthlyAggregateQuery(
+      tx.$queryRaw<MonthlyAggregateRow[]>(buildMonthlyAggregateQuery(
         "Expense",
         userId,
         currentYearStartMs,
@@ -242,14 +203,20 @@ export async function GET(request: Request) {
         lastYearStartMs,
         sameDayLastYearMs,
       )),
-      prisma.$queryRaw<RecentIncomeRow[]>(buildRecentIncomeQuery(userId)),
-      prisma.$queryRaw<RecentExpenseRow[]>(buildRecentExpenseQuery(userId)),
-      prisma.invoice.findMany({
+      tx.$queryRaw<RecentIncomeRow[]>(buildRecentIncomeQuery(userId)),
+      tx.$queryRaw<RecentExpenseRow[]>(buildRecentExpenseQuery(userId)),
+      tx.invoice.findMany({
         where: { userId, type: 'INVOICE', status: { in: ['DRAFT', 'SENT'] } },
-        include: { incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } } },
+        include: { incomes: { include: { cashTransaction: true } }, paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } } },
       }),
-      prisma.annualBusinessContextRevision.findMany({ where: { userId, contextYear: currentYear }, orderBy: { revision: 'asc' } }),
-    ]);
+      tx.annualBusinessContextRevision.findMany({ where: { userId, contextYear: currentYear }, orderBy: { revision: 'asc' } }),
+      tx.invoice.findMany({ where: { userId, paymentAdjustments: { some: { userId } } }, include: { customer: { select: { userId: true } }, incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } }, paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } } } }),
+    ]));
+
+    for (const invoice of adjustedInvoices) {
+      if (invoice.customer && invoice.customer.userId !== userId) throw new PaymentJournalError('Kundenzuordnung des berichtigten Zahlungsjournals benötigt Prüfung.', 409, 'PAYMENT_REVIEW_REQUIRED');
+      ledgerSummary(invoice);
+    }
 
     let openCents = BigInt(0);
     let openInvoicesReviewRequired = 0;
@@ -265,14 +232,14 @@ export async function GET(request: Request) {
     }
     const recentActivities: RecentActivity[] = [
       ...recentIncomes.map((item) => ({
-        id: item.id,
+        id: Number(item.id),
         description: item.description,
         amount: Number(item.amount),
         date: toDate(item.bookingDate),
-        type: "income" as const,
+        type: "income" as const, movementKind: item.movementKind, invoiceId: item.invoiceId == null ? null : Number(item.invoiceId),
       })),
       ...recentExpenses.map((item) => ({
-        id: item.id,
+        id: Number(item.id),
         description: item.description,
         amount: Number(item.amount),
         date: toDate(item.bookingDate),
@@ -293,6 +260,8 @@ export async function GET(request: Request) {
     const totalExpenses = sumRows(expenseRows);
 
     return NextResponse.json({
+      operationalMovements: { allTime: operationalMovementTotals(incomeRows), selectedYear: operationalMovementTotals(incomeRows, selectedYear) },
+      paymentContractVersion: 2, revenueMovementBasis: 'operational-signed-receipts-corrections-refunds', fiscalMappingStatus: 'UNREVIEWED',
       revenueThisMonth,
       revenueThisYear: revenueThisYearTotal,
       expensesThisMonth,
@@ -324,6 +293,7 @@ export async function GET(request: Request) {
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     if (error instanceof UnauthorizedError) return unauthorizedResponse();
+    if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code, paymentContractVersion: 2 }, { status: error.status });
     console.error("Fehler beim Laden der KPI-Daten:", error);
     return NextResponse.json({ error: "Fehler beim Laden der KPI-Daten" }, { status: 500 });
   }

@@ -1,3 +1,4 @@
+import { PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, assertPositiveOnlySnapshot, PaymentAdjustmentConsumerError } from '@/lib/payment-journal/consumer-guard';
 /**
  * CSV working paper for an Anlage-EÜR period.
  *
@@ -67,7 +68,9 @@ export async function GET(request: NextRequest) {
 
         // Read all inputs from one database snapshot so the control totals,
         // line rows and metadata cannot describe different moments in time.
-        const [incomes, expenses, settings] = await prisma.$transaction(async (tx) => Promise.all([
+        const [incomes, expenses, settings] = await prisma.$transaction(async (tx) => {
+            await assertPositiveOnlySnapshot(tx, userId);
+            return Promise.all([
             tx.income.findMany({
                 where: { userId },
                 select: {
@@ -93,7 +96,8 @@ export async function GET(request: NextRequest) {
                 },
             }),
             tx.settings.findUnique({ where: { userId } }),
-        ]));
+        ]);
+        });
 
         const lineAmounts = new Map<number, number>();
         const unmappedCategories = new Map<string, { amount: number; count: number }>();
@@ -244,6 +248,7 @@ export async function GET(request: NextRequest) {
             },
         });
     } catch (error) {
+        if (error instanceof PaymentAdjustmentConsumerError) return NextResponse.json(PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, { status: 409 });
         console.error('Error exporting EÜR:', error);
         return NextResponse.json({ error: 'Fehler beim Export der EÜR' }, { status: 500 });
     }

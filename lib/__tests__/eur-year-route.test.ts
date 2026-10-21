@@ -23,6 +23,7 @@ beforeEach(() => {
   state.audit.mockResolvedValue(undefined);
   state.snapshot.mockReset();
   state.snapshot.mockImplementation(async (read: (tx: unknown) => Promise<unknown>) => read({
+    paymentAdjustment: { count: async () => 0 },
     income: { findMany: async () => state.incomes },
     expense: { findMany: async () => state.expenses },
     settings: { findUnique: async () => ({ companyName: 'Synthetic EUR fixture', taxNumber: null }) },

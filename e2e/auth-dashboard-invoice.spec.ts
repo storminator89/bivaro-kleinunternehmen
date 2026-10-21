@@ -693,7 +693,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
           await card.getByRole('button', { name: 'Zahlung erfassen', exact: true }).focus();
           await page.keyboard.press('Enter');
         }
-        const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+        const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
         await expect(dialog).toBeVisible();
         await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toBeEnabled();
         await expect(dialog).toContainText('123,45');
@@ -784,13 +784,14 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await submit.focus();
       await page.keyboard.press('Enter');
       await saved;
-      await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
+      const savedConfirmation = dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) });
+      await expect(savedConfirmation).toBeVisible();
       await expect(dialog.getByRole('alert')).toHaveText('Die Zahlung ist gespeichert, aber die Listen konnten nicht aktualisiert werden. Nicht erneut buchen.');
       expect(blockedReads).toBeGreaterThan(0);
       expect(postCount).toBe(2);
       await expect(submit).toHaveCount(0);
       await expect(dialog).toContainText('31.12.2024');
-      await expect(dialog.getByRole('status')).toBeFocused();
+      await expect(savedConfirmation).toBeFocused();
       expect(savedPayload).toMatchObject({ amount: '123.45', currency: 'EUR', paidAt: '2024-12-31', source: 'MANUAL', reference: `Synthetic statement ${workspace} 2024-12-31` });
       expect(savedPayload?.idempotencyKey).toMatch(/^[\da-f-]{36}$/iu);
       expect(savedPayload).toEqual(firstAttemptPayload); // An unchanged retry keeps its request identity.
@@ -851,7 +852,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       const open = async (state: 'Offen' | 'Teilbezahlt') => {
         await record().getByRole('button', { name: `Zahlungsstatus: ${state}`, exact: true }).click();
         await page.getByRole('menuitem', { name: state === 'Offen' ? 'Bezahlt' : 'Weitere Zahlung erfassen', exact: true }).click();
-        const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+        const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
         await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toBeEnabled();
         return dialog;
       };
@@ -919,6 +920,12 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       expect(ledger.event).toBeNull();
       expect(ledger.events).toHaveLength(2);
       expect(ledger.summary).toMatchObject({ paidCents: '12000', openCents: '0', paymentState: 'PAID' });
+      const currentAxes = dialog.getByRole('region', { name: 'Zahlung korrigieren oder Erstattung dokumentieren', exact: true });
+      await expect(currentAxes.getByText('Gültig eingegangen', { exact: true }).locator('..').locator('dd')).toHaveText(/^120,00\s*€$/u);
+      await expect(currentAxes.getByText('Noch einzuziehen', { exact: true }).locator('..').locator('dd')).toHaveText(/^0,00\s*€$/u);
+      const currentConfirmation = dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) });
+      await expect(currentConfirmation).toBeFocused();
+      await expect(currentConfirmation).toBeInViewport({ ratio: 1 });
       const incomeList = await (await page.request.get(`/api/incomes?search=${invoiceNumber}&pageSize=100`)).json();
       expect(incomeList.items).toHaveLength(2);
       expect(new Set(incomeList.items.map((income: { amount: number }) => income.amount))).toEqual(new Set([40, 80]));
@@ -933,7 +940,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       // Merely opening history must not masquerade as a new saved operation.
       await record().getByRole('button', { name: `Weitere Aktionen fuer Rechnung ${invoiceNumber}`, exact: true }).click();
       await page.getByRole('menuitem', { name: 'Zahlungsverlauf ansehen', exact: true }).click();
-      dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+      dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
       await expect(dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true }).getByRole('listitem')).toHaveCount(2);
       await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toHaveCount(0);
       await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toHaveCount(0);
@@ -954,7 +961,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const row = page.getByRole('row').filter({ hasText: invoiceNumber });
     await row.getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
     let activeDialog = dialog;
     let submit = activeDialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true });
     await expect(submit).toBeEnabled();
@@ -987,7 +994,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await searchPartialInvoiceAndWait(page, invoiceNumber);
     await row.getByRole('button', { name: 'Zahlungsstatus: Teilbezahlt', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Weitere Zahlung erfassen', exact: true }).click();
-    activeDialog = page.getByRole('dialog', { name: 'Zahlung erfassen', exact: true });
+    activeDialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
     submit = activeDialog.getByRole('button', { name: /^(Zahlung verbindlich erfassen|Unverändert erneut bestätigen)$/ });
     await expect(submit).toBeEnabled();
     await activeDialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true }).fill('40.00');

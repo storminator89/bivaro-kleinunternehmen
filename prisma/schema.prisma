@@ -67,6 +67,8 @@ model User {
   suppliers Supplier[]
   aiProviderSettings AiProviderSettings?
   paymentJournalEvents PaymentJournalEvent[]
+  paymentAdjustments PaymentAdjustment[]
+  paymentOperations PaymentOperation[]
   dataImportBatches DataImportBatch[]
   serviceArticles ServiceArticle[]
   serviceBillingPlans ServiceBillingPlan[]
@@ -159,6 +161,8 @@ model Invoice {
   customerId    Int?
   incomes       Income[]
   paymentJournalEvents PaymentJournalEvent[]
+  paymentAdjustments PaymentAdjustment[] @relation("AdjustedInvoice")
+  refundBasisAdjustments PaymentAdjustment[] @relation("RefundBasis")
   billingNotes  BillingNote[]
   reminders     Reminder[]
   customer      Customer? @relation(fields: [customerId], references: [id])
@@ -508,6 +512,7 @@ model PaymentJournalEvent {
   reference      String
   idempotencyKey String
   createdAt      DateTime @default(now())
+  adjustments PaymentAdjustment[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, paidAt])
@@ -625,4 +630,47 @@ model ServiceBillingPeriod {
 
   @@unique([planId, periodIndex])
   @@index([userId, planId])
+}
+
+// Shared tenant-wide replay namespace for upgraded financial commands.
+model PaymentOperation {
+  id Int @id @default(autoincrement())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  idempotencyKey String
+  kind String
+  createdAt DateTime @default(now())
+  adjustment PaymentAdjustment?
+  @@unique([userId, idempotencyKey])
+}
+
+// Append-only evidence; never rewrites its positive payment or Income projection.
+model PaymentAdjustment {
+  id Int @id @default(autoincrement())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  invoiceId Int
+  invoice Invoice @relation("AdjustedInvoice", fields: [invoiceId], references: [id], onDelete: Restrict)
+  originalPaymentId Int
+  originalPayment PaymentJournalEvent @relation(fields: [originalPaymentId], references: [id], onDelete: Restrict)
+  kind String
+  amountCents String
+  currency String @default("EUR")
+  actionDate DateTime
+  accountingEffectiveOn DateTime
+  reason String
+  reference String
+  payoutEvidenceIdentity String?
+  cancellationInvoiceId Int?
+  cancellationInvoice Invoice? @relation("RefundBasis", fields: [cancellationInvoiceId], references: [id], onDelete: Restrict)
+  basisSnapshot Json?
+  idempotencyKey String
+  operation PaymentOperation @relation(fields: [userId, idempotencyKey], references: [userId, idempotencyKey], onDelete: Restrict, onUpdate: Restrict)
+  semanticFingerprint String
+  contractVersion Int @default(2)
+  recordedAt DateTime @default(now())
+  @@unique([userId, idempotencyKey])
+  @@unique([userId, payoutEvidenceIdentity])
+  @@index([userId, invoiceId, id])
+  @@index([userId, accountingEffectiveOn])
 }

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Quote } from "@/components/dashboard/tabs/quotes-tab";
 import { toQuery } from "@/lib/dashboard-utils";
-import { refreshPaymentDashboardLists } from "@/lib/payment-dashboard-refresh";
+import { connectPaymentRefreshBridge, invalidatePaymentDashboardQueries, refreshPaymentDashboardLists } from "@/lib/payment-dashboard-refresh";
 import type { Customer, Expense, FilterState, Income, Invoice, TimeRange } from "@/types/dashboard";
 
 type PaginatedResponse<T> = {
@@ -65,10 +65,12 @@ type UseDashboardDataParams = {
   selectedTimeRange: TimeRange;
 };
 
-async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, { cache: "no-store", signal });
+async function fetchJson<T>(url: string, signal?: AbortSignal, headers?: HeadersInit): Promise<T> {
+  const response = await fetch(url, { cache: "no-store", signal, ...(headers ? { headers } : {}) });
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    let message = `Request failed: ${response.status}`;
+    try { const data: unknown = await response.json(); if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') message = data.error; } catch { /* retain HTTP failure */ }
+    throw new Error(message);
   }
   return response.json();
 }
@@ -91,6 +93,7 @@ export function useDashboardData({
   selectedTimeRange,
 }: UseDashboardDataParams) {
   const queryClient = useQueryClient();
+  useEffect(() => connectPaymentRefreshBridge(() => { void invalidatePaymentDashboardQueries(queryClient).catch(() => {}); }), [queryClient]);
   const selectedDocument = useSearchParams().get("document");
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -170,7 +173,7 @@ export function useDashboardData({
   });
   const invoicesQuery = useQuery({
     queryKey: ["dashboard", "invoices", "list", invoicesQueryString],
-    queryFn: ({ signal }) => fetchJson<PaginatedResponse<Invoice>>(`/api/invoices?${invoicesQueryString}`, signal),
+    queryFn: ({ signal }) => fetchJson<PaginatedResponse<Invoice>>(`/api/invoices?${invoicesQueryString}`, signal, { 'X-Bivaro-Payment-Contract': '2' }),
     enabled: activeTab === "invoices",
   });
   const quotesQuery = useQuery({
@@ -195,7 +198,21 @@ export function useDashboardData({
       signal,
     ),
     enabled: activeTab === "eur",
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
+  useEffect(() => {
+    if (activeTab !== 'eur') return;
+    const recheckFiscalSummary = () => {
+      if (document.visibilityState !== 'visible') return;
+      void queryClient.invalidateQueries({ queryKey: ['dashboard', 'summary', selectedTimeRange], exact: true }, { throwOnError: true }).catch(() => {});
+    };
+    const restoreFiscalSummary = (event: PageTransitionEvent) => { if (event.persisted) recheckFiscalSummary(); };
+    window.addEventListener('focus', recheckFiscalSummary);
+    document.addEventListener('visibilitychange', recheckFiscalSummary);
+    window.addEventListener('pageshow', restoreFiscalSummary);
+    return () => { window.removeEventListener('focus', recheckFiscalSummary); document.removeEventListener('visibilitychange', recheckFiscalSummary); window.removeEventListener('pageshow', restoreFiscalSummary); };
+  }, [activeTab, selectedTimeRange, queryClient]);
   const assetsQuery = useQuery({
     queryKey: ["dashboard", "assets", "gwg", selectedTimeRange],
     queryFn: ({ signal }) => fetchJson<DashboardAssets>(
@@ -335,8 +352,14 @@ export function useDashboardData({
     assetExpenses,
     summary: summaryQuery.data,
     summaryIsLoading: summaryQuery.isLoading,
+    summaryIsFetching: summaryQuery.isFetching,
     summaryIsError: summaryQuery.isError,
     summaryError: summaryQuery.error,
+    reloadSummary: async () => {
+      const result = await summaryQuery.refetch({ throwOnError: true });
+      if (!result.data || result.isError) throw new Error('Die aktuelle EÜR-Auswertung ist nicht freigegeben.');
+      return result.data;
+    },
     assetsIsLoading: assetsQuery.isLoading,
     assetsIsError: assetsQuery.isError,
     assetsError: assetsQuery.error,

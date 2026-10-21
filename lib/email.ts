@@ -388,7 +388,7 @@ async function getDocumentInvoice(userId: string, request: EmailDraftRequest) {
       customer: {
         select: { id: true, name: true, email: true },
       },
-      paymentJournalEvents: true,
+      paymentAdjustments: true, creditNotes: true, paymentJournalEvents: true,
       incomes: {
         include: {
           cashTransaction: true,

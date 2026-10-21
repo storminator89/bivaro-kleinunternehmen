@@ -213,12 +213,12 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
       </section>
       <aside className={styles.scope} aria-labelledby="handoff-scope-title">
         <h2 id="handoff-scope-title">Was Sie übergeben</h2>
-        <p>Ein begrenztes Arbeitspaket im Bivaro-Format 1, kein Direktimport in eine Kanzleisoftware.</p>
+        <p>Ein begrenztes Arbeitspaket im Bivaro-Format 2, kein Direktimport in eine Kanzleisoftware.</p>
         <ul><li>Einnahmen, Ausgaben, Rechnungen und Gutschriften sowie Kassenbewegungen als CSV und JSON.</li><li>Zugehörige Kunden und Kassenbücher, vorhandene unveränderte Originaldateien.</li><li>Eine Paketbeschreibung sowie manifest.json mit Zählungen, Warnungen und Datei-Prüfsummen.</li></ul>
         <details><summary>Wie wird der Zeitraum ausgewählt?</summary><p>Ausgaben und Kassenbewegungen folgen ihrem gespeicherten Datum. Einnahmen folgen dem gespeicherten Datum oder dem Zahlungsdatum der eigenen verknüpften Rechnung. Rechnungen folgen Rechnungs-/ersatzweise Uploaddatum, Zahlung oder verknüpfter Einnahme. Ursprungsrechnungen von Gutschriften können als Kontext außerhalb des Zeitraums enthalten sein. Die genauen Regeln stehen in README.txt.</p></details>
         <h3>Bewusste Grenzen</h3>
         <p>Kein DATEV-Format oder zugesicherter DATEV-Import, keine ELSTER-Einreichung, kein vollständiger GoBD-Prüfexport und kein wiederherstellbares Backup.</p>
-        <p>Nicht enthalten: Angebote, ungebuchte Eingangsbelege, wiederkehrende Vorlagen und nicht betroffene Stammdaten. Bestätigte positive Teilzahlungsnachweise sind als payments.csv enthalten, einschließlich historischer Datumsunsicherheit. Einnahme und Zahlungsnachweis bilden denselben Eingang ab und dürfen nicht addiert werden. Ein vollständiges Zahlungsprüfjournal und ein separates Erstattungsjournal sind nicht enthalten.</p>
+        <p>Nicht enthalten: Angebote, ungebuchte Eingangsbelege, wiederkehrende Vorlagen und nicht betroffene Stammdaten. Original-Zahlungsnachweise stehen in payments.csv, einschließlich historischer Datumsunsicherheit; Korrekturen und tatsächliche Erstattungen in adjustments.csv. Dies sind operative Nachweise, keine freigegebene Steuer-/EÜR-Zuordnung. Einnahme und Zahlungsnachweis bilden denselben Eingang ab und dürfen nicht addiert werden.</p>
         <p>Passwörter, API-Schlüssel, SMTP-/Hosteinstellungen und Sicherheitslogs werden nicht exportiert.</p>
         <h3>Sie entscheiden über die Übergabe</h3>
         <p>Das ZIP wird nur auf Ihr Gerät heruntergeladen. Es wird nichts automatisch an eine Kanzlei oder einen anderen Dienst gesendet. Nutzen Sie für vertrauliche Geschäfts- und Personendaten einen abgestimmten sicheren Übergabekanal.</p>
