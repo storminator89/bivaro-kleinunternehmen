@@ -1,6 +1,7 @@
 import { AlertTriangle, FileArchive } from 'lucide-react';
 import { formatBusinessDateDisplay } from '@/lib/business-date';
-import type { HandoffPreview } from './handoff-model';
+import { handoffWarningTarget, type HandoffPreview } from './handoff-model';
+import Link from 'next/link';
 import styles from './handoff.module.css';
 
 const countLabels = [
@@ -26,10 +27,11 @@ export function HandoffReview({ preview }: { preview: HandoffPreview }) {
       {absent === 0 && <p className={styles.muted}>Für die ausgewählten Datensätze wurden keine fehlenden Originale festgestellt. Das ist keine Vollständigkeitsprüfung Ihrer Unterlagen.</p>}
     </div>
     {m.warningCount > 0 ? <section className={styles.warningSection} aria-labelledby="handoff-warning-title">
-      <h3 id="handoff-warning-title"><AlertTriangle aria-hidden="true" />{m.warningCount.toLocaleString('de-DE')} {m.warningCount === 1 ? 'Warnung' : 'Warnungen'} vor der Übergabe prüfen</h3>
+      <h3 id="handoff-warning-title" tabIndex={-1}><AlertTriangle aria-hidden="true" />{m.warningCount.toLocaleString('de-DE')} {m.warningCount === 1 ? 'Warnung' : 'Warnungen'} vor der Übergabe prüfen</h3>
       <p>Das Paket wird mit diesen Warnungen erstellt, nicht als vollständig geprüft freigegeben.</p>
-      <details><summary>Warnungen anzeigen</summary><ul>{m.warnings.slice(0, 50).map((warning, index) => <li key={`${warning.code}-${warning.recordId}-${index}`}><strong>{warning.recordType}{warning.recordId !== null ? ` #${warning.recordId}` : ''}:</strong> {warning.message}</li>)}</ul>{m.warningCount > 50 && <p>Hier sind die ersten 50 von {m.warningCount} Warnungen sichtbar. Alle Warnungen stehen in manifest.json im Paket.</p>}</details>
+      <details><summary>Warnungen anzeigen</summary><ul>{m.warnings.slice(0, 50).map((warning, index) => <li key={`${warning.code}-${warning.recordId}-${index}`}><strong>{warning.recordType}{warning.recordId !== null ? ` #${warning.recordId}` : ''}:</strong> {warning.message}{handoffWarningTarget(warning) && <><br /><Link href={handoffWarningTarget(warning)!.href}>{handoffWarningTarget(warning)!.label}</Link></>}</li>)}</ul>{m.warningCount > 50 && <p>Hier sind die ersten 50 von {m.warningCount} Warnungen sichtbar. Alle Warnungen stehen in manifest.json im Paket.</p>}</details>
     </section> : <p className={styles.notice}>Keine technischen Warnungen in dieser Vorschau. Die fachliche Prüfung und der Abgleich mit Ihren eigenen Unterlagen bleiben erforderlich.</p>}
+    <section className={styles.packageIdentity}><h3>Paketstand und Wiederholbarkeit</h3><p>Manifestversion {m.formatVersion} · Vorschau erstellt: {new Date(m.generatedAt).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC.</p><p>Dateiname: {preview.filename}</p><p>Quellfingerabdruck (SHA-256): <code>{m.sourceFingerprint}</code></p><p>Gleiche Auswahl und unveränderte Quellen ergeben denselben Quellfingerabdruck. Die Erstellzeit und ZIP-Bytes können sich unterscheiden. Ein neuer Datenstand erfordert eine neue Vorschau; alte Empfangsnotizen bestätigen ihn nicht.</p></section>
     <p className={styles.muted}>Rechnung, Einnahme und verknüpfte Kassenbewegung sind verschiedene Sichten desselben Vorgangs. Addieren Sie diese Tabellen nicht miteinander.</p>
   </div>;
 }

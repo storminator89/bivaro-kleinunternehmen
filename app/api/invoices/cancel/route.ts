@@ -1,3 +1,4 @@
+import { cancellationReasonInput } from '@/lib/invoice-cancellation-input';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -20,11 +21,27 @@ async function postHandler(request: Request) {
     try {
         const userId = await requireUserId();
         owner = userId;
-        const { invoiceId, cancellationReason } = await request.json();
+        let body: Record<string, unknown>;
+        try {
+            const parsed: unknown = await request.json();
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+            body = parsed as Record<string, unknown>;
+        } catch {
+            return NextResponse.json({ error: 'Ein gültiges JSON-Objekt ist erforderlich.' }, { status: 400 });
+        }
+        const { invoiceId } = body;
 
         if (!invoiceId) {
             return NextResponse.json({ error: 'Rechnungs-ID ist erforderlich' }, { status: 400 });
         }
+
+        // Validate before looking up data, previewing a number, rendering a PDF
+        // or writing anything. The original explicit reason is retained.
+        const reason = cancellationReasonInput(body.cancellationReason);
+        if (!reason.ok) {
+            return NextResponse.json({ error: reason.error, fieldErrors: { cancellationReason: reason.error } }, { status: 400 });
+        }
+        const cancellationReason = reason.value;
 
         // Get the original invoice with customer
         const originalInvoice = await prisma.invoice.findFirst({
@@ -183,7 +200,7 @@ async function postHandler(request: Request) {
                 date: new Date(),
                 originalInvoiceNumber: originalInvoice.invoiceNumber,
                 originalInvoiceDate: originalInvoice.invoiceDate,
-                cancellationReason: cancellationReason || 'Stornierung der Originalrechnung',
+                cancellationReason: cancellationReason,
                 totalAmount: sourceGrossAmount,
                 netAmount: sourceNetAmount,
                 taxAmount: sourceTaxAmount,
@@ -223,7 +240,7 @@ async function postHandler(request: Request) {
             rawXml: null,
             invoiceNumber: creditNoteNumber,
             originalInvoiceNumber: originalInvoice.invoiceNumber,
-            cancellationReason: cancellationReason || 'Stornierung der Originalrechnung',
+            cancellationReason: cancellationReason,
         };
 
         const creditNote = await inTransaction(async tx => {
@@ -245,7 +262,7 @@ async function postHandler(request: Request) {
                 type: 'CREDIT_NOTE', fileName: creditNoteFileName, storedFileName,
                 invoiceDate: new Date(), invoiceNumber: reserved, parsedData: creditNoteParsedData,
                 totalAmount: -Math.abs(sourceGrossAmount), status: 'SENT', issuanceState: 'ISSUED',
-                originalInvoiceId: originalInvoice.id, cancellationReason: cancellationReason || null,
+                originalInvoiceId: originalInvoice.id, cancellationReason: cancellationReason,
                 customerId: originalInvoice.customerId, userId,
             } });
             await tx.invoice.update({
@@ -253,7 +270,7 @@ async function postHandler(request: Request) {
                 data: {
                     status: 'CANCELLED',
                     paidAt: cancellationPaidAt,
-                    cancellationReason: cancellationReason || null,
+                    cancellationReason: cancellationReason,
                 },
             });
             await createFinancialAuditLog({
@@ -263,13 +280,13 @@ async function postHandler(request: Request) {
                 entityId: originalInvoice.id,
                 entityName: current.invoiceNumber || current.fileName,
                 oldValues: { status: current.status, paidAt: current.paidAt },
-                newValues: { status: 'CANCELLED', cancellationReason: cancellationReason || null, creditNoteId: created.id },
+                newValues: { status: 'CANCELLED', cancellationReason: cancellationReason, creditNoteId: created.id },
                 metadata: {
                     actorId: userId,
                     tenantId: userId,
                     operation: 'invoice.cancel',
                     originalReference: current.invoiceNumber ?? `invoice:${current.id}`,
-                    reason: cancellationReason || 'invoice cancelled with credit note',
+                    reason: cancellationReason,
                 },
             }, tx);
             await createFinancialAuditLog({
@@ -284,7 +301,7 @@ async function postHandler(request: Request) {
                     tenantId: userId,
                     operation: 'credit-note.create',
                     originalReference: current.invoiceNumber ?? `invoice:${current.id}`,
-                    reason: cancellationReason || 'credit note created for cancellation',
+                    reason: cancellationReason,
                 },
             }, tx);
             return created;

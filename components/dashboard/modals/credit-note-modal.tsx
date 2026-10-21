@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { cancellationSubmissionGate } from "@/lib/cancellation-submission";
+import { cancellationReasonInput, MAX_CANCELLATION_REASON_LENGTH } from "@/lib/invoice-cancellation-input";
 import {
     Dialog,
     DialogContent,
@@ -22,13 +24,28 @@ interface CreditNoteModalProps {
     onSuccess?: () => void;
 }
 
+export function CancellationProgress() {
+    return <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Die bestätigte Stornierung wird verarbeitet. Bitte warten; dieser Dialog bleibt bis zur Antwort geöffnet. Schließen würde den Auftrag nicht zurücknehmen.</p>;
+}
+
 export function CreditNoteModal({ isOpen, onClose, invoice, onSuccess }: CreditNoteModalProps) {
     const [cancellationReason, setCancellationReason] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [reasonError, setReasonError] = useState<string | null>(null);
+    const reasonInput = useRef<HTMLTextAreaElement>(null);
+    const submission = useRef(cancellationSubmissionGate());
 
     const handleSubmit = async () => {
-        if (!invoice) return;
+        if (!invoice || isSubmitting) return;
+        const reason = cancellationReasonInput(cancellationReason);
+        if (!reason.ok) {
+            setReasonError(reason.error);
+            reasonInput.current?.focus();
+            return;
+        }
+        if (!submission.current.begin()) return;
+        setReasonError(null);
 
         setIsSubmitting(true);
         setError(null);
@@ -39,13 +56,18 @@ export function CreditNoteModal({ isOpen, onClose, invoice, onSuccess }: CreditN
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     invoiceId: invoice.id,
-                    cancellationReason: cancellationReason.trim() || undefined,
+                    cancellationReason: reason.value,
                 }),
             });
 
             const data = await response.json();
 
             if (!response.ok) {
+                if (typeof data.fieldErrors?.cancellationReason === 'string') {
+                    setReasonError(data.fieldErrors.cancellationReason);
+                    reasonInput.current?.focus();
+                    return;
+                }
                 setError(data.error || "Fehler beim Stornieren der Rechnung");
                 return;
             }
@@ -55,16 +77,20 @@ export function CreditNoteModal({ isOpen, onClose, invoice, onSuccess }: CreditN
             onClose();
             onSuccess?.();
         } catch {
-            setError("Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.");
+            setError("Die Antwort auf den Stornoauftrag ist unklar. Bitte die Rechnungshistorie prüfen, bevor Sie es erneut versuchen. Der Auftrag wurde durch diesen Fehler nicht zurückgenommen.");
         } finally {
+            submission.current.finish();
             setIsSubmitting(false);
         }
     };
 
     const handleClose = () => {
-        setCancellationReason("");
-        setError(null);
-        onClose();
+        submission.current.dismiss(() => {
+            setCancellationReason("");
+            setReasonError(null);
+            setError(null);
+            onClose();
+        });
     };
 
     if (!invoice) return null;
@@ -77,8 +103,14 @@ export function CreditNoteModal({ isOpen, onClose, invoice, onSuccess }: CreditN
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-lg bg-card border rounded-xl shadow-lg">
+        <Dialog open={isOpen} onOpenChange={open => { if (!open) handleClose(); }}>
+            <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg bg-card border rounded-xl shadow-lg"
+                showCloseButton={!isSubmitting}
+                aria-busy={isSubmitting}
+                onEscapeKeyDown={event => submission.current.preventDismiss(event)}
+                onPointerDownOutside={event => submission.current.preventDismiss(event)}
+                onInteractOutside={event => submission.current.preventDismiss(event)}
+            >
                 <DialogHeader className="border-b pb-4">
                     <DialogTitle className="text-xl font-semibold flex items-center gap-2 text-red-600 dark:text-red-400">
                         <FileX className="h-5 w-5" />
@@ -127,20 +159,32 @@ export function CreditNoteModal({ isOpen, onClose, invoice, onSuccess }: CreditN
 
                     {/* Cancellation Reason */}
                     <div className="space-y-2">
-                        <Label htmlFor="cancellation-reason">Stornierungsgrund (optional)</Label>
+                        <Label htmlFor="cancellation-reason">Stornierungsgrund (erforderlich)</Label>
                         <Textarea
+                            ref={reasonInput}
                             id="cancellation-reason"
+                            required
+                            disabled={isSubmitting}
+                            aria-required="true"
+                            aria-invalid={Boolean(reasonError)}
+                            aria-describedby={reasonError ? 'cancellation-reason-help cancellation-reason-error' : 'cancellation-reason-help'}
+                            maxLength={MAX_CANCELLATION_REASON_LENGTH}
                             placeholder="Geben Sie den Grund für die Stornierung an..."
                             value={cancellationReason}
-                            onChange={(e) => setCancellationReason(e.target.value)}
+                            onChange={(e) => { setCancellationReason(e.target.value); setReasonError(null); }}
                             rows={3}
                             className="resize-none"
                         />
                     </div>
 
+                    <p id="cancellation-reason-help" className="text-sm text-muted-foreground">Der Grund wird mit Original, Gutschrift und Änderungseintrag gespeichert. Ein Storno belegt keine Rückzahlung.</p>
+                    {reasonError && <p id="cancellation-reason-error" role="alert" className="text-sm text-destructive">{reasonError}</p>}
+
+                    {isSubmitting && <CancellationProgress />}
+
                     {/* Error Message */}
                     {error && (
-                        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                        <div role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                         </div>
                     )}

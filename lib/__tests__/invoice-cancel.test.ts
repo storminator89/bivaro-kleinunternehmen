@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
@@ -95,6 +95,11 @@ describe('invoice cancellation', () => {
     expect((await database.client.income.findFirstOrThrow({ where: { invoiceId: invoice.id } })).date).toEqual(incomeDate);
     expect(await database.client.invoice.count({ where: { originalInvoiceId: invoice.id } })).toBe(1);
     expect(state.files).toHaveLength(1);
+    expect(persisted.cancellationReason).toBe('Legacy correction');
+    const counters = await database.client.invoiceNumberCounter.findMany();
+    const duplicate = await cancelInvoice(new Request('http://localhost/api/invoices/cancel', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invoiceId: invoice.id, cancellationReason: 'Explicit retry' }) }));
+    expect(duplicate.status).toBe(400);
+    expect(await database.client.invoiceNumberCounter.findMany()).toEqual(counters);
   });
 
   it('cancels price-basis lines using the original line amount', async () => {
@@ -126,7 +131,7 @@ describe('invoice cancellation', () => {
     const response = await cancelInvoice(new Request('http://localhost/api/invoices/cancel', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ invoiceId: invoice.id }),
+      body: JSON.stringify({ invoiceId: invoice.id, cancellationReason: 'Price basis correction' }),
     }));
 
     expect(response.status).toBe(200);
@@ -136,5 +141,62 @@ describe('invoice cancellation', () => {
     expect(pdfData.grossAmount).toBe(10);
     const creditNote = await database.client.invoice.findFirstOrThrow({ where: { originalInvoiceId: invoice.id } });
     expect(creditNote.totalAmount).toBe(-10);
+  });
+});
+
+
+describe('explicit cancellation reason boundary', () => {
+  async function original() {
+    return database.client.invoice.create({ data: { userId: 'alice', fileName: 'reason.pdf', storedFileName: 'reason.pdf', parsedData: { items: [] }, totalAmount: 100, status: 'SENT', issuanceState: 'ISSUED' } });
+  }
+  async function snapshot(id: number) {
+    return { invoice: await database.client.invoice.findUnique({ where: { id } }), credits: await database.client.invoice.count({ where: { originalInvoiceId: id } }), counters: await database.client.invoiceNumberCounter.findMany(), audits: await database.client.auditLog.count(), files: state.files.filter(file => existsSync(file)) };
+  }
+  function request(invoiceId: number, cancellationReason: unknown) {
+    return new Request('http://localhost/api/invoices/cancel', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invoiceId, cancellationReason }) });
+  }
+  it.each([undefined, null, '', '   ', 42, {}, [], 'bad\u0000reason', 'x'.repeat(1001)])('rejects absent, nontext, blank, control or oversized reason without side effects (%j)', async value => {
+    const invoice = await original(), before = await snapshot(invoice.id);
+    const response = await cancelInvoice(request(invoice.id, value));
+    expect(response.status).toBe(400); expect(await response.json()).toHaveProperty('fieldErrors.cancellationReason');
+    expect(await snapshot(invoice.id)).toEqual(before);
+  });
+  it('stores the same explicit trimmed reason on original, correction and both audit entries', async () => {
+    const invoice = await original(); const response = await cancelInvoice(request(invoice.id, '  Explicit synthetic correction  '));
+    expect(response.status).toBe(200);
+    const credit = await database.client.invoice.findFirstOrThrow({ where: { originalInvoiceId: invoice.id } });
+    expect(credit.cancellationReason).toBe('Explicit synthetic correction');
+    expect((await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id } })).cancellationReason).toBe(credit.cancellationReason);
+    const entries = await database.client.auditLog.findMany({ where: { userId: 'alice', OR: [{ entityType: 'Invoice', entityId: String(invoice.id) }, { entityType: 'CreditNote', entityId: String(credit.id) }] } });
+    expect(entries).toHaveLength(2);
+    expect(entries.every(entry => JSON.parse(entry.metadata!).reason === credit.cancellationReason)).toBe(true);
+  });
+  it('rolls back document and number allocation if the required cancellation audit cannot be stored', async () => {
+    const invoice = await original(), before = await snapshot(invoice.id);
+    await database.client.$executeRawUnsafe(`CREATE TRIGGER fail_cancellation_audit BEFORE INSERT ON AuditLog WHEN NEW.action = 'CANCELLED' BEGIN SELECT RAISE(ABORT, 'synthetic cancellation audit failure'); END`);
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await cancelInvoice(request(invoice.id, 'Explicit failed-audit correction'));
+      expect(response.status).toBe(409); expect(await snapshot(invoice.id)).toEqual(before);
+    } finally {
+      silence.mockRestore(); await database.client.$executeRawUnsafe('DROP TRIGGER fail_cancellation_audit');
+    }
+  });
+});
+
+
+describe('cancellation input and ownership regression', () => {
+  it('rejects malformed JSON with a clear 400 before allocating a number', async () => {
+    const before = await database.client.invoiceNumberCounter.findMany();
+    const response = await cancelInvoice(new Request('http://localhost/api/invoices/cancel', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' }));
+    expect(response.status).toBe(400); expect(await database.client.invoiceNumberCounter.findMany()).toEqual(before);
+  });
+  it('preserves multiline explicit reasons and never cancels another owner document', async () => {
+    const invoice = await database.client.invoice.create({ data: { userId: 'alice', fileName: 'multiline.pdf', storedFileName: 'multiline.pdf', parsedData: { items: [] }, totalAmount: 10, status: 'SENT' } });
+    const request = () => new Request('http://localhost/api/invoices/cancel', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invoiceId: invoice.id, cancellationReason: '  First line\r\nSecond line  ' }) });
+    state.userId = 'other-owner';
+    try { expect((await cancelInvoice(request())).status).toBe(404); } finally { state.userId = 'alice'; }
+    expect((await cancelInvoice(request())).status).toBe(200);
+    expect((await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id } })).cancellationReason).toBe('First line\nSecond line');
   });
 });

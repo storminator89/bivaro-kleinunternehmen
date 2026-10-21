@@ -1,3 +1,4 @@
+import { ProcessingCapacityError } from '@/lib/processing-limit';
 import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
@@ -108,6 +109,7 @@ async function postHandler(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof UnauthorizedError) return unauthorizedResponse();
+    if (error instanceof ProcessingCapacityError) return NextResponse.json({ error: error.message, code: 'PROCESSING_BUSY' }, { status: error.status, headers: { 'Retry-After': '1' } });
     if (error instanceof RequestBodyLimitError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }

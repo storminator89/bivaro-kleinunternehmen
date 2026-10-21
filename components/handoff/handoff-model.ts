@@ -52,7 +52,8 @@ export function readHandoffPreview(value: unknown): HandoffPreview {
   const result = value as HandoffPreview;
   const m = result.manifest;
   const isCount = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
-  if (!m || m.format !== 'bivaro-accountant-handoff' || m.formatVersion !== 1 ||
+  if (typeof result.filename !== 'string' || !/^[a-zA-Z0-9._-]+\.zip$/.test(result.filename) || result.filename.includes('..') ||
+      !m || typeof m.generatedAt !== 'string' || !Number.isFinite(Date.parse(m.generatedAt)) || m.format !== 'bivaro-accountant-handoff' || m.formatVersion !== 1 ||
       !/^[a-f0-9]{64}$/.test(m.sourceFingerprint) || !m.period ||
       !m.counts || !['incomes', 'expenses', 'invoices', 'cashTransactions', 'customers', 'cashBooks'].every(key => isCount(m.counts[key])) ||
       !m.originalCounts || !Object.values(m.originalCounts).every(isCount) ||
@@ -85,4 +86,36 @@ export class HandoffRequestGate {
     this.controller?.abort();
     this.controller = null;
   }
+}
+
+export type HandoffReadiness = {
+  period: { from: string; to: string };
+  checkedAt: string;
+  incoming: {
+    datedCount: number; undatedCount: number; undatedUploadedInPeriod: number;
+    datedExamples: { id: number; originalFileName: string }[];
+    undatedExamples: { id: number; originalFileName: string }[];
+  };
+};
+export function readHandoffReadiness(value: unknown, period: HandoffPreview['manifest']['period']): HandoffReadiness {
+  const invalid = () => new Error('Die Prüfaufgaben sind ungültig. Bitte die Vorschau erneut laden.');
+  if (!value || typeof value !== 'object') throw invalid();
+  const result = value as HandoffReadiness;
+  const n = (v: unknown) => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+  if (!result.period || result.period.from !== period.from || result.period.to !== period.to ||
+      typeof result.checkedAt !== 'string' || !Number.isFinite(Date.parse(result.checkedAt)) || !result.incoming) throw invalid();
+  const i = result.incoming;
+  if (![i.datedCount, i.undatedCount, i.undatedUploadedInPeriod].every(n) || i.undatedUploadedInPeriod > i.undatedCount) throw invalid();
+  for (const [samples, total] of [[i.datedExamples, i.datedCount], [i.undatedExamples, i.undatedCount]] as const) {
+    if (!Array.isArray(samples) || samples.length > Math.min(5, total) || !samples.every(row => row && n(row.id) && row.id > 0 && typeof row.originalFileName === 'string')) throw invalid();
+  }
+  return result;
+}
+
+export function handoffWarningTarget(warning: HandoffPreview['manifest']['warnings'][number]): { href: string; label: string } | null {
+  if (warning.recordType === 'expense' && warning.recordId !== null && warning.recordId > 0) return { href: `/expenses/${warning.recordId}`, label: 'Ausgabe und Original prüfen' };
+  if (warning.recordType === 'invoice' || warning.recordType === 'payment') return { href: '/dashboard?tab=invoices', label: warning.recordType === 'payment' ? 'Zahlungsverlauf der Rechnung prüfen' : 'Rechnungsoriginal prüfen' };
+  if (warning.recordType === 'income') return { href: '/dashboard?tab=incomes', label: 'Einnahmen prüfen' };
+  if (warning.recordType === 'cashTransaction') return { href: '/cashbook', label: 'Kassenbuch prüfen' };
+  return null;
 }
