@@ -142,6 +142,15 @@ validation identity does not gain projects or duration/capture fields. The
 existing project import, capture-fingerprint and invoice-assignment guards are
 preserved unchanged.
 
+The release combining project capture, durable mail outbox and validation uses
+`20261022030000_combine_projects_outbox_validation`. The project/outbox identity
+`20261022020000_combine_projects_outbox` and outbox-only identity
+`20261022000000_durable_mail_outbox` do not gain validation reports. Conversely,
+the standalone and project/validation identities do not gain outbox capability.
+Runtime mail jobs and attempts remain excluded from backups at every version;
+restore never imports or reactivates them. Target-owned mail evidence and
+append-only validation history both survive destructive business-data restore.
+
 Imported reports are always `IMPORTED_HISTORIC`, never current technical passes.
 Restore performs no automatic validation. Reimport is idempotent; same portable
 UUID with changed immutable content aborts the complete transaction. Target

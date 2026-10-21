@@ -1,4 +1,4 @@
-import { backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, hashJson } from '@/lib/backup-manifest';
+import { backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
 /** Construct a genuine pre-CSV fixture, rather than relabelling a future schema. */
 export function stripCsvCatalogForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
   stripEmptyPaymentAdjustmentsForLegacy(backup);
@@ -35,6 +35,7 @@ export function stripEmptyServiceBillingForLegacy(backup: { data: Record<string,
 /** Genuine older fixtures cannot contain even empty future-capability fields. */
 export function stripEmptyPaymentAdjustmentsForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
   stripEmptyProjectServiceTimesForLegacy(backup);
+  if (!backupSchemaSupportsEmailOutbox(backup.manifest.schemaVersion)) backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => !['EmailOutbox', 'EmailOutboxAttempt'].includes(entry.model));
   if (!backupSchemaSupportsPurchaseValidation(backup.manifest.schemaVersion) && (backup.data.purchaseValidationReports === undefined || (Array.isArray(backup.data.purchaseValidationReports) && backup.data.purchaseValidationReports.length === 0))) {
     delete backup.data.purchaseValidationReports;
     backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => entry.model !== 'PurchaseValidationReport');

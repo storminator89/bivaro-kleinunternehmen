@@ -880,6 +880,7 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   const version = asRequiredString(root.version, 'Backup-Version', 32);
   if (version !== LEGACY_BACKUP_VERSION && version !== CURRENT_BACKUP_VERSION) throw new BackupValidationError(`Nicht unterstützte Backup-Version ${version}`);
   const data = asRecord(root.data, 'Backup-Daten');
+  if (data.emailOutbox !== undefined || data.emailOutboxAttempts !== undefined) throw new BackupValidationError('Versandaufträge und Versuchshistorie dürfen nicht importiert oder reaktiviert werden.');
   let manifest: BackupManifest | undefined;
   const warnings: string[] = [];
   if (version === CURRENT_BACKUP_VERSION) {
@@ -1242,6 +1243,15 @@ function issuanceStateRank(value: string | null | undefined): number {
 }
 
 async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+  // Preserve target-owned duplicate-risk evidence, but never reattach it to a
+  // replacement row whose numeric ID happens to match the former original.
+  await tx.emailOutboxAttempt.updateMany({ where: { outbox: { userId }, state: 'PROCESSING' },
+    data: { state: 'UNKNOWN', errorCode: 'RESTORE_INTERRUPTED', finishedAt: new Date(), uncertaintyRecordedAt: new Date() } });
+  await tx.emailOutbox.updateMany({ where: { userId, state: 'PROCESSING' },
+    data: { state: 'UNKNOWN', errorCode: 'RESTORE_INTERRUPTED', processingExpiresAt: null } });
+  await tx.emailOutbox.updateMany({ where: { userId, state: { in: ['PREPARED', 'FAILED'] } },
+    data: { state: 'CANCELLED', errorCode: 'ORIGINAL_REPLACED', processingExpiresAt: null } });
+  await tx.emailOutbox.updateMany({ where: { userId }, data: { invoiceId: null } });
   await tx.serviceBillingPeriod.deleteMany({ where: { userId } });
   await tx.serviceBillingPlan.deleteMany({ where: { userId } });
   await tx.cashTransaction.deleteMany({ where: { userId } });

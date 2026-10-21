@@ -95,7 +95,17 @@ describe('immutable owned technical reports without financial effects', () => {
     const manifest = (value: typeof data) => createBackupManifest({ sourceUserId: 'validator-owner', generatedAt: new Date().toISOString(), data: value, fileManifest: [{ kind: 'purchase-document', sourceName: source.storedFileName, sha256: source.originalSha256, bytes: source.originalByteCount }] });
     const backup = { version: '3.0', type: 'full', data, manifest: manifest(data) };
     const resolveFile = vi.fn(async () => bytes);
+    const outboxProof = [];
+    for (const [index, status] of ['PREPARED', 'PROCESSING'].entries()) {
+      outboxProof.push(await database.client.emailOutbox.create({ data: {
+        userId: 'validator-other', invoiceId: null, sourceInvoiceId: 700 + index, documentType: 'INVOICE', requestId: randomUUID(), fingerprint: randomUUID(),
+        attachmentSha256: source.originalSha256, storedFileName: `synthetic-proof-${index}.pdf`, attachmentFileName: 'synthetic-proof.pdf', from: 'sender@example.test', to: 'recipient@example.test', cc: '[]', bcc: '[]', subject: 'Synthetic retained evidence', text: 'No transport call', state: status,
+      } }));
+    }
+    const processingAttempt = await database.client.emailOutboxAttempt.create({ data: { outboxId: outboxProof[1].id, requestId: randomUUID(), sequence: 1, state: 'PROCESSING' } });
     await restoreBackupData({ userId: 'validator-other', backup, overwrite: false, resolveFile });
+    expect(await database.client.emailOutbox.findMany({ where: { userId: 'validator-other' }, orderBy: { sourceInvoiceId: 'asc' } })).toEqual(outboxProof);
+    expect(await database.client.emailOutboxAttempt.findUnique({ where: { id: processingAttempt.id } })).toEqual(processingAttempt);
     const imported = await database.client.purchaseValidationReport.findMany({ where: { userId: 'validator-other' } });
     expect(imported).toHaveLength(2); expect(imported.every(item => item.provenance === 'IMPORTED_HISTORIC')).toBe(true);
     const target = await database.client.purchaseDocument.findUniqueOrThrow({ where: { userId_originalSha256: { userId: 'validator-other', originalSha256: source.originalSha256 } } });
@@ -110,7 +120,12 @@ describe('immutable owned technical reports without financial effects', () => {
     await restoreBackupData({ userId: 'validator-other', backup, overwrite: false, resolveFile });
     await restoreBackupData({ userId: 'validator-other', backup, overwrite: true, resolveFile });
     expect(await database.client.purchaseValidationReport.findMany({ where: { userId: 'validator-other' }, orderBy: { id: 'asc' } })).toEqual(targetReports);
+    const retainedOutbox = await database.client.emailOutbox.findMany({ where: { userId: 'validator-other' }, orderBy: { sourceInvoiceId: 'asc' } });
+    expect(retainedOutbox).toEqual([expect.objectContaining({ id: outboxProof[0].id, state: 'CANCELLED', sourceInvoiceId: 700, invoiceId: null, fingerprint: outboxProof[0].fingerprint }), expect.objectContaining({ id: outboxProof[1].id, state: 'UNKNOWN', sourceInvoiceId: 701, invoiceId: null, fingerprint: outboxProof[1].fingerprint })]);
+    const retainedAttempt = await database.client.emailOutboxAttempt.findUnique({ where: { id: processingAttempt.id } });
+    expect(retainedAttempt).toMatchObject({ state: 'UNKNOWN', errorCode: 'RESTORE_INTERRUPTED', uncertaintyRecordedAt: expect.any(Date), finishedAt: expect.any(Date) });
     const after = await readBackupSnapshot('validator-other');
+    expect(after.data).not.toHaveProperty('emailOutbox'); expect(after.data).not.toHaveProperty('emailOutboxAttempts');
     const conflicting = structuredClone(backup);
     conflicting.data.purchaseValidationReports[0].report.checkerVersion = 'changed-checker';
     conflicting.data.purchaseValidationReports[0].fingerprint = technicalReportFingerprint(conflicting.data.purchaseValidationReports[0].report);
@@ -118,6 +133,8 @@ describe('immutable owned technical reports without financial effects', () => {
     await expect(restoreBackupData({ userId: 'validator-other', backup: conflicting, overwrite: true, resolveFile })).rejects.toThrow(/kollidiert/);
     expect((await readBackupSnapshot('validator-other')).data).toEqual(after.data);
     expect(await database.client.purchaseValidationReport.findMany({ where: { userId: 'validator-other' }, orderBy: { id: 'asc' } })).toEqual(targetReports);
+    expect(await database.client.emailOutbox.findMany({ where: { userId: 'validator-other' }, orderBy: { sourceInvoiceId: 'asc' } })).toEqual(retainedOutbox);
+    expect(await database.client.emailOutboxAttempt.findUnique({ where: { id: processingAttempt.id } })).toEqual(retainedAttempt);
     const foreign = structuredClone(backup); foreign.data.purchaseValidationReports[0].originalSha256 = 'b'.repeat(64); foreign.manifest = manifest(foreign.data);
     expect(() => validateBackupForRestore(foreign)).toThrow(/Original/);
     const old = structuredClone(backup); old.manifest.schemaVersion = PRE_PURCHASE_VALIDATION_SCHEMA_VERSION;

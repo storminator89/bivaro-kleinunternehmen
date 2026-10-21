@@ -1,14 +1,16 @@
 import { reminderBalance, normalizeReminderOptions, composeReminderText } from '@/lib/reminder-workbench';
 import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'fs/promises';
 import { basename, extname } from 'path';
-import type { SendMailOptions } from 'nodemailer';
+import type { SendMailOptions, Transporter } from 'nodemailer';
 import { createDocumentMailTransport } from '@/lib/smtp-transport';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog, createFinancialAuditLog } from '@/lib/audit-log';
 import { inTransaction } from '@/lib/db-transaction';
 import { findOwnedUploadedFile } from '@/lib/upload-ownership';
 import { recordDocumentDelivery } from '@/lib/email-delivery';
+import { attachmentSha256, emailStorageScope, prepareEmailOutbox, claimEmailOutbox, finishEmailAttempt, readEmailOutbox, validateEmailRequestId, classifyEmailTransportError, EmailOutboxConflict, type EmailRetry } from '@/lib/email-outbox';
 import { getSmtpSettingsStatus, resolveSmtpConfiguration } from '@/lib/smtp-settings';
 
 export type EmailDocumentType = 'invoice' | 'quote' | 'reminder';
@@ -48,9 +50,15 @@ export type EmailDraft = {
   missingConfiguration: string[];
   /** Internal UI context only. Never copied into subject, body or attachments. */
   internalCustomerNote: string | null;
+  attachmentSha256: string;
+  storageScope: string;
 };
 
 export type SendEmailRequest = EmailDraftRequest & {
+  requestId?: string;
+  attachmentSha256?: string;
+  reviewedFrom?: string;
+  reviewedReplyTo?: string | null;
   to: string;
   cc?: string;
   bcc?: string;
@@ -118,8 +126,15 @@ export function normalizeSendEmailRequest(body: unknown): SendEmailRequest {
   const cc = data.cc ? normalizeEmailList(data.cc, 'CC') : '';
   const bcc = data.bcc ? normalizeEmailList(data.bcc, 'BCC') : '';
 
+  const requestId = draftRequest.documentType === 'reminder' ? randomUUID() : validateEmailRequestId(data.requestId);
+  if (draftRequest.documentType !== 'reminder' && (typeof data.attachmentSha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(data.attachmentSha256))) throw new EmailOutboxConflict('Bitte den Originalanhang erneut in der Vorschau prüfen.');
+  if (draftRequest.documentType !== 'reminder' && (typeof data.reviewedFrom !== 'string' || (data.reviewedReplyTo !== null && typeof data.reviewedReplyTo !== 'string'))) throw new EmailOutboxConflict('Bitte den Absender erneut in der Vorschau prüfen.');
   return {
     ...draftRequest,
+    reviewedFrom: typeof data.reviewedFrom === 'string' ? data.reviewedFrom : undefined,
+    reviewedReplyTo: typeof data.reviewedReplyTo === 'string' ? data.reviewedReplyTo : null,
+    requestId,
+    attachmentSha256: typeof data.attachmentSha256 === 'string' ? data.attachmentSha256 : '',
     to,
     cc,
     bcc,
@@ -130,6 +145,8 @@ export function normalizeSendEmailRequest(body: unknown): SendEmailRequest {
 
 export async function buildDocumentEmailDraft(userId: string, request: EmailDraftRequest): Promise<EmailDraft> {
   const loaded = await loadEmailDocument(userId, request);
+  const originalHash = attachmentSha256(await readFile(loaded.attachmentPath));
+  const storageScope = emailStorageScope(userId);
   const configuration = await getEmailConfigurationStatus(loaded.settings.email);
   const companyName = loaded.settings.companyName || 'Ihr Unternehmen';
   const recipient = loaded.customer?.email || '';
@@ -169,6 +186,8 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
       emailConfigured: configuration.configured,
       missingConfiguration: configuration.missing,
       internalCustomerNote,
+      attachmentSha256: originalHash,
+      storageScope,
     };
   }
 
@@ -194,6 +213,8 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
       emailConfigured: configuration.configured,
       missingConfiguration: configuration.missing,
       internalCustomerNote,
+      attachmentSha256: originalHash,
+      storageScope,
     };
   }
 
@@ -222,10 +243,136 @@ export async function buildDocumentEmailDraft(userId: string, request: EmailDraf
     emailConfigured: configuration.configured,
     missingConfiguration: configuration.missing,
     internalCustomerNote,
+    attachmentSha256: originalHash,
+    storageScope,
   };
 }
 
-export async function sendDocumentEmail(userId: string, request: SendEmailRequest) {
+/** Bound the whole SMTP operation below the durable processing lease, not just idle sockets. */
+export async function sendOutboxMail(transport: Pick<Transporter, 'sendMail' | 'close'>, mail: SendMailOptions, abort?: () => void) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      abort?.();
+      transport.close?.();
+      reject(Object.assign(new Error('SMTP outcome uncertain after deadline'), { code: 'ETIMEDOUT' }));
+    }, 45_000);
+  });
+  try { return await Promise.race([transport.sendMail(mail), deadline]); }
+  finally { if (timer) clearTimeout(timer); abort?.(); }
+}
+
+export async function sendDocumentEmail(userId: string, request: SendEmailRequest, retry?: EmailRetry): Promise<{ outbox?: Awaited<ReturnType<typeof readEmailOutbox>>; messageId?: string; warning?: string; reminder?: unknown }> {
+  // Legacy wholly unpaid reminders remain outside this first outbox slice.
+  // Their existing fresh payment-evidence guard stays unchanged.
+  if (request.documentType === 'reminder') return sendLegacyReminderEmail(userId, request);
+  const loaded = await loadEmailDocument(userId, request);
+  const configuration = await getRequiredEmailConfiguration(loaded.settings.email);
+  const attachment = await readFile(loaded.attachmentPath);
+  const originalHash = attachmentSha256(attachment);
+  if (originalHash !== request.attachmentSha256) throw new EmailOutboxConflict('Der Originalanhang wurde geändert. Bitte eine neue Vorschau prüfen und bestätigen.');
+  const saved = retry
+    ? await readEmailOutbox(userId, retry.outboxId)
+    : await prisma.emailOutbox.findUnique({ where: { userId_requestId: { userId, requestId: validateEmailRequestId(request.requestId) } } });
+  if (saved && (saved.invoiceId !== loaded.invoice.id || saved.documentType !== request.documentType
+    || saved.storedFileName !== loaded.invoice.storedFileName || saved.attachmentSha256 !== originalHash
+    || saved.to !== request.to || saved.cc !== (request.cc || '') || saved.bcc !== (request.bcc || '')
+    || saved.subject !== request.subject || saved.text !== request.text)) {
+    throw new EmailOutboxConflict('Die bestätigte E-Mail oder das Original wurde geändert. Bitte eine neue Vorschau prüfen.');
+  }
+  if (retry && (!saved || saved.requestId !== request.requestId)) throw new EmailOutboxConflict('Versandauftrag nicht gefunden.');
+  if (!saved && (request.reviewedFrom !== configuration.from || (request.reviewedReplyTo ?? null) !== (loaded.settings.email || null))) {
+    throw new EmailOutboxConflict('Der Absender wurde geändert. Bitte eine neue Vorschau prüfen und bestätigen.');
+  }
+  const envelope = {
+    userId, invoiceId: loaded.invoice.id, sourceInvoiceId: loaded.invoice.id, documentType: request.documentType,
+    attachmentSha256: originalHash, storedFileName: loaded.invoice.storedFileName, attachmentFileName: loaded.attachmentFileName,
+    from: saved?.from ?? configuration.from, replyTo: saved ? saved.replyTo : loaded.settings.email || null,
+    to: request.to, cc: request.cc || '', bcc: request.bcc || '', subject: request.subject, text: request.text,
+  };
+  const outbox = await prepareEmailOutbox(envelope, validateEmailRequestId(request.requestId));
+  if (retry && retry.outboxId !== outbox.id) throw new EmailOutboxConflict('Der gespeicherte Versandauftrag stimmt nicht mehr mit der Vorschau überein.');
+  const claimed = await claimEmailOutbox(userId, outbox.id, retry);
+  if (!claimed) return { outbox: await readEmailOutbox(userId, outbox.id) };
+  const controller = new AbortController();
+  const transport = createDocumentMailTransport(configuration, { signal: controller.signal });
+  const mail: SendMailOptions = {
+    from: outbox.from, replyTo: outbox.replyTo || undefined,
+    to: splitEmailList(outbox.to), cc: outbox.cc ? splitEmailList(outbox.cc) : undefined,
+    bcc: outbox.bcc ? splitEmailList(outbox.bcc) : undefined,
+    subject: outbox.subject, text: outbox.text, html: textToHtml(outbox.text),
+    attachments: [{ filename: outbox.attachmentFileName, content: attachment, contentType: loaded.attachmentContentType }],
+  };
+  try {
+    // Reserve issuance before contacting SMTP.  If SMTP succeeds but the
+    // follow-up status write fails, the marker still keeps the draft locked
+    // against deletion.  A concurrent payment can win between these steps;
+    // the later CAS below then leaves PAID untouched.
+    await inTransaction(async tx => {
+      const active = await tx.emailOutbox.findFirst({ where: { id: outbox.id, userId, invoiceId: loaded.invoice.id, currentAttemptId: claimed.attemptId, state: 'PROCESSING' } });
+      if (!active) throw new EmailOutboxConflict('Versandauftrag wurde unterbrochen. Bitte Versandverlauf prüfen.');
+      const current = await tx.invoice.findFirst({
+        where: { id: loaded.invoice.id, userId },
+        select: { status: true, issuanceState: true, invoiceNumber: true, fileName: true, storedFileName: true },
+      });
+      if (!current || current.storedFileName !== outbox.storedFileName) throw new EmailOutboxConflict('Das Original wurde inzwischen ersetzt. Bitte neue Vorschau prüfen.');
+      if (current.status !== 'DRAFT' || current.issuanceState === 'ISSUED') return;
+      await tx.invoice.update({ where: { id: loaded.invoice.id, userId }, data: { issuanceState: 'ISSUED' } });
+      await createFinancialAuditLog({
+        userId,
+        action: 'STATUS_CHANGED',
+        entityType: request.documentType === 'quote' ? 'Quote' : 'Invoice',
+        entityId: loaded.invoice.id,
+        entityName: current.invoiceNumber || current.fileName,
+        oldValues: { status: current.status, issuanceState: current.issuanceState },
+        newValues: { status: current.status, issuanceState: 'ISSUED' },
+        metadata: {
+          actorId: userId,
+          tenantId: userId,
+          operation: 'invoice.issue-attempt',
+          originalReference: current.invoiceNumber ?? `invoice:${loaded.invoice.id}`,
+          reason: 'document email prepared for delivery',
+        },
+      }, tx);
+    });
+  } catch {
+    controller.abort();
+    await finishEmailAttempt(userId, outbox.id, claimed.attemptId, { state: 'FAILED', errorCode: 'PREPARATION_FAILED' });
+    return { outbox: await readEmailOutbox(userId, outbox.id) };
+  }
+  let info;
+  try {
+    // Never place SMTP inside a retried database transaction.
+    info = await sendOutboxMail(transport, mail, () => controller.abort());
+  } catch (error) {
+    await finishEmailAttempt(userId, outbox.id, claimed.attemptId, classifyEmailTransportError(error));
+    return { outbox: await readEmailOutbox(userId, outbox.id) };
+  }
+  if (Array.isArray(info.accepted) && info.accepted.length === 0) {
+    await finishEmailAttempt(userId, outbox.id, claimed.attemptId, { state: 'FAILED', errorCode: 'RECIPIENT_REJECTED' });
+    return { outbox: await readEmailOutbox(userId, outbox.id) };
+  }
+  const partiallyAccepted = Array.isArray(info.rejected) && info.rejected.length > 0;
+  const messageId = typeof info.messageId === 'string' ? info.messageId.slice(0, 998) : '';
+  try {
+    // Persist acceptance independently from invoice status/audit projection.
+    await finishEmailAttempt(userId, outbox.id, claimed.attemptId, { state: 'ACCEPTED', messageId, errorCode: partiallyAccepted ? 'PARTIAL_RECIPIENTS' : undefined });
+  } catch {
+    // The persisted PROCESSING attempt will recover to UNKNOWN, never retry itself.
+    throw new EmailDeliveryRecordingError(messageId);
+  }
+  try {
+    const projection = await recordDocumentDelivery({ userId, invoiceId: loaded.invoice.id, documentType: request.documentType,
+      expectedStatus: loaded.invoice.status, messageId, outbox: { id: outbox.id, attemptId: claimed.attemptId, attachmentSha256: outbox.attachmentSha256, storedFileName: outbox.storedFileName } });
+    if ('projectionSkipped' in projection) return { messageId, outbox: await readEmailOutbox(userId, outbox.id), warning: 'SMTP angenommen; das Original wurde inzwischen ersetzt. Der neue Dokumentstatus bleibt unverändert.' };
+  } catch {
+    // SMTP acceptance already survives reload; this failure must never invite resend.
+    return { messageId, outbox: await readEmailOutbox(userId, outbox.id), warning: 'SMTP angenommen; Dokumentstatus konnte nicht aktualisiert werden.' };
+  }
+  return { messageId, outbox: await readEmailOutbox(userId, outbox.id) };
+}
+
+async function sendLegacyReminderEmail(userId: string, request: SendEmailRequest) {
   const loaded = await loadEmailDocument(userId, request);
   const configuration = await getRequiredEmailConfiguration(loaded.settings.email);
   const attachment = await readFile(loaded.attachmentPath);
@@ -249,86 +396,40 @@ export async function sendDocumentEmail(userId: string, request: SendEmailReques
 
   const transport = createDocumentMailTransport(configuration);
 
-  // Reserve issuance before contacting SMTP.  If SMTP succeeds but the
-  // follow-up status write fails, the marker still keeps the draft locked
-  // against deletion.  A concurrent payment can win between these steps;
-  // the later CAS below then leaves PAID untouched.
-  if (request.documentType !== 'reminder' && loaded.invoice.status === 'DRAFT') {
-    await inTransaction(async tx => {
-      const current = await tx.invoice.findFirst({
-        where: { id: loaded.invoice.id, userId },
-        select: { status: true, issuanceState: true, invoiceNumber: true, fileName: true },
-      });
-      if (!current || current.status !== 'DRAFT' || current.issuanceState === 'ISSUED') return;
-      await tx.invoice.update({ where: { id: loaded.invoice.id, userId }, data: { issuanceState: 'ISSUED' } });
-      await createFinancialAuditLog({
-        userId,
-        action: 'STATUS_CHANGED',
-        entityType: request.documentType === 'quote' ? 'Quote' : 'Invoice',
-        entityId: loaded.invoice.id,
-        entityName: current.invoiceNumber || current.fileName,
-        oldValues: { status: current.status, issuanceState: current.issuanceState },
-        newValues: { status: current.status, issuanceState: 'ISSUED' },
-        metadata: {
-          actorId: userId,
-          tenantId: userId,
-          operation: 'invoice.issue-attempt',
-          originalReference: current.invoiceNumber ?? `invoice:${loaded.invoice.id}`,
-          reason: 'document email prepared for delivery',
-        },
-      }, tx);
-    });
-  }
-
   const info = await transport.sendMail(mail);
 
-  if (request.documentType === 'reminder') {
-    const reminderContext = normalizeReminderContext(request.reminder);
-    const dueDate = addDays(new Date(), reminderContext.dueDays ?? 14);
-    const reminder = await prisma.reminder.create({
-      data: {
-        invoiceId: request.id,
-        reminderLevel: reminderContext.reminderLevel ?? 1,
-        fee: reminderContext.fee ?? 0,
-        notes: reminderContext.notes || null,
-        dueDate,
-        userId,
-      },
-    });
-
-    await createAuditLog({
+  const reminderContext = normalizeReminderContext(request.reminder);
+  const dueDate = addDays(new Date(), reminderContext.dueDays ?? 14);
+  const reminder = await prisma.reminder.create({
+    data: {
+      invoiceId: request.id,
+      reminderLevel: reminderContext.reminderLevel ?? 1,
+      fee: reminderContext.fee ?? 0,
+      notes: reminderContext.notes || null,
+      dueDate,
       userId,
-      action: 'REMINDER_SENT',
-      entityType: 'Reminder',
-      entityId: reminder.id,
-      entityName: loaded.invoice.invoiceNumber || loaded.invoice.fileName,
-      newValues: {
-        invoiceId: request.id,
-        reminderLevel: reminder.reminderLevel,
-        fee: reminder.fee,
-        dueDate: reminder.dueDate,
-      },
-      metadata: {
-        messageId: info.messageId,
-        to: splitEmailList(request.to),
-      },
-    });
+    },
+  });
 
-    return { messageId: info.messageId, reminder };
-  }
+  await createAuditLog({
+    userId,
+    action: 'REMINDER_SENT',
+    entityType: 'Reminder',
+    entityId: reminder.id,
+    entityName: loaded.invoice.invoiceNumber || loaded.invoice.fileName,
+    newValues: {
+      invoiceId: request.id,
+      reminderLevel: reminder.reminderLevel,
+      fee: reminder.fee,
+      dueDate: reminder.dueDate,
+    },
+    metadata: {
+      messageId: info.messageId,
+      to: splitEmailList(request.to),
+    },
+  });
 
-  try {
-    await recordDocumentDelivery({
-      userId, invoiceId: loaded.invoice.id, documentType: request.documentType,
-      expectedStatus: loaded.invoice.status, messageId: info.messageId,
-    });
-  } catch {
-    // SMTP cannot be rolled back with the DB. Make this partial outcome
-    // explicit so clients do not mistake it for a safe-to-retry send failure.
-    throw new EmailDeliveryRecordingError(info.messageId);
-  }
-
-  return { messageId: info.messageId };
+  return { messageId: info.messageId, reminder };
 }
 
 async function loadEmailDocument(userId: string, request: EmailDraftRequest): Promise<LoadedDocument> {
