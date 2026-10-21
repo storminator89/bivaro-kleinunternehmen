@@ -155,6 +155,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
   const reloadPaymentData = () => {
     if (submitting.current) return;
     setError(null);
+    setLoadError(null);
     setPreflight(null);
     setIsLoading(true);
     setReload(value => value + 1);
@@ -236,6 +237,12 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
       setConfirmed(saved);
       try { setHistory(readPaymentEvents({ events: [...history, (data as { event: unknown }).event] })); } catch { /* confirmation above already verifies the saved allocation */ }
       clearIdentity();
+      // The saved receipt is verified; the old journal axes/capacities are not current.
+      setAdjustmentJournal(null);
+      setPreflight(null);
+      setLoadError(null);
+      setIsLoading(true);
+      setReload(value => value + 1);
       await refreshLists();
     } catch (failure) {
       setUncertain(Boolean(attempt.current));
@@ -269,6 +276,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
         {adjustmentEditing && loadError && <div className="space-y-2"><p role="alert" className="text-sm text-destructive">{loadError}</p><Button type="button" variant="outline" disabled={adjustmentBusy || isLoading} onClick={reloadPaymentData}>Journal erneut laden</Button></div>}
         {adjustmentEditing ? <DialogFooter><Button type="button" variant="ghost" className="min-h-11" disabled={adjustmentBusy} onClick={close}>Schließen</Button></DialogFooter> : confirmed ? (
           <>
+            {isLoading && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />Aktueller Journalstand wird geprüft …</p>}
             <div ref={successRef} tabIndex={-1} role="status" className="space-y-2 border-y py-4 outline-none">
               <p className="flex items-center gap-2 font-semibold text-[var(--color-success-ink)]"><CheckCircle className="h-5 w-5 shrink-0" aria-hidden="true" />Zahlung gespeichert</p>
               <p className="text-2xl font-semibold tabular-nums">{displayPaymentAmount(confirmed.amountCents)}</p>
@@ -276,6 +284,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
               <p className="break-words text-sm">Referenz: {confirmed.reference}</p>
               <p className="text-sm text-muted-foreground">Zahlungsnachweis #{confirmed.id} · Einnahme ist erfasst. {confirmed.summary.paid ? 'Rechnung vollständig bezahlt.' : `Noch offen: ${displayPaymentAmount(confirmed.summary.openCents)}.`}</p>
             </div>
+            {loadError && <div className="space-y-2"><p role="alert" className="text-sm text-destructive">Die Zahlung ist gespeichert, aber der aktuelle Journalstand konnte nicht geladen werden. Nicht erneut buchen.</p><Button type="button" variant="outline" className="h-auto min-h-11 max-w-full whitespace-normal" disabled={isLoading || isSubmitting} onClick={reloadPaymentData}>Journal erneut laden</Button></div>}
             {refreshError && <p role="alert" className="text-sm text-destructive">Die Zahlung ist gespeichert, aber die Listen konnten nicht aktualisiert werden. Nicht erneut buchen.</p>}
             <DialogFooter>{refreshError && <Button type="button" variant="outline" className="min-h-11" onClick={() => void refreshLists()}>Listen aktualisieren</Button>}<Button type="button" className="min-h-11" disabled={isSubmitting} onClick={close}>Schließen</Button></DialogFooter>
           </>

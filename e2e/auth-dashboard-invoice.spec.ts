@@ -920,6 +920,9 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       expect(ledger.event).toBeNull();
       expect(ledger.events).toHaveLength(2);
       expect(ledger.summary).toMatchObject({ paidCents: '12000', openCents: '0', paymentState: 'PAID' });
+      const currentAxes = dialog.getByRole('region', { name: 'Zahlung korrigieren oder Erstattung dokumentieren', exact: true });
+      await expect(currentAxes.getByText('Gültig eingegangen', { exact: true }).locator('..').locator('dd')).toHaveText(/^120,00\s*€$/u);
+      await expect(currentAxes.getByText('Noch einzuziehen', { exact: true }).locator('..').locator('dd')).toHaveText(/^0,00\s*€$/u);
       const incomeList = await (await page.request.get(`/api/incomes?search=${invoiceNumber}&pageSize=100`)).json();
       expect(incomeList.items).toHaveLength(2);
       expect(new Set(incomeList.items.map((income: { amount: number }) => income.amount))).toEqual(new Set([40, 80]));

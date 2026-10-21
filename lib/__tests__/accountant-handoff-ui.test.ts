@@ -10,9 +10,9 @@ const selection = initialHandoffSelection(new URLSearchParams(), '2026');
 const preview: HandoffPreview = {
   filename: 'bivaro-uebergabepaket-2026-01-01-2026-12-31.zip',
   manifest: {
-    format: 'bivaro-accountant-handoff', formatVersion: 1, generatedAt: '2026-10-20T21:00:00Z', sourceFingerprint: 'a'.repeat(64),
+    format: 'bivaro-accountant-handoff', formatVersion: 2, paymentContractVersion: 2, fiscalMappingStatus: 'UNCHANGED', generatedAt: '2026-10-20T21:00:00Z', sourceFingerprint: 'a'.repeat(64),
     period: { from: '2026-01-01', to: '2026-12-31' },
-    counts: { incomes: 0, expenses: 0, invoices: 0, cashTransactions: 0, customers: 0, cashBooks: 0 },
+    counts: { incomes: 0, expenses: 0, invoices: 0, payments: 0, adjustments: 0, cashTransactions: 0, customers: 0, cashBooks: 0, originals: 0 },
     originalCounts: { included: 0, missing: 0, notAttached: 0 }, warnings: [], warningCount: 0,
   },
 };
@@ -42,7 +42,7 @@ describe('handoff period selection and response contract', () => {
   });
   it('validates the exact preview version, counters and fingerprint before enabling review', () => {
     expect(readHandoffPreview(preview)).toBe(preview);
-    const bad = [null, {}, { ...preview, manifest: { ...preview.manifest, formatVersion: 2 } },
+    const bad = [null, {}, { ...preview, manifest: { ...preview.manifest, formatVersion: 1 } },
       { ...preview, manifest: { ...preview.manifest, sourceFingerprint: '' } },
       { ...preview, manifest: { ...preview.manifest, counts: {} } },
       { ...preview, manifest: { ...preview.manifest, originalCounts: { included: -1, missing: 0, notAttached: 0 } } },
@@ -50,6 +50,26 @@ describe('handoff period selection and response contract', () => {
       { ...preview, manifest: { ...preview.manifest, warningCount: 1, warnings: [null] } },
       { ...preview, manifest: { ...preview.manifest, period: { from: '2026-02-30', to: '2026-03-01' } } }];
     for (const value of bad) expect(() => readHandoffPreview(value)).toThrow(/ungültig/);
+  });
+  it('requires the current v2 format and payment contract, with fiscal status tied to adjustment count', () => {
+    const adjusted = { ...preview, manifest: { ...preview.manifest, fiscalMappingStatus: 'UNREVIEWED', counts: { ...preview.manifest.counts, adjustments: 1 } } };
+    expect(readHandoffPreview(adjusted)).toBe(adjusted);
+    const bad = [
+      ...[undefined, null, 1, 3, '2'].map(formatVersion => ({ ...preview.manifest, formatVersion })),
+      ...[undefined, null, 1, 3, '2'].map(paymentContractVersion => ({ ...preview.manifest, paymentContractVersion })),
+      ...[undefined, null, 'APPROVED', 'UNREVIEWED'].map(fiscalMappingStatus => ({ ...preview.manifest, fiscalMappingStatus })),
+      { ...adjusted.manifest, fiscalMappingStatus: 'UNCHANGED' },
+      { ...preview.manifest, format: 'unknown-handoff' },
+    ];
+    for (const manifest of bad) expect(() => readHandoffPreview({ ...preview, manifest })).toThrow(/ungültig/);
+  });
+  it('requires every typed v2 table count and rejects noninteger, unsafe or negative counters', () => {
+    for (const key of Object.keys(preview.manifest.counts)) {
+      for (const value of [undefined, null, '1', -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        expect(() => readHandoffPreview({ ...preview, manifest: { ...preview.manifest, counts: { ...preview.manifest.counts, [key]: value } } })).toThrow(/ungültig/);
+      }
+    }
+    expect(() => readHandoffPreview({ ...preview, manifest: { ...preview.manifest, counts: { ...preview.manifest.counts, unknown: 0.5 } } })).toThrow(/ungültig/);
   });
   it('uses the stable server attachment filename and never turns a response label into a path', () => {
     expect(handoffFilename('attachment; filename="bivaro-test.zip"', preview.manifest.period)).toBe('bivaro-test.zip');
@@ -95,7 +115,8 @@ describe('handoff accessible rendering and honest scope', () => {
     expect(html).toContain('value="2026"');
     expect(html).toContain('Vorschau laden');
     expect(html).not.toContain('ZIP herunterladen');
-    for (const copy of ['Format 1', 'kein vollständiger GoBD-Prüfexport', 'keine ELSTER-Einreichung', 'Kein DATEV-Format', 'payments.csv', 'historischer Datumsunsicherheit', 'dürfen nicht addiert werden', 'separates Erstattungsjournal', 'nichts automatisch', 'aria-live="polite"', 'href="/help#export"', 'href="/settings#handoff-settings"']) expect(html).toContain(copy);
+    for (const copy of ['Format 2', 'kein vollständiger GoBD-Prüfexport', 'keine ELSTER-Einreichung', 'Kein DATEV-Format', 'payments.csv', 'adjustments.csv', 'historischer Datumsunsicherheit', 'dürfen nicht addiert werden', 'keine freigegebene Steuer-/EÜR-Zuordnung', 'nichts automatisch', 'aria-live="polite"', 'href="/help#export"', 'href="/settings#handoff-settings"']) expect(html).toContain(copy);
+    expect(html).not.toContain('Format 1'); expect(html).not.toContain('separates Erstattungsjournal');
     expect(html).not.toContain('role="alert"');
   });
   it('offers a labelled two-date form for custom ranges', () => {
@@ -111,6 +132,20 @@ describe('handoff accessible rendering and honest scope', () => {
     expect(html).toContain('keine Vollständigkeitsprüfung');
     expect(html).toContain('Keine technischen Warnungen');
     expect(html).toContain('Addieren Sie diese Tabellen nicht');
+    expect(html).toContain('UNCHANGED'); expect(html).toContain('keine steuerliche Freigabe');
+  });
+  it('shows original payment and adjustment counts with an always-visible unreviewed fiscal limitation', () => {
+    const adjusted: HandoffPreview = { ...preview, manifest: { ...preview.manifest, fiscalMappingStatus: 'UNREVIEWED', counts: { ...preview.manifest.counts, payments: 3, adjustments: 2 } } };
+    const html = renderToStaticMarkup(createElement(HandoffReview, { preview: readHandoffPreview(adjusted) }));
+    expect(html).toContain('<dt>Original-Zahlungsnachweise</dt><dd>3</dd>');
+    expect(html).toContain('<dt>Korrektur- und Erstattungsnachweise</dt><dd>2</dd>');
+    expect(html).toContain('<strong>Steuerlich nicht freigegeben</strong> (UNREVIEWED)');
+    expect(html).toContain('vor EÜR oder Steuerexport fachlich prüfen');
+    expect(html.indexOf('Steuerlich nicht freigegeben')).toBeLessThan(html.indexOf('Originaldateien'));
+    expect(html).toContain('Manifestversion 2'); expect(html).toContain('Zahlungsvertrag 2');
+    expect(html).not.toContain('Keine Datensätze');
+    const onlyAdjustment = { ...adjusted, manifest: { ...adjusted.manifest, counts: { ...preview.manifest.counts, adjustments: 1 } } };
+    expect(renderToStaticMarkup(createElement(HandoffReview, { preview: readHandoffPreview(onlyAdjustment) }))).not.toContain('Keine Datensätze');
   });
   it('prominently exposes missing and unattached originals and never says fully checked', () => {
     const html = renderToStaticMarkup(createElement(HandoffReview, { preview: { ...preview, manifest: { ...preview.manifest,
@@ -137,5 +172,8 @@ describe('handoff accessible rendering and honest scope', () => {
     expect(guide.caution).toContain('2024, 2025 und 2026');
     expect(guide.caution).toContain('unbekannte Formularjahre werden abgewiesen');
     expect(guide.caution).toContain('kein vollständiger GoBD-Prüfexport');
+    expect(guide.steps.join(' ')).toContain('Bivaro-Format 2');
+    for (const copy of ['payments.csv', 'adjustments.csv', 'steuerlich ungeprüft (UNREVIEWED)', 'dürfen nicht addiert werden', 'Ungebuchte Eingangsbelege sind nicht enthalten']) expect(guide.caution).toContain(copy);
+    expect(guide.caution).not.toContain('separates Erstattungsjournal');
   });
 });

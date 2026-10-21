@@ -120,8 +120,8 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     expect(response.status()).toBe(201);
     const savedBody = await response.json();
     await expectSuccessfulCorrection(panel, '120,00');
-    await expect(metric(panel, 'Gültig eingegangen')).toContainText('0,00');
-    await expect(metric(panel, 'Noch einzuziehen')).toContainText('120,00');
+    await expect(metric(panel, 'Gültig eingegangen')).toHaveText(/^0,00\s*€$/u);
+    await expect(metric(panel, 'Noch einzuziehen')).toHaveText(/^120,00\s*€$/u);
     expect(posts).toHaveLength(1);
     expect(posts[0]).toMatchObject({ kind: 'PAYMENT_CORRECTION', originalPaymentId: original.event.id, amount: '120.00', actionDate: correctionDate, reason, reference, declarationNeverReceived: true, expectedLedgerVersion: initialJournal.ledgerVersion });
     expect(savedBody.adjustment).toMatchObject({ originalPaymentId: original.event.id, kind: 'PAYMENT_CORRECTION', amountCents: '12000', accountingEffectiveOn: `${originalDate}T00:00:00.000Z`, fiscalMappingStatus: 'UNREVIEWED' });
@@ -158,6 +158,9 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     const receiptResponse = await received; expect(receiptResponse.status()).toBe(201);
     expect(receiptResponse.request().postDataJSON()).toMatchObject({ amount: '120.00', paidAt: replacementDate, expectedPaidCents: '0', expectedLedgerVersion: corrected.ledgerVersion });
     await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
+    const replacementPanel = dialog.getByRole('region', { name: panelName, exact: true });
+    await expect(metric(replacementPanel, 'Gültig eingegangen')).toHaveText(/^120,00\s*€$/u);
+    await expect(metric(replacementPanel, 'Noch einzuziehen')).toHaveText(/^0,00\s*€$/u);
     const settled = await loadJournal(page, invoice.id), after = await snapshot(userId, invoice.id);
     expect(settled.ledger).toMatchObject({ documentState: 'PAID', originalReceivedCents: '24000', correctedCents: '12000', validReceivedCents: '12000', refundedCents: '0', collectibleOpenCents: '0' });
     expect(settled.events).toHaveLength(2); expect(settled.adjustments).toHaveLength(1);
@@ -196,7 +199,7 @@ test('stale correction preserves the draft, rejects without writes and requires 
     await expect(panel.getByRole('button', { name: 'Korrektur verbindlich speichern', exact: true })).toHaveCount(0);
     const reviewed = panel.getByRole('button', { name: 'Aktuellen Journalstand geprüft', exact: true });
     await expect(reviewed).toBeEnabled();
-    await expect(metric(panel, 'Gültig eingegangen')).toContainText('100,00');
+    await expect(metric(panel, 'Gültig eingegangen')).toHaveText(/^100,00\s*€$/u);
     expect(posts).toHaveLength(1); expect(posts[0].expectedLedgerVersion).toBe(baseline.ledgerVersion);
     await reviewed.focus(); await page.keyboard.press('Enter');
     const retried = page.waitForResponse(response => new URL(response.url()).pathname === path && response.request().method() === 'POST');
@@ -273,7 +276,7 @@ test('a real committed correction with a lost response recovers after close/relo
     expect(journal.ledger).toMatchObject({ correctedCents: '2000', validReceivedCents: '10000', collectibleOpenCents: '2000', refundedCents: '0' });
     // One natural desktop whole-page PNG. The independent keyboard/mobile
     // journey stays390x844; no crop, hiding, mask, styles or lossy conversion.
-    await expect(metric(panel, 'Noch einzuziehen')).toContainText('20,00');
+    await expect(metric(panel, 'Noch einzuziehen')).toHaveText(/^20,00\s*€$/u);
     await panel.scrollIntoViewIfNeeded();
     await expect(confirmation.locator('p.text-2xl')).toBeInViewport({ ratio: 1 });
     await expect(confirmation.getByText(`Original-Zahlungsnachweis #${original.event.id}`, { exact: false })).toBeInViewport({ ratio: 1 });

@@ -22,8 +22,8 @@ test('documents an actual refund against its full cancellation and keeps residua
     await page.goto('/dashboard?tab=invoices');
     const dialog = await openJournal(page, number);
     const panel = dialog.getByRole('region', { name: 'Zahlung korrigieren oder Erstattung dokumentieren', exact: true });
-    await expect(panel.getByText('Noch einzuziehen', { exact: true }).locator('..')).toContainText('0,00');
-    await expect(panel.getByText('Noch zu erstatten', { exact: true }).locator('..')).toContainText('120,00');
+    await expect(panel.getByText('Noch einzuziehen', { exact: true }).locator('..').locator('dd')).toHaveText(/^0,00\s*€$/u);
+    await expect(panel.getByText('Noch zu erstatten', { exact: true }).locator('..').locator('dd')).toHaveText(/^120,00\s*€$/u);
     await panel.getByRole('button', { name: 'Korrektur / Erstattung dokumentieren', exact: true }).click();
     await panel.getByRole('radio', { name: /Erstattung Bereits zurückgezahlt/ }).check();
     await expect(panel).toContainText(`Vollständiger Stornobeleg: ${basis.invoiceNumber}`);
@@ -41,8 +41,8 @@ test('documents an actual refund against its full cancellation and keeps residua
     expect(response.status()).toBe(201);
     expect(response.request().postDataJSON()).toMatchObject({ kind: 'CUSTOMER_REFUND', originalPaymentId: payment.event.id, cancellationInvoiceId: basis.id, amount: '40.00', actionDate: '2026-03-03' });
     await expect(panel.getByText('Erstattung dokumentiert', { exact: true })).toBeVisible();
-    await expect(panel.getByText('Noch zu erstatten', { exact: true }).locator('..')).toContainText('80,00');
-    await expect(panel.getByText('Noch einzuziehen', { exact: true }).locator('..')).toContainText('0,00');
+    await expect(panel.getByText('Noch zu erstatten', { exact: true }).locator('..').locator('dd')).toHaveText(/^80,00\s*€$/u);
+    await expect(panel.getByText('Noch einzuziehen', { exact: true }).locator('..').locator('dd')).toHaveText(/^0,00\s*€$/u);
     await expect(panel.getByLabel('Steuerliche Zuordnung: prüfpflichtig, nicht fachlich freigegeben')).toBeVisible();
     const ledger = await loadJournal(page, invoice.id);
     expect(ledger.ledger).toMatchObject({ documentState: 'CANCELLED', validReceivedCents: '12000', refundedCents: '4000', netRetainedCents: '8000', refundDueCents: '8000', collectibleOpenCents: '0' });
@@ -128,6 +128,17 @@ test('refuses real fiscal outputs and rechecks a cached EÜR before any CSV down
     await expect(page.getByRole('alert').filter({ hasText: 'Steuerzuordnung und betroffene Vorperioden' })).toBeVisible();
     await expect(page.getByText('Nicht verfügbar / fachlich zu prüfen', { exact: true })).toBeVisible();
     await expect(page.getByText('Keine bestätigte steuerliche Datenbasis', { exact: true })).toBeVisible();
+    expect(downloads).toEqual([]);
+    // Neutral evidence remains reviewable under its exact current contract;
+    // it must not be mistaken for the blocked fiscal calculation.
+    await page.goto('/handoff?year=2026');
+    const handoffResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/accountant-export' && new URL(response.url()).searchParams.get('preview') === '1');
+    await page.getByRole('button', { name: 'Vorschau laden', exact: true }).click();
+    const handoff = await handoffResponse; expect(handoff.status()).toBe(200);
+    expect((await handoff.json()).manifest).toMatchObject({ formatVersion: 2, paymentContractVersion: 2, fiscalMappingStatus: 'UNREVIEWED', counts: { payments: 1, adjustments: 1 } });
+    await expect(page.locator('#handoff-review-heading')).toBeFocused();
+    await expect(page.getByText('Steuerlich nicht freigegeben', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ZIP herunterladen', exact: true })).toBeDisabled();
     expect(downloads).toEqual([]);
     const db = await snapshot(userId, invoice.id);
     expect(db.adjustments).toHaveLength(1);

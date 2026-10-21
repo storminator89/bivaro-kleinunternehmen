@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { formatBusinessDateDisplay } from '@/lib/business-date';
-import { displayPaymentAmount, paymentAmountInput, paymentInputCents } from '@/lib/full-payment-form';
+import { displayPaymentAmount, paymentAmountInput, paymentInputCents, readPaymentLedger, type PaymentLedger } from '@/lib/full-payment-form';
 import { adjustmentFailure, adjustmentFingerprintHash, adjustmentPendingStorageKey, paymentAdjustmentAttempt, paymentAdjustmentPayload, persistPendingAdjustment, readConfirmedPaymentAdjustment, readPendingAdjustment, validatePaymentAdjustmentFields, type PaymentAdjustmentDraft, type PaymentAdjustmentEvent, type PaymentAdjustmentKind, type PaymentAdjustmentPreflight, type PendingAdjustment } from '@/lib/payment-adjustment-form';
 
 type Props = {
@@ -51,6 +51,7 @@ export function PaymentAdjustmentPanel({ invoiceId, tenantId, journal, disabled,
   const [busy, setBusy] = useState(false);
   const [conflictVersion, setConflictVersion] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<PaymentAdjustmentEvent | null>(null);
+  const [confirmedLedger, setConfirmedLedger] = useState<PaymentLedger | null>(null);
   const [refreshError, setRefreshError] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const pending = useRef<PendingAdjustment | null>(null);
@@ -115,6 +116,9 @@ export function PaymentAdjustmentPanel({ invoiceId, tenantId, journal, disabled,
   const selected = capacities.find(capacity => capacity.originalPaymentId === Number(originalId));
   const available = selected ? kind === 'PAYMENT_CORRECTION' ? selected.correctableCents : selected.refundableCents : '0';
   const locked = busy || disabled || storageError || (uncertain && Boolean(attempt.current));
+  // The verified write response owns the new balances until the fresh journal
+  // includes that immutable adjustment. Never display the pre-write balances.
+  const displayLedger = confirmedLedger && !journal.adjustments.some(event => event.id === confirmed?.id) ? confirmedLedger : journal.ledger;
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -147,6 +151,7 @@ export function PaymentAdjustmentPanel({ invoiceId, tenantId, journal, disabled,
         setError(adjustmentFailure(data)); return;
       }
       const saved = readConfirmedPaymentAdjustment(data, draft, journal.events.find(event => event.id === draft.originalPaymentId)?.paidAt ?? null);
+      setConfirmedLedger(readPaymentLedger((data as { ledger: unknown }).ledger));
       setConfirmed(saved); clearPending(); attempt.current = null;
       await refresh();
     } catch (failure) {
@@ -161,12 +166,12 @@ export function PaymentAdjustmentPanel({ invoiceId, tenantId, journal, disabled,
       <Badge variant="outline" aria-label="Steuerliche Zuordnung: prüfpflichtig, nicht fachlich freigegeben">Steuerlich nicht freigegeben</Badge>
     </div>
     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-      <div><dt className="text-xs text-muted-foreground">Gültig eingegangen</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(journal.ledger.validReceivedCents)}</dd></div>
-      <div><dt className="text-xs text-muted-foreground">Nie erhalten / korrigiert</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(journal.ledger.correctedCents)}</dd></div>
-      <div><dt className="text-xs text-muted-foreground">Bereits zurückgezahlt</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(journal.ledger.refundedCents)}</dd></div>
-      <div><dt className="text-xs text-muted-foreground">Tatsächlich einbehalten</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(journal.ledger.netRetainedCents)}</dd></div>
-      <div className="rounded-lg bg-muted/40 p-2.5"><dt className="text-xs text-muted-foreground">Noch einzuziehen</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(journal.ledger.collectibleOpenCents)}</dd></div>
-      <div className="rounded-lg bg-muted/40 p-2.5"><dt className="text-xs text-muted-foreground">Noch zu erstatten</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(journal.ledger.refundDueCents)}</dd></div>
+      <div><dt className="text-xs text-muted-foreground">Gültig eingegangen</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(displayLedger.validReceivedCents)}</dd></div>
+      <div><dt className="text-xs text-muted-foreground">Nie erhalten / korrigiert</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(displayLedger.correctedCents)}</dd></div>
+      <div><dt className="text-xs text-muted-foreground">Bereits zurückgezahlt</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(displayLedger.refundedCents)}</dd></div>
+      <div><dt className="text-xs text-muted-foreground">Tatsächlich einbehalten</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(displayLedger.netRetainedCents)}</dd></div>
+      <div className="rounded-lg bg-muted/40 p-2.5"><dt className="text-xs text-muted-foreground">Noch einzuziehen</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(displayLedger.collectibleOpenCents)}</dd></div>
+      <div className="rounded-lg bg-muted/40 p-2.5"><dt className="text-xs text-muted-foreground">Noch zu erstatten</dt><dd className="mt-1 font-semibold tabular-nums">{displayPaymentAmount(displayLedger.refundDueCents)}</dd></div>
     </dl>
     <p className="text-xs text-muted-foreground">Hier wird niemals Geld überwiesen.</p>
     {journal.adjustmentReviewReason && <p role="status" className="text-sm">Nur lesbar · Prüfung erforderlich.</p>}

@@ -202,4 +202,35 @@ describe('adjustment fields and immutable history presentation', () => {
     for (const content of ['submitting.current || disabled', 'pending.current.fingerprintHash !== fingerprintHash', 'readConfirmedPaymentAdjustment(data, draft,', 'setConflictVersion(journal.ledgerVersion)', 'journal.ledgerVersion === conflictVersion', 'Aktuellen Journalstand geprüft', 'saved.idempotencyKey', 'sessionStorage.removeItem(storageKey)', 'busy || disabled || uncertain']) expect(panel).toContain(content);
     for (const content of ['adjustmentSubmitting.current', 'expectedLedgerVersion: draft.expectedLedgerVersion', ':ledger-version', 'onEscapeKeyDown', 'onPointerDownOutside']) expect(dialog).toContain(content);
   });
+  it('discards pre-save journal axes after a verified receipt and rechecks them without erasing its saved proof', () => {
+    const dialog = readFileSync('components/dashboard/full-payment-dialog.tsx', 'utf8');
+    const save = dialog.slice(dialog.indexOf('const saved = readConfirmedPayment(data, draft, invoice.id);'), dialog.indexOf('} catch (failure)', dialog.indexOf('const saved = readConfirmedPayment(data, draft, invoice.id);')));
+    const sequence = ['setConfirmed(saved);', 'clearIdentity();', 'setAdjustmentJournal(null);', 'setPreflight(null);', 'setLoadError(null);', 'setIsLoading(true);', 'setReload(value => value + 1);', 'await refreshLists();'];
+    let previous = -1;
+    for (const step of sequence) { const index = save.indexOf(step); expect(index).toBeGreaterThan(previous); previous = index; }
+    expect(dialog).toContain("headers: { 'X-Bivaro-Payment-Contract': '2' }, signal: controller.signal");
+    expect(dialog).toContain('setAdjustmentJournal(adjustments)');
+    const savedView = dialog.slice(dialog.indexOf(' : confirmed ? ('), dialog.indexOf(') : preflight &&'));
+    for (const content of ['isLoading &&', 'Aktueller Journalstand wird geprüft', 'ref={successRef}', 'Zahlung gespeichert', 'confirmed.amountCents', 'loadError &&', 'der aktuelle Journalstand konnte nicht geladen werden', 'Nicht erneut buchen.', 'onClick={reloadPaymentData}>Journal erneut laden']) expect(savedView).toContain(content);
+    const retry = dialog.slice(dialog.indexOf('const reloadPaymentData = () =>'), dialog.indexOf('const submit = async'));
+    expect(retry).toContain('setLoadError(null)'); expect(retry).toContain('setReload(value => value + 1)');
+    for (const content of ['setConfirmed(', 'clearIdentity(', 'fetch(', 'method:', '.focus(']) expect(retry).not.toContain(content);
+    const failure = dialog.slice(dialog.lastIndexOf('} catch (failure)'), dialog.indexOf('\n  return ('));
+    expect(failure).not.toContain('setConfirmed(');
+  });
+  it('uses the strictly validated adjustment response ledger until a newer journal includes that saved adjustment', () => {
+    const panel = readFileSync('components/payments/payment-adjustment-panel.tsx', 'utf8');
+    const verified = panel.indexOf('const saved = readConfirmedPaymentAdjustment(data, draft,');
+    const authority = panel.indexOf('setConfirmedLedger(readPaymentLedger((data as { ledger: unknown }).ledger))');
+    expect(verified).toBeGreaterThan(-1); expect(authority).toBeGreaterThan(verified);
+    expect(authority).toBeLessThan(panel.indexOf('setConfirmed(saved); clearPending();'));
+    expect(panel).toContain('confirmedLedger && !journal.adjustments.some(event => event.id === confirmed?.id) ? confirmedLedger : journal.ledger');
+    for (const axis of ['validReceivedCents', 'correctedCents', 'refundedCents', 'netRetainedCents', 'collectibleOpenCents', 'refundDueCents']) {
+      expect(panel).toContain(`displayPaymentAmount(displayLedger.${axis})`);
+      expect(panel).not.toContain(`displayPaymentAmount(journal.ledger.${axis})`);
+    }
+    const recovery = panel.slice(panel.indexOf('useEffect(() => {'), panel.indexOf('useEffect(() => { if (error)'));
+    expect(recovery).toContain('setConfirmed(saved)');
+    expect(recovery).not.toContain('setConfirmedLedger(');
+  });
 });

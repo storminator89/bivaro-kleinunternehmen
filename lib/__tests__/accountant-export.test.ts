@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import type { Prisma } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
+import { readHandoffPreview } from '@/components/handoff/handoff-model';
 
 const state = vi.hoisted(() => ({ client: null as ReturnType<typeof createTestDatabase>['client'] | null, actor: 'accountant-owner' as string | null }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
@@ -316,6 +317,7 @@ describe('download API failure and resource boundaries', () => {
     const logs = await database.client.auditLog.findMany();
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({ userId: 'accountant-owner', action: 'SECURITY_EVENT', entityType: 'SecurityEvent', entityName: 'ACCOUNTANT_HANDOFF_EXPORT' });
+    expect(JSON.parse(logs[0].metadata!)).toMatchObject({ formatVersion: 2, paymentContractVersion: 2, fiscalMappingStatus: 'UNCHANGED' });
     expect(logs[0].oldValues).toBeNull();
     const zip = await JSZip.loadAsync(await response.arrayBuffer());
     expect(Object.keys(zip.files)).not.toContain('auditLogs.json');
@@ -386,6 +388,7 @@ describe('guided handoff preview and approved-snapshot download', () => {
       expect(response.headers.get('x-content-type-options')).toBe('nosniff');
       expect(response.headers.get('content-disposition')).toBeNull();
       const body = await response.json();
+      expect(readHandoffPreview(body)).toBe(body);
       expect(body).not.toHaveProperty('bytes');
       expect(body).not.toHaveProperty('records');
       expect(JSON.stringify(body)).not.toContain('PRIVATE_DESCRIPTION_NOT_IN_PREVIEW');
