@@ -46,28 +46,38 @@ export function BankImportHistory({ refresh }: { refresh: number }) {
   const [history, setHistory] = useState<Awaited<ReturnType<typeof loadBankImportHistory>> | null>(null), [detail, setDetail] = useState<BankImportDetail | null>(null);
   const [page, setPage] = useState(0), [error, setError] = useState(''), [busy, setBusy] = useState(false), [reload, setReload] = useState(0);
   const sequence = useRef(0), historySequence = useRef(0), controller = useRef<AbortController | null>(null), heading = useRef<HTMLHeadingElement>(null), lastOpened = useRef<string | null>(null), historyHeading = useRef<HTMLHeadingElement>(null);
+  const pendingFocus = useRef<{ owner: Element | null; sequence: number } | null>(null);
   useEffect(() => {
     const request = new AbortController(), current = ++historySequence.current;
     loadBankImportHistory(page, request.signal).then(value => { if (!request.signal.aborted && historySequence.current === current) { setHistory(value); setError(''); } }).catch(() => { if (!request.signal.aborted && historySequence.current === current) setError('Der Importverlauf konnte nicht geladen werden. Erneut versuchen.'); });
     return () => { request.abort(); };
   }, [page, refresh, reload]);
   useEffect(() => () => { sequence.current++; controller.current?.abort(); }, []);
+  useEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    pendingFocus.current = null;
+    if (sequence.current !== pending.sequence || (document.activeElement !== pending.owner && document.activeElement !== document.body)) return;
+    // An animation frame can precede React's async commit. Both the receipt
+    // heading and the returning history opener must exist before moving focus.
+    if (detail) heading.current?.focus();
+    else {
+      const opener = lastOpened.current ? document.querySelector<HTMLButtonElement>(`[data-bank-receipt="${lastOpened.current}"]`) : null;
+      (opener ?? historyHeading.current)?.focus();
+    }
+  }, [detail]);
   async function open(id: string, rowPage: number, button?: HTMLButtonElement) {
     if (busy) return;
     if (button) lastOpened.current = id;
     const owner = document.activeElement;
     const request = new AbortController(), current = ++sequence.current; controller.current?.abort(); controller.current = request; setBusy(true); setError('');
-    try { const value = await loadBankImportReceipt(id, rowPage, request.signal); if (sequence.current === current) { setDetail(value); requestAnimationFrame(() => { if (sequence.current === current && (document.activeElement === owner || document.activeElement === document.body)) heading.current?.focus(); }); } }
+    try { const value = await loadBankImportReceipt(id, rowPage, request.signal); if (sequence.current === current) { pendingFocus.current = { owner, sequence: current }; setDetail(value); } }
     catch { if (!request.signal.aborted && sequence.current === current) setError('Die Quittung konnte nicht geladen werden. Erneut öffnen.'); }
     finally { if (sequence.current === current) setBusy(false); }
   }
   function close() {
-    const owner = document.activeElement, current = ++sequence.current; controller.current?.abort(); setBusy(false); setDetail(null);
-    requestAnimationFrame(() => {
-      if (sequence.current !== current || (document.activeElement !== owner && document.activeElement !== document.body)) return;
-      const opener = lastOpened.current ? document.querySelector<HTMLButtonElement>(`[data-bank-receipt="${lastOpened.current}"]`) : null;
-      (opener ?? historyHeading.current)?.focus();
-    });
+    const owner = document.activeElement, current = ++sequence.current; controller.current?.abort();
+    pendingFocus.current = { owner, sequence: current }; setBusy(false); setDetail(null);
   }
   return <section aria-labelledby="bank-history-heading" className="space-y-4 rounded-xl border bg-card p-4 sm:p-6"><h2 id="bank-history-heading" ref={historyHeading} tabIndex={-1} className="font-semibold outline-none focus-visible:outline-2 focus-visible:outline-ring">Gespeicherte Importe</h2>{error && <div role="alert" className="space-y-2 text-sm"><p>{error}</p><Button variant="outline" onClick={() => setReload(value => value + 1)}>Verlauf erneut laden</Button></div>}{detail ? <><h3 ref={heading} tabIndex={-1} className="font-semibold outline-none focus-visible:outline-2 focus-visible:outline-ring">Importquittung</h3><BankImportReceiptSummary receipt={detail.receipt} /><ol className="space-y-3">{detail.rows.map(row => <li key={row.rowNumber} className="space-y-1 rounded-lg border p-3 text-sm"><p>Zeile {row.rowNumber} · {row.date ?? 'Datum unklar'} · {row.amountCents !== null ? money(row.amountCents.startsWith('-') ? row.amountCents.slice(1) : row.amountCents) + (row.amountCents.startsWith('-') ? ' Soll' : ' Haben') : 'Betrag nicht bestätigt'}</p><p className="break-words">{row.counterparty || 'Gegenpartei fehlt'} · {row.reference || 'Referenz fehlt'}</p>{row.errors.map((message, index) => <p key={`e${index}`} className="text-destructive">{message}</p>)}{row.duplicate && <p>Mögliche Dublette / Überschneidung. Unzugeordnet, keine Zeile entfernt.</p>}{(row.warnings.length > 0 || row.externalId || row.currency !== 'EUR') && <details><summary className="min-h-11 cursor-pointer py-3">Zeilendetails und Prüfhinweise</summary><dl className="space-y-2 pb-3 text-xs"><div><dt>Bank-ID</dt><dd className="break-all">{row.externalId || 'Nicht angegeben'}</dd></div><div><dt>Währung</dt><dd className="break-all">{row.currency || 'Unklar'}</dd></div><div><dt>Frühere Treffer bei Übernahme · kein Eindeutigkeitsbeweis</dt><dd>Bank-ID: {row.priorMatches.external} · Inhalt: {row.priorMatches.content} · Tag/Betrag: {row.priorMatches.dayAmount}</dd></div></dl><ul className="space-y-2">{row.warnings.map((message, index) => <li key={index}>{message}</li>)}</ul></details>}</li>)}</ol><nav aria-label="Gespeicherte Umsatzseiten" className="flex flex-wrap items-center justify-between gap-2"><Button variant="outline" disabled={busy || detail.page === 0} onClick={() => void open(detail.receipt.id, detail.page - 1)}>Vorherige Zeilen</Button><span className="text-xs">Seite {detail.page + 1} / {detail.pages}</span><Button variant="outline" disabled={busy || detail.page + 1 >= detail.pages} onClick={() => void open(detail.receipt.id, detail.page + 1)}>Nächste Zeilen</Button></nav><Button variant="outline" onClick={close}>Zurück zum Importverlauf</Button></> : <>{!history ? <p className="text-sm text-muted-foreground">Importverlauf laden…</p> : history.receipts.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine gespeicherten Importe.</p> : <ul className="space-y-2">{history.receipts.map(receipt => <li key={receipt.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"><span className="break-all text-sm">{receipt.accountAlias} · {receipt.counts.total} Zeilen · {receipt.savedAt.slice(0, 10)}</span><Button data-bank-receipt={receipt.id} variant="outline" disabled={busy} onClick={event => void open(receipt.id, 0, event.currentTarget)}>Quittung öffnen</Button></li>)}</ul>}{history && <nav aria-label="Importverlaufseiten" className="flex flex-wrap items-center justify-between gap-2"><Button variant="outline" disabled={page === 0 || busy} onClick={() => setPage(value => value - 1)}>Vorherige Importe</Button><span className="text-xs">Seite {page + 1}</span><Button variant="outline" disabled={!history.hasMore || busy} onClick={() => setPage(value => value + 1)}>Nächste Importe</Button></nav>}</>}</section>;
 }
