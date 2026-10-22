@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import path from 'node:path';
 
-const state = vi.hoisted(() => ({ exitCode: 0, pages: 2, fail: '', directory: '', args: [] as string[], options: {} as Record<string, unknown>, manifest: true, extra: false, symlink: false, hang: false, child: undefined as EventEmitter | undefined }));
+const state = vi.hoisted(() => ({ exitCode: 0, stdout: '', stderr: '', exitSignal: null as string | null, pages: 2, fail: '', directory: '', args: [] as string[], options: {} as Record<string, unknown>, manifest: true, extra: false, symlink: false, hang: false, child: undefined as EventEmitter | undefined }));
 vi.mock('node:module', () => ({ createRequire: () => ({ resolve: (name: string) => path.join('/runtime/node_modules', name) }) }));
 vi.mock('node:fs/promises', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -17,7 +17,7 @@ vi.mock('node:child_process', () => ({ spawn: vi.fn((_file: string, args: string
   queueMicrotask(() => {
     if (state.hang) return;
     void (async () => {
-      if (state.exitCode) { child.emit('close', state.exitCode); return; }
+      if (state.exitCode) { child.stdout.write(state.stdout); child.stderr.write(state.stderr); child.emit('close', state.exitCode, state.exitSignal); return; }
       if (state.fail) {
         child.emit('error', Object.assign(new Error('private renderer error'), { code: state.fail }));
         child.emit('close', -2); return;
@@ -34,7 +34,7 @@ vi.mock('node:child_process', () => ({ spawn: vi.fn((_file: string, args: string
 import { prepareAiReceiptImages, AI_MAX_INPUT_BYTES } from '@/lib/purchase-documents/ai-input';
 
 beforeEach(() => {
-  Object.assign(state, { exitCode: 0, pages: 2, fail: '', directory: '', manifest: true, extra: false, symlink: false, hang: false, child: undefined });
+  Object.assign(state, { exitCode: 0, stdout: '', stderr: '', exitSignal: null, pages: 2, fail: '', directory: '', manifest: true, extra: false, symlink: false, hang: false, child: undefined });
   vi.spyOn(process, 'kill').mockImplementation(() => true);
   vi.spyOn(process, 'getuid').mockReturnValue(1001);
   vi.spyOn(process, 'geteuid').mockReturnValue(1001);
@@ -74,6 +74,22 @@ describe('bounded original input preparation', () => {
     state.exitCode = 65;
     await expect(prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic'))).rejects.toMatchObject({ code: 'AI_PDF_LIMIT' });
     await expect(access(state.directory)).rejects.toThrow();
+  });
+  it('exposes only fixed diagnostic tokens, never raw child output or paths', async () => {
+    Object.assign(state, { exitCode: 1, stdout: 'BIVARO_AI_RENDER_STAGE canvas-import\nBIVARO_AI_RENDER_STAGE PRIVATE-TEXT\nBIVARO_AI_RENDER_REASON module-load\n', stderr: 'private document text; /private/provider-key; arbitrary stack', exitSignal: 'PRIVATE-TEXT' });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ code: 'AI_RENDER_FAILED', cause: { stage: 'canvas-import', reason: 'module-load', exitCode: 1, signal: null, failure: null } });
+    expect(JSON.stringify(error)).not.toMatch(/PRIVATE|private|provider-key|arbitrary/);
+    expect(JSON.stringify(error.cause)).not.toMatch(/PRIVATE|private|provider-key|arbitrary/);
+    await expect(access(state.directory)).rejects.toThrow();
+  });
+  it('classifies a native memory startup error without retaining raw details', async () => {
+    Object.assign(state, { exitCode: 134, stderr: 'FATAL ERROR: Allocation failed - /private/document.pdf; private contents', exitSignal: 'SIGABRT' });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ code: 'AI_RENDER_FAILED', cause: { stage: 'launcher', reason: 'memory', exitCode: 134, signal: 'SIGABRT' } });
+    expect(JSON.stringify(error.cause)).not.toContain('private');
   });
   it('requires a successful final completion manifest', async () => {
     state.manifest = false;

@@ -17,6 +17,9 @@ const MAX_ALLOCATED_CANVAS_PIXELS = 64_000_000;
 const MAX_PAGE_PIXELS = 4_000_000;
 const MAX_OPERATIONS = 100_000;
 let diagnostic = false;
+// Fixed protocol tokens only: no document strings, paths, error messages or
+// library diagnostics leave the child. Useful even when native startup fails.
+const progress = stage => process.stdout.write(`BIVARO_AI_RENDER_STAGE ${stage}\n`);
 // PDF.js recovery can return successful promises after skipping damaged data.
 // Its warnings use console.log; never suppress them into an apparent success.
 // Keep no original content in diagnostics and reject any diagnostic, even a
@@ -32,12 +35,15 @@ let loadingTask;
 try {
   const [input, output] = process.argv.slice(2);
   if (!input || !output || process.argv.length !== 4) throw new Error('Invalid renderer invocation');
+  progress('read-input');
   const bytes = await readFile(input);
   if (!bytes.length || bytes.length > MAX_INPUT_BYTES || bytes.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('Input limit');
   const require = createRequire(import.meta.url);
   const pdfjsRoot = path.dirname(require.resolve('pdfjs-dist/package.json'));
+  progress('canvas-import');
   const canvas = require('@napi-rs/canvas');
   if (require('@napi-rs/canvas/package.json').version !== '1.0.13') throw new Error('Unreviewed canvas version');
+  progress('pdfjs-import');
   const { getDocument, version, AnnotationMode, VerbosityLevel } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   if (version !== '6.4.299') throw new Error('Unreviewed PDF.js version');
   let livePixels = 0, allocatedPixels = 0;
@@ -69,6 +75,7 @@ try {
       target.canvas.width = 0; target.canvas.height = 0; target.canvas = null; target.context = null;
     }
   }
+  progress('document-load');
   loadingTask = getDocument({
     data: new Uint8Array(bytes), stopAtErrors: true, verbosity: VerbosityLevel.INFOS,
     // PDF.js documents that maxImageSize skips oversize images. Its resulting
@@ -85,6 +92,7 @@ try {
   const pdf = await loadingTask.promise;
   assertClean();
   if (!Number.isInteger(pdf.numPages) || pdf.numPages < 1 || pdf.numPages > MAX_PAGES) throw new PdfLimitError('Page limit');
+  progress('metadata');
   const { info } = await pdf.getMetadata();
   if (pdf.isPureXfa || info.IsXFAPresent || await pdf.hasJSActions() || await pdf.getJSActions()) throw new Error('Dynamic document content requires manual review');
   assertClean();
@@ -100,15 +108,18 @@ try {
     if (width * height > MAX_PAGE_PIXELS + width + height) throw new Error('Page pixel limit');
     // Parse every page's complete operator list before accepting its rendering.
     // No operation is interpreted or filtered by application code.
+    progress('operators');
     const operators = await page.getOperatorList({ intent: 'display', annotationMode: AnnotationMode.ENABLE });
     if (!operators.lastChunk || !operators.fnArray.length || operators.fnArray.length > MAX_OPERATIONS) throw new Error('Incomplete or overly complex page');
     assertClean();
     const target = mainFactory.create(width, height);
     try {
+      progress('render');
       const task = page.render({ canvas: target.canvas, viewport, intent: 'display', annotationMode: AnnotationMode.ENABLE, background: 'rgb(255,255,255)' });
       await task.promise;
       if (task.separateAnnots) throw new Error('Annotations were not included on the page');
       assertClean();
+      progress('pixels');
       const rgba = target.context.getImageData(0, 0, width, height).data;
       let visible = 0, min = 255, max = 0;
       for (let pixel = 0; pixel < rgba.length; pixel += 4) {
@@ -119,21 +130,35 @@ try {
       // Blank/uniform/near-empty recovered pages are not successful extraction
       // inputs, even if the original intentionally contained a blank page.
       if (visible < 16 || max - min < 4) throw new Error('Blank or unverifiable rendered page');
+      progress('encode');
       const image = target.canvas.toBuffer('image/jpeg', 80);
       if (image.length < 5 || image.length > MAX_PAGE_BYTES || totalBytes + image.length > MAX_INPUT_BYTES) throw new Error('Output limit');
       totalBytes += image.length;
+      progress('write-page');
       await writeFile(path.join(output, `page-${number}.jpg`), image, { flag: 'r+' });
     } finally { mainFactory.destroy(target); }
+    progress('page-cleanup');
     if (!page.cleanup()) throw new Error('Page cleanup incomplete');
     assertClean();
   }
   const pages = pdf.numPages;
+  progress('document-cleanup');
   await loadingTask.destroy(); loadingTask = undefined;
   assertClean();
   // This final completion record exists only after ALL pages and all cleanup
   // succeeded without any parser/rendering diagnostic. Parent requires it.
+  progress('manifest');
   await writeFile(path.join(output, 'complete.json'), JSON.stringify({ version: 1, pages }), { flag: 'r+' });
 } catch (error) {
+  const code = error?.code;
+  const reason = diagnostic ? 'pdf-diagnostic'
+    : code === 'ERR_ACCESS_DENIED' || code === 'EACCES' || code === 'EPERM' ? 'permission'
+    : code === 'ERR_DLOPEN_FAILED' || code === 'MODULE_NOT_FOUND' || code === 'ERR_MODULE_NOT_FOUND' ? 'module-load'
+    : code === 'ENOMEM' ? 'memory'
+    : error instanceof PdfLimitError ? 'page-limit'
+    : error instanceof TypeError ? 'type'
+    : error instanceof RangeError ? 'range' : 'runtime';
+  process.stdout.write(`BIVARO_AI_RENDER_REASON ${reason}\n`);
   try { await loadingTask?.destroy(); } catch { /* Parent still kills/reaps the entire process group. */ }
   process.exitCode = error instanceof PdfLimitError ? 65 : 1;
 }

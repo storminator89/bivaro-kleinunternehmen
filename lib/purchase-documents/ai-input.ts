@@ -79,6 +79,8 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
     type RenderFailure = 'unavailable' | 'failed' | 'interrupted';
     let failure: RenderFailure | undefined;
     let diagnostics = 0;
+    let diagnosticText = '';
+    let stage = 'launcher', reason = 'unknown';
     let timer: ReturnType<typeof setTimeout> | undefined;
     const killGroup = () => {
       if (!child?.pid) return;
@@ -96,17 +98,37 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
         env: { LANG: 'C', HOME: output, TMPDIR: output, NODE_ENV: 'production', UV_THREADPOOL_SIZE: '1', RAYON_NUM_THREADS: '1', DISABLE_SYSTEM_FONTS_LOAD: '1' },
       });
     } catch { reject(new PurchaseDocumentError('Isolierter PDF-Renderer ist nicht verfügbar; keine KI-Anfrage wurde gesendet.', 422, 'AI_RENDER_UNAVAILABLE')); return; }
-    const count = (chunk: Buffer) => { diagnostics += chunk.length; if (diagnostics > MAX_DIAGNOSTIC_BYTES) stop('failed'); };
+    const count = (chunk: Buffer) => {
+      diagnostics += chunk.length;
+      if (diagnostics > MAX_DIAGNOSTIC_BYTES) { stop('failed'); return; }
+      // Retain bounded data in memory only. Accept fixed protocol tokens, never
+      // surface raw PDF/library/native output or paths in logs/API errors.
+      diagnosticText += chunk.toString('ascii');
+      for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_STAGE (read-input|canvas-import|pdfjs-import|document-load|metadata|operators|render|pixels|encode|write-page|page-cleanup|document-cleanup|manifest)\n/g)) stage = match[1];
+      for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_REASON (pdf-diagnostic|permission|module-load|memory|page-limit|type|range|runtime)\n/g)) reason = match[1];
+      if (reason === 'unknown') {
+        if (/ERR_ACCESS_DENIED|Permission denied|Operation not permitted/.test(diagnosticText)) reason = 'permission';
+        else if (/Cannot allocate memory|Allocation failed|heap out of memory|Failed to reserve|Reservation failed/.test(diagnosticText)) reason = 'memory';
+        else if (/pthread_create|uv_thread_create/.test(diagnosticText)) reason = 'thread-create';
+      }
+    };
     child.stdout?.on('data', count); child.stderr?.on('data', count);
     child.once('error', error => { failure ??= (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'unavailable' : 'failed'; killGroup(); });
-    child.once('close', code => {
+    child.once('close', (code, exitSignal) => {
       if (timer) clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       killGroup();
       if (signal?.aborted || failure === 'interrupted') reject(new PurchaseDocumentError('KI-Eingabeaufbereitung wurde durch Gesamtzeitlimit oder Abbruch beendet.', 422, 'AI_REQUEST_INTERRUPTED'));
       else if (failure === 'unavailable' || code === 127) reject(new PurchaseDocumentError('Sichere PDF-Isolation ist nicht verfügbar. Später erneut versuchen oder Original manuell prüfen; keine KI-Anfrage wurde gesendet.', 422, 'AI_RENDER_UNAVAILABLE'));
       else if (!failure && code === 65) reject(new PurchaseDocumentError('Nur PDFs mit ein bis vier vollständigen Seiten werden an KI gesendet. Dieses PDF wird nicht teilweise analysiert; Original manuell prüfen.', 422, 'AI_PDF_LIMIT'));
-      else if (failure || code !== 0) reject(new PurchaseDocumentError('PDF konnte nicht vollständig innerhalb der sicheren Ressourcenlimits gerendert werden. Erneut versuchen oder Original manuell prüfen; keine KI-Anfrage wurde gesendet.', 422, 'AI_RENDER_FAILED'));
+      else if (failure || code !== 0) {
+        const error = new PurchaseDocumentError('PDF konnte nicht vollständig innerhalb der sicheren Ressourcenlimits gerendert werden. Erneut versuchen oder Original manuell prüfen; keine KI-Anfrage wurde gesendet.', 422, 'AI_RENDER_FAILED');
+        // Error.cause is diagnostic-only. Routes continue returning the fixed
+        // public code/message, and synthetic native smoke shows these tokens.
+        const signals = ['SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGILL', 'SIGKILL', 'SIGSEGV', 'SIGSYS', 'SIGTERM', 'SIGXCPU', 'SIGXFSZ'];
+        Object.defineProperty(error, 'cause', { value: { stage, reason, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
+        reject(error);
+      }
       else resolve();
     });
     timer = setTimeout(() => stop('failed'), WALL_TIME_MS); timer.unref?.();
