@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import React, { useEffect, useState } from 'react';
 import { ServiceWorkbench } from '@/components/customers/service-workbench';
+import { CustomerTimeline } from '@/components/customers/customer-timeline';
 import styles from "@/components/dashboard/sales-workspace.module.css";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ClipboardList, Loader2 } from "lucide-react";
+import { ClipboardList, History, Loader2 } from "lucide-react";
 
 type Customer = {
   id: number;
@@ -269,6 +270,7 @@ export default function CustomersPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [notesCustomer, setNotesCustomer] = useState<Customer | null>(null);
+  const [timelineCustomer, setTimelineCustomer] = useState<Customer | null>(null);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -428,7 +430,7 @@ export default function CustomersPage() {
                 {filteredCustomers.length ? filteredCustomers.map(customer => <article key={customer.id}>
                   <div className="customer-record-heading"><span className="customer-monogram">{getInitials(customer.name)}</span><div><h2>{customer.name}</h2><p>{customer.contactPerson || 'Geschäftskontakt'}{customer.city ? ` · ${customer.city}` : ''}</p></div></div>
                   <dl>{customer.email && <div><dt>E-Mail</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>}{customer.phone && <div><dt>Telefon</dt><dd><a href={`tel:${customer.phone}`}>{customer.phone}</a></dd></div>}</dl>
-                  <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openEditModal(customer)} aria-label={`${customer.name} bearbeiten`}>Bearbeiten</Button><Button variant="ghost" size="sm" onClick={() => setNotesCustomer(customer)} data-service-workbench-return={customer.id} aria-label={`Leistungsnotizen für ${customer.name}`}>Leistungsnotizen</Button><Button variant="ghost" size="sm" className="text-destructive" disabled={isDeleting} onClick={() => handleDeleteCustomer(customer.id)} aria-label={`${customer.name} löschen`}>Löschen</Button></div>
+                  <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openEditModal(customer)} aria-label={`${customer.name} bearbeiten`}>Bearbeiten</Button><Button variant="ghost" size="sm" onClick={() => setNotesCustomer(customer)} data-service-workbench-return={customer.id} aria-label={`Leistungsnotizen für ${customer.name}`}>Leistungsnotizen</Button><Button variant="ghost" size="sm" onClick={() => setTimelineCustomer(customer)} data-customer-timeline-return={customer.id} aria-label={`Verlauf für ${customer.name}`}>Verlauf</Button><Button variant="ghost" size="sm" className="text-destructive" disabled={isDeleting} onClick={() => handleDeleteCustomer(customer.id)} aria-label={`${customer.name} löschen`}>Löschen</Button></div>
                 </article>) : <div className="ledger-empty"><h2>Keine Kunden gefunden</h2>{!searchTerm && <Button variant="outline" onClick={openAddModal}>Ersten Kunden anlegen</Button>}</div>}
               </div>
               <div className={`hidden ${isLoadingCustomers || loadError ? "" : "xl:block"} overflow-hidden bg-card`}>
@@ -556,6 +558,24 @@ export default function CustomersPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
+                                      onClick={() => setTimelineCustomer(customer)}
+                                      data-customer-timeline-return={customer.id}
+                                      className="h-8 w-8"
+                                      aria-label={`Verlauf für ${customer.name}`}
+                                    >
+                                      <History className="h-4 w-4" aria-hidden="true" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Verlauf</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
                                       className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                                       aria-label={`${customer.name} löschen`}
                                       onClick={() => handleDeleteCustomer(customer.id)}
@@ -614,6 +634,13 @@ export default function CustomersPage() {
         open={Boolean(notesCustomer)}
         onOpenChange={(open) => {
           if (!open) setNotesCustomer(null);
+        }}
+      />
+      <CustomerTimeline
+        customer={timelineCustomer}
+        open={Boolean(timelineCustomer)}
+        onOpenChange={(open) => {
+          if (!open) setTimelineCustomer(null);
         }}
       />
     </div>
