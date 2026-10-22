@@ -358,3 +358,48 @@ heap, pixel, file, CPU, wall-time or syscall limit is increased by this delta.
 A measured benign case and remaining-budget justification are still required
 before any resource adjustment, and native positive/negative plus real-PDF
 browser acceptance remain mandatory.
+
+
+### Test-only real-child memory observation (native evidence pending)
+
+At source c6af8ce0db43f1bab4f122256f9e9ba84825469c,
+[native run 39780638841](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39780638841)
+built both architectures successfully but rejected the first synthetic PDF at
+`document-load`. Arm64 reported V8-heap/SIGTRAP with GC-used 8.3 MB/total 12.7 MB;
+x64 reported native-allocation/SIGSEGV with GC-used 8.5 MB/total 12.9 MB. These
+reported heaps are far below the configured 128 MiB old-space cap; neither a
+heap increase nor an address-space increase follows from that observation.
+No native positive or production-derived real-PDF browser acceptance passed.
+
+The synthetic native smoke adds read-only observation outside the sandboxed
+child, not a different renderer or a spawn mock. Pinned Node's documented
+[child_process diagnostic channel](https://github.com/nodejs/node/blob/v22.23.4/doc/api/diagnostics_channel.md#event-child_process)
+(the process event is experimental in this pinned release) identifies the actual
+ChildProcess. Only its expected prlimit executable, pid, parent pid, same uid and
+stable process start time are accepted; commandline/environment/document paths
+are never recorded. No production module imports this observer, and the child
+receives no procfs permission, new descriptor, credential or resource allowance.
+
+The observer opens only the known child's proc stat/status files with
+O_NOFOLLOW, keeps those handles rather than reopening a potentially reused PID,
+and checks the identity before and after each status read. Kernel documentation
+[specifies that existing proc handles do not act on a reused PID](https://docs.kernel.org/filesystems/proc.html#process-specific-subdirectories).
+Only four numeric KiB fields (VmPeak/VmSize/VmHWM/VmRSS), sample count and fixed
+status are emitted. Numeric identity, process name, addresses, commandline,
+environment and paths are not emitted; invalid/duplicate/oversize data or changed
+ownership becomes a fixed unavailable/ownership-rejected result.
+
+Sampling uses non-overlapping reads every 20 ms, at most 1,000 samples/20 seconds,
+16 KiB per proc file read and two held handles. Exit/error/close, deadline and
+caller finally remove the channel subscription/listeners/timers and close the
+handles, including an in-flight open/read. The native smoke retains its outer
+150-second command deadline; no renderer success or failure is suppressed by
+observation. Pure tests cover the parser, ownership/PID reuse, privacy and
+cleanup; they execute no child, proc access, kernel/filter probe or renderer.
+
+These are **sampled lower-bound peaks, not exact maxima**: short spikes may be
+missed, proc RSS accounting is approximate, and a failed sample is not evidence
+of spare budget. Virtual mappings/reservations are distinct from resident memory
+and V8 heap. Any resource proposal still needs the actual native figures and a
+bounded remaining-budget rationale, followed by all unchanged positive/negative
+native and real-PDF browser gates. No limit or security policy changes here.
