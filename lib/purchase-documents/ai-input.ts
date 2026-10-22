@@ -87,6 +87,8 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
     let startupCode: string | null = null;
     let startupOperation: string | null = null;
     let startupContexts: string[] = [];
+    let memoryClass: string | null = null;
+    let gcReportedUsedMb: number | null = null, gcReportedTotalMb: number | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const killGroup = () => {
       if (!child?.pid) return;
@@ -129,6 +131,26 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
         ['node-process', /uv_spawn|child_process/],
       ];
       startupContexts = contexts.filter(([, pattern]) => pattern.test(diagnosticText)).map(([value]) => value);
+      const memoryClasses: [string, RegExp][] = [
+        ['v8-heap', /JavaScript heap out of memory|Reached heap limit|Ineffective mark-compacts near heap limit/i],
+        ['v8-code-range', /CodeRange|code range/i],
+        ['v8-memory-chunk', /MemoryChunk/i],
+        ['v8-zone', /(?:OOM|out of memory) in (?:Zone|zone)/i],
+        ['wasm-reservation', /WebAssembly\.Memory|(?:wasm|WebAssembly)[^\n]*(?:reserv|allocat)/i],
+        ['native-mapping', /Failed to reserve|Reservation failed|VirtualMemory|mmap/i],
+        ['native-allocation', /std::bad_alloc|Cannot allocate memory|Allocation failed|out of memory|ENOMEM/i],
+      ];
+      memoryClass = memoryClasses.find(([, pattern]) => pattern.test(diagnosticText))?.[0] ?? null;
+      // Only bounded numeric fields from the fixed V8 GC layout. These are
+      // reported heap figures, NOT native RSS/address-space measurements.
+      for (const match of diagnosticText.matchAll(/(?:Scavenge|Mark-Compact|Mark-Sweep)(?: \([^\n)]{1,24}\))?\s+([0-9]{1,5}(?:\.[0-9]{1,3})?) \(([0-9]{1,5}(?:\.[0-9]{1,3})?)\) -> ([0-9]{1,5}(?:\.[0-9]{1,3})?) \(([0-9]{1,5}(?:\.[0-9]{1,3})?)\) MB/g)) {
+        const values = match.slice(1).map(Number);
+        if (values.every(value => Number.isFinite(value) && value >= 0 && value <= 65536)) {
+          gcReportedUsedMb = Math.max(gcReportedUsedMb ?? 0, values[0], values[2]);
+          gcReportedTotalMb = Math.max(gcReportedTotalMb ?? 0, values[1], values[3]);
+        }
+      }
+
       if (/OpenSSL configuration error/.test(diagnosticText)) reason = 'openssl-config';
       else if (/uv_pipe_open|createWritableStdioStream/.test(diagnosticText)) reason = 'stdio-setup';
       else if (/ERR_ACCESS_DENIED/.test(diagnosticText)) reason = 'node-permission';
@@ -159,8 +181,8 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
         const error = new PurchaseDocumentError('PDF konnte nicht vollständig innerhalb der sicheren Ressourcenlimits gerendert werden. Erneut versuchen oder Original manuell prüfen; keine KI-Anfrage wurde gesendet.', 422, 'AI_RENDER_FAILED');
         // Error.cause is diagnostic-only. Routes continue returning the fixed
         // public code/message, and synthetic native smoke shows these tokens.
-        const signals = ['SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGILL', 'SIGKILL', 'SIGSEGV', 'SIGSYS', 'SIGTERM', 'SIGXCPU', 'SIGXFSZ'];
-        Object.defineProperty(error, 'cause', { value: { stage, reason, startupCode, startupOperation, startupContexts, diagnosticBytes: diagnostics, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
+        const signals = ['SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGILL', 'SIGKILL', 'SIGSEGV', 'SIGSYS', 'SIGTRAP', 'SIGTERM', 'SIGXCPU', 'SIGXFSZ'];
+        Object.defineProperty(error, 'cause', { value: { stage, reason, startupCode, startupOperation, startupContexts, memoryClass, gcReportedUsedMb, gcReportedTotalMb, diagnosticBytes: diagnostics, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
         reject(error);
       }
       else resolve();

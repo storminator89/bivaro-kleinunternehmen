@@ -56,7 +56,11 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     await expect(preview.getByRole('listitem')).toHaveCount(3);
     await expect(preview.getByText('80,00 €', { exact: true })).toBeVisible();
     await preview.getByRole('link', { name: 'Alle Schritte', exact: true }).click();
-    const list = page.getByRole('list', { name: 'Priorisierte nächste Schritte', exact: true });
+    await expect(page).toHaveURL(/\/dashboard\/today$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Heute erledigen', exact: true })).toBeVisible();
+    const fullView = page.locator('section[aria-labelledby="daily-actions-title"]');
+    await expect(fullView).toBeVisible();
+    const list = fullView.getByRole('list', { name: 'Priorisierte nächste Schritte', exact: true });
     await expect(list.getByRole('listitem')).toHaveCount(4);
     await expect(list.getByRole('listitem').first()).toContainText('SYNTHETIC-DAILY-PARTIAL');
     for (const width of [360, 390, 1440]) {

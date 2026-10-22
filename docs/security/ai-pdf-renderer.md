@@ -337,3 +337,24 @@ uses a Unix SOCK_STREAM socketpair for UV_CREATE_PIPE;
 changes only the open file description's O_NONBLOCK flag. These facts explain
 the narrow request allowance without claiming that descriptors are anonymous
 pipe inodes or that arbitrary network access is allowed.
+
+
+### Next native gate: bounded memory-failure classification
+
+[Native run 39778311611](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39778311611)
+at source 14476ea76122034bfad6b8d0522b5314419b1a11 moved arm64 beyond
+stdio/import initialization to `document-load`, then failed with fixed memory
+context before any accepted page. This is progress, not rendering acceptance.
+The amd64 job failed earlier during the shared Next font build and did not run
+the renderer. Both real-PDF browser journeys were therefore unreached.
+
+The next diagnostic-only delta classifies V8 heap, code-range, memory-chunk,
+zone, Wasm reservation, native mapping and native allocation failures using a
+finite vocabulary. It can expose only bounded numeric heap figures parsed from
+the fixed V8 GC layout; these are labeled as reported MB values, **not resident
+memory, virtual-size peaks or proof of the remaining native budget**. Raw GC
+lines, addresses, paths and document strings remain unavailable. No address-space,
+heap, pixel, file, CPU, wall-time or syscall limit is increased by this delta.
+A measured benign case and remaining-budget justification are still required
+before any resource adjustment, and native positive/negative plus real-PDF
+browser acceptance remain mandatory.

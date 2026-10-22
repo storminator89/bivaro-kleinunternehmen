@@ -115,6 +115,29 @@ describe('bounded original input preparation', () => {
     expect(JSON.stringify(error.cause)).not.toMatch(/private|source|file\b/);
   });
   it.each([
+    ['FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory', 'v8-heap'],
+    ['Failed to reserve virtual memory for CodeRange', 'v8-code-range'],
+    ['Fatal javascript OOM in MemoryChunk allocation', 'v8-memory-chunk'],
+    ['Fatal javascript OOM in Zone', 'v8-zone'],
+    ['WebAssembly.Memory(): could not allocate memory', 'wasm-reservation'],
+    ['mmap: Cannot allocate memory', 'native-mapping'],
+    ['std::bad_alloc', 'native-allocation'],
+    ['PRIVATE_MEMORY_CLASS /private/path', null],
+  ])('reports only finite memory failure classes from %s', async (message, memoryClass) => {
+    Object.assign(state, { exitCode: 1, stderr: message + '\nprivate document text /private/path', exitSignal: 'SIGTRAP' });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ cause: { memoryClass, signal: 'SIGTRAP', gcReportedUsedMb: null, gcReportedTotalMb: null } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/private|PRIVATE_MEMORY_CLASS|document text/);
+  });
+  it('exposes only bounded V8-reported heap figures, not raw GC lines or addresses', async () => {
+    Object.assign(state, { exitCode: 1, stderr: '[private-address] 99ms: Mark-Compact (reduce) 124.5 (150.2) -> 123.4 (149.7) MB, private text\nScavenge 119.1 (146.1) -> 125.7 (151.1) MB\nMark-Compact 99999 (99999) -> 99999 (99999) MB' });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ cause: { gcReportedUsedMb: 125.7, gcReportedTotalMb: 151.1 } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/private|address|99999|Mark-Compact|Scavenge/);
+  });
+  it.each([
     ['MODULE_NOT_FOUND', 'module-load'], ['ERR_MODULE_NOT_FOUND', 'module-load'],
     ['ERR_DLOPEN_FAILED', 'module-load'], ['EMFILE', 'descriptors'],
     ['ENOMEM', 'memory'], ['EPERM', 'permission'], ['EACCES', 'permission'],
