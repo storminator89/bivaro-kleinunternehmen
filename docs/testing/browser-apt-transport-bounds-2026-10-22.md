@@ -6,7 +6,7 @@ PR119 browser run [39773046663](https://github.com/storminator89/bivaro-kleinunt
 
 ## Narrow workflow change
 
-Base: local font-integrated PR119 commit `0c2aa3767c4f649d54f0f3bf64aca97e2c4a2c12`.
+Original transport-candidate base: local font-integrated PR119 commit `0c2aa3767c4f649d54f0f3bf64aca97e2c4a2c12`. The current budget integration incorporates accepted main `3c4fd511d34be384c4b3f1cdfde467ffff89f36a` (local `7d8a7c8f24c91ef441c04904b5ba96c553eef918`, tree `7ad3006e2ab1229e687401055bb94b582d57d9ea`) without changing any main-relative application/PDF/E2E/dependency bytes.
 
 Each dependency setup step creates its own private `mktemp` configuration beneath the required `RUNNER_TEMP`, removes it on shell exit, and sets exactly:
 
@@ -22,9 +22,21 @@ Hosted run [39779270998](https://github.com/storminator89/bivaro-kleinunternehme
 
 The installed Playwright1.59.1 dependency source executes `apt-get update` and its own exact browser dependency list. Its usual non-root `sudo -- sh -c` escalation does not preserve the caller's APT_CONFIG. Therefore the workflow invokes the installed Node executable and installed Playwright CLI explicitly as root for `install-deps chromium`, then invokes that same CLI without sudo for `install chromium`. No `npx` package lookup is needed, no dependency list is copied or reduced, and browser downloads remain in the original runner-user cache.
 
-The existing PDF/display apt update and install keep the exact package arguments `ghostscript xvfb xauth default-jre-headless util-linux`, and retain all executable/version probes. No mirror, repository, signature/TLS verification, host configuration file, dependency version,30-minute job timeout or functional assertion is changed. These are connection/data-idle limits and one failed-file retry, not an absolute bound on total setup time. Failed setup remains a failed gate; there is no retry-until-green loop.
+The PDF/display apt update and install keep accepted main's exact package arguments `ghostscript xvfb xauth default-jre-headless util-linux poppler-utils`, and retain all executable/version probes. The additional Poppler dependency comes from the already accepted own-invoice PDF integration, not this budget delta. No main-relative mirror, repository, signature/TLS verification, host configuration file, dependency version or functional assertion is changed. These are connection/data-idle limits and one failed-file retry, not an absolute bound on total setup time. Failed setup remains a failed gate; there is no retry-until-green loop.
 
-The full-suite command and the entire workflow section from the hash-pinned official validator onward remain byte-identical to the base. This includes zero browser retries, all50 evidence names, lossless proof checks,5MiB cap, one-day retention and artifact compression settings.
+The full-suite command and the entire workflow section from the hash-pinned official validator onward remain byte-identical to accepted main. This preserves its own-invoice PDF-A verifier, both real final-byte browser cases, Poppler page rendering and PDF artifact retention, alongside zero browser retries, all 50 screenshot names, lossless proof checks, 5MiB cap, one-day retention and screenshot compression settings. All E2E source/configuration bytes are unchanged, retaining main's expected 116 functional cases; no functional test bodies are executed locally.
+
+## Measured whole-job budget
+
+The whole hosted job has a 45-minute orchestration ceiling instead of 30 minutes. This accommodates measured dependency setup, legitimate functional execution and mandatory lossless evidence staging rather than cancelling the suite because setup consumed its budget:
+
+- [Run 39773046663](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39773046663): checkout 11:45:59.987Z to functional command 12:12:19.769Z was 26m 19.8s of setup, including 6m 23.2s Chromium setup and 19m 29.9s PDF/display setup.
+- [Run 39761533198](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39761533198): the complete functional command ran 10:20:53.111Z–10:29:43.882Z, or 8m 50.8s. [Run 39766114470](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39766114470) attempt 2 took 7m 14.0s. Their application assertion failures remain failures; these timings do not imply acceptance.
+- Run 39761533198: staging all 50 images took 5m 39.3s, followed by 1.2s upload. Evidence processing is part of the real job budget and is not skipped.
+
+Measured slow setup 26m 20s + functional 8m 51s + evidence 5m 40s is about 40m 51s, so even 40 minutes is insufficient; 45 leaves about 4 minutes for ordinary variance/overhead. This does not guarantee completion under arbitrary network slowness. It permits at most 15 additional runner-minutes per execution, not guaranteed extra usage or a new service.
+
+Only the whole-job orchestration ceiling changes. The 25-minute functional-step limit, 20-minute Playwright global timeout, 30-second PDF subprocess sandbox, browser retries 0, per-connection transport bounds, dependency/package lists, mirrors, signature checks, 50-image allowlist, 5MiB artifact cap and one-day retention remain unchanged. No current run is cancelled or rerun by this change.
 
 ## Verification
 
