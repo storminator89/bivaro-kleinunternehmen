@@ -93,6 +93,14 @@ describe('bounded original input preparation', () => {
     expect(JSON.stringify(error.cause)).not.toMatch(/PRIVATE|private|provider-key|arbitrary/);
     await expect(access(state.directory)).rejects.toThrow();
   });
+  it('retains only bounded finite PDF diagnostic codes, never raw diagnostic details', async () => {
+    Object.assign(state, { exitCode: 1, stdout: 'BIVARO_AI_RENDER_STAGE operators\nBIVARO_AI_RENDER_REASON pdf-diagnostic\n' + 'BIVARO_AI_PDF_DIAGNOSTIC font-type1-truetype\n'.repeat(4) + 'BIVARO_AI_PDF_DIAGNOSTIC asset-font\nBIVARO_AI_PDF_DIAGNOSTIC PRIVATE-TEXT\nBIVARO_AI_PDF_DIAGNOSTIC font-repair PRIVATE\n', stderr: 'PRIVATE DOCUMENT /private/provider-key' });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ code: 'AI_RENDER_FAILED', cause: { stage: 'operators', reason: 'pdf-diagnostic', pdfDiagnosticCodes: ['font-type1-truetype', 'asset-font'] } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/PRIVATE|private|provider-key/);
+    expect(JSON.stringify(error)).not.toContain('pdfDiagnosticCodes');
+  });
   it.each([
     ["Error: EPERM: operation not permitted, open; syscall: 'open'; private stack", 'open'],
     ["Error: EACCES: permission denied, realpath '/private/path'", 'realpath'],

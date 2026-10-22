@@ -442,3 +442,42 @@ rights unchanged. No host setting or live process is modified, no diagnostic is
 suppressed, and no provider call or partial rendering can be accepted on failure.
 The same real positive/negative native and production-derived PDF browser gates
 must pass on the candidate; resource increases remain unapproved and unproven.
+
+### Operators-stage diagnostics after bounded reservation tuning
+
+At exact source `247f0814314f5529381d0070013948ea58002bee`,
+[native run 39788281457](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39788281457)
+built both production architectures and reached `operators` on the first genuine
+synthetic PDF, then failed closed with `pdf-diagnostic`, exit 1 and no signal or
+memory class. Sampled lower-bound VmPeak/VmHWM were 873,012/99,644 KiB on x64
+(18 samples) and 602,484/97,220 KiB on arm64 (16 samples). The observed initial
+virtual exhaustion is reduced, but **neither architecture rendered successfully**;
+the remaining native cases and production-derived real-PDF browser were skipped.
+
+The installed and [pinned upstream font map](https://github.com/mozilla/pdf.js/blob/v6.4.299/src/core/standard_fonts.js)
+maps Helvetica to bundled LiberationSans TrueType data. The
+[font translator](https://github.com/mozilla/pdf.js/blob/v6.4.299/src/core/evaluator.js)
+marks successfully fetched standard-font data internal, but the
+[font constructor](https://github.com/mozilla/pdf.js/blob/v6.4.299/src/core/fonts.js)
+also reports an informational type mismatch when declared Type1 and actual
+TrueType differ. This is a source-backed candidate for the current rejection,
+not its confirmed native diagnostic. The pinned GetOperatorList worker handler
+does not emit a routine progress/timing information message. Node's
+[binary-data factory](https://github.com/mozilla/pdf.js/blob/v6.4.299/src/display/node_utils.js)
+uses filesystem paths; no switch to file URLs is justified.
+
+The next diagnostic-only delta emits one token per finite category (12 maximum,
+under 1 KiB combined), never the original console arguments. Exact single-string
+shapes, method identity and bounded input distinguish Type1-to-TrueType mismatch,
+other font mismatch, font/CMap/Wasm asset failure, font repair, parser/operator
+recovery, unsupported graphics, image decoder, worker setup and unknown. Values
+over 4,096 characters, controls, multiple arguments or non-strings are unknown;
+objects are never stringified. Parent errors retain only the finite deduplicated
+codes in a non-enumerable diagnostic cause, not in public API responses.
+
+**Every captured console call remains fatal**, including the exact mismatch
+shape and unknown diagnostics. INFOS verbosity, stopAtErrors and all existing
+parser, blank-page, completeness, resource and kernel-confinement checks are
+unchanged. Console text alone cannot distinguish a trusted standard-font
+substitution from an embedded-font mismatch; no acceptance exception is added.
+Pure preamble/privacy/bounds and parent protocol tests are not native evidence.

@@ -84,6 +84,7 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
     let diagnostics = 0;
     let diagnosticText = '';
     let stage = 'launcher', reason = 'unknown';
+    let pdfDiagnosticCodes: string[] = [];
     let startupCode: string | null = null;
     let startupOperation: string | null = null;
     let startupContexts: string[] = [];
@@ -114,6 +115,8 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
       diagnosticText += chunk.toString('ascii');
       for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_STAGE (read-input|canvas-import|pdfjs-import|document-load|metadata|operators|render|pixels|encode|write-page|page-cleanup|document-cleanup|manifest)\n/g)) stage = match[1];
       for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_REASON (pdf-diagnostic|permission|module-load|memory|page-limit|type|range|runtime)\n/g)) reason = match[1];
+      const pdfCodes = ['font-type1-truetype', 'font-type-mismatch', 'asset-font', 'asset-cmap', 'asset-wasm', 'font-repair', 'parser-recovery', 'operator-recovery', 'graphics-unsupported', 'image-decoder', 'worker-setup', 'other'];
+      pdfDiagnosticCodes = pdfCodes.filter(value => diagnosticText.includes(`BIVARO_AI_PDF_DIAGNOSTIC ${value}\n`));
       // Never copy an arbitrary error code/message. Match a finite reviewed
       // vocabulary, including startup failures that occur before JS progress.
       const codes = ['ERR_ACCESS_DENIED', 'ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_DLOPEN_FAILED', 'ERR_UNKNOWN_FILE_EXTENSION', 'ERR_INVALID_ARG_VALUE', 'ERR_INVALID_ARG_TYPE', 'ERR_WORKER_INIT_FAILED', 'ERR_SYSTEM_ERROR', 'EMFILE', 'ENOMEM', 'EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'EISDIR', 'EBADF', 'EIO', 'SyntaxError', 'ReferenceError', 'TypeError', 'RangeError'];
@@ -182,7 +185,7 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
         // Error.cause is diagnostic-only. Routes continue returning the fixed
         // public code/message, and synthetic native smoke shows these tokens.
         const signals = ['SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGILL', 'SIGKILL', 'SIGSEGV', 'SIGSYS', 'SIGTRAP', 'SIGTERM', 'SIGXCPU', 'SIGXFSZ'];
-        Object.defineProperty(error, 'cause', { value: { stage, reason, startupCode, startupOperation, startupContexts, memoryClass, gcReportedUsedMb, gcReportedTotalMb, diagnosticBytes: diagnostics, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
+        Object.defineProperty(error, 'cause', { value: { stage, reason, pdfDiagnosticCodes, startupCode, startupOperation, startupContexts, memoryClass, gcReportedUsedMb, gcReportedTotalMb, diagnosticBytes: diagnostics, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
         reject(error);
       }
       else resolve();

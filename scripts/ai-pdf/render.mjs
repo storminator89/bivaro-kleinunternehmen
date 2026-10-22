@@ -18,16 +18,54 @@ const MAX_ALLOCATED_CANVAS_PIXELS = 64_000_000;
 const MAX_PAGE_PIXELS = 4_000_000;
 const MAX_OPERATIONS = 100_000;
 let diagnostic = false;
+const diagnosticCodes = new Set();
 // Fixed protocol tokens only: no document strings, paths, error messages or
 // library diagnostics leave the child. Useful even when native startup fails.
-// A direct write to the inherited pipe avoids initializing a new libuv handle
+// A direct write to the inherited stdio channel avoids a new libuv handle
 // merely to report a failure of that very stdio initialization.
 const progress = stage => writeSync(1, `BIVARO_AI_RENDER_STAGE ${stage}\n`);
 // PDF.js recovery can return successful promises after skipping damaged data.
-// Its warnings use console.log; never suppress them into an apparent success.
+// Capture its console methods; never suppress diagnostics into apparent success.
 // Keep no original content in diagnostics and reject any diagnostic, even a
-// warning that a different renderer might consider harmless.
-for (const method of ['log', 'info', 'warn', 'error', 'debug']) console[method] = () => { diagnostic = true; };
+// warning that a different renderer might consider harmless. Classification is
+// diagnostic-only: even the exact font-type shape below remains fatal because
+// the text alone cannot prove trusted built-in versus embedded font provenance.
+function classifyPdfDiagnostic(method, args) {
+  if (args.length !== 1 || typeof args[0] !== 'string') return 'other';
+  const message = args[0];
+  if (message.length > 4096 || /[\x00-\x1f\x7f]/.test(message)) return 'other';
+  if (method === 'info') {
+    if (message === 'Info: Inconsistent font file Type/SubType, expected: Type1/undefined but found: TrueType/undefined.') return 'font-type1-truetype';
+    if (message.startsWith('Info: Inconsistent font file Type/SubType, expected: ')) return 'font-type-mismatch';
+    if (['Info: TT:', 'Info: cff data is shifted', 'Info: Attempting to fix ', 'Info: Unable to recover a standard glyph name for:', 'Info: MMType1 font ('].some(prefix => message.startsWith(prefix))) return 'font-repair';
+    if (['Info: Malformed dictionary:', 'Info: Found "', 'Info: Bad length "', 'Info: Lexer.getNumber', 'Info: Command ', 'Info: (while reading XRef):', 'Info: Truncating too long decode map.'].some(prefix => message.startsWith(prefix))) return 'parser-recovery';
+    if (['Info: graphic state operator ', 'Info: Unknown graphic state operator ', 'Info: Ignored XObject subtype ', 'Info: hasBlendModes - ignoring ', 'Info: Invalid BlackPoint', 'Info: Invalid Gamma', 'Info: Invalid Range', 'Info: Bad shading domain.', 'Info: No support for cubic spline interpolation:'].some(prefix => message.startsWith(prefix))) return 'graphics-unsupported';
+    if (message === 'Info: The worker has been disabled.') return 'worker-setup';
+  }
+  if (method === 'warn') {
+    for (const wrapper of ['Warning: ', 'Warning: Error: ', 'Warning: UnknownErrorException: ']) {
+      if (message.startsWith(`${wrapper}Unable to load font data at: `)) return 'asset-font';
+      if (message.startsWith(`${wrapper}Unable to load CMap data at: `)) return 'asset-cmap';
+      if (message.startsWith(`${wrapper}Unable to load wasm data at: `)) return 'asset-wasm';
+    }
+    if (['Warning: TT:', 'Warning: Invalid "Length1"', 'Warning: Unable to recover "Length1"', 'Warning: Failed to parse font ', 'Warning: Failed to compile font ', 'Warning: Font file is empty ', 'Warning: Incorrect \'loca\' table length', 'Warning: translateFont - '].some(prefix => message.startsWith(prefix))) return 'font-repair';
+    if (message.startsWith('Warning: getOperatorList - ignoring ')) return 'operator-recovery';
+    if (['Warning: Indexing all PDF objects', 'Warning: XRef.parse - ', 'Warning: indexObjects', 'Warning: readXRef - ', 'Warning: getContentStream - ignoring ', 'Warning: checkLastPage - '].some(prefix => message.startsWith(prefix))) return 'parser-recovery';
+    if (['Warning: Image exceeded maximum allowed size', 'Warning: Unable to decode image', 'Warning: JpxError', 'Warning: Jbig2Error', 'Warning: JPEG error', 'OpenJPEG: '].some(prefix => message.startsWith(prefix))) return 'image-decoder';
+    if (message === 'Warning: Setting up fake worker.') return 'worker-setup';
+  }
+  return 'other';
+}
+for (const method of ['log', 'info', 'warn', 'error', 'debug']) console[method] = (...args) => {
+  diagnostic = true;
+  const code = classifyPdfDiagnostic(method, args);
+  // At most one token per finite code: no retained original value, unbounded
+  // diagnostic list, arbitrary string coercion or library text in the protocol.
+  if (!diagnosticCodes.has(code)) {
+    diagnosticCodes.add(code);
+    writeSync(1, `BIVARO_AI_PDF_DIAGNOSTIC ${code}\n`);
+  }
+};
 function assertClean() { if (diagnostic) throw new Error('Renderer reported recovery or unsupported content'); }
 function geometry(width, height) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1 || width > MAX_CANVAS_EDGE || height > MAX_CANVAS_EDGE || width * height > MAX_CANVAS_PIXELS) throw new Error('Canvas geometry limit');
