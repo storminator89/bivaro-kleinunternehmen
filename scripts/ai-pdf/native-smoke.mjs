@@ -37,6 +37,9 @@ for (const [name, pages] of [['one', 1], ['two', 2], ['four', 4], ['raster', 1]]
 for (const [name, code] of [['five', 'AI_PDF_LIMIT'], ['blank', 'AI_RENDER_FAILED'], ['geometry', 'AI_RENDER_FAILED']]) {
   await assert.rejects(prepareObserved(await fixture(name)), error => error.code === code);
 }
+for (const name of ['embedded-mismatch', 'embedded-claimed-internal', 'standard-then-embedded', 'embedded-then-standard']) {
+  await assert.rejects(prepareObserved(await fixture(name)), error => error.code === 'AI_RENDER_FAILED' && error.cause?.reason === 'pdf-diagnostic' && error.cause?.pdfDiagnosticCodes.includes('font-type1-truetype'));
+}
 const valid = await fixture('one');
 for (const original of [Buffer.from('%PDF-1.7\nnot a valid document'), valid.subarray(0, Math.floor(valid.length / 2))]) {
   await assert.rejects(prepareObserved(original), error => error.code === 'AI_RENDER_FAILED');

@@ -441,7 +441,7 @@ pixel/operator/input/page/output/file/descriptor limits and Landlock/seccomp
 rights unchanged. No host setting or live process is modified, no diagnostic is
 suppressed, and no provider call or partial rendering can be accepted on failure.
 The same real positive/negative native and production-derived PDF browser gates
-must pass on the candidate; resource increases remain unapproved and unproven.
+must pass on the candidate; resource increases remain unjustified and unproven.
 
 ### Operators-stage diagnostics after bounded reservation tuning
 
@@ -481,3 +481,57 @@ parser, blank-page, completeness, resource and kernel-confinement checks are
 unchanged. Console text alone cannot distinguish a trusted standard-font
 substitution from an embedded-font mismatch; no acceptance exception is added.
 Pure preamble/privacy/bounds and parent protocol tests are not native evidence.
+
+### Provenance-aware standard-font diagnostic adapter (acceptance pending)
+
+At source `cbbc314c2aea91c608562309a8bd8578596b6a27`,
+[native run 39790672631](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39790672631)
+confirmed the sole category `font-type1-truetype` on both architectures, still
+failing the first positive PDF at operators. The fixture's standard Helvetica
+dictionary has no embedded font program. Pinned PDF.js intentionally retrieves
+bundled LiberationSans, but emits that information for the declared/actual type
+difference. Text alone remains insufficient provenance for arbitrary PDFs.
+
+A deterministic **build-time** adapter changes only the diagnostic condition at
+that reviewed call site: skip that one information emission only when
+`properties.isInternalFont === true`, declared type is Type1 with undefined
+subtype, and actual type is TrueType with undefined subtype. This flag is assigned
+from successful internal standard-font retrieval, not PDF dictionary data. No
+font parser, repair, glyph, operator, layout or rendering code changes. Any
+embedded mismatch, other tuple or other information/warning remains fatal.
+
+`prepare-worker.mjs` accepts only the pinned official input SHA-256
+`bb422f60804477de4a0b09091d8347a916a387755ed1cbad24ccaec1d09c78bf`,
+requires exactly one source replacement and writes a **separate** read-only
+`pdf.worker.bivaro-6.4.299.mjs`, SHA-256
+`0f463d40ad20db0c24f3f6a4a1b94818dfebea67c06b4a734a66b9fcd21b0135`.
+It retains the original official worker unchanged, preserves its license and
+adds a prominent modification notice. Missing/version/hash/source-target drift,
+stale output or symlinks fail instead of receiving a heuristic patch/fallback.
+`prebuild`/`predev` and the native fixture builder explicitly prepare this asset;
+there is no new install lifecycle script, network fetch or dependency version.
+Existing full PDF.js tracing and Docker copies include both files unchanged.
+
+Before parsing, the child hashes **bytes only**, not decoded/re-written/evaluated
+source, and checks both original and adapted hashes, bounded regular single-link
+files and a read-only adapted asset. The same canonical absolute path that is
+hashed becomes the explicit file URL workerSrc. The child rejects any preexisting
+`globalThis.pdfjsWorker` (including inherited/undefined properties) and any
+non-null workerPort: PDF.js would otherwise prefer these over workerSrc. There
+is no default-worker or unattested-handler fallback. Existing read-only PDF.js
+package grants suffice; no filesystem, syscall or network right is added.
+
+Pure tests cover exact strict-boolean/type/subtype decisions, deterministic
+input/output hash drift, unchanged original bytes, read-only output, symlinks,
+stale/missing assets, actual child attestation on temporary assets and handler/port
+shortcuts. Genuine both-architecture negatives add the **same** LiberationSans
+bytes embedded as FontFile2 in a Type1 dictionary with matching FontName/BaseFont,
+a claimed `/isInternalFont true` case, and internal/embedded same-name fonts in
+both orders. They must specifically report `pdf-diagnostic/font-type1-truetype`,
+not merely fail for some unrelated reason. Standard Helvetica positives and every
+previous positive/negative, original-byte/hash, complete-page and real-PDF browser
+assertion remain unchanged. Build/fixtures and pure checks are not native passes.
+Actual image/standalone packaging and all genuine native/browser gates must still
+pass, including attestation's resource use under unchanged 1 GiB AS/128 MiB heap,
+15-second CPU/20-second wall, pixel/output and confinement limits. Ghostscript
+remains for the separate foreign-PDF conversion path.

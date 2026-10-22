@@ -42,7 +42,13 @@ describe('real PDF browser gate packaging contract (static, not native evidence)
     const workflow = source('.github/workflows/container-runtime.yml');
     expect(workflow.indexOf('bivaro-runtime-smoke /tmp/container-runtime-smoke.sh')).toBeLessThan(workflow.indexOf('docker build --file Dockerfile.ai-browser'));
     expect(workflow).toContain('docker run --rm --network=none --shm-size=256m bivaro-ai-browser');
-    for (const unsafe of ['--privileged', '--security-opt', '--network=host', '--ipc=host', 'upload-artifact']) expect(workflow).not.toContain(unsafe);
+    for (const unsafe of ['--privileged', '--security-opt', '--network=host', '--ipc=host']) expect(workflow).not.toContain(unsafe);
+    // Main's independent own-invoice PDF/page evidence remains intact. The AI
+    // derivative creates no new screenshot/artifact channel to evade the cap.
+    const aiGate = workflow.slice(workflow.indexOf('      - name: Build test-only browser derivative'));
+    expect(aiGate).not.toContain('upload-artifact');
+    expect(workflow).toContain('own-invoice-container-${{ matrix.runner }}');
+    expect(workflow.match(/uses: actions\/upload-artifact@v4/g)).toHaveLength(1);
     expect(workflow).toContain('ubuntu-24.04-arm');
   });
   it('exercises real APIs, consent, ordered images and rejection without mocks or evidence uploads', () => {

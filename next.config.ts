@@ -32,8 +32,13 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // The receipt renderer is a separate Node process, never an app-heap or
   // browser import. Trace its exact public runtime assets for standalone use.
-  serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas'],
+  serverExternalPackages: ['pdfkit', 'fontkit', 'pdfjs-dist', '@napi-rs/canvas'],
   outputFileTracingIncludes: {
+    '/api/invoices/render': [
+      './node_modules/pdfkit/js/data/**/*',
+      './node_modules/pdfkit/js/standard-fonts/**/*',
+      './public/fonts/invoice/**/*',
+    ],
     '/*': [
       './scripts/ai-pdf/render.mjs',
       './scripts/ai-pdf/sandbox-*.bpf',

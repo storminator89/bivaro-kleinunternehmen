@@ -109,7 +109,7 @@ describe('per-command browser dependency transport bounds', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(result.configs).toEqual([config, config, config]);
     expect(result.calls).toContain('<apt-get> <update>');
-    expect(result.calls).toContain('<apt-get> <install> <-y> <--no-install-recommends> <ghostscript> <xvfb> <xauth> <default-jre-headless> <util-linux>');
+    expect(result.calls).toContain('<apt-get> <install> <-y> <--no-install-recommends> <ghostscript> <xvfb> <xauth> <default-jre-headless> <util-linux> <poppler-utils>');
     expect(result.remaining).toEqual([]);
   });
 

@@ -2,10 +2,12 @@
  * PDF.js performs every PDF parsing/rendering operation; this is not a PDF
  * interpreter. No viewer, scripting manager, HTML or external provider is used.
  */
-import { readFile, writeFile } from 'node:fs/promises';
-import { writeSync } from 'node:fs';
+import { readFile, writeFile, realpath, lstat, open } from 'node:fs/promises';
+import { writeSync, constants } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const MAX_INPUT_BYTES = 6 * 1024 * 1024;
 const MAX_PAGES = 4;
@@ -17,6 +19,11 @@ const MAX_LIVE_CANVAS_PIXELS = 24_000_000;
 const MAX_ALLOCATED_CANVAS_PIXELS = 64_000_000;
 const MAX_PAGE_PIXELS = 4_000_000;
 const MAX_OPERATIONS = 100_000;
+// Match the separately generated, reviewed build-time adapter contract. Runtime
+// hashes bytes only: never rewrite/evaluate source or fall back to another worker.
+const OFFICIAL_WORKER_SHA256 = 'bb422f60804477de4a0b09091d8347a916a387755ed1cbad24ccaec1d09c78bf';
+const ADAPTED_WORKER_SHA256 = '0f463d40ad20db0c24f3f6a4a1b94818dfebea67c06b4a734a66b9fcd21b0135';
+const ADAPTED_WORKER_NAME = 'pdf.worker.bivaro-6.4.299.mjs';
 let diagnostic = false;
 const diagnosticCodes = new Set();
 // Fixed protocol tokens only: no document strings, paths, error messages or
@@ -71,6 +78,32 @@ function geometry(width, height) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1 || width > MAX_CANVAS_EDGE || height > MAX_CANVAS_EDGE || width * height > MAX_CANVAS_PIXELS) throw new Error('Canvas geometry limit');
 }
 
+async function attestedWorkerUrl(pdfjsRoot) {
+  let worker;
+  for (const [name, expectedHash] of [['pdf.worker.mjs', OFFICIAL_WORKER_SHA256], [ADAPTED_WORKER_NAME, ADAPTED_WORKER_SHA256]]) {
+    const requested = path.join(pdfjsRoot, 'legacy', 'build', name);
+    const file = await realpath(requested), info = await lstat(requested);
+    if (file !== requested || !info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size < 1 || info.size > 4 * 1024 * 1024 || (name === ADAPTED_WORKER_NAME && (info.mode & 0o222))) throw new Error('Invalid attested worker asset');
+    const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const current = await handle.stat();
+      if (!current.isFile() || current.dev !== info.dev || current.ino !== info.ino || current.nlink !== 1 || current.size !== info.size) throw new Error('Changed attested worker');
+      const bytes = await handle.readFile();
+      if (bytes.length !== info.size || createHash('sha256').update(bytes).digest('hex') !== expectedHash) throw new Error('Unreviewed worker bytes');
+    } finally { await handle.close(); }
+    if (name === ADAPTED_WORKER_NAME) worker = pathToFileURL(file).href;
+  }
+  return worker;
+}
+
+function selectAttestedWorker(GlobalWorkerOptions, workerUrl) {
+  // PDF.js otherwise prefers this global handler or a supplied port over
+  // workerSrc. Reject both before getDocument; no preloaded/cached fallback.
+  if ('pdfjsWorker' in globalThis || GlobalWorkerOptions.workerPort !== null) throw new Error('Unexpected preloaded PDF worker');
+  GlobalWorkerOptions.workerSrc = workerUrl;
+  if (GlobalWorkerOptions.workerSrc !== workerUrl) throw new Error('Unexpected PDF worker source');
+}
+
 class PdfLimitError extends Error {}
 let loadingTask;
 try {
@@ -80,13 +113,17 @@ try {
   const bytes = await readFile(input);
   if (!bytes.length || bytes.length > MAX_INPUT_BYTES || bytes.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('Input limit');
   const require = createRequire(import.meta.url);
-  const pdfjsRoot = path.dirname(require.resolve('pdfjs-dist/package.json'));
+  const pdfjsRoot = await realpath(path.dirname(require.resolve('pdfjs-dist/package.json')));
   progress('canvas-import');
   const canvas = require('@napi-rs/canvas');
   if (require('@napi-rs/canvas/package.json').version !== '1.0.13') throw new Error('Unreviewed canvas version');
+  if ('pdfjsWorker' in globalThis) throw new Error('Unexpected preloaded PDF worker');
+  progress('worker-attestation');
+  const workerUrl = await attestedWorkerUrl(pdfjsRoot);
   progress('pdfjs-import');
-  const { getDocument, version, AnnotationMode, VerbosityLevel } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const { getDocument, version, AnnotationMode, VerbosityLevel, GlobalWorkerOptions } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   if (version !== '6.4.299') throw new Error('Unreviewed PDF.js version');
+  selectAttestedWorker(GlobalWorkerOptions, workerUrl);
   let livePixels = 0, allocatedPixels = 0;
   const sizes = new WeakMap();
   class BoundedCanvasFactory {

@@ -113,7 +113,7 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
       // Retain bounded data in memory only. Accept fixed protocol tokens, never
       // surface raw PDF/library/native output or paths in logs/API errors.
       diagnosticText += chunk.toString('ascii');
-      for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_STAGE (read-input|canvas-import|pdfjs-import|document-load|metadata|operators|render|pixels|encode|write-page|page-cleanup|document-cleanup|manifest)\n/g)) stage = match[1];
+      for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_STAGE (read-input|canvas-import|worker-attestation|pdfjs-import|document-load|metadata|operators|render|pixels|encode|write-page|page-cleanup|document-cleanup|manifest)\n/g)) stage = match[1];
       for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_REASON (pdf-diagnostic|permission|module-load|memory|page-limit|type|range|runtime)\n/g)) reason = match[1];
       const pdfCodes = ['font-type1-truetype', 'font-type-mismatch', 'asset-font', 'asset-cmap', 'asset-wasm', 'font-repair', 'parser-recovery', 'operator-recovery', 'graphics-unsupported', 'image-decoder', 'worker-setup', 'other'];
       pdfDiagnosticCodes = pdfCodes.filter(value => diagnosticText.includes(`BIVARO_AI_PDF_DIAGNOSTIC ${value}\n`));

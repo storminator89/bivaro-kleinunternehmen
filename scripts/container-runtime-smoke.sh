@@ -56,11 +56,13 @@ printf '%%!PS\n/Helvetica findfont 12 scalefont setfont 30 50 moveto (Bivaro syn
 timeout 30 gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -sOutputFile=/tmp/smoke.pdf /tmp/smoke.ps
 timeout 30 gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r36 -sOutputFile=/tmp/smoke.png /tmp/smoke.pdf
 test -s /tmp/smoke.pdf && test -s /tmp/smoke.png
-# Each run has only an ephemeral /tmp database. No application or host volume is mounted.
+# Each run has only an ephemeral /tmp database. Host mounts contain read-only
+# test code/dependencies/fixtures only, never application data or host secrets.
 export DATABASE_URL=file:/tmp/bivaro-container-smoke.db CHECKPOINT_DISABLE=1
 node /app/node_modules/prisma/build/index.js migrate deploy --schema=/app/prisma/schema.prisma
 node /app/node_modules/prisma/build/index.js migrate diff --from-url="$DATABASE_URL" --to-schema-datamodel=/app/prisma/schema.prisma --exit-code
 export NEXTAUTH_SECRET=synthetic-container-check-not-a-real-secret NEXTAUTH_URL=http://127.0.0.1:3000 HOSTNAME=127.0.0.1 PORT=3000
+export BIVARO_SETUP_TOKEN=synthetic-container-smoke-bootstrap-117
 DATABASE_MIGRATION_MODE=manual sh /app/docker-entrypoint.sh >/tmp/server.log 2>&1 &
 server_pid=$!
 trap 'kill "$server_pid" 2>/dev/null || true' EXIT INT TERM
@@ -71,4 +73,5 @@ for attempt in $(seq 1 30); do
 done
 if [ "$ready" != 1 ]; then cat /tmp/server.log; exit 1; fi
 node -e 'const h=require("/tmp/health.json"); if(h.checks.database.status!=="up")process.exit(1)'
+node /tmp/own-invoice-container-smoke.mjs
 echo 'Synthetic non-root container runtime checks passed.'

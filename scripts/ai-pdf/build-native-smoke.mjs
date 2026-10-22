@@ -4,7 +4,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, PDFName, PDFDict, PDFBool, rgb } from 'pdf-lib';
+import { createRequire } from 'node:module';
+import { preparePdfWorker } from './prepare-worker.mjs';
+
+await preparePdfWorker();
 
 const output = path.join(process.cwd(), 'scripts', 'ai-pdf', 'smoke-runtime');
 await mkdir(output, { recursive: true });
@@ -33,6 +37,28 @@ for (const [name, pages, blank, geometry] of [
       if (image) page.drawImage(image, { x: 42, y: 400, width: 250, height: 120 });
       page.drawRectangle({ x: 42, y: 600 - number * 40, width: 70 + number * 20, height: 25, color: rgb(number / (pages + 1), 0.2, 0.4) });
     }
+  }
+  await writeFile(path.join(output, `${name}.pdf`), await pdf.save());
+}
+
+// The exact same trusted LiberationSans bytes are deliberately embedded in a
+// Type1-declared font. Unlike a built-in substitution, this document-controlled
+// FontFile2 must remain a fatal type mismatch, even beside an internal font.
+const require = createRequire(import.meta.url);
+const standardFont = await readFile(path.join(path.dirname(require.resolve('pdfjs-dist/package.json')), 'standard_fonts', 'LiberationSans-Regular.ttf'));
+for (const name of ['embedded-mismatch', 'embedded-claimed-internal', 'standard-then-embedded', 'embedded-then-standard']) {
+  const pdf = await PDFDocument.create(), page = pdf.addPage([595, 842]);
+  const embedded = await pdf.embedFont(StandardFonts.Helvetica);
+  const standard = await pdf.embedFont(StandardFonts.Helvetica);
+  const fonts = name === 'standard-then-embedded' ? [standard, embedded] : name === 'embedded-then-standard' ? [embedded, standard] : [embedded];
+  for (const [index, font] of fonts.entries()) page.drawText('SYNTHETIC FONT PROVENANCE', { x: 42, y: 760 - index * 60, size: 16, font });
+  await embedded.embed();
+  const dict = pdf.context.lookup(embedded.ref, PDFDict);
+  const descriptor = pdf.context.obj({ Type: 'FontDescriptor', FontName: 'Helvetica', Flags: 32, FontBBox: [-600, -303, 2048, 1075], ItalicAngle: 0, Ascent: 900, Descent: -300, CapHeight: 700, StemV: 80, FontFile2: pdf.context.register(pdf.context.flateStream(standardFont)) });
+  dict.set(PDFName.of('FontDescriptor'), pdf.context.register(descriptor));
+  if (name === 'embedded-claimed-internal') {
+    dict.set(PDFName.of('isInternalFont'), PDFBool.True);
+    descriptor.set(PDFName.of('isInternalFont'), PDFBool.True);
   }
   await writeFile(path.join(output, `${name}.pdf`), await pdf.save());
 }

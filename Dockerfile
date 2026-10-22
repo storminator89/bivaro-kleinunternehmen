@@ -40,8 +40,12 @@ RUN npm ci && \
 # Official validator assets are downloaded only while building the image.
 # Runtime validation is strictly local and never uploads invoice documents.
 FROM deps AS einvoice-assets
+RUN apt-get update && apt-get install -y --no-install-recommends default-jre-headless && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY scripts/einvoice-validation/install-runtime.mjs ./scripts/einvoice-validation/install-runtime.mjs
 RUN node scripts/einvoice-validation/install-runtime.mjs /opt/bivaro/einvoice
+COPY scripts/own-invoice-pdfa ./scripts/own-invoice-pdfa
+RUN node scripts/own-invoice-pdfa/install-runtime.mjs /opt/verapdf
 
 # -----------------------------------------------------------------------------
 # Stage 3: Builder - Build the application
@@ -115,6 +119,7 @@ RUN sh scripts/ai-pdf/build-sandbox-filter.sh "scripts/ai-pdf/sandbox-$(node -p 
 
 # Read-only, original-hash-verified tools/rules; no external validation service.
 COPY --from=einvoice-assets /opt/bivaro/einvoice /opt/bivaro/einvoice
+COPY --from=einvoice-assets /opt/verapdf /opt/verapdf
 # Runtime diagnostics and the explicit upgrade job are outside Next standalone
 # tracing and must be present in the final image.
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/database-runtime.mjs ./scripts/database-runtime.mjs
