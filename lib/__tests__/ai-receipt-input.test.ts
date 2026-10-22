@@ -84,6 +84,13 @@ describe('bounded original input preparation', () => {
     expect(JSON.stringify(error.cause)).not.toMatch(/PRIVATE|private|provider-key|arbitrary/);
     await expect(access(state.directory)).rejects.toThrow();
   });
+  it('identifies libuv pipe initialization only by a fixed diagnostic class', async () => {
+    Object.assign(state, { exitCode: 13, stderr: 'Error: EPERM: operation not permitted, uv_pipe_open; private stack /private/document.pdf' });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ code: 'AI_RENDER_FAILED', cause: { stage: 'launcher', reason: 'stdio-setup', exitCode: 13, signal: null } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/private|document|stack/);
+  });
   it('classifies a native memory startup error without retaining raw details', async () => {
     Object.assign(state, { exitCode: 134, stderr: 'FATAL ERROR: Allocation failed - /private/document.pdf; private contents', exitSignal: 'SIGABRT' });
     const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);

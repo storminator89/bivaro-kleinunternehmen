@@ -3,6 +3,7 @@
  * interpreter. No viewer, scripting manager, HTML or external provider is used.
  */
 import { readFile, writeFile } from 'node:fs/promises';
+import { writeSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -19,7 +20,9 @@ const MAX_OPERATIONS = 100_000;
 let diagnostic = false;
 // Fixed protocol tokens only: no document strings, paths, error messages or
 // library diagnostics leave the child. Useful even when native startup fails.
-const progress = stage => process.stdout.write(`BIVARO_AI_RENDER_STAGE ${stage}\n`);
+// A direct write to the inherited pipe avoids initializing a new libuv handle
+// merely to report a failure of that very stdio initialization.
+const progress = stage => writeSync(1, `BIVARO_AI_RENDER_STAGE ${stage}\n`);
 // PDF.js recovery can return successful promises after skipping damaged data.
 // Its warnings use console.log; never suppress them into an apparent success.
 // Keep no original content in diagnostics and reject any diagnostic, even a
@@ -158,7 +161,7 @@ try {
     : error instanceof PdfLimitError ? 'page-limit'
     : error instanceof TypeError ? 'type'
     : error instanceof RangeError ? 'range' : 'runtime';
-  process.stdout.write(`BIVARO_AI_RENDER_REASON ${reason}\n`);
+  writeSync(1, `BIVARO_AI_RENDER_REASON ${reason}\n`);
   try { await loadingTask?.destroy(); } catch { /* Parent still kills/reaps the entire process group. */ }
   process.exitCode = error instanceof PdfLimitError ? 65 : 1;
 }
