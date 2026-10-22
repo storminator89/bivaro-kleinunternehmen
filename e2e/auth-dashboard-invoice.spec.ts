@@ -2342,7 +2342,7 @@ test.describe('anonymous access and offer foundation', () => {
       const offer = page.locator('#angebot');
       await offer.getByText('Angebotsdetails', { exact: true }).click();
       await expect(offer.getByRole('heading', { name: 'Angebot und Verantwortung', exact: true })).toBeVisible();
-      for (const copy of ['Konzept – kein verbindliches Angebot', 'concept-unconfigured-v1', 'Keine Softwareversion', 'Anbieter noch nicht bestätigt', 'Betriebsmodell noch offen; keine Variante voreingestellt', 'Preis und Steuerdarstellung noch offen', 'keine rechtliche Freigabe', 'Kein Supportkontakt hinterlegt', 'AGPL-3.0-only', 'Quellcode-Zuordnung zum laufenden Release noch offen', 'Kein Onlineabschluss']) await expect(offer).toContainText(copy);
+      for (const copy of ['Konzept – kein verbindliches Angebot', 'concept-unconfigured-v1', 'Keine Softwareversion', 'Anbieter noch nicht bestätigt', 'Betriebsmodell noch offen; keine Variante voreingestellt', 'Preis und Steuerdarstellung noch offen', 'keine rechtliche Freigabe', 'Kein Supportkontakt hinterlegt', 'Apache-2.0', 'Quellcode-Zuordnung zum laufenden Release noch offen', 'Kein Onlineabschluss']) await expect(offer).toContainText(copy);
       await expect(offer.locator('form, input, select, button, a[href^="mailto:"], a[href^="tel:"]')).toHaveCount(0);
       await expect(offer).not.toContainText(/FIKTIVE TESTFIRMA|FICTIONAL-SOURCE|12,34/);
       const repository = offer.getByRole('link', { name: 'Projekt-Repository (keine Laufzeitzuordnung)', exact: true });

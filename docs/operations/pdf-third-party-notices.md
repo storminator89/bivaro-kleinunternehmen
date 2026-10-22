@@ -1,8 +1,11 @@
 # Scoped PDF runtime notices
 
-This packaging step preserves known third-party notices. It does **not** change
-Bivaro's AGPL-3.0-only license, clear rights to relicense the application, or
-certify the complete application/container dependency inventory.
+This packaging step preserves known third-party notices. Bivaro's current
+application declaration is **Apache-2.0**; see the separate
+[application license transition](../legal/application-license-transition.md).
+The inventory does **not** relicense third-party components, establish rights
+to relicense others' work, or certify the complete application/container
+dependency inventory.
 
 ## Where the runtime artifacts are
 
@@ -13,7 +16,7 @@ a distribution. The collector writes these files into `.next/standalone/`:
 - `THIRD_PARTY_NOTICES.txt`: scope, component list and explicit limitations;
 - `THIRD_PARTY_SOURCES.json`: installed/locked versions, npm archive URLs and
   integrity values, declared repositories, and copied-notice SHA-256 values;
-- `LICENSE`: the application's current root AGPL-3.0-only text, unchanged and
+- `LICENSE`: the application's current root Apache-2.0 text, unchanged and
   SHA-256-bound in the manifest; third-party components keep their own terms;
 - `licenses/npm/`: original root license, copyright and notice files plus package
   metadata for PDFKit/fontkit and their declared npm runtime dependency closure,
@@ -123,8 +126,9 @@ alternative**, not a relicensing of the entire shaded JAR or application.
   stax-utils). Surviving embedded notices may omit notices lost during upstream
   assembly. Their remaining source/version/license inventory needs audit.
 
-Before a license transition or a claim of complete binary/container compliance,
-resolve missing upstream attribution and audit **the final release artifact**:
+The application license declaration does not resolve the limits above. Before
+claiming complete binary/container compliance, resolve missing upstream
+attribution and audit **the final release artifact**:
 all veraPDF shaded dependencies/resources, PDF.js fonts and Canvas's native and
 transitive components, existing sharp/libvips and other npm/native
 libraries, the other invoice validators, Debian packages and the JRE. Keep

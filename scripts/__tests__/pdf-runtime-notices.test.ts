@@ -34,9 +34,9 @@ async function fixture() {
     await mkdir(path.join(root, 'node_modules/pdfjs-dist', directory));
     await writeFile(path.join(root, 'node_modules/pdfjs-dist', directory, 'LICENSE_SYNTHETIC'), 'Separate synthetic resource license\r\n');
   }
-  await writeFile(path.join(root, 'package.json'), JSON.stringify({ license: 'AGPL-3.0-only' }));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ license: 'Apache-2.0' }));
   await writeFile(path.join(root, 'LICENSE'), 'Unchanged synthetic application license\r\n');
-  await writeFile(path.join(root, 'package-lock.json'), JSON.stringify({ packages: { '': { license: 'AGPL-3.0-only' }, ...Object.fromEntries(Object.entries(packages).map(([location, metadata]) => [location, { ...metadata, resolved: `https://registry.npmjs.org/${metadata.name}/-/${metadata.name}-${metadata.version}.tgz`, integrity: 'synthetic-integrity' }])) } }));
+  await writeFile(path.join(root, 'package-lock.json'), JSON.stringify({ packages: { '': { license: 'Apache-2.0' }, ...Object.fromEntries(Object.entries(packages).map(([location, metadata]) => [location, { ...metadata, resolved: `https://registry.npmjs.org/${metadata.name}/-/${metadata.name}-${metadata.version}.tgz`, integrity: 'synthetic-integrity' }])) } }));
   await mkdir(path.join(root, 'licenses/synthetic'), { recursive: true });
   const recovered = 'Original synthetic notice\r\n';
   const runtime = '// Synthetic inert runtime marker, never executed.\n';
@@ -85,6 +85,8 @@ describe('offline PDF runtime notice packaging (synthetic files only)', () => {
     expect(first.files.get('licenses/MIT-reference.txt')?.toString()).toContain('<copyright holders>');
     expect(first.files.get('THIRD_PARTY_SOURCES.json')?.toString()).not.toContain(root);
     expect(first.files.get('LICENSE')).toEqual(await readFile(path.join(root, 'LICENSE')));
+    expect(first.manifest.application).toEqual({ declaredLicense: 'Apache-2.0', file: 'LICENSE', sha256: hash(await readFile(path.join(root, 'LICENSE'))) });
+    expect(first.files.get('THIRD_PARTY_NOTICES.txt')?.toString()).toContain('Application: Apache-2.0');
     expect(first.files.get('licenses/synthetic/NOTICE')?.toString()).toBe('Original synthetic notice\r\n');
     expect(first.manifest.supplemental).toMatchObject({ noticeFiles: 1, verifiedRuntimeFiles: 1 });
     expect(first.files.get('licenses/npm/pdfjs-dist/standard_fonts/LICENSE_SYNTHETIC')?.toString()).toBe('Separate synthetic resource license\r\n');
@@ -118,10 +120,10 @@ describe('offline PDF runtime notice packaging (synthetic files only)', () => {
     expect(await readFile(path.join(standalone, 'licenses/invoice-fonts/FONT-LICENSE.txt'))).toEqual(await readFile(path.join(root, 'public/fonts/invoice/FONT-LICENSE.txt')));
   });
 
-  it('hooks notice collection after the build and retains Docker standalone propagation without relicensing', async () => {
+  it('hooks notice collection after the build and retains the Apache application license separately from dependencies', async () => {
     const metadata = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
     expect(metadata.scripts.postbuild).toBe('node scripts/third-party-notices/build-notices.mjs');
-    expect(metadata.license).toBe('AGPL-3.0-only');
+    expect(metadata.license).toBe('Apache-2.0');
     expect(await readFile(new URL('../../Dockerfile', import.meta.url), 'utf8')).toContain('/app/.next/standalone ./');
     const dockerIgnore = (await readFile(new URL('../../.dockerignore', import.meta.url), 'utf8')).split(/\r?\n/u);
     expect(dockerIgnore.lastIndexOf('!licenses/shadcn-ui/LICENSE.md')).toBeGreaterThan(dockerIgnore.lastIndexOf('*.md'));
@@ -211,9 +213,9 @@ describe('offline PDF runtime notice packaging (synthetic files only)', () => {
 
   it('bounds pinned input size and rejects application license metadata drift', async () => {
     const root = await fixture();
-    await writeFile(path.join(root, 'package.json'), JSON.stringify({ license: 'Apache-2.0' }));
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({ license: 'MIT' }));
     await expect(collectPdfNotices(root)).rejects.toThrow('Application license metadata');
-    await writeFile(path.join(root, 'package.json'), JSON.stringify({ license: 'AGPL-3.0-only' }));
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({ license: 'Apache-2.0' }));
     await writeFile(path.join(root, 'licenses/synthetic/NOTICE'), 'x'.repeat(256 * 1024 + 1));
     await expect(collectPdfNotices(root)).rejects.toThrow('Notice input exceeded its bound');
   });

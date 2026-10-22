@@ -189,7 +189,7 @@ export async function collectPdfNotices(projectRoot = ROOT) {
       'Missing upstream license/copyright texts (including fontkit 2.0.4) remain unresolved and require upstream clarification before claiming complete distribution compliance.',
       'PDF.js nested resource notices are retained under their separate original terms; Canvas optional/native/transitive components, sharp/libvips, Debian/JRE, veraPDF shaded dependencies/resources and other validators still need a separate final-image audit.',
       'Recovered source-bound Brotli decoder headers do not resolve its missing wrapper MIT attribution. QuickJS compiler/libc-runtime provenance remains unresolved; its wrapper notice was supplied later upstream, not present as a license file at build time. See licenses/third-party-sources.json.',
-      'No project license change or conclusion about the right to relicense Bivaro is made by this inventory.',
+      'This inventory copies the separately declared current application license; it neither relicenses third-party components nor establishes a conclusion about relicensing rights or complete distribution compliance.',
     ],
   };
   const notices = [

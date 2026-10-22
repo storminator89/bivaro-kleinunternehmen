@@ -158,7 +158,7 @@ export async function inspectRuntimeNotices(appRoot, veraRoot, expected = {
   pdfkit: '5f0d5197d2b5d91f41de43143b0be42fb55515bc2b894f2a9b62de9f7056c0f8',
   font: 'f32df582a2aab128c07b2f7e36e7b928dc5f6bd82657b905c04f91459f9e5cf9',
   cli: '19f6edd5c92841a38d9b3b018a555b7ba173b13e4e0d29edecc232e5ba6c1d70',
-  applicationLicense: '0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0',
+  applicationLicense: 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30',
   supplemental: '71796ff2cb5d48582356a0020a1f7cb4de100e20c020e67827611819ac081553',
 }) {
   // Expected digests are injectable only for synthetic unit files. The actual
@@ -203,7 +203,7 @@ export async function inspectRuntimeNotices(appRoot, veraRoot, expected = {
   assert(npm.schemaVersion === 1 && npm.roots.pdfkit === '0.20.2' && npm.roots.fontkit === '2.0.4'
     && npm.roots['pdfjs-dist'] === '6.4.299', 'Wrong PDF notice versions.');
   const applicationLicense = await read(app, 'LICENSE');
-  assert(npm.application?.declaredLicense === 'AGPL-3.0-only' && npm.application.file === 'LICENSE'
+  assert(npm.application?.declaredLicense === 'Apache-2.0' && npm.application.file === 'LICENSE'
     && npm.application.sha256 === expected.applicationLicense && hash(applicationLicense) === expected.applicationLicense, 'Application license changed or missing.');
   assert(npm.supplemental?.file === 'licenses/third-party-sources.json' && npm.supplemental.sha256 === expected.supplemental, 'Wrong recovered-notice manifest.');
   const recoveredBytes = await read(app, npm.supplemental.file);

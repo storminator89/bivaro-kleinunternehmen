@@ -8,130 +8,87 @@ Historische Git-Basis: `0208c62f26ff60cf855dfef21e74e0ff6466e7c9`; keine Aussage
 
 Diese Übersicht enthält alle 160 Backlog-Tickets. Der Status ist der aktuelle Arbeitsstand dieser Welle und ersetzt weder die im Backlog offenen ACs noch fachliche, rechtliche oder produktive Freigaben. „Vorgeschlagen“ bedeutet ausdrücklich, dass in dieser Welle keine Umsetzung vorliegt. Architektur-Discovery ist separat von Produktimplementierung ausgewiesen.
 
-## Integrationscheckpoint vom 22.10.2026, 20:45:47 UTC
+## Integrationscheckpoint vom 22.10.2026, 22:07:35 UTC
 
-Dieser zusätzliche Checkpoint trennt den bestätigten Integrationsstand von der
-historischen AC-Bewertung oben und unten. Alle **160 Ticketidentitäten und
-Statuswerte** sowie die Summen **3 abgeschlossen / 21 teilumgesetzt / 4 Discovery /
-132 vorgeschlagen** bleiben erhalten. Diese öffentliche Zusammenfassung enthält
-keine Neubewertung der ACs. GitHub-Nummern wie
-**#116 und #127 sind keine BV-Ticket-IDs**. Grüne Integrationsläufe schließen
-nicht automatisch historische ACs oder fachliche/produktive Freigaben.
+Alle 160 historischen Ticketobjekte und Statussummen bleiben unverändert:
+**3 abgeschlossen / 21 teilumgesetzt / 4 Discovery / 132 vorgeschlagen**.
+GitHub-Issues sind keine BV-Ticket-IDs; dieser Checkpoint bewertet keine
+historischen ACs oder fachlichen/produktiven Freigaben neu.
 
-### Integrierte Basis: PR #123 / main
-
-[PR #123](https://github.com/storminator89/bivaro-kleinunternehmen/pull/123)
-wurde am 22.10.2026 um **17:35:23 UTC** gemergt;
-[Issue #116](https://github.com/storminator89/bivaro-kleinunternehmen/issues/116)
-ist geschlossen. Bestätigte Basis ist Commit
-`8f9f6264dab78b3f3d4991278df5a23d7a8394ce`, Tree
-`53d5597fa649252ecc5ce841d279edfb71d7a954`.
-Alle **fünf Workflows und zehn Jobs** dieser Basis waren im **ersten Versuch**
-erfolgreich:
-
-| Workflow | Lauf / tatsächliches Ergebnis |
-|---|---|
-| Own-invoice PDF-A conformance | [39824036507](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036507): erfolgreich |
-| CI | [39824036377](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036377): erfolgreich |
-| Docker Publish | [39824036332](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036332): erfolgreich |
-| Container runtime compatibility | [39824036331](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036331): erfolgreich |
-| Browser acceptance | [39824036238](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036238): 124 bestanden |
-
-Die Bildabnahme umfasst **153 aktuelle Bilder: 38 frische vollständige
-Originalbildprüfungen plus 115 Wiederverwendungen nach exaktem Identitätsbeleg**.
-Das sind ausdrücklich **nicht 153 frische Browseraktionen**. Das vollständige,
-read-only auf Größe und Hash geprüfte Postmerge-Evidenzsiegel heißt
-`postmerge-acceptance-main8f9f626.json` (extern aufbewahrte Evidenz, nicht Teil
-dieses Repositorys): **19.868 Bytes**, SHA-256
-`4c2b797beafa03631c210a47f9ba9abd6680cae8a814f2f3ac0b1a77d5fb4834`.
-
-### Abgenommener veröffentlichter Head: PR #126 / Issue #127
+### Gemergte Ghostscript-Entfernung: PR #126 / main
 
 [PR #126](https://github.com/storminator89/bivaro-kleinunternehmen/pull/126)
-ist weiterhin **offen, Draft und nicht gemergt**. Der veröffentlichte Head
-`ae12a4ef5543af8b07d6f2b9168b9e5c12a747fe` (Parent
-`b28ddbaff839ccbb1bdc6796d2dc81825351d7d0`) hat Tree
-`fb4ca685fe54bd8e31215535f783b16593b0e171`. Der tatsächliche synthetische
-Merge-Checkout `e4bf61c0d52683797387d73a9caceeb18bf5c791` hat exakt denselben Tree
-und die Parents main `8f9f6264dab78b3f3d4991278df5a23d7a8394ce` plus ae12.
-Für diesen exakten Head sind **alle fünf Workflows und elf Jobs im ersten Versuch
-erfolgreich**; die begrenzte aktuelle Prüf-/Artefaktabnahme ist vollständig:
+wurde um **21:46:48 UTC** gemergt. Bestätigte main-Basis ist
+`5fdc757971ce98e2351e0ed5cc8ce7da06f9bbd3`, Tree
+`a73d13695934f2189636345bcc60f5048900c15e`, mit Parents
+`8f9f6264dab78b3f3d4991278df5a23d7a8394ce` und
+`48eadab74c4c89839c175c1b5f3f26e964e5e0e1`.
+[Issue #118](https://github.com/storminator89/bivaro-kleinunternehmen/issues/118)
+und [#127](https://github.com/storminator89/bivaro-kleinunternehmen/issues/127)
+sind geschlossen. **Main ist Ghostscript-frei**, belegt durch den exakten
+akzeptierten Quellstand und wiederholte native Produktions-/Nicht-root-Prüfungen;
+die Anwendung auf main bleibt **AGPL**.
 
-| Workflow | Lauf / tatsächliches Ergebnis |
+Die exakte **PR-Abnahme von 48eadab7**, nicht eine abgeschlossene Postmerge-Abnahme,
+umfasst fünf Workflows / elf Jobs, alle im ersten Versuch erfolgreich:
+**3.786 Tests / 20 Skips**, Browser **124 bestanden in 9,4 min**, 177 Bilder
+(**42 frische vollständige Originalprüfungen + 135 strikte Wiederverwendungen
+wirklich geprüfter Originale**), 62 PDFs / 30 eingebettete XML-Bindungen /
+2 separate XML-Dateien und **11 echte Ghostscript-Abwesenheitsereignisse**.
+Das sind nicht 177 frische Browseraktionen oder 30 separate XML-Dateien.
+Externes finales Evidenzsiegel: `acceptance-48eadab7-exact-current.json`,
+**25.382 Bytes**, SHA-256
+`c5b7a02934c188023385e2956729329b9bbd585b29a70cbd99646efdc023f555`;
+[öffentlicher finaler Nachweis](https://github.com/storminator89/bivaro-kleinunternehmen/pull/126#issuecomment-6352018630).
+
+### Separater Postmerge-Stand: noch keine vollständige Abnahme
+
+| Workflow auf main5fdc | Tatsächlicher Stand |
 |---|---|
-| CI | [39845788386](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788386): erfolgreich; 3.749 Tests bestanden / 20 Skips, 228 Dateien bestanden / 3 übersprungen; Security-Browserprüfung 1 bestanden |
-| Container runtime compatibility | [39845788373](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788373): erfolgreich |
-| Foreign PDF compatibility | [39845788313](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788313): erfolgreich auf x64/arm64 |
-| Own-invoice PDF-A conformance | [39845788285](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788285): erfolgreich auf x64/arm64 |
-| Browser acceptance | [39845788254](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788254): erfolgreich, 124 Tests bestanden |
+| CI | [39859981025](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39859981025): erfolgreich |
+| Container runtime | [39859980998](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39859980998): erfolgreich |
+| Foreign PDF | [39859981089](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39859981089): erfolgreich |
+| Docker Publish | [39859981040](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39859981040): erfolgreich; Hosted-Pushes für main/latest/sha-5fdc757 abgeschlossen |
+| Own-invoice PDF-A | [39859981032](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39859981032): ARM erfolgreich, x64-Runtime-Setup noch ausstehend |
+| Browser acceptance | [39859981099](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39859981099): terminal erfolgreich, 124 bestanden in 9,4 min; Host-Ghostscript-Abwesenheitsprüfung bestanden; UI-/Gesamtabnahme noch offen |
 
-Die unabhängige aktuelle Artefaktabnahme umfasst **177 Bilder = 62 frische
-vollständige Originalbildprüfungen + 115 Wiederverwendungen nach striktem,
-vollständigem Identitätsbeleg**; keine verfügbaren Bilder sind ungedeckt, keine
-neuen sichtbaren Defekte bestätigt. Das sind **nicht 177 frische Browseraktionen**.
-Erhalten sind **62 PDFs, 30 eingebettete XML-Bindungen und 2 separate XML-Dateien**;
-30 Bindungen bedeuten nicht 30 separat aufbewahrte XML-Dateien.
-Das auf Größe/Hash geprüfte, extern aufbewahrte Evidenzsiegel heißt
-`acceptance-ae12a4ef-exact-current.json`: **19.083 Bytes**, SHA-256
-`3eef3a4cc77eacb80ac9580a659443aa41a96e2286917c336d2a68c884cd901c`.
-Der [öffentliche native Meilenstein](https://github.com/storminator89/bivaro-kleinunternehmen/pull/126#issuecomment-6350464863)
-ordnet diesen geprüften Stand ein.
+Damit sind **fünf von sechs Workflows** grün; kein Anwendungsfehler ist belegt.
+Der aufbewahrte OCI-Index-Digest
+`sha256:29634956ef1a868ef66e60e9250364a2353b533b6d322215f57dc6fa51810e35`
+ist unabhängig abgeglichen; **keine Live-Registry- oder Deploymentprüfung**
+behauptet. PR-Nachweise ersetzen keine noch offene Postmerge-Abnahme.
+Produktiver `omit-dev`-Audit: 0; vollständiger Entwicklungspaketbaum: weiterhin
+5 hohe Befunde. Sichtbare Capture-/Mock-/Verdeckungs-/Referenz-Ellipsengrenzen,
+Hosted-only Quell-/Archiv-/API-/Zustandsbelege sowie fehlende unabhängige
+QR-Dekodierung bleiben begrenzt; je neu materialisiertem Stream besteht keine
+globale Garantie für dekodierten Speicher.
 
-Die Abnahme bleibt begrenzt: Navigation kann Bildteile verdecken; gescrollte,
-eingeklappte oder nicht sichtbare Bereiche sind nicht visuell belegt. Der
-E-Mail-PDF-Bereich ist gemockt, bestehende mobile Zeit-/Jahresumbrüche und
-Zahlungsreferenz-Ellipsen bleiben; volle Referenz-IDs stehen in Kopfzeilen.
-Screenshots beweisen keine Backend-/Zustell-/Finanz- oder Konformitätswirkung;
-Quell-/Original-/Archiv-/API-/Zustandsaussagen bleiben im jeweiligen Umfang an
-die Hosted-Evidenz gebunden, nicht unabhängig lokal reproduziert. QR-Inhalte
-wurden nicht unabhängig dekodiert. Die akzeptierte Adaptergrenze gilt je neu
-materialisiertem Stream, nicht als globale Garantie für dekodierten Speicher;
-der Runner bleibt JRE-only ohne JDK/Compiler. Der produktive `omit-dev`-Audit
-meldet **0** Schwachstellen, die vollständige Installation einschließlich
-Entwicklungsabhängigkeiten weiterhin **5 hohe Befunde**. Kein pauschal
-schwachstellenfreier Gesamtbaum und keine allgemeine Produktivfreigabe behauptet.
-[Issue #127](https://github.com/storminator89/bivaro-kleinunternehmen/issues/127)
-bleibt bis zum finalen integrierten Merge offen.
+### Lokales Apache-/DE-EN-Paket: Issue #128
 
-### Lokaler Nachfolger: Ghostscript-Entfernung noch nicht im Image belegt
+[Issue #128](https://github.com/storminator89/bivaro-kleinunternehmen/issues/128):
+Kandidat `57e7e97251cfcff528a1d7f1cd6f6e8a68d58168`, Tree
+`73ac556da3a14a2f13af068f409880e20281eed2`, basiert auf main5fdc und umfasst
+29 Dateien. Unabhängiges finales Review ohne verbleibenden wesentlichen Befund;
+218 README-Links gültig, vollständiges Inventar aus 12 DE/EN-Dateien. Sieben
+unveränderte echte Aufnahmen (977.308 Bytes) bleiben ausdrücklich auf `870d73be`
+datiert, **keine frischen Runtime-Screenshots**.
 
-Der **nicht veröffentlichte** Kandidat
-`7607a0473932af8fa4cfc175f476e8aecd40998d`, Tree
-`6371fba2e9c612563419baf9e435e39a1d3a847c`, entfernt im Quellstand die letzte
-Ghostscript-Paketinstallation und den alten PostScript-Smoke. Fail-closed-Prüfungen
-auf fehlende `gs`-Executables und Interpreter-Pakete sind für reale Image-/Build-/
-Nicht-root-Gates sowie das Browser-Testimage ergänzt. App-/PDF-Verhalten,
-Validatoren, Regeln, Prozesslimits, Dependency-Pins und Anwendungslizenz bleiben
-unverändert. Das unabhängige Review des exakten finalen Quellstands ist ohne wesentlichen
-Befund abgeschlossen. Die Korrektur zur KI-Verschlüsselung und begrenzten
-Ablehnungsevidenz betrifft ausschließlich zwei Dokumente, nicht den Runtimecode.
+Nur dieser lokale Kandidat stellt die Anwendung auf Apache-2.0 um: offizielle
+`LICENSE`, 11.358 Bytes, SHA-256
+`cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`.
+Historische AGPL-Datei und sämtliche Drittpflichten bleiben erhalten; keine
+Abhängigkeitsversion geändert. Das aggregierte Standard-OCI-Lizenzlabel ist
+explizit leer; separates Apache-Anwendungslabel mit Anwendungsscope, **keine
+pauschale Apache-Lizenzbehauptung für das gesamte Image**.
 
-Die folgenden lokalen Quellprüfungen gehören zu
-`609dcc4c92b3289aaaf5a17eeee05c992c8407c2`, Tree
-`889bd16bb418a2558021885d4c4deec844bd0c09`; der aktuelle Nachfolger ist außerhalb
-der zwei Dokumentkorrekturen byte-identisch: **3.779 reine Tests bestanden / 27 native
-Opt-in-Skips**, 229 Dateien bestanden / 3 übersprungen; 108 fokussierte Tests
-bestanden. Vollständige Typprüfung, Lint, Shellsyntax und Node-22-Build endeten
-jeweils mit Exit 0. **Das beweist noch keine tatsächliche Ghostscript-Abwesenheit
-im neuen Image**: Der Nachfolger ist nicht veröffentlicht, ein nativer
-Nachfolgerlauf wurde nicht ausgeführt; reale Image-, native und Browserabnahme
-des Nachfolgers stehen aus.
-
-**Ghostscript ist auf main und der veröffentlichten ae12-Basis weiterhin
-installiert.** Die geplante Entfernung gilt nur für den lokalen Nachfolger,
-nicht für diese akzeptierten Baselines. AGPL bleibt unverändert; Apache-2.0 und
-die finale DE/EN-README folgen erst nach tatsächlich belegter Entfernung.
-Der aktualisierte README-Kandidat
-`ec394312533cfc8476e060e264d1e4929dd02d54` ist ausschließlich lokal: vier
-Dokumente geändert, sieben frühere echte Aufnahmen erhalten und ausdrücklich
-auf `870d73be` datiert, **keine frischen Runtime-Screenshots**.
-
-Die Angaben sind ein datierter Evidenzcheckpoint, keine laufende Statusabfrage.
-Für diese Dokumentationsänderung wurden keine Builds, nativen Tests,
-Browserläufe oder neuen GitHub-CI-Läufe gestartet. Das JSON trennt
-`integrationCheckpoint` von den historischen Tickets; deren Statuswerte werden
-weder erweitert noch neu bewertet. Historische Prüfergebnisse und damals fehlende
-Remote-CI gelten nur für ihre jeweilige frühere Welle.
+Exakte lokale Checks: 60 fokussierte Tests, **3.786 reine Tests / 27 native
+Opt-in-Skips**, 231 Dateien bestanden / 3 Skips; Typprüfung, Lint und gewöhnlicher
+Node-22-Produktionsbuild jeweils Exit 0. Neun dynamische Tracing-Warnungen,
+kein neuer Buildfehler; Standalone-Nachweise: 21 npm-Pakete / 28 Notices,
+24 ergänzende Notices / 9 Runtime-Eingänge. Keine lokalen nativen/JVM-/Browserläufe.
+Der Kandidat ist **nicht veröffentlicht, nicht gemergt und nicht hosted abgenommen**;
+main ist noch nicht Apache-lizenziert. Diese Dokumentationsänderung startet
+keine Builds, Tests oder GitHub-Läufe.
 
 ## Test-/Legacy-Audit vom 17.10.2026
 
