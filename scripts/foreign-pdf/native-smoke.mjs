@@ -13,9 +13,11 @@ const FIXTURE='/tmp/foreign-pdf-test',EVIDENCE='/tmp/foreign-pdf-evidence';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const require=createRequire('/app/package.json'), inspectRequire=createRequire(`${FIXTURE}/fixture.cjs`);
 const {createPdfA3Invoice}=inspectRequire('./lib/server/pdfa3-converter.js');
-const {validatePdfA3,veraPdfSpawnSpecification}=inspectRequire('./lib/server/pdfa-validator.js');
+const {validatePdfA3,veraPdfSpawnSpecification,PdfA3ValidationError}=inspectRequire('./lib/server/pdfa-validator.js');
 const {foreignVerifierCommand}=inspectRequire('./lib/server/foreign-pdf-validator-confinement.js');
 const {prepareForeignVerifierConfig,assertForeignVerifierConfigOnly}=inspectRequire('./lib/server/foreign-pdf-verifier-config.js');
+const {verifyForeignVerifierAdapter}=inspectRequire('./lib/server/foreign-pdf-verifier-adapter.js');
+const {NEW_STREAM_MAX_BYTES,ADAPTER_CLASS,ADAPTER_SOURCE}=await import('./adapter-identity.mjs');
 const {PDFDocument,PDFArray,PDFDict,PDFName,PDFRawStream,decodePDFRawStream}=inspectRequire('pdf-lib');
 const {PrismaClient}=require('@prisma/client');
 const prisma=new PrismaClient({datasources:{db:{url:'file:/tmp/bivaro-foreign-compatibility.db'}},log:[]});
@@ -137,8 +139,28 @@ try{
   assert.equal(process.version,'v22.23.4');assert.equal(process.env.DATABASE_URL,'file:/tmp/bivaro-foreign-compatibility.db');
   assert(!process.env.BIVARO_VERAPDF_BIN||process.env.BIVARO_VERAPDF_BIN==='/opt/verapdf/verapdf');
   assert.equal(await prisma.user.count(),0);await mkdir(EVIDENCE,{mode:0o700});
+  stage='trusted-verifier-adapter';
+  const adapter=await verifyForeignVerifierAdapter('/opt/verapdf');
+  const adapterRoot='/opt/verapdf/foreign-runtime/adapter';
+  const adapterSource=await readFile(`${adapterRoot}/${ADAPTER_SOURCE}`),adapterClass=await readFile(`${adapterRoot}/classes/${ADAPTER_CLASS}`);
+  assert.equal(adapterSource.length,adapter.source.bytes);assert.equal(sha(adapterSource),adapter.source.sha256);assert.equal(adapterClass.length,adapter.compiled.bytes);assert.equal(sha(adapterClass),adapter.compiled.sha256);
+  await writeFile(`${EVIDENCE}/verifier-adapter-build.json`,JSON.stringify(adapter,null,2),{flag:'wx',mode:0o600});
+  await writeFile(`${EVIDENCE}/verifier-adapter-source.java`,adapterSource,{flag:'wx',mode:0o600});
+  await writeFile(`${EVIDENCE}/verifier-adapter-class.bin`,adapterClass,{flag:'wx',mode:0o600});
+  const generatedFontBytes=await readFile(`${FIXTURE}/generated-font.json`),generatedFont=JSON.parse(generatedFontBytes.toString('utf8'));
+  assert.equal(generatedFont.sourceCheckout,process.env.BIVARO_FOREIGN_SOURCE_CHECKOUT);
+  assert.deepEqual(generatedFont.fixture,{name:'vector-text.pdf',bytes:(await original('vector-text')).length,sha256:sha(await original('vector-text'))});
+  for(const [property,name]of [['generatorSha256','generator.mjs'],['fontSha256','font.ttf'],['lockSha256','package-lock.json'],['descriptorSourceSha256','generated-font-descriptor.mjs'],['boundarySourceSha256','bounded-stream-fixtures.mjs']])assert.equal(generatedFont[property],sha(await readFile(`${FIXTURE}/provenance/${name}`)));
+  assert.equal(generatedFont.descriptor.referencedStandardFonts,0);assert.equal(generatedFont.descriptor.fontProgram,'FontFile2');
+  assert.deepEqual(generatedFont.boundedStreams.map(item=>item.name),['stream-at-limit.pdf','stream-over-limit.pdf']);
+  for(const [index,item]of generatedFont.boundedStreams.entries()){
+    const bytes=await original(index===0?'stream-at-limit':'stream-over-limit');assert.equal(bytes.length,item.bytes);assert.equal(sha(bytes),item.sha256);
+    assert.equal(item.decodedBytes,NEW_STREAM_MAX_BYTES+index*2048);assert.equal(item.originalFontBytes,generatedFont.descriptor.decodedBytes);assert.equal(item.originalFontSha256,item.retainedFontPrefixSha256);assert.equal(item.zeroPaddingBytes,item.decodedBytes-item.originalFontBytes);
+  }
+  await writeFile(`${EVIDENCE}/generated-font.json`,generatedFontBytes,{flag:'wx',mode:0o600});
   const xmlBytes=await readFile(`${FIXTURE}/invoice.xml`),xml=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(xmlBytes);
-  const inputHashes=new Map();for(const name of [...allCases.positive,...Object.keys(allCases.negative)])inputHashes.set(name,sha(await original(name)));
+  assert.deepEqual(allCases.boundedStreams,['stream-at-limit','stream-over-limit']);
+  const inputHashes=new Map();for(const name of [...allCases.positive,...Object.keys(allCases.negative),...allCases.boundedStreams])inputHashes.set(name,sha(await original(name)));
   stage='ordinary-authentication';
   const email=`synthetic-foreign-${randomUUID()}@example.test`,password=`Synthetic118-${randomBytes(18).toString('hex')}!`;
   const registration=await jsonRequest('/api/auth/register',{email,password,name:'Synthetic foreign compatibility',setupToken:process.env.BIVARO_SETUP_TOKEN});assert.equal(registration.status,201);
@@ -188,6 +210,16 @@ try{
     const form=new FormData();form.set('pdf',new Blob([bytes],{type:'application/pdf'}),`${name}.pdf`);form.set('xml',new Blob([xmlBytes],{type:'text/xml'}),'invoice.xml');form.set('invoiceNumber','SYNTHETIC-118');
     const response=await localRequest('/api/pdfa3',{method:'POST',body:form});assert.equal(response.status,422);const error=JSON.parse(response.bytes.toString('utf8'));assert(allowed.includes(error.code));rejected.push({name,code:error.code});
   }
+  // These additional trusted budget fixtures cannot replace any of the three
+  // full compatibility derivations, seven rejections, or independent pixels.
+  stage='bounded-stream-at-limit';await validatePdfA3(await original('stream-at-limit'),{confined:true});
+  stage='bounded-stream-over-limit';let overLimit;
+  try{await validatePdfA3(await original('stream-over-limit'),{confined:true});assert.fail('An over-limit materialized stream passed');}
+  catch(error){assert(error instanceof PdfA3ValidationError);assert(error.status===422||error.status===503);overLimit=foreignFailureDiagnostic(error,stage);}
+  const boundedStreams={atLimit:{status:'passed',decodedFontBytes:NEW_STREAM_MAX_BYTES,sha256:inputHashes.get('stream-at-limit')},overLimit:{status:'rejected',decodedFontBytes:NEW_STREAM_MAX_BYTES+2048,sha256:inputHashes.get('stream-over-limit'),diagnostic:overLimit}};
+  await writeFile(`${EVIDENCE}/bounded-streams.json`,JSON.stringify(boundedStreams,null,2),{flag:'wx',mode:0o600});
+  console.error(JSON.stringify({event:'foreign-pdf-bounded-streams',...boundedStreams}));
+  for(const name of allCases.boundedStreams)await writeFile(`${EVIDENCE}/${name}-source.pdf`,await original(name),{flag:'wx',mode:0o600});
   stage='archive-and-state-preservation';
   for(const {id,name}of archived){const response=await localRequest(`/api/purchase-documents/${id}/original`,{maxBytes:20*1024*1024});assert.equal(response.status,200);assert.equal(sha(response.bytes),inputHashes.get(name));}
   for(const [name,beforeHash]of inputHashes)assert.equal(sha(await original(name)),beforeHash);
@@ -197,7 +229,7 @@ try{
   assert.equal(fixtureDiagnostic.outcome,'passed');
   assert.equal(fixtureDiagnostic.report?.verdict,'coherent-compliant');
   assert.equal(fixtureDiagnostic.provenance?.fixture.sha256,inputHashes.get('vector-text'));
-  await writeFile(`${EVIDENCE}/manifest.json`,JSON.stringify({status:'passed',syntheticOnly:true,platform:process.platform,architecture:process.arch,node:process.version,verifier:'1.30.3',cases,rejected,originalFilesPreserved:true,archivedOriginalAndAttachmentPreserved:true,statelessFinancialCountsBefore:before,statelessFinancialCountsAfter:await snapshot(),limits:'No claim of cryptographic signature validation or full XML/business-rule conformance; synthetic signature dictionary is a conservative rejection fixture.'},null,2),{flag:'wx',mode:0o600});
+  await writeFile(`${EVIDENCE}/manifest.json`,JSON.stringify({status:'passed',syntheticOnly:true,platform:process.platform,architecture:process.arch,node:process.version,verifier:'1.30.3',adapter,boundedStreams,cases,rejected,originalFilesPreserved:true,archivedOriginalAndAttachmentPreserved:true,statelessFinancialCountsBefore:before,statelessFinancialCountsAfter:await snapshot(),limits:'No claim of cryptographic signature validation or full XML/business-rule conformance; synthetic signature dictionary is a conservative rejection fixture. Stream materialization limit is per newly copied stream, not a global PDF/decoded-memory bound; over-limit status is recorded, never accepted.'},null,2),{flag:'wx',mode:0o600});
   console.log(`Genuine foreign PDF compatibility gate passed (${process.arch}).`);
 }catch(error){
   const diagnostic=foreignFailureDiagnostic(error,stage);

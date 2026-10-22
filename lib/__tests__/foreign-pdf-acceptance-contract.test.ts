@@ -81,4 +81,26 @@ describe('mandatory foreign PDF release evidence contract (static only)',()=>{
     expect(pkg.scripts.prebuild).toBe('node scripts/ai-pdf/prepare-worker.mjs');expect(pkg.scripts.postbuild).toBe('node scripts/third-party-notices/build-notices.mjs');
     expect(pkg.dependencies['pdfjs-dist']).toBe('6.4.299');expect(pkg.dependencies.pdfkit).toBe('0.20.2');
   });
+  it('pins the single foreign application entry and build-only compiler without changing official validation or runtime confinement',()=>{
+    const java=read('scripts/foreign-pdf/ForeignVerifierMain.java'),identity=read('scripts/foreign-pdf/adapter-identity.mjs'),prepare=read('scripts/foreign-pdf/prepare-verifier-adapter.mjs'),docker=read('Dockerfile');
+    expect(java).toContain('SeekableInputStream.setMaxStreamSize(2097152)');expect(java).toContain('SeekableInputStream.setMaxBufferSize(2097153)');expect(java).toContain('GreenfieldCliWrapper.main(args)');
+    expect(java).not.toMatch(/catch\s*\(|System\.|VeraPdfCli\.main|args\[|java\.io|java\.nio|reflect/);
+    expect(identity).toContain("['--release','21','-proc:none','-g:none','-encoding','UTF-8']");
+    expect(prepare).toContain("sha(source)!==ADAPTER_SOURCE_SHA256");expect(prepare).toContain("sha(await bytes(jar,64*1024*1024))!==OFFICIAL_CLI_SHA256");
+    expect(docker.split('FROM node:22.23.4-trixie-slim AS runner')[0]).toContain('default-jdk-headless');
+    expect(docker.split('FROM node:22.23.4-trixie-slim AS runner')[1]).not.toContain('default-jdk-headless');
+    expect(read('scripts/foreign-pdf/container-gate.sh')).toContain('! command -v javac');
+    expect(read('lib/server/foreign-pdf-verifier-adapter.ts')).toContain("['ForeignVerifierMain.class']");
+    expect(read('lib/server/own-invoice-pdfa-validator.ts')).not.toContain('ForeignVerifierMain');
+  });
+  it('requires actual font-length/compile identity plus passing and rejected stream-boundary evidence in addition to all existing coverage',()=>{
+    const fixture=read('scripts/foreign-pdf/build-native-fixtures.mjs'),smoke=read('scripts/foreign-pdf/native-smoke.mjs'),workflow=read('.github/workflows/foreign-pdf-compatibility.yml');
+    expect(fixture).toContain('describeGeneratedVectorFont(doc)');expect(fixture).toContain("['stream-at-limit',NEW_STREAM_MAX_BYTES],['stream-over-limit',NEW_STREAM_MAX_BYTES+2048]");
+    expect(fixture).toContain('descriptorSourceSha256:');expect(fixture).toContain('boundarySourceSha256:');expect(fixture).toContain('lockSha256:provenance.lockSha256');expect(fixture).toContain('pdfkit:provenance.pdfkit');
+    expect(smoke).toContain("await verifyForeignVerifierAdapter('/opt/verapdf')");for(const name of ['verifier-adapter-source.java','verifier-adapter-class.bin','verifier-adapter-build.json','bounded-streams.json'])expect(smoke).toContain(name);
+    expect(smoke).toContain("stage='bounded-stream-at-limit';await validatePdfA3(await original('stream-at-limit'),{confined:true})");
+    expect(smoke).toContain("assert.fail('An over-limit materialized stream passed')");expect(smoke).toContain('assert(error instanceof PdfA3ValidationError)');
+    expect(smoke.indexOf("stage='bounded-stream-at-limit'")).toBeGreaterThan(smoke.indexOf('for(const [name,expected]of Object.entries(allCases.negative))'));
+    expect(workflow).toContain('m.boundedStreams?.atLimit.status!=="passed"');expect(workflow).toContain('m.boundedStreams?.overLimit.status!=="rejected"');
+  });
 });

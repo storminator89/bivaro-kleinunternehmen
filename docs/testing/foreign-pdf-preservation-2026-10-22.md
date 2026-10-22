@@ -358,3 +358,66 @@ through close before this decision. Own-invoice invocation and its public500
 contract are unchanged. This correction does not establish the vector fixture's
 actual conformance or explain its current failure; genuine new native evidence
 is still required.
+
+## Bounded stream materialization candidate (19:29 UTC; native acceptance pending)
+
+The next genuine both-architecture run39834457147 (reviewed headb28ddbaf;
+actual checkout40bff614, both tree71f77975) separated startup from validation:
+both JVM/CLI version probes passed, but the fixed vector source produced a
+coherent exit1 report with one failed rule/check, ISO19005-3 clause6.2.11.4.1
+test1. This reports a font-program embedding/parsing predicate; it does **not**
+prove the generated font is absent or corrupt. No foreign positive/final/pixel
+acceptance was reached, and the production source correctly rejected with422.
+
+Pinned parser source explains a supported processing incompatibility:
+[TrueTypeBaseParser](https://github.com/veraPDF/veraPDF-parser/blob/v1.30.3/src/main/java/org/verapdf/pd/font/truetype/TrueTypeBaseParser.java)
+materializes decoded font input through
+[SeekableInputStream](https://github.com/veraPDF/veraPDF-parser/blob/v1.30.3/src/main/java/org/verapdf/io/SeekableInputStream.java),
+whose default10KiB threshold can invoke
+[InternalInputStream temporary storage](https://github.com/veraPDF/veraPDF-parser/blob/v1.30.3/src/main/java/org/verapdf/io/InternalInputStream.java).
+The validator intentionally has no filesystem-write grant. A font-parser
+IOException can become a failed embedding predicate in the official model.
+This source mechanism is not yet proof that it is the sole native failure.
+
+The foreign-only immutable application entrypoint sets the public supported
+new-stream maximum to2097152bytes and memory threshold to2097153, then delegates
+unchanged `GreenfieldCliWrapper.main(args)`. It does not catch/rewrite arguments,
+output, exceptions or exits; official foundry initialization, profiles, rules,
+reporting and strict independent acceptance remain unchanged. Own-invoice
+invocation is unchanged. Existing192MiBheap/2GiBAS/CPU25:26/30swall/2MiBoutput,
+network/process restrictions and completely no-write JVM policy remain intact.
+
+This is **per newly materialized non-seekable stream**, not a global PDF,
+decoded-memory or universal no-temp bound. Already-seekable inputs bypass these
+setters; other direct temporary-file paths remain denied. A read can transiently
+observe up toN+2048bytes before rejection. Prefix concatenation also duplicates
+buffers and is quadratic (roughly1GiB cumulative copying for a full2MiB stream),
+so the unchanged process caps remain authoritative; this is not a performance
+claim. Over-cap exceptions fail closed; actual native rejection status is
+recorded rather than presumed, and can never be acceptance evidence.
+
+Only the build asset stage installs Debian's build-only default-jdk-headless.
+The compiler consumes one fixed SHA-bound trusted source, exact pinned CLI JAR,
+UTF-8/target21/`-proc:none`/`-g:none`, a private directory and credential-free
+bounded child recipe. The final runner retains only the existing JRE; the
+native gate checks both absence of javac and installed JDK packages. Runtime
+verification requires an exact root-owned nonwritable single-application-class
+tree, fixed source bytes, actual official-JAR/class digests and strict compiler
+receipt. Source/class/compiler launcher/module-image/package/flags are retained
+for independent actual-build verification: an arbitrary manifest's assertion
+alone is not treated as proof of source/bytecode equivalence. No official class
+is shadowed, no runtime compiler or unconfined retry is added.
+
+Closed generated writer-object evidence records actual encoded/decoded font
+lengths and referenced standard-font count without PDF parsing or exporting
+font names/text. It is bound to exact vector bytes, checkout, generator/font/
+lock/PDFKit ESM and helper hashes. Additional trusted same-font fixtures retain
+the original program prefix and append zero padding atN and N+2048. The confined
+official validator must genuinely accept the at-limit case; the over-limit case
+must reject and records only closed status/phase metadata. These budget fixtures
+claim no additional visual coverage or PDF repair. The original three complete
+vector/Unicode/transparency/scan derivations, seven rejections, archive/hash/
+stateless checks and independent complete page-pixel/text comparisons remain
+mandatory and unchanged. No local JVM/compiler/native or browser evidence has
+been produced for this candidate. Rejection is not a claim that every source
+outside this supported processing profile is intrinsically malformed.

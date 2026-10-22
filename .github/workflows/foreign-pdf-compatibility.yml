@@ -62,6 +62,7 @@ jobs:
         run: |
           trap 'docker rm --force bivaro-foreign-compatibility >/dev/null 2>&1 || true' EXIT
           mkdir "$RUNNER_TEMP/foreign-pdf-evidence"
+          cp "$RUNNER_TEMP/foreign-pdf-fixtures/generated-font.json" "$RUNNER_TEMP/foreign-pdf-evidence/generated-font.json"
           chmod -R a+rX "$RUNNER_TEMP/foreign-pdf-fixtures"
           status=0
           docker run --name bivaro-foreign-compatibility --network=none --entrypoint sh \
@@ -77,7 +78,7 @@ jobs:
           EVIDENCE: ${{ runner.temp }}/foreign-pdf-evidence
           EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
         run: |
-          node -e 'const fs=require("node:fs"),c=require("node:crypto"),p=process.env.EVIDENCE,m=require(p+"/manifest.json");if(m.status!=="passed"||m.architecture!==process.env.EXPECTED_ARCHITECTURE||m.verifier!=="1.30.3"||m.cases.length!==3||m.rejected.length!==7||!m.originalFilesPreserved||!m.archivedOriginalAndAttachmentPreserved)throw Error("Missing genuine native evidence");for(const f of m.cases)for(const [suffix,key]of [["source","sourceSha256"],["final","finalSha256"]])if(c.createHash("sha256").update(fs.readFileSync(p+"/"+f.name+"-"+suffix+".pdf")).digest("hex")!==f[key])throw Error("Changed retained bytes")'
+          node -e 'const fs=require("node:fs"),c=require("node:crypto"),p=process.env.EVIDENCE,m=require(p+"/manifest.json");if(m.status!=="passed"||m.architecture!==process.env.EXPECTED_ARCHITECTURE||m.verifier!=="1.30.3"||m.cases.length!==3||m.rejected.length!==7||!m.originalFilesPreserved||!m.archivedOriginalAndAttachmentPreserved||m.boundedStreams?.atLimit.status!=="passed"||m.boundedStreams?.overLimit.status!=="rejected"||m.adapter?.limits.newStreamMaxBytes!==2097152||m.adapter?.limits.bufferThresholdBytes!==2097153)throw Error("Missing genuine native evidence");for(const f of m.cases)for(const [suffix,key]of [["source","sourceSha256"],["final","finalSha256"]])if(c.createHash("sha256").update(fs.readFileSync(p+"/"+f.name+"-"+suffix+".pdf")).digest("hex")!==f[key])throw Error("Changed retained bytes")'
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends poppler-utils
           mkdir "$EVIDENCE/pixels"

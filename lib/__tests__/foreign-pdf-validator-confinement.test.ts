@@ -9,17 +9,18 @@ beforeEach(()=>{
 });
 afterEach(()=>vi.restoreAllMocks());
 describe('foreign-only verifier kernel policy construction (no native execution)',()=>{
-  it('uses direct pinned Java CLI with read-only distribution/JRE/privateinput grants and no shell, app tree, proc, database or writes',async()=>{
+  it('uses the fixed reviewed Java adapter with read-only distribution/JRE/privateinput grants and no shell, app tree, proc, database or writes',async()=>{
     const command=await foreignVerifierCommand('/opt/verapdf/verapdf','/tmp/private-unit');
     const args=command(['--flavour','3b','/tmp/private-unit/final.pdf']);
     expect(args[0]).toBe('/usr/bin/setpriv');expect(args).toContain('--no-new-privs');expect(args).toContain('--seccomp-filter');expect(args).toContain('/usr/lib/jvm/synthetic/bin/java');
-    expect(args).toContain('org.verapdf.apps.GreenfieldCliWrapper');expect(args).toContain('/opt/verapdf/foreign-runtime/classes:/opt/verapdf/etc:/opt/verapdf/bin/*');
+    expect(args.slice(1,9)).toEqual(['--no-new-privs','--inh-caps=-all','--ambient-caps=-all','--pdeathsig=KILL','--landlock-access','fs','--seccomp-filter',`${process.cwd()}/scripts/foreign-pdf/sandbox-${process.arch}.bpf`]);expect(args.some(a=>/net-port|bind-tcp|connect-tcp/u.test(a))).toBe(false);expect(args.filter(a=>a==='org.bivaro.pdfa.ForeignVerifierMain')).toHaveLength(1);
+    expect(args).toContain('org.bivaro.pdfa.ForeignVerifierMain');expect(args).not.toContain('org.verapdf.apps.GreenfieldCliWrapper');expect(args).toContain('/opt/verapdf/foreign-runtime/classes:/opt/verapdf/foreign-runtime/adapter/classes:/opt/verapdf/etc:/opt/verapdf/bin/*');
     expect(args).toContain('path-beneath:read-file,read-dir:/tmp/private-unit');
     expect(args).toContain('path-beneath:read-file:/usr/lib/jvm/synthetic/conf/security/java.security');
     expect(args).not.toContain('path-beneath:read-file,read-dir:/usr/lib/jvm/synthetic/conf');
     expect(args.some(a=>a.includes('write-file')||a.includes('make-reg')||a==='sh'||a==='--allow-child-process')).toBe(false);
     expect(args.filter(a=>a.startsWith('path-beneath:')).some(a=>a.includes('/proc')||a.includes('/app/data')||a.includes('/home')||a===`path-beneath:read-file,read-dir:${process.cwd()}`)).toBe(false);
-    expect(args).toContain('-XX:-UsePerfData');expect(args).toContain('-XX:+DisableAttachMechanism');
+    for(const flag of ['-Xms16m','-Xmx192m','-Xss512k','-XX:+UseSerialGC','-XX:ActiveProcessorCount=1','-XX:MaxMetaspaceSize=64m','-XX:CompressedClassSpaceSize=32m','-XX:ReservedCodeCacheSize=32m','-XX:MaxDirectMemorySize=16m','-XX:-CreateCoredumpOnCrash','-XX:-UsePerfData','-XX:-UseContainerSupport','-XX:+DisableAttachMechanism','-Djavax.xml.accessExternalDTD=','-Djavax.xml.accessExternalSchema=','-Djavax.xml.accessExternalStylesheet='])expect(args).toContain(flag);
     expect(args.slice(-3)).toEqual(['--flavour','3b','/tmp/private-unit/final.pdf']);
   });
   it.each(['amd64','arm64'])('grants only the exact Debian 21 security leaf for the %s packaging layout',async architecture=>{

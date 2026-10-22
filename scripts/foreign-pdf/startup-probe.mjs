@@ -6,7 +6,8 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-const MAIN='org.verapdf.apps.GreenfieldCliWrapper',BINARY='/opt/verapdf/verapdf';
+import {ADAPTER_MAIN as MAIN} from './adapter-identity.mjs';
+const BINARY='/opt/verapdf/verapdf';
 const MAX_OUTPUT=2*1024*1024,MAX_EXCERPT=4096,TIMEOUT=30_000;
 export function sanitizeTrustedStartupText(text,directory,maxBytes=MAX_EXCERPT){
   if(typeof text!=='string'||typeof directory!=='string'||!directory.startsWith('/')||!Number.isSafeInteger(maxBytes)||maxBytes<0||maxBytes>MAX_EXCERPT)return '';

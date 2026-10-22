@@ -6,9 +6,10 @@ type Entry={kind:'file'|'directory'|'symlink';uid:number;mode:number;nlink:numbe
 type StatOverride=Partial<{uid:number;mode:number;nlink:number;size:number}>;
 const m=vi.hoisted(()=>({
   entries:new Map<string,Entry>(),aliases:new Map<string,string>(),lstatOverrides:new Map<string,StatOverride>(),handleOverrides:new Map<string,StatOverride>(),
-  open:vi.fn(),realpath:vi.fn(),lstat:vi.fn(),mkdir:vi.fn(),writeFile:vi.fn(),readdir:vi.fn(),closed:[] as string[],reads:[] as {file:string;length:number}[],
+  open:vi.fn(),realpath:vi.fn(),lstat:vi.fn(),mkdir:vi.fn(),writeFile:vi.fn(),readdir:vi.fn(),verifyAdapter:vi.fn(),closed:[] as string[],reads:[] as {file:string;length:number}[],
 }));
 vi.mock('node:fs/promises',()=>({open:m.open,realpath:m.realpath,lstat:m.lstat,mkdir:m.mkdir,writeFile:m.writeFile,readdir:m.readdir}));
+vi.mock('@/lib/server/foreign-pdf-verifier-adapter',()=>({verifyForeignVerifierAdapter:m.verifyAdapter}));
 import { prepareForeignVerifierConfig,assertForeignVerifierConfigOnly,FOREIGN_CONFIG_NAMES,FOREIGN_LOGGING_PROPERTIES,type ForeignVerifierConfigEvidence } from '@/lib/server/foreign-pdf-verifier-config';
 const ROOT='/opt/verapdf',ASSETS=`${ROOT}/foreign-runtime`,WORK='/tmp/private-config-unit',PRIVATE=`${WORK}/.verapdf/config`;
 const MANIFEST=`${ASSETS}/manifest.json`,LOGGING=`${ASSETS}/classes/org/verapdf/processor/logging.properties`;
@@ -24,8 +25,8 @@ function rewriteManifest(change:(value:ReturnType<typeof expected>)=>void){const
 const originalGlobal=()=>new Map([...m.entries].filter(([file])=>file.startsWith(ROOT)).map(([file,e])=>[file,{...e,value:Buffer.from(e.value)}]));
 beforeEach(()=>{
   vi.clearAllMocks();m.entries.clear();m.aliases.clear();m.lstatOverrides.clear();m.handleOverrides.clear();m.closed=[];m.reads=[];
-  vi.spyOn(process,'getuid').mockReturnValue(1000);
-  for(const file of [ROOT,ASSETS,`${ASSETS}/templates`,`${ASSETS}/classes`,`${ASSETS}/classes/org`,`${ASSETS}/classes/org/verapdf`,`${ASSETS}/classes/org/verapdf/processor`])add(file,'directory');
+  vi.spyOn(process,'getuid').mockReturnValue(1000);m.verifyAdapter.mockResolvedValue(undefined);
+  for(const file of [ROOT,ASSETS,`${ASSETS}/adapter`,`${ASSETS}/templates`,`${ASSETS}/classes`,`${ASSETS}/classes/org`,`${ASSETS}/classes/org/verapdf`,`${ASSETS}/classes/org/verapdf/processor`])add(file,'directory');
   add(WORK,'directory',Buffer.alloc(0),1000,0o700);
   // Byte-identity fixtures only; not generated defaults or PDF/A evidence.
   for(const name of FOREIGN_CONFIG_NAMES)add(`${ASSETS}/templates/${name}`,'file',Buffer.from(`\uFEFF<?xml version="1.0"?>\r\n<synthetic-default name="${name}"> unchanged &amp; whitespace </synthetic-default>\r\n`));
@@ -44,7 +45,7 @@ afterEach(()=>vi.restoreAllMocks());
 describe('trusted foreign-verifier parent preparation (in-memory fs mocks only)',()=>{
   it('copies exact vendor-template bytes without changing global assets, default values, modes or any JVM grant',async()=>{
     const globals=originalGlobal(),evidence=await prepareForeignVerifierConfig(`${ROOT}/verapdf`,WORK);
-    expect(evidence).toEqual(expected());expect(m.mkdir.mock.calls).toEqual([[`${WORK}/.verapdf`,{mode:0o700}],[PRIVATE,{mode:0o700}]]);
+    expect(evidence).toEqual(expected());expect(m.verifyAdapter).toHaveBeenCalledExactlyOnceWith(ROOT);expect(m.mkdir.mock.calls).toEqual([[`${WORK}/.verapdf`,{mode:0o700}],[PRIVATE,{mode:0o700}]]);
     expect(m.writeFile).toHaveBeenCalledTimes(5);
     for(const name of FOREIGN_CONFIG_NAMES){
       const target=entry(`${PRIVATE}/${name}`);expect(target.value).toEqual(entry(`${ASSETS}/templates/${name}`).value);expect(target.mode).toBe(0o600);expect(target.uid).toBe(1000);
@@ -55,6 +56,10 @@ describe('trusted foreign-verifier parent preparation (in-memory fs mocks only)'
     expect(JSON.stringify(evidence)).not.toContain(WORK);expect(JSON.stringify(evidence)).not.toContain('synthetic-default');
     expect(FOREIGN_LOGGING_PROPERTIES).toContain('handlers=\n');expect(FOREIGN_LOGGING_PROPERTIES).not.toContain('LogsFileHandler');
     await expect(assertForeignVerifierConfigOnly(WORK,evidence)).resolves.toBeUndefined();
+  });
+  it('requires the independently checked adapter before reading/copying trusted configuration',async()=>{
+    m.verifyAdapter.mockRejectedValueOnce(Error('Synthetic adapter verification failure'));
+    await expect(prepareForeignVerifierConfig(`${ROOT}/verapdf`,WORK)).rejects.toThrow();expect(m.open).not.toHaveBeenCalled();expect(m.mkdir).not.toHaveBeenCalled();expect(m.writeFile).not.toHaveBeenCalled();
   });
   it('refuses a repeat/nonempty workdir without overwriting existing files or reading global assets again',async()=>{
     await prepareForeignVerifierConfig(`${ROOT}/verapdf`,WORK);m.open.mockClear();m.writeFile.mockClear();

@@ -3,6 +3,8 @@
 set -eu
 [ "$(id -u)" != 0 ]
 [ "$(node --version)" = v22.23.4 ]
+! command -v javac >/dev/null 2>&1
+dpkg-query -W -f='${binary:Package} ${db:Status-Status}\n' | awk '$2=="installed" && $1~/^(default-jdk|openjdk-[0-9]+-jdk)(-|:|$)/{found=1} END{exit found?1:0}'
 [ -f "/app/scripts/foreign-pdf/sandbox-$(node -p process.arch).bpf" ]
 [ "${DATABASE_URL:-}" = file:/tmp/bivaro-foreign-compatibility.db ]
 node /app/node_modules/prisma/build/index.js migrate deploy --schema=/app/prisma/schema.prisma

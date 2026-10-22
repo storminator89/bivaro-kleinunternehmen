@@ -40,13 +40,15 @@ RUN npm ci && \
 # Official validator assets are downloaded only while building the image.
 # Runtime validation is strictly local and never uploads invoice documents.
 FROM deps AS einvoice-assets
-RUN apt-get update && apt-get install -y --no-install-recommends default-jre-headless && \
+RUN apt-get update && apt-get install -y --no-install-recommends default-jdk-headless && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY scripts/einvoice-validation/install-runtime.mjs ./scripts/einvoice-validation/install-runtime.mjs
 RUN node scripts/einvoice-validation/install-runtime.mjs /opt/bivaro/einvoice
 COPY scripts/own-invoice-pdfa ./scripts/own-invoice-pdfa
 COPY scripts/foreign-pdf/prepare-verifier-config.mjs ./scripts/foreign-pdf/prepare-verifier-config.mjs
 RUN node scripts/own-invoice-pdfa/install-runtime.mjs /opt/verapdf
+COPY scripts/foreign-pdf/prepare-verifier-adapter.mjs scripts/foreign-pdf/adapter-identity.mjs scripts/foreign-pdf/ForeignVerifierMain.java ./scripts/foreign-pdf/
+RUN node scripts/foreign-pdf/prepare-verifier-adapter.mjs /opt/verapdf
 
 # -----------------------------------------------------------------------------
 # Stage 3: Builder - Build the application

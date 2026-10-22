@@ -486,6 +486,7 @@ describe('closed validator phase and startup diagnostics (mocked children only)'
     ['Could not reserve enough space for object heap', 'java-memory-reservation'],
     ['unable to create native thread', 'java-thread-creation'],
     ['Could not find or load main class org.verapdf.apps.GreenfieldCliWrapper', 'java-main-class'],
+    ['Could not find or load main class org.bivaro.pdfa.ForeignVerifierMain', 'java-main-class'],
     ['Unrecognized VM option', 'java-options'],
     ['Error occurred during initialization of VM', 'java-vm-initialization'],
     ['setpriv: landlock: synthetic', 'sandbox-rule'],

@@ -27,4 +27,7 @@ describe('closed-enum native harness failure privacy (no native execution)',()=>
     const secret={toString(){throw Error('secret coercion');}};
     expect(foreignFailureDiagnostic({code:secret,kind:secret,status:secret,validatorStage:secret,startupCategory:secret,processOutcome:secret},secret)).toEqual({...unknownValidator,event:'foreign-pdf-failure',stage:'unknown-stage',code:'UNCLASSIFIED_FAILURE',kind:null,status:null});
   });
+  it.each(['trusted-verifier-adapter','bounded-stream-at-limit','bounded-stream-over-limit'])('recognizes only the fixed trusted adapter/budget stage %s',stage=>{
+    expect(foreignFailureDiagnostic({kind:'unavailable',status:503,stderr:'private never emitted'},stage)).toEqual({...unknownValidator,event:'foreign-pdf-failure',stage,code:'UNCLASSIFIED_FAILURE',kind:'unavailable',status:503});
+  });
 });

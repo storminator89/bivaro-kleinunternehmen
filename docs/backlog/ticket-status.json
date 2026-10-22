@@ -3,8 +3,8 @@
   "statusObservedAt": "2026-09-20T21:29:59+02:00",
   "auditBaseCommit": "85972ed9fe61d268b6640882ea2ddc6e616d1859",
   "gitBasis": "0208c62f26ff60cf855dfef21e74e0ff6466e7c9",
-  "worktreeAtDocumentation": "Welle 7 documentation added on the uncommitted Welle-5/Welle-6 worktree; Welle-5 and Welle-6 changes preserved, with uncommitted BV-011/BV-025/BV-030 implementation and focused test files visible at status observation",
-  "source": "/home/pmeyhoefer/Downloads/Bivaro_Agent_Backlog.json",
+  "worktreeAtDocumentation": "Historical Welle-7 implementation snapshot; no deployment or production acceptance inferred.",
+  "source": "Bivaro_Agent_Backlog.json",
   "statusSummary": {
     "complete": 3,
     "partial": 21,
@@ -12,24 +12,11 @@
     "architecture_discovery": 4,
     "proposed_unimplemented": 132
   },
-  "knownIncidents": [
+  "publicLimitations": [
     {
-      "id": "PRUEFVORFALL-2026-09-19",
-      "status": "documented_operator_review_open",
-      "summary": "Bestätigter migrate-deploy-Aufruf ohne temporäre DATABASE_URL; Migrationen 20260918120000_auth_hardening und 20260918195000_bookkeeping_integrity wurden auf die lokale, bislang ignorierte prisma/dev.db angewandt.",
-      "scope": "Lokale prisma/dev.db; keine vorherige Agentensicherung, kein Vorher-Hash und kein Vorher-Snapshot; externe Sicherung unbekannt. SQL-Quellen ohne Datensatzlöschung oder Betragsfeld-Update, aber kein Gesamtintegritätsbeleg ohne Vorher-Messung.",
-      "recovery": "Keine automatische Rücknahme und keine Recovery ausgeführt. Der Nutzer hat die Datenbank als lokale Testdatenbank eingeordnet und keine Wiederherstellung gewünscht; der Vorfall ist kein Arbeitsblocker. Betreiberbewertung bleibt dokumentarisch offen.",
-      "userDecision": "2026-09-19: Lokale Testdatenbank; keine Wiederherstellung gewünscht.",
-      "blocking": false,
-      "evidence": "docs/backlog/PRUEFVORFALL-2026-09-19.md"
-    },
-    {
-      "id": "PRUEFVORFALL-2026-09-19-COMPOSE-DIAGNOSE",
-      "status": "documented_operator_review_open",
-      "summary": "docker compose config war erfolgreich, gab aber erste 80 Zeilen aus und schrieb eine temporäre Ausgabe mit festgestelltem nichtleerem NEXTAUTH_SECRET.",
-      "scope": "Diagnoseausgabe und Toolhistorie; Secretwert wird nicht dokumentiert.",
-      "recovery": "Temporäre Ausgabe entfernt; keine Secretrotation und keine .env-Änderung; sichere betriebliche Bewertung offen.",
-      "evidence": "docs/backlog/PRUEFVORFALL-2026-09-19.md"
+      "observedDate": "2026-09-19",
+      "limitation": "Historical local data-integrity assurance is not established; operational integrity/security review and release/production approvals remain outstanding.",
+      "resolved": false
     }
   ],
   "tickets": [
@@ -38,26 +25,22 @@
       "title": "Produktionsstart ohne destruktives db push",
       "status": "partial",
       "implemented": "Technische lokale Start-/Upgrade- bzw. DB-Zielprüfung abgeschlossen und mit 7 Runtime-Integrationstests sowie zentraler Gesamtprüfung belegt.",
-      "remaining": "Release-/Produktivfreigabe, Betreiberfreigaben und sichere Bewertung der Compose-Diagnose offen.",
+      "remaining": "Release-/Produktivfreigabe, Betreiberfreigaben und sichere betriebliche Bewertung offen.",
       "tests": [
-        "7 Runtime-Integrationstests; zentrale npm test/lint/build-Prüfung und Docker-Build/Compose-Checks am 19.09.2026 dokumentiert."
+        "7 Runtime-Integrationstests; zentrale npm test/lint/build-Prüfung sowie Dockerbuild/Konfigurationsprüfung am 19.09.2026 dokumentiert."
       ],
-      "evidence": [
-        "docs/backlog/BV-001-002.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-002",
       "title": "Nichtdestruktive Betriebsdiagnose und DB-Zielprüfung",
       "status": "partial",
       "implemented": "Technische lokale Start-/Upgrade- bzw. DB-Zielprüfung abgeschlossen und mit 7 Runtime-Integrationstests sowie zentraler Gesamtprüfung belegt.",
-      "remaining": "Release-/Produktivfreigabe, Betreiberfreigaben und sichere Bewertung der Compose-Diagnose offen.",
+      "remaining": "Release-/Produktivfreigabe, Betreiberfreigaben und sichere betriebliche Bewertung offen.",
       "tests": [
-        "7 Runtime-Integrationstests; zentrale npm test/lint/build-Prüfung und Docker-Build/Compose-Checks am 19.09.2026 dokumentiert."
+        "7 Runtime-Integrationstests; zentrale npm test/lint/build-Prüfung sowie Dockerbuild/Konfigurationsprüfung am 19.09.2026 dokumentiert."
       ],
-      "evidence": [
-        "docs/backlog/BV-001-002.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-003",
@@ -70,8 +53,7 @@
         "Zwischen- und Abschlussprüfung: File-Security-Integration 10/10, Betriebsagentenlauf 25/25, Playwright/E2E 7/7 mit Productionbuild in 18,4 s sowie finale Gesamtprüfung 26 Dateien/240 Tests bestanden/1 Skip in 15,48 s; Lint warnungsfrei. PAID-409-Zahlungsintegrität sowie Desktop-/Mobile-Screenshots geprüft."
       ],
       "evidence": [
-        "docs/backlog/BV-003-006.md",
-        "docs/backlog/WELLE-2.md"
+        "docs/backlog/BV-003-006.md"
       ]
     },
     {
@@ -83,9 +65,7 @@
       "tests": [
         "Gezielter BV-003/BV-006-Lauf deckt PAID-Reopen und abweichendes Zahlungsdatum als 409 mit erhaltenem Income/paidAt ab; finale Gesamtprüfung ist grün."
       ],
-      "evidence": [
-        "docs/backlog/WELLE-2.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-005",
@@ -111,10 +91,7 @@
         "Root-Gesamtprüfung: 39 Testdateien, 309 Tests bestanden und 1 Skip; Lint ohne Warnungen, Typecheck grün, E2E 11/11 mit Productionbuild."
       ],
       "evidence": [
-        "docs/backlog/BV-003-006.md",
-        "docs/backlog/WELLE-2.md",
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md",
-        "docs/backlog/WELLE-5.md"
+        "docs/backlog/BV-003-006.md"
       ]
     },
     {
@@ -178,7 +155,6 @@
         "Vier Original-ACs sowie Rollback-, Isolation- und Separate-DB-Connection-Fälle belegt; die Welle-6-Baseline mit 342 Tests, 1 Skip und 12/12 E2E wird nicht als neuer Nachweis gezählt."
       ],
       "evidence": [
-        "docs/backlog/WELLE-7.md",
         "docs/backlog/BV-011.md",
         "docs/backlog/WELLE-3.md"
       ]
@@ -193,10 +169,7 @@
         "Money-/Migrationsbericht-Suite 11/11 am 20.09.2026 21:01:08; inklusive unabhängigem Referenzgitter 2/2 mit 40.001 signierten Beträgen mit drei Nachkommastellen (Millieuro), read-only-SQL-Schreibschutz, Query-only-Fehlerpfad und CLI-Zielschutz.",
         "Abschließender Root-Gesamtcheck 20.09.2026 21:08:13: 46 Testdateien bestanden, eine übersprungen; 342 Tests bestanden, 1 Skip; Lint 0 Warnungen und Typecheck grün. E2E 12/12 mit Productionbuild, inklusive SMTP-UI und Backup-Secretprüfung; gezielter Screenshot-E2E-/Build-Nachlauf 2/2 ebenfalls grün."
       ],
-      "evidence": [
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md",
-        "docs/backlog/WELLE-6.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-013",
@@ -207,9 +180,7 @@
       "tests": [
         "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
       ],
-      "evidence": [
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-014",
@@ -220,9 +191,7 @@
       "tests": [
         "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
       ],
-      "evidence": [
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-015",
@@ -359,7 +328,6 @@
         "Welle-7-Gesamtcheck: 47 Testdateien, 346 Tests bestanden und 1 Skip; Lint 0 Warnungen, Typecheck grün, E2E 12/12 mit Productionbuild. Die frühere Welle-6-Baseline wird nicht als neuer BV-025-Nachweis gezählt."
       ],
       "evidence": [
-        "docs/backlog/WELLE-7.md",
         "docs/backlog/BV-025.md",
         "docs/backlog/WELLE-3.md"
       ]
@@ -406,15 +374,11 @@
       "title": "Backup v3 mit Audit und Nummern-High-Water-Marks",
       "status": "partial",
       "implemented": "Welle 2: Manifest v3, append-only Audit-/Mappingereignisse, transaktionaler Restore-Audit, Counter-Maximum vor Overwrite, konservative Marker, Income-Konflikte und Dateimanifestvalidierung technisch umgesetzt.",
-      "remaining": "Gemeinsamer Snapshot-Export, vollständige Fachmodell-/API-Key-Matrix, automatischer DMMF-Abgleich neuer Exportmodelle, nicht geprüfte Merge-/Overwrite-Kombinationen, Produktionsrollout und fachliche Abnahme offen; lokaler Testdatenbank-Rollout ist erfolgreich; vorhandene ISSUED-Marker und externe UNKNOWN-Importe bleiben konservativ.",
+      "remaining": "Gemeinsamer Snapshot-Export, vollständige Fachmodell-/API-Key-Matrix, automatischer DMMF-Abgleich neuer Exportmodelle, nicht geprüfte Merge-/Overwrite-Kombinationen, Produktionsrollout und fachliche Abnahme offen; historische Schema-/Integritätsprüfungen erfolgreich; keine globale Integritätszusage; vorhandene ISSUED-Marker und externe UNKNOWN-Importe bleiben konservativ.",
       "tests": [
-        "Eigener Backup-v3-Lauf 4/4; Typecheck und globales Lint des Agentenlaufs grün. File-Security-Integration 10/10; finale Gesamtprüfung 26 Dateien/240 Tests bestanden/1 Skip und E2E 7/7 grün. Lokaler Testdatenbank-Rollout mit Canary, Diff, Integrity und 23 aktuellen Migrationen erfolgreich; Schema-Diff 0, FK-Verletzungen 0."
+        "Eigener Backup-v3-Lauf 4/4; Typecheck und globales Lint des Agentenlaufs grün. File-Security-Integration 10/10; finale Gesamtprüfung 26 Dateien/240 Tests bestanden/1 Skip und E2E 7/7 grün. Historischer technischer Prüfnachweis mit Canary, Diff, Integrity und 23 aktuellen Migrationen erfolgreich; Schema-Diff 0, FK-Verletzungen 0; kein Gesamtintegritätsnachweis."
       ],
-      "evidence": [
-        "docs/backlog/BV-029.md",
-        "docs/backlog/WELLE-2.md",
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-030",
@@ -428,8 +392,6 @@
         "Die Welle-6-Baseline mit 342 Tests, 1 Skip und 12/12 E2E wird nicht als neuer BV-030-Nachweis gezählt."
       ],
       "evidence": [
-        "docs/backlog/WELLE-7.md",
-        "docs/backlog/BV-030.md",
         "docs/backlog/WELLE-3.md"
       ]
     },
@@ -444,7 +406,6 @@
         "Root-Gesamtprüfung: 39 Testdateien, 309 Tests bestanden und 1 Skip; Lint ohne Warnungen, Typecheck grün, E2E 11/11 mit Productionbuild."
       ],
       "evidence": [
-        "docs/backlog/WELLE-5.md",
         "Bivaro_Agent_Backlog.json"
       ]
     },
@@ -485,7 +446,7 @@
       "id": "BV-035",
       "title": "Erstadmin nur mit einmaligem Bootstrap-Nachweis anlegen",
       "status": "partial",
-      "implemented": "Welle 6 ergänzt `bootstrap_w6`: serverseitiger Setup-Nachweis, atomarer Verbrauch mit Erstadminanlage, Konkurrenz-/Neustartschutz und additive Migration, die bestehende Nutzerinstallationen als verbraucht markiert. Der zusätzlich vom Nutzer angeforderte und implementierte Host-/Admin-SMTP-Bereich umfasst UI, geschützte API, verschlüsseltes Passwort und ENV-Fallback, ohne Testmails.",
+      "implemented": "Welle 6 ergänzt `bootstrap_w6`: serverseitiger Setup-Nachweis, atomarer Verbrauch mit Erstadminanlage, Konkurrenz-/Neustartschutz und additive Migration, die bestehende Nutzerinstallationen als verbraucht markiert. Der zusätzlich implementierte Host-/Admin-SMTP-Bereich umfasst UI, geschützte API, verschlüsseltes Passwort und ENV-Fallback, ohne Testmails.",
       "remaining": "Bootstrap sowie SMTP-UI und -Route sind technisch belegt; AC-Evidenz im Produktivpfad, Recovery-/Betreiberprüfung und fachliche/produktive Prüfung stehen aus.",
       "tests": [
         "Gezielte Bootstrap-Suite 12/12 am 20.09.2026 20:56:22 in drei isolierten Testdateien grün; fehlender Setup-Nachweis, atomarer Verbrauch/Rollback, Neustart, Parallelaufrufe, Freischaltung und additive Bestandsmigration geprüft.",
@@ -493,7 +454,6 @@
       ],
       "evidence": [
         "Bivaro_Agent_Backlog.json",
-        "docs/backlog/WELLE-6.md",
         "lib/auth-registration.ts",
         "prisma/migrations/20260920100000_bootstrap_token/migration.sql"
       ]
@@ -508,7 +468,6 @@
         "Gezielter Root-Endlauf: 54/54 Tests in vier Dateien auf isolierten Fixtures (Expense 8/8, Passwortpolicy 8/8, Passwort-Routen 1/1, Security 37/37). Gesamtprüfung: 39 Dateien, 309 Tests bestanden, 1 Skip; Lint ohne Warnungen, Typecheck grün, E2E 11/11 mit Productionbuild; password-byte-policy.png visuell geprüft."
       ],
       "evidence": [
-        "docs/backlog/WELLE-5.md",
         "Bivaro_Agent_Backlog.json"
       ]
     },
@@ -619,8 +578,7 @@
       "remaining": "Outbox-Worker, Lease, Retrybudget, uncertain-SMTP-Zustand, Crash-Wiederaufnahme, alle vier ACs und Freigaben offen.",
       "tests": [],
       "evidence": [
-        "Bivaro_Agent_Backlog.json",
-        "docs/backlog/WELLE-6.md"
+        "Bivaro_Agent_Backlog.json"
       ]
     },
     {
@@ -635,7 +593,6 @@
       ],
       "evidence": [
         "Bivaro_Agent_Backlog.json",
-        "docs/backlog/WELLE-6.md",
         "lib/email-delivery.ts"
       ]
     },
@@ -747,9 +704,7 @@
       "tests": [
         "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
       ],
-      "evidence": [
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-058",
@@ -1838,9 +1793,7 @@
       "tests": [
         "Keine produktbezogenen Tests als Teil der Discovery ausgeführt."
       ],
-      "evidence": [
-        "docs/backlog/ARCHITEKTUR-VORPRUEFUNG.md"
-      ]
+      "evidence": []
     },
     {
       "id": "BV-157",
@@ -1893,7 +1846,7 @@
       "date": "2026-10-17",
       "status": "complete",
       "gitBase": "4b293ff3081455bd7e21f08dbc928e5ffe4cd051",
-      "worktree": "Uncommitted; pre-existing dirty baseline preserved (113 modified tracked files, 28 untracked entries at audit observation).",
+      "worktree": "Historical pre-integration maintenance snapshot; no deployment or production acceptance inferred.",
       "ticketStatusChanges": [],
       "implementedScope": [
         "12 unreachable frontend files and one dead barrel export removed (1191 source lines).",
@@ -1904,7 +1857,7 @@
         "Both E2E runners now forward SIGINT/SIGTERM, await child shutdown, and clean temporary fixtures; six process regressions verify normal and interrupted lifecycle.",
         "Browser response-inspection stalls fixed using real upstream/persisted data; explicit shared issuer fixture removes hidden billing test-order dependency without weakening assertions."
       ],
-      "remainingAcceptanceCriteria": "No new backlog acceptance-criterion completion claimed; all 160 ticket states and prior remaining criteria retained. This maintenance audit has no blocking checks; uncertain obsolete candidates and historical operator-review items remain documented.",
+      "remainingAcceptanceCriteria": "No new backlog acceptance-criterion completion claimed; all 160 ticket states and prior remaining criteria retained. This maintenance audit has no blocking checks; uncertain obsolete candidates and historical assurance and operational-security review remain outside scope.",
       "tests": [
         "Full Vitest with benchmark enabled: 58 files/424 tests passed, zero skipped, 41.73 s; Ghostscript conversion executed.",
         "Main browser suite: BIVARO_E2E_PORT=3117 npm run test:e2e -- --trace=retain-on-failure; 20 passed, zero retries/skips, 1.1 min, fresh temporary database and production build.",
@@ -1912,28 +1865,25 @@
         "Production build, full lint with zero warnings, TypeScript, changed-script node --check, git diff --check, and manifest/lock dependency equality passed.",
         "Lifecycle and fixture regressions: 2 files/10 tests passed, included in final 424; fake CLI only, no real database or server.",
         "Strengthened opt-in benchmark independently passed 1 file/1 test in 11.50 s; focused date 2/2 and complete customer/billing 2/2 reruns passed.",
-        "All 160 ticket objects and every pre-existing top-level JSON field equal HEAD; all local documentation evidence links resolve."
+        "Historical documentation consistency check passed for all 160 ticket records and then-existing fields."
       ],
-      "evidence": [
-        "docs/testing/legacy-code-audit-2026-10-17.md"
-      ],
-      "knownIncidentReferences": [
-        "PRUEFVORFALL-2026-09-19",
-        "PRUEFVORFALL-2026-09-19-COMPOSE-DIAGNOSE"
-      ],
+      "evidence": [],
       "blockingFailures": [],
       "remainingNonblockingLimitations": [
         "Unproven maintenance, Money and EÜR cleanup candidates retained until supported-consumer contracts are established.",
         "Shared database helper can leak its temporary directory if migration setup throws before returning cleanup.",
-        "CI build uses file:./dev.db as a dummy URL; no migration/write evidenced from that build.",
+        "CI build uses a relative dummy database URL; no migration/write evidenced from that build.",
         "Configured ESLint source patterns omit .mjs; changed runners passed syntax and process tests.",
-        "Historical operator-review incidents remain documented; remote CI, deployment and backlog AC acceptance are outside this audit."
+        "Historical local integrity assurance, operational-security review, remote CI, deployment and backlog AC acceptance are outside this audit."
+      ],
+      "publicLimitations": [
+        "Historical local integrity assurance and operational-security review are outside this technical audit."
       ]
     }
   ],
   "integrationCheckpoint": {
-    "recordedAt": "2026-10-22T18:39:07Z",
-    "scope": "Dated integration evidence only; all 160 historical ticket objects, status counts, existing incidents and audit records are unchanged. GitHub issue/PR numbers are not BV ticket IDs.",
+    "recordedAt": "2026-10-22T19:39:45Z",
+    "scope": "Dated public integration evidence only; all 160 historical ticket identities/statuses and status counts are preserved. GitHub issue/PR numbers are not BV ticket IDs. Historical operational details are omitted, not resolved.",
     "basis": "Supplied confirmed integration checkpoint; main commit/tree and postmerge seal bytes/hash independently checked read-only. No new hosted status query or execution performed by this documentation change.",
     "integratedMain": {
       "pullRequest": {
@@ -2000,60 +1950,132 @@
         "state": "open",
         "draft": true
       },
-      "canonicalCommit": "a8a93820d30361b6379f830eef2ea8ee659d66a5",
-      "tree": "42ebb210367a68437989e65327adf7c6652011f9",
+      "canonicalCommit": "b28ddbaff839ccbb1bdc6796d2dc81825351d7d0",
+      "tree": "71f7797562447ff96281bb4d0daf1fae3a81e1f0",
+      "actualMergeCheckout": "40bff6145696c012dd89112e95ec9cef8663e9c6",
+      "actualMergeCheckoutTree": "71f7797562447ff96281bb4d0daf1fae3a81e1f0",
       "mergedIntoMain": false,
       "workflows": {
         "ci": {
-          "runId": 39827040238,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040238",
-          "conclusion": "success"
+          "runId": 39834456758,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456758",
+          "conclusion": null,
+          "status": "in_progress",
+          "jobs": {
+            "lintAndType": "success",
+            "tests": "success",
+            "build": "success",
+            "security": {
+              "status": "in_progress",
+              "detail": "Installing Playwright dependencies."
+            }
+          }
         },
         "ownInvoicePdfa": {
-          "runId": 39827040198,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040198",
+          "runId": 39834457083,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834457083",
           "conclusion": "success"
         },
         "containerRuntime": {
-          "runId": 39827040190,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040190",
+          "runId": 39834456919,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456919",
           "conclusion": "success"
         },
         "foreignPdf": {
-          "runId": 39827040211,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040211",
+          "runId": 39834457147,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834457147",
           "conclusion": "failure",
-          "startup": "JVM and CLI passed on both x64 and arm64.",
-          "failureStage": "source-precheck-vector-text",
-          "validatorStage": "validation-result",
-          "processOutcome": "nonzero-exit",
-          "code": "UNCLASSIFIED_FAILURE",
-          "cause": "unknown",
+          "architectures": [
+            "x64",
+            "arm64"
+          ],
+          "startup": "JVM and CLI passed on both architectures.",
+          "coherentNoncompliance": {
+            "specification": "ISO19005-3:2012",
+            "rule": "6.2.11.4.1",
+            "test": 1
+          },
+          "sourcePrecheck": {
+            "kind": "unsupported",
+            "httpStatus": 422
+          },
+          "diagnosisUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/126#issuecomment-6349239959",
+          "interpretation": "Pinned font parser can translate denied tempfile spill above 10 KiB into fontProgramParsed=false. The rule finding does not prove intrinsic fixture corruption or establish the sole native cause.",
           "nativeAcceptance": false
         },
         "browser": {
-          "runId": 39827040240,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040240",
-          "conclusion": "failure",
-          "passedCases": 123,
-          "totalCases": 124,
-          "failure": "Email-dialog keyboard return focus.",
-          "finalPdfRenderStep": "skipped"
+          "runId": 39834456795,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456795",
+          "conclusion": null,
+          "status": "in_progress",
+          "observedAt": "2026-10-22T19:35Z",
+          "completedSteps": [
+            {
+              "number": 10,
+              "name": "Functional suite",
+              "conclusion": "success"
+            },
+            {
+              "number": 11,
+              "name": "Final PDF render",
+              "conclusion": "success"
+            },
+            {
+              "number": 12,
+              "name": "PDF artifact upload",
+              "conclusion": "success"
+            }
+          ],
+          "pending": [
+            "Screenshot staging.",
+            "Terminal run conclusion.",
+            "Final image/artifact review."
+          ],
+          "countLimitation": "Current test count is not established; old 124-case count is not reused."
         }
       },
       "issue": {
         "number": 127,
         "url": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/127",
         "state": "open",
-        "correction": "Locally reviewed; not yet hosted accepted."
+        "remaining": "Final acceptance of integrated head and merge; successful intermediate browser steps do not close this issue."
       },
-      "nextLocalCandidate": "Strict rejection of validator exit 1 / noncompliance and a fixed-synthetic diagnostic; not a native success claim.",
+      "nextLocalCandidate": {
+        "scope": "Locally implemented bounded foreign-only memory adapter; independent static review clean.",
+        "configuration": {
+          "newStreamMaxBytes": 2097152,
+          "bufferThresholdBytes": 2097153,
+          "delegates": "Original GreenfieldCliWrapper after official public setters.",
+          "limitScope": "Per newly materialized stream, not a global memory bound."
+        },
+        "unchanged": [
+          "Validation rules.",
+          "OS filesystem-write and network restrictions.",
+          "Existing process caps.",
+          "Runtime remains JRE-only; no JDK/compiler is shipped."
+        ],
+        "jdk": "Build-only dependency.",
+        "reportedLocalChecks": {
+          "pureTestsPassed": 3742,
+          "nativeOptInSkipped": 27,
+          "fullTypecheck": "success",
+          "lint": "success",
+          "node22Build": "success",
+          "localJavaNativeBrowserRuns": false
+        },
+        "pending": [
+          "Actual hosted compilation proof.",
+          "Native acceptance."
+        ],
+        "nativeSuccessClaim": false
+      },
       "remainingAcceptanceCriteria": [
-        "Native foreign-PDF acceptance.",
-        "Green browser acceptance including email-dialog keyboard return focus.",
-        "Final PDF-render acceptance; skipped step is not passed."
+        "Native foreign-PDF acceptance for the corrected integrated candidate.",
+        "Completed CI including Security.",
+        "Terminal browser success and final screenshot/image/artifact review.",
+        "Final accepted integrated head and merge before closing #127."
       ],
-      "evidenceLimit": "Successful main results do not establish acceptance of PR #126 or the local correction."
+      "evidenceLimit": "Successful main, intermediate hosted steps and local checks do not establish final native/browser acceptance of the next integrated candidate."
     },
     "licenseAndReadme": {
       "ghostscriptInstalled": true,
@@ -2067,5 +2089,9 @@
     },
     "ticketStatusChanges": [],
     "documentationChangeOnly": "No builds, native tests, browser runs or new GitHub CI runs started; no ticket-status vocabulary changes."
+  },
+  "publicDocumentation": {
+    "preparedAt": "2026-10-22T19:59:21Z",
+    "scope": "Public status summary; personal paths, private operational narratives/decisions and links to sensitive source reports omitted. Ticket identities/statuses, counts, dates, non-sensitive test outcomes and unresolved assurance/acceptance limits retained."
   }
 }

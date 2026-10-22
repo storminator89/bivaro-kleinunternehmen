@@ -8,6 +8,7 @@ const codes = new Set([
 ]);
 const stages = new Set([
   'prerequisites','ordinary-authentication','original-archive-baseline','archive-and-state-preservation',
+  'trusted-verifier-adapter','bounded-stream-at-limit','bounded-stream-over-limit',
   ...['vector-text','transparency','scan'].flatMap(name=>[`source-precheck-${name}`,`positive-${name}`]),
   ...['encrypted','signature-dictionary','form','attachment','missing-font','wrong-part','malformed'].map(name=>`negative-${name}`),
 ]);

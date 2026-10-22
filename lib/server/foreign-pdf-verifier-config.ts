@@ -2,6 +2,7 @@ import { constants, type Stats } from 'node:fs';
 import { open, realpath, lstat, mkdir, writeFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { verifyForeignVerifierAdapter } from './foreign-pdf-verifier-adapter';
 /** Configuration only: no validation profiles, parser or conformance rules here. */
 export const FOREIGN_CONFIG_NAMES = ['app.xml','features.xml','fixer.xml','plugins.xml','validator.xml'] as const;
 export const FOREIGN_LOGGING_PROPERTIES = '# Foreign-only runtime logging; PDF/A validation defaults are unchanged.\nhandlers=\n.level=OFF\n';
@@ -49,7 +50,8 @@ export async function prepareForeignVerifierConfig(binary:string,workDir:string)
   const distribution=path.dirname(await realpath(binary)),root=path.join(distribution,'foreign-runtime');
   for(const dir of [distribution,root,path.join(root,'templates'),path.join(root,'classes'),path.join(root,'classes/org'),path.join(root,'classes/org/verapdf'),path.join(root,'classes/org/verapdf/processor')])await directory(dir,0);
   const only=async(dir:string,names:readonly string[])=>requireValue((await readdir(dir)).sort().join(',')===[...names].sort().join(','));
-  await only(root,['classes','manifest.json','templates']);await only(path.join(root,'templates'),FOREIGN_CONFIG_NAMES);
+  await only(root,['adapter','classes','manifest.json','templates']);await only(path.join(root,'templates'),FOREIGN_CONFIG_NAMES);
+  await verifyForeignVerifierAdapter(distribution);
   for(const [parent,child]of [['classes','org'],['classes/org','verapdf'],['classes/org/verapdf','processor'],['classes/org/verapdf/processor','logging.properties']])await only(path.join(root,parent),[child]);
   const evidence=identity(JSON.parse((await bytes(path.join(root,'manifest.json'),MAX_MANIFEST,0)).toString('utf8')));
   const logging=await bytes(path.join(root,'classes/org/verapdf/processor/logging.properties'),MAX_TEMPLATE,0);

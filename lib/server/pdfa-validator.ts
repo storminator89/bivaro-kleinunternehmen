@@ -25,7 +25,7 @@ export function classifyPdfA3StartupText(text: unknown): StartupCategory {
   if (text.includes('Error loading java.security file')) return 'java-security-config';
   if (text.includes('Could not reserve enough space') || text.includes('Native memory allocation (mmap) failed')) return 'java-memory-reservation';
   if (text.includes('unable to create native thread') || text.includes('pthread_create failed')) return 'java-thread-creation';
-  if (text.includes('Could not find or load main class org.verapdf.apps.GreenfieldCliWrapper')) return 'java-main-class';
+  if (text.includes('Could not find or load main class org.verapdf.apps.GreenfieldCliWrapper') || text.includes('Could not find or load main class org.bivaro.pdfa.ForeignVerifierMain')) return 'java-main-class';
   if (text.includes('Unrecognized VM option') || text.includes('Invalid maximum heap size')) return 'java-options';
   // Static English markers from util-linux v2.41.2; LANG is fixed C.UTF-8.
   // https://github.com/util-linux/util-linux/blob/v2.41.2/sys-utils/setpriv-landlock.c

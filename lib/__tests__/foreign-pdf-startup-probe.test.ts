@@ -44,6 +44,7 @@ describe('trusted no-input startup-only diagnostic (mocked processes only)',()=>
     const build=await foreignVerifierCommand('/opt/verapdf/verapdf',m.directory),cli=build(['--version']);
     expect(()=>startupCommand([...cli,'/tmp/input.pdf'],'cli')).toThrow();
     expect(()=>startupCommand(cli.slice(0,-1),'cli')).toThrow();
+    expect(()=>startupCommand(cli.map(value=>value==='org.bivaro.pdfa.ForeignVerifierMain'?'org.verapdf.apps.GreenfieldCliWrapper':value),'cli')).toThrow();
     m.boundary.mockRejectedValueOnce(Error('Unexpected invoice.pdf'));const result=await probeTrustedVerifierStartup(factories);
     expect(m.spawn).not.toHaveBeenCalled();expect(result.results[0]).toMatchObject({mode:'boundary',outcome:'unavailable',excerpt:''});
   });
