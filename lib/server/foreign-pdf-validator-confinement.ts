@@ -19,9 +19,18 @@ export async function foreignVerifierCommand(binary: string, directory: string):
   const allow = (access: string, file: string) => rules.push('--landlock-rule', `path-beneath:${access}:${file}`);
   for (const root of ['/usr/lib', '/lib', javaHome, distribution, directory])
     allow('read-file,read-dir', await realpath(root));
-  // JDK distro configuration can be an /etc symlink outside javaHome. It is
-  // system runtime configuration, not an application's configuration directory.
-  allow('read-file,read-dir', await realpath(path.join(javaHome, 'conf')));
+  // OpenJDK Security.initialize() requires conf/security/java.security:
+  // https://github.com/openjdk/jdk21u/blob/master/src/java.base/share/classes/java/security/Security.java#L89-L99
+  // Debian 21 keeps conf as a real directory with individual /etc symlinks.
+  // Resolve ONLY this required leaf, never conf trees or management credentials.
+  const logicalSecurity = path.join(javaHome, 'conf', 'security', 'java.security');
+  const security = await realpath(logicalSecurity);
+  if (security !== logicalSecurity && security !== '/etc/java-21-openjdk/security/java.security')
+    throw new Error('Unexpected JRE security configuration');
+  const securityInfo = await lstat(security);
+  if (!securityInfo.isFile() || securityInfo.isSymbolicLink())
+    throw new Error('Missing regular JRE security configuration');
+  allow('read-file', security);
   for (const file of ['/etc/ld.so.cache', '/dev/urandom', '/dev/null'])
     allow('read-file', await realpath(file));
   allow('read-file,execute', java);
