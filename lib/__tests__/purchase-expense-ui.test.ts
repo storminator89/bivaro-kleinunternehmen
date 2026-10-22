@@ -9,6 +9,10 @@ import { approvalAmount, approvalBlockedReason, approvalIdentityKey, approvalIde
 import type { IncomingDocument, PurchaseExpenseApprovalInput } from '@/lib/purchase-documents/types';
 
 vi.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'tenant-test' } } }) }));
+// These server-rendered financial presentation assertions do not mount Next's
+// App Router. Supply its navigation dependency, not a replacement link/guard;
+// actual navigation is covered by the browser regressions.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 
 const supplier = { id: 3, revision: 1, name: 'Lieferfirma', address: 'Lieferstraße 2', postalCode: '12345', city: 'Berlin', country: 'DE', email: null, phone: null, taxId: null, vatId: null };
 function document(overrides: Partial<IncomingDocument> = {}): IncomingDocument {
