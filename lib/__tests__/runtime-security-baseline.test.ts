@@ -11,8 +11,8 @@ describe('October 2026 patched runtime baseline', () => {
   it('aligns both Docker stages, development and CI with the patched Node 22 release', () => {
     const stages = read('Dockerfile').match(/^FROM node:[^\n]+/gm);
     expect(stages).toEqual([
-      'FROM node:22.23.4-bookworm-slim AS base',
-      'FROM node:22.23.4-bookworm-slim AS runner',
+      'FROM node:22.23.4-trixie-slim AS base',
+      'FROM node:22.23.4-trixie-slim AS runner',
     ]);
     expect(read('.nvmrc').trim()).toBe('22.23.4');
     expect(read('.github/workflows/ci.yml')).toContain("NODE_VERSION: '22.23.4'");
