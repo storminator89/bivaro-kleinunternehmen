@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { durationToQuantity, formatManualDuration, parseManualDuration } from '@/lib/service-duration';
 import styles from './service-workbench.module.css';
+import { ServiceStatement } from './service-statement';
 
 type ServiceProject = {
   id: number;
@@ -446,7 +447,7 @@ function CustomerServices({ customerId, onPendingChange }: { customerId: number;
         </section>
 
         <section className={styles.history} aria-labelledby="service-history-title" aria-busy={isLoading}>
-          <div className={styles.historyHeading}><div className={styles.sectionHeading}><span>02 / Prüfen</span><h2 id="service-history-title">Leistungsverlauf</h2></div><Button type="button" variant="ghost" disabled={Boolean(busy) || isLoading} onClick={() => void loadData()}>Aktualisieren</Button></div>
+          <div className={styles.historyHeading}><div className={styles.sectionHeading}><span>02 / Prüfen</span><h2 id="service-history-title">Leistungsverlauf</h2></div><div className={styles.projectActions}><ServiceStatement customerId={customerId} notes={notes} projects={projects} filters={filters} disabled={actionsDisabled || pendingCapture} /><Button type="button" variant="ghost" disabled={Boolean(busy) || isLoading} onClick={() => void loadData()}>Aktualisieren</Button></div></div>
           <div className={styles.filters}>
             <div className={styles.field}>
               <Label htmlFor="service-filter-project">Projekt filtern</Label>
