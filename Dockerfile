@@ -40,12 +40,15 @@ RUN npm ci && \
 # Official validator assets are downloaded only while building the image.
 # Runtime validation is strictly local and never uploads invoice documents.
 FROM deps AS einvoice-assets
-RUN apt-get update && apt-get install -y --no-install-recommends default-jre-headless && \
+RUN apt-get update && apt-get install -y --no-install-recommends default-jdk-headless && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY scripts/einvoice-validation/install-runtime.mjs ./scripts/einvoice-validation/install-runtime.mjs
 RUN node scripts/einvoice-validation/install-runtime.mjs /opt/bivaro/einvoice
 COPY scripts/own-invoice-pdfa ./scripts/own-invoice-pdfa
+COPY scripts/foreign-pdf/prepare-verifier-config.mjs ./scripts/foreign-pdf/prepare-verifier-config.mjs
 RUN node scripts/own-invoice-pdfa/install-runtime.mjs /opt/verapdf
+COPY scripts/foreign-pdf/prepare-verifier-adapter.mjs scripts/foreign-pdf/adapter-identity.mjs scripts/foreign-pdf/ForeignVerifierMain.java ./scripts/foreign-pdf/
+RUN node scripts/foreign-pdf/prepare-verifier-adapter.mjs /opt/verapdf
 
 # -----------------------------------------------------------------------------
 # Stage 3: Builder - Build the application
@@ -82,8 +85,7 @@ FROM node:22.23.4-trixie-slim AS runner
 
 # Install security updates and dumb-init for proper signal handling
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates ghostscript util-linux util-linux-extra default-jre-headless && \
-    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' ghostscript)" ge '10.05.1~dfsg-1+deb13u3' && \
+    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates util-linux util-linux-extra default-jre-headless && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -116,6 +118,16 @@ COPY --from=builder /app/node_modules/@napi-rs ./node_modules/@napi-rs
 # Architecture-native policy DATA only. No PDFs or native syscall probes are
 # executed while generating this filter, and no host security setting changes.
 RUN sh scripts/ai-pdf/build-sandbox-filter.sh "scripts/ai-pdf/sandbox-$(node -p process.arch).bpf"
+
+# Narrow foreign-PDF processing uses its own independently confined worker.
+# Keep the exact CJS runtime closure, including pdf-lib's nested tslib copy.
+COPY --from=builder /app/scripts/foreign-pdf ./scripts/foreign-pdf
+COPY --from=builder /app/node_modules/pdf-lib ./node_modules/pdf-lib
+COPY --from=builder /app/node_modules/@pdf-lib ./node_modules/@pdf-lib
+COPY --from=builder /app/node_modules/pako ./node_modules/pako
+COPY --from=builder /app/node_modules/tslib ./node_modules/tslib
+COPY --from=builder /app/node_modules/sax ./node_modules/sax
+RUN sh scripts/foreign-pdf/build-sandbox-filter.sh "scripts/foreign-pdf/sandbox-$(node -p process.arch).bpf"
 
 # Read-only, original-hash-verified tools/rules; no external validation service.
 COPY --from=einvoice-assets /opt/bivaro/einvoice /opt/bivaro/einvoice
@@ -163,6 +175,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # Copy entrypoint script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
+
+# Fail the actual final image if a direct or transitive interpreter remains.
+COPY --from=builder /app/scripts/assert-no-ghostscript.sh ./scripts/assert-no-ghostscript.sh
+RUN sh scripts/assert-no-ghostscript.sh
 
 # Switch to non-root user
 USER nextjs

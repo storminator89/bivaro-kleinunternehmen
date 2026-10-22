@@ -1,0 +1,25 @@
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -45,4 +45,5 @@
+ COPY scripts/einvoice-validation/install-runtime.mjs ./scripts/einvoice-validation/install-runtime.mjs
+ RUN node scripts/einvoice-validation/install-runtime.mjs /opt/bivaro/einvoice
+ COPY scripts/own-invoice-pdfa ./scripts/own-invoice-pdfa
++COPY scripts/foreign-pdf/prepare-verifier-config.mjs ./scripts/foreign-pdf/prepare-verifier-config.mjs
+ RUN node scripts/own-invoice-pdfa/install-runtime.mjs /opt/verapdf
+@@ -117,6 +118,16 @@
+ # executed while generating this filter, and no host security setting changes.
+ RUN sh scripts/ai-pdf/build-sandbox-filter.sh "scripts/ai-pdf/sandbox-$(node -p process.arch).bpf"
+
++# Narrow foreign-PDF processing uses its own independently confined worker.
++# Keep the exact CJS runtime closure, including pdf-lib's nested tslib copy.
++COPY --from=builder /app/scripts/foreign-pdf ./scripts/foreign-pdf
++COPY --from=builder /app/node_modules/pdf-lib ./node_modules/pdf-lib
++COPY --from=builder /app/node_modules/@pdf-lib ./node_modules/@pdf-lib
++COPY --from=builder /app/node_modules/pako ./node_modules/pako
++COPY --from=builder /app/node_modules/tslib ./node_modules/tslib
++COPY --from=builder /app/node_modules/sax ./node_modules/sax
++RUN sh scripts/foreign-pdf/build-sandbox-filter.sh "scripts/foreign-pdf/sandbox-$(node -p process.arch).bpf"
++
+ # Read-only, original-hash-verified tools/rules; no external validation service.
+ COPY --from=einvoice-assets /opt/bivaro/einvoice /opt/bivaro/einvoice
+ COPY --from=einvoice-assets /opt/verapdf /opt/verapdf

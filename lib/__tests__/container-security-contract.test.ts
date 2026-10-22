@@ -4,10 +4,14 @@ import path from 'node:path';
 const root=path.resolve(import.meta.dirname,'../..');
 const read=(p:string)=>readFileSync(path.join(root,p),'utf8');
 describe('patched container compatibility gate',()=>{
-  it('uses patched Debian security packages with a build-time minimum',()=>{
+  it('uses updated Debian security packages without installing a Ghostscript interpreter',()=>{
     const docker=read('Dockerfile');
     expect(docker.match(/FROM node:22\.23\.4-trixie-slim/g)).toHaveLength(2);
-    expect(docker).toContain("ge '10.05.1~dfsg-1+deb13u3'");
+    expect(docker).toContain('apt-get upgrade -y');
+    expect(docker).not.toMatch(/apt-get install[^\n]*\bghostscript\b/);
+    expect(docker).toContain('COPY --from=builder /app/scripts/assert-no-ghostscript.sh');
+    expect(docker).toContain('RUN sh scripts/assert-no-ghostscript.sh');
+    for(const file of ['.github/workflows/container-runtime.yml','.github/workflows/foreign-pdf-compatibility.yml'])expect(read(file).match(/'scripts\/assert-no-ghostscript\.sh'/g)).toHaveLength(2);
     expect(docker).not.toContain('bookworm');
   });
   it('exercises both native architectures without publishing or host data access',()=>{
@@ -39,7 +43,8 @@ describe('patched container compatibility gate',()=>{
     expect(script).toContain('for format in cii ubl');
     expect(script).toContain("['val-xml','val-xsd','val-sch.1','val-sch.2']");
     expect(script).toContain('--connect-timeout 1 --max-time 2');
-    expect(script).toContain('-sDEVICE=png16m');
+    expect(script).toContain('sh /app/scripts/assert-no-ghostscript.sh');
+    expect(script).not.toMatch(/sDEVICE|smoke\.(?:ps|pdf|png)|timeout \d+ gs/);
     expect(script).toContain('timeout 150 node /app/scripts/ai-pdf/native-smoke.mjs');
     expect(script).toContain('util-linux-extra');
     expect(script).toContain('[ "$(id -u)" != 0 ]');

@@ -61,3 +61,6 @@ next-env.d.ts
 # Generated architecture-native AI renderer policy; build from source per image.
 /scripts/ai-pdf/sandbox-*.bpf
 /scripts/ai-pdf/smoke-runtime/
+
+# Generated foreign-worker native policy; compile from source per image.
+/scripts/foreign-pdf/sandbox-*.bpf

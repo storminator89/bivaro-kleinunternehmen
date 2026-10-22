@@ -2,7 +2,7 @@ import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { createPdfA3Invoice } from '@/lib/server/pdfa3-converter';
+import { createPdfA3Invoice, ForeignPdfError } from '@/lib/server/pdfa3-converter';
 import { ProcessingCapacityError } from '@/lib/processing-limit';
 import {
   isRequestBodyWithinLimit,
@@ -64,7 +64,7 @@ async function postHandler(request: Request) {
     return jsonError('Die kombinierte PDF-/XML-Anfrage ist zu groß.', 413);
   }
 
-  if (typeof invoiceNumber !== 'string' || invoiceNumber.trim().length === 0) {
+  if (typeof invoiceNumber !== 'string' || invoiceNumber.trim().length === 0 || invoiceNumber.length > 200) {
     return jsonError('Eine Rechnungsnummer ist erforderlich.', 400);
   }
 
@@ -77,9 +77,12 @@ async function postHandler(request: Request) {
     if (pdfBytes.byteLength + xmlBytes.byteLength > MAX_PDF_XML_COMBINED_BYTES) {
       return jsonError('Die kombinierte PDF-/XML-Anfrage ist zu groß.', 413);
     }
+    let xmlContent: string;
+    try { xmlContent = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(xmlBytes); }
+    catch { return NextResponse.json({ error: 'Die XML-Datei muss gültiges UTF-8 enthalten.', code: 'PDF_XML_INVALID' }, { status: 422 }); }
     const pdfA3Bytes = await createPdfA3Invoice({
       basePdfBytes: pdfBytes,
-      xmlContent: new TextDecoder().decode(xmlBytes),
+      xmlContent,
       invoiceNumber: invoiceNumber.trim(),
       userId: session.user.id,
     });
@@ -99,8 +102,10 @@ async function postHandler(request: Request) {
       response.headers.set('Retry-After', '1');
       return response;
     }
-    console.error('PDF/A-3 conversion failed:', error);
-    return jsonError('PDF/A-3-Konvertierung fehlgeschlagen. Bitte pruefen Sie die Serverinstallation von Ghostscript.', 500);
+    if (error instanceof ForeignPdfError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    return NextResponse.json({ error: 'Die sichere PDF-Verarbeitung ist derzeit nicht verfügbar. Bitte später erneut versuchen. Es wurde keine Datei erstellt oder archiviert.', code: 'PDF_PROCESSING_UNAVAILABLE' }, { status: 503 });
   }
 }
 

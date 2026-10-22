@@ -1,0 +1,103 @@
+name: Foreign PDF compatibility without Ghostscript conversion
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/api/pdfa3/**'
+      - 'lib/server/*pdf*.ts'
+      - 'scripts/foreign-pdf/**'
+      - 'scripts/assert-no-ghostscript.sh'
+      - 'lib/resource-limits.ts'
+      - 'lib/processing-limit.ts'
+      - 'Dockerfile'
+      - 'next.config.ts'
+      - 'package*.json'
+      - '.github/workflows/foreign-pdf-compatibility.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/api/pdfa3/**'
+      - 'lib/server/*pdf*.ts'
+      - 'scripts/foreign-pdf/**'
+      - 'scripts/assert-no-ghostscript.sh'
+      - 'Dockerfile'
+      - 'next.config.ts'
+      - 'package*.json'
+      - '.github/workflows/foreign-pdf-compatibility.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: foreign-pdf-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-container:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: x64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+          cache: npm
+      - name: Require actual native architecture and build trusted synthetic fixtures
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          node -e 'if(process.platform!=="linux" || process.arch!==process.env.EXPECTED_ARCHITECTURE)throw Error("Native architecture required")'
+          npm ci --ignore-scripts
+          node scripts/foreign-pdf/build-native-fixtures.mjs "$RUNNER_TEMP/foreign-pdf-fixtures" "$GITHUB_SHA"
+      - name: Build exact production Dockerfile without publishing
+        run: docker build --pull --tag bivaro-foreign-compatibility .
+      - name: Exercise actual isolated worker, verifier, API and existing-original downloads
+        shell: bash
+        run: |
+          trap 'docker rm --force bivaro-foreign-compatibility >/dev/null 2>&1 || true' EXIT
+          mkdir "$RUNNER_TEMP/foreign-pdf-evidence"
+          cp "$RUNNER_TEMP/foreign-pdf-fixtures/generated-font.json" "$RUNNER_TEMP/foreign-pdf-evidence/generated-font.json"
+          chmod -R a+rX "$RUNNER_TEMP/foreign-pdf-fixtures"
+          status=0
+          docker run --name bivaro-foreign-compatibility --network=none --entrypoint sh \
+            --env DATABASE_URL=file:/tmp/bivaro-foreign-compatibility.db \
+            --env BIVARO_FOREIGN_SOURCE_CHECKOUT="$GITHUB_SHA" \
+            --mount type=bind,src="$RUNNER_TEMP/foreign-pdf-fixtures",dst=/tmp/foreign-pdf-test,readonly \
+            --mount type=bind,src="$PWD/node_modules",dst=/tmp/foreign-pdf-test/node_modules,readonly \
+            bivaro-foreign-compatibility scripts/foreign-pdf/container-gate.sh || status=$?
+          docker cp bivaro-foreign-compatibility:/tmp/foreign-pdf-evidence/. "$RUNNER_TEMP/foreign-pdf-evidence/" || true
+          exit "$status"
+      - name: Independently compare every source and derived page pixel and searchable text
+        env:
+          EVIDENCE: ${{ runner.temp }}/foreign-pdf-evidence
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          node -e 'const fs=require("node:fs"),c=require("node:crypto"),p=process.env.EVIDENCE,m=require(p+"/manifest.json");if(m.status!=="passed"||m.architecture!==process.env.EXPECTED_ARCHITECTURE||m.verifier!=="1.30.3"||m.cases.length!==3||m.rejected.length!==7||!m.originalFilesPreserved||!m.archivedOriginalAndAttachmentPreserved||m.boundedStreams?.atLimit.status!=="passed"||m.boundedStreams?.overLimit.status!=="rejected"||m.adapter?.limits.newStreamMaxBytes!==2097152||m.adapter?.limits.bufferThresholdBytes!==2097153)throw Error("Missing genuine native evidence");for(const f of m.cases)for(const [suffix,key]of [["source","sourceSha256"],["final","finalSha256"]])if(c.createHash("sha256").update(fs.readFileSync(p+"/"+f.name+"-"+suffix+".pdf")).digest("hex")!==f[key])throw Error("Changed retained bytes")'
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          mkdir "$EVIDENCE/pixels"
+          for name in vector-text transparency scan; do
+            mkdir "$EVIDENCE/pixels/$name-source" "$EVIDENCE/pixels/$name-final"
+            pdftoppm -scale-to 2000 -png "$EVIDENCE/$name-source.pdf" "$EVIDENCE/pixels/$name-source/page"
+            pdftoppm -scale-to 2000 -png "$EVIDENCE/$name-final.pdf" "$EVIDENCE/pixels/$name-final/page"
+            diff --recursive "$EVIDENCE/pixels/$name-source" "$EVIDENCE/pixels/$name-final"
+            pdftotext -layout "$EVIDENCE/$name-source.pdf" "$EVIDENCE/$name-source.txt"
+            pdftotext -layout "$EVIDENCE/$name-final.pdf" "$EVIDENCE/$name-final.txt"
+            cmp "$EVIDENCE/$name-source.txt" "$EVIDENCE/$name-final.txt"
+          done
+      - name: Retain only synthetic final bytes, hashes and independently rendered pages
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: foreign-pdf-native-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/foreign-pdf-evidence
+          if-no-files-found: warn
+          retention-days: 1

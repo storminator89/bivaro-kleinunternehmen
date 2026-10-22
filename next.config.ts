@@ -34,6 +34,15 @@ const nextConfig: NextConfig = {
   // browser import. Trace its exact public runtime assets for standalone use.
   serverExternalPackages: ['pdfkit', 'fontkit', 'pdfjs-dist', '@napi-rs/canvas'],
   outputFileTracingIncludes: {
+    '/api/pdfa3': [
+      './scripts/foreign-pdf/*.mjs',
+      './scripts/foreign-pdf/*.bpf',
+      './node_modules/pdf-lib/**/*',
+      './node_modules/@pdf-lib/**/*',
+      './node_modules/pako/**/*',
+      './node_modules/tslib/**/*',
+      './node_modules/sax/**/*',
+    ],
     '/api/invoices/render': [
       './node_modules/pdfkit/js/data/**/*',
       './node_modules/pdfkit/js/standard-fonts/**/*',
