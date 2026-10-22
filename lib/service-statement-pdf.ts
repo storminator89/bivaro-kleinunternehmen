@@ -33,12 +33,17 @@ export async function generateServiceStatementPdf(snapshot: ServiceStatementSnap
   const wrap = (value: string, size = 10, font: PDFFont = regular, width = 505) => {
     for (const paragraph of text(value).split('\n')) {
       let current = '';
+      let currentWidth = 0;
       // Character wrapping also bounds unbroken customer/project names.
       for (const char of paragraph) {
-        if (current && font.widthOfTextAtSize(current + char, size) > width) {
-          line(current, size, font); current = '';
+        // Standard-font drawText emits unkerned Tj text. Whole-string width
+        // includes pair kerning, so sum glyph advances to match what is drawn.
+        const charWidth = font.widthOfTextAtSize(char, size);
+        if (current && currentWidth + charWidth > width) {
+          line(current, size, font); current = ''; currentWidth = 0;
         }
         current += char;
+        currentWidth += charWidth;
       }
       line(current || ' ', size, font);
     }

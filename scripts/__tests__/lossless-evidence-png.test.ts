@@ -9,7 +9,7 @@ describe('bounded lossless synthetic screenshot evidence', () => {
     });
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stderr).toContain('Ran 10 tests');
+    expect(result.stderr).toContain('Ran 15 tests');
     expect(result.stderr).toContain('OK');
   });
   it('preserves the exact screenshot count and aggregate limit rather than hiding evidence', () => {
