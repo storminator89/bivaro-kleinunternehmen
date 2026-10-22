@@ -1,553 +1,198 @@
-# Bivaro – Buchhaltung für Kleinunternehmer
+<div align="center">
 
-![Dashboard Screenshot](public/screenshot/dashboard.png)
+# Bivaro
 
-Bivaro ist eine moderne, webbasierte Buchhaltungsanwendung, die speziell für Kleinunternehmer in Deutschland entwickelt wurde. Sie hilft dabei, Einnahmen und Ausgaben zu verwalten, Rechnungen und Angebote zu erstellen und den Überblick über die Finanzen zu behalten – alles unter Berücksichtigung der Kleinunternehmerregelung (§ 19 UStG).
+### Vom Angebot bis zum geprüften Beleg.
 
-> **Neu einsteigend?** Lesen Sie zuerst den Abschnitt [Erste Schritte](#-erste-schritte) – dort wird alles Schritt für Schritt erklärt.
+Buchhaltung und Büroalltag für Selbstständige und kleine Unternehmen in Deutschland.<br>
+Selbst gehostet · Nachvollziehbare Belege · Bewusste Freigaben
 
----
+**Deutsch** · [English](README.en.md)
 
-## Inhaltsverzeichnis
+[Funktionen](#funktionen) · [Einblicke](#einblicke) · [Installation](#installation) · [Betrieb](#betrieb-und-updates) · [Grenzen](#aktuelle-grenzen)
 
-1. [Features](#-features)
-2. [Technologie-Stack](#️-technologie-stack)
-3. [Projektstruktur](#-projektstruktur)
-4. [Erste Schritte](#-erste-schritte)
-5. [Konfiguration](#️-konfiguration)
-6. [Alle npm-Scripts](#-alle-npm-scripts)
-7. [Testing](#-testing)
-8. [API-Dokumentation](#-api-dokumentation)
-9. [Docker-Deployment](#-docker-deployment)
-10. [Sicherheit & Audit-Log](#-sicherheit--audit-log)
-11. [Backup & Restore](#-backup--restore)
-12. [Häufige Fragen](#-häufige-fragen)
-13. [Lizenz](#-lizenz)
+</div>
 
 ---
 
-## 🚀 Features
+Bivaro verbindet Angebote, Rechnungen, Kunden, Leistungen, Zahlungen und Eingangsbelege in einem Web-Workspace. Statt stiller Automatik zeigt die Anwendung, was belegt ist, was noch geprüft werden muss und welcher Schritt eine ausdrückliche Bestätigung braucht. Ein Schwerpunkt liegt auf kleinen Unternehmen und der Kleinunternehmerregelung; der Rechnungseditor bietet auch einen Standard-Umsatzsteuermodus.
 
-### 📊 Dashboard & Übersicht
-- **Echtzeit-KPIs**: Umsatz (Monat/Jahr), Ausgaben, offene Forderungen und Gewinnmarge auf einen Blick.
-- **Kleinunternehmer-Tracker**: Visueller Fortschrittsbalken für die Umsatzgrenzen ab 2025 (25.000 € Vorjahresgrenze / 100.000 € Sofortgrenze) mit Warnungen.
-- **Interaktive Charts**: Monatliche Einnahmen vs. Ausgaben im Jahresverlauf.
-- **Live-Daten**: Das Dashboard lädt alle Daten mit [TanStack Query](https://tanstack.com/query) automatisch im Hintergrund und hält sie aktuell.
+> **Aktueller Stand:** aktive Weiterentwicklung, keine pauschale GoBD-, Steuer- oder Compliance-Zertifizierung. Auslesen ist keine Freigabe, ein Bankimport ist keine Buchung und eine SMTP-Annahme ist kein Zustellnachweis. [Grenzen vor dem produktiven Einsatz lesen.](#aktuelle-grenzen)
 
-### 📝 Rechnungen & Angebote
-- **PDF-Rechnungsgenerator**: Professionelle Rechnungen direkt im Browser, mit automatischem Hinweis auf § 19 UStG.
-- **E-Rechnungen**: ZUGFeRD-/Factur-X-PDFs mit PDF/A-3-Normalisierung sowie XRechnung-/UBL-XMLs importieren, strukturierte Daten übernehmen und XML exportieren.
-- **GiroCode (EPC069-12)**: Optionaler QR-Code auf der Rechnung – Kunden scannen und zahlen per Banking-App.
-- **Angebotsverwaltung**: Angebote erstellen und direkt in Rechnungen umwandeln.
-- **Mahnsystem**: Automatische Fälligkeitserinnerungen.
-- **Kundenverwaltung**: Empfänger aus der Datenbank auswählen oder manuell eingeben.
-- **Kundenhinweise**: Interne Hinweise können getrennt für Rechnungserstellung und E-Mail-Versand sichtbar gemacht werden.
-- **Leistungsnotizen**: Wiederverwendbare Leistungszeilen mit Leistungsdatum, Menge und Einheit lassen sich einem Kunden und optional einer Rechnung zuordnen.
-- **Individuelle Vorlagen**: Logo, Adresse und Fußzeile aus den Einstellungen.
+<a href="docs/screenshots/daily-actions-1440.png"><img src="docs/screenshots/daily-actions-1440.png" alt="Bivaro: Heute erledigen mit vier nächsten Schritten und klar getrennten Betragsarten, ausschließlich synthetische Daten" width="1200"></a>
 
-### 💰 Einnahmen & Ausgaben
-- **Belege erfassen**: Einfaches Hinzufügen mit Kategorien, Datum und Betrag.
-- **Beleg-Upload**: PDF- oder Bilddateien direkt zur Buchung speichern.
-- **Filter & Suche**: Nach Datum, Kategorie oder Freitext filtern.
-- **EÜR-Export**: Einnahmen-Überschuss-Rechnung für Steuerberater oder Finanzamt exportieren.
-- **GWG-Verzeichnis**: Geringwertige Wirtschaftsgüter automatisch erfassen.
+*„Heute erledigen“ führt zu offenen Rechnungen, Angebotsnachfassern und gespeicherten Belegprüfungen. Alle Abbildungen zeigen synthetische Testdaten.*
 
-### 📒 Kassenbuch
-- Digitales Kassenbuch mit Tagesabschlüssen und CSV-Export.
+## Funktionen
 
-### ⚙️ Einstellungen
-- **Firmendaten**: Name, Adresse, Steuernummer und Bankverbindung (IBAN/BIC) zentral hinterlegen.
-- **Logo-Upload**: Firmenlogo hochladen für Rechnungen und Angebote.
-- **Benutzerverwaltung**: Mehrere Benutzer mit Rollen (Admin / User).
-- **API-Schlüssel**: Externe Integrationen über REST-API anbinden.
-- **Benutzerregistrierung**: Registrierung kann vom Admin aktiviert oder gesperrt werden.
+| Arbeitsbereich | Was heute möglich ist |
+| --- | --- |
+| **Überblick & nächste Schritte** | Einnahmen-/Ausgabenübersicht, operative Kennzahlen, Jahresvergleich und eine Aufgabenansicht für überfällige Rechnungen, Angebote und offene Belegprüfungen. Optionaler Jahreskontext trennt eigene Angaben von tatsächlich erfassten Bewegungen. |
+| **Angebote & Rechnungen** | Angebote mit Nachfassstatus, bewusste Übernahme in eine Rechnung, Vorlagen, Leistungskatalog, Logo und optionaler GiroCode. Zahlungsziel-Vorschläge folgen Kunde → Firma → 14 Tage; manuell gesetzte Daten bleiben geschützt. Eigene Rechnungen entstehen serverseitig mit eingebettetem Factur-X-/ZUGFeRD-XML und abschließender Prüfung der tatsächlichen PDF/A-3b-Datei. |
+| **Kunden & Suche** | Kunden- und Lieferantenverwaltung, interne Kundenhinweise sowie ein lesender Kundenverlauf mit verknüpften Angeboten, Belegen und Zahlungsnachweisen. Strg/⌘+K sucht begrenzt in eigenen Kundennamen, Ausgangsbelegnummern und Eingangsbelegnummern/-dateinamen. |
+| **Projekte & Leistungen** | Kundenbezogene Projekte, Mengennotizen und manuell erfasste Zeiten in `HH:MM`. Offene Leistungen bewusst im Rechnungseditor auswählen; Preise dort prüfen. PDF-Leistungsaufstellungen für ausdrücklich ausgewählte Leistungen. Wiederkehrende Servicepläne bereiten bestätigte Perioden als Entwürfe vor, nicht als automatische Abrechnung. |
+| **Zahlungen & Historie** | Voll- und Teilzahlungen mit Zahlungsjournal und Restbetrag; getrennte Nachweise für Korrekturen und tatsächlich ausgeführte Erstattungen in unterstützten Fällen. Rechnungshistorie, referenzierte Vollstornos und kontrollierte Mahnwege statt Überschreiben der Originalhistorie. |
+| **Belegeingang & Ausgaben** | Originale archivieren, XML oder eingebettete E-Rechnungsdaten auslesen, Lieferanten zuordnen und Prüfentwürfe fortsetzen. Foto-/Bildbelege lassen sich manuell prüfen. Listenweise Belegprüfung mit Speichern/Weiter und Schutz ungespeicherter Änderungen. Unterstützte XRechnung-XMLs erhalten eine separate technische XSD-/Schematron-Prüfung. Erst die ausdrückliche fachliche Bestätigung erzeugt eine unterstützte Ausgabe. |
+| **Optionale KI-Erfassung** | Eigene OpenAI-kompatible Vision-Anbindung mit getrennten Freigaben für Anbieter und automatische neue Uploads. KI liefert ungeprüfte Vorschläge für geeignete Bilder/PDFs; keine Zahlung, Lieferantenauswahl oder automatische Buchung. Der manuelle Weg bleibt nutzbar. |
+| **Bank-CSV & Datenübernahme** | UTF-8-CSV mit eigener Spaltenzuordnung, EUR-Kontrollsummen, Zeilenfehlern, Dublettenhinweisen und lesenden Rechnungsvorschlägen. Geprüfte Bankzeilen können als unzugeordnete Evidenz gespeichert und wieder geöffnet werden. Separate Vorschau-/Bestätigungsimporte für Kunden und Leistungskatalog. |
+| **Auswertungen & Übergabe** | Einnahmen, Ausgaben, Kassenbuch, GWG-Verzeichnis und Steuersimulation. Vereinfachtes EÜR-CSV-Arbeitspapier für unterstützte Jahre 2024–2026; neutrale Übergabepakete mit Originalbezügen, Manifesten und Prüfhinweisen. Kein ELSTER-Versand. |
+| **Einstellungen & Integration** | Benutzerrollen, API-Schlüssel, optionaler SMTP-Versand und bestätigter Rechnungs-/Angebotsversand mit dauerhaftem Versuchsjournal. JSON-/vollständige ZIP-Backups mit Vorschau und versionsgebundener Wiederherstellung. |
 
-### ⚖️ Steuer-Simulation
-- Einkommensteuer-Rechner: voraussichtliche Steuerlast auf Basis des aktuellen Gewinns schätzen.
+## Einblicke
 
-### 🔐 Sicherheit & Compliance
-- Passwort-Hashing mit bcrypt (Kostenfaktor 12).
-- Rollenbasierter Zugriffsschutz (RBAC) auf allen API-Routen.
-- Strukturierter Audit-Log: jede sicherheitsrelevante Aktion (Login, Registrierung, Backup) wird als Datenbankzeile gespeichert.
-- Rate-Limiting für den Registrierungs-Endpunkt.
+Echte UI-Aufnahmen, keine Mockups. Auf ein Bild klicken, um das unveränderte Original zu öffnen. Die Oberfläche der gezeigten Version ist deutsch; helle und dunkle Ansichten gehören zur Anwendung.
 
----
+<table>
+  <tr>
+    <td width="50%"><strong>Kundenverlauf</strong><br><a href="docs/screenshots/customer-timeline-desktop-1440.png"><img src="docs/screenshots/customer-timeline-desktop-1440.png" alt="Kundenverlauf mit getrennten Zahlungs-, Korrektur-, Rechnungs- und Angebotsnachweisen" width="600"></a><br><sub>Belege und Zahlungsnachweise gemeinsam lesen, ohne einen Kundengesamtsaldo zu erfinden.</sub></td>
+    <td width="50%"><strong>Projekte & Leistungszeiten</strong><br><a href="docs/screenshots/project-services-workbench-desktop-1440.png"><img src="docs/screenshots/project-services-workbench-desktop-1440.png" alt="Leistungsnotizen mit Projektfilter, bekannter Dauer und gesondert ausgewiesener fehlender Zeitangabe" width="600"></a><br><sub>Bekannte Dauer, Mengen und fehlende Zeitangaben bleiben unterscheidbar.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><strong>Bank-CSV mit Prüfquittung</strong><br><a href="docs/screenshots/bank-evidence-saved-1440.png"><img src="docs/screenshots/bank-evidence-saved-1440.png" alt="Gespeicherte synthetische Bank-CSV-Evidenz mit EUR-Kontrollsummen und Warnung: keine Buchung" width="600"></a><br><sub>Kontrollsummen und mögliche Dubletten prüfen. Speichern bucht keine Zahlung.</sub></td>
+    <td width="50%"><strong>Technische E-Rechnungsprüfung</strong><br><a href="docs/screenshots/incoming-validation-desktop-1440.png"><img src="docs/screenshots/incoming-validation-desktop-1440.png" alt="Separate technische XRechnung-Prüfung mit Regel- und Originalhash, ohne steuerliche Freigabe" width="600"></a><br><sub>Technische Regeln, Originalbezug und menschliche Freigabe sind getrennte Aussagen.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><strong>Original im Mittelpunkt</strong><br><a href="docs/screenshots/receipt-draft-desktop.png"><img src="docs/screenshots/receipt-draft-desktop.png" alt="Dunkle Belegprüfung mit ausdrücklich synthetischem Foto-Original, Zoom und Speichern-und-weiter-Aktion" width="600"></a><br><sub>Foto-Original ansehen, Prüfentwurf sichern und gezielt weiterarbeiten.</sub></td>
+    <td width="50%"><strong>Leistungsaufstellung als PDF</strong><br><a href="docs/screenshots/service-statement-preview-1440.png"><img src="docs/screenshots/service-statement-preview-1440.png" alt="Leistungsaufstellung mit ausgewählten Leistungen, bekannten Minuten und identischer Datei für Vorschau und Download" width="600"></a><br><sub>Bewusst ausgewählte Leistungen zusammenstellen. Keine Rechnung oder Abnahmebestätigung.</sub></td>
+  </tr>
+</table>
 
-## 🛠️ Technologie-Stack
+[Herkunft, Bildhashes und Prüfgrenzen aller sieben Screenshots](docs/screenshots/README.md)
 
-| Schicht | Technologie |
-|---|---|
-| Framework | [Next.js 16](https://nextjs.org/) (App Router, TypeScript) |
-| UI-Bibliothek | [React 19](https://react.dev/), [Tailwind CSS v4](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/) |
-| Datenabruf | [TanStack Query v5](https://tanstack.com/query) |
-| Datenbank | [SQLite](https://www.sqlite.org/) via [Prisma 6](https://www.prisma.io/) ORM |
-| Authentifizierung | [NextAuth.js v4](https://next-auth.js.org/) |
-| PDF-Generierung | [pdf-lib](https://pdf-lib.js.org/) + [Ghostscript](https://www.ghostscript.com/) für PDF/A-3-Normalisierung |
-| QR-Code | [qrcode](https://github.com/soldair/node-qrcode) |
-| Unit-Tests | [Vitest](https://vitest.dev/) |
-| E2E-Tests | [Playwright](https://playwright.dev/) |
+## Aktuelle Grenzen
 
----
+- **Keine Rechts- oder Steuerfreigabe:** gespeicherte Steuerprofile und Jahresangaben sind Selbstauskünfte. Umsatzindikatoren und Simulationen ersetzen keine individuelle Prüfung. Technische PDF-/XML-Prüfung bestätigt weder Identität noch Zahlung, Belegberechtigung oder die vollständige steuerliche Richtigkeit.
+- **Kein Bankzugang:** kein Bankfeed, keine Überweisung, keine automatische Abstimmung oder Zahlungszuordnung. Bank-CSV-Evidenz enthält normalisierte Zeilen und Hashes, **nicht die archivierte Rohdatei**. Rechnungsvorschläge vergleichen höchstens die letzten 100 Rechnungen. [Details](docs/features/bank-import-evidence.md)
+- **Korrekturen bewusst begrenzt:** Zahlungsanpassungen unterstützen bestimmte ausgestellte EUR-Kleinunternehmerrechnungen ohne Kassenverknüpfung. Bei vorhandener Anpassungshistorie sperren mehrere fiskalische Auswertungen/Exporte bis zur gesonderten Zuordnung; frische Mahnungen zu angepassten Rechnungen werden nicht unterstützt. Eine Stornierung erstattet kein Geld. [Vertrag](lib/payment-journal/README.md)
+- **Keine unsichtbare Automatik:** kein laufender Leistungstimer, keine automatische Serviceabrechnung und kein geplanter Mahn- oder E-Mail-Worker. Bestätigte Restbetragsmahnungen bleiben ein kontrollierter manueller Weg; ihr SMTP-Versand ist nicht freigegeben. SMTP-Annahme beweist keine Zustellung, unbekannte Versandresultate verlangen eine bewusste Wiederholung.
+- **KI ist optional und fehlbar:** Anbieter/Modell und Vision-Unterstützung sind nicht universell kompatibel oder zertifiziert. Datenübertragung kann Kosten und Datenschutzpflichten auslösen. Aktuell höchstens vier vollständige PDF-Seiten; ohne passende Konfiguration/Einwilligung keine KI-Anfrage. Vorschläge bleiben ungeprüft und dürfen keinen Zahlungszeitpunkt erfinden. [Grenzen und Einwilligung](docs/ai/receipt-extraction.md)
+- **Betrieb ist Teil der Verantwortung:** SQLite ist für eine einzelne App-Instanz mit einem Datenbankziel vorgesehen, nicht für parallele Schreiber oder Hochverfügbarkeit. Kein eingebauter E-Mail-Passwortreset oder MFA-Self-Service. Öffentliche Hilfe-/Angebotsseiten sind kein zugesagter Support- oder Hostingvertrag. [Zugangshilfe](docs/operations/account-access.md)
 
-## 📁 Projektstruktur
+## Installation
 
-```
-bivaro-kleinunternehmen/
-│
-├── app/                        # Next.js App Router
-│   ├── api/                    # Backend-Endpunkte (Server-seitig)
-│   │   ├── auth/               # Login, Registrierung, Session
-│   │   ├── backup/             # Daten-Export und -Import
-│   │   ├── invoices/           # Rechnungen
-│   │   ├── expenses/           # Ausgaben
-│   │   ├── incomes/            # Einnahmen
-│   │   ├── customers/          # Kundenverwaltung
-│   │   ├── users/              # Benutzerverwaltung (nur Admin)
-│   │   ├── openapi/            # OpenAPI-Spezifikation als JSON
-│   │   └── v1/                 # Externe REST-API (mit API-Key)
-│   ├── dashboard/              # Dashboard-Seite
-│   ├── settings/               # Einstellungen (inkl. Backup/Restore)
-│   ├── login/ register/        # Authentifizierungs-Seiten
-│   └── ...weitere Seiten
-│
-├── components/                 # Wiederverwendbare UI-Komponenten
-│   ├── dashboard/              # Dashboard-spezifische Komponenten
-│   │   ├── dashboard-content.tsx        # Haupt-UI des Dashboards
-│   │   ├── dashboard-query-provider.tsx # TanStack QueryClient für Dashboard
-│   │   └── tabs/               # Einzelne Dashboard-Reiter
-│   └── ui/                     # shadcn-Basiskomponenten
-│
-├── hooks/
-│   └── use-dashboard-data.ts   # Alle Dashboard-Datenabrufe (TanStack Query)
-│
-├── lib/                        # Gemeinsame Hilfsfunktionen
-│   ├── audit-log.ts            # Audit-Log & Security-Events
-│   ├── e-invoice-parser.ts     # ZUGFeRD-/Factur-X- und XRechnung-XML-Import
-│   ├── backup-preview.ts       # Backup-Vorschau und Validierung
-│   ├── password.ts             # Zentrales Passwort-Hashing (bcrypt)
-│   └── prisma.ts               # Prisma-Client-Singleton
-│
-├── prisma/
-│   ├── schema.prisma           # Datenbankschema
-│   ├── migrations/             # SQL-Migrationsdateien
-│   └── dev.db                  # Lokale Entwicklungsdatenbank (nicht committen)
-│
-├── e2e/                        # End-to-End-Tests (Playwright)
-│   └── auth-dashboard-invoice.spec.ts
-│
-├── proxy.ts                    # Schützt alle nicht-öffentlichen Routen
-├── playwright.config.ts        # Playwright-Konfiguration
-├── vitest.config.mts           # Vitest-Konfiguration
-├── .env.example                # Vorlage für Umgebungsvariablen
-└── docker-compose.yml          # Docker-Deployment
-```
+### Docker Compose
 
-> **Tipp für Einsteiger:** Wenn Sie eine neue Seite hinzufügen möchten, erstellen Sie einen Ordner unter `app/` mit einer `page.tsx`. Für eine neue API-Route erstellen Sie einen Ordner unter `app/api/` mit einer `route.ts`. Das ist die Next.js App-Router-Konvention.
-
----
-
-## 🏁 Erste Schritte
-
-### Voraussetzungen
-
-- [Node.js](https://nodejs.org/) **Version 18 oder neuer** (empfohlen: aktuelles LTS)
-- [npm](https://www.npmjs.com/) (wird mit Node.js mitgeliefert)
-- [Git](https://git-scm.com/)
-- [Ghostscript](https://www.ghostscript.com/) für die PDF/A-3-Normalisierung von ZUGFeRD-/Factur-X-PDFs (im Docker-Image enthalten)
-
-Prüfen Sie Ihre Versionen im Terminal:
-```bash
-node --version   # sollte v18+ anzeigen
-npm --version
-```
-
-### Schritt 1 – Repository klonen
+Der mitgelieferte Linux-Container bündelt die nativen PDF-/Prüfwerkzeuge. Docker Engine mit Compose-Plugin und Git werden vorausgesetzt; ein öffentlich erreichbarer Betrieb benötigt zusätzlich korrekt eingerichtetes HTTPS.
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/storminator89/bivaro-kleinunternehmen.git
 cd bivaro-kleinunternehmen
-```
-
-### Schritt 2 – Abhängigkeiten installieren
-
-```bash
-npm install
-```
-
-Dies lädt alle benötigten Pakete in `node_modules/`. Das kann beim ersten Mal 1–2 Minuten dauern.
-
-### Schritt 3 – Umgebungsvariablen konfigurieren
-
-```bash
 cp .env.example .env
 ```
 
-Öffnen Sie `.env` und passen Sie mindestens `NEXTAUTH_SECRET` an:
+**Vor dem Start `.env` bearbeiten:**
 
-```env
-DATABASE_URL="file:./prisma/dev.db"
-NEXTAUTH_SECRET="ein-langer-zufaelliger-geheimer-string"
-NEXTAUTH_URL="http://localhost:3000"
-```
-
-**Hinweis:** `NEXTAUTH_SECRET` schützt Ihre Sitzungen. Generieren Sie einen sicheren Wert mit:
-```bash
-openssl rand -base64 32
-```
-
-### Schritt 4 – Datenbank initialisieren
+| Einstellung | Zweck |
+| --- | --- |
+| `NEXTAUTH_SECRET` | Eigenes langes Zufallsgeheimnis, z. B. mit `openssl rand -base64 32` erzeugen. Platzhalter ersetzen; sicher aufbewahren. |
+| `NEXTAUTH_URL` | Exakter Browser-Ursprung, lokal `http://localhost:3000`, öffentlich die eigene HTTPS-URL. |
+| `BIVARO_SETUP_TOKEN` | Eigenen einmaligen Bootstrap-Nachweis ergänzen, z. B. mit `openssl rand -hex 32` erzeugen. Nicht veröffentlichen. |
+| `PORT` | Optionaler Host-Port, Standard `3000`. Compose setzt `DATABASE_URL` im Container auf `file:/app/data/prod.db`. |
 
 ```bash
-npx prisma migrate dev
+docker compose config --quiet
+docker compose up -d --build
+docker compose logs --tail=100 buchhaltung
 ```
 
-Dieser Befehl erstellt die SQLite-Datenbankdatei `prisma/dev.db` und richtet alle Tabellen ein. Bei zukünftigen Schema-Änderungen führen Sie diesen Befehl erneut aus.
+`/register` erstellt das erste Admin-Konto nur mit dem serverseitig konfigurierten Setup-Token. Ohne Token bleibt der Erststart geschlossen. Nach erfolgreichem Bootstrap wird dessen Verbrauch dauerhaft markiert; spätere Kontolöschung öffnet ihn nicht erneut. Weitere Registrierung muss ein Admin ausdrücklich freigeben. Danach Firmendaten, erklärtes Steuerprofil, Bankverbindung und gewünschte Vorlagen prüfen.
 
-### Schritt 5 – Entwicklungsserver starten
+Alternativ enthält [`docker-compose.hub.yml`](docker-compose.hub.yml) die Registry-Variante. Deren Service heißt **`bivaro`**, während die Build-Variante **`buchhaltung`** verwendet. Dateien, Projektnamen und Volumes nicht unbesehen wechseln; ein anderer Compose-Kontext kann eine leere Installation statt der bestehenden Daten zeigen. Für kontrollierte Releases den gewünschten Image-Tag/Digest ausdrücklich auswählen, nicht `latest` als unveränderliche Version behandeln.
+
+### Entwicklung aus dem Quellcode
+
+Unterstützte Node-Versionen laut [`package.json`](package.json): **`>=22.23.4 <23` oder `>=24.22.1 <25`**. Das Dockerfile verwendet Node `22.23.4`. npm und Git werden benötigt.
+
+Nach Klonen und Kopieren der `.env.example`:
+
+1. Ein eigenes Datenverzeichnis anlegen (`mkdir -p data`) und in `.env` einen **absoluten** SQLite-Pfad setzen, etwa `DATABASE_URL="file:/absoluter/pfad/bivaro-kleinunternehmen/data/dev.db"`. Den Beispielpfad durch den tatsächlichen Pfad ersetzen. Relative SQLite-Pfade werden von Prisma relativ zum Schema ausgewertet; sie sind kein verlässlicher Standalone-/Containerpfad.
+2. Secrets, Setup-Token und lokale `NEXTAUTH_URL` wie oben setzen.
+3. Nur für diese neue Entwicklungsdatenbank ausführen:
 
 ```bash
+npm ci
+npm run db:generate
+npm run db:migrate
 npm run dev
 ```
 
-Die Anwendung ist nun unter **[http://localhost:3000](http://localhost:3000)** erreichbar.
+Die UI läuft unter `http://localhost:3000`. Web-App, eigene PDF-Erzeugung und KI-Anbindung sind Node.js-basiert. **`npm ci` allein installiert nicht alle Laufzeitwerkzeuge:** Java wird für **beide technischen Prüfpfade** benötigt: veraPDF prüft die endgültigen eigenen PDF/A-3b-Rechnungen; der KoSIT-Validator prüft unterstützte XRechnung-XMLs. Diese lokalen Prüflaufzeiten benötigen Linux, Java, `prlimit` und die jeweils gepinnten Validator-/Regel-Assets. Java übernimmt weder die PDF-Erzeugung noch die KI-Anfrage. Im aktuellen Stand benötigen Fremd-PDF-Normalisierung und KI-PDF-Rasterung außerdem Ghostscript. Der Docker-Build richtet diese Werkzeuge ein. Fehlende Werkzeuge werden nicht durch eine behauptete erfolgreiche Prüfung ersetzt. [PDF-Aufbau und Laufzeit](docs/testing/own-invoice-pdfa-reconstruction.md)
 
-Beim ersten Aufruf von `/register` können Sie das **erste Admin-Konto** nur mit dem einmaligen Bootstrap-Nachweis aus `BIVARO_SETUP_TOKEN` erstellen. Ohne gesetztes Server-Token bleibt die Erstregistrierung geschlossen. Nach erfolgreicher Erstellung wird der Nachweis dauerhaft als verbraucht markiert und kann auch nach einem Neustart oder einer späteren Benutzerlöschung nicht erneut verwendet werden. Danach ist die Registrierung standardmäßig gesperrt und kann vom Admin bewusst freigegeben werden.
+## Betrieb und Updates
 
----
+### Daten sichern, dann aktualisieren
 
-## ⚙️ Konfiguration
-
-Alle Einstellungen erfolgen über die `.env`-Datei (Kopie von `.env.example`):
-
-| Variable | Beschreibung | Beispielwert |
-|---|---|---|
-| `DATABASE_URL` | Pfad zur SQLite-Datenbank | `file:./prisma/dev.db` |
-| `NEXTAUTH_SECRET` | Geheimschlüssel für Sitzungen (mind. 32 Zeichen) | `openssl rand -base64 32` |
-| `NEXTAUTH_URL` | Öffentliche URL der App | `http://localhost:3000` |
-| `BIVARO_SETUP_TOKEN` | Einmaliger serverseitiger Nachweis für das erste Admin-Konto; wird weder gespeichert noch zurückgegeben | `openssl rand -hex 32` |
-| `PORT` | TCP-Port (optional, Standard: 3000) | `3000` |
-| `ALLOWED_ORIGINS` | CORS-Whitelist für externe API-Nutzung | `https://meine-domain.de` |
-| `SMTP_HOST` | SMTP-Server für optionalen E-Mail-Versand | `smtp.example.de` |
-| `SMTP_PORT` | SMTP-Port, meist 587 (STARTTLS) oder 465 (TLS) | `587` |
-| `SMTP_SECURE` | `true` für Port 465, sonst `false` für STARTTLS | `false` |
-| `SMTP_USER` | SMTP-Benutzername (optional nur bei SMTP-Relays ohne Auth) | `rechnung@example.de` |
-| `SMTP_PASSWORD` | SMTP-Passwort/App-Passwort | `...` |
-| `EMAIL_FROM` | Absenderadresse für Rechnungen, Angebote und Mahnungen | `Bivaro <rechnung@example.de>` |
-
-**Wichtig:** Die `.env`-Datei darf **niemals** in Git eingecheckt werden (steht bereits in `.gitignore`).
-
-Der E-Mail-Versand nutzt SMTP als Standardschnittstelle. Vor dem Versand öffnet die App eine Vorschau mit editierbarem Empfänger, Betreff, Text und PDF-Anhang-Viewer; ohne vollständige SMTP-Konfiguration ist nur die Vorschau verfügbar.
-
-Administratoren können die globale SMTP-Konfiguration unter *Einstellungen → SMTP-Versand* pflegen. Die API `/api/settings/smtp` ist ausschließlich für Administratoren verfügbar. Ein gespeichertes SMTP-Passwort wird mit AES-GCM und einem aus `NEXTAUTH_SECRET` abgeleiteten Schlüssel verschlüsselt und weder angezeigt noch in die Benutzer-Backupexporte übernommen. Ohne Datenbank-Override verwendet der Versand die `SMTP_*`-/`EMAIL_FROM`-Umgebungsvariablen. Bei beiden Konfigurationsquellen erzwingt `secure=false` STARTTLS. Reine Klartext-Relays werden abgewiesen; `secure=true` verwendet implizites TLS.
-
-Nach einer Änderung von `NEXTAUTH_SECRET` muss das SMTP-Passwort erneut eingegeben werden. Ein leeres Passwortfeld behält das bestehende Passwort bei; ein leerer Benutzername entfernt die Anmeldung. Speichern prüft die Konfiguration, baut aber keine Verbindung auf und versendet keine Testmail. Docker führt ausstehende Migrationen beim Start mit Sicherung und Test auf einer Kopie aus. Für manuell verwaltete Installationen ist der unten beschriebene Upgrade-Job erforderlich.
-
-### Sicherheitsbetrieb
-
-- Öffentlich erreichbare Installationen über HTTPS betreiben und `NEXTAUTH_URL` auf den exakten Browser-Ursprung setzen (Schema, Host und Port). Schreibende Browser-Anfragen aus anderen Ursprüngen, auch von Geschwister-Subdomains, werden abgewiesen. Reine HTTP-Clients ohne Browser-Metadaten benötigen weiterhin die normale Authentifizierung; für Integrationen ist die getrennte Bearer-API unter `/api/v1` vorgesehen.
-- Alle neuen schreibenden API-Handler mit `protectMutation` aus `lib/request-security.ts` exportieren. Nur die explizite Bearer-API und NextAuths eigene CSRF-geschützten Aktionen nutzen die jeweiligen Ausnahmen. Auth-Bodies sind auf 16 KiB begrenzt, gewöhnliche JSON-Bodies auf 1 MiB; bestehende Dokument- und Backup-Routen behalten ihre eigenen Byte-Limits. Die Limits zählen tatsächliche Stream-Bytes, nicht nur `Content-Length`.
-- Seiten verwenden pro Antwort eine zufällige CSP-Nonce und werden dynamisch gerendert. Inline-Skripte ohne Nonce und Inline-Eventhandler sind gesperrt; Inline-Stile bleiben für die UI erlaubt. Personenbezogene API-Antworten sollen `private, no-store` verwenden. XML wird als Download ausgeliefert; HTML/XML-Vorschauen erhalten eine Sandbox, PDF-Vorschauen bleiben im Browser nutzbar.
-- `npm run audit:security` prüft die Produktionsabhängigkeiten und läuft zusätzlich in CI. `npm audit` umfasst auch Entwicklungswerkzeuge. Stand 17.10.2026 verbleiben dort fünf hohe Meldungen in der ESLint-/`braces`-Abhängigkeitskette; die Registry bietet für `braces` noch keine korrigierte Version. Linting nicht auf ungeprüften fremden Dateimustern als öffentlichen Dienst anbieten. Kein erzwungenes Framework-Downgrade zur bloßen Bereinigung des Audit-Ergebnisses verwenden.
-- `npm run test:e2e:security` erstellt eine neue temporäre SQLite-Datenbank, baut den Produktionsserver auf Port 3101 und prüft Registrierung, Anmeldung, Herkunftsprüfung, Größenlimits, CSP und Dokumentausgabe. Die Testdatenbank wird danach entfernt. Laufende Entwicklungs- oder Produktionsdatenbanken werden dafür nicht verwendet.
-
-Die Härtung erfordert keine Datenbankmigration. Sie ersetzt keine Prüfung der tatsächlichen HTTPS-/Proxy-Konfiguration, Betriebssystem- und Ghostscript-Updates oder der Wiederherstellbarkeit von Sicherungen. Neue private Uploads liegen unter `data/uploads` und damit im Docker-Datenvolume; das separate `public/uploads`-Volume dient nur der Legacy-Kompatibilität.
-
----
-
-## 📜 Alle npm-Scripts
+- Den gewünschten geprüften Release-/Commit-Stand bereitstellen; lokale Änderungen vorher sichern. **Eine App-Instanz je SQLite-Datenbank.** Vor Migrationen die bestehende App und alle weiteren DB-Schreiber stoppen. Genügend Platz für Sicherung und Testkopie einplanen.
+- Build-Compose: `buchhaltung-data` enthält `/app/data` mit Datenbank, **neuen privaten Uploads** unter `data/uploads` und Upgrade-Sicherungen. `buchhaltung-uploads` hält `/app/public/uploads` nur für Legacy-Dateien. Bei der Hub-Variante heißen die logischen Volumes `bivaro-data`/`bivaro-uploads`; tatsächliche Namen hängen vom Compose-Projekt ab.
+- Datenbank **und** Uploads getrennt vom laufenden Host sichern und die Wiederherstellung überprüfen. `docker compose down -v` löscht Volumes; nicht als Update- oder Fehlerbehebungsbefehl verwenden.
 
 ```bash
-# Entwicklung
-npm run dev          # Entwicklungsserver mit Hot-Reload starten (Port 3000)
-
-# Produktion
-npm run build        # Optimierten Production-Build erstellen
-npm run start        # Production-Server aus dem Build starten
-
-# Datenbankoperationen
-npm run db:migrate   # Migrationen auf der Produktionsdatenbank anwenden
-npm run db:generate  # Prisma Client nach Schema-Änderungen neu generieren
-npm run db:studio    # Prisma Studio (Browser-GUI für die Datenbank) öffnen
-
-# Codequalität
-npm run lint         # ESLint ausführen (schlägt bei Warnungen fehl)
-
-# Tests
-npm run test         # Alle Vitest Unit-Tests einmalig ausführen
-npm run test:watch   # Unit-Tests im Watch-Modus (reagiert auf Dateiänderungen)
-npm run test:e2e     # Playwright E2E-Tests ausführen (baut vorher automatisch)
-
-# Docker
-npm run docker:build # Docker-Image bauen
-npm run docker:up    # Container im Hintergrund starten
-npm run docker:down  # Container stoppen
-npm run docker:logs  # Container-Logs live verfolgen
-```
-
----
-
-## 🧪 Testing
-
-Das Projekt hat zwei Teststufen:
-
-### Unit-Tests (Vitest)
-
-Unit-Tests prüfen einzelne Funktionen isoliert (z.B. Steuerberechnungen, Sicherheitsfunktionen).
-
-```bash
-npm run test         # Tests einmalig ausführen
-npm run test:watch   # Automatisch bei Dateiänderungen erneut ausführen
-```
-
-Testdateien liegen in `lib/__tests__/` und `scripts/__tests__/`.
-
-Verifizierte Ergebnisse und verbleibende Einschränkungen stehen im [Testaudit vom 17.10.2026](docs/testing/legacy-code-audit-2026-10-17.md).
-
-### End-to-End-Tests (Playwright)
-
-E2E-Tests simulieren einen echten Browser und testen komplette Nutzerflüsse:
-
-- Erste Admin-Registrierung
-- Anmeldung und Dashboard-Aufruf
-- Arbeitsbereiche, Rechnungs- und Angebotserstellung sowie Buchhaltungsabläufe
-
-```bash
-npm run test:e2e
-```
-
-**Wie funktioniert das?** Der Runner erstellt für jeden Aufruf ein neues temporäres Verzeichnis. Playwright migriert die dortige leere Testdatenbank, baut die App und startet den isolierten Test-Server auf Port 3100. Anschließend wird die temporäre Datenbank entfernt. `e2e:prepare` ist ein interner Schritt, der nur dieses Fixture akzeptiert und keine vorhandene Datenbank überschreibt.
-
-Falls Port 3100 bereits belegt ist, kann ein freier Testport gewählt werden: `BIVARO_E2E_PORT=3117 npm run test:e2e`. Ein laufender Server wird nicht wiederverwendet.
-
-> **Einmaliger Setup:** Playwright-Browser müssen einmalig installiert werden:
-> ```bash
-> npx playwright install chromium
-> ```
-
----
-
-## 📖 API-Dokumentation
-
-Bivaro bietet eine interne REST-API (für externe Tools und Integrationen):
-
-| Endpunkt | Beschreibung |
-|---|---|
-| `GET /api/openapi` | OpenAPI 3.0 Spezifikation als JSON |
-| `GET /api/v1/docs` | Interaktive API-Dokumentation |
-| `GET /api/health` | Health-Check (für Load-Balancer) |
-
-Die externe API unter `/api/v1/` erfordert einen **API-Schlüssel**, den Sie in den App-Einstellungen unter *Einstellungen → API-Schlüssel* generieren können.
-
-Beispiel-Aufruf:
-```bash
-curl -H "x-api-key: IHR_SCHLUESSEL" http://localhost:3000/api/v1/invoices
-```
-
----
-
-## 🐳 Docker-Deployment
-
-Für den Betrieb auf einem eigenen Server empfehlen wir Docker:
-
-```bash
-# 1. Secrets in .env setzen
-cp .env.example .env
-# NEXTAUTH_SECRET, BIVARO_SETUP_TOKEN und NEXTAUTH_URL anpassen!
-
-# 2. Image bauen
-npm run docker:build
-
-# 3. Vorhandene App stoppen; keine weiteren DB-Schreiber betreiben
+# Build-Variante; bestehende Compose-Dateien und Projektnamen beibehalten
 docker compose stop buchhaltung
-
-# 4. Starten: ausstehende Migrationen laufen vor dem Webserver
-npm run docker:up
-
-# 5. Logs prüfen
-npm run docker:logs
+docker compose build buchhaltung
+docker compose up -d buchhaltung
+docker compose logs --tail=100 buchhaltung
 ```
 
-Die App ist dann unter `http://localhost:3000` erreichbar (Port über `PORT`-Variable änderbar).
+Standardmäßig prüft `DATABASE_MIGRATION_MODE=auto` vor dem Webserver den Migrationsstand. Bei ausstehenden Migrationen sichert der Upgrade-Job die bestehende SQLite-Datenbank, testet an einer Kopie und migriert erst danach das konfigurierte Ziel. Neue Datenbanken werden aus versionierten Migrationen aufgebaut. Fehler oder ungeklärte Schemaabweichungen blockieren den Start statt einer destruktiven Reparatur. Sicherungen bleiben unter `/app/data/backups`.
 
-**Datenpersistenz:** Datenbank und Upload-Dateien werden in benannten Docker-Volumes gespeichert und überleben Container-Neustarts:
-- `buchhaltung-data` → Datenbank
-- `buchhaltung-uploads` → hochgeladene Dateien
+Für getrennte Wartung `DATABASE_MIGRATION_MODE=manual` setzen und nach dem Stoppen ausdrücklich ausführen:
 
-**Produktionsbetrieb:**
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml stop buchhaltung
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-**Docker-Hub-Image aktualisieren:**
-```bash
-docker compose -f docker-compose.hub.yml pull bivaro
-docker compose -f docker-compose.hub.yml stop bivaro
-docker compose -f docker-compose.hub.yml up -d bivaro
-docker compose -f docker-compose.hub.yml logs --tail=100 bivaro
-```
-
-Verwenden Sie dabei immer dieselbe Compose-Datei und denselben Projektnamen wie
-bei der Installation, damit die bestehenden Volumes eingebunden bleiben.
-
-Standardmäßig gilt `DATABASE_MIGRATION_MODE=auto`, auch für bestehende
-Compose-Dateien ohne diese Variable. Vor dem Webserverstart prüft der Container
-den Migrationsstand. Bei ausstehenden Migrationen startet er den Upgrade-Job:
-vorhandene Datenbank sichern, Migrationen auf einer Kopie testen, anschließend
-das konfigurierte Ziel migrieren und Schema sowie Integrität prüfen. Eine neue
-Datenbank wird über die versionierten Migrationen initialisiert. Ein normaler
-Neustart bei aktuellem Migrationsstand erzeugt keine zusätzliche Sicherung.
-Bei fehlgeschlagener Migration oder unerklärter Schemaabweichung startet der
-Webserver nicht; es gibt keine automatische destruktive Schemareparatur.
-
-Betreiben Sie nur einen App-Container pro SQLite-Datenbank. Während eines Updates
-müssen weitere DB-Schreiber gestoppt sein; parallele Starts oder überlappende
-Deployments auf demselben Volume werden nicht unterstützt. Große Datenbanken
-benötigen ausreichend freien Platz für Sicherung und Testkopie und entsprechend
-Zeit beim Start. Die Sicherungen bleiben standardmäßig unter `/app/data/backups`
-im Datenvolume erhalten; berücksichtigen Sie sie bei Ihrer Aufbewahrungsplanung.
-
-Für einen getrennten Wartungsschritt setzen Sie `DATABASE_MIGRATION_MODE=manual`
-in der Compose-Umgebung (bei den mitgelieferten Compose-Dateien über `.env`).
-Dann bleibt der Start rein prüfend und Sie führen vorab explizit aus:
-```bash
-docker compose -f docker-compose.hub.yml stop bivaro
-docker compose -f docker-compose.hub.yml run --rm --no-deps bivaro node scripts/upgrade-database.mjs
+docker compose run --rm --no-deps buchhaltung node scripts/upgrade-database.mjs
 # Nur nach erfolgreichem Upgrade:
-docker compose -f docker-compose.hub.yml up -d bivaro
+docker compose up -d buchhaltung
 ```
 
-Für diese Containerpfade muss `DATABASE_URL` eine absolute lokale SQLite-Datei
-bezeichnen, standardmäßig `file:/app/data/prod.db`. Relative Ziele werden abgelehnt,
-damit Prisma-CLI und Standalone-App dieselbe Datei verwenden. Die Konfiguration
-wird nicht auf eine andere Datenbank umgeschrieben.
+In der Hub-Variante zuerst `docker compose -f docker-compose.hub.yml pull bivaro`, dann den Service stoppen und mit **derselben Datei** aktualisieren; auch bei `run`, `up` und `logs` `-f docker-compose.hub.yml` und `bivaro` verwenden. Für Produktion kann die Build-Variante um [`docker-compose.prod.yml`](docker-compose.prod.yml) ergänzt werden; diese Datei richtet HTTPS nicht automatisch ein. [Upgrade-, Prüf- und Rückfallgrenzen](docs/backlog/BV-001-002.md)
 
-Vor Änderungen an einer vorhandenen Datenbank erstellt der Upgrade-Job eine
-SQLite-Sicherung und prüft Migrationen zunächst an einer isolierten Kopie.
-Die Sicherung bleibt für eine kontrollierte Wiederherstellung erhalten. Eine
-zusätzliche getrennte Sicherung der Datenbank **und** der Upload-Dateien sowie
-die fachliche Wiederherstellungsprüfung gehören zum Releaseablauf. Einzelheiten,
-Prüfgrenzen und Rückfallverfahren stehen in [BV-001/BV-002](docs/backlog/BV-001-002.md).
+### SMTP und optionale KI
 
-Die Migration `20260920150000_income_date_review` erzeugt für vorhandene manuelle
-Einnahmen einmalige **Prüfhinweise** im Audit-Log. Prüfen Sie das gespeicherte
-Zahlungsdatum anhand Ihrer Belege; der Hinweis bedeutet nicht, dass es nachweislich
-falsch ist. Historische Datumswerte, Beträge und Verknüpfungen bleiben unverändert.
-Auch Einnahmen mit Mitternachtsdatum oder Kassenverknüpfung werden berücksichtigt.
+- SMTP ist optional: Admin-Einstellungen oder `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` in der Serverumgebung. Gespeicherte Admin-Einstellungen haben Vorrang. `SMTP_SECURE=false` verlangt STARTTLS, `true` implizites TLS; Klartext-Relays sind nicht unterstützt. Ohne Konfiguration bleibt die Vorschau, nicht der Versand.
+- KI wird pro Benutzer in den Einstellungen mit eigenem Endpunkt, Modell und Schlüssel eingerichtet. Aktivierung und automatische Analyse **neuer** geeigneter Uploads sind getrennt; beide sind standardmäßig aus. Öffentliche Anbieter verwenden HTTPS. Private/HTTP-Endpunkte erfordern eine exakte betreiberseitige Freigabe (`BIVARO_AI_PRIVATE_BASE_URLS`), keine Umgehung der TLS-Prüfung. Betreiber müssen diese Variable bei Bedarf selbst ausdrücklich in die Containerumgebung durchreichen. [Anbietervertrag](docs/ai/provider-contract.md)
+- SMTP-/KI-Schlüssel werden verschlüsselt mit einem aus `NEXTAUTH_SECRET` abgeleiteten Schlüssel gespeichert und sind nicht Teil der portablen Geschäftsbackups. Bei Secret-Wechsel müssen betroffene gespeicherte Zugangsdaten neu verbunden werden. Keine Geheimnisse, `.env`, Datenbanken oder unbereinigten Screenshots committen.
 
-### 📧 E-Mail-Versand im Docker-Betrieb
+### Backup und Restore
 
-Der E-Mail-Versand ist vollständig optional. Ohne SMTP-Konfiguration bleibt die Vorschau verfügbar, der Versand-Button wird aber in der UI deaktiviert.
+Unter **Einstellungen → Backup** vor dem Import stets die Vorschau prüfen. JSON enthält Geschäftsdaten, aber keine eingebetteten Originaldateien; bei Eingangsbelegen ist für eine vollständige Wiederherstellung das **vollständige ZIP-Backup** erforderlich. Auch ein Geschäfts-ZIP ersetzt keine vollständige Betriebssicherung: Servergeheimnisse, SMTP-/KI-Konfiguration und das E-Mail-Versuchsjournal sind nicht portabel enthalten.
 
-Richten Sie den Mailserver als Administrator unter *Einstellungen → SMTP-Versand* ein. Alternativ können Sie die SMTP-Variablen in Ihre `.env`-Datei eintragen – Docker Compose liest sie beim Start automatisch aus:
+Zusammenführen und Überschreiben sind unterschiedliche, versionsgebundene Wege. Vorhandene unveränderliche Zahlungs-/Korrektur-/Freigabehistorien können Überschreiben verbieten; widersprüchliche Beziehungen brechen die Wiederherstellung ab. Nicht durch Löschen der Historie oder Umdeklarieren alter Backups umgehen. Ein Restore startet keine KI-Analyse, Zahlung oder E-Mail erneut. [Zahlungs-/Restore-Vertrag](lib/payment-journal/README.md) · [Outbox-Grenzen](docs/roadmap/durable-email-outbox-contract.md)
 
-```env
-# .env (neben docker-compose.yml)
-SMTP_HOST=smtp.example.de
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=rechnung@example.de
-SMTP_PASSWORD=IhrPasswort
-EMAIL_FROM=Bivaro <rechnung@example.de>
-```
+## Sicherheit
 
-| Variable | Pflicht | Beschreibung |
-|---|---|---|
-| `SMTP_HOST` | ✅ | Hostname des SMTP-Servers |
-| `SMTP_PORT` | – | Port, Standard `587` (STARTTLS) oder `465` (TLS) |
-| `SMTP_SECURE` | – | `true` für Port 465, `false` für STARTTLS (Standard: `false`) |
-| `SMTP_USER` | – | Benutzername (leer lassen bei anonymen Relay) |
-| `SMTP_PASSWORD` | – | Passwort oder App-Passwort |
-| `EMAIL_FROM` | – | Absenderadresse, z. B. `Bivaro <rechnung@firma.de>` |
+Bivaro verwendet bcrypt mit Kostenfaktor 12, serverseitige Sitzungs-/Besitzprüfungen, Benutzerrollen, Login-/Registrierungslimits, Herkunftsprüfung für schreibende Browser-Anfragen, CSP-Nonces und strukturierte Audit-Ereignisse. Neue private Uploads werden über authentifizierte Endpunkte ausgeliefert. Das ist technische Absicherung, kein Prüfsiegel und kein Ersatz für Betreiberprozesse.
 
-**Typische Anbieter:**
+Öffentliche Installationen ausschließlich über korrekt konfiguriertes HTTPS betreiben, `NEXTAUTH_URL` exakt setzen, Zugänge begrenzen und System-/Anwendungsabhängigkeiten aktuell halten. `TRUST_PROXY` nur bei tatsächlich vertrauenswürdig gesetzten und bereinigten Proxy-Headern aktivieren; bei Compose gegebenenfalls ausdrücklich durchreichen. Audit-Log und Dokumenthistorie sind anwendungsseitige Nachweise, kein unabhängiges unveränderliches Fremdarchiv. Ein Admin kann Benutzer verwalten; daraus folgt kein pauschaler Zugriff auf fremde Geschäftsdaten. Für Zugangshilfe die [dokumentierten Identitäts- und Freigabegrenzen](docs/operations/account-access.md) beachten.
 
-| Anbieter | `SMTP_HOST` | `SMTP_PORT` | `SMTP_SECURE` |
-|---|---|---|---|
-| Gmail | `smtp.gmail.com` | `587` | `false` |
-| Outlook / Microsoft 365 | `smtp.office365.com` | `587` | `false` |
-| Strato | `smtp.strato.de` | `465` | `true` |
-| IONOS (1&1) | `smtp.ionos.de` | `587` | `false` |
-| Mailgun (EU) | `smtp.eu.mailgun.org` | `587` | `false` |
+## Entwicklung und Verifikation
 
-> 💡 **Tipp für Gmail:** Aktivieren Sie unter *Google-Konto → Sicherheit* ein **App-Passwort** statt Ihr normales Passwort zu verwenden. 2FA muss dabei aktiv sein.
+Next.js 16 · React 19 · TypeScript · Tailwind CSS 4/shadcn · TanStack Query 5 · Prisma 6/SQLite · NextAuth 4. Eigene Rechnungen: PDFKit, fontkit und pdf-lib mit veraPDF-Endprüfung; die weiteren PDF-/Prüfpfade sind davon getrennt.
 
-> 🔒 **Sicherheit:** SMTP-Passwörter gehören **nicht** in die `docker-compose.yml`. Nutzen Sie die verschlüsselte Speicherung über die Einstellungen oder für Serverkonfigurationen die `.env`-Datei (steht in `.gitignore`) beziehungsweise Docker Secrets.
+| Befehl | Zweck |
+| --- | --- |
+| `npm run dev` | Entwicklungsserver |
+| `npm run lint` | ESLint, null Warnungen |
+| `npx tsc --noEmit --incremental false` | Typprüfung |
+| `npm run build` | Produktionsbuild und gebündelte Drittanbieterhinweise |
+| `npm run start` | Gebauten Standalone-Server starten |
+| `npm run db:generate` / `npm run db:migrate` | Prisma-Client / versionierte Migrationen; kein Ersatz für den Upgrade-Ablauf bestehender Installationen |
+| `npm run audit:security` | Audit der Produktionsabhängigkeiten; kein dauerhaftes Sicherheitsversprechen |
 
----
+Vor `npm run start` außerhalb Docker müssen `public` und `.next/static` nach `.next/standalone/public` bzw. `.next/standalone/.next/static` kopiert sein. `.env`/Prozessumgebung und absolute Datenbankziele müssen auch für den gestarteten Standalone-Prozess stimmen; `npm run start` führt keine Migrationen aus.
 
-## 🔐 Sicherheit & Audit-Log
+`npm run test` führt die Vitest-Suiten aus, `npm run test:e2e` die Playwright-End-to-End-Suiten mit isolierten temporären Datenbanken. Aufbau und zusätzliche Sicherheitsprüfungen sind in [`AGENTS.md`](AGENTS.md) und [Browser-Abnahme](docs/testing/browser-acceptance-ci.md) beschrieben. CI- und Browserergebnisse gelten nur für den jeweils getesteten Commit und die angegebenen Konfigurationen; eine vorhandene Testdatei ist kein Ausführungsnachweis. Die unten verlinkten Berichte sind historische, jeweils versionsgebundene Nachweise, keine Aussage, dass jede spätere Änderung erneut geprüft wurde. Screenshots belegen die gezeigte Oberfläche, nicht eine reale Bank-, KI- oder SMTP-Anbindung.
 
-### Passwort-Sicherheit
+### API
 
-Alle Passwörter werden mit **bcrypt** gehasht (Kostenfaktor 12). Die Logik ist zentralisiert in `lib/password.ts`, damit kein Endpunkt versehentlich einen anderen Kostenfaktor verwendet.
+`GET /api/openapi` liefert die Spezifikation, `GET /api/v1/docs` JSON-Dokumentation und `GET /api/health` den Gesundheitsstatus. Die externe API unter `/api/v1` verwendet benutzerspezifische Schlüssel aus den Einstellungen, etwa als `Authorization: Bearer <API_KEY>`; API-Funktionen und Geltungsbereiche sind in [`lib/api-documentation.ts`](lib/api-documentation.ts) beschrieben. Die internen Sitzungsendpunkte sind kein pauschal stabiler öffentlicher Integrationsvertrag.
 
-### Rollenbasierter Zugriff (RBAC)
+### Weiterführend
 
-| Rolle | Berechtigung |
-|---|---|
-| `ADMIN` | Vollzugriff auf alle Daten und Einstellungen; Benutzerverwaltung |
-| `USER` | Zugriff auf eigene Daten; keine Benutzerverwaltung |
+- **Funktionsverträge:** [Bankvorschau (erste Stufe)](docs/features/bank-csv-preview.md), [aktuelle Bank-Evidenz](docs/features/bank-import-evidence.md), [KI-Anbieter](docs/ai/provider-contract.md), [KI-Belege](docs/ai/receipt-extraction.md), [Projekte/Zeiten](docs/roadmap/project-service-times-contract.md), [Zahlungsjournal](lib/payment-journal/README.md).
+- **Versionierte Prüfberichte:** [Zahlungsziele](docs/testing/payment-terms.md), [Kundenverlauf](docs/testing/customer-timeline.md), [Datensatzsuche](docs/testing/record-search.md), [Belegnavigation](docs/testing/incoming-review-cross-navigation-2026-10-22.md), [eigene PDF/A-Rechnungen](docs/testing/own-invoice-pdfa-reconstruction.md), [älterer Testaudit](docs/testing/legacy-code-audit-2026-10-17.md).
+- **Planung, nicht Lieferzusage:** [Backlog](docs/backlog/TICKETSTATUS.md), [Pilot-Readiness](docs/roadmap/pilot-readiness.md), [fachliche GoBD-/Rechtsprüfgrenzen](docs/backlog/PRUEFPLAN-GOBD-RECHT.md).
+- **README-Nachvollziehbarkeit:** [Funktions-/Quellenzuordnung](docs/readme-source-map.md), [Bildprovenienz](docs/screenshots/provenance.json).
 
-API-Routen prüfen die Rolle mit `getServerSession` aus NextAuth. Die `proxy.ts` schützt alle nicht-öffentlichen Seiten.
+## Lizenz
 
-### Audit-Log
-
-Jede sicherheitsrelevante Aktion wird als `AuditLog`-Eintrag in der Datenbank gespeichert:
-
-| Ereignis | Wann |
-|---|---|
-| `AUTH_REGISTRATION` | Neuer Benutzer registriert |
-| `BACKUP_EXPORT` | JSON- oder ZIP-Backup erstellt |
-| `BACKUP_RESTORE` | Daten aus Backup wiederhergestellt |
-
-Den Audit-Log können Admins unter *Einstellungen → Audit-Log* einsehen.
-
----
-
-## 💾 Backup & Restore
-
-Daten können unter *Einstellungen → Backup* gesichert und wiederhergestellt werden.
-
-### Backup erstellen
-
-- **JSON-Backup**: Exportiert alle Daten als strukturierte JSON-Datei.
-- **ZIP-Backup**: Exportiert Daten + alle hochgeladenen Dateien (Belege, Logos) in einem ZIP-Archiv.
-- Kundenhinweise und Leistungsnotizen werden in JSON- und ZIP-Backups mit ihren Kunden-/Rechnungszuordnungen übernommen.
-
-### Backup wiederherstellen
-
-1. Klicken Sie auf *JSON-Backup wiederherstellen* oder *ZIP-Backup wiederherstellen*.
-2. Wählen Sie Ihre Backup-Datei aus.
-3. **Vorschau**: Bivaro zeigt Ihnen zuerst eine Übersicht des Backups (Anzahl der Datensätze pro Kategorie, Erstellungsdatum, Warnungen bei unbekanntem Format).
-4. Erst nach Ihrer Bestätigung werden die Daten tatsächlich importiert.
-
-> ⚠️ **Achtung:** Der Restore überschreibt alle vorhandenen Daten. Erstellen Sie vorher ein aktuelles Backup.
-
----
-
-## ❓ Häufige Fragen
-
-**Q: Ich sehe "Registrierung deaktiviert" auf `/register`.**
-A: Das ist korrekt, sobald bereits ein Benutzer existiert. Ein Admin kann die Registrierung unter *Einstellungen → Benutzerverwaltung → Benutzerregistrierung erlauben* freischalten.
-
-**Q: Ich habe das Passwort vergessen.**
-A: Aktuell gibt es keinen Passwort-Reset per E-Mail. Ein Admin kann das Passwort unter *Einstellungen → Benutzer* zurücksetzen. Alternativ können Sie in der Datenbank mit `npx prisma studio` direkt eingreifen.
-
-**Q: Wo liegt meine Datenbank?**
-A: In `prisma/dev.db` (Entwicklung) bzw. im Docker-Volume `buchhaltung-data` (Produktion). Öffnen Sie sie mit `npm run db:studio` im Browser.
-
-**Q: Wie füge ich einen neuen API-Endpunkt hinzu?**
-A: Erstellen Sie `app/api/mein-endpunkt/route.ts` und exportieren Sie `GET`, `POST`, etc. als benannte async-Funktionen. Schützen Sie den Endpunkt mit `getServerSession`.
-
-**Q: Die E2E-Tests schlagen fehl.**
-A: Stellen Sie sicher, dass kein Dev-Server auf Port 3100 läuft (`npm run dev` läuft auf 3000, Tests nutzen 3100). Führen Sie `npx playwright install chromium` aus, falls der Browser fehlt.
-
-**Q: Wie aktualisiere ich das Datenbankschema?**
-A: Bearbeiten Sie `prisma/schema.prisma` und führen Sie dann `npx prisma migrate dev --name meine-aenderung` aus. Prisma erstellt automatisch eine SQL-Migrationsdatei und aktualisiert den TypeScript-Client.
-
----
-
-## 📝 Lizenz
-
-Dieses Projekt steht unter der **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. Den vollständigen Lizenztext finden Sie in [`LICENSE`](LICENSE).
+Bivaro steht derzeit unter **GNU Affero General Public License v3.0 only (`AGPL-3.0-only`)**. Maßgeblich ist [`LICENSE`](LICENSE). Drittanbieterkomponenten und Schriftarten behalten ihre jeweiligen Lizenzen; die [PDF-Laufzeithinweise](docs/operations/pdf-third-party-notices.md) beschreiben den geprüften Umfang und offene Inventargrenzen. Daraus folgt keine vollständige Lizenzfreigabe des gesamten Containers.
