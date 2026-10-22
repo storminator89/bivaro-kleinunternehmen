@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { ReviewLink as Link } from '@/components/purchases/review-link';
 import { Loader2, ScanText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { AiProviderSettingsDto } from '@/lib/ai-provider/types';

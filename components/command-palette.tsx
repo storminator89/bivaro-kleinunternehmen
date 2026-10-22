@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { flushSync } from "react-dom";
 import { Command, defaultFilter } from "cmdk";
 import * as Dialog from "@radix-ui/react-dialog";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -15,6 +16,8 @@ import { BivaroIcon, type BivaroIconName } from "@/components/brand/bivaro-icon"
 import { cn } from "@/lib/utils";
 import { RECORD_SEARCH_GROUPS, RECORD_SEARCH_MAX_LENGTH, RECORD_SEARCH_MIN_LENGTH } from '@/lib/record-search/contract';
 import { startRecordSearch, type RecordSearchState } from '@/lib/record-search/client';
+import { useReviewNavigation } from '@/components/purchases/use-review-navigation';
+import { reviewSessionKey } from '@/components/purchases/incoming-review-history';
 
 type CommandItem = {
   id: string;
@@ -28,30 +31,31 @@ type CommandItem = {
 };
 
 type CommandHelpers = {
-  router: ReturnType<typeof useRouter>;
+  navigate: (href: string) => void;
+  logout: () => void;
   setTheme: (theme: string) => void;
   close: () => void;
 };
 
 const COMMANDS: CommandItem[] = [
   // Navigation
-  { id: "nav-dashboard", label: "Dashboard öffnen", group: "Navigation", icon: "nav-dashboard", keywords: ["start", "übersicht", "home"], action: ({ router, close }) => { router.push("/dashboard"); close(); } },
-  { id: "nav-incomes", label: "Einnahmen", group: "Navigation", icon: "nav-incomes", keywords: ["umsatz", "rechnung"], action: ({ router, close }) => { router.push("/dashboard?tab=incomes"); close(); } },
-  { id: "nav-purchases", label: "Belegeingang", group: "Navigation", icon: "nav-expenses", keywords: ["eingangsrechnung", "lieferant", "original", "upload"], action: ({ router, close }) => { router.push("/purchases"); close(); } },
-  { id: "nav-expenses", label: "Ausgaben", group: "Navigation", icon: "nav-expenses", keywords: ["beleg", "kosten"], action: ({ router, close }) => { router.push("/dashboard?tab=expenses"); close(); } },
-  { id: "nav-invoices", label: "Rechnungen", group: "Navigation", icon: "nav-invoices", action: ({ router, close }) => { router.push("/dashboard?tab=invoices"); close(); } },
-  { id: "nav-cashbook", label: "Kassenbuch", group: "Navigation", icon: "nav-cashbook", action: ({ router, close }) => { router.push("/cashbook"); close(); } },
-  { id: "nav-reminders", label: "Mahnwesen", group: "Navigation", icon: "nav-reminders", action: ({ router, close }) => { router.push("/dashboard/reminders"); close(); } },
-  { id: "nav-tax", label: "Steuer-Simulation", group: "Navigation", icon: "nav-tax", keywords: ["einkommensteuer"], action: ({ router, close }) => { router.push("/steuer-simulation"); close(); } },
-  { id: "nav-customers", label: "Kunden", group: "Navigation", icon: "nav-customers", action: ({ router, close }) => { router.push("/customers"); close(); } },
-  { id: "nav-settings", label: "Einstellungen", group: "Navigation", icon: "nav-settings", action: ({ router, close }) => { router.push("/settings"); close(); } },
-  { id: "nav-users", label: "Benutzerverwaltung", group: "Navigation", icon: "nav-users", adminOnly: true, action: ({ router, close }) => { router.push("/users"); close(); } },
+  { id: "nav-dashboard", label: "Dashboard öffnen", group: "Navigation", icon: "nav-dashboard", keywords: ["start", "übersicht", "home"], action: ({ navigate }) => { navigate("/dashboard"); } },
+  { id: "nav-incomes", label: "Einnahmen", group: "Navigation", icon: "nav-incomes", keywords: ["umsatz", "rechnung"], action: ({ navigate }) => { navigate("/dashboard?tab=incomes"); } },
+  { id: "nav-purchases", label: "Belegeingang", group: "Navigation", icon: "nav-expenses", keywords: ["eingangsrechnung", "lieferant", "original", "upload"], action: ({ navigate }) => { navigate("/purchases"); } },
+  { id: "nav-expenses", label: "Ausgaben", group: "Navigation", icon: "nav-expenses", keywords: ["beleg", "kosten"], action: ({ navigate }) => { navigate("/dashboard?tab=expenses"); } },
+  { id: "nav-invoices", label: "Rechnungen", group: "Navigation", icon: "nav-invoices", action: ({ navigate }) => { navigate("/dashboard?tab=invoices"); } },
+  { id: "nav-cashbook", label: "Kassenbuch", group: "Navigation", icon: "nav-cashbook", action: ({ navigate }) => { navigate("/cashbook"); } },
+  { id: "nav-reminders", label: "Mahnwesen", group: "Navigation", icon: "nav-reminders", action: ({ navigate }) => { navigate("/dashboard/reminders"); } },
+  { id: "nav-tax", label: "Steuer-Simulation", group: "Navigation", icon: "nav-tax", keywords: ["einkommensteuer"], action: ({ navigate }) => { navigate("/steuer-simulation"); } },
+  { id: "nav-customers", label: "Kunden", group: "Navigation", icon: "nav-customers", action: ({ navigate }) => { navigate("/customers"); } },
+  { id: "nav-settings", label: "Einstellungen", group: "Navigation", icon: "nav-settings", action: ({ navigate }) => { navigate("/settings"); } },
+  { id: "nav-users", label: "Benutzerverwaltung", group: "Navigation", icon: "nav-users", adminOnly: true, action: ({ navigate }) => { navigate("/users"); } },
 
   // Aktionen
-  { id: "action-new-invoice", label: "Neue Rechnung erstellen", hint: "Öffnet den Editor", group: "Aktionen", icon: "nav-invoices", keywords: ["create", "rechnung"], action: ({ router, close }) => { router.push("/dashboard/invoices/new"); close(); } },
-  { id: "action-new-quote", label: "Neues Angebot erstellen", hint: "Öffnet den Editor", group: "Aktionen", icon: "nav-quotes", keywords: ["create", "angebot"], action: ({ router, close }) => { router.push("/dashboard/quotes/new"); close(); } },
-  { id: "action-new-expense", label: "Neue Ausgabe erfassen", hint: "Fokussiert das Formular", group: "Aktionen", icon: "nav-expenses", keywords: ["beleg"], action: ({ router, close }) => { router.push("/dashboard?tab=expenses&new=1"); close(); } },
-  { id: "action-new-income", label: "Neue Einnahme erfassen", hint: "Fokussiert das Formular", group: "Aktionen", icon: "nav-incomes", action: ({ router, close }) => { router.push("/dashboard?tab=incomes&new=1"); close(); } },
+  { id: "action-new-invoice", label: "Neue Rechnung erstellen", hint: "Öffnet den Editor", group: "Aktionen", icon: "nav-invoices", keywords: ["create", "rechnung"], action: ({ navigate }) => { navigate("/dashboard/invoices/new"); } },
+  { id: "action-new-quote", label: "Neues Angebot erstellen", hint: "Öffnet den Editor", group: "Aktionen", icon: "nav-quotes", keywords: ["create", "angebot"], action: ({ navigate }) => { navigate("/dashboard/quotes/new"); } },
+  { id: "action-new-expense", label: "Neue Ausgabe erfassen", hint: "Fokussiert das Formular", group: "Aktionen", icon: "nav-expenses", keywords: ["beleg"], action: ({ navigate }) => { navigate("/dashboard?tab=expenses&new=1"); } },
+  { id: "action-new-income", label: "Neue Einnahme erfassen", hint: "Fokussiert das Formular", group: "Aktionen", icon: "nav-incomes", action: ({ navigate }) => { navigate("/dashboard?tab=incomes&new=1"); } },
 
   // Theme
   { id: "theme-light", label: "Helles Design", group: "Erscheinungsbild", icon: Sun, keywords: ["theme", "hell"], action: ({ setTheme, close }) => { setTheme("light"); close(); } },
@@ -59,7 +63,7 @@ const COMMANDS: CommandItem[] = [
   { id: "theme-system", label: "System-Design", group: "Erscheinungsbild", icon: Sun, keywords: ["theme", "system", "auto"], action: ({ setTheme, close }) => { setTheme("system"); close(); } },
 
   // Account
-  { id: "logout", label: "Abmelden", group: "Konto", icon: "nav-logout", action: ({ close }) => { close(); signOut({ callbackUrl: "/" }); } },
+  { id: "logout", label: "Abmelden", group: "Konto", icon: "nav-logout", action: ({ logout }) => { logout(); } },
 ];
 
 export function CommandPalette() {
@@ -72,7 +76,7 @@ function ScopedCommandPalette() {
   const params = useSearchParams();
   if (status !== 'authenticated') return null;
   // Dispose all terms, pending work and results on navigation/account/session changes.
-  return <AuthenticatedCommandPalette key={`${session.user.id}:${session.user.role}:${session.user.sessionVersion}:${pathname}?${params}`} />;
+  return <AuthenticatedCommandPalette key={`${reviewSessionKey(session, status)}:${pathname}?${params}`} />;
 }
 
 function AuthenticatedCommandPalette() {
@@ -95,6 +99,7 @@ function AuthenticatedCommandPalette() {
     return () => { clearTimeout(timer); request?.cancel(); };
   }, [open, searchable, term, retry]);
   const router = useRouter();
+  const requestNavigation = useReviewNavigation();
   const { setTheme } = useTheme();
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
@@ -119,7 +124,14 @@ function AuthenticatedCommandPalette() {
     return acc;
   }, {});
 
-  const helpers: CommandHelpers = { router, setTheme, close: () => changeOpen(false) };
+  // Dispose the overlaid palette (including input/results) before the receipt's
+  // save/discard/stay preflight gets focus. No raw push or signOut bypasses it.
+  const closeBeforeNavigation = (action: () => void) => {
+    flushSync(() => changeOpen(false));
+    requestNavigation(action);
+  };
+  const navigate = (href: string) => closeBeforeNavigation(() => router.push(href));
+  const helpers: CommandHelpers = { navigate, logout: () => closeBeforeNavigation(() => { void signOut({ callbackUrl: "/" }); }), setTheme, close: () => changeOpen(false) };
 
   return (
     <Dialog.Root open={open} onOpenChange={changeOpen}>
@@ -148,10 +160,10 @@ function AuthenticatedCommandPalette() {
           {current?.status === 'error' && <Command.Item value="record-search-retry" onSelect={() => { setSearchState(null); setRetry(value => value + 1); }} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm data-[selected=true]:bg-accent">Suche erneut versuchen</Command.Item>}
           {current?.status === 'ready' && current.result?.groups.filter(group => group.items.length > 0).map(group => (
             <Command.Group key={group.type} heading={`Datensätze · ${RECORD_SEARCH_GROUPS[group.type].title}`} className="px-1 py-1 text-xs font-semibold text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider">
-              {group.items.map(item => <Command.Item key={`${item.type}:${item.id}`} value={`record:${item.type}:${item.id}`} onSelect={() => { router.push(item.href); changeOpen(false); }} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground">
+              {group.items.map(item => <Command.Item key={`${item.type}:${item.id}`} value={`record:${item.type}:${item.id}`} onSelect={() => navigate(item.href)} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground">
                 <BivaroIcon name={RECORD_SEARCH_GROUPS[group.type].icon} size={26} /><span className="min-w-0 flex-1 truncate" title={item.label}>{item.label}</span><span aria-hidden="true" className="text-muted-foreground">↗</span>
               </Command.Item>)}
-              <Command.Item value={`record-list:${group.type}`} onSelect={() => { router.push(RECORD_SEARCH_GROUPS[group.type].href); changeOpen(false); }} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-xs text-muted-foreground data-[selected=true]:bg-accent">
+              <Command.Item value={`record-list:${group.type}`} onSelect={() => navigate(RECORD_SEARCH_GROUPS[group.type].href)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-xs text-muted-foreground data-[selected=true]:bg-accent">
                 {group.hasMore ? 'Weitere Treffer vorhanden · ' : ''}Alle {RECORD_SEARCH_GROUPS[group.type].title} öffnen (ungefiltert)
               </Command.Item>
             </Command.Group>

@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { ReviewLink as Link } from "@/components/purchases/review-link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { BivaroIcon, type BivaroIconName } from "@/components/brand/bivaro-icon";
 import { useState, useEffect } from "react";
+import { useReviewNavigation } from "@/components/purchases/use-review-navigation";
 
 type NavItem = {
   href: string;
@@ -20,6 +21,7 @@ type NavSection = {
 
 export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?: boolean; onNavigate?: () => void }) {
   const { data: session, status } = useSession();
+  const requestNavigation = useReviewNavigation();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -183,7 +185,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
         <div className="mt-auto space-y-1 border-t border-border/80 pt-3">
           {status === "authenticated" && (
             <button
-              onClick={() => signOut({ callbackUrl: '/' })}
+              onClick={() => requestNavigation(() => { void signOut({ callbackUrl: '/' }); })}
               className="flex min-h-11 w-full cursor-pointer items-center justify-center rounded-md p-3 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
               title="Abmelden"
             >
@@ -275,7 +277,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
       <div className="mt-auto space-y-1 border-t border-border/80 pt-3">
         {status === "authenticated" && (
           <button
-            onClick={() => signOut({ callbackUrl: '/' })}
+            onClick={() => requestNavigation(() => { void signOut({ callbackUrl: '/' }); })}
             className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
           >
             <BivaroIcon name="nav-logout" className="nav-artwork" size={28} />

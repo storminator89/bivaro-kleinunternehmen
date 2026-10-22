@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import Link from "next/link";
+import { ReviewLink as Link } from "@/components/purchases/review-link";
 import { BivaroBrand } from "@/components/brand/bivaro-brand";
 import { NavLinks } from "@/components/navigation/nav-links";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
