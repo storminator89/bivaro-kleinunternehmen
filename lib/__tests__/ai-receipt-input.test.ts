@@ -84,6 +84,17 @@ describe('bounded original input preparation', () => {
     expect(JSON.stringify(error.cause)).not.toMatch(/PRIVATE|private|provider-key|arbitrary/);
     await expect(access(state.directory)).rejects.toThrow();
   });
+  it.each([
+    ['OpenSSL configuration error: Permission denied: /private/openssl.cnf', 'openssl-config'],
+    ['Error [ERR_ACCESS_DENIED]: /private/file', 'node-permission'],
+    ['Warning: Detected unsettled top-level await at /private/file', 'unsettled-await'],
+  ])('classifies startup errors without exposing their source: %s', async (stderr, reason) => {
+    Object.assign(state, { exitCode: 13, stderr });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ code: 'AI_RENDER_FAILED', cause: { stage: 'launcher', reason, exitCode: 13, signal: null } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/private|file|cnf/);
+  });
   it('identifies libuv pipe initialization only by a fixed diagnostic class', async () => {
     Object.assign(state, { exitCode: 13, stderr: 'Error: EPERM: operation not permitted, uv_pipe_open; private stack /private/document.pdf' });
     const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);

@@ -106,7 +106,10 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
       diagnosticText += chunk.toString('ascii');
       for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_STAGE (read-input|canvas-import|pdfjs-import|document-load|metadata|operators|render|pixels|encode|write-page|page-cleanup|document-cleanup|manifest)\n/g)) stage = match[1];
       for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_REASON (pdf-diagnostic|permission|module-load|memory|page-limit|type|range|runtime)\n/g)) reason = match[1];
-      if (/uv_pipe_open/.test(diagnosticText)) reason = 'stdio-setup';
+      if (/OpenSSL configuration error/.test(diagnosticText)) reason = 'openssl-config';
+      else if (/uv_pipe_open/.test(diagnosticText)) reason = 'stdio-setup';
+      else if (/ERR_ACCESS_DENIED/.test(diagnosticText)) reason = 'node-permission';
+      else if (/Detected unsettled top-level await/.test(diagnosticText)) reason = 'unsettled-await';
       if (reason === 'unknown') {
         if (/ERR_ACCESS_DENIED|Permission denied|Operation not permitted/.test(diagnosticText)) reason = 'permission';
         else if (/Cannot allocate memory|Allocation failed|heap out of memory|Failed to reserve|Reservation failed/.test(diagnosticText)) reason = 'memory';
