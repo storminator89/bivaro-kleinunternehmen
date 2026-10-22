@@ -29,6 +29,14 @@ const IFRAME_ALLOWED_HEADERS = BASE_SECURITY_HEADERS.map((h) =>
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  serverExternalPackages: ['pdfkit', 'fontkit'],
+  outputFileTracingIncludes: {
+    '/api/invoices/render': [
+      './node_modules/pdfkit/js/data/**/*',
+      './node_modules/pdfkit/js/standard-fonts/**/*',
+      './public/fonts/invoice/**/*',
+    ],
+  },
   poweredByHeader: false,
   async headers() {
     // Next.js evaluates rules in declaration order and later rules override

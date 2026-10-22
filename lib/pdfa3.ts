@@ -89,6 +89,11 @@ function buildFacturXXmpMetadata({ invoiceNumber, createdAt, modifiedAt }: Requi
       <xmp:MetadataDate>${modifiedAtIso}</xmp:MetadataDate>
       <pdf:Producer>pdf-lib</pdf:Producer>
       <dc:format>application/pdf</dc:format>
+      <dc:description>
+        <rdf:Alt>
+          <rdf:li xml:lang="x-default">Factur-X/ZUGFeRD invoice</rdf:li>
+        </rdf:Alt>
+      </dc:description>
       <dc:title>
         <rdf:Alt>
           <rdf:li xml:lang="x-default">${title}</rdf:li>
