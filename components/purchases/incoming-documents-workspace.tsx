@@ -47,7 +47,7 @@ function IncomingDocumentsWorkspaceContent() {
   const navigationGuard = useRef<IncomingNavigationGuard | null>(null);
   const navigationIntents = useRef(createReviewNavigationIntents(() => window.location.href));
   const historyGuard = useRef<ReturnType<typeof createReviewTraversalGuard> | null>(null);
-  const registerNavigationGuard = useCallback((guard: IncomingNavigationGuard | null) => { navigationGuard.current = guard; }, []);
+  const registerNavigationGuard = useCallback((guard: IncomingNavigationGuard | null) => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'register', hasGuard: !!guard, blocked: guard?.blocked ?? null })); navigationGuard.current = guard; }, []);
   const [queue, setQueue] = useState<readonly number[]>([]);
   const [queueBusy, setQueueBusy] = useState(false);
   const [queueMessage, setQueueMessage] = useState<string | null>(null);
@@ -104,7 +104,7 @@ function IncomingDocumentsWorkspaceContent() {
       getGuard: () => navigationGuard.current,
       onReplay: () => {},
     });
-    const onPop = (event: PopStateEvent) => {
+    const onPop = (event: PopStateEvent) => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'workspace-pop', blocked: navigationGuard.current?.blocked ?? null }));
       intents.invalidate();
       navigationGuard.current?.cancelPending?.();
       queueRequest.current?.abort(); queueMoving.current = false; setQueueBusy(false);
@@ -114,9 +114,9 @@ function IncomingDocumentsWorkspaceContent() {
     // the actual source at Navigation API's precommit boundary; restorations
     // and deliberate replay keep their controller-owned indexes unchanged.
     const stopCapturingSource = captureReviewNavigationSource(navigation, handlePop);
-    historyGuard.current = handlePop;
+    console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'mount-history' })); historyGuard.current = handlePop;
     window.addEventListener('popstate', onPop, true);
-    return () => { window.removeEventListener('popstate', onPop, true); stopCapturingSource(); intents.invalidate(); historyGuard.current = null; };
+    return () => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'cleanup-history' })); window.removeEventListener('popstate', onPop, true); stopCapturingSource(); intents.invalidate(); historyGuard.current = null; };
   }, []);
   useLayoutEffect(() => { historyGuard.current?.syncIndex(); }, [activeId, queryString]);
   useEffect(() => () => queueRequest.current?.abort(), []);

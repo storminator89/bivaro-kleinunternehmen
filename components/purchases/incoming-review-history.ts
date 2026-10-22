@@ -13,7 +13,7 @@ export function createReviewTraversalGuard(options: {
   let restoring: { original: number; destination: number; intent: number } | null = null;
   let replay = false;
   const onPop = (event: { stopImmediatePropagation: () => void }) => {
-    const nextIndex = options.getIndex();
+    const nextIndex = options.getIndex(); console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'pop-controller', currentIndex, nextIndex, blocked: options.getGuard()?.blocked ?? null, restoring: !!restoring, replay }));
     if (replay) { replay = false; currentIndex = nextIndex; options.onReplay(); return; }
     if (restoring) {
       event.stopImmediatePropagation();
@@ -43,7 +43,7 @@ export function createReviewTraversalGuard(options: {
     options.go(currentIndex - nextIndex);
   };
   return Object.assign(onPop, {
-    syncIndex: () => { if (!restoring && !replay) currentIndex = options.getIndex(); },
+    syncIndex: () => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'sync-source', currentIndex, nextIndex: options.getIndex(), restoring: !!restoring, replay })); if (!restoring && !replay) currentIndex = options.getIndex(); },
   });
 }
 

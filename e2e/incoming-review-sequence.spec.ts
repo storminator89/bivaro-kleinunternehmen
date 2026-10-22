@@ -110,6 +110,7 @@ test('dirty keyboard Back/Forward preserves entries, allows stay/discard and kee
     const trace = (kind: string) => (state.receiptTraversalTrace ??= []).push({ kind, path: location.pathname + location.search, index: state.navigation?.currentEntry?.index });
     trace('dashboard'); window.addEventListener('popstate', () => trace('pop'), true);
   });
+  page.on('console', message => { if (message.text().startsWith('BIVARO_RECEIPT_LIFECYCLE')) console.warn(message.text()); });
   // This link stays in the same app document, exercising the actual app-router popstate boundary.
   await page.locator('a[href="/purchases"]').first().click(); await expect(page).toHaveURL(/\/purchases$/);
   await page.getByRole('list', { name: 'Eingangsbelege', exact: true }).getByRole('button').first().click();
