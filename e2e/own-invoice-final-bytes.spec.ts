@@ -144,7 +144,11 @@ nativeSuite('real standalone own-invoice final bytes', () => {
         await fields.locator('#customer').fill('Synthetic browser buyer\nBuyer Road 2\n10115 Berlin');
         await fields.locator('#invoice-number').fill(invoiceNumber);
         await fields.locator('#date').fill('2026-10-22');
+        // A fill equal to the existing fallback date emits no React change.
+        // Deliberately edit it first, then retain the requested manual date.
+        await fields.locator('#due-date').fill('2026-11-06');
         await fields.locator('#due-date').fill('2026-11-05');
+        await expect(fields.locator('#payment-term-source')).toHaveText('Manuell festgelegt · bleibt bei Änderungen erhalten');
         await fields.locator('#delivery-date').fill('2026-10-21');
         await fields.locator('#invoice-buyer-email').fill('buyer@example.test');
         await fields.locator('#invoice-buyer-reference').fill('SYNTHETIC-BROWSER-117');
@@ -236,9 +240,15 @@ nativeSuite('real standalone own-invoice final bytes', () => {
         expect(after.invoices[0].invoiceNumber).toBe(invoiceNumber);
         expect(after.invoices[0].status).toBe('DRAFT');
         expect(after.invoices[0].issuanceState).toBe('UNKNOWN');
+        // The established upload resolves a new tenant-owned customer and
+        // canonicalizes its ID in the immutable payment-term snapshot.
+        const resolvedCustomerId = after.invoices[0].customerId;
+        expect(resolvedCustomerId).not.toBeNull();
+        expect(await prisma.customer.count({ where: { userId, id: resolvedCustomerId! } })).toBe(1);
+        expect(await prisma.customer.count({ where: { userId } })).toBe(beforeCustomers + 1);
         const paymentTermSelection = (after.invoices[0].parsedData as Record<string, unknown>).paymentTermSelection;
         expect(paymentTermSelection).toEqual({
-          version: 1, source: 'MANUAL', days: null, invoiceDate: '2026-10-22', dueDate: '2026-11-05', customerId: null,
+          version: 1, source: 'MANUAL', days: null, invoiceDate: '2026-10-22', dueDate: '2026-11-05', customerId: resolvedCustomerId,
         });
         expect({ ...after, invoices: [] }).toEqual({ ...beforePreview, invoices: [] });
         expect(alerts).toEqual([]);

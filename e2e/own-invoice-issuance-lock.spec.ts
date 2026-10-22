@@ -117,7 +117,10 @@ async function openReadyEditor(page: Page) {
   await fields.locator('select[aria-label="Gespeicherten Kunden auswählen"]').selectOption('117042');
   await fields.locator('#invoice-number').fill(`LOCK-${randomUUID().slice(0, 8)}`);
   await fields.locator('#date').fill('2026-10-22');
+  // Ensure an actual manual edit even when the target already equals fallback.
+  await fields.locator('#due-date').fill('2026-11-06');
   await fields.locator('#due-date').fill('2026-11-05');
+  await expect(fields.locator('#payment-term-source')).toHaveText('Manuell festgelegt · bleibt bei Änderungen erhalten');
   await fields.locator('#delivery-date').fill('2026-10-21');
   await fields.getByRole('button', { name: 'Aus Artikelkatalog übernehmen', exact: true }).click();
   await expect(fields.locator('button[aria-label="Synthetic catalogue addition als Position übernehmen"]')).toBeVisible();
@@ -140,7 +143,10 @@ async function availability(fields: Locator) {
 }
 
 async function assertLocked(page: Page, fields: Locator) {
-  await expect(fields).toBeDisabled();
+  // Playwright's enabled-state matcher does not classify FIELDSET itself as a
+  // disableable control. Check its native property and every real child control.
+  await expect(fields).toHaveJSProperty('disabled', true);
+  await expect(fields).toHaveAttribute('disabled', '');
   await expect(fields).toHaveAttribute('inert', '');
   await expect(fields).toHaveAttribute('aria-busy', 'true');
   await expect(page.getByRole('status').filter({ hasText: lockedMessage })).toBeVisible();
@@ -193,7 +199,8 @@ test('freezes every invoice source/action during one delayed render and retains/
     routes.delivery.release();
     expect((await responded).status()).toBe(503);
     await expect.poll(() => routes.alerts).toContain(renderRejection);
-    await expect(fields).not.toBeDisabled();
+    await expect(fields).toHaveJSProperty('disabled', false);
+    await expect(fields).not.toHaveAttribute('disabled');
     await expect(fields).not.toHaveAttribute('inert', '');
     await expect(fields).toHaveAttribute('aria-busy', 'false');
     expect(await values(fields)).toEqual(beforeValues);
@@ -317,7 +324,8 @@ test('discards a payment-term refresh started before issuance and permits an exp
     routes.delivery.release();
     expect((await rejectedRender).status()).toBe(503);
     await expect.poll(() => routes.alerts).toEqual([renderRejection]);
-    await expect(fields).not.toBeDisabled();
+    await expect(fields).toHaveJSProperty('disabled', false);
+    await expect(fields).not.toHaveAttribute('disabled');
     expect(await values(fields)).toEqual(beforeValues);
     await expect(fields.locator('#payment-term-source')).toHaveText('Manuell festgelegt · bleibt bei Änderungen erhalten');
 

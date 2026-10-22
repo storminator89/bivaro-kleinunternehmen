@@ -2,9 +2,12 @@
 
 Issue: <https://github.com/storminator89/bivaro-kleinunternehmen/issues/117>
 
-Status, 2026-10-22: native Linux/amd64 generation and final-byte conformance
-verified with Node 22.23.4 and official veraPDF 1.30.3. Release acceptance is
-still pending the integrated native arm64, container and browser gates below.
+Status, 2026-10-22: native Linux/amd64 and arm64 conformance and both production
+container gates passed on `bcba8772`; all their 98 final pages were individually
+reviewed at readable resolution. Node 22.23.4 and official veraPDF 1.30.3 were
+used. Browser acceptance is still pending: its first hosted run failed five
+owned test definitions, as detailed below. Corrected definitions require a new
+hosted run and retained browser PDF-page review.
 
 ## Boundaries
 
@@ -45,7 +48,7 @@ still pending the integrated native arm64, container and browser gates below.
   issuance do not replace the issuing source. Refresh results, errors and busy
   cleanup are scoped to the active editor generation. A terminal
   rejection unlocks the retained editor values. The delayed-response browser
-  regression definitions are not conformance evidence and remain unrun; actual
+  regression definitions are not conformance evidence; actual
   keyboard, pointer, native/custom-control and error-recovery checks are required.
 
 ## Payment-term and service integration
@@ -179,6 +182,48 @@ five approved read-only test-script/dependency/fixture paths and reject extra
 mounts, privileged flags or host namespace sharing. The final aggregate rerun
 passed without reducing runtime isolation.
 
+## First hosted acceptance attempt
+
+All results in this section are anchored to
+[`bcba8772`](https://github.com/storminator89/bivaro-kleinunternehmen/commit/bcba8772c4ab6539b794125ceadbc880cace03bd):
+
+- [Native final-byte conformance](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39771515413)
+  passed **13/13 on each architecture**, including all ten finalized documents
+  and three negative cases. Both artifact ZIP digests and all twenty final-PDF
+  hashes were checked. All **86 hosted native pages** were individually viewed
+  at **1415×2000**, not merely compared as contact sheets; no visible layout
+  defect was found, including full units/amounts and civil years 0001/9999.
+- [Production-container compatibility](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39771515146)
+  passed on **amd64 and arm64**. Both actual authenticated renderers produced
+  final bytes through the mandatory verifier gate, preserved original logos and
+  preview/final page streams, and left financial state unchanged. ZIP digests
+  and final-PDF hashes were verified; all **12 container pages** were individually
+  viewed at **1415×2000**. No new clipping, overlap, missing content or footer
+  collision was found. The inherited payment-card reference display can be
+  ellipsized beside a QR code for long identifiers; the complete identifier is
+  still in the header/XML/QR. This matches the previous layout, not a new claim
+  that every repeated display of the identifier is unabridged.
+- [Hosted CI](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39771515025)
+  passed lint/type, security, production build and **2,577 unit tests**. Its
+  **15 skips** were the separately enabled native matrix's 13 cases, one
+  optional Ghostscript unit case and one performance benchmark. The seven
+  official KoSIT runtime/lifecycle cases skipped in the local aggregate ran here.
+- [Browser acceptance](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39771515039)
+  finished **110 passed, five failed**. Both real PDF flows reached native
+  response/download/storage byte equality, then failed an incorrect manual-term
+  snapshot assumption: filling an unchanged fallback date does not emit a React
+  change, and upload intentionally stores the newly resolved customer's ID.
+  The three lock cases failed the matcher for the `fieldset` itself even though
+  its actual DOM had `disabled`, `inert` and `aria-busy="true"`.
+
+The corrected tests deliberately edit and restore the due date, require visible
+manual intent and the exact stored `MANUAL`/null-days selection with its owned
+resolved customer, and assert the native fieldset property/attribute **plus every
+real child control**. These do not change the application or weaken the snapshot
+and interaction contracts. They are **not accepted until the hosted rerun passes**.
+No native browser PDF artifact was retained by the failed attempt because its
+assertions failed before evidence persistence; readable review remains required.
+
 ## Required release gates
 
 The real matrix must explicitly run with
@@ -190,8 +235,9 @@ manifest. The manifest requires all ten positive and all three negative cases.
 
 `.github/workflows/own-invoice-pdfa.yml` defines native Linux x64 and arm64
 jobs, verifies the actual architecture, installs the pinned runtime, enables the
-whole matrix and renders every final page for review. Native arm64 is **unrun**
-at this report's cutoff. Standard runner labels follow the
+whole matrix and renders every final page for review. Both architectures passed
+the first hosted attempt above; the corrected-head jobs must pass again.
+Standard runner labels follow the
 [official GitHub runner documentation](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
 The existing browser workflow now installs the official verifier and explicitly
@@ -201,8 +247,8 @@ logo preservation, multipage notes, QR/XML/content parity and byte-identical
 native response/download/stored file and the manual payment-term snapshot.
 Three delayed-503 regressions cover frozen native/custom actions, retained
 values, unlocking, late response after navigation, and a stale pre-issuance term
-refresh followed by an explicit reapply. These **five browser definitions remain
-unrun**. Local browser
+refresh followed by an explicit reapply. These **five browser definitions failed
+the first hosted attempt and their corrections still need a hosted pass**. Local browser
 execution is unavailable because the sandbox denies Chromium's process-singleton
 socket creation; no browser assertions passed. The actual retained browser PDF
 pages still require readable pixel review after a supported CI run.
@@ -214,7 +260,9 @@ The native amd64/arm64 container workflow mounts an isolated smoke script into
 the freshly built non-root, network-disabled runtime. It exercises ordinary
 fixture registration/login and the actual authenticated read-only renderer,
 including alpha-logo originals, QR, multipage output and final-byte parity.
-Container stages remain **unrun** here; Docker is unavailable locally. No
+Both hosted container stages passed as recorded above; Docker remains unavailable
+locally. The owned E2E paths also trigger native/container jobs so an E2E
+correction cannot silently rely on earlier-head checks. No
 privileged flags or host/security changes are part of this check.
 
 All gates must be evaluated on the final integrated source, including any
