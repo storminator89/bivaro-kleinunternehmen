@@ -138,19 +138,36 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     expect((await (await page.request.get(`/api/invoices/download?id=${outbound.id}&download=true`)).body()).equals(original)).toBe(true);
     expect(await page.evaluate(() => Object.values(localStorage).concat(Object.values(sessionStorage)).some(value => String(value).includes('SYN-SEARCH')))).toBe(false);
 
-    // Replace the cookie identity through an independent page, then revalidate
-    // SessionProvider without a navigation; prior-account in-flight data cannot render.
+    // Keep actual logout separate from authenticated account replacement.
+    // The real palette action must end the owner session, redirect to the
+    // public page and clear search content; a login never masks that assertion.
+    ({ dialog, input } = await openPalette(page)); await input.fill('SYN-SEARCH');
+    await expect(dialog.getByRole('option', { name: 'SYN-SEARCH-OUT', exact: false })).toBeVisible();
+    await input.fill(''); await dialog.getByRole('option', { name: 'Abmelden', exact: true }).click();
+    await expect(page).toHaveURL(new URL('/', testInfo.project.use.baseURL).href);
+    await expect(dialog).toBeHidden();
+    const loggedOut = await (await page.request.get('/api/auth/session')).json();
+    expect(loggedOut.user).toBeUndefined();
+    await expect(page.locator('body')).not.toContainText('SYN-SEARCH');
+    await signIn(page, owner.email, password);
+
+    // Replace an authenticated cookie directly through a real independent UI
+    // login, without an intervening anonymous-session redirect race. Revalidate
+    // the original SessionProvider without navigating that page; old in-flight
+    // results must not render under the newly authenticated identity.
     ({ dialog, input } = await openPalette(page)); await input.fill('SYN-SEARCH'); await expect(dialog.getByRole('option', { name: 'SYN-SEARCH-OUT', exact: false })).toBeVisible();
     let accountRelease!: () => void; const accountGate = new Promise<void>(resolve => { accountRelease = resolve; });
     let accountStarted!: () => void; const accountHeld = new Promise<void>(resolve => { accountStarted = resolve; });
     await page.route('**/api/record-search', async route => { if (route.request().postDataJSON().query === 'ACCOUNT-OLD') { accountStarted(); await accountGate; try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [{ type: 'customer', hasMore: false, items: [{ type: 'customer', id: customers[0].id, label: 'ACCOUNT-PRIVATE-OLD', href: `/customers?customer=${customers[0].id}` }] }] }) }); } catch { /* Aborted prior-account transport. */ } } else await route.continue(); });
     await input.fill('ACCOUNT-OLD'); await accountHeld;
+    const unchangedUrl = page.url();
     const sibling = await page.context().newPage();
-    const csrf = await (await sibling.request.get('/api/auth/csrf')).json();
-    await sibling.request.post('/api/auth/signout', { form: { csrfToken: csrf.csrfToken, json: 'true' } });
     await signIn(sibling, foreign.email, password);
+    const replacement = await (await sibling.request.get('/api/auth/session')).json();
+    expect(replacement.user.id).toBe(foreign.id);
     await page.bringToFront(); await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await expect(dialog).toBeHidden(); accountRelease();
+    await expect(page).toHaveURL(unchangedUrl);
     ({ dialog, input } = await openPalette(page)); await expect(input).toHaveValue(''); await input.fill('SYN-SEARCH'); await expect(dialog.getByRole('option', { name: foreignCustomer.name, exact: false })).toBeVisible(); await expect(dialog).not.toContainText('SYN-SEARCH Kunde 0'); await expect(dialog).not.toContainText('SYN-SEARCH-IN.pdf'); await expect(dialog).not.toContainText('ACCOUNT-PRIVATE-OLD');
     await sibling.close();
   } finally { await prisma.$disconnect(); }
