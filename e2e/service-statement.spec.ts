@@ -127,7 +127,13 @@ test('explicit service statement has a frozen preview, safe retries, pagination,
   await statement.getByRole('checkbox', { name: /SYNTHETISCH · Neues Konzept/ }).check();
   await approval.check();
   await statement.getByRole('button', { name: 'Vorschau erstellen', exact: true }).click();
-  await expect(statement.getByText(/Archivierte Website · archiviert/)).toBeVisible();
+  const snapshotSummary = statement.locator('p:has(time)');
+  await expect(snapshotSummary).toBeVisible();
+  await expect(snapshotSummary).toContainText('Archivierte Website · archiviert');
+  await statement.locator('details > summary').click();
+  const selectedRow = statement.locator('article').filter({ has: page.getByRole('heading', { name: 'SYNTHETISCH · Neues Konzept', exact: true }) });
+  await expect(selectedRow).toBeVisible();
+  await expect(selectedRow).toContainText('Archivierte Website · archiviert');
   expect(await downloadHash(page, statement)).not.toBe(hash);
   await page.keyboard.press('Escape');
   await expect(trigger).toBeFocused();
