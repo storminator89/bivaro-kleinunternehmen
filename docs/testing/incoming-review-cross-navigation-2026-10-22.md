@@ -7,10 +7,13 @@
 
 The cross-feature guard extends these inputs without a database migration, automatic financial posting, new service or global router/history patch.
 
+The regression-correction baseline is PR121 `3eac57bfc5035c2ad42e51dc7ce9e4a2c87f5111`, tree `a5022c359c8a5c22d3b65a5ec04dc7c8a1eb94c1`. Its accepted bank receipt-focus follow-up is retained unchanged.
+
 ## Navigation contract
 
 - The purchases workspace owns a cooperative preflight. Opted-in navigation offers **save / discard / stay** before changing route.
 - Palette static routes, create actions, record results, unfiltered-list actions and logout close and clear the palette before preflight. Theme changes remain non-navigation actions.
+- Palette teardown restores unowned focus to the source before preflight. Its deferred close-autofocus callback never takes focus from a chooser or newer control. While a queue read is in flight, repeated controls are rejected before preparing another intent; distinct navigation still invalidates the older result.
 - Deferred actions are one-shot and bound to the live review owner, active receipt, exact source URL and latest intent. Session identity includes status, user id, role and sessionVersion; routine expiry refresh is not an account switch.
 - Native Back/Forward choices share that intent generation. A newer request during a traversal save prevents the older traversal replay, even when the newer request is refused while saving. Queue reads also reject stale results.
 - `ReviewLink` uses Next's documented [`onNavigate`](https://nextjs.org/docs/app/api-reference/components/link#onnavigate). Modifier/new-tab/download/external-link behavior remains with Next/browser. Without a purchases owner, normal Next navigation is unchanged. A transient menu link does not own the review's lifetime.
@@ -32,9 +35,16 @@ Environment: Node **22.23.4**, Next **16.4.1**, isolated locked dependencies and
 | Fixture correction and focused rerun | Only the missing public `next/navigation` hook dependency was supplied; no link/guard replacement or financial assertion change. **29/29 passed**: 27 financial-presentation assertions and two codec wrappers, including all **15 Python cases**. |
 | Full ordinary rerun, before the follow-up | **2,400 passed, zero failed, eight skipped** across 187 files. Full lint and repeat typecheck passed. The initial 47 assertions are included, not additional. |
 | Accepted service-PDF follow-up incorporated | Renderer, new regression file and codec-wrapper blobs match the PR119 follow-up exactly. Guard changes were retained. |
-| Final combined-source focus | **79/79 passed** in five files: navigation, queue/history, financial presentation, service-PDF bounds and codec wrappers. Full lint and typecheck passed again. |
+| Post-service follow-up focus | **79/79 passed** in five files: navigation, queue/history, financial presentation, service-PDF bounds and codec wrappers. Full lint and typecheck passed again. |
+| Accepted bank receipt-focus follow-up | Its three source/test files match the PR121 baseline exactly. |
+| Hosted browser acceptance, PR121 baseline | **115 passed, three failed**; evidence contained **51/52** required images. This was not acceptance. Details below. |
+| New workspace lifecycle regressions, pre-fix source | **Four passed, two failed**: repeated clicks invalidated the held candidate read, including after a failed-read retry. |
+| New palette lifecycle matrix, pre-fix source | **Four passed, 28 failed** across focus ownership and correct return-trigger assertions. The delayed callback demonstrably moved focus from the chooser heading back to the source. The initial run had incomplete fake-DOM failure formatting; completing that diagnostic support produced the same counts and readable assertion failures. |
+| Corrected lifecycle focus | **38/38 passed** in two files: 32 palette lifecycle/navigation cases and six actual-workspace lifecycle cases. |
+| Final corrected-source type/lint | Full TypeScript and zero-warning lint passed, including both new regression files. |
+| Corrected full ordinary suite and fixture-aligned recheck | Both runs: **2,448 passed, zero failed, eight skipped** across 191 files, including the 38 new lifecycle cases. The second followed alignment of two synthetic result URLs with the existing search-service contract; implementation was unchanged. Full type/lint passed again after that fixture-only correction. |
 
-The full ordinary run and production build **predate** the service-PDF follow-up. Neither was rerun in full on the final combined source; the 79-assertion focus does not replace final canonical CI.
+The earlier production build **predates** the service-PDF, bank-focus and lifecycle follow-ups; it was not repeated locally on the corrected source. Focused checks do not replace final canonical CI.
 
 ### Eight local ordinary-suite skips
 
@@ -51,7 +61,7 @@ No skip was added or changed. These are local conditions, not a claim about anot
 | Same runtime file | `rejects wrong sums and a required missing field through official rules, not heuristics` | Same missing official-assets variable. |
 | Same runtime file | `keeps accepted informational guidance visibly distinct from an unqualified technical pass` | Same missing official-assets variable. |
 
-### Browser failure and pending behavioral coverage
+### Local browser-launch failure
 
 The isolated runner selected `incoming-review-sequence.spec.ts`, `incoming-review-cross-navigation.spec.ts` and `record-search.spec.ts`, with one worker, zero retries and system Chromium **155**. This focused invocation omitted the bootstrap project's dependency; it was not full acceptance.
 
@@ -66,6 +76,15 @@ Crashpad initialization errors also occurred. This is an **OS/sandbox launch fai
 
 Prepared cross-feature cases use actual Ctrl+K interaction and a reachable in-review settings link, not synthetic clicks through the modal. They cover customer stay/discard/Back; static/create/list/logout preflight; failed-save retention followed by successful receipt navigation; and a held real save response followed by a newer intent. Assertions compare original download bytes/SHA-256, expected draft-only record changes, unchanged customers and zero expense/income/cash/invoice/payment-journal writes. **These behavioral assertions have not run locally.**
 
+### Hosted browser failures and source corrections
+
+The PR121 baseline's real hosted run completed **115 passing and three failing tests**, with **51/52** evidence images. Unlike the local launch failure, these were application assertion failures:
+
+- `incoming-review-cross-navigation.spec.ts` callers at lines 73 and 162 reached the dirty-draft chooser, but its heading was not focused. Installed Radix FocusScope defers close autofocus beyond `flushSync`; the palette's unconditional restoration then stole focus. The correction preserves immediate intent checks, records the actual source trigger before preflight and makes later restoration conditional on live ownership and unclaimed focus.
+- `incoming-review-sequence.spec.ts:85` remained on `sequence-3.xml` after releasing the held candidate response instead of opening `sequence-2.xml`. The second synchronous click prepared a new intent before the existing busy check rejected it, invalidating its own in-flight checkpoint. Moving duplicate rejection before intent preparation preserves that request without exempting distinct navigation from cancellation.
+
+The new component harnesses separate render, commit, chooser effects and the real palette close callback; they use actual workspace/palette handlers and navigation-intent code, with deterministic transport/focus fixtures. Both focus-effect interleavings, repeated clicks/retries, newer intents, source changes and disposal are covered without sleeps or a browser workaround. No existing browser, original-byte, customer or financial assertion was changed. The corrected source has **not** yet received a hosted browser result.
+
 ## Remaining acceptance gates
 
-The final canonical commit requires standard CI unit/build/type/lint/security checks and real browser acceptance. Appropriately provisioned validator checks must execute the seven official-assets-dependent assertions above. The local launch failure must remain distinct from application behavior; focused passing checks are not full final acceptance. This report claims neither a browser pass nor merge readiness.
+The final canonical commit requires standard CI unit/build/type/lint/security checks and real browser acceptance. Appropriately provisioned validator checks must execute the seven official-assets-dependent assertions above. The local launch failure must remain distinct from application behavior; passing local checks are not full final acceptance. This report claims neither a browser pass nor merge readiness.

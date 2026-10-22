@@ -138,6 +138,12 @@ function IncomingDocumentsWorkspaceContent() {
     }
   }, [queue.length, data, activeId]);
 
+  function requestQueueMove(direction: -1 | 1) {
+    // A second click can precede the disabled-state commit. It is not a new
+    // intent: preparing it would invalidate the request already in flight.
+    if (queueMoving.current) return;
+    requestNavigation(() => { void moveInQueue(direction); });
+  }
   async function moveInQueue(direction: -1 | 1) {
     if (queueMoving.current || activeIdRef.current === null) return;
     const sourceId = activeIdRef.current; const sourceLocation = window.location.href;
@@ -199,6 +205,6 @@ function IncomingDocumentsWorkspaceContent() {
       {!loading && !loadError && data && (data.total > INCOMING_PAGE_SIZE || page > 1) && <nav aria-label="Belegseiten" className="flex items-center justify-between gap-2 border-t border-border px-4 py-3 sm:px-5"><Button variant="outline" size="icon" aria-label="Vorherige Belegseite" disabled={page <= 1} onClick={() => updateQuery({ page: page === 2 ? null : String(page - 1) })}><ChevronLeft className="size-4" /></Button><p className="text-xs text-muted-foreground">Seite {page} von {Math.max(1, Math.ceil(data.total / data.limit))}</p><Button variant="outline" size="icon" aria-label="Nächste Belegseite" disabled={page * data.limit >= data.total} onClick={() => updateQuery({ page: String(page + 1) })}><ChevronRight className="size-4" /></Button></nav>}
     </section>
 
-    {activeId !== null && <IncomingDocumentReview key={`${session?.user?.id ?? 'signed-out'}:${activeId}`} id={activeId} registerNavigationGuard={registerNavigationGuard} sequence={queue.includes(activeId) ? { position: queue.indexOf(activeId) + 1, count: queue.length, busy: queueBusy, message: queueMessage, canPrevious: queue.indexOf(activeId) > 0, canNext: queue.indexOf(activeId) < queue.length - 1, move: direction => requestNavigation(() => { void moveInQueue(direction); }), prepareNextAfterSave } : undefined} onClose={() => updateQuery({ document: null })} onChanged={() => { setSavedChange(true); refreshList(); }} onOpen={openDocument} returnFocus={restoreFocus} />}
+    {activeId !== null && <IncomingDocumentReview key={`${session?.user?.id ?? 'signed-out'}:${activeId}`} id={activeId} registerNavigationGuard={registerNavigationGuard} sequence={queue.includes(activeId) ? { position: queue.indexOf(activeId) + 1, count: queue.length, busy: queueBusy, message: queueMessage, canPrevious: queue.indexOf(activeId) > 0, canNext: queue.indexOf(activeId) < queue.length - 1, move: requestQueueMove, prepareNextAfterSave } : undefined} onClose={() => updateQuery({ document: null })} onChanged={() => { setSavedChange(true); refreshList(); }} onOpen={openDocument} returnFocus={restoreFocus} />}
   </div>;
 }

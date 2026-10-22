@@ -85,10 +85,19 @@ function AuthenticatedCommandPalette() {
   const [searchState, setSearchState] = React.useState<RecordSearchState | null>(null);
   const [retry, setRetry] = React.useState(0);
   const returnFocus = React.useRef<HTMLElement | null>(null);
+  const openRef = React.useRef(false);
+  const alive = React.useRef(false);
+  React.useLayoutEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const term = query.trim();
   const searchable = term.length >= RECORD_SEARCH_MIN_LENGTH;
   const current = open && searchState?.query === term ? searchState : null;
-  const changeOpen = (value: boolean) => { setOpen(value); setQuery(''); setSearchState(null); };
+  const changeOpen = (value: boolean) => { openRef.current = value; setOpen(value); setQuery(''); setSearchState(null); };
+  const restorePaletteFocus = () => {
+    // Radix defers close autofocus beyond the unmount commit. A chooser or
+    // newer control may already own focus by then; never take it back.
+    if (!alive.current || openRef.current || (document.activeElement && document.activeElement !== document.body)) return;
+    if (returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true });
+  };
   React.useEffect(() => {
     if (!open || !searchable) return;
     let request: ReturnType<typeof startRecordSearch> | undefined;
@@ -109,7 +118,7 @@ function AuthenticatedCommandPalette() {
       if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         if (document.activeElement instanceof HTMLElement && !document.activeElement.closest('[cmdk-root]')) returnFocus.current = document.activeElement;
-        setOpen((v) => !v); setQuery(''); setSearchState(null);
+        changeOpen(!openRef.current);
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -128,6 +137,8 @@ function AuthenticatedCommandPalette() {
   // save/discard/stay preflight gets focus. No raw push or signOut bypasses it.
   const closeBeforeNavigation = (action: () => void) => {
     flushSync(() => changeOpen(false));
+    // Record the real source control as the review chooser's return trigger.
+    restorePaletteFocus();
     requestNavigation(action);
   };
   const navigate = (href: string) => closeBeforeNavigation(() => router.push(href));
@@ -137,7 +148,7 @@ function AuthenticatedCommandPalette() {
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[80] bg-foreground/45" />
-        <Dialog.Content aria-label="Befehlspalette" onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true }); }} className="fixed left-1/2 top-[10dvh] z-[90] w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-popover shadow-[var(--shadow-floating)]">
+        <Dialog.Content aria-label="Befehlspalette" onCloseAutoFocus={event => { event.preventDefault(); restorePaletteFocus(); }} className="fixed left-1/2 top-[10dvh] z-[90] w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-popover shadow-[var(--shadow-floating)]">
           <Command label="Befehlspalette" filter={(value, search, keywords) => value.startsWith('record:') || value.startsWith('record-list:') || value === 'record-search-retry' ? 1 : defaultFilter(value, search, keywords)} className="flex max-h-[calc(90dvh-1rem)] flex-col">
         <Dialog.Title className="sr-only">Befehlspalette</Dialog.Title>
         <Dialog.Description className="sr-only">Seiten, Aktionen und eigene Datensätze suchen. Mit den Pfeiltasten auswählen und mit Enter öffnen.</Dialog.Description>
