@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { TimelineEntry } from '@/lib/customer-timeline-contract';
-import { formatMoneyEUR } from '@/lib/money';
+import { formatTimelineMoney, type TimelineEntry } from '@/lib/customer-timeline-contract';
 import styles from './customer-timeline.module.css';
 
 type TimelinePage = {
@@ -29,11 +28,6 @@ function dateLabel(value: string, withTime = false) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return 'Datum unbekannt';
   return withTime ? `${timestampFormatter.format(date)} UTC` : dateFormatter.format(date);
-}
-
-function euros(value: string | null) {
-  if (value === null || !/^[0-9]{1,16}$/u.test(value)) return null;
-  return `${formatMoneyEUR(BigInt(value)).replace('.', ',')} €`;
 }
 
 function documentType(type: string) {
@@ -185,8 +179,8 @@ function TimelineEntries({ customerId }: { customerId: number }) {
       {loaded && entries.length === 0 && !loading && <div className={styles.empty}><h2>Noch kein Verlauf</h2><p>Für diesen Kunden sind keine Belege oder Zahlungsnachweise direkt verknüpft.</p></div>}
       {entries.length > 0 && <ol className={styles.entries} aria-label="Kundenverlauf">
         {entries.map(entry => {
-          const amount = euros(entry.amountCents);
-          const open = euros(entry.balance.openCents);
+          const amount = formatTimelineMoney(entry.amountCents);
+          const open = formatTimelineMoney(entry.balance.openCents);
           const collectible = entry.kind === 'DOCUMENT' && entry.document.type === 'INVOICE'
             && !['DRAFT', 'CANCELLED'].includes(entry.document.status);
           return <li key={entry.key} className={styles.entry}>

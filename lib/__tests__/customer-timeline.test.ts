@@ -17,7 +17,7 @@ vi.mock('@/lib/get-user-id', () => {
 });
 import { GET } from '@/app/api/customers/[id]/timeline/route';
 import { CUSTOMER_TIMELINE_PAGE_SIZE, readCustomerTimeline, timelineBalance, CUSTOMER_TIMELINE_EVIDENCE_LIMIT } from '@/lib/customer-timeline';
-import type { CustomerTimelinePage } from '@/lib/customer-timeline-contract';
+import { formatTimelineMoney, type CustomerTimelinePage } from '@/lib/customer-timeline-contract';
 import { ownedInvoice } from '@/lib/payment-journal/service';
 import { GET as getQuotePreview } from '@/app/api/quotes/download/route';
 
@@ -49,6 +49,14 @@ beforeAll(async () => {
 afterAll(async () => { await db?.cleanup(); });
 
 describe('read-only directly linked customer timeline', () => {
+  it.each([
+    ['0', '0,00 €'], ['1', '0,01 €'], ['10', '0,10 €'], ['8000', '80,00 €'],
+    ['10000', '100,00 €'], ['12345', '123,45 €'], ['9999999999999999', '99999999999999,99 €'],
+    [null, null], ['-1', null], ['1.01', null], ['10000000000000000', null],
+  ])('displays exact timeline cents %s as %s without trimming or lossy conversion', (value, expected) => {
+    expect(formatTimelineMoney(value)).toBe(expected);
+  });
+
   it('owns the customer and every linked source; never matches names or historical buyer fields', async () => {
     const own = await customer(); const foreign = await customer(undefined, 'timeline-foreign');
     const unlinked = await document(null); const source = await document(own.id);

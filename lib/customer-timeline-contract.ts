@@ -1,3 +1,12 @@
+import { formatMoneyEUR } from '@/lib/money';
+
+/** Display exact cents with two places; never round through a JS number. */
+export function formatTimelineMoney(value: string | null): string | null {
+  if (value === null || !/^[0-9]{1,16}$/u.test(value)) return null;
+  const [whole, fraction = ''] = formatMoneyEUR(BigInt(value)).split('.');
+  return `${whole},${fraction.padEnd(2, '0')} €`;
+}
+
 export type TimelineEntry = {
   key: string;
   kind: 'DOCUMENT' | 'PAYMENT' | 'ADJUSTMENT';
