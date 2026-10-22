@@ -9,6 +9,14 @@ describe('mandatory foreign PDF release evidence contract (static only)',()=>{
     expect(workflow).toContain('process.arch!==process.env.EXPECTED_ARCHITECTURE');expect(workflow).toContain('docker build --pull');expect(workflow).toContain('--network=none');
     expect(workflow).not.toMatch(/docker push|--privileged|--cap-add|--security-opt|--network=host|qemu|continue-on-error|patch .*Dockerfile/);
   });
+  it('precreates the nested mount target without making either fixture bind writable',()=>{
+    const fixture=read('scripts/foreign-pdf/build-native-fixtures.mjs'),workflow=read('.github/workflows/foreign-pdf-compatibility.yml');
+    expect(fixture).toContain("await mkdir(path.join(destination,'node_modules'),{mode:0o755});");
+    expect(fixture.indexOf("mkdir(path.join(destination,'node_modules')")).toBeGreaterThan(fixture.indexOf('mkdir(destination,{recursive:false'));
+    expect(workflow).toContain('dst=/tmp/foreign-pdf-test,readonly');
+    expect(workflow).toContain('dst=/tmp/foreign-pdf-test/node_modules,readonly');
+    expect(workflow).not.toMatch(/dst=\/tmp\/foreign-pdf-test(?:\/node_modules)?,(?:rw|readwrite)|--privileged|--security-opt/);
+  });
   it('binds actual source/final bytes, independent pixel/text comparison and readable evidence to a passing complete native matrix',()=>{
     const workflow=read('.github/workflows/foreign-pdf-compatibility.yml'),smoke=read('scripts/foreign-pdf/native-smoke.mjs');
     expect(workflow).toContain('m.cases.length!==3');expect(workflow).toContain('m.rejected.length!==7');expect(workflow).toContain('pdftoppm -scale-to 2000');expect(workflow).toContain('diff --recursive');expect(workflow).toContain('pdftotext -layout');

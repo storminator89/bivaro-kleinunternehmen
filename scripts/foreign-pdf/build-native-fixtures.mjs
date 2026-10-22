@@ -11,6 +11,10 @@ import { PDFDocument, PDFName, PDFDict, PDFString } from 'pdf-lib';
 const destination=process.argv[2];
 if(!destination||!path.isAbsolute(destination))throw new Error('Absolute fresh fixture output required');
 await mkdir(destination,{recursive:false,mode:0o700});
+// OCI cannot create a nested mountpoint beneath the read-only fixture bind.
+// Keep this empty directory in the trusted fixture; the locked dependencies
+// are mounted read-only over it, never copied into or written by the runtime.
+await mkdir(path.join(destination,'node_modules'),{mode:0o755});
 await writeFile(path.join(destination,'package.json'),JSON.stringify({type:'commonjs'}),{flag:'wx'});
 for(const file of ['lib/server/pdfa3-converter.ts','lib/server/pdfa-validator.ts','lib/server/foreign-pdf-validator-confinement.ts','lib/processing-limit.ts','lib/resource-limits.ts']){
   const input=await readFile(file,'utf8');
