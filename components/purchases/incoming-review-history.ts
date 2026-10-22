@@ -9,9 +9,10 @@ export function createReviewTraversalGuard(options: {
   onUnprotectedTraversal?: () => void;
 }) {
   let currentIndex = options.getIndex();
-  let restoring: { original: number; destination: number } | null = null;
+  let intent = 0;
+  let restoring: { original: number; destination: number; intent: number } | null = null;
   let replay = false;
-  return (event: { stopImmediatePropagation: () => void }) => {
+  const onPop = (event: { stopImmediatePropagation: () => void }) => {
     const nextIndex = options.getIndex();
     if (replay) { replay = false; currentIndex = nextIndex; options.onReplay(); return; }
     if (restoring) {
@@ -23,7 +24,7 @@ export function createReviewTraversalGuard(options: {
       const traversal = restoring; restoring = null; currentIndex = nextIndex;
       let resolved = false;
       options.getGuard()?.request(() => {
-        if (resolved) return;
+        if (resolved || traversal.intent !== intent) return;
         resolved = true; replay = true;
         options.go(traversal.destination - traversal.original);
       }, () => { resolved = true; });
@@ -36,16 +37,30 @@ export function createReviewTraversalGuard(options: {
       options.onUnprotectedTraversal?.(); currentIndex = nextIndex; return;
     }
     const guard = options.getGuard();
-    if (!guard?.blocked || currentIndex === nextIndex) { currentIndex = nextIndex; return; }
+    if (!guard?.blocked || currentIndex === nextIndex) { options.onUnprotectedTraversal?.(); currentIndex = nextIndex; return; }
     event.stopImmediatePropagation();
-    restoring = { original: currentIndex, destination: nextIndex };
+    restoring = { original: currentIndex, destination: nextIndex, intent: ++intent };
     options.go(currentIndex - nextIndex);
   };
+  return Object.assign(onPop, {
+    syncIndex: () => { if (!restoring && !replay) currentIndex = options.getIndex(); },
+  });
 }
 
-/** A pop allowance belongs to one exact normalized query, never a later close. */
-export function consumeReviewTraversalQuery(allowed: { current: string | null }, query: string): boolean {
-  const accepted = allowed.current === query;
-  allowed.current = null;
-  return accepted;
+/** One explicit UI intent owns one unchanged source location and can run only once. */
+export function createReviewNavigationIntents(readLocation: () => string) {
+  let version = 0;
+  return {
+    invalidate: () => { version++; },
+    prepare: (action: () => void) => {
+      const token = ++version; const location = readLocation(); let consumed = false;
+      return {
+        proceed: () => {
+          if (consumed || token !== version || readLocation() !== location) return;
+          consumed = true; action();
+        },
+        stay: () => { if (!consumed && token === version) { consumed = true; version++; } },
+      };
+    },
+  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { nextReviewDocument, reviewQueueSnapshot, sameReviewDraft, type IncomingNavigationGuard } from '@/components/purchases/incoming-review-queue';
-import { consumeReviewTraversalQuery, createReviewTraversalGuard } from '@/components/purchases/incoming-review-history';
+import { createReviewNavigationIntents, createReviewTraversalGuard } from '@/components/purchases/incoming-review-history';
 import { IncomingRequestError } from '@/components/purchases/incoming-document-ui';
 import type { IncomingDocument, IncomingDocumentList } from '@/lib/purchase-documents/types';
 
@@ -75,7 +75,7 @@ function historyFixture(initial = 4) {
   const go = vi.fn(); const onReplay = vi.fn(); const onUnprotectedTraversal = vi.fn(); const requests: Array<{ proceed: () => void; stay: () => void }> = [];
   guard = { blocked: true, request: (proceed, stay) => requests.push({ proceed, stay }) };
   const handle = createReviewTraversalGuard({ getIndex: () => index, go, onReplay, getGuard: () => guard, onUnprotectedTraversal });
-  return { go, onReplay, onUnprotectedTraversal, requests, setGuard: (next: IncomingNavigationGuard | null) => { guard = next; }, pop: (next: number | undefined) => { index = next; const event = { stopImmediatePropagation: vi.fn() }; handle(event); return event; } };
+  return { sync: (next: number) => { index = next; handle.syncIndex(); }, go, onReplay, onUnprotectedTraversal, requests, setGuard: (next: IncomingNavigationGuard | null) => { guard = next; }, pop: (next: number | undefined) => { index = next; const event = { stopImmediatePropagation: vi.fn() }; handle(event); return event; } };
 }
 describe('non-destructive dirty review Back/Forward guard', () => {
   it('restores Back without rewriting an entry; stay leaves both destinations intact', () => {
@@ -111,20 +111,58 @@ describe('non-destructive dirty review Back/Forward guard', () => {
   it('does not invent an index or rewrite history if browser capability is missing', () => {
     const f = historyFixture(); expect(f.pop(undefined).stopImmediatePropagation).not.toHaveBeenCalled(); expect(f.go).not.toHaveBeenCalled(); expect(f.requests).toHaveLength(0); expect(f.onUnprotectedTraversal).toHaveBeenCalledTimes(1);
   });
-  it('accepts only the unsupported-browser traversed query, without routing it through a stay rewrite', () => {
-    const allowed = { current: null as string | null };
-    const request = vi.fn(); const go = vi.fn();
-    let index: number | undefined;
-    const pop = createReviewTraversalGuard({ getIndex: () => index, go, getGuard: () => ({ blocked: true, request }), onReplay: vi.fn(), onUnprotectedTraversal: () => { allowed.current = 'document=A'; } });
-    const event = { stopImmediatePropagation: vi.fn() }; pop(event);
-    expect(consumeReviewTraversalQuery(allowed, 'document=A')).toBe(true);
-    expect(request).not.toHaveBeenCalled(); expect(go).not.toHaveBeenCalled(); expect(event.stopImmediatePropagation).not.toHaveBeenCalled();
-    expect(consumeReviewTraversalQuery(allowed, 'document=A')).toBe(false);
-    allowed.current = 'document=A';
-    expect(consumeReviewTraversalQuery(allowed, 'document=B')).toBe(false); // later explicit close/navigation cannot borrow a stale pop allowance
-    expect(allowed.current).toBeNull();
+  it('never requests a dirty query guard or rewrites an entry for an unsupported native traversal', () => {
+    const f = historyFixture();
+    f.pop(undefined);
+    expect(f.requests).toHaveLength(0); expect(f.go).not.toHaveBeenCalled(); expect(f.onUnprotectedTraversal).toHaveBeenCalledTimes(1);
+  });
+  it('syncs programmatic entry changes without recreating the controller or losing a restore/replay', () => {
+    const f = historyFixture(4);
+    f.sync(7); f.pop(5); expect(f.go).toHaveBeenLastCalledWith(2);
+    f.sync(5); // stale/intermediate router commit must not reset the pending original index
+    f.pop(7); expect(f.requests).toHaveLength(1); f.requests[0].proceed();
+    f.sync(7); expect(f.pop(5).stopImmediatePropagation).not.toHaveBeenCalled();
+    expect(f.onReplay).toHaveBeenCalledTimes(1);
+    f.pop(4); expect(f.go).toHaveBeenLastCalledWith(1);
+  });
+  it('observes an immediate edit through a live guard without waiting for registration effects', () => {
+    const f = historyFixture(); let dirty = false;
+    f.setGuard({ get blocked() { return dirty; }, request: (proceed, stay) => f.requests.push({ proceed, stay }) });
+    dirty = true; expect(f.pop(3).stopImmediatePropagation).toHaveBeenCalled();
+    f.pop(4); expect(f.requests).toHaveLength(1);
+  });
+  it('invalidates an older choice when a new traversal starts before that choice resolves', () => {
+    const f = historyFixture(8); f.pop(6); f.pop(8);
+    const old = f.requests[0]; f.pop(3); old.proceed();
+    expect(f.go.mock.calls).toEqual([[2], [5]]);
+    f.pop(8); f.requests[1].proceed(); expect(f.go).toHaveBeenLastCalledWith(-5);
+    old.proceed(); expect(f.go).toHaveBeenCalledTimes(3);
   });
   it('does not revive a cleared tenant/session guard during restoration', () => {
     const f = historyFixture(); f.pop(3); f.setGuard(null); f.pop(4); expect(f.requests).toHaveLength(0); expect(f.onReplay).not.toHaveBeenCalled();
+  });
+});
+
+describe('explicit review navigation is guarded before any location change', () => {
+  it('invalidates stale stay/proceed during a new traversal, including old/intermediate router snapshots', () => {
+    let location = '/purchases?document=A';
+    const intents = createReviewNavigationIntents(() => location);
+    const replace = vi.fn();
+    const old = intents.prepare(() => replace('/purchases'));
+    expect(replace).not.toHaveBeenCalled(); // awaiting dirty choice: source entry untouched
+    location = '/dashboard'; intents.invalidate(); // capture pop happens before the router
+    old.stay(); old.proceed(); expect(replace).not.toHaveBeenCalled();
+    location = '/purchases?document=A'; // exact source restored; stale callbacks still cannot act
+    old.proceed(); expect(replace).not.toHaveBeenCalled();
+    const latest = intents.prepare(() => replace('/purchases?document=B'));
+    old.stay(); latest.proceed(); latest.proceed();
+    expect(replace.mock.calls).toEqual([['/purchases?document=B']]);
+  });
+  it('refuses a changed source location and cancels only its own one-shot explicit intent', () => {
+    let location = '/purchases?document=A'; const action = vi.fn();
+    const intents = createReviewNavigationIntents(() => location);
+    const changed = intents.prepare(action); location = '/purchases?document=B'; changed.proceed(); expect(action).not.toHaveBeenCalled();
+    const stayed = intents.prepare(action); stayed.stay(); stayed.proceed(); expect(action).not.toHaveBeenCalled();
+    const latest = intents.prepare(action); changed.stay(); latest.proceed(); expect(action).toHaveBeenCalledTimes(1);
   });
 });

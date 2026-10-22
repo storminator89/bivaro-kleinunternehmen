@@ -31,10 +31,11 @@ export async function nextReviewDocument(
 export type IncomingNavigationGuard = {
   blocked: boolean;
   request: (proceed: () => void, stay: () => void) => void;
+  cancelPending?: () => void;
 };
 export type IncomingReviewSequence = {
   position: number; count: number; busy: boolean; message: string | null;
-  canPrevious: boolean; canNext: boolean; move: (direction: -1 | 1) => void;
+  canPrevious: boolean; canNext: boolean; move: (direction: -1 | 1) => void; prepareNextAfterSave: () => (() => void);
 };
 
 export function sameReviewDraft(left: PurchaseReviewDraft | null | undefined, right: PurchaseReviewDraft): boolean {

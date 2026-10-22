@@ -60,7 +60,7 @@ test('page-bounded filtered receipt sequence saves safely after unknown response
   await expect(review(page).getByRole('alert')).toContainText('Speicherung ist nicht bestätigt');
   await expect(review(page).getByLabel('Prüfnotiz', { exact: true })).toHaveValue('Synthetic sequential review; not posted.');
   const saved = await prisma.purchaseDocument.findUniqueOrThrow({ where: { id: originals[2].id } });
-  await review(page).getByRole('button', { name: 'Entwurf speichern & nächster', exact: true }).click();
+  await review(page).getByRole('button', { name: 'Entwurf speichern & nächster', exact: true }).evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
   await expect(review(page)).toContainText('sequence-2.xml'); expect(saveWrites).toBe(1);
   expect((await prisma.purchaseDocument.findUniqueOrThrow({ where: { id: saved.id } })).revision).toBe(saved.revision);
   const dismissed = await page.request.post(`/api/purchase-documents/${originals[0].id}/dismiss`, { data: { expectedRevision: originals[0].revision, reason: 'Synthetic changed in another tab' } }); expect(dismissed.status()).toBe(200);
@@ -88,6 +88,8 @@ test('page-bounded filtered receipt sequence saves safely after unknown response
   const restoredScroll = await page.evaluate(() => ({ y: scrollY, max: document.documentElement.scrollHeight - innerHeight }));
   expect(Math.abs(restoredScroll.y - Math.min(originalScroll, restoredScroll.max))).toBeLessThanOrEqual(2);
   await returningRow.click();
+  await expect(page).toHaveURL(new RegExp(`document=${originals[2].id}`));
+  await expect(review(page)).toContainText('sequence-3.xml');
   await page.reload(); await expect(review(page).getByLabel('Prüfnotiz', { exact: true })).toHaveValue('Synthetic sequential review; not posted.');
   await review(page).locator('footer[aria-label="Belegnavigation"]').scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('receipt-sequence-desktop-1440.png'), animations: 'disabled' });
@@ -109,6 +111,11 @@ test('dirty keyboard Back/Forward preserves entries, allows stay/discard and kee
   await page.evaluate(() => window.history.back()); await expect(chooser(page)).toBeVisible();
   await expect(chooser(page).getByRole('heading')).toBeFocused(); await chooser(page).getByRole('button', { name: 'Hier bleiben', exact: true }).click();
   await expect(review(page).getByLabel('Prüfnotiz', { exact: true })).toHaveValue('Keep this draft while deciding.');
+  const sourceEntry = page.url();
+  await review(page).getByRole('button', { name: 'Zur Liste', exact: true }).click();
+  await expect(chooser(page)).toBeVisible(); await expect(page).toHaveURL(sourceEntry);
+  await chooser(page).getByRole('button', { name: 'Hier bleiben', exact: true }).click();
+  await expect(page).toHaveURL(sourceEntry); // preflight never tentatively replaces the source entry
   await page.evaluate(() => window.history.back()); await expect(chooser(page)).toBeVisible();
   await page.route('**/review-draft', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }), { times: 1 });
   await chooser(page).getByRole('button', { name: 'Speichern & weiter', exact: true }).click();
@@ -177,5 +184,30 @@ test('unsupported-index same-workspace Back/Forward never compensates by replaci
   await expect(page).toHaveURL(secondEntry); await expect(review(page).getByLabel('Prüfnotiz', { exact: true })).toHaveValue('Keep this later explicit-close draft.');
   await page.goBack(); await expect(page).toHaveURL(firstEntry); await page.goForward(); await expect(page).toHaveURL(secondEntry);
   expect((await prisma.purchaseDocument.findUniqueOrThrow({ where: { id: older.id } })).reviewDraft).toBeNull();
+  await noFinancialWrites(user.id);
+});
+
+test('reverting to an old saved baseline cannot bypass reconciliation after an uncertain newer save', async ({ page }) => {
+  test.setTimeout(90_000);
+  const user = await signIn(page); await upload(page, 1); const source = await upload(page, 2);
+  const baseline = { supplierName: '', invoiceNumber: '', invoiceDate: '', paymentDate: '', amount: '', note: 'Previously confirmed baseline.' };
+  const initial = await page.request.post(`/api/purchase-documents/${source.id}/review-draft`, { data: { expectedRevision: source.revision, draft: baseline } });
+  expect(initial.status()).toBe(200);
+  await page.goto('/purchases'); await page.locator(`[data-incoming-document-id="${source.id}"]`).click();
+  await expect(review(page).getByLabel('Prüfnotiz', { exact: true })).toHaveValue(baseline.note);
+  await (await draft(page)).fill('Newer save with a lost response.');
+  let writes = 0;
+  await page.route(`**/api/purchase-documents/${source.id}/review-draft`, async route => {
+    writes++; const result = await route.fetch(); expect(result.status()).toBe(200); await route.abort('failed');
+  });
+  await review(page).getByRole('button', { name: 'Entwurf speichern & nächster', exact: true }).click();
+  await expect(review(page).getByRole('alert')).toContainText('Speicherung ist nicht bestätigt');
+  await review(page).getByLabel('Prüfnotiz', { exact: true }).fill(baseline.note);
+  await review(page).getByRole('button', { name: 'Entwurf speichern & nächster', exact: true }).click();
+  await expect(review(page).getByRole('alert')).toContainText('inzwischen geändert');
+  await expect(page).toHaveURL(new RegExp(`document=${source.id}`));
+  await expect(review(page).getByLabel('Prüfnotiz', { exact: true })).toHaveValue(baseline.note);
+  expect(writes).toBe(1);
+  expect((await prisma.purchaseDocument.findUniqueOrThrow({ where: { id: source.id } })).reviewDraft).toMatchObject({ note: 'Newer save with a lost response.' });
   await noFinancialWrites(user.id);
 });
