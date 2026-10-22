@@ -6,7 +6,7 @@ set -eu
 [ "$ID" = debian ] && [ "$VERSION_ID" = 13 ]
 [ "$(node --version)" = v22.23.4 ]
 dpkg --compare-versions "$(dpkg-query -W -f='${Version}' ghostscript)" ge '10.05.1~dfsg-1+deb13u3'
-dpkg-query -W ghostscript openssl default-jre-headless util-linux curl
+dpkg-query -W ghostscript openssl default-jre-headless util-linux util-linux-extra curl
 node -e 'if (require("/app/node_modules/next/package.json").version !== "16.4.1") process.exit(1)'
 java -version
 echo '799e64befca97d4080e03608c80b85dd5a5ecc5f4ae4f35d1116ec2855b9a7c9  /opt/bivaro/einvoice/validator-1.6.3-standalone.jar' | sha256sum -c -
@@ -47,6 +47,10 @@ if(!root||['val-xml','val-xsd','val-sch.1','val-sch.2'].some(k=>steps.get(k)!==t
 if(hash.trim()!==crypto.createHash('sha256').update(fs.readFileSync(`${dir}/source.xml`)).digest('base64'))throw Error('Wrong report source');
 NODE
  done
+# Genuine PDF.js positive and negative receipt cases use the exact production
+# parent wrapper, Landlock/seccomp, native canvas and per-request cleanup. An
+# unsupported kernel/confinement fails this gate; there is no privileged retry.
+timeout 150 node /app/scripts/ai-pdf/native-smoke.mjs
 # Benign synthetic PS -> PDF -> PNG exercises the actual installed renderer.
 printf '%%!PS\n/Helvetica findfont 12 scalefont setfont 30 50 moveto (Bivaro synthetic runtime check) show showpage\n' >/tmp/smoke.ps
 timeout 30 gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -sOutputFile=/tmp/smoke.pdf /tmp/smoke.ps

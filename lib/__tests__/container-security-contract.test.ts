@@ -16,6 +16,10 @@ describe('patched container compatibility gate',()=>{
     expect(workflow).toContain('docker build --pull');
     expect(workflow).toContain('--network=none');
     expect(workflow).not.toContain('docker push');
+    expect(workflow).not.toContain('--privileged');
+    expect(workflow).not.toContain('--security-opt');
+    expect(workflow).toContain("'scripts/ai-pdf/**'");
+    expect(workflow).toContain("'next.config.ts'");
     expect(workflow.match(/readonly/g)).toHaveLength(3);
     expect(workflow).toContain('npm ci --ignore-scripts');
   });
@@ -27,6 +31,8 @@ describe('patched container compatibility gate',()=>{
     expect(script).toContain("['val-xml','val-xsd','val-sch.1','val-sch.2']");
     expect(script).toContain('--connect-timeout 1 --max-time 2');
     expect(script).toContain('-sDEVICE=png16m');
+    expect(script).toContain('timeout 150 node /app/scripts/ai-pdf/native-smoke.mjs');
+    expect(script).toContain('util-linux-extra');
     expect(script).toContain('[ "$(id -u)" != 0 ]');
   });
 });

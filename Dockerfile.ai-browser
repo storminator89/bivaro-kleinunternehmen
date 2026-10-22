@@ -1,0 +1,31 @@
+# Test-only derivative of the exact production image built by the native gate.
+# Never used as the published application image. No host packages/settings change.
+ARG BIVARO_RUNTIME_IMAGE=bivaro-runtime-smoke
+FROM ${BIVARO_RUNTIME_IMAGE}
+USER root
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    BIVARO_AI_BROWSER_FIXTURE=1 \
+    CI=true \
+    NEXT_TELEMETRY_DISABLED=1
+# Test tooling is a sibling, never an ancestor/resolution fallback of /app.
+# Do not mutate /app/node_modules, production trace or renderer policy.
+WORKDIR /test-tools
+COPY scripts/ai-pdf/runtime-manifest.mjs ./runtime-manifest.mjs
+RUN node runtime-manifest.mjs capture
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN npm ci --include=dev --ignore-scripts && \
+    npx prisma generate --schema=./prisma/schema.prisma && \
+    npx playwright install --with-deps chromium && \
+    npm cache clean --force && \
+    node runtime-manifest.mjs verify
+COPY --chown=nextjs:nodejs tsconfig.json playwright.ai-pdf.config.ts ./
+COPY --chown=nextjs:nodejs e2e/ai-receipt-native.spec.ts ./e2e/
+COPY --chown=nextjs:nodejs lib/password.ts lib/password-policy.ts lib/prisma.ts ./lib/
+COPY --chown=nextjs:nodejs scripts/run-e2e.mjs scripts/e2e-process.mjs scripts/e2e-fixture.mjs scripts/prepare-e2e.mjs ./scripts/
+COPY --chown=nextjs:nodejs scripts/ai-pdf/browser-server.mjs ./scripts/ai-pdf/
+USER nextjs
+# Actual browser, app, synthetic provider and fresh DB share only this ephemeral
+# container. Runtime invocation must keep Docker's normal profile/network=none.
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["node", "scripts/run-e2e.mjs", "--config=playwright.ai-pdf.config.ts", "--workers=1", "--retries=0", "--forbid-only", "--reporter=line", "--trace=off"]

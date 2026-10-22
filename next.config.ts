@@ -30,6 +30,18 @@ const IFRAME_ALLOWED_HEADERS = BASE_SECURITY_HEADERS.map((h) =>
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // The receipt renderer is a separate Node process, never an app-heap or
+  // browser import. Trace its exact public runtime assets for standalone use.
+  serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas'],
+  outputFileTracingIncludes: {
+    '/*': [
+      './scripts/ai-pdf/render.mjs',
+      './scripts/ai-pdf/sandbox-*.bpf',
+      './node_modules/pdfjs-dist/**/*',
+      './node_modules/@napi-rs/canvas/**/*',
+      './node_modules/@napi-rs/canvas-linux-*-gnu/**/*',
+    ],
+  },
   async headers() {
     // Next.js evaluates rules in declaration order and later rules override
     // earlier ones for the same header key on overlapping paths. Therefore

@@ -57,3 +57,7 @@ next-env.d.ts
 *.pre-upgrade
 *.db
 *.db-journal
+
+# Generated architecture-native AI renderer policy; build from source per image.
+/scripts/ai-pdf/sandbox-*.bpf
+/scripts/ai-pdf/smoke-runtime/
