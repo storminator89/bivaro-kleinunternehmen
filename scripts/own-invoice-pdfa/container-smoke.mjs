@@ -158,6 +158,8 @@ export async function inspectRuntimeNotices(appRoot, veraRoot, expected = {
   pdfkit: '5f0d5197d2b5d91f41de43143b0be42fb55515bc2b894f2a9b62de9f7056c0f8',
   font: 'f32df582a2aab128c07b2f7e36e7b928dc5f6bd82657b905c04f91459f9e5cf9',
   cli: '19f6edd5c92841a38d9b3b018a555b7ba173b13e4e0d29edecc232e5ba6c1d70',
+  applicationLicense: '0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0',
+  supplemental: '71796ff2cb5d48582356a0020a1f7cb4de100e20c020e67827611819ac081553',
 }) {
   // Expected digests are injectable only for synthetic unit files. The actual
   // container invocation below passes fixed image roots and no overrides.
@@ -198,7 +200,26 @@ export async function inspectRuntimeNotices(appRoot, veraRoot, expected = {
   const appSources = await read(app, 'THIRD_PARTY_SOURCES.json');
   const appNotice = await read(app, 'THIRD_PARTY_NOTICES.txt');
   const npm = JSON.parse(appSources);
-  assert(npm.schemaVersion === 1 && npm.roots.pdfkit === '0.20.2' && npm.roots.fontkit === '2.0.4', 'Wrong PDF notice versions.');
+  assert(npm.schemaVersion === 1 && npm.roots.pdfkit === '0.20.2' && npm.roots.fontkit === '2.0.4'
+    && npm.roots['pdfjs-dist'] === '6.4.299', 'Wrong PDF notice versions.');
+  const applicationLicense = await read(app, 'LICENSE');
+  assert(npm.application?.declaredLicense === 'AGPL-3.0-only' && npm.application.file === 'LICENSE'
+    && npm.application.sha256 === expected.applicationLicense && hash(applicationLicense) === expected.applicationLicense, 'Application license changed or missing.');
+  assert(npm.supplemental?.file === 'licenses/third-party-sources.json' && npm.supplemental.sha256 === expected.supplemental, 'Wrong recovered-notice manifest.');
+  const recoveredBytes = await read(app, npm.supplemental.file);
+  assert(hash(recoveredBytes) === expected.supplemental, 'Recovered-notice manifest changed.');
+  const recovered = JSON.parse(recoveredBytes);
+  assert(recovered.schemaVersion === 1 && Array.isArray(recovered.files) && recovered.files.length > 0 && recovered.files.length <= 128
+    && Array.isArray(recovered.verifiedRuntimeFiles) && recovered.verifiedRuntimeFiles.length <= 32
+    && Array.isArray(recovered.limitations) && recovered.limitations.length > 0, 'Invalid recovered-notice inventory.');
+  const recoveredPaths = new Set();
+  for (const item of [...recovered.files, ...recovered.verifiedRuntimeFiles]) {
+    const prefix = recovered.files.includes(item) ? 'licenses/' : 'node_modules/';
+    assert(typeof item.file === 'string' && item.file.startsWith(prefix) && !recoveredPaths.has(item.file), 'Unsafe recovered-notice path.');
+    assert(/^[a-f0-9]{64}$/u.test(item.sha256) && hash(await read(app, item.file, 2 * 1024 * 1024)) === item.sha256, 'Recovered-notice/runtime hash mismatch.');
+    recoveredPaths.add(item.file);
+  }
+  assert(npm.supplemental.noticeFiles === recovered.files.length && npm.supplemental.verifiedRuntimeFiles === recovered.verifiedRuntimeFiles.length, 'Recovered-notice counts mismatch.');
   assert(Array.isArray(npm.packages) && npm.packages.length > 0 && npm.packages.length <= 128, 'Invalid npm notice inventory.');
   let npmNoticeFiles = 0;
   for (const item of npm.packages) {
@@ -213,6 +234,12 @@ export async function inspectRuntimeNotices(appRoot, veraRoot, expected = {
     }
   }
   assert(hash(await read(app, 'licenses/npm/pdfkit/LICENSE')) === expected.pdfkit, 'PDFKit license changed.');
+  const pdfjsPackages = npm.packages.filter(item => item.name === 'pdfjs-dist' && item.version === '6.4.299');
+  const pdfjsNotices = ['LICENSE', 'cmaps/LICENSE', 'iccs/LICENSE', 'standard_fonts/LICENSE_FOXIT', 'standard_fonts/LICENSE_LIBERATION',
+    ...['JBIG2', 'OPENJPEG', 'PDFJS_JBIG2', 'PDFJS_OPENJPEG', 'PDFJS_QCMS', 'QCMS'].map(name => `wasm/LICENSE_${name}`)]
+    .map(file => `licenses/npm/pdfjs-dist/${file}`).sort();
+  assert(pdfjsPackages.length === 1 && pdfjsPackages[0].metadata === 'licenses/npm/pdfjs-dist/package.json', 'Missing PDF.js notice package.');
+  assert.deepEqual(pdfjsPackages[0].notices.map(item => item.file).sort(), pdfjsNotices, 'Incomplete PDF.js separate-resource notices.');
   const fontkit = npm.packages.find(item => item.name === 'fontkit' && item.version === '2.0.4');
   const fontkitMetadata = JSON.parse(await read(app, 'licenses/npm/fontkit/package.json'));
   assert(fontkit && fontkitMetadata.license === 'MIT' && fontkit.notices.length === 0 && fontkit.limitations.length > 0
@@ -245,7 +272,8 @@ export async function inspectRuntimeNotices(appRoot, veraRoot, expected = {
   assert(verifier.artifacts.filter(item => !item.sourceArtifact).every(item => item.selectedLicense === null), 'MPL must not be applied to separate dependencies.');
   assert(npm.scope.includes('not an application/container SBOM') && npm.limitations.length > 0
     && verifier.scope.includes('incomplete inventory') && verifier.limitations.length > 0, 'Audit limits were omitted.');
-  return { status: 'passed', npmPackages: npm.packages.length, npmNoticeFiles, veraCopiedFiles: verifier.copiedFiles.length,
+  return { status: 'passed', npmPackages: npm.packages.length, npmNoticeFiles, recoveredNoticeFiles: recovered.files.length,
+    verifiedRuntimeFiles: recovered.verifiedRuntimeFiles.length, supplementalSha256: hash(recoveredBytes), applicationLicenseSha256: hash(applicationLicense), veraCopiedFiles: verifier.copiedFiles.length,
     veraSourceModules: sources.length, appSourcesSha256: hash(appSources), appNoticeSha256: hash(appNotice),
     veraSourcesSha256: hash(veraSources), veraNoticeSha256: hash(veraNotice), originalFontNoticeSha256: hash(font),
     cliSha256: cliHash, explicitAuditLimitsRetained: true };

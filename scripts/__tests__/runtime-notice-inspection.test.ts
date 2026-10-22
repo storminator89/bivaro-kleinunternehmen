@@ -21,17 +21,34 @@ async function fixture() {
   const pdfkit = 'Synthetic PDFKit notice, never an actual attribution grant.';
   const font = 'Synthetic OFL fixture, never an actual font.';
   const cli = 'Synthetic JAR marker, never executed.';
-  const expected = { pdfkit: hash(pdfkit), font: hash(font), cli: hash(cli) };
+  const applicationLicense = 'Synthetic application license, not a grant.';
+  const recoveredNotice = 'Synthetic recovered upstream notice.';
+  const runtime = '// Synthetic inert asset, never executed.';
+  const recovered = { schemaVersion: 1, files: [{ file: 'licenses/recovered/NOTICE', sha256: hash(recoveredNotice) }], verifiedRuntimeFiles: [{ file: 'node_modules/pdfjs-dist/wasm/synthetic.js', sha256: hash(runtime) }], limitations: ['Synthetic unresolved provenance.'] };
+  const recoveredBytes = JSON.stringify(recovered);
+  const expected = { pdfkit: hash(pdfkit), font: hash(font), cli: hash(cli), applicationLicense: hash(applicationLicense), supplemental: hash(recoveredBytes) };
   const packages = [
     { name: 'pdfkit', version: '0.20.2', metadata: 'licenses/npm/pdfkit/package.json', notices: [{ file: 'licenses/npm/pdfkit/LICENSE', sha256: expected.pdfkit }], limitations: [] },
     { name: 'fontkit', version: '2.0.4', metadata: 'licenses/npm/fontkit/package.json', notices: [], limitations: ['Missing upstream text.'] },
+    { name: 'pdfjs-dist', version: '6.4.299', metadata: 'licenses/npm/pdfjs-dist/package.json',
+      notices: ['LICENSE', 'cmaps/LICENSE', 'iccs/LICENSE', 'standard_fonts/LICENSE_FOXIT', 'standard_fonts/LICENSE_LIBERATION',
+        ...['JBIG2', 'OPENJPEG', 'PDFJS_JBIG2', 'PDFJS_OPENJPEG', 'PDFJS_QCMS', 'QCMS'].map(name => `wasm/LICENSE_${name}`)]
+        .map(file => ({ file: `licenses/npm/pdfjs-dist/${file}`, sha256: hash('Synthetic separate PDF.js resource license.') })), limitations: [] },
   ];
   for (const item of packages) await file(app, item.metadata, JSON.stringify({ name: item.name, version: item.version, license: 'MIT' }));
+  for (const notice of packages[2].notices) await file(app, notice.file, 'Synthetic separate PDF.js resource license.');
   await file(app, 'licenses/npm/pdfkit/LICENSE', pdfkit);
+  await file(app, 'LICENSE', applicationLicense);
+  await file(app, 'licenses/recovered/NOTICE', recoveredNotice);
+  await file(app, 'licenses/third-party-sources.json', recoveredBytes);
+  await file(app, 'node_modules/pdfjs-dist/wasm/synthetic.js', runtime);
   await file(app, 'licenses/invoice-fonts/FONT-LICENSE.txt', font);
   await file(app, 'public/fonts/invoice/FONT-LICENSE.txt', font);
   await file(app, 'THIRD_PARTY_NOTICES.txt', 'Synthetic: attribution remains unresolved.');
-  const npm = { schemaVersion: 1, roots: { pdfkit: '0.20.2', fontkit: '2.0.4' }, packages, scope: 'not an application/container SBOM', limitations: ['Synthetic incomplete inventory.'] };
+  const npm = { schemaVersion: 1, roots: { pdfkit: '0.20.2', fontkit: '2.0.4', 'pdfjs-dist': '6.4.299' }, packages,
+    application: { declaredLicense: 'AGPL-3.0-only', file: 'LICENSE', sha256: expected.applicationLicense },
+    supplemental: { file: 'licenses/third-party-sources.json', sha256: expected.supplemental, noticeFiles: 1, verifiedRuntimeFiles: 1 },
+    scope: 'not an application/container SBOM', limitations: ['Synthetic incomplete inventory.'] };
   await file(app, 'THIRD_PARTY_SOURCES.json', JSON.stringify(npm));
   const modules = ['org.verapdf.apps:apps', 'org.verapdf.apps:cli', ...['core', 'feature-reporting', 'metadata-fixer', 'parser', 'pdf-model', 'validation-model', 'verapdf-xmp-core'].map(name => `org.verapdf:${name}`)];
   const artifacts = modules.map(coordinate => {
@@ -67,15 +84,15 @@ describe('read-only actual-image notice assertion logic (isolated function; synt
     const result = await run(input);
     expect(result.status, result.stderr).toBe(0);
     const evidence = JSON.parse(result.stdout);
-    expect(evidence).toMatchObject({ status: 'passed', npmPackages: 2, npmNoticeFiles: 1, veraCopiedFiles: 2, veraSourceModules: 9, cliSha256: input.expected.cli, explicitAuditLimitsRetained: true });
-    expect(result.stdout.length).toBeLessThan(1500);
+    expect(evidence).toMatchObject({ status: 'passed', npmPackages: 3, npmNoticeFiles: 12, recoveredNoticeFiles: 1, verifiedRuntimeFiles: 1, supplementalSha256: input.expected.supplemental, applicationLicenseSha256: input.expected.applicationLicense, veraCopiedFiles: 2, veraSourceModules: 9, cliSha256: input.expected.cli, explicitAuditLimitsRetained: true });
+    expect(result.stdout.length).toBeLessThan(1800);
     expect(result.stdout).not.toContain('Synthetic');
     const source = await readFile(new URL('../own-invoice-pdfa/container-smoke.mjs', import.meta.url), 'utf8');
     expect(source).toContain("const runtimeNotices = await inspectRuntimeNotices('/app', '/opt/verapdf');");
     expect(source).toContain("status: 'passed', syntheticIsolatedFixture: true, ...platform, runtimeNotices,");
     const fixed = await run(input, false);
     expect(fixed.status).not.toBe(0);
-    expect(fixed.stderr).toContain('PDFKit license changed.');
+    expect(fixed.stderr).toContain('Application license changed or missing.');
   });
 
   it('rejects missing notice files', async () => {
@@ -84,13 +101,15 @@ describe('read-only actual-image notice assertion logic (isolated function; synt
     expect((await run(input)).stderr).toContain('ENOENT');
   });
 
-  it.each(['npm', 'embedded', 'binary'])('rejects tampered %s bytes', async kind => {
+  it.each(['npm', 'embedded', 'binary', 'application', 'recovered', 'runtime', 'manifest'])('rejects tampered %s bytes', async kind => {
     const input = await fixture();
-    const target = kind === 'npm' ? path.join(input.app, 'licenses/npm/pdfkit/LICENSE') : path.join(input.vera, kind === 'embedded' ? 'licenses/MPL-2.0.txt' : 'bin/cli-1.30.3.jar');
+    const appPaths: Record<string, string> = { npm: 'licenses/npm/pdfkit/LICENSE', application: 'LICENSE', recovered: 'licenses/recovered/NOTICE', runtime: 'node_modules/pdfjs-dist/wasm/synthetic.js', manifest: 'licenses/third-party-sources.json' };
+    const target = appPaths[kind] ? path.join(input.app, appPaths[kind]) : path.join(input.vera, kind === 'embedded' ? 'licenses/MPL-2.0.txt' : 'bin/cli-1.30.3.jar');
     await writeFile(target, 'Tampered synthetic bytes.');
     const result = await run(input);
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain(kind === 'npm' ? 'Recorded npm notice hash mismatch.' : kind === 'embedded' ? 'Embedded notice hash mismatch.' : 'Pinned veraPDF CLI hash mismatch.');
+    const errors: Record<string, string> = { npm: 'Recorded npm notice hash mismatch.', embedded: 'Embedded notice hash mismatch.', binary: 'Pinned veraPDF CLI hash mismatch.', application: 'Application license changed or missing.', recovered: 'Recovered-notice/runtime hash mismatch.', runtime: 'Recovered-notice/runtime hash mismatch.', manifest: 'Recovered-notice manifest changed.' };
+    expect(result.stderr).toContain(errors[kind]);
   });
 
   it('rejects manifest path escapes before reading outside a root', async () => {
@@ -100,6 +119,14 @@ describe('read-only actual-image notice assertion logic (isolated function; synt
     const result = await run(input);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('Unsafe notice path.');
+  });
+
+  it.each(['package', 'notice'])('rejects omitted PDF.js %s inventory entries', async kind => {
+    const input = await fixture();
+    if (kind === 'package') input.npm.packages.pop();
+    else input.npm.packages[2].notices.pop();
+    await writeFile(path.join(input.app, 'THIRD_PARTY_SOURCES.json'), JSON.stringify(input.npm));
+    expect((await run(input)).stderr).toContain(kind === 'package' ? 'Missing PDF.js notice package.' : 'Incomplete PDF.js separate-resource notices.');
   });
 
   it.each(['file', 'directory'])('rejects a symlinked %s path component', async kind => {
