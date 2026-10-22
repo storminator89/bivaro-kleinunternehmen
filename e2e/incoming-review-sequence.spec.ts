@@ -103,12 +103,28 @@ test('page-bounded filtered receipt sequence saves safely after unknown response
 test('dirty keyboard Back/Forward preserves entries, allows stay/discard and keeps failed-save input on mobile', async ({ page }, testInfo) => {
   test.setTimeout(120_000); const user = await signIn(page); const first = await upload(page, 1); await upload(page, 2);
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(() => {
+    const state = window as Window & { navigation?: { currentEntry?: { index: number } }; receiptTraversalTrace?: Array<{ path: string; index?: number; kind: string }> };
+    const trace = (kind: string) => (state.receiptTraversalTrace ??= []).push({ kind, path: location.pathname + location.search, index: state.navigation?.currentEntry?.index });
+    trace('dashboard'); window.addEventListener('popstate', () => trace('pop'), true);
+  });
   // This link stays in the same app document, exercising the actual app-router popstate boundary.
   await page.locator('a[href="/purchases"]').first().click(); await expect(page).toHaveURL(/\/purchases$/);
   await page.getByRole('list', { name: 'Eingangsbelege', exact: true }).getByRole('button').first().click();
   await page.setViewportSize({ width: 390, height: 844 });
   await (await draft(page)).fill('Keep this draft while deciding.');
-  await page.evaluate(() => window.history.back()); await expect(chooser(page)).toBeVisible();
+  await page.evaluate(() => {
+    const state = window as Window & { navigation?: { currentEntry?: { index: number } }; receiptTraversalTrace?: Array<{ path: string; index?: number; kind: string }> };
+    state.receiptTraversalTrace?.push({ kind: 'before-back', path: location.pathname + location.search, index: state.navigation?.currentEntry?.index });
+    window.history.back();
+  });
+  try { await expect(chooser(page)).toBeVisible(); } catch (failure) {
+    const diagnostic = await page.evaluate(() => {
+      const state = window as Window & { navigation?: { currentEntry?: { index: number } }; receiptTraversalTrace?: unknown };
+      return { path: location.pathname + location.search, index: state.navigation?.currentEntry?.index, trace: state.receiptTraversalTrace, reviewOpen: !!document.querySelector('[role=dialog]'), unsavedLabel: document.body.textContent?.includes('Ungespeicherte Änderungen'), noteRetained: (document.querySelector('#review-draft-note') as HTMLTextAreaElement | null)?.value === 'Keep this draft while deciding.' };
+    });
+    throw new Error(`Dirty Back must retain review and show explicit choices: ${JSON.stringify(diagnostic)}`, { cause: failure });
+  }
   await expect(chooser(page).getByRole('heading')).toBeFocused(); await chooser(page).getByRole('button', { name: 'Hier bleiben', exact: true }).click();
   await expect(review(page).getByLabel('Prüfnotiz', { exact: true })).toHaveValue('Keep this draft while deciding.');
   const sourceEntry = page.url();
