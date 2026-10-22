@@ -80,6 +80,13 @@ describe('pure native-memory observation data and lifecycle', () => {
     const report = await h.observer.close(); expect(report).toMatchObject({ status: 'unavailable', samples: 0 }); expect(JSON.stringify(report)).not.toMatch(/PRIVATE|private/);
     expect(h.reader.close).toHaveBeenCalledOnce(); expect(h.subscribers.size).toBe(0); expect(vi.getTimerCount()).toBe(0);
   });
+  it('labels a later failed sample partial without erasing valid lower-bound metrics', async () => {
+    vi.useFakeTimers(); const h = harness(); h.publish(); h.child.emit('spawn'); await flush();
+    h.reader.read.mockRejectedValue(new Error('PRIVATE later process read failure'));
+    await vi.advanceTimersByTimeAsync(20); const report = await h.observer.close();
+    expect(report).toMatchObject({ status: 'partial', samples: 1, maxVmPeakKiB: 1000000, maxVmRssKiB: 70000 });
+    expect(JSON.stringify(report)).not.toMatch(/PRIVATE|failure/); expect(h.reader.close).toHaveBeenCalledOnce(); expect(vi.getTimerCount()).toBe(0);
+  });
   it('preserves existing production child listeners and hides observer close failures', async () => {
     vi.useFakeTimers(); const h = harness(); const productionExit = vi.fn();
     h.child.on('exit', productionExit); h.reader.close.mockRejectedValue(new Error('PRIVATE close failure'));

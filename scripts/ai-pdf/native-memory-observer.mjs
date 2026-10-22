@@ -112,7 +112,7 @@ export function createNativeMemoryObserver(options = {}) {
       summary.maxVmSizeKiB = Math.max(summary.maxVmSizeKiB, parsed.values.VmSize);
       summary.maxVmHwmKiB = Math.max(summary.maxVmHwmKiB, parsed.values.VmHWM);
       summary.maxVmRssKiB = Math.max(summary.maxVmRssKiB, parsed.values.VmRSS);
-    } catch { summary.status = 'unavailable'; stop(); }
+    } catch { summary.status = summary.samples > 0 ? 'partial' : 'unavailable'; stop(); }
     if (!stopped) { timer = setTimeout(() => { pending = sample(); }, INTERVAL_MS); timer.unref?.(); }
   };
   const subscriber = message => {

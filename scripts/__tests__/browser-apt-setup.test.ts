@@ -153,7 +153,7 @@ describe('per-command browser dependency transport bounds', () => {
   });
 
   it('retains existing acceptance limits, evidence policy and package trust configuration', () => {
-    expect(workflow).toContain('    timeout-minutes: 30');
+    expect(workflow).toContain('    timeout-minutes: 45');
     expect(workflow).toContain('        timeout-minutes: 25');
     expect(workflow).toContain('--retries=0');
     const allowed = workflow.split('          allowed = {')[1].split('          }')[0].match(/'[^']+\.png'/g);

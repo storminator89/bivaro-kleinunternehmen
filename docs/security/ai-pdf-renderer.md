@@ -403,3 +403,42 @@ of spare budget. Virtual mappings/reservations are distinct from resident memory
 and V8 heap. Any resource proposal still needs the actual native figures and a
 bounded remaining-budget rationale, followed by all unchanged positive/negative
 native and real-PDF browser gates. No limit or security policy changes here.
+
+
+### Fixed process-local reservation reduction (native confirmation pending)
+
+At source d43ada0c238156f299de7752095d18f7c7c7fbe6,
+[native run 39782765605](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39782765605)
+rejected the first synthetic PDF at document-load on both architectures. The
+observer retained these valid numeric lower bounds before a later observation
+failure (`unavailable`, not a complete measurement):
+
+| Native architecture | Samples | VmPeak KiB | VmSize KiB | VmHWM/VmRSS KiB |
+| --- | ---: | ---: | ---: | ---: |
+| x64 | 36 | 1,048,576 | 1,048,540 | 92,264 |
+| arm64 | 57 | 1,048,576 | 1,048,572 | 97,836 |
+
+The observed virtual peak reaches the exact 1 GiB AS ceiling while the observed
+resident figures and prior V8 GC heap figures are much smaller. This supports
+investigating virtual reservation/allocation pressure, not increasing the V8 heap
+cap or claiming a successful render. The observer now distinguishes a later
+failed sample as `partial`, retaining earlier valid lower bounds; no failed read
+is silently presented as complete measurement.
+
+The candidate fixes **only the child process** to `MALLOC_ARENA_MAX=2` and Node
+`--v8-pool-size=1`. [GNU documents the arena-count cap](https://sourceware.org/glibc/manual/latest/html_node/Memory-Allocation-Tunables.html),
+and [the pinned Node CLI documents the background-job pool](https://github.com/nodejs/node/blob/v22.23.4/doc/api/cli.md#--v8-pool-sizenum).
+The constructed child environment does not inherit operator settings or add
+GLIBC_TUNABLES, LD_PRELOAD, MiMalloc settings or any other allocator override.
+Native threads remain supported; fewer arenas/jobs may reduce reservations but
+can affect contention/throughput and require genuine native confirmation.
+
+This is a hypothesis-driven reduction, **not a native-memory bound**: canvas's
+[Rust global allocator is MiMalloc](https://github.com/Brooooooklyn/canvas/blob/v1.0.13/src/lib.rs#L33-L34),
+independent of glibc's arena count. V8/native code may reserve other mappings.
+AS remains 1 GiB, V8 old space 128 MiB, CPU 15 seconds, wall 20 seconds, with all
+pixel/operator/input/page/output/file/descriptor limits and Landlock/seccomp
+rights unchanged. No host setting or live process is modified, no diagnostic is
+suppressed, and no provider call or partial rendering can be accepted on failure.
+The same real positive/negative native and production-derived PDF browser gates
+must pass on the candidate; resource increases remain unapproved and unproven.

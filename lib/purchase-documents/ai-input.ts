@@ -61,7 +61,7 @@ async function rendererArguments(input: string, output: string): Promise<string[
     // The network-free worker must not read the host's OpenSSL configuration.
     // Node initializes OpenSSL before JS; use the already read-allowed empty
     // device rather than granting /etc or inheriting OPENSSL_CONF.
-    '--openssl-config=/dev/null', '--max-old-space-size=128', '--disable-wasm-trap-handler', '--disallow-code-generation-from-strings', '--permission', '--allow-addons',
+    '--openssl-config=/dev/null', '--v8-pool-size=1', '--max-old-space-size=128', '--disable-wasm-trap-handler', '--disallow-code-generation-from-strings', '--permission', '--allow-addons',
     `--allow-fs-read=${script}`, `--allow-fs-read=${input}`, `--allow-fs-read=${pdfjs}`,
     `--allow-fs-read=${canvas}`, `--allow-fs-read=${native}`, '--allow-fs-read=/usr/bin/ldd',
     `--allow-fs-read=${output}`, `--allow-fs-write=${output}`, script, input, output,
@@ -103,7 +103,7 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
         detached: true, cwd: output, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
         // No inherited PATH, NODE_OPTIONS, provider/API keys, database URL,
         // proxy, shell, locale configuration or app secrets.
-        env: { LANG: 'C', HOME: output, TMPDIR: output, NODE_ENV: 'production', UV_THREADPOOL_SIZE: '1', RAYON_NUM_THREADS: '1', DISABLE_SYSTEM_FONTS_LOAD: '1' },
+        env: { LANG: 'C', HOME: output, TMPDIR: output, NODE_ENV: 'production', UV_THREADPOOL_SIZE: '1', RAYON_NUM_THREADS: '1', DISABLE_SYSTEM_FONTS_LOAD: '1', MALLOC_ARENA_MAX: '2' },
       });
     } catch { reject(new PurchaseDocumentError('Isolierter PDF-Renderer ist nicht verfügbar; keine KI-Anfrage wurde gesendet.', 422, 'AI_RENDER_UNAVAILABLE')); return; }
     const count = (chunk: Buffer) => {
