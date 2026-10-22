@@ -89,6 +89,19 @@ describe('bounded original input preparation', () => {
     await expect(access(state.directory)).rejects.toThrow();
   });
   it.each([
+    ['MODULE_NOT_FOUND', 'module-load'], ['ERR_MODULE_NOT_FOUND', 'module-load'],
+    ['ERR_DLOPEN_FAILED', 'module-load'], ['EMFILE', 'descriptors'],
+    ['ENOMEM', 'memory'], ['EPERM', 'permission'], ['EACCES', 'permission'],
+    ['SyntaxError', 'syntax'],
+  ])('reports only reviewed startup code %s, with a bounded output count', async (startupCode, reason) => {
+    const stderr = `Error ${startupCode}: private text /private/path`;
+    Object.assign(state, { exitCode: 1, stderr });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ cause: { startupCode, reason, diagnosticBytes: Buffer.byteLength(stderr), exitCode: 1 } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/private|path/);
+  });
+  it.each([
     ['OpenSSL configuration error: Permission denied: /private/openssl.cnf', 'openssl-config'],
     ['Error [ERR_ACCESS_DENIED]: /private/file', 'node-permission'],
     ['Warning: Detected unsettled top-level await at /private/file', 'unsettled-await'],

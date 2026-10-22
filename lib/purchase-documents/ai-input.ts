@@ -84,6 +84,7 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
     let diagnostics = 0;
     let diagnosticText = '';
     let stage = 'launcher', reason = 'unknown';
+    let startupCode: string | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const killGroup = () => {
       if (!child?.pid) return;
@@ -109,10 +110,21 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
       diagnosticText += chunk.toString('ascii');
       for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_STAGE (read-input|canvas-import|pdfjs-import|document-load|metadata|operators|render|pixels|encode|write-page|page-cleanup|document-cleanup|manifest)\n/g)) stage = match[1];
       for (const match of diagnosticText.matchAll(/BIVARO_AI_RENDER_REASON (pdf-diagnostic|permission|module-load|memory|page-limit|type|range|runtime)\n/g)) reason = match[1];
+      // Never copy an arbitrary error code/message. Match a finite reviewed
+      // vocabulary, including startup failures that occur before JS progress.
+      const codes = ['ERR_ACCESS_DENIED', 'ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_DLOPEN_FAILED', 'ERR_UNKNOWN_FILE_EXTENSION', 'ERR_INVALID_ARG_VALUE', 'ERR_INVALID_ARG_TYPE', 'ERR_WORKER_INIT_FAILED', 'ERR_SYSTEM_ERROR', 'EMFILE', 'ENOMEM', 'EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'EISDIR', 'EBADF', 'EIO', 'SyntaxError', 'ReferenceError', 'TypeError', 'RangeError'];
+      startupCode = codes.find(value => new RegExp(`\\b${value}\\b`).test(diagnosticText)) ?? null;
       if (/OpenSSL configuration error/.test(diagnosticText)) reason = 'openssl-config';
       else if (/uv_pipe_open/.test(diagnosticText)) reason = 'stdio-setup';
       else if (/ERR_ACCESS_DENIED/.test(diagnosticText)) reason = 'node-permission';
       else if (/Detected unsettled top-level await/.test(diagnosticText)) reason = 'unsettled-await';
+      if (reason === 'unknown') {
+        if (startupCode === 'ERR_MODULE_NOT_FOUND' || startupCode === 'MODULE_NOT_FOUND' || startupCode === 'ERR_DLOPEN_FAILED') reason = 'module-load';
+        else if (startupCode === 'EMFILE') reason = 'descriptors';
+        else if (startupCode === 'ENOMEM') reason = 'memory';
+        else if (startupCode === 'EACCES' || startupCode === 'EPERM') reason = 'permission';
+        else if (startupCode === 'SyntaxError') reason = 'syntax';
+      }
       if (reason === 'unknown') {
         if (/ERR_ACCESS_DENIED|Permission denied|Operation not permitted/.test(diagnosticText)) reason = 'permission';
         else if (/Cannot allocate memory|Allocation failed|heap out of memory|Failed to reserve|Reservation failed/.test(diagnosticText)) reason = 'memory';
@@ -133,7 +145,7 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
         // Error.cause is diagnostic-only. Routes continue returning the fixed
         // public code/message, and synthetic native smoke shows these tokens.
         const signals = ['SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGILL', 'SIGKILL', 'SIGSEGV', 'SIGSYS', 'SIGTERM', 'SIGXCPU', 'SIGXFSZ'];
-        Object.defineProperty(error, 'cause', { value: { stage, reason, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
+        Object.defineProperty(error, 'cause', { value: { stage, reason, startupCode, diagnosticBytes: diagnostics, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
         reject(error);
       }
       else resolve();
