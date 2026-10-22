@@ -97,6 +97,9 @@ describe('PDF/A-3 Factur-X metadata', () => {
     expect(metadata).toContain('<pdfaid:conformance>B</pdfaid:conformance>');
     expect(metadata).toContain(`<fx:DocumentFileName>${FACTUR_X_XML_FILENAME}</fx:DocumentFileName>`);
     expect(metadata).toContain('<rdf:li xml:lang="x-default">Rechnung RE-2025-001 &amp; Co</rdf:li>');
+    expect(loadedDoc.getSubject()).toBe('Factur-X/ZUGFeRD invoice');
+    expect(metadata).toContain('<dc:description>');
+    expect(metadata).toContain('<rdf:li xml:lang="x-default">Factur-X/ZUGFeRD invoice</rdf:li>');
   });
 
   it('ships an sRGB ICC profile for PDF/A output intents', () => {

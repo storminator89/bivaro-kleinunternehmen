@@ -1,0 +1,100 @@
+name: Own-invoice PDF-A conformance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'app/api/invoices/render/**'
+      - 'components/dashboard/create-invoice-modal.tsx'
+      - 'public/fonts/invoice/**'
+      - 'scripts/own-invoice-pdfa/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/own-invoice-pdfa.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'lib/**'
+      - 'app/api/invoices/render/**'
+      - 'components/dashboard/create-invoice-modal.tsx'
+      - 'public/fonts/invoice/**'
+      - 'scripts/own-invoice-pdfa/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/own-invoice-pdfa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: own-invoice-pdfa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  final-bytes:
+    name: Final attached bytes (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: x64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      TZ: UTC
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+          cache: npm
+      - name: Require native Linux architecture and a fresh temporary fixture
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          node -e 'if(process.platform!=="linux" || process.arch!==process.env.EXPECTED_ARCHITECTURE) throw Error("Native Linux runner required")'
+          fixture=$(mktemp -d "${RUNNER_TEMP}/bivaro-pdfa-unit-XXXXXX")
+          echo "DATABASE_URL=file:${fixture}/unused.db" >> "$GITHUB_ENV"
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Generate Prisma Client
+        run: npx prisma generate
+      - name: Install ordinary runtime and independent pixel renderer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends default-jre-headless util-linux poppler-utils
+      - name: Install exact hash-pinned official veraPDF
+        run: node scripts/own-invoice-pdfa/install-runtime.mjs "${{ runner.temp }}/bivaro-verapdf"
+      - name: Require every positive and negative real conformance case
+        env:
+          BIVARO_RUN_OWN_INVOICE_PDFA_ACCEPTANCE: '1'
+          BIVARO_VERAPDF_BIN: ${{ runner.temp }}/bivaro-verapdf/verapdf
+          BIVARO_OWN_INVOICE_EVIDENCE_DIR: ${{ runner.temp }}/bivaro-own-invoice-pdfa
+        run: npm test -- lib/__tests__/own-invoice-pdfa-acceptance.test.ts
+      - name: Render all exact final PDF pages for readable review
+        env:
+          EVIDENCE: ${{ runner.temp }}/bivaro-own-invoice-pdfa
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          node -e 'const m=require(process.env.EVIDENCE+"/manifest.json"); if(m.status!=="matrix-passed" || m.verifier!=="1.30.3" || m.platform!=="linux" || m.architecture!==process.env.EXPECTED_ARCHITECTURE || m.cases.length!==10 || !m.malformedLogoPassed || !m.overlongIdentifierPassed || !m.overlongUnitPassed) throw Error("Incomplete conformance matrix")'
+          mkdir "$EVIDENCE/rendered"
+          for pdf in "$EVIDENCE"/*.pdf; do
+            case "$pdf" in *-preview.pdf) continue ;; esac
+            pdftoppm -scale-to 2000 -png "$pdf" "$EVIDENCE/rendered/$(basename "${pdf%.pdf}")"
+          done
+      - name: Retain only synthetic conformance PDFs, manifest and page pixels
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: own-invoice-pdfa-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/bivaro-own-invoice-pdfa
+          if-no-files-found: warn
+          retention-days: 1

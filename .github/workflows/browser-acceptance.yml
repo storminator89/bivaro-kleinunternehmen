@@ -45,7 +45,7 @@ jobs:
       - name: Install and verify PDF and virtual display dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ghostscript xvfb xauth default-jre-headless util-linux
+          sudo apt-get install -y --no-install-recommends ghostscript xvfb xauth default-jre-headless util-linux poppler-utils
           command -v gs
           command -v Xvfb
           command -v xvfb-run
@@ -56,12 +56,18 @@ jobs:
       - name: Install hash-pinned official offline invoice validator
         run: node scripts/einvoice-validation/install-runtime.mjs "${{ runner.temp }}/bivaro-einvoice"
 
+      - name: Install hash-pinned official own-invoice PDF-A verifier
+        run: node scripts/own-invoice-pdfa/install-runtime.mjs "${{ runner.temp }}/bivaro-verapdf"
+
       # Use the supported runner: it owns a fresh temporary database and cleanup.
       # Security hardening remains in CI / Security checks (see testing docs).
       - name: Run the complete functional suite
         timeout-minutes: 25
         env:
           BIVARO_EINVOICE_ASSETS: ${{ runner.temp }}/bivaro-einvoice
+          BIVARO_VERAPDF_BIN: ${{ runner.temp }}/bivaro-verapdf/verapdf
+          BIVARO_RUN_OWN_INVOICE_PDFA_BROWSER: '1'
+          BIVARO_OWN_INVOICE_BROWSER_EVIDENCE_DIR: ${{ runner.temp }}/bivaro-own-invoice-browser
         run: >-
           xvfb-run --auto-servernum npm run test:e2e --
           --headed
@@ -72,6 +78,26 @@ jobs:
           --reporter=github
           --trace=off
           --output="${{ runner.temp }}/bivaro-browser-results"
+
+      - name: Require both real final-byte browser cases and render all their PDF pages
+        env:
+          EVIDENCE: ${{ runner.temp }}/bivaro-own-invoice-browser
+        run: |
+          for viewport in desktop mobile; do
+            directory="$EVIDENCE/$viewport"
+            node -e 'const fs=require("node:fs"),c=require("node:crypto"),p=process.argv[1],m=require(p+"/manifest.json"),h=c.createHash("sha256").update(fs.readFileSync(p+"/final.pdf")).digest("hex"); if(m.status!=="passed" || h!==m.finalSha256 || h!==m.downloadedSha256 || h!==m.storedSha256) throw Error("Incomplete real browser final-byte evidence")' "$directory"
+            mkdir "$directory/rendered"
+            pdftoppm -scale-to 2000 -png "$directory/final.pdf" "$directory/rendered/final"
+          done
+
+      - name: Retain only synthetic own-invoice final-byte browser evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: own-invoice-browser-final-bytes
+          path: ${{ runner.temp }}/bivaro-own-invoice-browser
+          if-no-files-found: warn
+          retention-days: 1
 
       - name: Stage only allowlisted synthetic screenshots
         id: stage-visuals

@@ -11,6 +11,14 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/container-runtime-smoke.sh'
+      - 'scripts/own-invoice-pdfa/**'
+      - 'lib/server/own-invoice-*.ts'
+      - 'lib/own-invoice-source.ts'
+      - 'lib/pdfa3.ts'
+      - 'lib/zugferd-generator.ts'
+      - 'app/api/invoices/render/**'
+      - 'public/fonts/invoice/**'
+      - 'next.config.ts'
       - 'lib/__tests__/fixtures/incoming-validation/**'
       - '.github/workflows/container-runtime.yml'
   push:
@@ -24,6 +32,14 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/container-runtime-smoke.sh'
+      - 'scripts/own-invoice-pdfa/**'
+      - 'lib/server/own-invoice-*.ts'
+      - 'lib/own-invoice-source.ts'
+      - 'lib/pdfa3.ts'
+      - 'lib/zugferd-generator.ts'
+      - 'app/api/invoices/render/**'
+      - 'public/fonts/invoice/**'
+      - 'next.config.ts'
       - 'lib/__tests__/fixtures/incoming-validation/**'
       - '.github/workflows/container-runtime.yml'
 permissions:
@@ -49,10 +65,35 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Build current runtime without publishing
         run: docker build --pull --tag bivaro-runtime-smoke .
-      - name: Check isolated non-root runtime and synthetic PDF/database
-        run: >-
-          docker run --rm --network=none --entrypoint sh
-          --mount type=bind,src="$PWD/scripts/container-runtime-smoke.sh",dst=/tmp/container-runtime-smoke.sh,readonly
-          --mount type=bind,src="$PWD/lib/__tests__/fixtures/incoming-validation",dst=/tmp/validator-fixtures,readonly
-          --mount type=bind,src="$PWD/node_modules/sax",dst=/tmp/smoke-sax,readonly
-          bivaro-runtime-smoke /tmp/container-runtime-smoke.sh
+      - name: Check isolated non-root runtime and retain only synthetic PDF evidence
+        shell: bash
+        run: |
+          trap 'docker rm --force bivaro-runtime-smoke >/dev/null 2>&1 || true' EXIT
+          mkdir "${RUNNER_TEMP}/bivaro-own-invoice-container"
+          status=0
+          docker run --name bivaro-runtime-smoke --network=none --entrypoint sh \
+            --mount type=bind,src="$PWD/scripts/container-runtime-smoke.sh",dst=/tmp/container-runtime-smoke.sh,readonly \
+            --mount type=bind,src="$PWD/scripts/own-invoice-pdfa/container-smoke.mjs",dst=/tmp/own-invoice-container-smoke.mjs,readonly \
+            --mount type=bind,src="$PWD/lib/__tests__/fixtures/incoming-validation",dst=/tmp/validator-fixtures,readonly \
+            --mount type=bind,src="$PWD/node_modules/sax",dst=/tmp/smoke-sax,readonly \
+            --mount type=bind,src="$PWD/node_modules",dst=/tmp/own-invoice-test/node_modules,readonly \
+            bivaro-runtime-smoke /tmp/container-runtime-smoke.sh || status=$?
+          docker cp bivaro-runtime-smoke:/tmp/bivaro-own-invoice-container-smoke/. "${RUNNER_TEMP}/bivaro-own-invoice-container/" || true
+          exit "$status"
+      - name: Verify copied final bytes and render every container PDF page
+        env:
+          EVIDENCE: ${{ runner.temp }}/bivaro-own-invoice-container
+        run: |
+          node -e 'const fs=require("node:fs"),c=require("node:crypto"),p=process.env.EVIDENCE,m=require(p+"/manifest.json"); if(m.status!=="passed" || m.platform!=="linux" || m.architecture!==process.arch || c.createHash("sha256").update(fs.readFileSync(p+"/final.pdf")).digest("hex")!==m.finalSha256) throw Error("Invalid native final-byte evidence")'
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          mkdir "$EVIDENCE/rendered"
+          pdftoppm -scale-to 2000 -png "$EVIDENCE/final.pdf" "$EVIDENCE/rendered/final"
+      - name: Retain only synthetic container PDF, manifest and page pixels
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: own-invoice-container-${{ matrix.runner }}
+          path: ${{ runner.temp }}/bivaro-own-invoice-container
+          if-no-files-found: warn
+          retention-days: 1
