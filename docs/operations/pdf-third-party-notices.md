@@ -13,18 +13,34 @@ a distribution. The collector writes these files into `.next/standalone/`:
 - `THIRD_PARTY_NOTICES.txt`: scope, component list and explicit limitations;
 - `THIRD_PARTY_SOURCES.json`: installed/locked versions, npm archive URLs and
   integrity values, declared repositories, and copied-notice SHA-256 values;
+- `LICENSE`: the application's current root AGPL-3.0-only text, unchanged and
+  SHA-256-bound in the manifest; third-party components keep their own terms;
 - `licenses/npm/`: original root license, copyright and notice files plus package
-  metadata for PDFKit/fontkit and their declared npm runtime dependency closure;
+  metadata for PDFKit/fontkit and their declared npm runtime dependency closure,
+  and PDF.js 6.4.299's root and separately licensed CMAP/ICC/font/WASM notices;
 - `licenses/invoice-fonts/`: byte-for-byte original `FONT-LICENSE.txt` and font
   provenance README. Font files and their existing adjacent notice stay unchanged;
 - `licenses/MIT-reference.txt`: **reference template only**, copied from SPDX
-  license-list-data v3.26.0, including unfilled placeholders.
+  license-list-data v3.26.0, including unfilled placeholders;
+- `licenses/shadcn-ui/`, `licenses/brotli/`, `licenses/quickjs/`: recovered
+  original notices also committed in the source tree;
+- `licenses/third-party-sources.json`: exact upstream URLs, commit pins,
+  full-source SHA-256/Git-blob IDs, extracted-notice SHA-256 values and explicit
+  provenance limits for those recovered notices.
 
 The Docker builder runs `npm run build` before pruning dependencies and copies
 that entire standalone directory to `/app`. Notice files therefore survive
 Next's tracing and `npm prune`; they do not depend on Next tracing a LICENSE.
 The collector does not download anything, execute PDF tools, or start a server.
 Its output has no timestamps or absolute build paths.
+The offline collector checks all 24 pinned recovered notice/provenance files
+and byte-matches seven installed Brotli decoder sources and both shipped
+QuickJS assets before writing anything. It rejects duplicate/escaped paths,
+symlinked inputs/output components, excessive inputs and mismatched hashes.
+Existing hard-linked output files are rejected before truncation.
+Repeated writes preserve identical bytes; no mutable upstream fetch runs during
+build. The source repository includes the originals and manifest, so source
+distributions do not depend on a later build to recover these notices.
 
 The pinned veraPDF installer separately writes
 `/opt/verapdf/THIRD-PARTY-NOTICES.txt`, `THIRD_PARTY_SOURCES.json`, MPL/GPL license
@@ -44,8 +60,46 @@ alternative**, not a relicensing of the entire shaded JAR or application.
   <https://github.com/foliojs/fontkit/issues/255>. The collector preserves those
   declarations and flags the gap. **It does not invent a copyright year/holder,
   reuse PDFKit's copyright for fontkit, or pretend the generic MIT template
-  supplies missing attribution.** The observed closure also lacks root license
-  texts for brotli 1.3.3 and dfa 1.2.0; these remain flagged, not silently cleared.
+  supplies missing attribution.** dfa 1.2.0 also lacks a full root license text;
+  Brotli's missing wrapper attribution remains flagged separately below.
+- shadcn/ui-derived `components/ui/` scaffolds retain the exact original MIT
+  `Copyright (c) 2023 shadcn` notice from commit
+  `6ea6856f5a1082d4d9c231559b6bc3ee73827493`:
+  <https://raw.githubusercontent.com/shadcn-ui/ui/6ea6856f5a1082d4d9c231559b6bc3ee73827493/LICENSE.md>.
+- Brotli 1.3.3's installed `dec/{bit_reader,context,decode,dictionary-data,
+  dictionary,prefix,transform}.js` files byte-match foliojs/brotli.js commit
+  `e36051345f6d27a56e5f39ea70d2f789b8574046` (tag `v1.3.3`). Their original
+  leading Google-2013 Apache-2.0 comments are preserved **separately by source
+  path**, alongside the complete official Apache text. Example source:
+  <https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/decode.js>.
+  Package metadata/README still declare MIT. **This does not relabel the whole
+  package Apache or resolve missing full wrapper MIT attribution.**
+- PDF.js 6.4.299's unchanged `wasm/quickjs-eval.{js,wasm}` byte-match the
+  corresponding `external/quickjs/` assets at PDF.js commit
+  `7a7e4fd382481a76f55c6d735873f635c9178db1`; respective Git blobs are
+  `f087fb29602352e8be9a6e7f7d766ccdb0dda038` and
+  `42980e94aa4d7359e4113c968c67800b45462764`.
+  Their absent packaged notices are tracked upstream:
+  <https://github.com/mozilla/pdf.js/issues/22143>.
+  The wrapper build pin `b62f7cd527363ca2c1fe7467f274bc9acbf78c24` identifies
+  bellard/quickjs `3d5e064e9dd67c70f7962836505a7fa067bf0a4e`, VERSION
+  `2026-06-04`; its original root license and leading MIT headers from
+  `quickjs.{c,h}`, `cutils.{c,h}`, `libregexp.{c,h}`, `libunicode.{c,h}`,
+  `dtoa.{c,h}`, `quickjs-atom.h` and `quickjs-opcode.h` are preserved. In
+  particular `dtoa` has its own original 2024 Fabrice Bellard attribution;
+  `quickjs.c` has the newer 2017–2025 Bellard/Gordon notices. These are not
+  replaced by the root license's older date range. Primary engine license:
+  <https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/LICENSE>.
+- `LICENSE_PDFJS_QUICKJS` is the **subsequently supplied official wrapper
+  project notice**, from `e2c5bfc8194b16f5973eea5e4e025b67be3c1015`, not an
+  original file at the asset-build revision:
+  <https://raw.githubusercontent.com/mozilla/pdf.js.quickjs/e2c5bfc8194b16f5973eea5e4e025b67be3c1015/LICENSE>.
+  Upstream explains the missing license-file correction at
+  <https://github.com/mozilla/pdf.js.quickjs/issues/1>. The exact build wrapper's
+  `Dockerfile`, `compile.sh` and patch source URLs/hashes are in the manifest.
+  Its Dockerfile uses `emscripten/emsdk:latest`; **exact shipped compiler and
+  libc-runtime provenance remains unresolved**. Matching source pins/assets
+  does not prove reproducible compilation or complete binary-license coverage.
 - Exact original font OFL notices remain authoritative. No font license changes.
 - veraPDF CLI 1.30.3 is from the installer archive pinned in
   `scripts/own-invoice-pdfa/install-runtime.mjs`. The inspected CLI SHA-256 is
@@ -72,7 +126,7 @@ alternative**, not a relicensing of the entire shaded JAR or application.
 Before a license transition or a claim of complete binary/container compliance,
 resolve missing upstream attribution and audit **the final release artifact**:
 all veraPDF shaded dependencies/resources, PDF.js fonts and Canvas's native and
-transitive components if introduced, existing sharp/libvips and other npm/native
+transitive components, existing sharp/libvips and other npm/native
 libraries, the other invoice validators, Debian packages and the JRE. Keep
 applicable source-availability/relinking obligations and original notices for
 each component; a top-level MIT/Apache/MPL label is not a bundle-wide license.
@@ -82,7 +136,7 @@ each component; a top-level MIT/Apache/MPL label is not a bundle-wide license.
 Pure unit tests use synthetic package trees and ZIPs only:
 
 ```sh
-npx vitest run scripts/__tests__/pdf-runtime-notices.test.ts scripts/__tests__/own-invoice-pdfa-installer.test.ts
+npx vitest run scripts/__tests__/pdf-runtime-notices.test.ts scripts/__tests__/runtime-notice-inspection.test.ts scripts/__tests__/own-invoice-pdfa-installer.test.ts
 ```
 
 They cover deterministic byte preservation, nested dependency versions, missing
@@ -106,6 +160,10 @@ and retains the separate-license/source-mapping limits. Only a compact
 The production smoke uses fixed roots and digests; synthetic unit tests extract
 only the isolated inspection function and supply synthetic expected digests.
 They never import/run the full container smoke, server, database or native tools.
+The inspection additionally pins the recovered-notice manifest, verifies all
+its original notice/provenance bytes and nine unchanged runtime inputs, and
+checks the copied application license. Only their counts/digests are included
+in the existing compact result; no full private artifact is uploaded.
 A summary with `status: passed` is scoped file-preservation evidence for that
 particular image, **not** complete license clearance, AI/foreign-PDF closure
 coverage, or evidence of an emulated arm64 build.

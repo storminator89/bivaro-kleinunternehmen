@@ -64,6 +64,7 @@ tests
 # Documentation
 *.md
 !README.md
+!licenses/shadcn-ui/LICENSE.md
 docs
 AGENTS.md
 
@@ -76,3 +77,7 @@ temp
 
 # High-resolution design originals; runtime uses public/brand/icons.
 assets/brand/bivaro-icons
+
+# Never reuse host-architecture renderer policy in an image build.
+scripts/ai-pdf/sandbox-*.bpf
+scripts/ai-pdf/smoke-runtime/
