@@ -23,7 +23,7 @@ vi.mock('fs/promises', () => ({
   rm: mocks.rm,
 }));
 
-import { PdfA3ValidationError, validatePdfA3 } from '@/lib/server/pdfa-validator';
+import { classifyPdfA3StartupText, PdfA3ValidationError, validatePdfA3 } from '@/lib/server/pdfa-validator';
 import { OwnInvoicePdfAValidationError, validateOwnInvoicePdfA3 } from '@/lib/server/own-invoice-pdfa-validator';
 
 const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]);
@@ -472,5 +472,74 @@ describe('shared foreign-PDF verifier classification', () => {
   it('rejects an unbounded verifier request before process creation', async () => {
     await expect(validatePdfA3(bytes, { maxBytes: MAX_PDF_INPUT_BYTES * 2 + 1 })).rejects.toBeInstanceOf(PdfA3ValidationError);
     expect(mocks.spawn).not.toHaveBeenCalled();
+  });
+});
+
+// Closed internal diagnostics only; the own-invoice public wrapper above still
+// discards these and preserves its exact established status/name/message.
+describe('closed validator phase and startup diagnostics (mocked children only)', () => {
+  it.each([
+    ['java.lang.InternalError: Error loading java.security file', 'java-security-config'],
+    ['Could not reserve enough space for object heap', 'java-memory-reservation'],
+    ['unable to create native thread', 'java-thread-creation'],
+    ['Could not find or load main class org.verapdf.apps.GreenfieldCliWrapper', 'java-main-class'],
+    ['Unrecognized VM option', 'java-options'],
+    ['Error occurred during initialization of VM', 'java-vm-initialization'],
+    ['setpriv: landlock: synthetic', 'sandbox-rule'],
+    ['setpriv: Could not load seccomp filter synthetic', 'sandbox-filter'],
+    ['setpriv: landlock_create_ruleset failed: synthetic', 'sandbox-landlock-create'],
+    ['setpriv: adding landlock rule failed: synthetic', 'sandbox-landlock-add'],
+    ['setpriv: landlock_restrict_self failed: synthetic', 'sandbox-landlock-restrict'],
+    ['setpriv: failed to execute synthetic', 'sandbox-execution'],
+  ])('maps only a known static marker to %s', (text, category) => {
+    expect(classifyPdfA3StartupText(text)).toBe(category);
+  });
+  it.each([undefined, null, {}, 'private unknown document /secret/path', {toString(){throw Error('private coercion');}}].map(value=>({value})))('leaves unknown/non-string startup data unknown without conversion', ({value}) => {
+    expect(classifyPdfA3StartupText(value)).toBe('unknown');
+  });
+  it('distinguishes directory, construction, version identity and report failures without copied error text', async () => {
+    mocks.mkdtemp.mockRejectedValueOnce(Error('secret directory'));
+    await expect(validatePdfA3(bytes)).rejects.toMatchObject({validatorStage:'directory',kind:'unavailable',status:503});
+    vi.stubEnv('BIVARO_VERAPDF_BIN','relative-secret');
+    await expect(validatePdfA3(bytes)).rejects.toMatchObject({validatorStage:'construction',kind:'unavailable',status:503});
+    vi.stubEnv('BIVARO_VERAPDF_BIN',undefined);
+    mocks.version='secret unexpected version';
+    const identity=await validatePdfA3(bytes).catch(error=>error);
+    expect(identity).toMatchObject({validatorStage:'version-identity',startupCategory:'unknown',processOutcome:'unknown',kind:'unavailable',status:503});
+    expect(JSON.stringify(identity)).not.toContain('secret');
+    mocks.version='veraPDF 1.30.3\n';mocks.report='secret invalid report';
+    const report=await validatePdfA3(bytes).catch(error=>error);
+    expect(report).toMatchObject({validatorStage:'report',startupCategory:'unknown',kind:'unavailable',status:503});
+    expect(JSON.stringify(report)).not.toContain('secret');
+  });
+  it('distinguishes asynchronous version launch error and preserves the own-invoice public error contract', async () => {
+    mocks.error=Error('secret executable path');
+    const error=await validatePdfA3(bytes).catch(error=>error);
+    expect(error).toMatchObject({validatorStage:'version-launch',processOutcome:'launch-error',kind:'unavailable',status:503});
+    expect(JSON.stringify(error)).not.toContain('secret');
+    const own=await validateOwnInvoicePdfA3(bytes).catch(error=>error);
+    expect(own).toMatchObject({name:'OwnInvoicePdfAValidationError',status:500,message:'Die abschließende PDF/A-3b-Prüfung ist fehlgeschlagen. Es wurde keine Rechnungsdatei erstellt.'});
+    expect(own).not.toHaveProperty('validatorStage');expect(own).not.toHaveProperty('startupCategory');expect(own).not.toHaveProperty('processOutcome');
+  });
+  it('classifies bounded split stderr markers only after failed version result, without retaining source text in errors', async () => {
+    mocks.manualVersion=true;const outcome=validatePdfA3(bytes).catch(error=>error);await flushMicrotasks();
+    const child=mocks.children[0];child.stderr.emit('data',Buffer.from('secret /private/file Error loading java.se'));
+    child.stderr.emit('data',Buffer.from('curity file secret document'));child.emit('exit',1,null);child.emit('close',1,null);
+    const error=await outcome;expect(error).toMatchObject({validatorStage:'version-result',startupCategory:'java-security-config',processOutcome:'nonzero-exit',status:503});
+    expect(JSON.stringify(error)).not.toContain('secret');expect(JSON.stringify(error)).not.toContain('/private');
+  });
+  it.each([true,false])('distinguishes validation launch/result failure (%s) after successful pinned version', async launch => {
+    mocks.manualValidation=true;const outcome=validatePdfA3(bytes).catch(error=>error);await flushMicrotasks();
+    expect(mocks.children).toHaveLength(2);const child=mocks.children[1];
+    if(launch)child.emit('error',Error('secret launch path'));else child.stderr.emit('data',Buffer.from('secret unknown child data'));
+    child.emit('exit',1,null);child.emit('close',1,null);const error=await outcome;
+    expect(error).toMatchObject({validatorStage:launch?'validation-launch':'validation-result',startupCategory:'unknown',processOutcome:launch?'launch-error':'nonzero-exit',status:503});
+    expect(JSON.stringify(error)).not.toContain('secret');
+  });
+  it('never treats a startup marker as acceptance evidence or changes successful report validation', async () => {
+    mocks.version='veraPDF 1.30.3\nError loading java.security file';
+    await expect(validatePdfA3(bytes)).resolves.toBeUndefined();
+    mocks.report='not a compliant report';
+    await expect(validatePdfA3(bytes)).rejects.toMatchObject({validatorStage:'report',kind:'unavailable',status:503});
   });
 });

@@ -14,9 +14,32 @@ const VERAPDF_JAVA_OPTIONS = [
   '-Djava.awt.headless=true', '-Djava.io.tmpdir=.', '-Duser.home=.',
   '-Djavax.xml.accessExternalDTD=', '-Djavax.xml.accessExternalSchema=', '-Djavax.xml.accessExternalStylesheet=',
 ].join(' ');
+type ValidatorStage = 'unknown' | 'bounds' | 'directory' | 'construction' | 'version-launch' | 'version-result' | 'version-identity' | 'input-write' | 'validation-launch' | 'validation-result' | 'report' | 'cleanup';
+type StartupCategory = 'unknown' | 'java-security-config' | 'java-memory-reservation' | 'java-thread-creation' | 'java-main-class' | 'java-options' | 'java-vm-initialization' | 'sandbox-rule' | 'sandbox-landlock-create' | 'sandbox-landlock-add' | 'sandbox-landlock-restrict' | 'sandbox-filter' | 'sandbox-execution';
+type ProcessOutcome = 'unknown' | 'launch-error' | 'stream-error' | 'timeout' | 'output-limit' | 'nonzero-exit' | 'signal-sigsys' | 'signal-sigkill' | 'signal-sigabrt' | 'signal-sigsegv' | 'other-signal';
+/** Diagnostic hints only, never acceptance evidence. No text is returned or
+ * retained here; only static known marker categories may leave the process. */
+export function classifyPdfA3StartupText(text: unknown): StartupCategory {
+  if (typeof text !== 'string') return 'unknown';
+  if (text.includes('Error loading java.security file')) return 'java-security-config';
+  if (text.includes('Could not reserve enough space') || text.includes('Native memory allocation (mmap) failed')) return 'java-memory-reservation';
+  if (text.includes('unable to create native thread') || text.includes('pthread_create failed')) return 'java-thread-creation';
+  if (text.includes('Could not find or load main class org.verapdf.apps.GreenfieldCliWrapper')) return 'java-main-class';
+  if (text.includes('Unrecognized VM option') || text.includes('Invalid maximum heap size')) return 'java-options';
+  // Static English markers from util-linux v2.41.2; LANG is fixed C.UTF-8.
+  // https://github.com/util-linux/util-linux/blob/v2.41.2/sys-utils/setpriv-landlock.c
+  if (text.includes('setpriv: landlock_create_ruleset failed')) return 'sandbox-landlock-create';
+  if (text.includes('setpriv: adding landlock rule failed')) return 'sandbox-landlock-add';
+  if (text.includes('setpriv: landlock_restrict_self failed')) return 'sandbox-landlock-restrict';
+  if (['setpriv: landlock', 'setpriv: could not parse landlock fs access', 'setpriv: could not open file for landlock', 'setpriv: invalid landlock rule'].some(marker => text.includes(marker))) return 'sandbox-rule';
+  if (text.includes('setpriv: Could not load seccomp filter') || text.includes('setpriv: Seccomp non-functional')) return 'sandbox-filter';
+  if (text.includes('setpriv: failed to execute')) return 'sandbox-execution';
+  if (text.includes('Error occurred during initialization of VM') || text.includes('Could not create the Java Virtual Machine.')) return 'java-vm-initialization';
+  return 'unknown';
+}
 export class PdfA3ValidationError extends Error {
   readonly status: 422 | 503;
-  constructor(readonly kind: 'unsupported' | 'unavailable' = 'unavailable') {
+  constructor(readonly kind: 'unsupported' | 'unavailable' = 'unavailable', readonly validatorStage: ValidatorStage = 'unknown', readonly startupCategory: StartupCategory = 'unknown', readonly processOutcome: ProcessOutcome = 'unknown') {
     super(kind === 'unsupported' ? 'Das PDF erfüllt das erforderliche PDF/A-3b-Profil nicht.' : 'Die unabhängige PDF/A-Prüfung ist nicht verfügbar.');
     this.name = 'PdfA3ValidationError';
     this.status = kind === 'unsupported' ? 422 : 503;
@@ -126,6 +149,13 @@ function runVeraPdf(binary: string, args: string[], directory: string, confined?
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    const prefix = args[0] === '--version' ? 'version' : 'validation';
+    let launchFailed = false;
+    let processOutcome: ProcessOutcome = 'unknown';
+    let startupCategory: StartupCategory = 'unknown';
+    // Separate bounded tails permit static ASCII markers split across chunks,
+    // without retaining full stderr or exposing either stream to the harness.
+    const tails = [Buffer.alloc(0), Buffer.alloc(0)];
     let failed = false;
     let groupKillAttempted = false;
     let totalBytes = 0;
@@ -147,25 +177,31 @@ function runVeraPdf(binary: string, args: string[], directory: string, confined?
         catch { /* Already reaped or unavailable. */ }
       }
     };
-    const fail = () => {
+    const fail = (outcome: ProcessOutcome) => {
+      if (processOutcome === 'unknown') processOutcome = outcome;
       failed = true;
       killGroup();
     };
-    const timer = setTimeout(fail, VERAPDF_TIMEOUT_MS);
+    const timer = setTimeout(() => fail('timeout'), VERAPDF_TIMEOUT_MS);
     const consume = (chunk: Buffer, keep: boolean) => {
       totalBytes += chunk.byteLength;
       if (totalBytes > MAX_VERAPDF_REPORT_BYTES) {
-        fail();
+        fail('output-limit');
         return;
       }
+      const channel = keep ? 0 : 1;
+      const bounded = Buffer.concat([tails[channel], chunk]);
+      tails[channel] = Buffer.from(bounded.subarray(-256));
+      const category = classifyPdfA3StartupText(bounded.toString('utf8'));
+      if (category !== 'unknown' && (startupCategory === 'unknown' || startupCategory === 'java-vm-initialization')) startupCategory = category;
       if (keep && !failed)
         stdout.push(chunk);
     };
     child.stdout.on('data', (chunk: Buffer) => consume(chunk, true));
     child.stderr.on('data', (chunk: Buffer) => consume(chunk, false));
-    child.stdout.on('error', fail);
-    child.stderr.on('error', fail);
-    child.once('error', fail);
+    child.stdout.on('error', () => fail('stream-error'));
+    child.stderr.on('error', () => fail('stream-error'));
+    child.once('error', () => { launchFailed = true; fail('launch-error'); });
     child.once('exit', (code, signal) => {
       if (code !== 0 || signal)
         failed = true;
@@ -178,9 +214,14 @@ function runVeraPdf(binary: string, args: string[], directory: string, confined?
       killGroup();
       // Wait for close, not error/exit: all output descriptors must be gone
       // before the caller deletes private files or releases processing capacity.
-      if (failed || code !== 0 || signal)
-        reject(new PdfA3ValidationError());
-      else
+      if (failed || code !== 0 || signal) {
+        if (processOutcome === 'unknown') {
+          processOutcome = signal === 'SIGSYS' ? 'signal-sigsys' : signal === 'SIGKILL' ? 'signal-sigkill'
+            : signal === 'SIGABRT' ? 'signal-sigabrt' : signal === 'SIGSEGV' ? 'signal-sigsegv'
+              : signal ? 'other-signal' : 'nonzero-exit';
+        }
+        reject(new PdfA3ValidationError('unavailable', `${prefix}-${launchFailed ? 'launch' : 'result'}`, startupCategory, processOutcome));
+      } else
         resolve(Buffer.concat(stdout).toString('utf8'));
     });
   });
@@ -193,25 +234,32 @@ export async function validatePdfA3(bytes: Uint8Array, options: {
 } = {}): Promise<void> {
   const maxBytes = options.maxBytes ?? MAX_PDF_INPUT_BYTES;
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_PDF_INPUT_BYTES * 2)
-    throw new PdfA3ValidationError();
+    throw new PdfA3ValidationError('unavailable', 'bounds');
   if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
-    throw new PdfA3ValidationError();
+    throw new PdfA3ValidationError('unavailable', 'bounds');
   }
   // Take a bounded snapshot before the first await so caller mutation cannot
   // change which bytes are written while the version check is in progress.
   const finalBytes = Uint8Array.from(bytes);
   let workDir: string | undefined;
+  let validatorStage: ValidatorStage = 'construction';
   try {
     // Deployment configuration only; never a request/source-model property.
     const binary = process.env.BIVARO_VERAPDF_BIN || '/opt/verapdf/verapdf';
     if (process.platform !== 'linux' || !path.isAbsolute(binary))
       throw new PdfA3ValidationError();
+    validatorStage = 'directory';
     workDir = await mkdtemp(path.join(tmpdir(), options.temporaryPrefix ?? 'bivaro-own-invoice-pdfa-'));
+    validatorStage = 'construction';
     const confinement = options.confined ? await foreignVerifierCommand(binary, workDir) : undefined;
+    validatorStage = 'version-launch';
     const version = await runVeraPdf(binary, ['--version'], workDir, confinement);
+    validatorStage = 'version-identity';
     requireEqual(version.trim().split(/\r?\n/u)[0], `veraPDF ${PDF_A_VERAPDF_VERSION}`);
     const pdfPath = path.join(workDir, 'final.pdf');
+    validatorStage = 'input-write';
     await writeFile(pdfPath, finalBytes, { flag: 'wx', mode: 0o600 });
+    validatorStage = 'validation-launch';
     const report = await runVeraPdf(binary, [
       '--flavour', '3b',
       '--format', 'json',
@@ -219,14 +267,15 @@ export async function validatePdfA3(bytes: Uint8Array, options: {
       '--loglevel', '0',
       pdfPath,
     ], workDir, confinement);
+    validatorStage = 'report';
     requireSingleCompliantReport(report, pdfPath, finalBytes.byteLength);
   }
   catch (error) {
-    if (error instanceof PdfA3ValidationError)
+    if (error instanceof PdfA3ValidationError && error.validatorStage !== 'unknown')
       throw error;
     // No report, document content, temp path or process diagnostics are safe
     // for an API response. Every unavailable/failed/unknown outcome is fatal.
-    throw new PdfA3ValidationError();
+    throw new PdfA3ValidationError(error instanceof PdfA3ValidationError ? error.kind : 'unavailable', validatorStage);
   }
   finally {
     if (workDir) {
@@ -234,7 +283,7 @@ export async function validatePdfA3(bytes: Uint8Array, options: {
         await rm(workDir, { recursive: true, force: true });
       }
       catch {
-        throw new PdfA3ValidationError();
+        throw new PdfA3ValidationError('unavailable', 'cleanup');
       }
     }
   }
