@@ -25,6 +25,14 @@ describe('mandatory foreign PDF release evidence contract (static only)',()=>{
     expect(smoke).toContain("form.set('analysisMode','manual')");expect(smoke).toContain('assert.deepEqual(await snapshot(),before)');
     expect(smoke).not.toContain('it.skip');expect(smoke).not.toContain('vi.mock');
   });
+  it('adds a confined source diagnostic without replacing production derivation or leaking raw failures',()=>{
+    const smoke=read('scripts/foreign-pdf/native-smoke.mjs');
+    expect(smoke).toContain('stage=`source-precheck-${name}`;await validatePdfA3(bytes,{confined:true})');
+    expect(smoke).toContain('const direct=await createPdfA3Invoice(');
+    expect(smoke.indexOf('stage=`source-precheck-${name}`')).toBeLessThan(smoke.indexOf('const direct=await createPdfA3Invoice('));
+    expect(smoke).toContain("foreignFailureDiagnostic(error,stage)");expect(smoke).toContain('JSON.stringify(diagnostic)');
+    expect(smoke).not.toContain('error.message');expect(smoke).not.toContain('error.stack');expect(smoke).toContain('process.exitCode=1');
+  });
   it('never parses foreign PDFs in the parent or adds a normalizer/raster fallback',()=>{
     const source=read('lib/server/pdfa3-converter.ts');
     expect(source).not.toMatch(/from ['"]pdf-lib|PDFDocument\.load|execFile.*gs|sDEVICE/i);

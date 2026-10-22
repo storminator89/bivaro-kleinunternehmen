@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { foreignFailureDiagnostic } from './diagnostics.mjs';
 const ORIGIN='http://127.0.0.1:3000';
 const permittedPaths=new Set(['/api/auth/register','/api/auth/csrf','/api/auth/callback/credentials','/api/auth/session','/api/pdfa3','/api/purchase-documents']);
 const FIXTURE='/tmp/foreign-pdf-test',EVIDENCE='/tmp/foreign-pdf-evidence';
@@ -151,7 +152,11 @@ try{
   }
   const before=await snapshot(),cases=[];
   for(const name of allCases.positive){
-    stage=`positive-${name}`;const bytes=await original(name);
+    const bytes=await original(name);
+    // Additional confined diagnostic prerequisite, never a substitute for the
+    // exact production derivation/final assertions that follow.
+    stage=`source-precheck-${name}`;await validatePdfA3(bytes,{confined:true});
+    stage=`positive-${name}`;
     // Both exact compiled parent and actual standalone route must traverse the
     // production kernel sandbox and pinned independent validator twice.
     const direct=await createPdfA3Invoice({basePdfBytes:bytes,xmlContent:xml,invoiceNumber:'SYNTHETIC-118',userId:'native-direct-gate'});
@@ -178,6 +183,11 @@ try{
   await writeFile(`${EVIDENCE}/manifest.json`,JSON.stringify({status:'passed',syntheticOnly:true,platform:process.platform,architecture:process.arch,node:process.version,verifier:'1.30.3',cases,rejected,originalFilesPreserved:true,archivedOriginalAndAttachmentPreserved:true,statelessFinancialCountsBefore:before,statelessFinancialCountsAfter:await snapshot(),limits:'No claim of cryptographic signature validation or full XML/business-rule conformance; synthetic signature dictionary is a conservative rejection fixture.'},null,2),{flag:'wx',mode:0o600});
   console.log(`Genuine foreign PDF compatibility gate passed (${process.arch}).`);
 }catch(error){
-  console.error(`Foreign PDF compatibility failed at ${stage}${error instanceof assert.AssertionError?`: ${error.message.slice(0,180).replace(/[\r\n]/g,' ')}`:''}`);
+  const diagnostic=foreignFailureDiagnostic(error,stage);
+  console.error(JSON.stringify(diagnostic));
+  try {
+    await mkdir(EVIDENCE,{mode:0o700,recursive:true});
+    await writeFile(`${EVIDENCE}/failure.json`,JSON.stringify(diagnostic,null,2),{flag:'wx',mode:0o600});
+  } catch { /* Preserve failure without emitting filesystem/error strings. */ }
   process.exitCode=1;
 }finally{cookies.clear();await prisma.$disconnect();}
