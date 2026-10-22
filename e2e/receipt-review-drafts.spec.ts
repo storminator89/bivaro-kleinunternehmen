@@ -55,8 +55,9 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
     await dialog.getByLabel('Bruttobetrag (EUR)', { exact: true }).fill('119,00');
     await dialog.getByLabel('Prüfnotiz', { exact: true }).fill('Mobil geprüft; Entwurf, noch keine Ausgabe.');
     await expect(dialog.getByText('Ungespeicherte Änderungen', { exact: true })).toBeVisible();
-    page.once('dialog', prompt => prompt.dismiss());
     await page.keyboard.press('Escape');
+    await expect(dialog.getByRole('alertdialog', { name: 'Ungespeicherter Prüfentwurf' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Hier bleiben', exact: true }).click();
     await expect(dialog).toBeVisible();
     expect((await prisma.purchaseDocument.findFirstOrThrow({ where: { userId: user.id } })).reviewDraft).toBeNull();
     await dialog.getByRole('button', { name: 'Prüfentwurf speichern', exact: true }).click();
