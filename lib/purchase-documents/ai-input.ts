@@ -58,7 +58,10 @@ async function rendererArguments(input: string, output: string): Promise<string[
   return [
     '--as=1073741824:1073741824', '--cpu=15:15', `--fsize=${MAX_PAGE_BYTES}:${MAX_PAGE_BYTES}`, '--nofile=64:64', '--core=0:0', '--',
     '/usr/bin/setpriv', ...rules, '--', node,
-    '--max-old-space-size=128', '--disable-wasm-trap-handler', '--disallow-code-generation-from-strings', '--permission', '--allow-addons',
+    // The network-free worker must not read the host's OpenSSL configuration.
+    // Node initializes OpenSSL before JS; use the already read-allowed empty
+    // device rather than granting /etc or inheriting OPENSSL_CONF.
+    '--openssl-config=/dev/null', '--max-old-space-size=128', '--disable-wasm-trap-handler', '--disallow-code-generation-from-strings', '--permission', '--allow-addons',
     `--allow-fs-read=${script}`, `--allow-fs-read=${input}`, `--allow-fs-read=${pdfjs}`,
     `--allow-fs-read=${canvas}`, `--allow-fs-read=${native}`, '--allow-fs-read=/usr/bin/ldd',
     `--allow-fs-read=${output}`, `--allow-fs-write=${output}`, script, input, output,

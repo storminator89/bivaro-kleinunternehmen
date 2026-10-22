@@ -52,12 +52,16 @@ describe('bounded original input preparation', () => {
   it('requires kernel confinement, ordered complete pages, sanitized environment and whole-group cleanup', async () => {
     vi.stubEnv('BIVARO_AI_CHILD_SECRET', 'synthetic-never-inherited');
     vi.stubEnv('NODE_OPTIONS', '--inspect=0');
+    vi.stubEnv('OPENSSL_CONF', '/private/operator-config');
     const original = Buffer.from('%PDF-synthetic'), before = Buffer.from(original);
     const result = await prepareAiReceiptImages('application/pdf', original);
     expect(original.equals(before)).toBe(true);
     expect(result).toHaveLength(2);
     expect(result[0].image_url.url).not.toBe(result[1].image_url.url);
-    expect(state.args).toEqual(expect.arrayContaining(['--as=1073741824:1073741824', '--cpu=15:15', '--fsize=2097152:2097152', '--nofile=64:64', '--core=0:0', '/usr/bin/setpriv', '--no-new-privs', '--landlock-access', 'fs', '--seccomp-filter', '--permission', '--allow-addons', '--disallow-code-generation-from-strings']));
+    expect(state.args).toEqual(expect.arrayContaining(['--as=1073741824:1073741824', '--cpu=15:15', '--fsize=2097152:2097152', '--nofile=64:64', '--core=0:0', '/usr/bin/setpriv', '--no-new-privs', '--landlock-access', 'fs', '--seccomp-filter', '--permission', '--allow-addons', '--disallow-code-generation-from-strings', '--openssl-config=/dev/null']));
+    expect(state.args.filter(argument => argument.startsWith('--openssl-config'))).toEqual(['--openssl-config=/dev/null']);
+    expect(state.args).toContain('path-beneath:read-file:/dev/null');
+    expect(state.args.some(argument => argument.includes('/etc/ssl'))).toBe(false);
     expect(state.args).not.toEqual(expect.arrayContaining(['gs', '--allow-child-process', '--allow-worker', '--allow-fs-read=*']));
     expect(state.args).not.toContain(`path-beneath:read-file,read-dir,write-file,make-reg:${state.directory}`);
     expect(state.options).toMatchObject({ detached: true, stdio: ['ignore', 'pipe', 'pipe'] });

@@ -63,6 +63,11 @@ that every semantic visual discrepancy in an arbitrary PDF can be detected.
   Separate processes, process-group/session escape, sockets/networking,
   io_uring, cross-process memory/handles/signals, IPC, namespace changes and
   filesystem metadata mutations not mediated by Landlock are denied.
+- The child pins `--openssl-config=/dev/null`. Node initializes OpenSSL before
+  JavaScript; the renderer must not read host OpenSSL configuration or inherit
+  `OPENSSL_CONF`. `/dev/null` is already read-allowed, so this adds no filesystem
+  grant or host change. This network-free renderer does not assert FIPS validation
+  or adopt an operator's global TLS/provider configuration.
 - Child environment is constructed from fixed values only. No inherited API
   keys, proxy variables, database URL, PATH, NODE_OPTIONS or credentials; stdio
   contains only anonymous pipes/no terminal. Parent kills the detached process
@@ -137,7 +142,8 @@ pages, original-byte hash preservation, explicit fifth-page rejection,
 blank/malformed/truncated/geometry/byte-limit rejection and JPEG output limits.
 Any prerequisite failure fails the gate rather than skipping a case.
 
-Local evidence on 2026-10-22, Node 22.23.4 Linux x64:
+Initial combined-source local evidence on 2026-10-22, Node 22.23.4 Linux x64
+(before subsequent failure-diagnostic/startup changes):
 
 - Reviewed npm dependencies installed; production `npm audit` reported zero
   advisories. This is a dependency-advisory result, not a proof of absence of
@@ -146,7 +152,7 @@ Local evidence on 2026-10-22, Node 22.23.4 Linux x64:
   cases were skipped, not passed: six isolated PDF renderer cases, seven
   offline validator integrations without configured test assets, and one
   opt-in performance benchmark. TypeScript `tsc --noEmit` and repository ESLint
-  passed against the same runtime source.
+  passed against that initial combined runtime source.
 - Official util-linux-extra 2.41.5 package SHA256 verified; native x64 policy
   generated successfully (7,720 bytes). Policy evaluator checks are not kernel
   enforcement tests.
@@ -161,6 +167,19 @@ Local evidence on 2026-10-22, Node 22.23.4 Linux x64:
   two existing validation-runtime/upload-path warnings remain.
 - Docker was unavailable locally. Native container matrix and real PDF browser
   acceptance remain unrun locally and required in the supported runtime.
+
+Hosted native diagnosis on 2026-10-22:
+
+- Both ordinary-profile amd64/arm64 production images built successfully. The
+  first genuine positive renderer call failed before the input stage, with
+  fixed diagnostic `openssl-config`, exit 13, on both architectures. No genuine
+  positive rendering pass or resource suitability is established by those builds.
+- The child-local explicit empty OpenSSL configuration addresses that observed
+  startup dependency without granting host configuration access. Its native
+  confirmation is pending. No syscall or resource limit was changed on the
+  strength of an unconfirmed hypothesis.
+- The dependent real PDF browser journey correctly did not run after the native
+  prerequisite failed. Ordinary mocked-AI UI acceptance is not a substitute.
 
 ## Separate real PDF browser acceptance
 
