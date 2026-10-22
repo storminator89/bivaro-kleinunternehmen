@@ -41,11 +41,35 @@ cfg="\${2#APT_CONFIG=}"
 [[ "$cfg" == "$RUNNER_TEMP"/bivaro-apt-*.conf && -f "$cfg" ]]
 cat "$cfg" >> "$BIVARO_APT_CONFIGS"; printf '<END>\\n' >> "$BIVARO_APT_CONFIGS"
 if [[ "$3" == apt-config ]]; then
-  printf "%s\\n" "BIVARO_APT_RETRIES='1'"
-  if [[ "$BIVARO_APT_SETTINGS" != missing ]]; then
-    if [[ "$BIVARO_APT_SETTINGS" == wrong ]]; then printf "%s\\n" "BIVARO_APT_HTTP_TIMEOUT='45'"; else printf "%s\\n" "BIVARO_APT_HTTP_TIMEOUT='20'"; fi
+  timeout=20; retries=1
+  case "\${BIVARO_APT_SETTINGS#https-}" in
+    stricter) timeout=15 ;;
+    minimum) timeout=1 ;;
+    wrong) timeout=45 ;;
+    zero) timeout=0 ;;
+    negative) timeout=-1 ;;
+    too-large) timeout=21 ;;
+    noninteger) timeout=1.5 ;;
+    nonnumeric) timeout=nope ;;
+    empty-value) timeout='' ;;
+    retry) retries=2 ;;
+    retry-zero) retries=0 ;;
+    empty) exit 0 ;;
+  esac
+  http_timeout="$timeout"
+  [[ "$BIVARO_APT_SETTINGS" != https-* ]] || http_timeout=20
+  printf "%s\\n" "BIVARO_APT_RETRIES='$retries'"
+  [[ "$BIVARO_APT_SETTINGS" == missing ]] || printf "%s\\n" "BIVARO_APT_HTTP_TIMEOUT='$http_timeout'"
+  if [[ "$BIVARO_APT_SETTINGS" == duplicate-three ]]; then
+    printf "%s\\n" "BIVARO_APT_HTTP_TIMEOUT='$timeout'"
+  elif [[ "$BIVARO_APT_SETTINGS" == unexpected-three ]]; then
+    printf "%s\\n" "UNEXPECTED='$timeout'"
+  elif [[ "$BIVARO_APT_SETTINGS" != https-missing ]]; then
+    printf "%s\\n" "BIVARO_APT_HTTPS_TIMEOUT='$timeout'"
   fi
-  printf "%s\\n" "BIVARO_APT_HTTPS_TIMEOUT='20'"
+  [[ "$BIVARO_APT_SETTINGS" != duplicate ]] || printf "%s\\n" "BIVARO_APT_HTTP_TIMEOUT='$timeout'"
+  [[ "$BIVARO_APT_SETTINGS" != unexpected ]] || printf "%s\\n" "UNEXPECTED='20'"
+  :
 elif [[ "$3" == "$BIVARO_APT_NODE" ]]; then
   [[ "$4" == "$GITHUB_WORKSPACE/node_modules/playwright/cli.js" && "$5" == install-deps && "$6" == chromium ]]
   [[ "$BIVARO_APT_FAIL" != deps ]] || exit 71
@@ -90,7 +114,18 @@ describe('per-command browser dependency transport bounds', () => {
   });
 
   for (const name of [chromium, pdf]) {
-    for (const settings of ['wrong', 'missing']) {
+    for (const settings of ['stricter', 'minimum']) {
+      it(`preserves stricter positive bounded ${settings} runner timeouts in ${name}`, () => {
+        const result = runSetup(name, settings);
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stdout).toContain(`BIVARO_APT_HTTP_TIMEOUT='${settings === 'stricter' ? 15 : 1}'`);
+        expect(result.stdout).toContain(`BIVARO_APT_HTTPS_TIMEOUT='${settings === 'stricter' ? 15 : 1}'`);
+        expect(result.configs).toEqual(name === chromium ? [config, config] : [config, config, config]);
+        expect(result.calls).toContain(name === chromium ? '<install-deps> <chromium>' : '<apt-get> <update>');
+        expect(result.remaining).toEqual([]);
+      });
+    }
+    for (const settings of ['wrong', 'missing', 'zero', 'negative', 'too-large', 'noninteger', 'nonnumeric', 'empty', 'empty-value', 'duplicate', 'duplicate-three', 'unexpected', 'unexpected-three', 'retry', 'retry-zero', 'https-missing', 'https-zero', 'https-negative', 'https-too-large', 'https-noninteger', 'https-nonnumeric', 'https-empty-value']) {
       it(`fails closed before installation for ${settings} effective values in ${name}`, () => {
         const result = runSetup(name, settings);
         expect(result.status).toBe(1);
@@ -130,6 +165,7 @@ describe('per-command browser dependency transport bounds', () => {
     for (const name of [chromium, pdf]) {
       const script = shellStep(name);
       expect(script).not.toMatch(/\/etc\/apt|sources\.list|apt-mirrors|AllowUnauthenticated|AllowInsecure|Verify-Peer|Verify-Host|ForceIPv/);
+      expect(script).not.toMatch(/\beval\b/);
       expect(script).toContain('trap \'rm -f -- "$apt_config"\' EXIT');
     }
   });

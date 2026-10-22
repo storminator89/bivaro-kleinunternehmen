@@ -49,11 +49,14 @@ jobs:
           Acquire::http::Timeout "20";
           Acquire::https::Timeout "20";
           APT
-          # APT_CONFIG is read before system fragments, so reject an unexpected override.
-          expected_settings="$(printf '%s\n' "BIVARO_APT_RETRIES='1'" "BIVARO_APT_HTTP_TIMEOUT='20'" "BIVARO_APT_HTTPS_TIMEOUT='20'")"
+          # APT_CONFIG is read before system fragments. Preserve stricter runner bounds.
           actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
           printf '%s\n' "$actual_settings"
-          if [[ "$actual_settings" != "$expected_settings" ]]; then
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
             echo '::error::Unexpected per-command APT transport settings.'
             exit 1
           fi
@@ -77,10 +80,13 @@ jobs:
           Acquire::http::Timeout "20";
           Acquire::https::Timeout "20";
           APT
-          expected_settings="$(printf '%s\n' "BIVARO_APT_RETRIES='1'" "BIVARO_APT_HTTP_TIMEOUT='20'" "BIVARO_APT_HTTPS_TIMEOUT='20'")"
           actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
           printf '%s\n' "$actual_settings"
-          if [[ "$actual_settings" != "$expected_settings" ]]; then
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
             echo '::error::Unexpected per-command APT transport settings.'
             exit 1
           fi

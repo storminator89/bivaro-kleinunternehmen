@@ -16,7 +16,9 @@ Acquire::http::Timeout "20";
 Acquire::https::Timeout "20";
 ```
 
-Every package-manager invocation receives that path explicitly through `sudo env APT_CONFIG=...`. Before installation, `apt-config shell` reports only those three effective values and the workflow rejects missing or overridden values. Existing system configuration fragments remain loaded: APT_CONFIG is read first, so this verification is intentional rather than assuming precedence.
+Every package-manager invocation receives that path explicitly through `sudo env APT_CONFIG=...`. Before installation, `apt-config shell` reports those three effective values. The workflow requires retries exactly1 and each timeout to be a positive integer from1 through20. It validates exactly three correctly named, ordered output lines without `eval`, rejecting empty, missing, duplicate, unexpected, non-integer, zero, negative or larger values. Existing system configuration fragments remain loaded: APT_CONFIG is read first, so this verification is intentional rather than assuming precedence. Stricter runner timeouts remain intact.
+
+Hosted run [39779270998](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39779270998), head `29f6ed88`, reported effective retries1 and both timeouts15. The original exact20 equality guard rejected those safe stricter bounds before dependency installation or any functional tests. This follow-up corrects only that guard to accept the verified1..20 range; it neither raises the runner's15-second values nor bypasses its configuration order. A fresh exact-source hosted run remains required.
 
 The installed Playwright1.59.1 dependency source executes `apt-get update` and its own exact browser dependency list. Its usual non-root `sudo -- sh -c` escalation does not preserve the caller's APT_CONFIG. Therefore the workflow invokes the installed Node executable and installed Playwright CLI explicitly as root for `install-deps chromium`, then invokes that same CLI without sudo for `install chromium`. No `npx` package lookup is needed, no dependency list is copied or reduced, and browser downloads remain in the original runner-user cache.
 
@@ -26,8 +28,8 @@ The full-suite command and the entire workflow section from the hash-pinned offi
 
 ## Verification
 
-- Nine focused unit checks pass. They execute the actual workflow shell text using stand-ins for sudo, apt-config, apt-get, Node and external executables; **no real sudo, apt, dependency installer, Playwright CLI or browser is executed**.
-- Cases cover both successful paths, incorrect and absent effective values, dependency failure preventing browser download, apt-update failure preventing package installation, exact package arguments and temporary-file cleanup.
+- Fifty-three focused unit checks pass. They execute the actual workflow shell text using stand-ins for sudo, apt-config, apt-get, Node and external executables; **no real sudo, apt, dependency installer, Playwright CLI or browser is executed**.
+- Cases cover both setup paths with20,15 and1-second bounds; independent invalid HTTP/HTTPS values, missing/empty/duplicate/unexpected output, retries other than1, dependency failure preventing browser download, apt-update failure preventing package installation, exact package arguments and temporary-file cleanup.
 - YAML parsing, Bash syntax, exact three-key configuration, protected workflow prefix/tail comparison and `git diff --check` pass.
 - Focused ESLint and full no-emit TypeScript checks pass with Node22.23.4.
 - No local apt/install/browser checks or new GitHub workflow runs were performed for this candidate. Complete exact-published-source hosted acceptance and the final50-image artifact remain required.
