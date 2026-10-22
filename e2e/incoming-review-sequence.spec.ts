@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { errors, expect, test, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { prisma } from '../lib/prisma';
@@ -165,8 +165,17 @@ test('dirty keyboard Back/Forward preserves entries, allows stay/discard and kee
   }
   await chooser(page).scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath('receipt-sequence-mobile-390.png'), animations: 'disabled' });
   await chooser(page).getByRole('button', { name: 'Hier bleiben', exact: true }).click();
-  // Reload stays native: cancelling the browser warning must retain the draft.
-  page.once('dialog', prompt => prompt.dismiss()); await page.reload().catch(() => {});
+  // Cancellation has no committed navigation; bound that navigation waiter,
+  // and separately prove the real native warning was dismissed without loss.
+  const beforeReload = page.url();
+  const warning = page.waitForEvent('dialog');
+  const cancelledReload = page.reload({ waitUntil: 'commit', timeout: 10_000 }).catch((error: unknown) => {
+    if (error instanceof errors.TimeoutError || (error instanceof Error && error.message.includes('net::ERR_ABORTED'))) return;
+    throw error;
+  });
+  const prompt = await warning; expect(prompt.type()).toBe('beforeunload'); await prompt.dismiss();
+  await cancelledReload;
+  await expect(page).toHaveURL(beforeReload);
   await expect(review(page).getByLabel('Prüfnotiz', { exact: true })).toHaveValue('Keep this draft while deciding.');
   await page.evaluate(() => window.history.back()); await expect(chooser(page)).toBeVisible();
   await chooser(page).getByRole('button', { name: 'Änderungen verwerfen', exact: true }).click(); await expect(page).toHaveURL(/\/dashboard$/);
