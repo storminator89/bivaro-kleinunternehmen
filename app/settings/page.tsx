@@ -94,6 +94,7 @@ export default function SettingsPage() {
     bic: "",
     footerText: "",
     logoUrl: "",
+    paymentTermDays: "",
   });
 
   const [savedCompanyData, setSavedCompanyData] = useState(formData);
@@ -139,6 +140,7 @@ export default function SettingsPage() {
             bic: data.bic || "",
             footerText: data.footerText || "",
             logoUrl: data.logoUrl || "",
+            paymentTermDays: data.paymentTermDays == null ? "" : String(data.paymentTermDays),
           };
           setFormData(companyData);
           setSavedCompanyData(companyData);
@@ -187,7 +189,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, paymentTermDays: formData.paymentTermDays === "" ? null : Number(formData.paymentTermDays) }),
       });
       if (res.ok) {
         setSavedCompanyData(formData);
@@ -597,6 +599,9 @@ export default function SettingsPage() {
             </fieldset>
             <fieldset className={styles.fieldGroup}><legend>Darstellung auf Belegen</legend>
             <div className="space-y-2">
+              <Label htmlFor="company-payment-term">Zahlungsziel für neue Rechnungen (Tage)</Label>
+              <Input id="company-payment-term" name="paymentTermDays" type="number" min={0} max={365} step={1} value={formData.paymentTermDays} onChange={handleChange} aria-describedby="company-payment-term-help" placeholder="Standard: 14" />
+              <p id="company-payment-term-help" className="text-xs text-muted-foreground">Leer: 14 Tage. 0: fällig am Rechnungsdatum. Bestehende Rechnungen bleiben unverändert.</p>
               <Label htmlFor="footerText">Fußzeile (Optional)</Label>
               <Input
                 id="footerText"

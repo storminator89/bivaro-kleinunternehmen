@@ -20,6 +20,8 @@ export type BackupPreview = {
     customers: number;
     suppliers: number;
     serviceArticles: number;
+    bankImportBatches: number;
+    bankImportRows: number;
     serviceProjects: number;
     billingNotes: number;
     expenses: number;
@@ -84,6 +86,8 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     customers: countArray(data, 'customers'),
     suppliers: countArray(data, 'suppliers'),
     serviceArticles: countArray(data, 'serviceArticles'),
+    bankImportBatches: countArray(data, 'bankImportBatches'),
+    bankImportRows: countArray(data, 'bankImportRows'),
     serviceProjects: countArray(data, 'serviceProjects'),
     billingNotes: countArray(data, 'billingNotes'),
     expenses: countArray(data, 'expenses'),
@@ -126,6 +130,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     warnings.push('Eingangsbeleg-Originale sind im JSON-Backup nicht eingebettet. Zum Wiederherstellen ist ein vollständiges ZIP-Backup erforderlich.');
   }
   if (Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(document => document && typeof document === 'object' && (document as Record<string, unknown>).aiExtraction != null)) warnings.push('KI-Herkunft bleibt erhalten. Unterbrochene Analysen werden nicht fortgesetzt; Provider-Verbindungsdaten sind ausgeschlossen, vorhandene Ziel-Einstellungen bleiben unverändert.');
+  if (counts.bankImportBatches > 0) warnings.push('Bankimport-Quittungen und unzugeordnete Bankzeilen bleiben historische Evidenz. Wiederherstellen führt keine Zahlung, Einnahme, Ausgabe oder neue Dublettenbewertung aus.');
   if (counts.serviceProjects > 0) warnings.push('Projekte, archivierte Zustände und manuell erfasste Minuten bleiben erhalten. Bestehende Leistungsnotizen und Rechnungszuordnungen werden beim Zusammenführen nicht überschrieben.');
   if (Array.isArray(data.purchaseValidationReports) && data.purchaseValidationReports.length > 0) warnings.push(`${data.purchaseValidationReports.length} technische Eingangsprüfberichte werden nur als historische Nachweise übernommen. Keine aktuelle technische oder steuerliche Freigabe; keine automatische erneute Prüfung.`);
   if (counts.serviceBillingPlans > 0) warnings.push('Servicepläne und erledigte Perioden bleiben erhalten. Wiederherstellen erzeugt, versendet oder verbucht keine Rechnungen; abweichende Periodenidentitäten werden nicht überschrieben.');

@@ -232,8 +232,12 @@ async function postHandler(request: Request) {
         stagedFile = storedFileName;
 
         // Modify parsed data to indicate it's a credit note
+        // The original invoice keeps its frozen payment-term evidence. A new
+        // credit note is not a new ordinary invoice and must not inherit it.
+        const creditNoteSourceData = { ...sourceData };
+        delete creditNoteSourceData.paymentTermSelection;
         const creditNoteParsedData = {
-            ...sourceData,
+            ...creditNoteSourceData,
             type: 'CREDIT_NOTE',
             documentType: 'CREDIT_NOTE',
             documentTypeCode: '381',

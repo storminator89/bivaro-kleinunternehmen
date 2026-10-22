@@ -1,4 +1,5 @@
 "use client";
+import { formatPaymentBusinessDate, paymentToday, addPaymentCalendarDays, isPaymentBusinessDate, paymentTermSuggestion, type PaymentTermSelection } from "@/lib/payment-terms";
 import type { ServiceBillingDraftSeed } from "@/lib/service-billing";
 import { ServiceArticlePicker } from "@/components/dashboard/service-article-picker";
 import { ProjectServiceSelection, type ProjectServiceNote } from "@/components/dashboard/project-service-selection";
@@ -65,6 +66,7 @@ function stripBillingNoteAssociation(item: InvoiceItem): InvoiceItem {
 type NoteVisibility = 'EDITOR' | 'SEND' | 'BOTH';
 
 interface Settings extends DocumentFiscalSettings {
+  paymentTermDays?: number | null;
   companyName?: string;
   companyAddress?: string;
   taxNumber?: string;
@@ -86,6 +88,7 @@ interface Customer {
   email?: string;
   internalNote?: string | null;
   noteVisibility?: NoteVisibility;
+  paymentTermDays?: number | null;
 }
 
 interface Template {
@@ -115,8 +118,14 @@ export function CreateInvoiceModal({
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(paymentToday());
   const [dueDate, setDueDate] = useState("");
+  const [paymentTermManual, setPaymentTermManual] = useState(false);
+  const [paymentTermMessage, setPaymentTermMessage] = useState("");
+  const [paymentTermRefreshing, setPaymentTermRefreshing] = useState(false);
+  const paymentTermRefreshRef = useRef(0);
+  const paymentTermDataRef = useRef(0);
+  const paymentTermDataRequestRef = useRef(0);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
@@ -201,9 +210,7 @@ export function CreateInvoiceModal({
   const appliedDraftRef = useRef<number | null>(null);
 
   const resetEditorState = useCallback(() => {
-    const today = new Date();
-    const in14Days = new Date(today);
-    in14Days.setDate(today.getDate() + 14);
+    const today = paymentToday();
 
     appliedQuoteRef.current = null;
     appliedDraftRef.current = null;
@@ -211,9 +218,13 @@ export function CreateInvoiceModal({
     setDraftSaveMessage("");
     setCustomerAddress("");
     setInvoiceNumber("");
-    setDate(today.toISOString().split('T')[0]);
-    setDueDate(in14Days.toISOString().split('T')[0]);
-    setDeliveryDate(today.toISOString().split('T')[0]);
+    setDate(today);
+    setDueDate(addPaymentCalendarDays(today, 14));
+    setPaymentTermManual(false);
+    setPaymentTermMessage('');
+    setPaymentTermRefreshing(false);
+    paymentTermRefreshRef.current += 1;
+    setDeliveryDate(today);
     setNotes("");
     setItems([{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
     setSelectedCustomer(null);
@@ -263,6 +274,7 @@ export function CreateInvoiceModal({
   useEffect(() => {
     if (!isOpen) {
       wasOpenRef.current = false;
+      paymentTermRefreshRef.current += 1;
       return;
     }
 
@@ -270,23 +282,18 @@ export function CreateInvoiceModal({
     wasOpenRef.current = true;
 
     let active = true;
+    const dataRequestId = ++paymentTermDataRequestRef.current;
     if (isOpen) {
-      // Set default due date to 14 days from now
-      const today = new Date();
-      const in14Days = new Date(today);
-      in14Days.setDate(today.getDate() + 14);
-      setDueDate(in14Days.toISOString().split('T')[0]);
-      setDeliveryDate(today.toISOString().split('T')[0]);
-
       fetch("/api/settings", { cache: "no-store" })
         .then(res => { if (!res.ok) throw new Error("Firmenprofil konnte nicht geladen werden"); return res.json(); })
-        .then(data => { if (active) setSettings(data); })
+        .then(data => { if (active && dataRequestId >= paymentTermDataRef.current) { paymentTermDataRef.current = dataRequestId; setSettings(data); } })
         .catch(err => console.error("Failed to load settings", err));
 
       fetch("/api/customers")
         .then(res => res.json())
         .then(data => {
-          if (!active) return;
+          if (!active || dataRequestId < paymentTermDataRef.current) return;
+          paymentTermDataRef.current = dataRequestId;
           const nextCustomers = Array.isArray(data) ? data : [];
           setCustomers(nextCustomers);
           if (fromQuote?.customerId || fromDraft?.customerId) {
@@ -351,6 +358,48 @@ export function CreateInvoiceModal({
       controller.abort();
     };
   }, [selectedCustomerId, isServiceDraft, isOpen, billingNotesReload]);
+
+  let suggestedPaymentTerm: PaymentTermSelection | null = null;
+  if (isPaymentBusinessDate(date)) {
+    try { suggestedPaymentTerm = paymentTermSuggestion(date, selectedCustomerId, selectedCustomer?.paymentTermDays, settings?.paymentTermDays); }
+    catch { /* Unsupported end dates remain editable, never crash the editor. */ }
+  }
+  const suggestedPaymentDue = suggestedPaymentTerm?.dueDate ?? '';
+  useEffect(() => {
+    if (!isOpen || isServiceDraft || paymentTermManual) return;
+    setDueDate(suggestedPaymentDue);
+  }, [isOpen, isServiceDraft, paymentTermManual, suggestedPaymentDue]);
+
+  const reapplyPaymentTerm = async () => {
+    const requestId = ++paymentTermRefreshRef.current;
+    const dataRequestId = ++paymentTermDataRequestRef.current;
+    setPaymentTermRefreshing(true);
+    setPaymentTermMessage('');
+    try {
+      const [settingsResponse, customersResponse] = await Promise.all([
+        fetch('/api/settings', { cache: 'no-store' }),
+        fetch('/api/customers', { cache: 'no-store' }),
+      ]);
+      if (!settingsResponse.ok || !customersResponse.ok) throw new Error('Die aktuelle Vorgabe konnte nicht geladen werden. Ihre Fälligkeit bleibt erhalten.');
+      const nextSettings: Settings = await settingsResponse.json();
+      const nextCustomers: Customer[] = await customersResponse.json();
+      if (requestId !== paymentTermRefreshRef.current) return;
+      if (!Array.isArray(nextCustomers)) throw new Error('Kunden konnten nicht geladen werden.');
+      const nextCustomer = nextCustomers.find(customer => Number(customer.id) === selectedCustomerId) ?? null;
+      if (selectedCustomerId !== null && !nextCustomer) throw new Error('Der ausgewählte Kunde ist nicht mehr verfügbar. Bitte erneut auswählen.');
+      const nextSelection = paymentTermSuggestion(date, selectedCustomerId, nextCustomer?.paymentTermDays, nextSettings.paymentTermDays);
+      paymentTermDataRef.current = dataRequestId;
+      setSettings(nextSettings);
+      setCustomers(nextCustomers);
+      setSelectedCustomer(nextCustomer);
+      setPaymentTermManual(false);
+      setDueDate(nextSelection.dueDate ?? '');
+    } catch (error) {
+      if (requestId === paymentTermRefreshRef.current) setPaymentTermMessage(error instanceof Error ? error.message : 'Vorgabe konnte nicht geladen werden.');
+    } finally {
+      if (requestId === paymentTermRefreshRef.current) setPaymentTermRefreshing(false);
+    }
+  };
 
   // Pre-fill from quote when converting
   useEffect(() => {
@@ -514,7 +563,10 @@ export function CreateInvoiceModal({
 
   const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     billingNotesRequestRef.current += 1;
+    paymentTermRefreshRef.current += 1;
+    setPaymentTermRefreshing(false);
     const customerId = e.target.value;
+    if (!isServiceDraft && paymentTermManual && window.confirm('Das Fälligkeitsdatum wurde manuell bearbeitet. Durch die Vorgabe des neuen Kunden ersetzen?')) setPaymentTermManual(false);
     const customer = customers.find(c => c.id.toString() === customerId);
     const hadSelectedBillingNotes = items.some(item => item.billingNoteId !== undefined);
     if (hadSelectedBillingNotes) {
@@ -665,7 +717,7 @@ export function CreateInvoiceModal({
     const surfaceStrong = rgb(0.93, 0.96, 0.995);
     const hairline = rgb(0.82, 0.87, 0.94);
 
-    const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('de-DE') : '-';
+    const formatDate = formatPaymentBusinessDate;
     const formatQuantity = (value: number) => value.toLocaleString('de-DE', { maximumFractionDigits: 12 });
     const formatUnitPrice = (value: number) => value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 12 }) + ' €';
     const formatTaxRate = (value: number) => `${value.toLocaleString('de-DE', { maximumFractionDigits: 12 })}%`;
@@ -1401,6 +1453,12 @@ export function CreateInvoiceModal({
     ));
     formData.append('billingNoteIds', JSON.stringify(billingNoteIds));
     if (generatedRequestId) formData.append('generatedRequestId', generatedRequestId);
+    if (!isServiceDraft) {
+      const selection: PaymentTermSelection = paymentTermManual
+        ? { version: 1, source: 'MANUAL', days: null, invoiceDate: date, dueDate: dueDate || null, customerId: selectedCustomerId }
+        : paymentTermSuggestion(date, selectedCustomerId, selectedCustomer?.paymentTermDays, settings?.paymentTermDays);
+      formData.append('paymentTermSelection', JSON.stringify(selection));
+    }
     if (fromQuote) formData.append('fromQuoteId', String(fromQuote.id));
     if (fromDraft) { formData.append('serviceDraftId', String(fromDraft.id)); formData.append('serviceDraftToken', draftToken); }
 
@@ -1741,7 +1799,7 @@ export function CreateInvoiceModal({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date">Rechnungsdatum</Label>
-                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <Input id="date" type="date" value={date} onChange={(e) => { paymentTermRefreshRef.current += 1; setPaymentTermRefreshing(false); setDate(e.target.value); }} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="delivery-date">Leistungsdatum</Label>
@@ -1925,7 +1983,16 @@ export function CreateInvoiceModal({
               {/* Right: Payment Terms */}
               <div className="space-y-2">
                 <Label htmlFor="due-date">Fälligkeitsdatum</Label>
-                <Input id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                <Input id="due-date" type="date" value={dueDate} onChange={(e) => { paymentTermRefreshRef.current += 1; setPaymentTermRefreshing(false); setPaymentTermManual(true); setPaymentTermMessage(''); setDueDate(e.target.value); }} aria-describedby={!isServiceDraft ? 'payment-term-source' : undefined} />
+                {!isServiceDraft && <div className="space-y-2">
+                  <p id="payment-term-source" className="text-xs text-muted-foreground" aria-live="polite">{paymentTermManual ? 'Manuell festgelegt · bleibt bei Änderungen erhalten' : `${suggestedPaymentTerm?.source === 'CUSTOMER' ? 'Kundenvorgabe' : suggestedPaymentTerm?.source === 'COMPANY' ? 'Firmenvorgabe' : 'Standard'}: ${suggestedPaymentTerm?.days ?? 14} Kalendertage`}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" disabled={paymentTermRefreshing || !isPaymentBusinessDate(date)} onClick={() => void reapplyPaymentTerm()}>{paymentTermRefreshing ? 'Vorgabe wird geladen …' : 'Vorgabe erneut anwenden'}</Button>
+                    {!paymentTermManual && <Button type="button" variant="ghost" size="sm" onClick={() => { paymentTermRefreshRef.current += 1; setPaymentTermRefreshing(false); setPaymentTermManual(true); }}>Fälligkeit beibehalten</Button>}
+                  </div>
+                  {!suggestedPaymentTerm && !paymentTermManual && <p role="alert" className="text-sm text-destructive">Bitte ein unterstütztes Rechnungsdatum wählen.</p>}
+                  {paymentTermMessage && <p role="alert" className="text-sm text-destructive">{paymentTermMessage}</p>}
+                </div>}
                 <Label htmlFor="invoice-payment-means">Zahlungsart</Label>
                 <select
                   id="invoice-payment-means"

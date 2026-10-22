@@ -1,3 +1,4 @@
+import { parsePaymentTermDays, PaymentTermError } from '@/lib/payment-terms';
 import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -39,6 +40,8 @@ function optionalCustomerData(input: Record<string, unknown>, includeDefaults = 
     if (value !== undefined) data[key] = value;
     else if (includeDefaults) data[key] = null;
   }
+  if ('paymentTermDays' in input) data.paymentTermDays = parsePaymentTermDays(input.paymentTermDays);
+  else if (includeDefaults) data.paymentTermDays = null;
   if ('noteVisibility' in input || includeDefaults) data.noteVisibility = parseNoteVisibility(input.noteVisibility, 'BOTH');
   return data;
 }
@@ -96,7 +99,7 @@ async function postHandler(request: Request) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
-    if (error instanceof RequestBodyLimitError || error instanceof BillingNoteInputError) {
+    if (error instanceof RequestBodyLimitError || error instanceof BillingNoteInputError || error instanceof PaymentTermError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('Error creating customer:', error);
@@ -143,7 +146,7 @@ async function putHandler(request: Request) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
-    if (error instanceof RequestBodyLimitError || error instanceof BillingNoteInputError) {
+    if (error instanceof RequestBodyLimitError || error instanceof BillingNoteInputError || error instanceof PaymentTermError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('Error updating customer:', error);

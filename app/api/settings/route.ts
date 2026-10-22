@@ -1,3 +1,4 @@
+import { parsePaymentTermDays, PaymentTermError } from '@/lib/payment-terms';
 import { readFiscalProfile, validateFiscalProfileInput } from '@/lib/fiscal-profile';
 import { createAuditLog } from '@/lib/audit-log';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
@@ -39,6 +40,7 @@ async function postHandler(request: Request) {
     if (!fiscalInput.ok) {
       return NextResponse.json({ error: 'Bitte das Steuerprofil prüfen.', fieldErrors: fiscalInput.fieldErrors }, { status: 400 });
     }
+    const paymentTermData = Object.hasOwn(body, 'paymentTermDays') ? { paymentTermDays: parsePaymentTermDays(body.paymentTermDays) } : {};
     const { logoUrl } = body;
     const companyFields = ['companyName', 'companyAddress', 'email', 'telephone', 'taxNumber', 'bankName', 'iban', 'bic', 'footerText'] as const;
     const companyData: Partial<Record<typeof companyFields[number], string | null>> = {};
@@ -87,12 +89,14 @@ async function postHandler(request: Request) {
       where: { userId },
       update: {
         ...companyData,
+        ...paymentTermData,
         ...fiscalData,
         ...(logoUrl !== undefined ? { logoUrl: ownedLogoUrl } : {}),
       },
       create: {
         userId,
         ...companyData,
+        ...paymentTermData,
         ...fiscalData,
         ...(logoUrl !== undefined ? { logoUrl: ownedLogoUrl } : {}),
       },
@@ -100,7 +104,7 @@ async function postHandler(request: Request) {
 
     // Record field names only: even masked profile values would unnecessarily
     // retain addresses, contact details, bank data and free-form footer content.
-    const profileFields = ['companyName', 'companyAddress', 'email', 'telephone', 'taxNumber', 'bankName', 'iban', 'bic', 'footerText', 'logoUrl', 'fiscalTaxRegime', 'fiscalEffectiveFrom', 'fiscalConfirmedAt'] as const;
+    const profileFields = ['companyName', 'companyAddress', 'email', 'telephone', 'taxNumber', 'bankName', 'iban', 'bic', 'footerText', 'logoUrl', 'fiscalTaxRegime', 'fiscalEffectiveFrom', 'fiscalConfirmedAt', 'paymentTermDays'] as const;
     const changedFields = profileFields.filter(field =>
       String(previousSettings?.[field] ?? null) !== String(settings[field] ?? null));
     if (changedFields.length > 0) {
@@ -123,6 +127,7 @@ async function postHandler(request: Request) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof PaymentTermError) return NextResponse.json({ error: error.message, fieldErrors: { paymentTermDays: error.message } }, { status: error.status });
     return NextResponse.json({ error: 'Failed to save settings' }, { status: 500 });
   }
 }

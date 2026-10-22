@@ -1,3 +1,4 @@
+import { PaymentTermError, validatePaymentTermSelection, assertPaymentTermDocument, assertCurrentPaymentTerm, type PaymentTermSelection } from '@/lib/payment-terms';
 import { ownedServiceBillingDraft } from '@/lib/server/service-billing-draft';
 import { ServiceBillingError } from '@/lib/service-billing';
 import { quoteConversionBlockReason } from '@/lib/quote-workflow';
@@ -107,6 +108,7 @@ function buildInvoiceUploadFingerprint(
   billingNoteIds: number[],
   fromQuoteId: number | null,
   serviceDraftId: number | null = null,
+  paymentTermSelection: PaymentTermSelection | null = null,
 ): string {
   const hash = createHash('sha256')
     .update(rawXml)
@@ -117,6 +119,7 @@ function buildInvoiceUploadFingerprint(
     .update('\0')
     .update(String(fromQuoteId ?? ''));
   if (serviceDraftId !== null) hash.update(`\0service-draft:${serviceDraftId}`);
+  if (paymentTermSelection !== null) hash.update(`\0payment-term:${JSON.stringify(paymentTermSelection)}`);
   return hash.digest('hex');
 }
 
@@ -190,7 +193,7 @@ async function findOrCreateCustomer(
   });
 }
 
-function toStoredParsedData(parsedInvoice: ParsedEInvoice, uploadRequest?: UploadRequestMetadata) {
+function toStoredParsedData(parsedInvoice: ParsedEInvoice, uploadRequest?: UploadRequestMetadata, paymentTermSelection?: PaymentTermSelection) {
   return {
     extractionStatus: parsedInvoice.extractionStatus,
     validationStatus: parsedInvoice.validationStatus,
@@ -217,6 +220,7 @@ function toStoredParsedData(parsedInvoice: ParsedEInvoice, uploadRequest?: Uploa
     rawXml: parsedInvoice.rawXml,
     eInvoiceFormat: parsedInvoice.format,
     ...(uploadRequest ? { _uploadRequest: uploadRequest } : {}),
+    ...(paymentTermSelection ? { paymentTermSelection } : {}),
   };
 }
 
@@ -326,6 +330,17 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json({ error: 'Ungültige Serviceentwurfsreferenz. Bitte den Entwurf neu laden.' }, { status: 400 });
     }
     if (serviceDraftId !== null && fromQuoteId !== null) return NextResponse.json({ error: 'Ein Serviceentwurf kann nicht zugleich ein Angebot umwandeln.' }, { status: 400 });
+    let paymentTermSelection: PaymentTermSelection | null = null;
+    const rawPaymentTermSelection = formData.get('paymentTermSelection');
+    if (rawPaymentTermSelection !== null) {
+      if (!generatedRequestId || serviceDraftId !== null || typeof rawPaymentTermSelection !== 'string' || rawPaymentTermSelection.length > 1024) throw new PaymentTermError('Zahlungszielherkunft ist nur für neue, gewöhnliche Rechnungen zulässig.');
+      let value: unknown;
+      try { value = JSON.parse(rawPaymentTermSelection); }
+      catch { throw new PaymentTermError('Ungültige Zahlungszielherkunft.'); }
+      paymentTermSelection = validatePaymentTermSelection(value);
+      assertPaymentTermDocument(paymentTermSelection, { invoiceDate: parsedInvoice.invoiceDate, dueDate: parsedInvoice.dueDate, customerId: selectedCustomerId });
+    }
+
 
     let sourceQuote: { id: number; status: string; validUntil: Date | null; convertedInvoice?: { id: number } | null } | null = null;
     if (fromQuoteId !== null) {
@@ -367,7 +382,7 @@ async function postHandler(request: NextRequest) {
     // and its retry, even if findOrCreateCustomer creates a row meanwhile.
     const fingerprintCustomerId = selectedCustomerId;
     const uploadFingerprint = generatedRequestId
-      ? buildInvoiceUploadFingerprint(parsedInvoice.rawXml, fingerprintCustomerId, billingNoteIds, fromQuoteId, serviceDraftId)
+      ? buildInvoiceUploadFingerprint(parsedInvoice.rawXml, fingerprintCustomerId, billingNoteIds, fromQuoteId, serviceDraftId, paymentTermSelection)
       : null;
     if (generatedRequestId && uploadFingerprint) {
       const existing = await findUploadRequestInvoice(prisma, userId, generatedRequestId);
@@ -491,6 +506,15 @@ async function postHandler(request: NextRequest) {
           }, tx);
           return { invoice: await tx.invoice.findUniqueOrThrow({ where: { id: draft.id, userId }, include: { incomes: true } }), idempotent: false };
         }
+        let storedPaymentTermSelection: PaymentTermSelection | undefined;
+        if (paymentTermSelection) {
+          const currentSettings = await tx.settings.findUnique({ where: { userId }, select: { paymentTermDays: true } });
+          assertCurrentPaymentTerm(paymentTermSelection, selectedCustomer ? customerRecord?.paymentTermDays : null, currentSettings?.paymentTermDays);
+          // A manually addressed invoice may create/match its customer only here.
+          // Preserve selected source/dates, binding the frozen snapshot to the saved relation.
+          storedPaymentTermSelection = { ...paymentTermSelection, customerId: customerRecord?.id ?? null };
+          assertPaymentTermDocument(storedPaymentTermSelection, { invoiceDate, dueDate: parsedInvoice.dueDate, customerId: customerRecord?.id ?? null });
+        }
         const invoiceNumber = parsedInvoice.invoiceNumber || await getNextDocumentNumber(tx, userId, 'INVOICE', invoiceDate.getFullYear());
         const created = await tx.invoice.create({
           data: {
@@ -503,7 +527,7 @@ async function postHandler(request: NextRequest) {
             totalAmount: parsedInvoice.totalAmount ?? undefined,
             parsedData: toStoredParsedData(parsedInvoice, generatedRequestId && uploadFingerprint
               ? { requestId: generatedRequestId, fingerprint: uploadFingerprint }
-              : undefined),
+              : undefined, storedPaymentTermSelection),
             customerId: customerRecord?.id,
             // Uploaded/imported documents have no trusted never-issued proof.
             issuanceState: 'UNKNOWN',
@@ -582,6 +606,7 @@ async function postHandler(request: NextRequest) {
     if (error instanceof RequestBodyLimitError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    if (error instanceof PaymentTermError) return NextResponse.json({ error: error.message, code: error.status === 409 ? 'PAYMENT_TERM_STALE' : 'INVALID_PAYMENT_TERM' }, { status: error.status });
     if (error instanceof ServiceBillingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof QuoteConversionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -1,3 +1,4 @@
+import { stripEmptyBankImportsForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
@@ -36,6 +37,7 @@ function historical(backup: ReturnType<typeof pack>) {
   }
   old.manifest = createBackupManifest({ sourceUserId: old.manifest.sourceUserId, generatedAt: fixed.toISOString(), data: old.data });
   old.manifest.schemaVersion = PAYMENT_ADJUSTMENTS_SCHEMA_VERSION;
+  stripEmptyBankImportsForLegacy(old);
   old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => !['ServiceProject', 'PurchaseValidationReport', 'EmailOutbox', 'EmailOutboxAttempt'].includes(entry.model));
   return old;
 }
@@ -93,6 +95,7 @@ describe('exact project and manual-duration backup contract', () => {
       const old = historical(original);
       (old.data.billingNotes as Record<string, unknown>[])[0][field] = null;
       old.manifest = { ...createBackupManifest({ sourceUserId, generatedAt: fixed.toISOString(), data: old.data }), schemaVersion: PAYMENT_ADJUSTMENTS_SCHEMA_VERSION };
+      stripEmptyBankImportsForLegacy(old);
       old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => !['ServiceProject', 'PurchaseValidationReport', 'EmailOutbox', 'EmailOutboxAttempt'].includes(entry.model));
       expect(() => validateBackupForRestore(old)).toThrow(/Älteres Backupschema/);
       const missing = structuredClone(original); delete (missing.data.billingNotes as Record<string, unknown>[])[0][field];

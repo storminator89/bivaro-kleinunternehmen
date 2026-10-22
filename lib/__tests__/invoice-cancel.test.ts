@@ -40,6 +40,8 @@ vi.mock('@/lib/upload-path', () => ({
   }),
 }));
 
+import { CURRENT_SCHEMA_VERSION, validatePaymentTermBackupFields } from '@/lib/backup-manifest';
+import { paymentTermSuggestion } from '@/lib/payment-terms';
 import { POST as cancelInvoice } from '@/app/api/invoices/cancel/route';
 
 let database: ReturnType<typeof createTestDatabase>;
@@ -100,6 +102,24 @@ describe('invoice cancellation', () => {
     const duplicate = await cancelInvoice(new Request('http://localhost/api/invoices/cancel', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invoiceId: invoice.id, cancellationReason: 'Explicit retry' }) }));
     expect(duplicate.status).toBe(400);
     expect(await database.client.invoiceNumberCounter.findMany()).toEqual(counters);
+  });
+
+  it('preserves original payment-term evidence without copying it into a new credit note', async () => {
+    const parsedData = { items: [], paymentTermSelection: paymentTermSuggestion('2026-10-22', null) };
+    const invoice = await database.client.invoice.create({ data: {
+      userId: 'alice', type: 'INVOICE', fileName: 'terms.pdf', storedFileName: 'terms.pdf',
+      invoiceNumber: 'PAYMENT-TERMS-CANCEL', invoiceDate: new Date('2026-10-22T00:00:00.000Z'),
+      dueDate: new Date('2026-11-05T00:00:00.000Z'), parsedData, totalAmount: 10, status: 'SENT',
+    } });
+    const response = await cancelInvoice(new Request('http://localhost/api/invoices/cancel', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invoiceId: invoice.id, cancellationReason: 'Synthetic provenance preservation' }),
+    }));
+    expect(response.status).toBe(200);
+    const original = await database.client.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
+    const credit = await database.client.invoice.findFirstOrThrow({ where: { originalInvoiceId: invoice.id } });
+    expect(original.parsedData).toEqual(parsedData); expect(original.dueDate).toEqual(invoice.dueDate);
+    expect(credit.parsedData).not.toHaveProperty('paymentTermSelection');
+    expect(() => validatePaymentTermBackupFields({ invoices: [original, credit] }, CURRENT_SCHEMA_VERSION)).not.toThrow();
   });
 
   it('cancels price-basis lines using the original line amount', async () => {

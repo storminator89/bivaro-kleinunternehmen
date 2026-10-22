@@ -46,6 +46,7 @@ type Customer = {
   taxNumber?: string;
   internalNote?: string | null;
   noteVisibility?: NoteVisibility;
+  paymentTermDays?: number | null;
   createdAt: string;
 };
 
@@ -80,6 +81,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
     taxNumber: '',
     internalNote: '',
     noteVisibility: 'EDITOR',
+    paymentTermDays: null,
   });
 
   useEffect(() => {
@@ -97,6 +99,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
         taxNumber: '',
         internalNote: '',
         noteVisibility: 'EDITOR',
+        paymentTermDays: null,
       });
     }
   }, [customer]);
@@ -207,6 +210,12 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
               placeholder="DE123456789"
               className="h-10"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="customer-payment-term">Abweichendes Zahlungsziel (Tage)</Label>
+            <Input id="customer-payment-term" type="number" min={0} max={365} step={1} value={formData.paymentTermDays ?? ''} onChange={e => setFormData({ ...formData, paymentTermDays: e.target.value === '' ? null : Number(e.target.value) })} aria-describedby="customer-payment-term-help" placeholder="Firmenvorgabe verwenden" />
+            <p id="customer-payment-term-help" className="text-xs text-muted-foreground">Leer: Firmenvorgabe, sonst 14 Tage. 0: fällig am Rechnungsdatum.</p>
           </div>
 
           <details open={Boolean(customer?.internalNote)} className="space-y-3 border-t pt-3">
