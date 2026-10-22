@@ -1882,9 +1882,9 @@
     }
   ],
   "integrationCheckpoint": {
-    "recordedAt": "2026-10-22T19:39:45Z",
+    "recordedAt": "2026-10-22T20:45:47Z",
     "scope": "Dated public integration evidence only; all 160 historical ticket identities/statuses and status counts are preserved. GitHub issue/PR numbers are not BV ticket IDs. Historical operational details are omitted, not resolved.",
-    "basis": "Supplied confirmed integration checkpoint; main commit/tree and postmerge seal bytes/hash independently checked read-only. No new hosted status query or execution performed by this documentation change.",
+    "basis": "Supplied confirmed public checkpoint; current ae12 acceptance seal size/hash and contents independently checked read-only. No new hosted query or execution by this documentation change.",
     "integratedMain": {
       "pullRequest": {
         "number": 123,
@@ -1950,141 +1950,172 @@
         "state": "open",
         "draft": true
       },
-      "canonicalCommit": "b28ddbaff839ccbb1bdc6796d2dc81825351d7d0",
-      "tree": "71f7797562447ff96281bb4d0daf1fae3a81e1f0",
-      "actualMergeCheckout": "40bff6145696c012dd89112e95ec9cef8663e9c6",
-      "actualMergeCheckoutTree": "71f7797562447ff96281bb4d0daf1fae3a81e1f0",
+      "canonicalCommit": "ae12a4ef5543af8b07d6f2b9168b9e5c12a747fe",
+      "canonicalParent": "b28ddbaff839ccbb1bdc6796d2dc81825351d7d0",
+      "tree": "fb4ca685fe54bd8e31215535f783b16593b0e171",
+      "actualMergeCheckout": "e4bf61c0d52683797387d73a9caceeb18bf5c791",
+      "actualMergeCheckoutTree": "fb4ca685fe54bd8e31215535f783b16593b0e171",
+      "actualMergeCheckoutParents": [
+        "8f9f6264dab78b3f3d4991278df5a23d7a8394ce",
+        "ae12a4ef5543af8b07d6f2b9168b9e5c12a747fe"
+      ],
       "mergedIntoMain": false,
+      "acceptance": "Complete bounded exact-published-head hosted-gate and retained-artifact acceptance; not broad merge/release approval.",
       "workflows": {
         "ci": {
-          "runId": 39834456758,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456758",
-          "conclusion": null,
-          "status": "in_progress",
-          "jobs": {
-            "lintAndType": "success",
-            "tests": "success",
-            "build": "success",
-            "security": {
-              "status": "in_progress",
-              "detail": "Installing Playwright dependencies."
-            }
-          }
-        },
-        "ownInvoicePdfa": {
-          "runId": 39834457083,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834457083",
-          "conclusion": "success"
+          "runId": 39845788386,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788386",
+          "status": "completed",
+          "conclusion": "success",
+          "passedTests": 3749,
+          "skippedTests": 20,
+          "passedFiles": 228,
+          "skippedFiles": 3,
+          "securityBrowserPassed": 1
         },
         "containerRuntime": {
-          "runId": 39834456919,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456919",
+          "runId": 39845788373,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788373",
+          "status": "completed",
           "conclusion": "success"
         },
         "foreignPdf": {
-          "runId": 39834457147,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834457147",
-          "conclusion": "failure",
+          "runId": 39845788313,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788313",
+          "status": "completed",
+          "conclusion": "success",
           "architectures": [
             "x64",
             "arm64"
-          ],
-          "startup": "JVM and CLI passed on both architectures.",
-          "coherentNoncompliance": {
-            "specification": "ISO19005-3:2012",
-            "rule": "6.2.11.4.1",
-            "test": 1
-          },
-          "sourcePrecheck": {
-            "kind": "unsupported",
-            "httpStatus": 422
-          },
-          "diagnosisUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/126#issuecomment-6349239959",
-          "interpretation": "Pinned font parser can translate denied tempfile spill above 10 KiB into fontProgramParsed=false. The rule finding does not prove intrinsic fixture corruption or establish the sole native cause.",
-          "nativeAcceptance": false
+          ]
+        },
+        "ownInvoicePdfa": {
+          "runId": 39845788285,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788285",
+          "status": "completed",
+          "conclusion": "success",
+          "architectures": [
+            "x64",
+            "arm64"
+          ]
         },
         "browser": {
-          "runId": 39834456795,
-          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456795",
-          "conclusion": null,
-          "status": "in_progress",
-          "observedAt": "2026-10-22T19:35Z",
-          "completedSteps": [
-            {
-              "number": 10,
-              "name": "Functional suite",
-              "conclusion": "success"
-            },
-            {
-              "number": 11,
-              "name": "Final PDF render",
-              "conclusion": "success"
-            },
-            {
-              "number": 12,
-              "name": "PDF artifact upload",
-              "conclusion": "success"
-            }
-          ],
-          "pending": [
-            "Screenshot staging.",
-            "Terminal run conclusion.",
-            "Final image/artifact review."
-          ],
-          "countLimitation": "Current test count is not established; old 124-case count is not reused."
+          "runId": 39845788254,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788254",
+          "status": "completed",
+          "conclusion": "success",
+          "passedTests": 124
         }
       },
+      "successfulWorkflows": 5,
+      "successfulJobs": 11,
+      "allRunAttempts": 1,
+      "imageAcceptance": {
+        "currentImages": 177,
+        "freshWholeOriginalViews": 62,
+        "strictCompleteIdentityReuses": 115,
+        "uncovered": 0,
+        "newConfirmedVisibleDefects": 0,
+        "limitation": "177 current accepted images do not mean 177 fresh browser actions."
+      },
+      "retainedInventory": {
+        "pdfFiles": 62,
+        "embeddedXmlBindings": 30,
+        "separateXmlFiles": 2,
+        "limitation": "Embedded bindings are not separate XML files or proof of business equality."
+      },
+      "acceptanceSeal": {
+        "file": "acceptance-ae12a4ef-exact-current.json",
+        "bytes": 19083,
+        "sha256": "3eef3a4cc77eacb80ac9580a659443aa41a96e2286917c336d2a68c884cd901c",
+        "storage": "Externally retained evidence; no repository-relative file implied."
+      },
+      "nativeMilestoneUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/126#issuecomment-6350464863",
+      "audit": {
+        "productionOmitDevVulnerabilities": 0,
+        "fullDevIncludedInstallHighFindings": 5,
+        "limitation": "Production audit zero does not establish a vulnerability-free full development dependency tree."
+      },
+      "acceptanceLimits": [
+        "Fixed-navigation occlusion and scrolled/collapsed/unseen areas remain; unseen pixels are not accepted.",
+        "Mocked email-PDF pane and existing mobile timestamp/year wrapping remain; captures do not prove backend/delivery/financial or conformance behavior.",
+        "Payment-reference ellipsis remains with full IDs in headers; QR payload is not independently decoded.",
+        "Relevant source/original/archive/API/state claims remain hosted evidence bindings, not independently locally reproduced.",
+        "Foreign synthetic XML attachment identity is not financial/business equality of visible foreign-PDF content.",
+        "Accepted adapter bound is per newly materialized stream, not global decoded-memory assurance; runtime remains JRE-only with no JDK/compiler.",
+        "Compiler/module provenance and some original source bytes remain hosted bindings; no independent cryptographic JAR signature guarantee.",
+        "The separate local Ghostscript-cleanup successor is outside this acceptance seal."
+      ],
       "issue": {
         "number": 127,
         "url": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/127",
         "state": "open",
-        "remaining": "Final acceptance of integrated head and merge; successful intermediate browser steps do not close this issue."
+        "remaining": "Final integrated merge."
       },
       "nextLocalCandidate": {
-        "scope": "Locally implemented bounded foreign-only memory adapter; independent static review clean.",
-        "configuration": {
-          "newStreamMaxBytes": 2097152,
-          "bufferThresholdBytes": 2097153,
-          "delegates": "Original GreenfieldCliWrapper after official public setters.",
-          "limitScope": "Per newly materialized stream, not a global memory bound."
-        },
+        "commit": "7607a0473932af8fa4cfc175f476e8aecd40998d",
+        "tree": "6371fba2e9c612563419baf9e435e39a1d3a847c",
+        "published": false,
+        "sourceChanges": [
+          "Remove final Ghostscript package installation.",
+          "Remove legacy PostScript smoke.",
+          "Add fail-closed gs executable/interpreter-package absence guards to actual image/build/nonroot gates and browser test image."
+        ],
         "unchanged": [
-          "Validation rules.",
-          "OS filesystem-write and network restrictions.",
+          "Application/PDF behavior.",
+          "Validators and validation rules.",
           "Existing process caps.",
-          "Runtime remains JRE-only; no JDK/compiler is shipped."
+          "Dependency pins.",
+          "Application license."
         ],
-        "jdk": "Build-only dependency.",
+        "staticReview": "Independent exact-final-source review complete with no material findings after two-document AI-encryption/bounded-rejection wording correction.",
         "reportedLocalChecks": {
-          "pureTestsPassed": 3742,
+          "pureTestsPassed": 3779,
           "nativeOptInSkipped": 27,
-          "fullTypecheck": "success",
-          "lint": "success",
-          "node22Build": "success",
-          "localJavaNativeBrowserRuns": false
+          "passedFiles": 229,
+          "skippedFiles": 3,
+          "focusedTestsPassed": 108,
+          "fullTypecheckExit": 0,
+          "lintExit": 0,
+          "shellSyntaxExit": 0,
+          "node22BuildExit": 0,
+          "checkedSourceCommit": "609dcc4c92b3289aaaf5a17eeee05c992c8407c2",
+          "checkedSourceTree": "889bd16bb418a2558021885d4c4deec844bd0c09",
+          "nonDocumentationBytesIdenticalToCurrentCandidate": true
         },
-        "pending": [
-          "Actual hosted compilation proof.",
-          "Native acceptance."
+        "nativeSuccessorRunPerformed": false,
+        "actualImageAbsenceProven": false,
+        "remainingAcceptanceCriteria": [
+          "Publish the integrated successor.",
+          "Verify actual new image Ghostscript executable/interpreter-package absence and native/browser acceptance."
         ],
-        "nativeSuccessClaim": false
+        "evidenceLimit": "Local source checks do not prove actual image absence; do not attribute removal to main or published ae12.",
+        "successorBrowserAcceptance": "pending"
       },
       "remainingAcceptanceCriteria": [
-        "Native foreign-PDF acceptance for the corrected integrated candidate.",
-        "Completed CI including Security.",
-        "Terminal browser success and final screenshot/image/artifact review.",
-        "Final accepted integrated head and merge before closing #127."
+        "Final integrated merge before closing #127.",
+        "Actual-image/native/browser acceptance of the separately prepared Ghostscript-cleanup successor."
       ],
-      "evidenceLimit": "Successful main, intermediate hosted steps and local checks do not establish final native/browser acceptance of the next integrated candidate."
+      "evidenceLimit": "ae12 exact-head acceptance does not cover the unpublished successor or establish merge/release approval."
     },
     "licenseAndReadme": {
       "ghostscriptInstalled": true,
+      "installedAppliesTo": {
+        "mainCommit": "8f9f6264dab78b3f3d4991278df5a23d7a8394ce",
+        "publishedPr126Commit": "ae12a4ef5543af8b07d6f2b9168b9e5c12a747fe"
+      },
+      "candidateActualImageAbsenceProof": "pending",
       "applicationLicense": "AGPL unchanged",
-      "pendingSequence": "Apache-2.0 and final DE/EN README only after Ghostscript removal.",
+      "pendingSequence": "Apache-2.0 and final DE/EN README only after actual Ghostscript removal is established.",
       "preparedReadme": {
         "branch": "docs/bilingual-product-readme",
-        "canonicalCommit": "7b87ff0f9798ec0edc9c31347d85f776a2cecbac",
-        "mergedIntoMain": false
+        "canonicalCommit": "ec394312533cfc8476e060e264d1e4929dd02d54",
+        "localOnly": true,
+        "mergedIntoMain": false,
+        "changedDocuments": 4,
+        "retainedGenuineCaptures": 7,
+        "captureSourceCommit": "870d73be",
+        "freshRuntimeScreenshots": false
       }
     },
     "ticketStatusChanges": [],

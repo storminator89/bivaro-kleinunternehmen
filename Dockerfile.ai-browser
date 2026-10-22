@@ -17,6 +17,7 @@ COPY prisma ./prisma
 RUN npm ci --include=dev --ignore-scripts && \
     npx prisma generate --schema=./prisma/schema.prisma && \
     npx playwright install --with-deps chromium && \
+    sh /app/scripts/assert-no-ghostscript.sh && \
     npm cache clean --force && \
     node runtime-manifest.mjs verify
 COPY --chown=nextjs:nodejs tsconfig.json playwright.ai-pdf.config.ts ./

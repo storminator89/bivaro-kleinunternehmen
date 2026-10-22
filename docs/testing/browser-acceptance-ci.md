@@ -13,16 +13,18 @@ Prisma Client, and installs official Playwright Chromium plus system dependencie
 with `npx playwright install --with-deps chromium`. No application or test files,
 package versions, existing workflows, or security settings are changed.
 
-Factur-X generation also requires the application runtime executable `gs`, which
-Playwright's browser dependencies do not supply. The job installs Ubuntu's
-`ghostscript` package with `--no-install-recommends`, matching the production
-Dockerfile's explicit runtime dependency, then requires `command -v gs` and
-`gs --version` to succeed before E2E. It also explicitly installs Ubuntu's `xvfb`
-and `xauth`, checks `Xvfb`, `xvfb-run` and `xauth` presence, and records `xauth -V`.
-The Dockerfile and README specify no separate
-font package; Ghostscript's required package dependencies and Playwright's browser
-fonts are installed normally. The sRGB ICC profile is embedded in `lib/pdfa3.ts`,
-not a host-file prerequisite. No PDF assertions or dependency skips are added.
+Own-invoice PDF/A generation uses embedded fonts/profiles and independent local
+Java verification, not Ghostscript. The job installs `xvfb xauth
+default-jre-headless util-linux poppler-utils` with `--no-install-recommends`,
+checks `Xvfb`, `xvfb-run` and `xauth` presence, and records `xauth -V`.
+The read-only `scripts/assert-no-ghostscript.sh` guard then requires no callable
+`gs` and no payload-bearing Ghostscript interpreter/library packages; unrelated
+`libgsf`/`libgssapi` packages are not mistaken for Ghostscript. It never purges or
+repairs the host. A failed absence check fails setup. Browser fonts remain
+Playwright's dependencies; invoice fonts/profile are application assets.
+No PDF assertion, timeout, retry or dependency skip is changed by this cutover.
+Historical run results below do not certify the current Ghostscript-free image;
+see [the separate cutover contract](../security/ghostscript-removal.md).
 
 It invokes the supported `npm run test:e2e` runner with one worker, zero retries,
 `--forbid-only`, and a 20-minute Playwright global timeout. The test step allows

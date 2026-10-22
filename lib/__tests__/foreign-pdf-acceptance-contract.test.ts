@@ -64,14 +64,17 @@ describe('mandatory foreign PDF release evidence contract (static only)',()=>{
     expect(smoke.indexOf("assert.equal(fixtureDiagnostic.outcome,'passed')")).toBeGreaterThan(smoke.indexOf('assert.deepEqual(await snapshot(),before)'));
     for(const file of ['app/api/pdfa3/route.ts','lib/server/pdfa-validator.ts','lib/server/pdfa3-converter.ts','scripts/foreign-pdf/worker.mjs'])expect(read(file)).not.toContain('fixture-validation-probe');
   });
-  it('packages the reviewed runtime closure in the actual Dockerfile without prematurely removing Ghostscript',()=>{
+  it('packages the reviewed replacement closure and requires actual Ghostscript absence',()=>{
     const patch=read('scripts/foreign-pdf/Dockerfile.integration.patch'),docker=read('Dockerfile'),doc=read('docs/testing/foreign-pdf-preservation-2026-10-22.md');
     for(const name of ['pdf-lib','@pdf-lib','pako','tslib','sax'])expect(docker).toContain(`COPY --from=builder /app/node_modules/${name}`);
     expect(docker).toContain('COPY --from=builder /app/scripts/foreign-pdf');
     expect(docker).toContain('RUN sh scripts/foreign-pdf/build-sandbox-filter.sh');
-    expect(docker).toContain("dpkg-query -W -f='${Version}' ghostscript");
+    expect(docker).toContain('RUN sh scripts/assert-no-ghostscript.sh');
+    expect(docker).not.toMatch(/apt-get install[^\n]*\bghostscript\b/);
+    expect(read('scripts/foreign-pdf/container-gate.sh')).toContain('sh /app/scripts/assert-no-ghostscript.sh');
     expect(patch).toContain('build-sandbox-filter.sh');expect(patch).not.toContain('-    apt-get');
-    expect(doc).toContain('applied to the actual production Dockerfile');expect(doc).toContain('Ghostscript removal is still separate');
+    expect(doc).toContain('applied to the actual production Dockerfile');
+    expect(read('docs/security/ghostscript-removal.md')).toContain('not a license change');
   });
   it('retains exactly one combined Next configuration and the AI/notices build lifecycle',()=>{
     const config=read('next.config.ts'),pkg=JSON.parse(read('package.json'));

@@ -69,7 +69,7 @@ jobs:
           sudo env APT_CONFIG="$apt_config" "$node_bin" "$playwright_cli" install-deps chromium
           "$node_bin" "$playwright_cli" install chromium
 
-      # PDF generation needs gs; real PDF preview needs headed Chromium/Xvfb.
+      # PDF/A verification needs Java; real PDF preview needs headed Chromium/Xvfb.
       - name: Install and verify PDF and virtual display dependencies
         shell: bash
         run: |
@@ -91,13 +91,12 @@ jobs:
             exit 1
           fi
           sudo env APT_CONFIG="$apt_config" apt-get update
-          sudo env APT_CONFIG="$apt_config" apt-get install -y --no-install-recommends ghostscript xvfb xauth default-jre-headless util-linux poppler-utils
-          command -v gs
+          sudo env APT_CONFIG="$apt_config" apt-get install -y --no-install-recommends xvfb xauth default-jre-headless util-linux poppler-utils
           command -v Xvfb
           command -v xvfb-run
           command -v xauth
-          gs --version
           xauth -V
+          sh scripts/assert-no-ghostscript.sh
 
       - name: Install hash-pinned official offline invoice validator
         run: node scripts/einvoice-validation/install-runtime.mjs "${{ runner.temp }}/bivaro-einvoice"

@@ -153,7 +153,7 @@ bivaro-kleinunternehmen/
 - [Node.js](https://nodejs.org/) **Version 22.23.4** (Container-/CI-Version; weitere erlaubte Versionen siehe `package.json`)
 - [npm](https://www.npmjs.com/) (wird mit Node.js mitgeliefert)
 - [Git](https://git-scm.com/)
-- Ghostscript wird übergangsweise noch in Container-/CI-Kompatibilitätsprüfungen mitgeführt. Der produktive PDF-Code verwendet jetzt getrennt isoliertes PDF.js für die KI-Analyse sowie geprüftes PDF/A-3b für die alte XML-Anhangsschnittstelle; die endgültige Paketentfernung folgt erst nach gemeinsamer nativer Abnahme.
+- Für lokale PDF-/Rechnungsprüfungen werden eine Java-Laufzeit sowie passende Linux-Isolationswerkzeuge (`util-linux`/`util-linux-extra` unter Debian 13) benötigt; das Containerrezept liefert sie mit. Ghostscript wird nicht mehr benötigt oder installiert. Build, native Containerprüfungen und Browser-CI müssen seine Abwesenheit ausdrücklich nachweisen. [Umfang und Abnahmestand](docs/security/ghostscript-removal.md).
 
 Prüfen Sie Ihre Versionen im Terminal:
 ```bash
@@ -260,7 +260,7 @@ Nach einer Änderung von `NEXTAUTH_SECRET` muss das SMTP-Passwort erneut eingege
 - `npm run audit:security` prüft die Produktionsabhängigkeiten und läuft zusätzlich in CI. `npm audit` umfasst auch Entwicklungswerkzeuge. Stand 17.10.2026 verbleiben dort fünf hohe Meldungen in der ESLint-/`braces`-Abhängigkeitskette; die Registry bietet für `braces` noch keine korrigierte Version. Linting nicht auf ungeprüften fremden Dateimustern als öffentlichen Dienst anbieten. Kein erzwungenes Framework-Downgrade zur bloßen Bereinigung des Audit-Ergebnisses verwenden.
 - `npm run test:e2e:security` erstellt eine neue temporäre SQLite-Datenbank, baut den Produktionsserver auf Port 3101 und prüft Registrierung, Anmeldung, Herkunftsprüfung, Größenlimits, CSP und Dokumentausgabe. Die Testdatenbank wird danach entfernt. Laufende Entwicklungs- oder Produktionsdatenbanken werden dafür nicht verwendet.
 
-Die Härtung erfordert keine Datenbankmigration. Sie ersetzt keine Prüfung der tatsächlichen HTTPS-/Proxy-Konfiguration, Betriebssystem- und Ghostscript-Updates oder der Wiederherstellbarkeit von Sicherungen. Neue private Uploads liegen unter `data/uploads` und damit im Docker-Datenvolume; das separate `public/uploads`-Volume dient nur der Legacy-Kompatibilität.
+Die Härtung erfordert keine Datenbankmigration. Sie ersetzt keine Prüfung der tatsächlichen HTTPS-/Proxy-Konfiguration, Betriebssystem-/Laufzeit-Updates oder der Wiederherstellbarkeit von Sicherungen. Neue private Uploads liegen unter `data/uploads` und damit im Docker-Datenvolume; das separate `public/uploads`-Volume dient nur der Legacy-Kompatibilität.
 
 ---
 

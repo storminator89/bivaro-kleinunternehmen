@@ -8,7 +8,7 @@ Historische Git-Basis: `0208c62f26ff60cf855dfef21e74e0ff6466e7c9`; keine Aussage
 
 Diese Übersicht enthält alle 160 Backlog-Tickets. Der Status ist der aktuelle Arbeitsstand dieser Welle und ersetzt weder die im Backlog offenen ACs noch fachliche, rechtliche oder produktive Freigaben. „Vorgeschlagen“ bedeutet ausdrücklich, dass in dieser Welle keine Umsetzung vorliegt. Architektur-Discovery ist separat von Produktimplementierung ausgewiesen.
 
-## Integrationscheckpoint vom 22.10.2026, 19:39:45 UTC
+## Integrationscheckpoint vom 22.10.2026, 20:45:47 UTC
 
 Dieser zusätzliche Checkpoint trennt den bestätigten Integrationsstand von der
 historischen AC-Bewertung oben und unten. Alle **160 Ticketidentitäten und
@@ -45,51 +45,86 @@ read-only auf Größe und Hash geprüfte Postmerge-Evidenzsiegel heißt
 dieses Repositorys): **19.868 Bytes**, SHA-256
 `4c2b797beafa03631c210a47f9ba9abd6680cae8a814f2f3ac0b1a77d5fb4834`.
 
-### Offene Integrationsprüfungen: PR #126 / Issue #127
+### Abgenommener veröffentlichter Head: PR #126 / Issue #127
 
 [PR #126](https://github.com/storminator89/bivaro-kleinunternehmen/pull/126)
-ist weiterhin offen und Draft; veröffentlichter kanonischer Commit
-`b28ddbaff839ccbb1bdc6796d2dc81825351d7d0`, Tree
-`71f7797562447ff96281bb4d0daf1fae3a81e1f0`, ist **nicht main**. Der tatsächliche
-Merge-Checkout `40bff6145696c012dd89112e95ec9cef8663e9c6` hat exakt diesen Tree.
+ist weiterhin **offen, Draft und nicht gemergt**. Der veröffentlichte Head
+`ae12a4ef5543af8b07d6f2b9168b9e5c12a747fe` (Parent
+`b28ddbaff839ccbb1bdc6796d2dc81825351d7d0`) hat Tree
+`fb4ca685fe54bd8e31215535f783b16593b0e171`. Der tatsächliche synthetische
+Merge-Checkout `e4bf61c0d52683797387d73a9caceeb18bf5c791` hat exakt denselben Tree
+und die Parents main `8f9f6264dab78b3f3d4991278df5a23d7a8394ce` plus ae12.
+Für diesen exakten Head sind **alle fünf Workflows und elf Jobs im ersten Versuch
+erfolgreich**; die begrenzte aktuelle Prüf-/Artefaktabnahme ist vollständig:
 
-| Workflow | Lauf / tatsächliches Ergebnis und Restabnahme |
+| Workflow | Lauf / tatsächliches Ergebnis |
 |---|---|
-| CI | [39834456758](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456758): Lint/Typprüfung, Tests und Build erfolgreich; Security-Job installiert noch Playwright-Abhängigkeiten. Kein Gesamtabschluss behauptet. |
-| Own-invoice PDF-A conformance | [39834457083](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834457083): erfolgreich |
-| Container runtime compatibility | [39834456919](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456919): erfolgreich |
-| Foreign-PDF | [39834457147](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834457147): auf beiden Architekturen fehlgeschlagen, obwohl JVM-/CLI-Startup erfolgreich war. Kohärente Nichtkonformität: ISO19005-3:2012, Regel 6.2.11.4.1, Test 1; Source-Precheck lehnt als `unsupported` / HTTP 422 ab. Kein nativer Erfolgsnachweis. |
-| Browser acceptance | [39834456795](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39834456795): Stand 19:35 UTC waren funktionale Suite (Schritt 10), finale PDF-Renderprüfung (11) und PDF-Artefaktupload (12) erfolgreich. Screenshot-Staging, terminaler Laufabschluss und Artefaktabnahme stehen noch aus. Die aktuelle Testanzahl ist nicht belegt; die alten 124 werden nicht übertragen. |
+| CI | [39845788386](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788386): erfolgreich; 3.749 Tests bestanden / 20 Skips, 228 Dateien bestanden / 3 übersprungen; Security-Browserprüfung 1 bestanden |
+| Container runtime compatibility | [39845788373](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788373): erfolgreich |
+| Foreign PDF compatibility | [39845788313](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788313): erfolgreich auf x64/arm64 |
+| Own-invoice PDF-A conformance | [39845788285](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788285): erfolgreich auf x64/arm64 |
+| Browser acceptance | [39845788254](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39845788254): erfolgreich, 124 Tests bestanden |
 
-Die [öffentliche Diagnose](https://github.com/storminator89/bivaro-kleinunternehmen/pull/126#issuecomment-6349239959)
-grenzt den Foreign-PDF-Befund ein: Der gepinnte Fontparser kann einen verweigerten
-Tempfile-Spill oberhalb von 10 KiB in `fontProgramParsed=false` übersetzen.
-Der Regelbefund beweist daher **keine intrinsisch beschädigte Fixture**; diese
-mögliche Verarbeitungsschranke ist noch kein Beleg der alleinigen nativen Ursache.
+Die unabhängige aktuelle Artefaktabnahme umfasst **177 Bilder = 62 frische
+vollständige Originalbildprüfungen + 115 Wiederverwendungen nach striktem,
+vollständigem Identitätsbeleg**; keine verfügbaren Bilder sind ungedeckt, keine
+neuen sichtbaren Defekte bestätigt. Das sind **nicht 177 frische Browseraktionen**.
+Erhalten sind **62 PDFs, 30 eingebettete XML-Bindungen und 2 separate XML-Dateien**;
+30 Bindungen bedeuten nicht 30 separat aufbewahrte XML-Dateien.
+Das auf Größe/Hash geprüfte, extern aufbewahrte Evidenzsiegel heißt
+`acceptance-ae12a4ef-exact-current.json`: **19.083 Bytes**, SHA-256
+`3eef3a4cc77eacb80ac9580a659443aa41a96e2286917c336d2a68c884cd901c`.
+Der [öffentliche native Meilenstein](https://github.com/storminator89/bivaro-kleinunternehmen/pull/126#issuecomment-6350464863)
+ordnet diesen geprüften Stand ein.
 
+Die Abnahme bleibt begrenzt: Navigation kann Bildteile verdecken; gescrollte,
+eingeklappte oder nicht sichtbare Bereiche sind nicht visuell belegt. Der
+E-Mail-PDF-Bereich ist gemockt, bestehende mobile Zeit-/Jahresumbrüche und
+Zahlungsreferenz-Ellipsen bleiben; volle Referenz-IDs stehen in Kopfzeilen.
+Screenshots beweisen keine Backend-/Zustell-/Finanz- oder Konformitätswirkung;
+Quell-/Original-/Archiv-/API-/Zustandsaussagen bleiben im jeweiligen Umfang an
+die Hosted-Evidenz gebunden, nicht unabhängig lokal reproduziert. QR-Inhalte
+wurden nicht unabhängig dekodiert. Die akzeptierte Adaptergrenze gilt je neu
+materialisiertem Stream, nicht als globale Garantie für dekodierten Speicher;
+der Runner bleibt JRE-only ohne JDK/Compiler. Der produktive `omit-dev`-Audit
+meldet **0** Schwachstellen, die vollständige Installation einschließlich
+Entwicklungsabhängigkeiten weiterhin **5 hohe Befunde**. Kein pauschal
+schwachstellenfreier Gesamtbaum und keine allgemeine Produktivfreigabe behauptet.
 [Issue #127](https://github.com/storminator89/bivaro-kleinunternehmen/issues/127)
-bleibt bis zur finalen Abnahme des integrierten Heads und zum Merge offen. Die
-erfolgreichen aktuellen Browser-Schritte ersetzen weder den terminalen
-Laufabschluss noch die abschließende Bild-/Artefaktabnahme.
+bleibt bis zum finalen integrierten Merge offen.
 
-Der nächste **lokal implementierte**, statisch unabhängig geprüfte Kandidat ist
-ein begrenzter, ausschließlich für Fremd-PDFs verwendeter Speicheradapter:
-öffentliche Setter setzen das Maximum neuer Streams auf **N = 2 MiB
-(2.097.152 Bytes)** und die Pufferschwelle auf **N+1 (2.097.153 Bytes)**, danach
-folgt unverändert `GreenfieldCliWrapper`. Das ist eine Grenze je neu
-materialisiertem Stream,
-keine globale Speicherzusage. Regeln, OS-Schreib-/Netzwerkrechte und vorhandene
-Prozesslimits bleiben unverändert; das JDK ist ausschließlich Build-Abhängigkeit,
-der Runner enthält weiterhin nur die JRE, kein JDK/Compiler. Lokal gemeldet sind
-**3.742 bestandene reine Tests / 27 native Opt-in-Skips**, vollständige Typprüfung, Lint und Node-22-Build
-erfolgreich. Kein lokaler Java-/nativer-/Browserlauf wurde ausgeführt.
-**Tatsächliche Hosted-Kompilierung und native Abnahme sind noch offen**; weder
-lokale Checks noch die grüne Basis main belegen den nativen Erfolg des Kandidaten.
+### Lokaler Nachfolger: Ghostscript-Entfernung noch nicht im Image belegt
 
-Ghostscript ist weiterhin installiert; die Anwendungslizenz bleibt AGPL.
-Apache-2.0 und die DE/EN-README-Finalisierung folgen erst nach Entfernung von
-Ghostscript. Die vorbereitete README auf `docs/bilingual-product-readme`,
-kanonischer Commit `7b87ff0f9798ec0edc9c31347d85f776a2cecbac`, ist nicht gemergt.
+Der **nicht veröffentlichte** Kandidat
+`7607a0473932af8fa4cfc175f476e8aecd40998d`, Tree
+`6371fba2e9c612563419baf9e435e39a1d3a847c`, entfernt im Quellstand die letzte
+Ghostscript-Paketinstallation und den alten PostScript-Smoke. Fail-closed-Prüfungen
+auf fehlende `gs`-Executables und Interpreter-Pakete sind für reale Image-/Build-/
+Nicht-root-Gates sowie das Browser-Testimage ergänzt. App-/PDF-Verhalten,
+Validatoren, Regeln, Prozesslimits, Dependency-Pins und Anwendungslizenz bleiben
+unverändert. Das unabhängige Review des exakten finalen Quellstands ist ohne wesentlichen
+Befund abgeschlossen. Die Korrektur zur KI-Verschlüsselung und begrenzten
+Ablehnungsevidenz betrifft ausschließlich zwei Dokumente, nicht den Runtimecode.
+
+Die folgenden lokalen Quellprüfungen gehören zu
+`609dcc4c92b3289aaaf5a17eeee05c992c8407c2`, Tree
+`889bd16bb418a2558021885d4c4deec844bd0c09`; der aktuelle Nachfolger ist außerhalb
+der zwei Dokumentkorrekturen byte-identisch: **3.779 reine Tests bestanden / 27 native
+Opt-in-Skips**, 229 Dateien bestanden / 3 übersprungen; 108 fokussierte Tests
+bestanden. Vollständige Typprüfung, Lint, Shellsyntax und Node-22-Build endeten
+jeweils mit Exit 0. **Das beweist noch keine tatsächliche Ghostscript-Abwesenheit
+im neuen Image**: Der Nachfolger ist nicht veröffentlicht, ein nativer
+Nachfolgerlauf wurde nicht ausgeführt; reale Image-, native und Browserabnahme
+des Nachfolgers stehen aus.
+
+**Ghostscript ist auf main und der veröffentlichten ae12-Basis weiterhin
+installiert.** Die geplante Entfernung gilt nur für den lokalen Nachfolger,
+nicht für diese akzeptierten Baselines. AGPL bleibt unverändert; Apache-2.0 und
+die finale DE/EN-README folgen erst nach tatsächlich belegter Entfernung.
+Der aktualisierte README-Kandidat
+`ec394312533cfc8476e060e264d1e4929dd02d54` ist ausschließlich lokal: vier
+Dokumente geändert, sieben frühere echte Aufnahmen erhalten und ausdrücklich
+auf `870d73be` datiert, **keine frischen Runtime-Screenshots**.
 
 Die Angaben sind ein datierter Evidenzcheckpoint, keine laufende Statusabfrage.
 Für diese Dokumentationsänderung wurden keine Builds, nativen Tests,

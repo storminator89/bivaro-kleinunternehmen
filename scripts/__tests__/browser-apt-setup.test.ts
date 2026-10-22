@@ -79,7 +79,10 @@ else
   exit 90
 fi`);
     executable('node', `printf 'node' >> "$BIVARO_APT_CALLS"; printf ' <%s>' "$@" >> "$BIVARO_APT_CALLS"; printf '\\n' >> "$BIVARO_APT_CALLS"`);
-    for (const name of ['gs', 'Xvfb', 'xvfb-run', 'xauth']) executable(name, 'exit 0');
+    for (const name of ['Xvfb', 'xvfb-run', 'xauth']) executable(name, 'exit 0');
+    executable('sh', `[[ "$#" == 1 && "$1" == scripts/assert-no-ghostscript.sh ]]
+printf 'sh <%s>\\n' "$1" >> "$BIVARO_APT_CALLS"
+[[ "$BIVARO_APT_FAIL" != absence ]] || exit 73`);
     const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', shellStep(name)], {
       encoding: 'utf8', timeout: 5_000,
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RUNNER_TEMP: runnerTemp, GITHUB_WORKSPACE: workspace,
@@ -104,12 +107,14 @@ describe('per-command browser dependency transport bounds', () => {
     expect(result.remaining).toEqual([]);
   });
 
-  it('uses the same verified settings for both PDF apt commands without dropping a dependency', () => {
+  it('uses the same verified settings for PDF apt commands and verifies the Ghostscript-free replacement environment', () => {
     const result = runSetup(pdf);
     expect(result.status, result.stderr).toBe(0);
     expect(result.configs).toEqual([config, config, config]);
     expect(result.calls).toContain('<apt-get> <update>');
-    expect(result.calls).toContain('<apt-get> <install> <-y> <--no-install-recommends> <ghostscript> <xvfb> <xauth> <default-jre-headless> <util-linux> <poppler-utils>');
+    expect(result.calls).toContain('<apt-get> <install> <-y> <--no-install-recommends> <xvfb> <xauth> <default-jre-headless> <util-linux> <poppler-utils>');
+    expect(result.calls).toContain('sh <scripts/assert-no-ghostscript.sh>');
+    expect(result.calls).not.toContain('<ghostscript>');
     expect(result.remaining).toEqual([]);
   });
 
@@ -149,6 +154,12 @@ describe('per-command browser dependency transport bounds', () => {
     const result = runSetup(pdf, 'valid', 'update');
     expect(result.status).toBe(72);
     expect(result.calls).not.toContain('<apt-get> <install>');
+    expect(result.remaining).toEqual([]);
+  });
+
+  it('fails the PDF setup gate if the independent absence guard rejects the environment', () => {
+    const result = runSetup(pdf, 'valid', 'absence');
+    expect(result.status).toBe(73);
     expect(result.remaining).toEqual([]);
   });
 

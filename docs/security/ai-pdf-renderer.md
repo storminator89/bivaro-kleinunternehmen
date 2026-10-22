@@ -12,8 +12,10 @@ source-hash ownership checks and human review before financial capture stay in
 the existing extraction service. Original archived bytes and hashes are not
 rewritten. The provider receives ordered JPEG data URLs only, never the PDF,
 local paths, metadata, attachments or a document URL. Manual review remains
-available on any preparation failure. The separate foreign-PDF Ghostscript
-conversion path is intentionally unchanged (#118).
+available on any preparation failure. The separate foreign-PDF path now accepts
+only supported already-valid PDF/A-3b for XML attachment (#118); it is not an
+arbitrary PDF normalizer. [Final package cutover](ghostscript-removal.md) has its
+own actual-image absence and replacement acceptance gates.
 
 PDF.js parses and renders; no custom PDF interpreter, viewer or script sandbox
 is loaded. `--disallow-code-generation-from-strings` is defense in depth. XFA and
@@ -533,5 +535,6 @@ previous positive/negative, original-byte/hash, complete-page and real-PDF brows
 assertion remain unchanged. Build/fixtures and pure checks are not native passes.
 Actual image/standalone packaging and all genuine native/browser gates must still
 pass, including attestation's resource use under unchanged 1 GiB AS/128 MiB heap,
-15-second CPU/20-second wall, pixel/output and confinement limits. Ghostscript
-remains for the separate foreign-PDF conversion path.
+15-second CPU/20-second wall, pixel/output and confinement limits. At that
+integration checkpoint Ghostscript remained for the separate foreign-PDF path;
+the later [package cutover](ghostscript-removal.md) removes that dependency.

@@ -13,6 +13,7 @@ describe('real PDF browser gate packaging contract (static, not native evidence)
     expect(docker).toContain('npx prisma generate --schema=./prisma/schema.prisma');
     expect(docker).toContain('RUN node runtime-manifest.mjs capture');
     expect(docker).toContain('node runtime-manifest.mjs verify');
+    expect(docker.indexOf('sh /app/scripts/assert-no-ghostscript.sh')).toBeGreaterThan(docker.indexOf('npx playwright install --with-deps chromium'));
     expect(docker).not.toMatch(/COPY[^\n]*\/app|WORKDIR \/app|ENV NODE_PATH/);
     expect(docker).toContain('USER nextjs');
     expect(docker).toContain('lib/password.ts lib/password-policy.ts lib/prisma.ts ./lib/');

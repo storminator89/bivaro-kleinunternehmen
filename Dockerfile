@@ -85,8 +85,7 @@ FROM node:22.23.4-trixie-slim AS runner
 
 # Install security updates and dumb-init for proper signal handling
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates ghostscript util-linux util-linux-extra default-jre-headless && \
-    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' ghostscript)" ge '10.05.1~dfsg-1+deb13u3' && \
+    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates util-linux util-linux-extra default-jre-headless && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -176,6 +175,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # Copy entrypoint script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
+
+# Fail the actual final image if a direct or transitive interpreter remains.
+COPY --from=builder /app/scripts/assert-no-ghostscript.sh ./scripts/assert-no-ghostscript.sh
+RUN sh scripts/assert-no-ghostscript.sh
 
 # Switch to non-root user
 USER nextjs
