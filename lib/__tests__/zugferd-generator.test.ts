@@ -12,6 +12,22 @@ function createTestInvoice(overrides: Partial<ZugferdData> = {}): ZugferdData {
 }
 
 describe('generateZugferdXml', () => {
+  it.each([1, 9, 99, 100, 9999])('preserves the local civil year %i as four XML digits', year => {
+    const date = new Date(0);
+    date.setFullYear(year, 0, 15);
+    date.setHours(12, 0, 0, 0);
+    const xml = generateZugferdXml(createTestInvoice({ date, dueDate: undefined, paymentTerms: 'Zahlbar nach Erhalt' }));
+    expect(xml).toContain(`<udt:DateTimeString format="102">${String(year).padStart(4, '0')}0115</udt:DateTimeString>`);
+  });
+
+  it.each([0, -1, 10000])('rejects the XML civil year %i outside 0001–9999', year => {
+    const date = new Date(0);
+    date.setFullYear(year, 0, 15);
+    const validation = validateZugferdData(createTestInvoice({ date, dueDate: undefined, paymentTerms: 'Zahlbar nach Erhalt' }));
+    expect(validation.isValid).toBe(false);
+    expect(validation.errors.some(issue => issue.field === 'date')).toBe(true);
+  });
+
   it('writes the EN 16931 guideline and does not invent a buyer reference', () => {
     const xml = generateZugferdXml(createTestInvoice())
     expect(xml).toMatch(/^\s*<\?xml version="1\.0" encoding="UTF-8"\?>/)

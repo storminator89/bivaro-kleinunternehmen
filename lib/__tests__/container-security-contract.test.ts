@@ -16,7 +16,18 @@ describe('patched container compatibility gate',()=>{
     expect(workflow).toContain('docker build --pull');
     expect(workflow).toContain('--network=none');
     expect(workflow).not.toContain('docker push');
-    expect(workflow.match(/readonly/g)).toHaveLength(3);
+    const mounts = [...workflow.matchAll(/--mount type=bind,src="([^"]+)",dst=([^,\s]+),readonly/gu)]
+      .map(([, source, destination]) => ({ source, destination }));
+    expect(mounts).toEqual([
+      { source: '$PWD/scripts/container-runtime-smoke.sh', destination: '/tmp/container-runtime-smoke.sh' },
+      { source: '$PWD/scripts/own-invoice-pdfa/container-smoke.mjs', destination: '/tmp/own-invoice-container-smoke.mjs' },
+      { source: '$PWD/lib/__tests__/fixtures/incoming-validation', destination: '/tmp/validator-fixtures' },
+      { source: '$PWD/node_modules/sax', destination: '/tmp/smoke-sax' },
+      { source: '$PWD/node_modules', destination: '/tmp/own-invoice-test/node_modules' },
+    ]);
+    expect(workflow.match(/--mount\b/gu)).toHaveLength(mounts.length);
+    expect(workflow).not.toMatch(/--(?:privileged|cap-add|security-opt|volume)(?:[=\s]|$)|--(?:network|pid|ipc|userns)=host/gu);
+    expect(workflow).toContain('docker cp bivaro-runtime-smoke:/tmp/bivaro-own-invoice-container-smoke/.');
     expect(workflow).toContain('npm ci --ignore-scripts');
   });
   it('checks actual entrypoint, database, renderer and real offline validation with bounded polling',()=>{
