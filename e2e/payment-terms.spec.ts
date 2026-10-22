@@ -63,7 +63,19 @@ async function reachable(locator: Locator) {
       const header = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0).map(rect => rect.bottom));
       const clip = { left: Math.max(0, dialog?.left ?? 0), right: Math.min(innerWidth, dialog?.right ?? innerWidth), top: dialog ? Math.max(0, dialog.top) : header, bottom: Math.min(innerHeight, dialog?.bottom ?? innerHeight) };
       if (rect.width <= 0 || rect.height <= 0 || rect.left < clip.left || rect.right > clip.right || rect.top < clip.top || rect.bottom > clip.bottom) return `Outside visible bounds: ${JSON.stringify({ rect: rect.toJSON(), clip })}`;
-      const hits = [[rect.left + 3, rect.top + 3], [rect.right - 3, rect.bottom - 3], [rect.left + rect.width / 2, rect.top + rect.height / 2]].map(([x, y]) => {
+      // Rounded/native inputs have transparent bounding-box corners. Sample
+      // beyond their computed corner radii, not a fixed diagonal 3px from a
+      // fractional edge. The complete rectangle must still pass the bounds
+      // check above; all three actual interior hit tests remain mandatory.
+      const style = getComputedStyle(element);
+      const cornerInset = (radius: string) => {
+        const [horizontal, vertical = horizontal] = radius.split(/\s+/);
+        const pixels = (value: string, extent: number) => value.endsWith('%') ? Number.parseFloat(value) * extent / 100 : Number.parseFloat(value);
+        return [Math.min(rect.width / 2, Math.max(3, pixels(horizontal, rect.width) + 1)), Math.min(rect.height / 2, Math.max(3, pixels(vertical, rect.height) + 1))];
+      };
+      const [leftInset, topInset] = cornerInset(style.borderTopLeftRadius);
+      const [rightInset, bottomInset] = cornerInset(style.borderBottomRightRadius);
+      const hits = [[rect.left + leftInset, rect.top + topInset], [rect.right - rightInset, rect.bottom - bottomInset], [rect.left + rect.width / 2, rect.top + rect.height / 2]].map(([x, y]) => {
         const hit = document.elementFromPoint(x, y);
         return { x, y, reachable: hit !== null && (element === hit || element.contains(hit)), hit: hit ? `${hit.tagName}#${hit.id}.${hit.className}` : null };
       });

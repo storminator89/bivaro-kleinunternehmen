@@ -72,7 +72,13 @@ for (const width of [1440, 360, 390]) test(`bank evidence: bounded save/recovery
   await expect(page.getByRole('heading', { name: 'Importquittung', exact: true })).toBeFocused();
   await expect(page.getByText('Import gespeichert, noch keine Zahlungen zugeordnet', { exact: true })).toBeVisible();
   await expect(page.getByText('Betrag nicht bestätigt', { exact: false })).toBeVisible();
-  if (width === 390) await page.screenshot({ path: info.outputPath('bank-evidence-reopened-390.png'), fullPage: false });
+  if (width === 390) {
+    await page.getByRole('heading', { name: 'Importquittung', exact: true }).evaluate(element => {
+      element.scrollIntoView({ block: 'start', behavior: 'instant' });
+      window.scrollBy({ top: -80, behavior: 'instant' });
+    });
+    await page.screenshot({ path: info.outputPath('bank-evidence-reopened-390.png'), fullPage: false });
+  }
   await page.getByRole('button', { name: 'Zurück zum Importverlauf', exact: true }).click(); await expect(opener).toBeFocused();
   await preview(page, csv); await page.getByLabel(/Ich habe Kontoalias, Spalten, Vorzeichen und Kontrollsummen geprüft/u).check();
   await page.getByRole('button', { name: 'Geprüfte Umsätze speichern', exact: true }).click();
