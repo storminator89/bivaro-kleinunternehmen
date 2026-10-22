@@ -82,6 +82,7 @@ test('desktop preview explains partial suggestions, duplicate and manual-payment
   await page.screenshot({ path: testInfo.outputPath('bank-csv-desktop-preview.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await page.screenshot({ path: testInfo.outputPath('bank-csv-results-mobile-390.png'), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   expect(await snapshot(page, userId, created.id)).toEqual(before);

@@ -11,6 +11,7 @@ import zlib
 SIGNATURE = b'\x89PNG\r\n\x1a\n'
 MAX_PNG_BYTES = 5 * 1024 * 1024
 MAX_PIXEL_BYTES = 64 * 1024 * 1024
+MAX_STRONG_FILTERED_BYTES = 16 * 1024 * 1024
 COLOR_CHUNKS = {b'sRGB', b'gAMA', b'cHRM', b'iCCP', b'sBIT', b'pHYs'}
 
 
@@ -156,3 +157,34 @@ def recompress_png(data):
         'fullPixelSha256': hashlib.sha256(pixels).hexdigest(),
         'nonIdatSha256': hashlib.sha256(b''.join(metadata)).hexdigest(),
     }
+
+
+def recompress_png_strong(data, compressor=None):
+    """Optional stronger DEFLATE only; geometry, filters and metadata stay intact."""
+    result, proof = recompress_png(data)
+    width, height, channels, pixels, metadata, chunks = _decode(result)
+    if compressor is None:
+        from zopfli.zlib import compress
+        compressor = lambda raw: compress(raw, numiterations=1)
+    # _decode has already checked the exact bounded deflate stream and its pixels.
+    filtered = zlib.decompress(b''.join(raw[8:-4] for kind, raw in chunks if kind == b'IDAT'))
+    if len(filtered) > MAX_STRONG_FILTERED_BYTES:
+        return result, proof
+    encoded = _chunk(b'IDAT', compressor(filtered))
+    output, inserted = bytearray(SIGNATURE), False
+    for kind, raw in chunks:
+        if kind == b'IDAT':
+            if not inserted:
+                output.extend(encoded)
+                inserted = True
+        else:
+            output.extend(raw)
+    candidate = bytes(output)
+    if len(candidate) < len(result):
+        decoded = _decode(candidate)
+        _require(decoded[:3] == (width, height, channels) and decoded[3] == pixels
+                 and decoded[4] == metadata, 'strong PNG equivalence failed')
+        result = candidate
+    proof['outputBytes'] = len(result)
+    proof['outputSha256'] = hashlib.sha256(result).hexdigest()
+    return result, proof

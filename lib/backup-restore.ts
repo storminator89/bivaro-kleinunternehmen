@@ -1,3 +1,5 @@
+import { bankImportsFromBackup, restoreBankImports } from '@/lib/bank-import-backup';
+import { assertPaymentTermDocument, validatePaymentTermSelection } from '@/lib/payment-terms';
 import { validationReportsFromBackup, restoreValidationReports } from '@/lib/purchase-documents/validation-backup';
 import { validatePaymentAdjustmentBackup, paymentAdjustmentValues, sameAdjustmentEvidence } from '@/lib/payment-adjustment-backup';
 import { validateReminderBackupFields, restoredReminderKey } from '@/lib/reminder-backup';
@@ -29,11 +31,13 @@ import { validateRecurringValues } from '@/lib/recurring-schedule';
 import {
   CURRENT_BACKUP_VERSION,
   CURRENT_SCHEMA_VERSION,
+  backupSchemaSupportsBankImportEvidence,
   backupSchemaSupportsReminderBalance,
   backupSchemaSupportsPurchaseValidation,
   backupSchemaSupportsServiceBilling,
   backupSchemaSupportsProjectServiceTimes,
   validateProjectServiceBackupFields,
+  validatePaymentTermBackupFields,
   FULL_PAYMENT_JOURNAL_SCHEMA_VERSION,
   LEGACY_BACKUP_VERSION,
   manifestWarning,
@@ -97,6 +101,8 @@ type RestoreResult = {
   customers: { imported: number; skipped: number };
   suppliers: { imported: number; skipped: number };
   serviceArticles: { imported: number; skipped: number };
+  bankImportBatches: { imported: number; skipped: number };
+  bankImportRows: { imported: number; skipped: number };
   serviceProjects: { imported: number; skipped: number };
   billingNotes: { imported: number; skipped: number };
   expenses: { imported: number; skipped: number };
@@ -903,8 +909,12 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
     warnings.push(manifestWarning(LEGACY_BACKUP_VERSION)!);
   }
 
+  try { bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(manifest?.schemaVersion)); }
+  catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Bankimport-Evidenz ist ungültig'); }
   try { validateProjectServiceBackupFields(data, manifest?.schemaVersion); }
   catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Projekt- und Zeitdaten ungültig'); }
+  try { validatePaymentTermBackupFields(data, manifest?.schemaVersion); }
+  catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zahlungsziel-Backup ungültig'); }
   const arrays = Object.fromEntries(ARRAY_KEYS.map((key) => [key, asArray(data, key)]));
   if (version === LEGACY_BACKUP_VERSION && arrays.serviceArticles.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine ungebundenen Artikel enthalten');
   if (version === LEGACY_BACKUP_VERSION && arrays.suppliers.length > 0) throw new BackupValidationError('Legacy-Backups dürfen keine ungebundenen Lieferanten enthalten');
@@ -1052,6 +1062,8 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     customers: { imported: 0, skipped: 0 },
     suppliers: { imported: 0, skipped: 0 },
     serviceArticles: { imported: 0, skipped: 0 },
+    bankImportBatches: { imported: 0, skipped: 0 },
+    bankImportRows: { imported: 0, skipped: 0 },
     serviceProjects: { imported: 0, skipped: 0 },
     billingNotes: { imported: 0, skipped: 0 },
     expenses: { imported: 0, skipped: 0 },
@@ -1187,6 +1199,30 @@ function auditImportKey(backupId: string, sourceUserId: string | undefined, sour
   return `${backupId}:index-${index}`;
 }
 
+/** Only the tenant-local customer ID changes; every provenance value is retained. */
+function remappedPaymentTermParsedData(value: unknown, customers: Map<number, number>): unknown {
+  if (!isRecord(value) || value.paymentTermSelection == null) return value;
+  const selection = validatePaymentTermSelection(value.paymentTermSelection);
+  return { ...value, paymentTermSelection: { ...selection, customerId: relationMapValue(customers, selection.customerId, 'paymentTermSelection.customerId') } };
+}
+
+function validatePaymentTermMerge(target: JsonRecord, source: JsonRecord, restoredParsedData: unknown): void {
+  const targetSelection = isRecord(target.parsedData) ? target.parsedData.paymentTermSelection : undefined;
+  const sourceSelection = isRecord(restoredParsedData) ? restoredParsedData.paymentTermSelection : undefined;
+  if (targetSelection == null && sourceSelection == null) return;
+  if (targetSelection == null || sourceSelection == null || hashJson(targetSelection) !== hashJson(sourceSelection)
+    || target.type !== source.type || target.invoiceNumber !== source.invoiceNumber) {
+    throw new BackupValidationError('Rechnungs-Kollision: Abweichende oder fehlende Zahlungsziel-Herkunft; bitte getrennt prüfen.');
+  }
+  try {
+    assertPaymentTermDocument(validatePaymentTermSelection(targetSelection), {
+      invoiceDate: (target.invoiceDate ?? null) as Date | string | null,
+      dueDate: (target.dueDate ?? null) as Date | string | null,
+      customerId: (target.customerId ?? null) as number | null,
+    });
+  } catch { throw new BackupValidationError('Rechnungs-Kollision: Zahlungsziel-Herkunft widerspricht der Zielrechnung.'); }
+}
+
 function billingNoteImportKey(sourceUserId: string | undefined, sourceNoteId: number): string {
   return `${sourceUserId ?? 'unknown-source'}:billing-note:${sourceNoteId}`;
 }
@@ -1274,7 +1310,7 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
   await tx.invoice.deleteMany({ where: { userId } });
   await tx.customer.deleteMany({ where: { userId } });
   await tx.settings.deleteMany({ where: { userId } });
-  // AuditLog and PurchaseValidationReport are intentionally preserved as immutable history.
+  // AuditLog, PurchaseValidationReport and both BankImport models are intentionally preserved as immutable history.
 }
 
 function purchaseOriginalIdentity(record: JsonRecord): string {
@@ -1369,6 +1405,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
   const result = resultTemplate(overwrite);
   result.warnings.push(...validationWarnings);
   const documents = asArray(data, 'purchaseDocuments');
+  const bankImports = bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(manifest?.schemaVersion));
+  if (bankImports.batches.length) result.warnings.push('Bankimport-Evidenz wird unverändert und unzugeordnet wiederhergestellt. Bestehende Quittungen bleiben erhalten; keine Zahlung wird ausgeführt.');
   const validationReports = validationReportsFromBackup(data, backupSchemaSupportsPurchaseValidation(manifest?.schemaVersion));
   if (validationReports.length) result.warnings.push('Technische Eingangsprüfberichte werden ausschließlich als historische Nachweise übernommen. Keine erneute Prüfung und keine aktuelle Freigabe.');
   if (documents.length > 0 && !resolveFile) {
@@ -1527,6 +1565,10 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (sourceLogo) await stageFile('logo', sourceLogo, sourceLogo);
 
     await prisma.$transaction(async (tx) => {
+      // Bank evidence is additive even in overwrite mode; collisions abort the whole restore.
+      const bankResult = await restoreBankImports(tx, userId, bankImports);
+      result.bankImportBatches = bankResult.batches;
+      result.bankImportRows = bankResult.rows;
       const existingCustomerMatches = overwrite ? new Map<number, number>() : await planCustomerMerge(tx, userId, customers, invoices);
       // Read both counters and invoice-number history before overwrite can
       // remove the rows.  Historical years come from the number grammar.
@@ -1797,6 +1839,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
             taxNumber: asOptionalString(customer.taxNumber, 'customer.taxNumber', CUSTOMER_FIELD_LIMITS.taxNumber),
             internalNote: asOptionalString(customer.internalNote, 'customer.internalNote', 5_000),
             noteVisibility: asOptionalString(customer.noteVisibility, 'customer.noteVisibility', 16) ?? 'BOTH',
+            paymentTermDays: customer.paymentTermDays == null ? null : Number(customer.paymentTermDays),
             createdAt: asDate(customer.createdAt, 'customer.createdAt', new Date())!,
             userId,
           } });
@@ -1881,6 +1924,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       for (const invoice of invoices) {
         const sourceId = asOptionalInt(invoice.id, 'invoice.id')!;
         const invoiceNumber = asOptionalString(invoice.invoiceNumber, 'invoice.invoiceNumber', 255);
+        const restoredParsedData = remappedPaymentTermParsedData(invoice.parsedData, customerMap);
         const sourcePayments = sourcePaymentsByInvoice.get(sourceId) ?? [];
         const identityMatches = sourcePayments.flatMap((event) => {
           const existing = existingPaymentByKey.get(String(event.idempotencyKey));
@@ -1921,6 +1965,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
               throw new BackupValidationError('Gleiche Angebotsnummer mit abweichender Wiedervorlage oder Rückmeldungsnotiz. Zusammenführen würde Aufgaben oder Notizen verlieren; bitte getrennt prüfen.');
             }
           }
+          validatePaymentTermMerge(existing as unknown as JsonRecord, invoice, restoredParsedData);
           const targetPayments = existingPaymentsByInvoice.get(existing.id) ?? [];
           if (sourcePayments.length || targetPayments.length) {
             if (mappedJournalInvoices.has(existing.id)) throw new BackupValidationError('Mehrere Quellrechnungen dürfen nicht auf dieselbe Zahlungsrechnung abgebildet werden');
@@ -1933,7 +1978,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
             if (existing.type !== invoice.type || existing.invoiceNumber !== invoiceNumber
               || existing.totalAmount !== asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount')
               || existing.customerId !== relationMapValue(customerMap, invoice.customerId, 'invoice.customerId')
-              || hashJson(existing.parsedData ?? {}) !== hashJson(invoice.parsedData ?? {})) {
+              || hashJson(existing.parsedData ?? {}) !== hashJson(restoredParsedData ?? {})) {
               throw new BackupValidationError('Die Zielrechnung weicht vom unveränderlichen Zahlungsnachweis ab (Kunde, Dokument oder Betrag).');
             }
             if (existing.customerId !== null) {
@@ -2019,7 +2064,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           validUntil: asDate(invoice.validUntil, 'invoice.validUntil'),
           quoteFollowUpOn: asOptionalString(invoice.quoteFollowUpOn, 'invoice.quoteFollowUpOn', 10),
           quoteResponseNote: asOptionalString(invoice.quoteResponseNote, 'invoice.quoteResponseNote', 2000),
-          parsedData: asJson(invoice.parsedData, 'invoice.parsedData'),
+          parsedData: asJson(restoredParsedData, 'invoice.parsedData'),
           totalAmount: asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount'),
           status: asOptionalString(invoice.status, 'invoice.status', 32) ?? 'DRAFT',
           issuanceState: restoredIssuanceState(invoice, manifest?.version ?? LEGACY_BACKUP_VERSION, paidInvoiceIds),
@@ -2413,7 +2458,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           logoUrl: mappedLogo ? `/api/files/logo?file=${encodeURIComponent(mappedLogo)}` : null,
           allowedOrigins: asOptionalString(settings.allowedOrigins, 'settings.allowedOrigins', 10_000),
         };
-        const restoredSettings = await tx.settings.upsert({ where: { userId }, update: settingData, create: { userId, ...settingData } });
+        const restoredSettings = await tx.settings.upsert({ where: { userId }, update: settingData, create: { userId, ...settingData, paymentTermDays: settings.paymentTermDays == null ? null : Number(settings.paymentTermDays) } });
         const sourceSettingsId = asOptionalInt(settings.id, 'settings.id');
         if (sourceSettingsId !== null) settingsMap.set(sourceSettingsId, restoredSettings.id);
         if (mappedLogo) usedFiles.add(mappedLogo);

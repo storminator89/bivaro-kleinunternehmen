@@ -1,19 +1,19 @@
 "use client";
+import { paymentToday, addPaymentCalendarDays, isPaymentBusinessDate, paymentTermSuggestion, type PaymentTermSelection } from "@/lib/payment-terms";
 import type { ServiceBillingDraftSeed } from "@/lib/service-billing";
 import { ServiceArticlePicker } from "@/components/dashboard/service-article-picker";
 import { ProjectServiceSelection, type ProjectServiceNote } from "@/components/dashboard/project-service-selection";
 
 import salesStyles from "@/components/dashboard/sales-workspace.module.css";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type SyntheticEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
-import QRCode from 'qrcode';
-import { generateZugferdXml, validateZugferdData, SMALL_BUSINESS_EXEMPTION_REASON, type ZugferdData } from "@/lib/zugferd-generator";
+import { generateZugferdXml, validateZugferdData, SMALL_BUSINESS_EXEMPTION_REASON } from "@/lib/zugferd-generator";
 import { calculateInvoiceAmounts } from "@/lib/invoice-calculation";
+import { ownInvoiceToZugferdData, parseOwnInvoiceSource, type OwnInvoiceSource } from "@/lib/own-invoice-source";
 import { DocumentTaxProfileFields } from "@/components/dashboard/document-tax-profile-fields";
 import { type DocumentFiscalSettings, type DocumentTaxMode, type DocumentTaxSelection, type DocumentTaxCase, preservedDocumentTaxMode, resolveDocumentTaxState, isSupportedDocumentTaxCase, hasUnsupportedDocumentTaxCategory } from "@/lib/document-tax-profile";
 import PriceHistory from "@/components/dashboard/price-history";
@@ -65,6 +65,7 @@ function stripBillingNoteAssociation(item: InvoiceItem): InvoiceItem {
 type NoteVisibility = 'EDITOR' | 'SEND' | 'BOTH';
 
 interface Settings extends DocumentFiscalSettings {
+  paymentTermDays?: number | null;
   companyName?: string;
   companyAddress?: string;
   taxNumber?: string;
@@ -86,6 +87,7 @@ interface Customer {
   email?: string;
   internalNote?: string | null;
   noteVisibility?: NoteVisibility;
+  paymentTermDays?: number | null;
 }
 
 interface Template {
@@ -115,8 +117,14 @@ export function CreateInvoiceModal({
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(paymentToday());
   const [dueDate, setDueDate] = useState("");
+  const [paymentTermManual, setPaymentTermManual] = useState(false);
+  const [paymentTermMessage, setPaymentTermMessage] = useState("");
+  const [paymentTermRefreshing, setPaymentTermRefreshing] = useState(false);
+  const paymentTermRefreshRef = useRef(0);
+  const paymentTermDataRef = useRef(0);
+  const paymentTermDataRequestRef = useRef(0);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
@@ -192,18 +200,23 @@ export function CreateInvoiceModal({
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previewUrlRef = useRef<string | null>(null);
   const previewGenerationRef = useRef(0);
+  const renderRequestRef = useRef<Promise<void> | null>(null);
+  const issuingRef = useRef(false);
+  const editorActiveRef = useRef(isOpen);
+  const editorGenerationRef = useRef(0);
   const billingNotesRequestRef = useRef(0);
   const wasOpenRef = useRef(false);
   const appliedQuoteRef = useRef<number | null>(null);
   const appliedDraftRef = useRef<number | null>(null);
 
   const resetEditorState = useCallback(() => {
-    const today = new Date();
-    const in14Days = new Date(today);
-    in14Days.setDate(today.getDate() + 14);
+    editorGenerationRef.current += 1;
+    issuingRef.current = false;
+    const today = paymentToday();
 
     appliedQuoteRef.current = null;
     appliedDraftRef.current = null;
@@ -211,9 +224,13 @@ export function CreateInvoiceModal({
     setDraftSaveMessage("");
     setCustomerAddress("");
     setInvoiceNumber("");
-    setDate(today.toISOString().split('T')[0]);
-    setDueDate(in14Days.toISOString().split('T')[0]);
-    setDeliveryDate(today.toISOString().split('T')[0]);
+    setDate(today);
+    setDueDate(addPaymentCalendarDays(today, 14));
+    setPaymentTermManual(false);
+    setPaymentTermMessage('');
+    setPaymentTermRefreshing(false);
+    paymentTermRefreshRef.current += 1;
+    setDeliveryDate(today);
     setNotes("");
     setItems([{ description: "", quantity: 1, unitPrice: 0, unit: "Stück", taxRate: 0 }]);
     setSelectedCustomer(null);
@@ -258,38 +275,39 @@ export function CreateInvoiceModal({
       previewUrlRef.current = null;
     }
     setPreviewUrl(null);
+    setPreviewError(null);
   }, []);
 
   useEffect(() => {
     if (!isOpen) {
+      editorActiveRef.current = false;
+      editorGenerationRef.current += 1;
+      issuingRef.current = false;
       wasOpenRef.current = false;
+      paymentTermRefreshRef.current += 1;
       return;
     }
+    editorActiveRef.current = true;
 
     if (!wasOpenRef.current) resetEditorState();
     wasOpenRef.current = true;
 
     let active = true;
+    const dataRequestId = ++paymentTermDataRequestRef.current;
     if (isOpen) {
-      // Set default due date to 14 days from now
-      const today = new Date();
-      const in14Days = new Date(today);
-      in14Days.setDate(today.getDate() + 14);
-      setDueDate(in14Days.toISOString().split('T')[0]);
-      setDeliveryDate(today.toISOString().split('T')[0]);
-
       fetch("/api/settings", { cache: "no-store" })
         .then(res => { if (!res.ok) throw new Error("Firmenprofil konnte nicht geladen werden"); return res.json(); })
-        .then(data => { if (active) setSettings(data); })
+        .then(data => { if (active && !issuingRef.current && dataRequestId >= paymentTermDataRef.current) { paymentTermDataRef.current = dataRequestId; setSettings(data); } })
         .catch(err => console.error("Failed to load settings", err));
 
       fetch("/api/customers")
         .then(res => res.json())
         .then(data => {
-          if (!active) return;
+          if (!active || issuingRef.current || dataRequestId < paymentTermDataRef.current) return;
+          paymentTermDataRef.current = dataRequestId;
           const nextCustomers = Array.isArray(data) ? data : [];
           setCustomers(nextCustomers);
-          if (fromQuote?.customerId || fromDraft?.customerId) {
+          if (!issuingRef.current && (fromQuote?.customerId || fromDraft?.customerId)) {
             const sourceCustomerId = fromDraft?.customerId ?? fromQuote?.customerId;
             const quoteCustomer = nextCustomers.find((customer: Customer) => customer.id.toString() === sourceCustomerId?.toString());
             if (quoteCustomer) {
@@ -303,7 +321,7 @@ export function CreateInvoiceModal({
       fetch("/api/invoices/next-number")
         .then(res => res.json())
         .then(data => {
-          if (active && data.nextInvoiceNumber) {
+          if (active && !issuingRef.current && data.nextInvoiceNumber) {
             setInvoiceNumber(data.nextInvoiceNumber);
           }
         })
@@ -351,6 +369,53 @@ export function CreateInvoiceModal({
       controller.abort();
     };
   }, [selectedCustomerId, isServiceDraft, isOpen, billingNotesReload]);
+
+  let suggestedPaymentTerm: PaymentTermSelection | null = null;
+  if (isPaymentBusinessDate(date)) {
+    try { suggestedPaymentTerm = paymentTermSuggestion(date, selectedCustomerId, selectedCustomer?.paymentTermDays, settings?.paymentTermDays); }
+    catch { /* Unsupported end dates remain editable, never crash the editor. */ }
+  }
+  const suggestedPaymentDue = suggestedPaymentTerm?.dueDate ?? '';
+  useEffect(() => {
+    if (!isOpen || isServiceDraft || paymentTermManual || issuingRef.current) return;
+    setDueDate(suggestedPaymentDue);
+  }, [isOpen, isServiceDraft, paymentTermManual, suggestedPaymentDue]);
+
+  const reapplyPaymentTerm = async () => {
+    if (issuingRef.current || isSavingDraft || !editorActiveRef.current) return;
+    const editorGeneration = editorGenerationRef.current;
+    const requestId = ++paymentTermRefreshRef.current;
+    const dataRequestId = ++paymentTermDataRequestRef.current;
+    setPaymentTermRefreshing(true);
+    setPaymentTermMessage('');
+    try {
+      const [settingsResponse, customersResponse] = await Promise.all([
+        fetch('/api/settings', { cache: 'no-store' }),
+        fetch('/api/customers', { cache: 'no-store' }),
+      ]);
+      if (!settingsResponse.ok || !customersResponse.ok) throw new Error('Die aktuelle Vorgabe konnte nicht geladen werden. Ihre Fälligkeit bleibt erhalten.');
+      const nextSettings: Settings = await settingsResponse.json();
+      const nextCustomers: Customer[] = await customersResponse.json();
+      if (requestId !== paymentTermRefreshRef.current || issuingRef.current
+        || !editorActiveRef.current || editorGeneration !== editorGenerationRef.current) return;
+      if (!Array.isArray(nextCustomers)) throw new Error('Kunden konnten nicht geladen werden.');
+      const nextCustomer = nextCustomers.find(customer => Number(customer.id) === selectedCustomerId) ?? null;
+      if (selectedCustomerId !== null && !nextCustomer) throw new Error('Der ausgewählte Kunde ist nicht mehr verfügbar. Bitte erneut auswählen.');
+      const nextSelection = paymentTermSuggestion(date, selectedCustomerId, nextCustomer?.paymentTermDays, nextSettings.paymentTermDays);
+      paymentTermDataRef.current = dataRequestId;
+      setSettings(nextSettings);
+      setCustomers(nextCustomers);
+      setSelectedCustomer(nextCustomer);
+      setPaymentTermManual(false);
+      setDueDate(nextSelection.dueDate ?? '');
+    } catch (error) {
+      if (requestId === paymentTermRefreshRef.current && !issuingRef.current
+        && editorActiveRef.current && editorGeneration === editorGenerationRef.current) setPaymentTermMessage(error instanceof Error ? error.message : 'Vorgabe konnte nicht geladen werden.');
+    } finally {
+      if (requestId === paymentTermRefreshRef.current && editorActiveRef.current
+        && editorGeneration === editorGenerationRef.current) setPaymentTermRefreshing(false);
+    }
+  };
 
   // Pre-fill from quote when converting
   useEffect(() => {
@@ -440,6 +505,7 @@ export function CreateInvoiceModal({
   };
 
   const handleLoadTemplate = (templateId: string) => {
+    if (issuingRef.current || isSavingDraft) return;
     const template = templates.find(t => t.id.toString() === templateId);
     if (template && template.data) {
       const data = template.data;
@@ -514,7 +580,10 @@ export function CreateInvoiceModal({
 
   const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     billingNotesRequestRef.current += 1;
+    paymentTermRefreshRef.current += 1;
+    setPaymentTermRefreshing(false);
     const customerId = e.target.value;
+    if (!isServiceDraft && paymentTermManual && window.confirm('Das Fälligkeitsdatum wurde manuell bearbeitet. Durch die Vorgabe des neuen Kunden ersetzen?')) setPaymentTermManual(false);
     const customer = customers.find(c => c.id.toString() === customerId);
     const hadSelectedBillingNotes = items.some(item => item.billingNoteId !== undefined);
     if (hadSelectedBillingNotes) {
@@ -617,653 +686,74 @@ export function CreateInvoiceModal({
     return amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   }, []);
 
-  // Core PDF generation function (returns PDF bytes, used by both preview and final generation)
-  const generatePDFBytes = useCallback(async (forPreview: boolean = false): Promise<Uint8Array> => {
-    if (!taxReady) throw new Error("Bitte zuerst Steuerbehandlung und unterstützten Steuerfall bestätigen.");
-    const pdfDoc = await PDFDocument.create();
-    const pageSize: [number, number] = [595.28, 841.89]; // A4 portrait in PDF points
-    let page = pdfDoc.addPage(pageSize);
-    const { width, height } = page.getSize();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-    const margin = 42;
-    const contentWidth = width - 2 * margin;
-    const bottomContentY = 128;
-    const isNonEmptyString = (value: string | null | undefined): value is string => Boolean(value);
-    const companyName = settings?.companyName?.trim() || 'Bivaro';
-    const companyAddressLines = settings?.companyAddress
-      ?.split('\n')
-      .map(line => line.trim())
-      .filter(isNonEmptyString) ?? [];
-    const customerLines = customerAddress
-      .split('\n')
-      .map(line => line.trim())
-      .filter(Boolean);
-    const buyerPostalLine = [buyerPostcode.trim(), buyerCity.trim()].filter(Boolean).join(' ');
-    if (buyerCountry !== 'DE' && buyerPostalLine && customerLines.at(-1) !== buyerPostalLine) customerLines.push(buyerPostalLine);
-    const sellerPostalLine = [sellerPostcode.trim(), sellerCity.trim()].filter(Boolean).join(' ');
-    if (sellerCountry !== 'DE' && sellerPostalLine && companyAddressLines.at(-1) !== sellerPostalLine) companyAddressLines.push(sellerPostalLine);
-    if (buyerCountry) customerLines.push(buyerCountry);
-    const amounts = calculateInvoiceAmounts(items);
-    const calculatedItems = items.map((item, index) => ({
-      ...item,
-      lineNet: amounts.lines[index].netAmount,
-    }));
-    const netTotal = amounts.netAmount;
-    const taxTotal = amounts.taxAmount;
-    const grossTotal = amounts.grossAmount;
-
-    const brandDark = rgb(0.035, 0.078, 0.145);
-    const brandBlue = rgb(0.05, 0.22, 0.58);
-    const brandAccent = rgb(0.0, 0.56, 0.92);
-    const textColor = rgb(0.08, 0.1, 0.16);
-    const mutedColor = rgb(0.36, 0.42, 0.52);
-    const lightText = rgb(0.76, 0.84, 0.94);
-    const white = rgb(1, 1, 1);
-    const surface = rgb(0.965, 0.975, 0.99);
-    const surfaceStrong = rgb(0.93, 0.96, 0.995);
-    const hairline = rgb(0.82, 0.87, 0.94);
-
-    const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('de-DE') : '-';
-    const formatQuantity = (value: number) => value.toLocaleString('de-DE', { maximumFractionDigits: 12 });
-    const formatUnitPrice = (value: number) => value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 12 }) + ' €';
-    const formatTaxRate = (value: number) => `${value.toLocaleString('de-DE', { maximumFractionDigits: 12 })}%`;
-
-    const drawTextRight = (
-      text: string,
-      x: number,
-      y: number,
-      size: number,
-      fontToUse: PDFFont = font,
-      color: RGB = textColor,
-      targetPage: PDFPage = page,
-    ) => {
-      const textWidth = fontToUse.widthOfTextAtSize(text, size);
-      targetPage.drawText(text, { x: x - textWidth, y, size, font: fontToUse, color });
-    };
-
-    const drawTextCenter = (
-      text: string,
-      x: number,
-      y: number,
-      size: number,
-      fontToUse: PDFFont = font,
-      color: RGB = textColor,
-      targetPage: PDFPage = page,
-    ) => {
-      const textWidth = fontToUse.widthOfTextAtSize(text, size);
-      targetPage.drawText(text, { x: x - textWidth / 2, y, size, font: fontToUse, color });
-    };
-
-    const truncateText = (text: string, maxWidth: number, size: number, fontToUse: PDFFont = font) => {
-      if (fontToUse.widthOfTextAtSize(text, size) <= maxWidth) return text;
-
-      let trimmed = text;
-      while (trimmed.length > 0 && fontToUse.widthOfTextAtSize(`${trimmed}...`, size) > maxWidth) {
-        trimmed = trimmed.slice(0, -1);
-      }
-
-      return trimmed ? `${trimmed}...` : '';
-    };
-
-    const splitText = (text: string, maxWidth: number, size: number, fontToUse: PDFFont = font): string[] => {
-      const normalized = text.replace(/\s+/g, ' ').trim();
-      if (!normalized) return [''];
-
-      const splitLongWord = (word: string) => {
-        const parts: string[] = [];
-        let part = '';
-
-        Array.from(word).forEach(char => {
-          const candidate = part + char;
-          if (!part || fontToUse.widthOfTextAtSize(candidate, size) <= maxWidth) {
-            part = candidate;
-          } else {
-            parts.push(part);
-            part = char;
-          }
-        });
-
-        if (part) parts.push(part);
-        return parts;
-      };
-
-      const lines: string[] = [];
-      let currentLine = '';
-
-      normalized.split(' ').forEach(word => {
-        const wordParts = fontToUse.widthOfTextAtSize(word, size) > maxWidth ? splitLongWord(word) : [word];
-
-        wordParts.forEach(part => {
-          const candidate = currentLine ? `${currentLine} ${part}` : part;
-          if (fontToUse.widthOfTextAtSize(candidate, size) <= maxWidth) {
-            currentLine = candidate;
-          } else {
-            if (currentLine) lines.push(currentLine);
-            currentLine = part;
-          }
-        });
-      });
-
-      if (currentLine) lines.push(currentLine);
-      return lines.length > 0 ? lines : [''];
-    };
-
-    const drawCard = (
-      x: number,
-      topY: number,
-      cardWidth: number,
-      cardHeight: number,
-      color: RGB,
-      borderColor: RGB = hairline,
-      targetPage: PDFPage = page,
-    ) => {
-      targetPage.drawRectangle({
-        x,
-        y: topY - cardHeight,
-        width: cardWidth,
-        height: cardHeight,
-        color,
-        borderColor,
-        borderWidth: 0.6,
-      });
-    };
-
-    let logoImage: PDFImage | undefined;
-    if (settings?.logoUrl) {
-      try {
-        const logoResponse = await fetch(settings.logoUrl);
-        if (!logoResponse.ok) {
-          throw new Error('Logo konnte nicht geladen werden.');
-        }
-
-        const logoBytes = await logoResponse.arrayBuffer();
-        const logoExt = settings.logoUrl.split('?')[0]?.split('.').pop()?.toLowerCase();
-
-        if (logoExt === 'png') {
-          logoImage = await pdfDoc.embedPng(logoBytes);
-        } else if (logoExt === 'jpg' || logoExt === 'jpeg') {
-          logoImage = await pdfDoc.embedJpg(logoBytes);
-        }
-      } catch (error) {
-        console.error("Failed to embed logo:", error);
-      }
-    }
-
-    const toSEPA = (value: string) => {
-      const map: Record<string, string> = {
-        'ä': 'ae',
-        'ö': 'oe',
-        'ü': 'ue',
-        'Ä': 'Ae',
-        'Ö': 'Oe',
-        'Ü': 'Ue',
-        'ß': 'ss',
-      };
-
-      return value
-        .replace(/[äöüÄÖÜß]/g, match => map[match] ?? match)
-        .replace(/[^A-Za-z0-9/?:().,'+ -]/g, '')
-        .trim();
-    };
-
-    let qrCodeImage: PDFImage | undefined;
-    const canRenderQRCode = paymentMeansCode !== '10' && includeQRCode && Boolean(settings?.iban && settings?.companyName);
-    if (canRenderQRCode && !forPreview) {
-      try {
-        const finalIban = settings?.iban?.replace(/\s/g, '').toUpperCase() ?? '';
-        const giroCodeData = [
-          'BCD',
-          '002',
-          '1',
-          'SCT',
-          settings?.bic?.trim() ?? '',
-          toSEPA(settings?.companyName ?? '').substring(0, 70),
-          finalIban,
-          `EUR${grossTotal.toFixed(2)}`,
-          '',
-          '',
-          toSEPA(invoiceNumber || '').substring(0, 140),
-        ].join('\n');
-
-        const qrCodeDataUrl = await QRCode.toDataURL(giroCodeData, {
-          errorCorrectionLevel: 'M',
-          type: 'image/png',
-          margin: 4,
-        });
-        qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
-      } catch (error) {
-        console.error("Error generating QR code:", error);
-      }
-    }
-
-    const drawDocumentHeader = (targetPage: PDFPage) => {
-      const headerHeight = 68;
-      const headerBottom = height - headerHeight;
-
-      targetPage.drawRectangle({ x: 0, y: headerBottom, width, height: headerHeight, color: brandDark });
-      targetPage.drawRectangle({ x: 0, y: headerBottom, width, height: 5, color: brandAccent });
-      targetPage.drawRectangle({ x: 0, y: headerBottom, width: 5, height: headerHeight, color: brandAccent });
-
-      targetPage.drawText('RECHNUNG', {
-        x: margin,
-        y: height - 44,
-        size: 22,
-        font: boldFont,
-        color: white,
-      });
-
-      if (logoImage) {
-        const logoCardWidth = 112;
-        const logoCardHeight = 36;
-        const logoCardX = width - margin - logoCardWidth;
-        const logoCardTop = height - 16;
-        drawCard(logoCardX, logoCardTop, logoCardWidth, logoCardHeight, white, rgb(0.78, 0.86, 0.95), targetPage);
-
-        const scale = Math.min((logoCardWidth - 22) / logoImage.width, (logoCardHeight - 16) / logoImage.height);
-        const logoDims = logoImage.scale(scale);
-        targetPage.drawImage(logoImage, {
-          x: logoCardX + (logoCardWidth - logoDims.width) / 2,
-          y: logoCardTop - logoCardHeight + (logoCardHeight - logoDims.height) / 2,
-          width: logoDims.width,
-          height: logoDims.height,
-        });
-      }
-    };
-
-    const drawContinuationHeader = (targetPage: PDFPage) => {
-      targetPage.drawRectangle({ x: 0, y: height - 58, width, height: 58, color: brandDark });
-      targetPage.drawRectangle({ x: 0, y: height - 58, width, height: 5, color: brandAccent });
-      targetPage.drawText('RECHNUNG', { x: margin, y: height - 36, size: 14, font: boldFont, color: white });
-      targetPage.drawText('Fortsetzung', { x: margin, y: height - 50, size: 8, font, color: lightText });
-      drawTextRight(invoiceNumber || 'RE-XXXX', width - margin, height - 36, 10, boldFont, white, targetPage);
-
-      return height - 88;
-    };
-
-    const drawFooter = (targetPage: PDFPage, pageNumber: number, pageCount: number) => {
-      const footerTop = 92;
-      const footerStartY = 74;
-      const footerFontSize = 7;
-      const footerLineHeight = 9;
-      const columnWidth = (contentWidth - 44) / 3;
-      const contactLine = [settings?.email, settings?.telephone].filter(isNonEmptyString).join(' | ');
-      const footerLeft = [companyName, ...companyAddressLines, sellerCountry, contactLine].filter(isNonEmptyString);
-      const footerCenter = [
-        settings?.bankName,
-        settings?.iban ? `IBAN: ${settings.iban}` : undefined,
-        settings?.bic ? `BIC: ${settings.bic}` : undefined,
-      ].filter(isNonEmptyString);
-      const footerRight = [
-        settings?.taxNumber ? 'Steuernummer:' : undefined,
-        settings?.taxNumber,
-        ...(
-          settings?.footerText
-            ?.split('\n')
-            .map(line => line.trim()) ?? []
-        ),
-      ].filter(isNonEmptyString);
-
-      targetPage.drawLine({
-        start: { x: margin, y: footerTop },
-        end: { x: width - margin, y: footerTop },
-        thickness: 0.6,
-        color: hairline,
-      });
-      targetPage.drawRectangle({ x: margin, y: footerTop + 3, width: 72, height: 2, color: brandAccent });
-
-      let footerY = footerStartY;
-      footerLeft.forEach(line => {
-        targetPage.drawText(truncateText(line, columnWidth, footerFontSize), {
-          x: margin,
-          y: footerY,
-          size: footerFontSize,
-          font,
-          color: mutedColor,
-        });
-        footerY -= footerLineHeight;
-      });
-
-      footerY = footerStartY;
-      footerCenter.slice(0, 4).forEach(line => {
-        drawTextCenter(truncateText(line, columnWidth, footerFontSize), width / 2, footerY, footerFontSize, font, mutedColor, targetPage);
-        footerY -= footerLineHeight;
-      });
-
-      footerY = footerStartY;
-      footerRight.slice(0, 4).forEach(line => {
-        drawTextRight(truncateText(line, columnWidth, footerFontSize), width - margin, footerY, footerFontSize, font, mutedColor, targetPage);
-        footerY -= footerLineHeight;
-      });
-
-      const pageText = `Seite ${pageNumber} von ${pageCount}`;
-      drawTextCenter(pageText, width / 2, 24, 8, font, mutedColor, targetPage);
-    };
-
-    const addContentPage = () => {
-      page = pdfDoc.addPage(pageSize);
-      return drawContinuationHeader(page);
-    };
-
-    const drawTableHeader = (topY: number) => {
-      const colX = {
-        pos: margin + 15,
-        desc: margin + 48,
-        qty: width - margin - 236,
-        unit: width - margin - 204,
-        price: width - margin - 124,
-        tax: width - margin - 70,
-        total: width - margin - 10,
-      };
-
-      page.drawRectangle({
-        x: margin,
-        y: topY - 28,
-        width: contentWidth,
-        height: 28,
-        color: brandDark,
-      });
-      page.drawRectangle({ x: margin, y: topY - 28, width: 5, height: 28, color: brandAccent });
-
-      const labelY = topY - 18;
-      page.drawText('Pos.', { x: colX.pos, y: labelY, size: 8, font: boldFont, color: white });
-      page.drawText('Beschreibung', { x: colX.desc, y: labelY, size: 8, font: boldFont, color: white });
-      drawTextRight('Menge', colX.qty, labelY, 8, boldFont, white);
-      page.drawText('Einh.', { x: colX.unit, y: labelY, size: 8, font: boldFont, color: white });
-      drawTextRight('Preis', colX.price, labelY, 8, boldFont, white);
-      drawTextRight('USt.', colX.tax, labelY, 8, boldFont, white);
-      drawTextRight('Netto', colX.total, labelY, 8, boldFont, white);
-
-      return topY - 42;
-    };
-
-    let y: number;
-
-    const ensureSpace = (requiredHeight: number, withTableHeader: boolean = false) => {
-      if (y - requiredHeight >= bottomContentY) return;
-
-      y = addContentPage();
-      if (withTableHeader) {
-        y = drawTableHeader(y);
-      }
-    };
-
-    const drawFirstPageIntro = () => {
-      drawDocumentHeader(page);
-
-      const senderText = [companyName, companyAddressLines[0], companyAddressLines.at(-1)]
-        .filter(isNonEmptyString)
-        .join(' • ');
-      if (senderText) {
-        const senderY = height - 94;
-        page.drawText(truncateText(senderText, contentWidth, 7, font), { x: margin, y: senderY, size: 7, font, color: mutedColor });
-        page.drawLine({
-          start: { x: margin, y: senderY - 4 },
-          end: { x: margin + Math.min(font.widthOfTextAtSize(senderText, 7), contentWidth), y: senderY - 4 },
-          thickness: 0.4,
-          color: hairline,
-        });
-      }
-
-      const cardTop = height - 116;
-      const cardHeight = Math.max(128, 58 + customerLines.length * 15);
-      const gap = 18;
-      const detailsWidth = 214;
-      const addressWidth = contentWidth - detailsWidth - gap;
-      const detailsX = margin + addressWidth + gap;
-
-      drawCard(margin, cardTop, addressWidth, cardHeight, surface, hairline);
-      page.drawRectangle({ x: margin, y: cardTop - cardHeight, width: 5, height: cardHeight, color: brandAccent });
-      page.drawText('EMPFÄNGER', { x: margin + 17, y: cardTop - 24, size: 7, font: boldFont, color: brandAccent });
-
-      const displayedCustomerLines = customerLines.length > 0 ? customerLines : ['Empfänger noch nicht angegeben'];
-      let addressY = cardTop - 46;
-      displayedCustomerLines.forEach((line, index) => {
-        page.drawText(truncateText(line, addressWidth - 34, index === 0 ? 11 : 10, index === 0 ? boldFont : font), {
-          x: margin + 17,
-          y: addressY,
-          size: index === 0 ? 11 : 10,
-          font: index === 0 ? boldFont : font,
-          color: index === 0 ? textColor : mutedColor,
-        });
-        addressY -= 15;
-      });
-
-      drawCard(detailsX, cardTop, detailsWidth, cardHeight, white, hairline);
-      page.drawRectangle({ x: detailsX, y: cardTop - 32, width: detailsWidth, height: 32, color: surfaceStrong });
-      page.drawText('Rechnungsdetails', { x: detailsX + 15, y: cardTop - 21, size: 9, font: boldFont, color: textColor });
-
-      const detailRows: Array<[string, string]> = [
-        ['Rechnungs-Nr.', invoiceNumber || 'RE-XXXX'],
-        ['Datum', formatDate(date)],
-      ];
-
-      if (selectedCustomer?.id) detailRows.push(['Kundennr.', selectedCustomer.id.toString()]);
-      if (deliveryDate) detailRows.push(['Leistung', formatDate(deliveryDate)]);
-      if (dueDate) detailRows.push(['Fällig', formatDate(dueDate)]);
-
-      let detailY = cardTop - 48;
-      detailRows.slice(0, 5).forEach(([label, value]) => {
-        page.drawText(label, { x: detailsX + 15, y: detailY, size: 8, font, color: mutedColor });
-        drawTextRight(truncateText(value, 92, 8.5, boldFont), detailsX + detailsWidth - 15, detailY, 8.5, boldFont, textColor);
-        detailY -= 15;
-      });
-
-      return cardTop - cardHeight - 28;
-    };
-
-    y = drawFirstPageIntro();
-    page.drawText('Positionen', { x: margin, y, size: 14, font: boldFont, color: textColor });
-    drawTextRight(`${calculatedItems.length} Position${calculatedItems.length === 1 ? '' : 'en'}`, width - margin, y + 2, 9, font, mutedColor);
-    y -= 20;
-    y = drawTableHeader(y);
-
-    const colX = {
-      pos: margin + 15,
-      desc: margin + 48,
-      qty: width - margin - 236,
-      unit: width - margin - 204,
-      price: width - margin - 124,
-      tax: width - margin - 70,
-      total: width - margin - 10,
-    };
-    const descriptionWidth = colX.qty - colX.desc - 18;
-
-    calculatedItems.forEach((item, index) => {
-      const descLines = splitText(item.description || 'Position', descriptionWidth, 9.5, font);
-      const rowHeight = Math.max(38, descLines.length * 12 + 20);
-
-      ensureSpace(rowHeight + 6, true);
-
-      const rowTop = y;
-      const rowBottom = rowTop - rowHeight;
-      const fillColor = index % 2 === 0 ? surface : white;
-      page.drawRectangle({
-        x: margin,
-        y: rowBottom,
-        width: contentWidth,
-        height: rowHeight,
-        color: fillColor,
-        borderColor: rgb(0.9, 0.93, 0.97),
-        borderWidth: 0.35,
-      });
-      page.drawRectangle({ x: margin, y: rowBottom, width: 3, height: rowHeight, color: index % 2 === 0 ? brandAccent : hairline });
-
-      const textY = rowTop - 16;
-      page.drawText((index + 1).toString().padStart(2, '0'), { x: colX.pos, y: textY, size: 8.5, font: boldFont, color: brandAccent });
-
-      descLines.forEach((line, lineIndex) => {
-        page.drawText(line, { x: colX.desc, y: textY - (lineIndex * 12), size: 9.5, font, color: textColor });
-      });
-
-      drawTextRight(formatQuantity(item.quantity), colX.qty, textY, 9, font, textColor);
-      page.drawText(truncateText(item.unit, 45, 8.5, font), { x: colX.unit, y: textY, size: 8.5, font, color: mutedColor });
-      drawTextRight(formatUnitPrice(item.unitPrice), colX.price, textY, 9, font, textColor);
-      drawTextRight(formatTaxRate(item.taxRate), colX.tax, textY, 9, font, mutedColor);
-      drawTextRight(formatCurrency(item.lineNet), colX.total, textY, 9, boldFont, textColor);
-
-      y = rowBottom - 4;
+  // One bounded invoice source drives the read-only server preview, visible
+  // issued PDF and server-generated XML. Editor-only claims never leave here.
+  const buildOwnInvoiceSource = useCallback((): OwnInvoiceSource => {
+    if (!taxReady || !taxMode) throw new Error("Bitte zuerst Steuerbehandlung und unterstützten Steuerfall bestätigen.");
+    return parseOwnInvoiceSource({
+      version: 1,
+      invoiceNumber, date, dueDate, deliveryDate, customerAddress,
+      ...(selectedCustomer?.id ? { customerId: String(selectedCustomer.id) } : {}),
+      buyerReference, buyerCountry, buyerPostcode, buyerCity, buyerEmail,
+      sellerCountry, sellerPostcode, sellerCity, taxMode,
+      items: items.map(item => ({
+        description: item.description, quantity: item.quantity, unitPrice: item.unitPrice,
+        unit: item.unit, taxRate: item.taxRate,
+        ...(item.taxCategory ? { taxCategory: item.taxCategory } : {}),
+        ...(item.exemptionReason ? { exemptionReason: item.exemptionReason } : {}),
+      })),
+      settings: {
+        companyName: settings?.companyName ?? '', companyAddress: settings?.companyAddress ?? '',
+        taxNumber: settings?.taxNumber ?? '', iban: settings?.iban ?? '', bic: settings?.bic ?? '',
+        bankName: settings?.bankName ?? '', footerText: settings?.footerText ?? '',
+        email: settings?.email ?? '', telephone: settings?.telephone ?? '',
+      },
+      notes, includeQRCode, paymentMeansCode,
     });
+  }, [taxReady, taxMode, invoiceNumber, date, dueDate, deliveryDate, customerAddress, selectedCustomer,
+    buyerReference, buyerCountry, buyerPostcode, buyerCity, buyerEmail, sellerCountry, sellerPostcode,
+    sellerCity, items, settings, notes, includeQRCode, paymentMeansCode]);
 
-    y -= 10;
-    ensureSpace(150);
-
-    const summaryTop = y;
-    const summaryHeight = 126;
-    const summaryGap = 18;
-    const totalCardWidth = 214;
-    const paymentCardWidth = contentWidth - totalCardWidth - summaryGap;
-    const totalCardX = width - margin - totalCardWidth;
-
-    drawCard(margin, summaryTop, paymentCardWidth, summaryHeight, surfaceStrong, hairline);
-    page.drawText('Zahlung', { x: margin + 16, y: summaryTop - 24, size: 10, font: boldFont, color: textColor });
-    page.drawText(dueDate ? `Zahlbar bis ${formatDate(dueDate)}` : 'Zahlbar nach Erhalt der Rechnung', {
-      x: margin + 16,
-      y: summaryTop - 42,
-      size: 9,
-      font: boldFont,
-      color: brandBlue,
-    });
-
-    const qrSize = 72;
-    const qrPadding = canRenderQRCode ? 96 : 0;
-    const paymentTextWidth = paymentCardWidth - 32 - qrPadding;
-    const paymentLines = paymentMeansCode === '10' ? ['Zahlungsart: Barzahlung'] : [
-      settings?.bankName ? `Bank: ${settings.bankName}` : undefined,
-      settings?.iban ? `IBAN: ${settings.iban}` : undefined,
-      settings?.bic ? `BIC: ${settings.bic}` : undefined,
-      invoiceNumber ? `Verwendungszweck: ${invoiceNumber}` : undefined,
-    ].filter(isNonEmptyString);
-    let paymentY = summaryTop - 62;
-    paymentLines.slice(0, 4).forEach(line => {
-      page.drawText(truncateText(line, paymentTextWidth, 8, font), {
-        x: margin + 16,
-        y: paymentY,
-        size: 8,
-        font,
-        color: mutedColor,
+  const generatePDFBytes = useCallback(async (forPreview = false, previewGeneration?: number, editorGeneration?: number): Promise<Uint8Array> => {
+    const source = buildOwnInvoiceSource();
+    const previous = renderRequestRef.current;
+    let release!: () => void;
+    const active = new Promise<void>(resolve => { release = resolve; });
+    renderRequestRef.current = active;
+    try {
+      // A final click waits for this tab's in-flight preview rather than
+      // colliding with the server's per-user processing limit. Superseded
+      // previews never start another native render once their turn arrives.
+      if (previous) await previous;
+      if (forPreview && previewGeneration !== previewGenerationRef.current) throw new Error('Vorschau wurde ersetzt.');
+      if (!forPreview && editorGeneration !== undefined
+        && (!editorActiveRef.current || editorGeneration !== editorGenerationRef.current)) throw new Error('Erstellung wurde verworfen.');
+      const response = await fetch('/api/invoices/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, preview: forPreview }),
       });
-      paymentY -= 12;
-    });
-
-    if (canRenderQRCode) {
-      const qrX = margin + paymentCardWidth - qrSize - 16;
-      const qrY = summaryTop - summaryHeight + 26;
-
-      if (qrCodeImage) {
-        page.drawImage(qrCodeImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
-      } else if (forPreview) {
-        page.drawRectangle({
-          x: qrX,
-          y: qrY,
-          width: qrSize,
-          height: qrSize,
-          color: white,
-          borderColor: hairline,
-          borderWidth: 1,
-        });
-        drawTextCenter('QR-Code', qrX + qrSize / 2, qrY + 35, 8, boldFont, mutedColor);
+      if (!response.ok) {
+        const message = await response.json().then((data: { error?: string }) => data.error).catch(() => null);
+        throw new Error(message ?? 'Die Rechnung konnte nicht sicher erstellt werden.');
       }
-
-      drawTextCenter('GiroCode', qrX + qrSize / 2, qrY - 10, 7, font, mutedColor);
+      return new Uint8Array(await response.arrayBuffer());
+    } finally {
+      release();
+      if (renderRequestRef.current === active) renderRequestRef.current = null;
     }
-
-    drawCard(totalCardX, summaryTop, totalCardWidth, summaryHeight, brandDark, brandDark);
-    page.drawRectangle({ x: totalCardX, y: summaryTop - summaryHeight, width: totalCardWidth, height: 46, color: brandAccent });
-    page.drawText('Zusammenfassung', { x: totalCardX + 16, y: summaryTop - 24, size: 10, font: boldFont, color: white });
-
-    let totalY = summaryTop - 48;
-    const totalRows: Array<[string, string]> = [
-      ['Netto', formatCurrency(netTotal)],
-      [taxTotal > 0 ? 'zzgl. USt.' : 'zzgl. USt. 0%', taxTotal > 0 ? formatCurrency(taxTotal) : '0,00 €'],
-    ];
-
-    totalRows.forEach(([label, value]) => {
-      page.drawText(label, { x: totalCardX + 16, y: totalY, size: 8.5, font, color: lightText });
-      drawTextRight(value, totalCardX + totalCardWidth - 16, totalY, 8.5, font, white);
-      totalY -= 17;
-    });
-
-    page.drawText('Gesamtbetrag', { x: totalCardX + 16, y: summaryTop - summaryHeight + 27, size: 8.5, font: boldFont, color: white });
-    drawTextRight(formatCurrency(grossTotal), totalCardX + totalCardWidth - 16, summaryTop - summaryHeight + 24, 14, boldFont, white);
-
-    y = summaryTop - summaryHeight - 24;
-
-    const noteLines: string[] = [];
-    if (notes.trim()) {
-      notes.split('\n').forEach(line => {
-        noteLines.push(...splitText(line, contentWidth - 36, 9, font));
-      });
-    }
-    if (taxMode === 'small-business') {
-      if (noteLines.length > 0) noteLines.push('');
-      noteLines.push(...splitText('Hinweis: Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', contentWidth - 36, 9, font));
-    }
-
-    if (taxMode === 'standard') {
-      for (const reason of new Set(items.filter(item => item.taxCategory === 'E').map(item => item.exemptionReason?.trim()).filter(Boolean))) {
-        noteLines.push(...splitText(`Steuerbefreiung: ${reason}`, contentWidth - 36, 9, font));
-      }
-    }
-    if (buyerReference.trim()) noteLines.push(...splitText(`Käuferreferenz: ${buyerReference.trim()}`, contentWidth - 36, 9, font));
-
-    const drawTextBlockCard = (title: string, lines: string[]) => {
-      let remainingLines = [...lines];
-
-      while (remainingLines.length > 0) {
-        const minimumCardHeight = 56;
-        if (y - bottomContentY < minimumCardHeight) {
-          y = addContentPage();
-        }
-
-        const availableLineCount = Math.max(1, Math.floor((y - bottomContentY - 44) / 12));
-        const pageLines = remainingLines.slice(0, availableLineCount);
-        const cardHeight = 40 + pageLines.length * 12;
-
-        drawCard(margin, y, contentWidth, cardHeight, white, hairline);
-        page.drawRectangle({ x: margin, y: y - 30, width: contentWidth, height: 30, color: surface });
-        page.drawText(title, { x: margin + 16, y: y - 20, size: 9.5, font: boldFont, color: textColor });
-
-        let lineY = y - 45;
-        pageLines.forEach(line => {
-          if (line) {
-            page.drawText(line, { x: margin + 16, y: lineY, size: 9, font, color: mutedColor });
-          }
-          lineY -= 12;
-        });
-
-        y = y - cardHeight - 14;
-        remainingLines = remainingLines.slice(pageLines.length);
-      }
-    };
-
-    if (noteLines.length > 0) {
-      drawTextBlockCard('Hinweise', noteLines);
-    }
-
-    if (y - 30 >= bottomContentY) {
-      page.drawText('Vielen Dank für Ihr Vertrauen.', { x: margin, y, size: 10, font: boldFont, color: brandBlue });
-    }
-
-    const pages = pdfDoc.getPages();
-    const pageCount = pages.length;
-    pages.forEach((pdfPage, index) => {
-      drawFooter(pdfPage, index + 1, pageCount);
-    });
-
-    return await pdfDoc.save();
-  }, [customerAddress, invoiceNumber, date, dueDate, deliveryDate, notes, items, settings, selectedCustomer, includeQRCode, formatCurrency, taxMode, taxReady, buyerReference, paymentMeansCode, sellerCountry, buyerCountry, buyerPostcode, buyerCity, sellerPostcode, sellerCity]);
+  }, [buildOwnInvoiceSource]);
 
   // Generate preview with debouncing
   const generatePreview = useCallback(async () => {
-    if (!showPreview || !taxReady) return;
+    if (!showPreview || !taxReady || issuingRef.current) return;
 
     const generationId = previewGenerationRef.current + 1;
     previewGenerationRef.current = generationId;
     setIsGeneratingPreview(true);
+    setPreviewError(null);
     try {
-      const pdfBytes = await generatePDFBytes(true);
+      const pdfBytes = await generatePDFBytes(true, generationId);
       const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
       const nextUrl = URL.createObjectURL(blob);
 
@@ -1280,7 +770,12 @@ export function CreateInvoiceModal({
         window.setTimeout(() => URL.revokeObjectURL(previousUrl), 1000);
       }
     } catch (error) {
-      console.error("Error generating preview:", error);
+      if (previewGenerationRef.current === generationId) {
+        setPreviewError(error instanceof Error ? error.message : 'Die Vorschau konnte nicht erstellt werden.');
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+        setPreviewUrl(null);
+      }
     } finally {
       if (previewGenerationRef.current === generationId) {
         setIsGeneratingPreview(false);
@@ -1301,6 +796,7 @@ export function CreateInvoiceModal({
     }, 500); // 500ms debounce
 
     return () => {
+      previewGenerationRef.current += 1;
       if (previewTimeoutRef.current) {
         clearTimeout(previewTimeoutRef.current);
       }
@@ -1310,6 +806,9 @@ export function CreateInvoiceModal({
   // Cleanup preview URL on unmount
   useEffect(() => {
     return () => {
+      editorActiveRef.current = false;
+      editorGenerationRef.current += 1;
+      issuingRef.current = false;
       if (previewTimeoutRef.current) {
         clearTimeout(previewTimeoutRef.current);
       }
@@ -1336,54 +835,7 @@ export function CreateInvoiceModal({
     setIsGeneratingPreview(false);
   }, [showPreview, taxReady]);
 
-  const buildZugferdData = (): ZugferdData => {
-    if (!taxMode || !taxReady) throw new Error("Bitte zuerst Steuerbehandlung und unterstützten Steuerfall bestätigen.");
-    const amounts = calculateInvoiceAmounts(items);
-    return {
-      invoiceNumber,
-      buyerReference: buyerReference.trim() || undefined,
-      taxMode,
-      paymentMeansCode,
-      date: new Date(`${date}T12:00:00`),
-      dueDate: dueDate ? new Date(`${dueDate}T12:00:00`) : undefined,
-      paymentTerms: dueDate ? undefined : 'Zahlbar nach Erhalt der Rechnung',
-      deliveryDate: deliveryDate ? new Date(`${deliveryDate}T12:00:00`) : undefined,
-      seller: {
-        name: settings?.companyName || '',
-        address: settings?.companyAddress || '',
-        countryCode: sellerCountry,
-        zipCode: sellerCountry === 'DE' ? undefined : sellerPostcode.trim(),
-        city: sellerCountry === 'DE' ? undefined : sellerCity.trim(),
-        email: settings?.email,
-        telephone: settings?.telephone,
-        taxNumber: settings?.taxNumber,
-        iban: settings?.iban,
-        bic: settings?.bic,
-      },
-      buyer: {
-        name: customerAddress.split('\n')[0]?.trim() || '',
-        address: customerAddress,
-        countryCode: buyerCountry,
-        zipCode: buyerCountry === 'DE' ? undefined : buyerPostcode.trim(),
-        city: buyerCountry === 'DE' ? undefined : buyerCity.trim(),
-        email: buyerEmail.trim() || undefined,
-      },
-      // Keep editor-only note claims and source snapshots out of PDF/XML.
-      items: items.map((item, index) => ({
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        unit: item.unit,
-        taxRate: item.taxRate,
-        taxCategory: taxMode === 'small-business' ? 'E' : item.taxCategory,
-        exemptionReason: item.exemptionReason,
-        total: amounts.lines[index].netAmount,
-      })),
-      netAmount: amounts.netAmount,
-      taxAmount: amounts.taxAmount,
-      currency: 'EUR',
-    };
-  };
+  const buildZugferdData = () => ownInvoiceToZugferdData(buildOwnInvoiceSource());
 
   const buildInvoiceFileName = (extension: 'pdf' | 'xml') => {
     const safeNumber = invoiceNumber.replace(/\s+/g, '_').replace(/[^A-Za-z0-9._-]/g, '_');
@@ -1401,6 +853,12 @@ export function CreateInvoiceModal({
     ));
     formData.append('billingNoteIds', JSON.stringify(billingNoteIds));
     if (generatedRequestId) formData.append('generatedRequestId', generatedRequestId);
+    if (!isServiceDraft) {
+      const selection: PaymentTermSelection = paymentTermManual
+        ? { version: 1, source: 'MANUAL', days: null, invoiceDate: date, dueDate: dueDate || null, customerId: selectedCustomerId }
+        : paymentTermSuggestion(date, selectedCustomerId, selectedCustomer?.paymentTermDays, settings?.paymentTermDays);
+      formData.append('paymentTermSelection', JSON.stringify(selection));
+    }
     if (fromQuote) formData.append('fromQuoteId', String(fromQuote.id));
     if (fromDraft) { formData.append('serviceDraftId', String(fromDraft.id)); formData.append('serviceDraftToken', draftToken); }
 
@@ -1454,26 +912,6 @@ export function CreateInvoiceModal({
     downloadGeneratedFile(await response.blob(), fileName);
   };
 
-  const convertToPdfA3 = async (basePdfBytes: Uint8Array, xmlContent: string) => {
-    const formData = new FormData();
-    formData.append('pdf', new Blob([basePdfBytes as BlobPart], { type: 'application/pdf' }), 'invoice.pdf');
-    formData.append('xml', new Blob([xmlContent], { type: 'text/xml' }), 'factur-x.xml');
-    formData.append('invoiceNumber', invoiceNumber);
-
-    const response = await fetch('/api/pdfa3', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const message = await response.json()
-        .then((data: { error?: string }) => data.error)
-        .catch(() => null);
-      throw new Error(message ?? 'PDF/A-3-Konvertierung fehlgeschlagen.');
-    }
-
-    return new Uint8Array(await response.arrayBuffer());
-  };
 
   const saveServiceDraft = async () => {
     if (!fromDraft || !taxMode) return;
@@ -1493,7 +931,20 @@ export function CreateInvoiceModal({
 
   const createInvoiceFile = async () => {
     if (fromDraft && items.some(item => item.billingNoteId !== undefined)) { setDraftSaveMessage('Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden.'); return; }
-    if (!taxReady) return;
+    if (!taxReady || issuingRef.current) return;
+    issuingRef.current = true;
+    // A term refresh started before this click must not replace the frozen
+    // due date/company/customer while the same source is rendered and saved.
+    paymentTermRefreshRef.current += 1;
+    setPaymentTermRefreshing(false);
+    const editorGeneration = editorGenerationRef.current;
+    const isCurrentAttempt = () => editorActiveRef.current && editorGenerationRef.current === editorGeneration;
+    previewGenerationRef.current += 1;
+    if (previewTimeoutRef.current) {
+      clearTimeout(previewTimeoutRef.current);
+      previewTimeoutRef.current = null;
+    }
+    setIsGeneratingPreview(false);
     setIsGenerating(true);
     try {
       const zugferdData = buildZugferdData();
@@ -1517,9 +968,10 @@ export function CreateInvoiceModal({
         const fileName = buildInvoiceFileName('xml');
         const blob = new Blob([xmlContent], { type: 'application/xml' });
         const file = new File([blob], fileName, { type: 'application/xml' });
+        if (!isCurrentAttempt()) return;
         const uploadResult = await uploadGeneratedInvoice(file);
 
-        if (uploadResult) {
+        if (uploadResult && isCurrentAttempt()) {
           if (uploadResult.replayed) {
             if (!uploadResult.invoiceId) throw new Error('Die gespeicherte Rechnung konnte nicht zugeordnet werden.');
             await downloadStoredInvoice(uploadResult.invoiceId, fileName);
@@ -1531,15 +983,16 @@ export function CreateInvoiceModal({
         return;
       }
 
-      // Generate base PDF bytes and let the server normalize the final file to PDF/A-3.
-      const pdfBytes = await generatePDFBytes(false);
-      const finalPdfBytes = await convertToPdfA3(pdfBytes, xmlContent);
+      // The controlled server renderer attaches XML from this same source and
+      // validates its exact final PDF/A-3b bytes before returning anything.
+      const finalPdfBytes = await generatePDFBytes(false, undefined, editorGeneration);
+      if (!isCurrentAttempt()) return;
       const blob = new Blob([finalPdfBytes as BlobPart], { type: 'application/pdf' });
       const fileName = buildInvoiceFileName('pdf');
       const file = new File([blob], fileName, { type: 'application/pdf' });
       const uploadResult = await uploadGeneratedInvoice(file);
 
-      if (uploadResult) {
+      if (uploadResult && isCurrentAttempt()) {
         if (uploadResult.replayed) {
           if (!uploadResult.invoiceId) throw new Error('Die gespeicherte Rechnung konnte nicht zugeordnet werden.');
           await downloadStoredInvoice(uploadResult.invoiceId, fileName);
@@ -1549,11 +1002,15 @@ export function CreateInvoiceModal({
         onClose();
       }
     } catch (error) {
+      if (!isCurrentAttempt()) return;
       console.error("Error generating invoice file:", error);
       const message = error instanceof Error ? error.message : null;
       alert(message ?? (outputMode === 'xml-only' ? "Fehler beim Erstellen der XML-Datei." : "Fehler beim Erstellen der PDF."));
     } finally {
-      setIsGenerating(false);
+      if (editorGenerationRef.current === editorGeneration) {
+        issuingRef.current = false;
+        setIsGenerating(false);
+      }
     }
   };
 
@@ -1571,12 +1028,24 @@ export function CreateInvoiceModal({
     // Export validation explains incomplete numerical input.
   }
   const isPage = presentation === "page";
+  const requestClose = () => {
+    if (issuingRef.current || isSavingDraft) return;
+    onClose();
+  };
+  // Native disabled controls and inert cover the actual DOM subtree. Capture
+  // guards also cover custom controls/React portals and the synchronous window
+  // before the isGenerating state update commits, without changing the snapshot.
+  const blockBusyEditorInteraction = (event: SyntheticEvent) => {
+    if (!issuingRef.current && !isSavingDraft) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
   const editorContent = (
     <>
         <DialogHeader className="invoice-editor-header pb-2 text-left">
           <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 items-center gap-2">
-              {isPage && <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Zu den Rechnungen" className="shrink-0 text-muted-foreground"><ArrowLeft className="size-4" aria-hidden="true" /></Button>}
+              {isPage && <Button type="button" variant="ghost" size="icon" onClick={requestClose} disabled={isSavingDraft || isGenerating} aria-label="Zu den Rechnungen" className="shrink-0 text-muted-foreground"><ArrowLeft className="size-4" aria-hidden="true" /></Button>}
               {isPage ? (
                 <h1 className="[overflow-wrap:anywhere] text-2xl font-semibold tracking-tight sm:text-3xl">
                   Neue Rechnung
@@ -1590,7 +1059,8 @@ export function CreateInvoiceModal({
               type="button"
               variant={showPreview ? "default" : "outline"}
               size="sm"
-              onClick={() => setShowPreview(!showPreview)}
+              onClick={() => { if (!issuingRef.current && !isSavingDraft) setShowPreview(!showPreview); }}
+              disabled={isGenerating || isSavingDraft}
               className="w-fit gap-2 whitespace-nowrap"
               aria-pressed={showPreview}
             >
@@ -1609,7 +1079,25 @@ export function CreateInvoiceModal({
           </div>
         </DialogHeader>
 
+        <p role="status" aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground">
+          {isGenerating ? 'Rechnung wird erstellt. Angaben bleiben bis zum Abschluss gesperrt.'
+            : isSavingDraft ? 'Entwurf wird gespeichert. Angaben bleiben bis zum Abschluss gesperrt.' : ''}
+        </p>
+
         {fromDraft && <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm"><p className="font-medium">Serviceentwurf · {fromDraft.parsedData.periodStart} bis {fromDraft.parsedData.periodEnd}</p><details className="mt-2 text-xs text-muted-foreground"><summary className="cursor-pointer">Zum Entwurf</summary><p className="pt-2">„Entwurf speichern“ erzeugt weder Datei noch Nummer. Die Dateierstellung aktualisiert denselben Datensatz; kein Versand und keine Einnahme.</p></details></div>}
+        <fieldset
+          aria-label="Rechnungsangaben"
+          aria-busy={isGenerating || isSavingDraft}
+          disabled={isGenerating || isSavingDraft}
+          inert={isGenerating || isSavingDraft}
+          onPointerDownCapture={blockBusyEditorInteraction}
+          onKeyDownCapture={blockBusyEditorInteraction}
+          onClickCapture={blockBusyEditorInteraction}
+          onChangeCapture={blockBusyEditorInteraction}
+          onInputCapture={blockBusyEditorInteraction}
+          onBeforeInputCapture={blockBusyEditorInteraction}
+          className="m-0 min-w-0 border-0 p-0"
+        >
         <div className="invoice-editor-grid">
           <div className="invoice-editor-main">
             <DocumentTaxProfileFields id="invoice" settings={settings} issueDate={date} selection={taxSelection} acknowledged={taxAcknowledged} onAcknowledged={setTaxAcknowledged} onModeChange={handleTaxModeChange} taxCase={taxCase} onTaxCaseChange={setTaxCase} foreignAddress={foreignAddress} domesticConfirmed={domesticConfirmed} onDomesticConfirmed={setDomesticConfirmed} />
@@ -1741,7 +1229,7 @@ export function CreateInvoiceModal({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date">Rechnungsdatum</Label>
-                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <Input id="date" type="date" value={date} onChange={(e) => { paymentTermRefreshRef.current += 1; setPaymentTermRefreshing(false); setDate(e.target.value); }} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="delivery-date">Leistungsdatum</Label>
@@ -1925,7 +1413,16 @@ export function CreateInvoiceModal({
               {/* Right: Payment Terms */}
               <div className="space-y-2">
                 <Label htmlFor="due-date">Fälligkeitsdatum</Label>
-                <Input id="due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                <Input id="due-date" type="date" value={dueDate} onChange={(e) => { paymentTermRefreshRef.current += 1; setPaymentTermRefreshing(false); setPaymentTermManual(true); setPaymentTermMessage(''); setDueDate(e.target.value); }} aria-describedby={!isServiceDraft ? 'payment-term-source' : undefined} />
+                {!isServiceDraft && <div className="space-y-2">
+                  <p id="payment-term-source" className="text-xs text-muted-foreground" aria-live="polite">{paymentTermManual ? 'Manuell festgelegt · bleibt bei Änderungen erhalten' : `${suggestedPaymentTerm?.source === 'CUSTOMER' ? 'Kundenvorgabe' : suggestedPaymentTerm?.source === 'COMPANY' ? 'Firmenvorgabe' : 'Standard'}: ${suggestedPaymentTerm?.days ?? 14} Kalendertage`}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" disabled={paymentTermRefreshing || !isPaymentBusinessDate(date)} onClick={() => void reapplyPaymentTerm()}>{paymentTermRefreshing ? 'Vorgabe wird geladen …' : 'Vorgabe erneut anwenden'}</Button>
+                    {!paymentTermManual && <Button type="button" variant="ghost" size="sm" onClick={() => { paymentTermRefreshRef.current += 1; setPaymentTermRefreshing(false); setPaymentTermManual(true); }}>Fälligkeit beibehalten</Button>}
+                  </div>
+                  {!suggestedPaymentTerm && !paymentTermManual && <p role="alert" className="text-sm text-destructive">Bitte ein unterstütztes Rechnungsdatum wählen.</p>}
+                  {paymentTermMessage && <p role="alert" className="text-sm text-destructive">{paymentTermMessage}</p>}
+                </div>}
                 <Label htmlFor="invoice-payment-means">Zahlungsart</Label>
                 <select
                   id="invoice-payment-means"
@@ -2007,7 +1504,7 @@ export function CreateInvoiceModal({
 
         {!taxReady && <p id="invoice-tax-blocker" className="text-xs"><a href="#invoice-tax-heading" className="underline underline-offset-4">Steuerbehandlung bestätigen</a>.</p>}
         <DialogFooter className={isPage ? "invoice-create-actions" : undefined}>
-          <Button type="button" variant="outline" onClick={onClose} disabled={isSavingDraft || isGenerating}>Abbrechen</Button>
+          <Button type="button" variant="outline" onClick={requestClose} disabled={isSavingDraft || isGenerating}>Abbrechen</Button>
           {fromDraft && <Button type="button" variant="outline" onClick={saveServiceDraft} disabled={isSavingDraft || isGenerating || !taxMode}>{isSavingDraft ? 'Speichere Entwurf …' : 'Entwurf speichern'}</Button>}
           <Button type="button" onClick={createInvoiceFile} aria-describedby={!taxReady ? "invoice-tax-blocker" : undefined} disabled={!taxReady || isSavingDraft || isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
             {isGenerating
@@ -2063,7 +1560,7 @@ export function CreateInvoiceModal({
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-muted-foreground">
                       <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">{taxReady ? "Füllen Sie das Formular aus, um die Vorschau zu sehen." : "Bitte zuerst Steuerbehandlung und Steuerfall bestätigen."}</p>
+                      <p className="text-sm" role={previewError ? 'alert' : undefined}>{previewError ?? (taxReady ? "Füllen Sie das Formular aus, um die Vorschau zu sehen." : "Bitte zuerst Steuerbehandlung und Steuerfall bestätigen.")}</p>
                     </div>
                   </div>
                 )}
@@ -2077,12 +1574,13 @@ export function CreateInvoiceModal({
               </div>
 
               <p className="text-xs text-muted-foreground mt-2">
-                Die Vorschau aktualisiert sich automatisch bei Änderungen. {outputMode === 'xml-only' ? 'Bei XML-only dient sie nur als Layoutkontrolle; gespeichert wird ausschließlich die XML-Datei.' : 'Der QR-Code wird erst in der finalen PDF angezeigt.'}
+                Die Vorschau aktualisiert sich automatisch bei Änderungen. {outputMode === 'xml-only' ? 'Bei XML-only dient sie nur als Layoutkontrolle; gespeichert wird ausschließlich die XML-Datei.' : 'Vorschau und finale PDF verwenden dasselbe Layout einschließlich GiroCode. Die abschließende PDF/A-3b-Prüfung erfolgt beim Erstellen.'}
               </p>
             </aside>
           )}
           </aside>
         </div>
+        </fieldset>
     </>
   );
 
@@ -2095,8 +1593,8 @@ export function CreateInvoiceModal({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={`max-h-[90vh] overflow-y-auto ${showPreview ? 'sm:max-w-[1400px]' : 'sm:max-w-[800px]'}`}>
+    <Dialog open={isOpen} onOpenChange={open => { if (!open) requestClose(); }}>
+      <DialogContent showCloseButton={!isGenerating && !isSavingDraft} className={`max-h-[90vh] overflow-y-auto ${showPreview ? 'sm:max-w-[1400px]' : 'sm:max-w-[800px]'}`}>
         {editorContent}
       </DialogContent>
     </Dialog>

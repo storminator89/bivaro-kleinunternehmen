@@ -39,13 +39,59 @@ jobs:
         run: npx prisma generate
 
       - name: Install Chromium and system dependencies
-        run: npx playwright install --with-deps chromium
+        shell: bash
+        run: |
+          # Bound transport stalls for these commands only; keep the runner's sources and trust settings.
+          apt_config="$(mktemp "${RUNNER_TEMP:?RUNNER_TEMP is required}/bivaro-apt-XXXXXX.conf")"
+          trap 'rm -f -- "$apt_config"' EXIT
+          cat > "$apt_config" <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          APT
+          # APT_CONFIG is read before system fragments. Preserve stricter runner bounds.
+          actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
+          printf '%s\n' "$actual_settings"
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
+            echo '::error::Unexpected per-command APT transport settings.'
+            exit 1
+          fi
+          node_bin="$(command -v node)"
+          playwright_cli="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}/node_modules/playwright/cli.js"
+          test -x "$node_bin"
+          test -f "$playwright_cli"
+          # Playwright's own sudo escalation drops environment variables. Run only its
+          # exact installed dependency installer as root; browser downloads stay non-root.
+          sudo env APT_CONFIG="$apt_config" "$node_bin" "$playwright_cli" install-deps chromium
+          "$node_bin" "$playwright_cli" install chromium
 
       # PDF generation needs gs; real PDF preview needs headed Chromium/Xvfb.
       - name: Install and verify PDF and virtual display dependencies
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ghostscript xvfb xauth default-jre-headless util-linux
+          apt_config="$(mktemp "${RUNNER_TEMP:?RUNNER_TEMP is required}/bivaro-apt-XXXXXX.conf")"
+          trap 'rm -f -- "$apt_config"' EXIT
+          cat > "$apt_config" <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          APT
+          actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
+          printf '%s\n' "$actual_settings"
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
+            echo '::error::Unexpected per-command APT transport settings.'
+            exit 1
+          fi
+          sudo env APT_CONFIG="$apt_config" apt-get update
+          sudo env APT_CONFIG="$apt_config" apt-get install -y --no-install-recommends ghostscript xvfb xauth default-jre-headless util-linux poppler-utils
           command -v gs
           command -v Xvfb
           command -v xvfb-run
@@ -56,12 +102,18 @@ jobs:
       - name: Install hash-pinned official offline invoice validator
         run: node scripts/einvoice-validation/install-runtime.mjs "${{ runner.temp }}/bivaro-einvoice"
 
+      - name: Install hash-pinned official own-invoice PDF-A verifier
+        run: node scripts/own-invoice-pdfa/install-runtime.mjs "${{ runner.temp }}/bivaro-verapdf"
+
       # Use the supported runner: it owns a fresh temporary database and cleanup.
       # Security hardening remains in CI / Security checks (see testing docs).
       - name: Run the complete functional suite
         timeout-minutes: 25
         env:
           BIVARO_EINVOICE_ASSETS: ${{ runner.temp }}/bivaro-einvoice
+          BIVARO_VERAPDF_BIN: ${{ runner.temp }}/bivaro-verapdf/verapdf
+          BIVARO_RUN_OWN_INVOICE_PDFA_BROWSER: '1'
+          BIVARO_OWN_INVOICE_BROWSER_EVIDENCE_DIR: ${{ runner.temp }}/bivaro-own-invoice-browser
         run: >-
           xvfb-run --auto-servernum npm run test:e2e --
           --headed
@@ -73,13 +125,35 @@ jobs:
           --trace=off
           --output="${{ runner.temp }}/bivaro-browser-results"
 
+      - name: Require both real final-byte browser cases and render all their PDF pages
+        env:
+          EVIDENCE: ${{ runner.temp }}/bivaro-own-invoice-browser
+        run: |
+          for viewport in desktop mobile; do
+            directory="$EVIDENCE/$viewport"
+            node -e 'const fs=require("node:fs"),c=require("node:crypto"),p=process.argv[1],m=require(p+"/manifest.json"),h=c.createHash("sha256").update(fs.readFileSync(p+"/final.pdf")).digest("hex"); if(m.status!=="passed" || h!==m.finalSha256 || h!==m.downloadedSha256 || h!==m.storedSha256) throw Error("Incomplete real browser final-byte evidence")' "$directory"
+            mkdir "$directory/rendered"
+            pdftoppm -scale-to 2000 -png "$directory/final.pdf" "$directory/rendered/final"
+          done
+
+      - name: Retain only synthetic own-invoice final-byte browser evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: own-invoice-browser-final-bytes
+          path: ${{ runner.temp }}/bivaro-own-invoice-browser
+          if-no-files-found: warn
+          retention-days: 1
+
       - name: Stage only allowlisted synthetic screenshots
         id: stage-visuals
         if: ${{ always() }}
         continue-on-error: true
-        timeout-minutes: 3
+        timeout-minutes: 8
         shell: bash
         run: |
+          python3 -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --require-hashes --target "$RUNNER_TEMP/bivaro-evidence-codec" -r scripts/evidence-requirements.txt
+          export PYTHONPATH="$RUNNER_TEMP/bivaro-evidence-codec${PYTHONPATH:+:$PYTHONPATH}"
           python3 - <<'PY'
           import json
           import os
@@ -88,7 +162,7 @@ jobs:
           import sys
           import tempfile
           sys.path.insert(0, 'scripts')
-          from lossless_evidence_png import recompress_png
+          from lossless_evidence_png import recompress_png_strong as recompress_png
 
           allowed = {
               'partial-payments-1440-two-events.png',
@@ -131,8 +205,16 @@ jobs:
               'incoming-validation-mobile-390.png',
               'mocked-email-accepted-1440.png',
               'mocked-email-unknown-390.png',
+              'record-search-1440.png',
+              'record-search-390.png',
+              'payment-terms-settings-1440.png',
+              'payment-terms-editor-390.png',
+              'bank-evidence-saved-1440.png',
+              'bank-evidence-reopened-390.png',
               'customer-timeline-desktop-1440.png',
               'customer-timeline-mobile-360.png',
+              'service-statement-preview-1440.png',
+              'service-statement-preview-390.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'

@@ -4,6 +4,7 @@ import importlib.util
 import pathlib
 import struct
 import unittest
+from unittest.mock import patch
 import zlib
 
 spec = importlib.util.spec_from_file_location('evidence_png', pathlib.Path(__file__).parents[1] / 'lossless_evidence_png.py')
@@ -47,6 +48,37 @@ def png(pixels, width=3, channels=3, method=0, metadata=(), split=False):
 
 
 class LosslessEvidencePng(unittest.TestCase):
+    def test_strong_compression_retains_pixels_metadata_and_original_proof(self):
+        source = png(bytes([20, 40, 60] * 120), metadata=(chunk(b'sRGB', b'\0'),), split=True)
+        result, proof = codec.recompress_png_strong(source, lambda raw: zlib.compress(raw, 9))
+        self.assertEqual(codec._decode(source)[:5], codec._decode(result)[:5])
+        self.assertEqual(proof['inputSha256'], hashlib.sha256(source).hexdigest())
+        self.assertEqual(proof['outputSha256'], hashlib.sha256(result).hexdigest())
+        self.assertLessEqual(len(result), len(source))
+
+    def test_strong_compression_rejects_smaller_corrupt_output(self):
+        source = png(bytes(range(90)), width=10)
+        with self.assertRaises((ValueError, zlib.error)):
+            codec.recompress_png_strong(source, lambda raw: b'x')
+
+    def test_strong_compression_rejects_valid_smaller_wrong_pixels(self):
+        source = png(bytes(range(90)), width=10)
+        with self.assertRaisesRegex(ValueError, 'equivalence'):
+            codec.recompress_png_strong(source, lambda raw: zlib.compress(bytes(len(raw)), 9))
+
+    def test_strong_non_improvement_keeps_fast_result_and_proof(self):
+        source = png(bytes(range(90)), width=10)
+        expected = codec.recompress_png(source)
+        self.assertEqual(codec.recompress_png_strong(source, lambda raw: b'x' * (len(source) + 1)), expected)
+
+    def test_strong_work_budget_bypasses_expensive_compressor(self):
+        source = png(bytes(range(90)), width=10)
+        expected = codec.recompress_png(source)
+        def unexpected(raw):
+            raise AssertionError('expensive compressor must not run')
+        with patch.object(codec, 'MAX_STRONG_FILTERED_BYTES', 8):
+            self.assertEqual(codec.recompress_png_strong(source, unexpected), expected)
+
     def test_every_standard_filter_decodes_every_rgb_pixel(self):
         pixels = bytes((index * 73 + index // 5) % 256 for index in range(27))
         for method in range(5):

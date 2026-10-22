@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Command } from "cmdk";
+import { Command, defaultFilter } from "cmdk";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
   Sun,
@@ -13,6 +13,8 @@ import { useTheme } from "next-themes";
 
 import { BivaroIcon, type BivaroIconName } from "@/components/brand/bivaro-icon";
 import { cn } from "@/lib/utils";
+import { RECORD_SEARCH_GROUPS, RECORD_SEARCH_MAX_LENGTH, RECORD_SEARCH_MIN_LENGTH } from '@/lib/record-search/contract';
+import { startRecordSearch, type RecordSearchState } from '@/lib/record-search/client';
 
 type CommandItem = {
   id: string;
@@ -61,7 +63,37 @@ const COMMANDS: CommandItem[] = [
 ];
 
 export function CommandPalette() {
+  return <React.Suspense fallback={null}><ScopedCommandPalette /></React.Suspense>;
+}
+
+function ScopedCommandPalette() {
+  const { data: session, status } = useSession();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  if (status !== 'authenticated') return null;
+  // Dispose all terms, pending work and results on navigation/account/session changes.
+  return <AuthenticatedCommandPalette key={`${session.user.id}:${session.user.role}:${session.user.sessionVersion}:${pathname}?${params}`} />;
+}
+
+function AuthenticatedCommandPalette() {
   const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState('');
+  const [searchState, setSearchState] = React.useState<RecordSearchState | null>(null);
+  const [retry, setRetry] = React.useState(0);
+  const returnFocus = React.useRef<HTMLElement | null>(null);
+  const term = query.trim();
+  const searchable = term.length >= RECORD_SEARCH_MIN_LENGTH;
+  const current = open && searchState?.query === term ? searchState : null;
+  const changeOpen = (value: boolean) => { setOpen(value); setQuery(''); setSearchState(null); };
+  React.useEffect(() => {
+    if (!open || !searchable) return;
+    let request: ReturnType<typeof startRecordSearch> | undefined;
+    const timer = setTimeout(() => {
+      setSearchState({ query: term, status: 'loading' });
+      request = startRecordSearch(term, setSearchState);
+    }, 250);
+    return () => { clearTimeout(timer); request?.cancel(); };
+  }, [open, searchable, term, retry]);
   const router = useRouter();
   const { setTheme } = useTheme();
   const { data: session, status } = useSession();
@@ -71,7 +103,8 @@ export function CommandPalette() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((v) => !v);
+        if (document.activeElement instanceof HTMLElement && !document.activeElement.closest('[cmdk-root]')) returnFocus.current = document.activeElement;
+        setOpen((v) => !v); setQuery(''); setSearchState(null);
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -86,30 +119,43 @@ export function CommandPalette() {
     return acc;
   }, {});
 
-  const helpers: CommandHelpers = { router, setTheme, close: () => setOpen(false) };
+  const helpers: CommandHelpers = { router, setTheme, close: () => changeOpen(false) };
 
   return (
-    <Command.Dialog
-      open={open}
-      onOpenChange={setOpen}
-      label="Befehlspalette"
-      overlayClassName="fixed inset-0 z-[80] bg-foreground/45"
-      contentClassName="fixed left-1/2 top-[10dvh] z-[90] w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-popover shadow-[var(--shadow-floating)]"
-      className="flex max-h-[calc(90dvh-1rem)] flex-col"
-    >
+    <Dialog.Root open={open} onOpenChange={changeOpen}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[80] bg-foreground/45" />
+        <Dialog.Content aria-label="Befehlspalette" onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true }); }} className="fixed left-1/2 top-[10dvh] z-[90] w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-popover shadow-[var(--shadow-floating)]">
+          <Command label="Befehlspalette" filter={(value, search, keywords) => value.startsWith('record:') || value.startsWith('record-list:') || value === 'record-search-retry' ? 1 : defaultFilter(value, search, keywords)} className="flex max-h-[calc(90dvh-1rem)] flex-col">
         <Dialog.Title className="sr-only">Befehlspalette</Dialog.Title>
-        <Dialog.Description className="sr-only">Seiten und Aktionen suchen. Mit den Pfeiltasten auswählen und mit Enter öffnen.</Dialog.Description>
+        <Dialog.Description className="sr-only">Seiten, Aktionen und eigene Datensätze suchen. Mit den Pfeiltasten auswählen und mit Enter öffnen.</Dialog.Description>
         <div className="border-b border-border px-3">
           <Command.Input
             autoFocus
-            placeholder="Tippen, um Aktionen oder Seiten zu suchen…"
+            value={query}
+            onValueChange={value => { setQuery(value); if (value.trim() !== term) setSearchState(null); }}
+            maxLength={RECORD_SEARCH_MAX_LENGTH}
+            aria-label="Aktionen und Datensätze suchen"
+            placeholder="Aktion, Kunde oder Belegnummer…"
             className="flex h-12 w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
           />
         </div>
         <Command.List className="min-h-0 max-h-[420px] overflow-y-auto p-2">
-          <Command.Empty className="px-3 py-8 text-center text-sm text-muted-foreground">
-            Keine Treffer.
-          </Command.Empty>
+          {!searchable && <Command.Empty className="px-3 py-3 text-center text-sm text-muted-foreground">Keine passende Aktion.</Command.Empty>}
+          <div role="status" aria-live="polite" className="px-3 py-2 text-xs text-muted-foreground">
+            {!searchable ? 'Datensätze ab 3 Zeichen · Namen, Belegnummern und Eingangsdateien' : !current || current.status === 'loading' ? 'Datensätze werden gesucht…' : current.status === 'expired' ? 'Sitzung abgelaufen. Bitte erneut anmelden.' : current.status === 'error' ? 'Suche nicht verfügbar. Bitte erneut versuchen.' : current.result?.groups.every(group => !group.items.length) ? 'Keine eigenen Datensätze gefunden.' : 'Eigene Datensätze · höchstens 5 je Typ'}
+          </div>
+          {current?.status === 'error' && <Command.Item value="record-search-retry" onSelect={() => { setSearchState(null); setRetry(value => value + 1); }} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm data-[selected=true]:bg-accent">Suche erneut versuchen</Command.Item>}
+          {current?.status === 'ready' && current.result?.groups.filter(group => group.items.length > 0).map(group => (
+            <Command.Group key={group.type} heading={`Datensätze · ${RECORD_SEARCH_GROUPS[group.type].title}`} className="px-1 py-1 text-xs font-semibold text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider">
+              {group.items.map(item => <Command.Item key={`${item.type}:${item.id}`} value={`record:${item.type}:${item.id}`} onSelect={() => { router.push(item.href); changeOpen(false); }} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground">
+                <BivaroIcon name={RECORD_SEARCH_GROUPS[group.type].icon} size={26} /><span className="min-w-0 flex-1 truncate" title={item.label}>{item.label}</span><span aria-hidden="true" className="text-muted-foreground">↗</span>
+              </Command.Item>)}
+              <Command.Item value={`record-list:${group.type}`} onSelect={() => { router.push(RECORD_SEARCH_GROUPS[group.type].href); changeOpen(false); }} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-xs text-muted-foreground data-[selected=true]:bg-accent">
+                {group.hasMore ? 'Weitere Treffer vorhanden · ' : ''}Alle {RECORD_SEARCH_GROUPS[group.type].title} öffnen (ungefiltert)
+              </Command.Item>
+            </Command.Group>
+          ))}
           {Object.entries(grouped).map(([group, items]) => (
             <Command.Group
               key={group}
@@ -151,7 +197,10 @@ export function CommandPalette() {
             <span>Schließen</span>
           </div>
         </div>
-    </Command.Dialog>
+          </Command>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
