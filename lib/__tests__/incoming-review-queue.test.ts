@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { nextReviewDocument, reviewQueueSnapshot, sameReviewDraft, type IncomingNavigationGuard } from '@/components/purchases/incoming-review-queue';
-import { createReviewNavigationIntents, createReviewTraversalGuard } from '@/components/purchases/incoming-review-history';
+import { captureReviewNavigationSource, createReviewNavigationIntents, createReviewTraversalGuard } from '@/components/purchases/incoming-review-history';
 import { IncomingRequestError } from '@/components/purchases/incoming-document-ui';
 import type { IncomingDocument, IncomingDocumentList } from '@/lib/purchase-documents/types';
 
@@ -164,5 +164,33 @@ describe('explicit review navigation is guarded before any location change', () 
     const changed = intents.prepare(action); location = '/purchases?document=B'; changed.proceed(); expect(action).not.toHaveBeenCalled();
     const stayed = intents.prepare(action); stayed.stay(); stayed.proceed(); expect(action).not.toHaveBeenCalled();
     const latest = intents.prepare(action); changed.stay(); latest.proceed(); expect(action).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('browser precommit source capture', () => {
+  it('captures a history push committed after the last router render before dirty Back', () => {
+    let index = 0;
+    const navigation = new EventTarget(); const go = vi.fn(); const request = vi.fn();
+    const guard = createReviewTraversalGuard({ getIndex: () => index, go, getGuard: () => ({ blocked: true, request }), onReplay: vi.fn() });
+    const cleanup = captureReviewNavigationSource(navigation, guard);
+    index = 1; // Next commits its source history entry after component layout.
+    navigation.dispatchEvent(new Event('navigate')); // Browser still at source.
+    index = 0; guard({ stopImmediatePropagation: vi.fn() });
+    expect(go).toHaveBeenLastCalledWith(1);
+    // The restore's own precommit must not replace the original source index.
+    navigation.dispatchEvent(new Event('navigate'));
+    index = 1; guard({ stopImmediatePropagation: vi.fn() });
+    expect(request).toHaveBeenCalledTimes(1);
+    const proceed = request.mock.calls[0][0]; proceed();
+    navigation.dispatchEvent(new Event('navigate')); // Conscious replay retains lock.
+    index = 0; expect(guard({ stopImmediatePropagation: vi.fn() })).toBeUndefined();
+    expect(go.mock.calls).toEqual([[1], [-1]]); cleanup();
+  });
+  it('removes only its own listener and leaves unsupported browser fallback unchanged', () => {
+    const navigation = new EventTarget(); const syncIndex = vi.fn();
+    const cleanup = captureReviewNavigationSource(navigation, { syncIndex });
+    navigation.dispatchEvent(new Event('navigate')); expect(syncIndex).toHaveBeenCalledTimes(1);
+    cleanup(); navigation.dispatchEvent(new Event('navigate')); expect(syncIndex).toHaveBeenCalledTimes(1);
+    expect(() => captureReviewNavigationSource(undefined, { syncIndex })()).not.toThrow();
   });
 });

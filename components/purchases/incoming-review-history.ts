@@ -64,3 +64,13 @@ export function createReviewNavigationIntents(readLocation: () => string) {
     },
   };
 }
+
+/** Capture the real source before browser traversal, not a lagging router render. */
+export function captureReviewNavigationSource(
+  navigation: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> | undefined,
+  guard: { syncIndex: () => void },
+) {
+  const captureSource = () => guard.syncIndex();
+  navigation?.addEventListener('navigate', captureSource);
+  return () => navigation?.removeEventListener('navigate', captureSource);
+}

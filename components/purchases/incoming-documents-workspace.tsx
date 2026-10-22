@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import type { IncomingDocument, IncomingDocumentList, IncomingDocumentResponse } from '@/lib/purchase-documents/types';
 import { IncomingUpload } from './incoming-upload';
 import { IncomingDocumentReview } from './incoming-document-review';
-import { createReviewNavigationIntents, createReviewTraversalGuard } from './incoming-review-history';
+import { captureReviewNavigationSource, createReviewNavigationIntents, createReviewTraversalGuard } from './incoming-review-history';
 import { nextReviewDocument, reviewQueueSnapshot, type IncomingNavigationGuard } from './incoming-review-queue';
 import { documentIdFromQuery, errorMessage, extractionLabel, formatSourceAmount, formatSourceDate, incomingJson, INCOMING_PAGE_SIZE, reviewLabel, type IncomingFilter } from './incoming-document-ui';
 
@@ -97,7 +97,7 @@ function IncomingDocumentsWorkspaceContent() {
     // Traversals cannot be cancelled. Restore/replay their exact index instead
     // of replacing entries (which would silently destroy Back/Forward history).
     const intents = navigationIntents.current;
-    const navigation = (window as Window & { navigation?: { currentEntry?: { index: number } } }).navigation;
+    const navigation = (window as Window & { navigation?: EventTarget & { currentEntry?: { index: number } } }).navigation;
     const handlePop = createReviewTraversalGuard({
       getIndex: () => navigation?.currentEntry?.index,
       go: delta => window.history.go(delta),
@@ -110,9 +110,13 @@ function IncomingDocumentsWorkspaceContent() {
       queueRequest.current?.abort(); queueMoving.current = false; setQueueBusy(false);
       handlePop(event);
     };
+    // The router can publish history after a component's layout effects. Read
+    // the actual source at Navigation API's precommit boundary; restorations
+    // and deliberate replay keep their controller-owned indexes unchanged.
+    const stopCapturingSource = captureReviewNavigationSource(navigation, handlePop);
     historyGuard.current = handlePop;
     window.addEventListener('popstate', onPop, true);
-    return () => { window.removeEventListener('popstate', onPop, true); intents.invalidate(); historyGuard.current = null; };
+    return () => { window.removeEventListener('popstate', onPop, true); stopCapturingSource(); intents.invalidate(); historyGuard.current = null; };
   }, []);
   useLayoutEffect(() => { historyGuard.current?.syncIndex(); }, [activeId, queryString]);
   useEffect(() => () => queueRequest.current?.abort(), []);

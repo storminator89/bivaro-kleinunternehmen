@@ -4,12 +4,14 @@ import { readFile } from 'node:fs/promises';
 import { prisma } from '../lib/prisma';
 import { hashPassword } from '../lib/password';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
+import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 import type { IncomingDocument } from '../lib/purchase-documents/types';
 
 // Only the runner's isolated synthetic database is permitted. No original from
 // an existing business/account is read, overwritten, or submitted for analysis.
 async function signIn(page: Page) {
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
+  await isolateSyntheticLoginIpBudget();
   const password = 'SyntheticSequence123!';
   const user = await prisma.user.create({ data: { name: 'Synthetic sequence owner', email: `sequence-${randomUUID()}@example.test`, password: await hashPassword(password), role: 'USER' } });
   await page.goto('/login'); await page.getByLabel('E-Mail').fill(user.email); await page.getByLabel('Passwort', { exact: true }).fill(password);
