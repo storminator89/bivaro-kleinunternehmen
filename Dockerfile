@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Base - Common configuration
 # -----------------------------------------------------------------------------
-FROM node:22.23.4-bookworm-slim AS base
+FROM node:22.23.4-trixie-slim AS base
 
 # Install security updates and required packages
 RUN apt-get update && apt-get upgrade -y && \
@@ -70,11 +70,12 @@ RUN npm prune --omit=dev && \
 # -----------------------------------------------------------------------------
 # Stage 4: Runner - Production runtime
 # -----------------------------------------------------------------------------
-FROM node:22.23.4-bookworm-slim AS runner
+FROM node:22.23.4-trixie-slim AS runner
 
 # Install security updates and dumb-init for proper signal handling
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates ghostscript util-linux default-jre-headless && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' ghostscript)" ge '10.05.1~dfsg-1+deb13u3' && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
