@@ -94,6 +94,22 @@ They do not run Java, a validator, browser/server, or container. A final image
 build/inspection remains separate release evidence; do not infer it from unit
 results.
 
+## Read-only final-image evidence
+
+The existing native container smoke inspects the actual `/app` and
+`/opt/verapdf` image files without rewriting them or invoking another tool.
+It rejects non-regular, symlinked, escaped, oversized, missing or hash-mismatched
+notice paths; checks the pinned PDFKit/OFL/CLI digests and declared versions;
+and retains the separate-license/source-mapping limits. Only a compact
+`runtimeNotices` hash/count summary is added to the existing synthetic
+`manifest.json` artifact. No license texts, JARs or image layers are uploaded.
+The production smoke uses fixed roots and digests; synthetic unit tests extract
+only the isolated inspection function and supply synthetic expected digests.
+They never import/run the full container smoke, server, database or native tools.
+A summary with `status: passed` is scoped file-preservation evidence for that
+particular image, **not** complete license clearance, AI/foreign-PDF closure
+coverage, or evidence of an emulated arm64 build.
+
 ## Build-only version startup bound (2026-10-22)
 
 Docker Publish run `39792213510` for main `3c4fd511` failed during the
