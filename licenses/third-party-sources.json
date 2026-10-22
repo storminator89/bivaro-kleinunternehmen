@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 1,
+  "scope": "Bounded recovered upstream notices: shadcn/ui scaffolds, seven Brotli 1.3.3 decoder files, and PDF.js 6.4.299 QuickJS engine/wrapper. Not complete binary or container legal clearance.",
+  "revisions": {
+    "shadcn-ui": "6ea6856f5a1082d4d9c231559b6bc3ee73827493",
+    "brotli.js": "e36051345f6d27a56e5f39ea70d2f789b8574046",
+    "pdf.js": "7a7e4fd382481a76f55c6d735873f635c9178db1",
+    "quickjs": "3d5e064e9dd67c70f7962836505a7fa067bf0a4e",
+    "quickjsVersion": "2026-06-04",
+    "pdf.js.quickjsBuild": "b62f7cd527363ca2c1fe7467f274bc9acbf78c24",
+    "pdf.js.quickjsLaterLicense": "e2c5bfc8194b16f5973eea5e4e025b67be3c1015"
+  },
+  "files": [
+    {
+      "file": "licenses/brotli/Apache-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "component": "Brotli decoder files only",
+      "license": "Apache-2.0",
+      "extraction": "complete original file",
+      "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+      "sourceSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "sourceGitBlob": "d645695673349e3947e8e5ae42332d0ac3164cd7"
+    },
+    {
+      "file": "licenses/brotli/headers/dec/bit_reader.js.txt",
+      "sha256": "1bbf33c8c8567a29b90ad8117bbc3659592f782911d295cc04a3f92799e36bd0",
+      "component": "Brotli 1.3.3 decoder dec/bit_reader.js",
+      "license": "Apache-2.0",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/bit_reader.js",
+      "sourceSha256": "1c7488ebdbcb2dba8a61965f5458452fe8cac38c06c3db0cc5184408a5aacf77",
+      "sourceGitBlob": "533cfec17f2d193ffe57aed2e92581e565e2919a"
+    },
+    {
+      "file": "licenses/brotli/headers/dec/context.js.txt",
+      "sha256": "9480fd27ebee76a7bf0b2931f8ac721f5f8b7de808fbd21c66368d217dd7db8d",
+      "component": "Brotli 1.3.3 decoder dec/context.js",
+      "license": "Apache-2.0",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/context.js",
+      "sourceSha256": "5cd72c7ce643693ff902cd9c1ada003b45f70b4daec1bfb1a6a4a842efca811e",
+      "sourceGitBlob": "ba98779adb16d68a981b5db4655e4ed9d8d91049"
+    },
+    {
+      "file": "licenses/brotli/headers/dec/decode.js.txt",
+      "sha256": "bc670957aaf188b069c48d4afe455bf0c276ec0f37994bdf435e3ad89e22a8a8",
+      "component": "Brotli 1.3.3 decoder dec/decode.js",
+      "license": "Apache-2.0",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/decode.js",
+      "sourceSha256": "f66d1fd1ea9e54c843b7f5f4bc02cf028f28fed69404f279f86869b097dace5e",
+      "sourceGitBlob": "7b2aa776e812726c1dee4727122e6b625b9173af"
+    },
+    {
+      "file": "licenses/brotli/headers/dec/dictionary-data.js.txt",
+      "sha256": "60e61f0023a70319bb08c024c88480e4c57536ff10cee0a86d1335c9c6f95efd",
+      "component": "Brotli 1.3.3 decoder dec/dictionary-data.js",
+      "license": "Apache-2.0",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/dictionary-data.js",
+      "sourceSha256": "e2a9bd8348d01afc08f49730d08b7f33fc5dbbc198cdea54da49afbeae45da4d",
+      "sourceGitBlob": "55448aa0b3ecd661b92456a996f2fe68f0330b6e"
+    },
+    {
+      "file": "licenses/brotli/headers/dec/dictionary.js.txt",
+      "sha256": "60e61f0023a70319bb08c024c88480e4c57536ff10cee0a86d1335c9c6f95efd",
+      "component": "Brotli 1.3.3 decoder dec/dictionary.js",
+      "license": "Apache-2.0",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/dictionary.js",
+      "sourceSha256": "f7bd7462acad204047edc609009dfeb28239f14fe6f06ca42661f1d751382946",
+      "sourceGitBlob": "927208abb1fb31cbc37b578b767bfefd9f8cab75"
+    },
+    {
+      "file": "licenses/brotli/headers/dec/prefix.js.txt",
+      "sha256": "757d933b567041740c44032694a07b23b29e3c91900c9711ec2806d9dcf8c4c2",
+      "component": "Brotli 1.3.3 decoder dec/prefix.js",
+      "license": "Apache-2.0",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/prefix.js",
+      "sourceSha256": "e65fb2183d6fc1058020ba55939ea08334d39ae33bf4832d952d9acab5db2d8a",
+      "sourceGitBlob": "386c2cfe6f6251a17d002d63b3fb030dfbea201c"
+    },
+    {
+      "file": "licenses/brotli/headers/dec/transform.js.txt",
+      "sha256": "e79c30c0df69759ee29e7aa3ca1a21438407503809211b07ccac00c5f61d9b03",
+      "component": "Brotli 1.3.3 decoder dec/transform.js",
+      "license": "Apache-2.0",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/transform.js",
+      "sourceSha256": "56c0ebea0ce70b4d7afa7225eca2e5c9e0046dbdc9a4d6b568c5d5f4b47f170b",
+      "sourceGitBlob": "965e0670ed9325cf2e9bf58fb2567d9b3ee1d115"
+    },
+    {
+      "file": "licenses/quickjs/LICENSE_PDFJS_QUICKJS",
+      "sha256": "7fdaed3d938f3dfce7189db07e74773c23789143a55db81a95d09dcbfda267b0",
+      "component": "PDF.js QuickJS wrapper: subsequently supplied project notice, not original build file",
+      "license": "MIT",
+      "extraction": "complete original file",
+      "source": "https://raw.githubusercontent.com/mozilla/pdf.js.quickjs/e2c5bfc8194b16f5973eea5e4e025b67be3c1015/LICENSE",
+      "sourceSha256": "7fdaed3d938f3dfce7189db07e74773c23789143a55db81a95d09dcbfda267b0",
+      "sourceGitBlob": "0417c6e580cc14211fe01ca0f27eb1501e237358"
+    },
+    {
+      "file": "licenses/quickjs/LICENSE_QUICKJS",
+      "sha256": "598fd7fc928e4350abce36e337ba5a1346923c5c692f5be92c3d8e29ddd7c18d",
+      "component": "QuickJS engine",
+      "license": "MIT",
+      "extraction": "complete original file",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/LICENSE",
+      "sourceSha256": "598fd7fc928e4350abce36e337ba5a1346923c5c692f5be92c3d8e29ddd7c18d",
+      "sourceGitBlob": "2cf449dd3eea4291da7470bd322211b61981ccd8"
+    },
+    {
+      "file": "licenses/quickjs/VERSION",
+      "sha256": "234057c4079458cba9862d4bbb6f8a059ac2e4a194947673da0ad38ca16a37fd",
+      "component": "QuickJS version evidence",
+      "license": null,
+      "extraction": "complete original file",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/VERSION",
+      "sourceSha256": "234057c4079458cba9862d4bbb6f8a059ac2e4a194947673da0ad38ca16a37fd",
+      "sourceGitBlob": "ba2d8bcded0796651a9a8e49b94bef882c0a3251"
+    },
+    {
+      "file": "licenses/quickjs/headers/cutils.c.txt",
+      "sha256": "7e0fe4067b295134b10ce8dcd90cb982d5b7cb41bbdab365e5fe20bdf1ad6586",
+      "component": "QuickJS engine cutils.c",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/cutils.c",
+      "sourceSha256": "b73a403a59da30726257ddbdf5e399298941c1def997782ee0d4d33f796a80a2",
+      "sourceGitBlob": "6a3aeca454bd60e4f79f2bfc39415c08f3dbb341"
+    },
+    {
+      "file": "licenses/quickjs/headers/cutils.h.txt",
+      "sha256": "7e0fe4067b295134b10ce8dcd90cb982d5b7cb41bbdab365e5fe20bdf1ad6586",
+      "component": "QuickJS engine cutils.h",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/cutils.h",
+      "sourceSha256": "d2da6d06a75b9e6c116c82b7a41df6bcc170c8b1779f374fa953ecf688eda647",
+      "sourceGitBlob": "094a8f124119ea179e3fe34586929a35402cf914"
+    },
+    {
+      "file": "licenses/quickjs/headers/dtoa.c.txt",
+      "sha256": "450801b4e1613417b2e97da12c2c16cd219b092abcae2b4460445946c816a215",
+      "component": "QuickJS engine dtoa.c",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/dtoa.c",
+      "sourceSha256": "af5abd68fa9806d1a19bdd5f2daef00d5fd0990ae56311382dfed4700343f074",
+      "sourceGitBlob": "ac1be8d8e1a49a5f088acc1f74728f172e74a447"
+    },
+    {
+      "file": "licenses/quickjs/headers/dtoa.h.txt",
+      "sha256": "450801b4e1613417b2e97da12c2c16cd219b092abcae2b4460445946c816a215",
+      "component": "QuickJS engine dtoa.h",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/dtoa.h",
+      "sourceSha256": "462070f7678a894b9f3612422f280f4dce412eb360a5cc585a513f407fc23114",
+      "sourceGitBlob": "de76f1a3feb6028c9c662933a41fe270cec02d3b"
+    },
+    {
+      "file": "licenses/quickjs/headers/libregexp.c.txt",
+      "sha256": "bc5974fe7de8f9f529e0f9b2857edeee3d045d169cb7fb46868f46e66e2e67f8",
+      "component": "QuickJS engine libregexp.c",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/libregexp.c",
+      "sourceSha256": "fdfcf86167029ab2c39c35730d4ae6875b7bbeb9406a0fcc886de4e9b1f5e2ac",
+      "sourceGitBlob": "c387f004387d546faf418abfe0b1227d5763c2dc"
+    },
+    {
+      "file": "licenses/quickjs/headers/libregexp.h.txt",
+      "sha256": "bc5974fe7de8f9f529e0f9b2857edeee3d045d169cb7fb46868f46e66e2e67f8",
+      "component": "QuickJS engine libregexp.h",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/libregexp.h",
+      "sourceSha256": "f5c5ef1899f224dcc718422a22c789ef9d8b5b837b622818fcfaf681ae793446",
+      "sourceGitBlob": "0905bcb7973bd1ebbe883fabb449267dc7997a72"
+    },
+    {
+      "file": "licenses/quickjs/headers/libunicode.c.txt",
+      "sha256": "2482d28b35648f52415f2b479fe63cd3d0643c81c57dfd847a570a331a927b21",
+      "component": "QuickJS engine libunicode.c",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/libunicode.c",
+      "sourceSha256": "26203ae888c0582e7d0e2113f13db0c9b39dc7b0b3836d68fa308c54f7a0898c",
+      "sourceGitBlob": "0b7b6d0b1f09a84f17d7fe18c3492c2d5318afb1"
+    },
+    {
+      "file": "licenses/quickjs/headers/libunicode.h.txt",
+      "sha256": "2482d28b35648f52415f2b479fe63cd3d0643c81c57dfd847a570a331a927b21",
+      "component": "QuickJS engine libunicode.h",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/libunicode.h",
+      "sourceSha256": "ce310152bc80d7415dcb657e23abd9a40bf83e393c0d05d325dae384bb01d259",
+      "sourceGitBlob": "c2fdeac89e6b222aec2a4eaf8e62133b7b57e6b3"
+    },
+    {
+      "file": "licenses/quickjs/headers/quickjs-atom.h.txt",
+      "sha256": "feb053912deeeb2a8fef504b768c919902b4eb49ae1da4f2f54307ffc06d02ca",
+      "component": "QuickJS engine quickjs-atom.h",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/quickjs-atom.h",
+      "sourceSha256": "342194359417664e652f54e7d682ee2ef91dd982e91f74decbde992a2c848236",
+      "sourceGitBlob": "13c1ccdb963e3bb994a1de571bdfba3ce745f1d5"
+    },
+    {
+      "file": "licenses/quickjs/headers/quickjs-opcode.h.txt",
+      "sha256": "251e88f198fa747e1b4645c3fea40b90624a747d758f89fa16e8a0967ec6d429",
+      "component": "QuickJS engine quickjs-opcode.h",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/quickjs-opcode.h",
+      "sourceSha256": "a9c60a8c9366820733d9d2acbb805f48b2e9e2778df526e6bcb845fdb6b47834",
+      "sourceGitBlob": "7b98ddf055e4c30ad1c3295a2cd38bfed37b0f5a"
+    },
+    {
+      "file": "licenses/quickjs/headers/quickjs.c.txt",
+      "sha256": "064a7cfca349296944375b7132170d12cf09b2398c03e15c9e8ed8fc6dfad276",
+      "component": "QuickJS engine quickjs.c",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/quickjs.c",
+      "sourceSha256": "a00762d2eee42316cecbc9c15efc4549b715ec500461845cd91b2a6c38190d08",
+      "sourceGitBlob": "fa5a7a9d0181778042a97ddb7234aefc4a8fc9a8"
+    },
+    {
+      "file": "licenses/quickjs/headers/quickjs.h.txt",
+      "sha256": "1c63556195379c8857b3cb28bfe9129a53f7a37d80beb6bc5bec1d1bc320dcb1",
+      "component": "QuickJS engine quickjs.h",
+      "license": "MIT",
+      "extraction": "original leading comment through first closing delimiter and following newline",
+      "source": "https://raw.githubusercontent.com/bellard/quickjs/3d5e064e9dd67c70f7962836505a7fa067bf0a4e/quickjs.h",
+      "sourceSha256": "2165f47772af9faee1798999a599fa9de850d1bf0259502dade1c25d4a588316",
+      "sourceGitBlob": "476d735137f241272568f9365988f118ee1387d3"
+    },
+    {
+      "file": "licenses/shadcn-ui/LICENSE.md",
+      "sha256": "1564074e13439397221ffd522e2e504d56561994a23d371aa5e3ad43e4f5423f",
+      "component": "shadcn/ui copied scaffolds",
+      "license": "MIT",
+      "extraction": "complete original file",
+      "source": "https://raw.githubusercontent.com/shadcn-ui/ui/6ea6856f5a1082d4d9c231559b6bc3ee73827493/LICENSE.md",
+      "sourceSha256": "1564074e13439397221ffd522e2e504d56561994a23d371aa5e3ad43e4f5423f",
+      "sourceGitBlob": "fad4d887a681dd49233e5ed01ee2c7a1513089a0"
+    }
+  ],
+  "verifiedRuntimeFiles": [
+    {
+      "file": "node_modules/brotli/dec/bit_reader.js",
+      "sha256": "1c7488ebdbcb2dba8a61965f5458452fe8cac38c06c3db0cc5184408a5aacf77",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/bit_reader.js",
+      "sourceGitBlob": "533cfec17f2d193ffe57aed2e92581e565e2919a"
+    },
+    {
+      "file": "node_modules/brotli/dec/context.js",
+      "sha256": "5cd72c7ce643693ff902cd9c1ada003b45f70b4daec1bfb1a6a4a842efca811e",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/context.js",
+      "sourceGitBlob": "ba98779adb16d68a981b5db4655e4ed9d8d91049"
+    },
+    {
+      "file": "node_modules/brotli/dec/decode.js",
+      "sha256": "f66d1fd1ea9e54c843b7f5f4bc02cf028f28fed69404f279f86869b097dace5e",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/decode.js",
+      "sourceGitBlob": "7b2aa776e812726c1dee4727122e6b625b9173af"
+    },
+    {
+      "file": "node_modules/brotli/dec/dictionary-data.js",
+      "sha256": "e2a9bd8348d01afc08f49730d08b7f33fc5dbbc198cdea54da49afbeae45da4d",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/dictionary-data.js",
+      "sourceGitBlob": "55448aa0b3ecd661b92456a996f2fe68f0330b6e"
+    },
+    {
+      "file": "node_modules/brotli/dec/dictionary.js",
+      "sha256": "f7bd7462acad204047edc609009dfeb28239f14fe6f06ca42661f1d751382946",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/dictionary.js",
+      "sourceGitBlob": "927208abb1fb31cbc37b578b767bfefd9f8cab75"
+    },
+    {
+      "file": "node_modules/brotli/dec/prefix.js",
+      "sha256": "e65fb2183d6fc1058020ba55939ea08334d39ae33bf4832d952d9acab5db2d8a",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/prefix.js",
+      "sourceGitBlob": "386c2cfe6f6251a17d002d63b3fb030dfbea201c"
+    },
+    {
+      "file": "node_modules/brotli/dec/transform.js",
+      "sha256": "56c0ebea0ce70b4d7afa7225eca2e5c9e0046dbdc9a4d6b568c5d5f4b47f170b",
+      "source": "https://raw.githubusercontent.com/foliojs/brotli.js/e36051345f6d27a56e5f39ea70d2f789b8574046/dec/transform.js",
+      "sourceGitBlob": "965e0670ed9325cf2e9bf58fb2567d9b3ee1d115"
+    },
+    {
+      "file": "node_modules/pdfjs-dist/wasm/quickjs-eval.js",
+      "sha256": "fe7930418e869791ce892567dbd0bc4698152b7e550b5cefa553992c56ddc325",
+      "source": "https://raw.githubusercontent.com/mozilla/pdf.js/7a7e4fd382481a76f55c6d735873f635c9178db1/external/quickjs/quickjs-eval.js",
+      "sourceGitBlob": "f087fb29602352e8be9a6e7f7d766ccdb0dda038"
+    },
+    {
+      "file": "node_modules/pdfjs-dist/wasm/quickjs-eval.wasm",
+      "sha256": "7bcacc9f22cacf7e9b23866d2a6d1639693d40c7f144e41b7c69ed37ba9cbe8f",
+      "source": "https://raw.githubusercontent.com/mozilla/pdf.js/7a7e4fd382481a76f55c6d735873f635c9178db1/external/quickjs/quickjs-eval.wasm",
+      "sourceGitBlob": "42980e94aa4d7359e4113c968c67800b45462764"
+    }
+  ],
+  "buildSourceEvidence": [
+    {
+      "source": "https://raw.githubusercontent.com/mozilla/pdf.js.quickjs/b62f7cd527363ca2c1fe7467f274bc9acbf78c24/Dockerfile",
+      "sha256": "a940489952df70cb14710a1e0ff2d059344026e7ed5a17ed6c85a83bb8da406a",
+      "gitBlob": "b1925680e4e097eb348211dbf02b7df5b92b26c4"
+    },
+    {
+      "source": "https://raw.githubusercontent.com/mozilla/pdf.js.quickjs/b62f7cd527363ca2c1fe7467f274bc9acbf78c24/compile.sh",
+      "sha256": "d6dfaec2192f9f88df2a6e48d6887c3c60fe5719256b0331e7d0986648be5522",
+      "gitBlob": "831e612adb53c58bd48dda11171d0c08ed50efb4"
+    },
+    {
+      "source": "https://raw.githubusercontent.com/mozilla/pdf.js.quickjs/b62f7cd527363ca2c1fe7467f274bc9acbf78c24/0001-Extra-stuff-for-use-with-PDF.js.patch",
+      "sha256": "002cc939251a803e99eea8a672e61e5ef991dab5c6278b75503ce89680424cf6",
+      "gitBlob": "5d1b3dc4d8637e5e5582dc5359be8a8d10baa08d"
+    }
+  ],
+  "issues": [
+    "https://github.com/mozilla/pdf.js/issues/22143",
+    "https://github.com/mozilla/pdf.js.quickjs/issues/1",
+    "https://github.com/foliojs/fontkit/issues/255"
+  ],
+  "limitations": [
+    "Brotli package metadata declares MIT. Only the seven source-path-bound original Google 2013 decoder headers are identified as Apache-2.0; missing full wrapper MIT attribution remains unresolved.",
+    "QuickJS wrapper LICENSE was supplied in a later official commit, not present as a license file at the original asset-build revision.",
+    "Wrapper Dockerfile uses emscripten/emsdk:latest; exact shipped compiler/libc-runtime provenance is unresolved. Source pins and matching assets do not establish reproducible binary compilation or complete bundled-license coverage.",
+    "fontkit 2.0.4, dfa 1.2.0 and Brotli wrapper attribution gaps remain open. This inventory does not clear Canvas/native dependencies, PDF.js separately licensed font/resources, veraPDF shaded dependencies, Debian/JRE or the rest of the application/container.",
+    "No renderer code, runtime assets, resource limits, public UI behavior or application license is changed."
+  ]
+}

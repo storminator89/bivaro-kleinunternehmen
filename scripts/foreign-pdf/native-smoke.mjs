@@ -14,6 +14,7 @@ const require=createRequire('/app/package.json'), inspectRequire=createRequire(`
 const {createPdfA3Invoice}=inspectRequire('./lib/server/pdfa3-converter.js');
 const {validatePdfA3,veraPdfSpawnSpecification}=inspectRequire('./lib/server/pdfa-validator.js');
 const {foreignVerifierCommand}=inspectRequire('./lib/server/foreign-pdf-validator-confinement.js');
+const {prepareForeignVerifierConfig,assertForeignVerifierConfigOnly}=inspectRequire('./lib/server/foreign-pdf-verifier-config.js');
 const {PDFDocument,PDFArray,PDFDict,PDFName,PDFRawStream,decodePDFRawStream}=inspectRequire('pdf-lib');
 const {PrismaClient}=require('@prisma/client');
 const prisma=new PrismaClient({datasources:{db:{url:'file:/tmp/bivaro-foreign-compatibility.db'}},log:[]});
@@ -153,7 +154,7 @@ try{
     const downloaded=await localRequest(`/api/purchase-documents/${id}/original`,{maxBytes:20*1024*1024});assert.equal(downloaded.status,200);assert.equal(sha(downloaded.bytes),sha(bytes));archived.push({id,name});
   }
   const before=await snapshot(),cases=[];
-  const startup=await probeTrustedVerifierStartup({foreignVerifierCommand,veraPdfSpawnSpecification});
+  const startup=await probeTrustedVerifierStartup({foreignVerifierCommand,veraPdfSpawnSpecification,prepareForeignVerifierConfig,assertForeignVerifierConfigOnly});
   console.error(JSON.stringify(startup));
   await writeFile(`${EVIDENCE}/startup.json`,JSON.stringify(startup,null,2),{flag:'wx',mode:0o600});
   for(const name of allCases.positive){
@@ -185,6 +186,8 @@ try{
   for(const {id,name}of archived){const response=await localRequest(`/api/purchase-documents/${id}/original`,{maxBytes:20*1024*1024});assert.equal(response.status,200);assert.equal(sha(response.bytes),inputHashes.get(name));}
   for(const [name,beforeHash]of inputHashes)assert.equal(sha(await original(name)),beforeHash);
   assert.deepEqual(await snapshot(),before);
+  assert.equal(startup.configuration?.templates.length,5);
+  assert(startup.results.length===2&&startup.results.every(result=>result.outcome==='passed'));
   await writeFile(`${EVIDENCE}/manifest.json`,JSON.stringify({status:'passed',syntheticOnly:true,platform:process.platform,architecture:process.arch,node:process.version,verifier:'1.30.3',cases,rejected,originalFilesPreserved:true,archivedOriginalAndAttachmentPreserved:true,statelessFinancialCountsBefore:before,statelessFinancialCountsAfter:await snapshot(),limits:'No claim of cryptographic signature validation or full XML/business-rule conformance; synthetic signature dictionary is a conservative rejection fixture.'},null,2),{flag:'wx',mode:0o600});
   console.log(`Genuine foreign PDF compatibility gate passed (${process.arch}).`);
 }catch(error){

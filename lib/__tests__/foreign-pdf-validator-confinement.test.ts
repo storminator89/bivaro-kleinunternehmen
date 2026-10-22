@@ -13,7 +13,7 @@ describe('foreign-only verifier kernel policy construction (no native execution)
     const command=await foreignVerifierCommand('/opt/verapdf/verapdf','/tmp/private-unit');
     const args=command(['--flavour','3b','/tmp/private-unit/final.pdf']);
     expect(args[0]).toBe('/usr/bin/setpriv');expect(args).toContain('--no-new-privs');expect(args).toContain('--seccomp-filter');expect(args).toContain('/usr/lib/jvm/synthetic/bin/java');
-    expect(args).toContain('org.verapdf.apps.GreenfieldCliWrapper');expect(args).toContain('/opt/verapdf/etc:/opt/verapdf/bin/*');
+    expect(args).toContain('org.verapdf.apps.GreenfieldCliWrapper');expect(args).toContain('/opt/verapdf/foreign-runtime/classes:/opt/verapdf/etc:/opt/verapdf/bin/*');
     expect(args).toContain('path-beneath:read-file,read-dir:/tmp/private-unit');
     expect(args).toContain('path-beneath:read-file:/usr/lib/jvm/synthetic/conf/security/java.security');
     expect(args).not.toContain('path-beneath:read-file,read-dir:/usr/lib/jvm/synthetic/conf');

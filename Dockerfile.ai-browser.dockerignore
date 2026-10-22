@@ -64,6 +64,7 @@ tests
 # Documentation
 *.md
 !README.md
+!licenses/shadcn-ui/LICENSE.md
 docs
 AGENTS.md
 

@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import JSZip from 'jszip';
 import { writeVerapdfNotices } from './runtime-notices.mjs';
+import { prepareVerifierConfigAssets } from '../foreign-pdf/prepare-verifier-config.mjs';
 
 export const VERAPDF_ASSET = Object.freeze({
   version: '1.30.3',
@@ -70,7 +71,7 @@ export function automatedInstallation(destination) {
 export async function probeInstalledVersion(binary, temporary, executor = execFile) {
   // Fixed allowlist: never inherit operator/JVM injection environment variables.
   const env = { PATH: '/usr/bin:/bin', HOME: temporary, TMPDIR: temporary, LANG: 'C.UTF-8', TZ: 'UTC', NODE_ENV: 'production',
-    JAVACMD: '/usr/bin/java', JAVA_OPTS: '-Xms16m -Xmx192m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.awt.headless=true' };
+    JAVACMD: '/usr/bin/java', JAVA_OPTS: '-Xms16m -Xmx192m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.awt.headless=true -Duser.home=.' };
   const version = await executor(binary, ['--version'], {
     cwd: temporary, env, timeout: 120_000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024,
   });
@@ -104,8 +105,13 @@ export async function installRuntime(destination) {
     });
     const binary = path.join(destination, 'verapdf');
     await chmod(binary, 0o755);
+    // Force fresh upstream defaults in private build-only HOME; never consume
+    // operator/home settings or modify the installer's global config.
+    const defaults = path.join(temporary, '.verapdf', 'config');
+    await mkdir(defaults, { recursive: true, mode: 0o700 });
     await probeInstalledVersion(binary, temporary);
     await writeVerapdfNotices(destination, VERAPDF_ASSET);
+    await prepareVerifierConfigAssets(destination, VERAPDF_ASSET, defaults);
     return binary;
   } catch (error) {
     if (created) await rm(destination, { recursive: true, force: true });

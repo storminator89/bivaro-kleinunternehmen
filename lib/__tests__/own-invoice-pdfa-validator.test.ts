@@ -4,6 +4,7 @@ import { MAX_PDF_INPUT_BYTES } from '@/lib/resource-limits';
 
 const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
+  prepare: vi.fn(),
   mkdtemp: vi.fn(),
   writeFile: vi.fn(),
   rm: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   children: [] as MockChild[],
 }));
 
+vi.mock('@/lib/server/foreign-pdf-verifier-config', () => ({ prepareForeignVerifierConfig: mocks.prepare }));
 vi.mock('node:child_process', () => ({ spawn: mocks.spawn }));
 vi.mock('fs/promises', () => ({
   mkdtemp: mocks.mkdtemp,
@@ -118,6 +120,7 @@ beforeEach(() => {
   mocks.manualVersion = false;
   mocks.manualValidation = false;
   mocks.children = [];
+  mocks.prepare.mockResolvedValue(undefined);
   mocks.mkdtemp.mockResolvedValue(mocks.directory);
   mocks.writeFile.mockResolvedValue(undefined);
   mocks.rm.mockResolvedValue(undefined);
@@ -541,5 +544,22 @@ describe('closed validator phase and startup diagnostics (mocked children only)'
     await expect(validatePdfA3(bytes)).resolves.toBeUndefined();
     mocks.report='not a compliant report';
     await expect(validatePdfA3(bytes)).rejects.toMatchObject({validatorStage:'report',kind:'unavailable',status:503});
+  });
+});
+
+
+describe('foreign-only parent preparation boundary (mocked)',()=>{
+  it('never changes the own-invoice unconfined path or invokes foreign configuration preparation',async()=>{
+    mocks.prepare.mockRejectedValue(new Error('synthetic foreign-only failure'));
+    await expect(validateOwnInvoicePdfA3(bytes)).resolves.toBeUndefined();
+    expect(mocks.prepare).not.toHaveBeenCalled();
+    expect(mocks.spawn.mock.calls[0][1]).toEqual([...processLimits,'/opt/verapdf/verapdf','--version']);
+  });
+  it('fails closed as infrastructure503 before JVM or document write and still cleans the private directory',async()=>{
+    mocks.prepare.mockRejectedValue(new Error('private source path must never be exposed'));
+    await expect(validatePdfA3(bytes,{confined:true})).rejects.toMatchObject({kind:'unavailable',status:503,validatorStage:'construction'});
+    expect(mocks.prepare).toHaveBeenCalledExactlyOnceWith('/opt/verapdf/verapdf',mocks.directory);
+    expect(mocks.spawn).not.toHaveBeenCalled();expect(mocks.writeFile).not.toHaveBeenCalled();
+    expect(mocks.rm).toHaveBeenCalledExactlyOnceWith(mocks.directory,{recursive:true,force:true});
   });
 });

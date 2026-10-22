@@ -3,7 +3,7 @@
  * Mandatory production PDF validation/derivation remains a separate unchanged gate.
  */
 import { spawn } from 'node:child_process';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const MAIN='org.verapdf.apps.GreenfieldCliWrapper',BINARY='/opt/verapdf/verapdf';
@@ -42,21 +42,24 @@ function collect(spec){
       resolve({outcome:failed?outcome:'passed',exit:exitBucket(code),text:failed?`stdout:\n${Buffer.concat(stdout).toString('utf8')}\nstderr:\n${Buffer.concat(stderr).toString('utf8')}`:''});});
   });
 }
-export async function probeTrustedVerifierStartup({foreignVerifierCommand,veraPdfSpawnSpecification}){
-  let directory;const results=[];let remaining=MAX_EXCERPT;
+export async function probeTrustedVerifierStartup({foreignVerifierCommand,veraPdfSpawnSpecification,prepareForeignVerifierConfig,assertForeignVerifierConfigOnly}){
+  let directory,configuration;const results=[];let remaining=MAX_EXCERPT;
   try{
     directory=await mkdtemp(path.join(tmpdir(),'bivaro-foreign-startup-'));
+    configuration=await prepareForeignVerifierConfig(BINARY,directory);
     const build=await foreignVerifierCommand(BINARY,directory);
     for(const mode of ['jvm','cli']){
-      // An empty fresh private directory and fixed version-only arguments mean
-      // no PDF/XML/document bytes can reach either probe, even accidentally.
-      if((await readdir(directory)).length!==0)throw Error('Startup boundary unavailable');
+      // Only the exact trusted default configuration is allowed, never a PDF
+      // or invoice XML. Hashes/tree are rechecked before AND after each launch.
+      await assertForeignVerifierConfigOnly(directory,configuration);
       const command=startupCommand(build(['--version']),mode);
       const spec=veraPdfSpawnSpecification(BINARY,['--version'],directory,()=>command);
-      const result=await collect(spec),excerpt=sanitizeTrustedStartupText(result.text,directory,remaining);
+      const result=await collect(spec);
+      await assertForeignVerifierConfigOnly(directory,configuration);
+      const excerpt=sanitizeTrustedStartupText(result.text,directory,remaining);
       remaining-=Buffer.byteLength(excerpt);results.push({mode,outcome:result.outcome,exit:result.exit,excerpt});
     }
   }catch{results.push({mode:'boundary',outcome:'unavailable',exit:'other',excerpt:''});}
   finally{if(directory)try{await rm(directory,{recursive:true,force:true});}catch{results.push({mode:'cleanup',outcome:'unavailable',exit:'other',excerpt:''});}}
-  return {event:'foreign-pdf-trusted-startup',results};
+  return {event:'foreign-pdf-trusted-startup',results,...(configuration?{configuration}:{})};
 }

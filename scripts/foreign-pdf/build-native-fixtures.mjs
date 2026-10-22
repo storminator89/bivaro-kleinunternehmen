@@ -16,7 +16,7 @@ await mkdir(destination,{recursive:false,mode:0o700});
 // are mounted read-only over it, never copied into or written by the runtime.
 await mkdir(path.join(destination,'node_modules'),{mode:0o755});
 await writeFile(path.join(destination,'package.json'),JSON.stringify({type:'commonjs'}),{flag:'wx'});
-for(const file of ['lib/server/pdfa3-converter.ts','lib/server/pdfa-validator.ts','lib/server/foreign-pdf-validator-confinement.ts','lib/processing-limit.ts','lib/resource-limits.ts']){
+for(const file of ['lib/server/pdfa3-converter.ts','lib/server/pdfa-validator.ts','lib/server/foreign-pdf-validator-confinement.ts','lib/server/foreign-pdf-verifier-config.ts','lib/processing-limit.ts','lib/resource-limits.ts']){
   const input=await readFile(file,'utf8');
   const resolved=input.replace(/from (['"])@\/([^'"]+)\1/g,(_match,quote,alias)=>{
     let relative=path.relative(path.dirname(file),alias).split(path.sep).join('/');if(!relative.startsWith('.'))relative=`./${relative}`;

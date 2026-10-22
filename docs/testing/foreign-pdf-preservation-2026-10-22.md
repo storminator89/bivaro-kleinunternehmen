@@ -244,11 +244,12 @@ A diagnostic-only candidate annotates internal failures with fixed enums for dir
 ### Trusted no-input startup drilldown (not PDF acceptance)
 
 The native harness additionally probes bare JVM `-version` and the trusted
-veraPDF CLI `--version`, before giving either process any PDF/XML input. This
+veraPDF CLI `--version`, before giving either process any PDF, invoice XML or
+user input (only exact trusted default configuration is present). This
 distinguishes JVM startup from CLI initialization (including configuration),
 without assuming which dependency is missing. Both use the exact compiled
 production command/resource/environment recipe and confinement policy, in a
-fresh private empty directory; CLI defaults and all read/write/network/process
+fresh private trusted-configuration-only directory; CLI defaults and all read/write/network/process
 restrictions remain unchanged. No application environment is inherited.
 
 Only these synthetic no-document startup probes may record a sanitized
@@ -256,9 +257,55 @@ diagnostic excerpt: known private workdir, other paths, URIs, controls and
 credential-looking assignments are redacted, with a shared maximum of 4096
 UTF-8 bytes across both probes. Successful probes retain no output. No raw
 production validation output, exception text, document data or credentials are
-recorded. `startup.json` is diagnostic only; the unchanged actual production
+recorded. `startup.json` provides startup/configuration evidence, never PDF
+acceptance; the unchanged actual production
 source/final validation, derivation, API, archive-byte and pixel assertions
 remain mandatory. A diagnostic probe is never an alternate validator or proof
 of PDF/A compliance, and never enables a write grant or fallback. Pure mocked
-tests cover the empty/version-only boundary, inherited-secret exclusion,
+tests cover the trusted-config-only/version-only boundary, inherited-secret exclusion,
 redaction/UTF-8 cap, output/wall bounds and group-kill/close-before-cleanup.
+
+### Proven CLI initialization fix: trusted preseed, no JVM writes
+
+At exact canonical `8979b6f7d45d2a2846805af5263fb2d1ef32dd19`, both genuine
+native architectures passed bare JVM startup but the CLI failed during
+`Applications.createAppConfigManager`/`configRoot`/`tempRoot`, before document
+input. This is an observed configuration-initialization failure, not PDF
+noncompliance or proof that all later stages work.
+
+A fresh private build-only `.verapdf/config` is created before the existing
+authentic `--version` probe, which generates the five upstream
+defaults (`app.xml`, `features.xml`, `fixer.xml`, `plugins.xml`, `validator.xml`).
+Its private `user.home=.` excludes prior operator/home or installer configuration; startup
+budget, heap, credential-free environment and exact version checks are unchanged.
+The build packages their **unchanged bytes**, archive/JAR/version provenance
+and per-file byte lengths/SHA-256 identities. Assets stay root-owned and
+non-writable by the application; JARs, profiles and global `/opt/verapdf/config`
+are not modified. Missing/empty/oversized/nonregular/linked/unsafe sources fail.
+
+Only on the foreign confined path, the parent checks bounded canonical regular
+root-owned assets and copies these exact defaults into its existing private
+0700 workdir's `.verapdf/config`, using 0600 exclusive-create files. Upstream
+DAC `Files.isWritable` checks can therefore pass; **Landlock still grants the JVM
+no writes at all**. Preparation failures remain infrastructure 503, not 422. The
+own-invoice unconfined launcher and conformance arguments/defaults are unchanged.
+
+A dedicated foreign-only first classpath directory supplies a standard JUL
+empty-handler configuration, preventing optional FileHandler tempfile creation.
+No validation rule or profile is replaced. `.level=OFF` alone is insufficient
+because CLI later sets levels; empty handlers remain empty. Per-file logging
+also remains disabled by the unchanged default (no `--addlogs`/`--config`).
+Pinned source: [config creation](https://github.com/veraPDF/veraPDF-apps/blob/v1.30.3/apps/src/main/java/org/verapdf/apps/Applications.java),
+[default initialization](https://github.com/veraPDF/veraPDF-library/blob/v1.30.3/core/src/main/java/org/verapdf/processor/app/ConfigManagerImpl.java),
+[logging resource lookup](https://github.com/veraPDF/veraPDF-library/blob/v1.30.3/core/src/main/java/org/verapdf/core/utils/LogsFileHandler.java),
+[JDK21 resource order](https://github.com/openjdk/jdk21u/blob/master/src/java.base/share/classes/jdk/internal/loader/URLClassPath.java).
+
+The synthetic startup diagnostic now uses that exact shared parent preparation.
+Before **and after each** version-only launch, it requires precisely the pinned
+configuration tree and unchanged hashes: no PDF, invoice XML, user configuration
+or extra file is allowed. Its artifact records only bounded source identities,
+not XML contents, paths or document data; the same 4 KiB sanitized startup-only
+excerpt cap remains. Actual production source/final, worker/API, archive-byte
+and independent pixel/text gates are still mandatory. No unconfined runtime
+retry, core wrapper, write grant or compliance heuristic is introduced. New
+native success is unverified until the exact subsequent hosted gates pass.

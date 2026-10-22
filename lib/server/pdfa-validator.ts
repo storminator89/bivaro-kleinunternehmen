@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import { foreignVerifierCommand } from './foreign-pdf-validator-confinement';
+import { prepareForeignVerifierConfig } from './foreign-pdf-verifier-config';
 import { MAX_PDF_INPUT_BYTES } from '@/lib/resource-limits';
 export const PDF_A_VERAPDF_VERSION = '1.30.3';
 const VERAPDF_TIMEOUT_MS = 30000;
@@ -257,6 +258,8 @@ export async function validatePdfA3(bytes: Uint8Array, options: {
     validatorStage = 'directory';
     workDir = await mkdtemp(path.join(tmpdir(), options.temporaryPrefix ?? 'bivaro-own-invoice-pdfa-'));
     validatorStage = 'construction';
+    if (options.confined)
+      await prepareForeignVerifierConfig(binary, workDir);
     const confinement = options.confined ? await foreignVerifierCommand(binary, workDir) : undefined;
     validatorStage = 'version-launch';
     const version = await runVeraPdf(binary, ['--version'], workDir, confinement);

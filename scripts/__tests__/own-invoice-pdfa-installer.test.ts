@@ -46,7 +46,7 @@ describe('bounded build-only veraPDF version probe (injected executor; no child 
       env: {
         PATH: '/usr/bin:/bin', HOME: '/synthetic/build-temp', TMPDIR: '/synthetic/build-temp',
         LANG: 'C.UTF-8', TZ: 'UTC', NODE_ENV: 'production', JAVACMD: '/usr/bin/java',
-        JAVA_OPTS: '-Xms16m -Xmx192m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.awt.headless=true',
+        JAVA_OPTS: '-Xms16m -Xmx192m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.awt.headless=true -Duser.home=.',
       },
     });
   });

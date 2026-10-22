@@ -41,7 +41,7 @@ export async function foreignVerifierCommand(binary: string, directory: string):
     '-XX:MaxDirectMemorySize=16m', '-XX:-CreateCoredumpOnCrash', '-XX:-UsePerfData', '-XX:-UseContainerSupport', '-XX:+DisableAttachMechanism',
     '-Djava.awt.headless=true', '-Djava.io.tmpdir=.', '-Duser.home=.', '-Duser.name=bivaro',
     '-Djavax.xml.accessExternalDTD=', '-Djavax.xml.accessExternalSchema=', '-Djavax.xml.accessExternalStylesheet=',
-    '-Dfile.encoding=UTF8', '-classpath', `${distribution}/etc:${distribution}/bin/*`,
+    '-Dfile.encoding=UTF8', '-classpath', `${distribution}/foreign-runtime/classes:${distribution}/etc:${distribution}/bin/*`,
     '-Dapp.name=VeraPDF validation CLI', `-Dapp.repo=${distribution}/bin`, `-Dapp.home=${distribution}`, `-Dbasedir=${distribution}`,
     '--add-exports=java.base/sun.security.pkcs=ALL-UNNAMED', 'org.verapdf.apps.GreenfieldCliWrapper',
   ];

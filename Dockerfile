@@ -45,6 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends default-jre-hea
 COPY scripts/einvoice-validation/install-runtime.mjs ./scripts/einvoice-validation/install-runtime.mjs
 RUN node scripts/einvoice-validation/install-runtime.mjs /opt/bivaro/einvoice
 COPY scripts/own-invoice-pdfa ./scripts/own-invoice-pdfa
+COPY scripts/foreign-pdf/prepare-verifier-config.mjs ./scripts/foreign-pdf/prepare-verifier-config.mjs
 RUN node scripts/own-invoice-pdfa/install-runtime.mjs /opt/verapdf
 
 # -----------------------------------------------------------------------------

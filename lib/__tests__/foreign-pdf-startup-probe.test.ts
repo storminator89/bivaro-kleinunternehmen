@@ -1,16 +1,17 @@
 import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
 import { EventEmitter } from 'node:events';
-const m=vi.hoisted(()=>({spawn:vi.fn(),mkdtemp:vi.fn(),readdir:vi.fn(),rm:vi.fn(),realpath:vi.fn(),lstat:vi.fn(),children:[] as Child[],manual:false,codes:[0,1],output:'',directory:'/tmp/synthetic-startup-private'}));
+const m=vi.hoisted(()=>({spawn:vi.fn(),mkdtemp:vi.fn(),readdir:vi.fn(),rm:vi.fn(),realpath:vi.fn(),lstat:vi.fn(),children:[] as Child[],manual:false,codes:[0,1],output:'',prepare:vi.fn(),boundary:vi.fn(),directory:'/tmp/synthetic-startup-private'}));
 vi.mock('node:child_process',()=>({spawn:m.spawn}));
 vi.mock('node:fs/promises',()=>({mkdtemp:m.mkdtemp,readdir:m.readdir,rm:m.rm,realpath:m.realpath,lstat:m.lstat}));
 import { foreignVerifierCommand } from '@/lib/server/foreign-pdf-validator-confinement';
 import { veraPdfSpawnSpecification } from '@/lib/server/pdfa-validator';
 import { probeTrustedVerifierStartup,sanitizeTrustedStartupText,startupCommand } from '../../scripts/foreign-pdf/startup-probe.mjs';
 class Child extends EventEmitter {stdout=new EventEmitter();stderr=new EventEmitter();kill=vi.fn();constructor(readonly pid:number){super();}}
-const factories={foreignVerifierCommand,veraPdfSpawnSpecification};
+const factories={foreignVerifierCommand,veraPdfSpawnSpecification,prepareForeignVerifierConfig:m.prepare,assertForeignVerifierConfigOnly:m.boundary};
 async function flush(){for(let i=0;i<60;i++)await Promise.resolve();}
 beforeEach(()=>{
   vi.clearAllMocks();m.children=[];m.manual=false;m.codes=[0,1];m.output=`java.lang.InitializationFailure at ${m.directory}/config and /opt/verapdf/etc/application.xml\nCaused by synthetic startup failure`;
+  m.prepare.mockResolvedValue({trusted:'synthetic-config-only'});m.boundary.mockResolvedValue(undefined);
   m.mkdtemp.mockResolvedValue(m.directory);m.readdir.mockResolvedValue([]);m.rm.mockResolvedValue(undefined);
   m.realpath.mockImplementation(async p=>p==='/usr/bin/java'?'/usr/lib/jvm/java-21-openjdk-amd64/bin/java':p);
   m.lstat.mockResolvedValue({isFile:()=>true,isSymbolicLink:()=>false});
@@ -19,11 +20,11 @@ beforeEach(()=>{
 });
 afterEach(()=>{vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllEnvs();});
 describe('trusted no-input startup-only diagnostic (mocked processes only)',()=>{
-  it('uses exact compiled production policy/options/resource/env recipe, fixed version args and fresh empty input; never inherited credentials',async()=>{
+  it('uses exact compiled production policy/options/resource/env recipe, fixed version args and trusted-configuration-only input; never inherited credentials',async()=>{
     vi.stubEnv('BIVARO_SETUP_TOKEN','parent-secret-never-pass');vi.stubEnv('OPENAI_API_KEY','parent-secret-never-pass');vi.stubEnv('JDK_JAVA_OPTIONS','parent-secret-never-pass');
     const result=await probeTrustedVerifierStartup(factories);
     expect(result.results.map(r=>[r.mode,r.outcome])).toEqual([['jvm','passed'],['cli','nonzero-exit']]);
-    expect(m.readdir).toHaveBeenCalledTimes(2);expect(m.spawn).toHaveBeenCalledTimes(2);
+    expect(m.prepare).toHaveBeenCalledExactlyOnceWith('/opt/verapdf/verapdf',m.directory);expect(m.boundary).toHaveBeenCalledTimes(4);expect(m.spawn).toHaveBeenCalledTimes(2);
     const exact=await foreignVerifierCommand('/opt/verapdf/verapdf',m.directory);
     for(const [index,mode]of ['jvm','cli'].entries()){
       const expected=veraPdfSpawnSpecification('/opt/verapdf/verapdf',['--version'],m.directory,()=>startupCommand(exact(['--version']),mode));
@@ -39,12 +40,18 @@ describe('trusted no-input startup-only diagnostic (mocked processes only)',()=>
     expect(JSON.stringify(result)).not.toContain(m.directory);expect(JSON.stringify(result)).not.toContain('/opt/verapdf');
     expect(m.rm).toHaveBeenCalledExactlyOnceWith(m.directory,{recursive:true,force:true});
   });
-  it('rejects any document argument or nonempty startup directory before spawning',async()=>{
+  it('rejects any document argument or non-config startup bytes before spawning',async()=>{
     const build=await foreignVerifierCommand('/opt/verapdf/verapdf',m.directory),cli=build(['--version']);
     expect(()=>startupCommand([...cli,'/tmp/input.pdf'],'cli')).toThrow();
     expect(()=>startupCommand(cli.slice(0,-1),'cli')).toThrow();
-    m.readdir.mockResolvedValue(['invoice.pdf']);const result=await probeTrustedVerifierStartup(factories);
+    m.boundary.mockRejectedValueOnce(Error('Unexpected invoice.pdf'));const result=await probeTrustedVerifierStartup(factories);
     expect(m.spawn).not.toHaveBeenCalled();expect(result.results[0]).toMatchObject({mode:'boundary',outcome:'unavailable',excerpt:''});
+  });
+  it('rejects changed configuration after a completed version-only launch before attempting another probe',async()=>{
+    m.boundary.mockResolvedValueOnce(undefined).mockRejectedValueOnce(Error('changed private config'));
+    const result=await probeTrustedVerifierStartup(factories);
+    expect(m.spawn).toHaveBeenCalledTimes(1);expect(result.results).toEqual([{mode:'boundary',outcome:'unavailable',exit:'other',excerpt:''}]);
+    expect(m.rm).toHaveBeenCalledOnce();expect(JSON.stringify(result)).not.toContain('changed private config');
   });
   it('returns no arbitrary constructor exception text',async()=>{
     const result=await probeTrustedVerifierStartup({...factories,foreignVerifierCommand:async()=>{throw Error('private secret document');}});
