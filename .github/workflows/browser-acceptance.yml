@@ -77,9 +77,11 @@ jobs:
         id: stage-visuals
         if: ${{ always() }}
         continue-on-error: true
-        timeout-minutes: 3
+        timeout-minutes: 8
         shell: bash
         run: |
+          python3 -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --require-hashes --target "$RUNNER_TEMP/bivaro-evidence-codec" -r scripts/evidence-requirements.txt
+          export PYTHONPATH="$RUNNER_TEMP/bivaro-evidence-codec${PYTHONPATH:+:$PYTHONPATH}"
           python3 - <<'PY'
           import json
           import os
@@ -88,7 +90,7 @@ jobs:
           import sys
           import tempfile
           sys.path.insert(0, 'scripts')
-          from lossless_evidence_png import recompress_png
+          from lossless_evidence_png import recompress_png_strong as recompress_png
 
           allowed = {
               'partial-payments-1440-two-events.png',
@@ -131,8 +133,16 @@ jobs:
               'incoming-validation-mobile-390.png',
               'mocked-email-accepted-1440.png',
               'mocked-email-unknown-390.png',
+              'record-search-1440.png',
+              'record-search-390.png',
+              'payment-terms-settings-1440.png',
+              'payment-terms-editor-390.png',
+              'bank-evidence-saved-1440.png',
+              'bank-evidence-reopened-390.png',
               'customer-timeline-desktop-1440.png',
               'customer-timeline-mobile-360.png',
+              'service-statement-preview-1440.png',
+              'service-statement-preview-390.png',
           }
           limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'

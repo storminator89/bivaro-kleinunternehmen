@@ -40,6 +40,11 @@ async function postHandler(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Only generated ordinary uploads can establish payment-term provenance.
+    if ((parsedData as Record<string, unknown>).paymentTermSelection != null) {
+      return NextResponse.json({ error: 'Zahlungszielherkunft ist nur bei der gewöhnlichen Rechnungserstellung zulässig.' }, { status: 400 });
+    }
+
     // A record without actual document bytes would advertise a downloadable
     // PDF while containing an empty placeholder. Require callers of this JSON
     // compatibility endpoint to provide the real file content. The normal UI

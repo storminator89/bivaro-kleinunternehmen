@@ -1,0 +1,2 @@
+-- Exact combined capability identity only. Preserve the payment-term-only 400
+-- and bank-evidence-only 500 identities; their model migrations remain unchanged.

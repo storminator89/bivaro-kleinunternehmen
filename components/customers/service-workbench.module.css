@@ -1,4 +1,19 @@
 .dialog { width: calc(100% - 2rem); max-width: 68rem; max-height: 92dvh; overflow-y: auto; padding: 0; gap: 0; }
+.statementDialog { width: calc(100% - 2rem); max-width: 40rem; max-height: 90dvh; overflow-y: auto; }
+.statementContent, .statementFields { display: grid; min-width: 0; gap: var(--space-md); }
+.statementFields { border: 0; padding: 0; }
+.statementSelection { border-top: 1px solid var(--color-rule); }
+.statementChoice { display: flex; align-items: flex-start; gap: var(--space-sm); min-width: 0; padding-block: var(--space-sm); font-size: var(--text-xs); line-height: 1.65; cursor: pointer; }
+.statementChoice input { flex: 0 0 auto; width: 1rem; height: 1rem; margin-top: .25rem; accent-color: var(--color-accent); }
+.statementChoice input:focus-visible, .statementDetails summary:focus-visible, .statementTitle:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+.statementChoice > span, .statementChoice strong, .statementChoice > span > span { display: block; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.statementChoice strong, .statementTitle { font-weight: 500; overflow-wrap: anywhere; white-space: pre-wrap; }
+.statementChoice > span > span { color: var(--color-muted); }
+.statementDetails { min-width: 0; font-size: var(--text-xs); }
+.statementDetails summary { min-height: 2.75rem; cursor: pointer; padding-block: var(--space-sm); }
+.statementContent .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 0; }
+.statementContent .summary > div:first-child { grid-column: auto; border-bottom: 0; }
+.statementContent .summary dd { font-size: var(--text-lg); }
 .header { padding: var(--space-lg); border-bottom: 1px solid var(--color-rule); text-align: left; }
 .header :global([data-slot="dialog-title"]) { overflow-wrap: anywhere; font-size: var(--text-xl); letter-spacing: -.025em; }
 .layout { display: grid; min-width: 0; }

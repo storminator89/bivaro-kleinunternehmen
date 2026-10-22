@@ -103,6 +103,11 @@ async function postHandler(request: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
+        // Only generated ordinary uploads can establish payment-term provenance.
+        if ((parsedData as Record<string, unknown>).paymentTermSelection != null) {
+          return NextResponse.json({ error: 'Zahlungszielherkunft ist nur bei der gewöhnlichen Rechnungserstellung zulässig.' }, { status: 400 });
+        }
+
         const parsedCustomerId = customerId === undefined || customerId === null || customerId === ''
             ? null
             : Number(customerId);

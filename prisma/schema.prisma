@@ -72,6 +72,8 @@ model User {
   paymentAdjustments PaymentAdjustment[]
   paymentOperations PaymentOperation[]
   dataImportBatches DataImportBatch[]
+  bankImportBatches BankImportBatch[]
+  bankImportRows BankImportRow[]
   emailOutbox EmailOutbox[]
   serviceArticles ServiceArticle[]
   serviceBillingPlans ServiceBillingPlan[]
@@ -191,6 +193,7 @@ model Customer {
   taxNumber       String?
   internalNote    String?
   noteVisibility  String    @default("BOTH") // EDITOR, SEND, BOTH
+  paymentTermDays Int?      // Explicit optional default, 0..365 calendar days
   serviceBillingPlans ServiceBillingPlan[]
   createdAt       DateTime  @default(now())
   invoices        Invoice[]
@@ -259,6 +262,7 @@ model Settings {
   iban           String?
   bic            String?
   footerText     String?
+  paymentTermDays Int?    // Explicit optional default, 0..365 calendar days
   logoUrl        String?
   // Explicit user declaration, never inferred from turnover or invoice history.
   // Existing settings remain unconfirmed until the user makes a selection.
@@ -780,4 +784,50 @@ model PurchaseValidationReport {
   @@unique([userId, stableKey])
   @@unique([userId, requestId])
   @@index([userId, originalSha256, checkedAt])
+}
+
+// Immutable, explicitly confirmed bank evidence; never a payment or ledger entry.
+model BankImportBatch {
+  id             Int      @id @default(autoincrement())
+  stableKey      String   @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId      String
+  fingerprint    String
+  sourceSha256   String
+  sourceBytes    Int
+  parserVersion  String
+  mappingVersion String
+  accountAlias   String
+  delimiter      String
+  mapping        Json
+  receipt        Json
+  createdAt      DateTime @default(now())
+  rows           BankImportRow[]
+
+  @@unique([userId, stableKey])
+  @@unique([userId, requestId])
+  @@unique([userId, fingerprint])
+  @@index([userId, id])
+  @@index([userId, sourceSha256])
+}
+
+model BankImportRow {
+  id           Int      @id @default(autoincrement())
+  stableKey    String   @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batchId      Int
+  batch        BankImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  sourceRow    Int
+  evidence     Json
+  externalKey  String?
+  contentKey   String?
+  dayAmountKey String?
+
+  @@unique([userId, stableKey])
+  @@unique([batchId, sourceRow])
+  @@index([userId, externalKey])
+  @@index([userId, contentKey])
+  @@index([userId, dayAmountKey])
 }

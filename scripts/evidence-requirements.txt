@@ -1,0 +1,2 @@
+# Test-only Linux x86_64 abi3 wheel. No application/runtime dependency.
+zopfli==0.4.3 --hash=sha256:769875152d0625c46707bcca57d4b2233fe653482067acd55fbf6ec525cb9bdc

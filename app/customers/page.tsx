@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { ServiceWorkbench } from '@/components/customers/service-workbench';
 import { CustomerTimeline } from '@/components/customers/customer-timeline';
 import styles from "@/components/dashboard/sales-workspace.module.css";
@@ -47,6 +49,7 @@ type Customer = {
   taxNumber?: string;
   internalNote?: string | null;
   noteVisibility?: NoteVisibility;
+  paymentTermDays?: number | null;
   createdAt: string;
 };
 
@@ -81,6 +84,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
     taxNumber: '',
     internalNote: '',
     noteVisibility: 'EDITOR',
+    paymentTermDays: null,
   });
 
   useEffect(() => {
@@ -98,6 +102,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
         taxNumber: '',
         internalNote: '',
         noteVisibility: 'EDITOR',
+        paymentTermDays: null,
       });
     }
   }, [customer]);
@@ -210,6 +215,12 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="customer-payment-term">Abweichendes Zahlungsziel (Tage)</Label>
+            <Input id="customer-payment-term" type="number" min={0} max={365} step={1} value={formData.paymentTermDays ?? ''} onChange={e => setFormData({ ...formData, paymentTermDays: e.target.value === '' ? null : Number(e.target.value) })} aria-describedby="customer-payment-term-help" placeholder="Firmenvorgabe verwenden" />
+            <p id="customer-payment-term-help" className="text-xs text-muted-foreground">Leer: Firmenvorgabe, sonst 14 Tage. 0: fällig am Rechnungsdatum.</p>
+          </div>
+
           <details open={Boolean(customer?.internalNote)} className="space-y-3 border-t pt-3">
             <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">Interner Hinweis</summary>
             <div>
@@ -255,6 +266,20 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
 };
 
 export default function CustomersPage() {
+  return <Suspense fallback={<p role="status">Kunden werden geladen …</p>}><ScopedCustomersWorkspace /></Suspense>;
+}
+
+function ScopedCustomersWorkspace() {
+  const { data: session, status } = useSession();
+  const params = useSearchParams();
+  // A selected-ID destination always gets a fresh owned-list read, including
+  // client-side navigation from the directory and Back/Forward.
+  return <CustomersWorkspace key={`${status}:${session?.user?.id}:${session?.user?.sessionVersion}:${params.get('customer')}`} />;
+}
+
+function CustomersWorkspace() {
+  const params = useSearchParams();
+  const selectedId = params.get('customer');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -269,7 +294,7 @@ export default function CustomersPage() {
     setIsLoadingCustomers(true);
     setLoadError(null);
     try {
-      const response = await fetch('/api/customers');
+      const response = await fetch('/api/customers', { cache: 'no-store' });
       if (response.ok) {
         const data = await response.json();
         setCustomers(data);
@@ -363,7 +388,7 @@ export default function CustomersPage() {
     setIsModalOpen(true);
   };
 
-  const filteredCustomers = customers.filter(customer =>
+  const filteredCustomers = customers.filter(customer => selectedId === null || (/^[1-9]\d*$/.test(selectedId) && Number.isSafeInteger(Number(selectedId)) && customer.id === Number(selectedId))).filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (customer.contactPerson && customer.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -392,6 +417,7 @@ export default function CustomersPage() {
           </div>
 </>} />
 
+        {selectedId !== null && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 text-sm"><p>{!isLoadingCustomers && !loadError && !filteredCustomers.length ? 'Kunde nicht gefunden oder nicht verfügbar.' : 'Ausgewählter Kunde'}</p><Button variant="outline" asChild><Link href="/customers">Alle Kunden anzeigen</Link></Button></div>}
         <div className="grid gap-6">
           <Card className="customer-directory overflow-hidden border bg-card shadow-none">
           <div className={styles.directoryToolbar}>
@@ -422,7 +448,7 @@ export default function CustomersPage() {
                   <div className="customer-record-heading"><span className="customer-monogram">{getInitials(customer.name)}</span><div><h2>{customer.name}</h2><p>{customer.contactPerson || 'Geschäftskontakt'}{customer.city ? ` · ${customer.city}` : ''}</p></div></div>
                   <dl>{customer.email && <div><dt>E-Mail</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>}{customer.phone && <div><dt>Telefon</dt><dd><a href={`tel:${customer.phone}`}>{customer.phone}</a></dd></div>}</dl>
                   <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openEditModal(customer)} aria-label={`${customer.name} bearbeiten`}>Bearbeiten</Button><Button variant="ghost" size="sm" onClick={() => setNotesCustomer(customer)} data-service-workbench-return={customer.id} aria-label={`Leistungsnotizen für ${customer.name}`}>Leistungsnotizen</Button><Button variant="ghost" size="sm" onClick={() => setTimelineCustomer(customer)} data-customer-timeline-return={customer.id} aria-label={`Verlauf für ${customer.name}`}>Verlauf</Button><Button variant="ghost" size="sm" className="text-destructive" disabled={isDeleting} onClick={() => handleDeleteCustomer(customer.id)} aria-label={`${customer.name} löschen`}>Löschen</Button></div>
-                </article>) : <div className="ledger-empty"><h2>Keine Kunden gefunden</h2>{!searchTerm && <Button variant="outline" onClick={openAddModal}>Ersten Kunden anlegen</Button>}</div>}
+                </article>) : <div className="ledger-empty"><h2>Keine Kunden gefunden</h2>{!searchTerm && selectedId === null && <Button variant="outline" onClick={openAddModal}>Ersten Kunden anlegen</Button>}</div>}
               </div>
               <div className={`hidden ${isLoadingCustomers || loadError ? "" : "xl:block"} overflow-hidden bg-card`}>
                 <Table>
@@ -595,7 +621,7 @@ export default function CustomersPage() {
                             </div>
                             <h3 className="text-lg font-medium text-foreground mb-1">Keine Kunden gefunden</h3>
                             {searchTerm && <p className="text-sm max-w-sm mx-auto mb-6">Suche ändern.</p>}
-                            {!searchTerm && (
+                            {!searchTerm && selectedId === null && (
                               <Button onClick={openAddModal} variant="outline">
                                 Ersten Kunden anlegen
                               </Button>
