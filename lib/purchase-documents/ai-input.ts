@@ -85,6 +85,8 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
     let diagnosticText = '';
     let stage = 'launcher', reason = 'unknown';
     let startupCode: string | null = null;
+    let startupOperation: string | null = null;
+    let startupContexts: string[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
     const killGroup = () => {
       if (!child?.pid) return;
@@ -114,8 +116,21 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
       // vocabulary, including startup failures that occur before JS progress.
       const codes = ['ERR_ACCESS_DENIED', 'ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_DLOPEN_FAILED', 'ERR_UNKNOWN_FILE_EXTENSION', 'ERR_INVALID_ARG_VALUE', 'ERR_INVALID_ARG_TYPE', 'ERR_WORKER_INIT_FAILED', 'ERR_SYSTEM_ERROR', 'EMFILE', 'ENOMEM', 'EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'EISDIR', 'EBADF', 'EIO', 'SyntaxError', 'ReferenceError', 'TypeError', 'RangeError'];
       startupCode = codes.find(value => new RegExp(`\\b${value}\\b`).test(diagnosticText)) ?? null;
+      const operations = ['open', 'read', 'write', 'realpath', 'readlink', 'stat', 'lstat', 'fstat', 'access', 'scandir', 'opendir', 'close', 'uv_cwd', 'uv_chdir', 'uv_pipe_open', 'uv_tty_init', 'uv_os_get_passwd', 'uv_os_homedir', 'uv_signal_start', 'uv_loop_init', 'uv_thread_create', 'pthread_create', 'socket', 'socketpair', 'connect', 'getaddrinfo', 'ioctl', 'fcntl', 'mmap', 'mprotect', 'getrandom', 'epoll_ctl', 'getcwd'];
+      startupOperation = operations.find(value => new RegExp(`(?:syscall:\\s*['"]${value}['"]|\\b(?:EPERM|EACCES|ENOENT|EMFILE)\\b[^\\n]*,\\s*${value}(?:[\\s'":]|$))`).test(diagnosticText)) ?? null;
+
+      const contexts: [string, RegExp][] = [
+        ['node-stdio', /createWritableStdioStream|getStdout|getStderr/],
+        ['node-module-loader', /getSourceSync|defaultLoad|toRealPath|Module\._findPath/],
+        ['node-filesystem', /readFileSync|realpathSync|openSync|readlinkSync/],
+        ['node-threads', /WorkerThreadsTaskRunner|uv_thread_create|pthread_create/],
+        ['node-memory', /MemoryAllocator|memfd_create|mmap|FATAL ERROR/],
+        ['node-crypto', /OpenSSL|openssl/],
+        ['node-process', /uv_spawn|child_process/],
+      ];
+      startupContexts = contexts.filter(([, pattern]) => pattern.test(diagnosticText)).map(([value]) => value);
       if (/OpenSSL configuration error/.test(diagnosticText)) reason = 'openssl-config';
-      else if (/uv_pipe_open/.test(diagnosticText)) reason = 'stdio-setup';
+      else if (/uv_pipe_open|createWritableStdioStream/.test(diagnosticText)) reason = 'stdio-setup';
       else if (/ERR_ACCESS_DENIED/.test(diagnosticText)) reason = 'node-permission';
       else if (/Detected unsettled top-level await/.test(diagnosticText)) reason = 'unsettled-await';
       if (reason === 'unknown') {
@@ -145,7 +160,7 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
         // Error.cause is diagnostic-only. Routes continue returning the fixed
         // public code/message, and synthetic native smoke shows these tokens.
         const signals = ['SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGILL', 'SIGKILL', 'SIGSEGV', 'SIGSYS', 'SIGTERM', 'SIGXCPU', 'SIGXFSZ'];
-        Object.defineProperty(error, 'cause', { value: { stage, reason, startupCode, diagnosticBytes: diagnostics, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
+        Object.defineProperty(error, 'cause', { value: { stage, reason, startupCode, startupOperation, startupContexts, diagnosticBytes: diagnostics, exitCode: Number.isInteger(code) ? code : null, signal: signals.includes(exitSignal ?? '') ? exitSignal : null, failure: failure ?? null } });
         reject(error);
       }
       else resolve();

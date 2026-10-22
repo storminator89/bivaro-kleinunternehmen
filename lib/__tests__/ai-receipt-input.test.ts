@@ -89,6 +89,31 @@ describe('bounded original input preparation', () => {
     await expect(access(state.directory)).rejects.toThrow();
   });
   it.each([
+    ["Error: EPERM: operation not permitted, open; syscall: 'open'; private stack", 'open'],
+    ["Error: EACCES: permission denied, realpath '/private/path'", 'realpath'],
+    ["Error: EPERM; syscall: 'PRIVATE_OPERATION'", null],
+  ])('reports only reviewed startup operations from %s', async (stderr, startupOperation) => {
+    Object.assign(state, { exitCode: 1, stderr });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ cause: { startupOperation } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/private|PRIVATE_OPERATION|stack/);
+  });
+  it('recognizes Node inherited-stdio setup when its public error operation is only open', async () => {
+    Object.assign(state, { exitCode: 1, stderr: 'Error: EPERM: operation not permitted, open\n at createWritableStdioStream (private stack)' });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ cause: { startupCode: 'EPERM', startupOperation: 'open', startupContexts: ['node-stdio'], reason: 'stdio-setup' } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/private|stack/);
+  });
+  it('emits fixed loader/filesystem context tags rather than private stack frames', async () => {
+    Object.assign(state, { exitCode: 1, stderr: 'Error EPERM; private path\n at getSourceSync (/private/source)\n at readFileSync (/private/file)' });
+    const error = await prepareAiReceiptImages('application/pdf', Buffer.from('%PDF-synthetic')).catch(error => error as Error);
+    if (!(error instanceof Error)) throw new Error('Expected renderer rejection');
+    expect(error).toMatchObject({ cause: { startupContexts: ['node-module-loader', 'node-filesystem'] } });
+    expect(JSON.stringify(error.cause)).not.toMatch(/private|source|file\b/);
+  });
+  it.each([
     ['MODULE_NOT_FOUND', 'module-load'], ['ERR_MODULE_NOT_FOUND', 'module-load'],
     ['ERR_DLOPEN_FAILED', 'module-load'], ['EMFILE', 'descriptors'],
     ['ENOMEM', 'memory'], ['EPERM', 'permission'], ['EACCES', 'permission'],

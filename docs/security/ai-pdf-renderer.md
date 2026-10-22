@@ -218,3 +218,45 @@ This supplemental gate does not upload screenshots/artifacts or modify the
 existing optional visual evidence budget or retention. Browser collection
 success is only a configuration check; genuine container/browser execution
 remains required and is not claimed from local unit tests.
+
+## Static EPERM startup audit and bounded diagnostics
+
+Policy error classes are intentionally distinct. The generated filter traps an
+unsupported audit architecture, returns EPERM for x32 on x64 and for clone
+without CLONE_THREAD, and returns ENOSYS for clone3/unknown syscall numbers.
+The remaining EPERM branches are exactly the maintained enosys name list in
+`build-sandbox-filter.sh`, grouped below; this audit does not prove a host's
+independent Docker/LSM policy or native compatibility.
+
+| EPERM surface | Pre-input runtime relevance |
+| --- | --- |
+| x32 ABI; non-thread clone; fork/vfork | Only native x64/arm64 ELF is supported; no separate renderer processes are intended. Native thread clone must retain CLONE_THREAD. |
+| Sockets/send/receive; SysV/POSIX message/semaphore/shared-memory IPC | No network/provider or application IPC is intended. Inherited stdio descriptors must work without creating new sockets. |
+| io_uring setup/enter/register | Node's inspected main ESM load uses synchronous fs reads. Async/native compatibility remains a real gate; no unconditional allowance is inferred. |
+| ptrace, process_vm, pidfd and signal-sending calls | No cross-process access is intended. A failure/abort path may itself need thread signals; a reported EPERM alone does not justify enabling them. |
+| Session/group changes, namespace/mount/fs-context APIs, handle-based opens | Not part of the supported loader or renderer contract; confinement/process-group escape remains denied. |
+| chmod/chown, xattr mutation, timestamp mutation, truncate/ftruncate | No file/metadata mutation is intended before input parsing. Later output is written to precreated files without truncation. |
+| ioctl | Exact Node/libuv source requires FIONBIO to initialize inherited pipe stdio; blanket denial is a compatibility candidate, not yet a confirmed cause or permission change. Other commands can mutate files/devices and must not become broadly available. |
+| bpf/perf/userfaultfd, memfd, kernel/module/kexec/reboot and keyring APIs | No such application operation is intended. V8/native mapping behavior is a separate native-runtime prerequisite; an error must be identified, not guessed around. |
+
+Landlock file denial normally produces EACCES; Node permission denial has
+ERR_ACCESS_DENIED. Neither distinction is an exhaustive proof of the origin of
+an arbitrary failure. Controlled diagnostics emit only fixed stage/reason,
+allowlisted error/operation/context tokens, a bounded byte count, exit and signal;
+raw stderr, document text, paths and arbitrary error codes are never returned or
+logged. The next ordinary-profile native run must identify the operation before
+any narrow compatibility proposal is accepted.
+
+Static inspected accepted Node 22.23.4/libuv 1.51.0 path:
+`getStdout/getStderr -> createWritableStdioStream -> net.Socket -> handle.open`.
+Node's net layer can report the public operation as merely `open`, whereas
+libuv's Linux pipe implementation calls `uv__nonblock`, i.e. ioctl(FIONBIO).
+Thus the diagnostic includes fixed stdio stack-context tags rather than assuming
+that every failure names `uv_pipe_open`.
+
+Primary implementation references:
+[Node stdio](https://github.com/nodejs/node/blob/v22.23.4/lib/internal/bootstrap/switches/is_main_thread.js),
+[Node net](https://github.com/nodejs/node/blob/v22.23.4/lib/net.js),
+[libuv pipe](https://github.com/libuv/libuv/blob/v1.51.0/src/unix/pipe.c),
+[libuv Linux nonblocking selection](https://github.com/libuv/libuv/blob/v1.51.0/src/unix/internal.h),
+[Node-embedded libuv ioctl](https://github.com/nodejs/node/blob/v22.23.4/deps/uv/src/unix/core.c).
