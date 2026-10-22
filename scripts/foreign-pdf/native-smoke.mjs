@@ -5,13 +5,15 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { foreignFailureDiagnostic } from './diagnostics.mjs';
+import { probeTrustedVerifierStartup } from './startup-probe.mjs';
 const ORIGIN='http://127.0.0.1:3000';
 const permittedPaths=new Set(['/api/auth/register','/api/auth/csrf','/api/auth/callback/credentials','/api/auth/session','/api/pdfa3','/api/purchase-documents']);
 const FIXTURE='/tmp/foreign-pdf-test',EVIDENCE='/tmp/foreign-pdf-evidence';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const require=createRequire('/app/package.json'), inspectRequire=createRequire(`${FIXTURE}/fixture.cjs`);
 const {createPdfA3Invoice}=inspectRequire('./lib/server/pdfa3-converter.js');
-const {validatePdfA3}=inspectRequire('./lib/server/pdfa-validator.js');
+const {validatePdfA3,veraPdfSpawnSpecification}=inspectRequire('./lib/server/pdfa-validator.js');
+const {foreignVerifierCommand}=inspectRequire('./lib/server/foreign-pdf-validator-confinement.js');
 const {PDFDocument,PDFArray,PDFDict,PDFName,PDFRawStream,decodePDFRawStream}=inspectRequire('pdf-lib');
 const {PrismaClient}=require('@prisma/client');
 const prisma=new PrismaClient({datasources:{db:{url:'file:/tmp/bivaro-foreign-compatibility.db'}},log:[]});
@@ -151,6 +153,9 @@ try{
     const downloaded=await localRequest(`/api/purchase-documents/${id}/original`,{maxBytes:20*1024*1024});assert.equal(downloaded.status,200);assert.equal(sha(downloaded.bytes),sha(bytes));archived.push({id,name});
   }
   const before=await snapshot(),cases=[];
+  const startup=await probeTrustedVerifierStartup({foreignVerifierCommand,veraPdfSpawnSpecification});
+  console.error(JSON.stringify(startup));
+  await writeFile(`${EVIDENCE}/startup.json`,JSON.stringify(startup,null,2),{flag:'wx',mode:0o600});
   for(const name of allCases.positive){
     const bytes=await original(name);
     // Additional confined diagnostic prerequisite, never a substitute for the

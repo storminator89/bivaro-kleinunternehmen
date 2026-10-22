@@ -28,6 +28,13 @@ describe('mandatory foreign PDF release evidence contract (static only)',()=>{
   it('adds a confined source diagnostic without replacing production derivation or leaking raw failures',()=>{
     const smoke=read('scripts/foreign-pdf/native-smoke.mjs');
     expect(smoke).toContain('stage=`source-precheck-${name}`;await validatePdfA3(bytes,{confined:true})');
+    expect(smoke).toContain('probeTrustedVerifierStartup({foreignVerifierCommand,veraPdfSpawnSpecification})');
+    expect(smoke.indexOf('probeTrustedVerifierStartup({foreignVerifierCommand,veraPdfSpawnSpecification})')).toBeLessThan(smoke.indexOf('stage=`source-precheck-${name}`'));
+    const probe=read('scripts/foreign-pdf/startup-probe.mjs');
+    expect(probe).toContain("if((await readdir(directory)).length!==0)throw Error('Startup boundary unavailable')");
+    expect(probe).toContain("const MAX_OUTPUT=2*1024*1024,MAX_EXCERPT=4096,TIMEOUT=30_000");
+    expect(read('app/api/pdfa3/route.ts')).not.toContain('startup-probe');
+    expect(read('scripts/foreign-pdf/worker.mjs')).not.toContain('startup-probe');
     expect(smoke).toContain('const direct=await createPdfA3Invoice(');
     expect(smoke.indexOf('stage=`source-precheck-${name}`')).toBeLessThan(smoke.indexOf('const direct=await createPdfA3Invoice('));
     expect(smoke).toContain("foreignFailureDiagnostic(error,stage)");expect(smoke).toContain('JSON.stringify(diagnostic)');

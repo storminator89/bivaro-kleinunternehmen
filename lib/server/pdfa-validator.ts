@@ -134,21 +134,27 @@ function requireSingleCompliantReport(stdout: string, pdfPath: string, pdfSize: 
  * Source: https://github.com/veraPDF/veraPDF-apps/blob/v1.30.3/installer/src/main/scripts/verapdf.sh#L111
  * Linux prlimit and a private process group bound both the launcher and JVM.
  */
-function runVeraPdf(binary: string, args: string[], directory: string, confined?: (args: string[]) => string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('/usr/bin/prlimit', [
+/** Shared exact command/resource/environment recipe. The synthetic no-input
+ * startup probe uses this exact recipe; no production stream capture is added. */
+export function veraPdfSpawnSpecification(binary: string, args: string[], directory: string, confined?: (args: string[]) => string[]) {
+  return { binary: '/usr/bin/prlimit', args: [
       '--as=2147483648:2147483648', '--cpu=25:26', '--nofile=64:64', '--fsize=2097152:2097152', '--',
       ...(confined ? confined(args) : [binary, ...args]),
-    ], {
+  ], options: {
       cwd: directory,
       detached: true,
-      shell: false,
+      shell: false as const,
       env: {
         PATH: '/usr/bin:/bin', HOME: directory, TMPDIR: directory, XDG_CONFIG_HOME: directory,
-        LANG: 'C.UTF-8', TZ: 'UTC', NODE_ENV: 'production', JAVACMD: '/usr/bin/java', JAVA_OPTS: VERAPDF_JAVA_OPTIONS,
+        LANG: 'C.UTF-8', TZ: 'UTC', NODE_ENV: 'production' as const, JAVACMD: '/usr/bin/java', JAVA_OPTS: VERAPDF_JAVA_OPTIONS,
       },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+      stdio: ['ignore', 'pipe', 'pipe'] as ['ignore', 'pipe', 'pipe'],
+  } };
+}
+function runVeraPdf(binary: string, args: string[], directory: string, confined?: (args: string[]) => string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const spec = veraPdfSpawnSpecification(binary, args, directory, confined);
+    const child = spawn(spec.binary, spec.args, spec.options);
     const prefix = args[0] === '--version' ? 'version' : 'validation';
     let launchFailed = false;
     let processOutcome: ProcessOutcome = 'unknown';

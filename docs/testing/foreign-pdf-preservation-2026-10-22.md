@@ -240,3 +240,25 @@ The same head's ordinary CI had one source-contract assertion failure (2990 othe
 The exact subsequent head `42bd79c170d06579ad8f0bef83a97c02745ee833`, [run 39813397641](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39813397641), still failed both confined source prechecks with unavailable/503 after successful production image builds. This confirms the necessary configuration fix was not sufficient; no additional filesystem/resource permission is inferred.
 
 A diagnostic-only candidate annotates internal failures with fixed enums for directory/construction, version launch/result/identity, input write, validation launch/result, report and cleanup. Failed bounded child streams may contribute only a static known JVM/launcher marker category and closed process outcome. Separate 256-byte tails handle markers split across chunks; full stderr is not retained, and arbitrary messages/paths/report data never reach the synthetic harness. Unknown values stay unknown. Marker categories are hints, not causal proof or acceptance evidence. The synthetic harness re-whitelists every enum before printing or retaining safe failure JSON. Public messages, statuses, API schema, own-invoice error wrapping, final-byte report requirements, commands, capabilities, limits and lifecycle are unchanged. No native rerun or local JVM execution is represented by pure tests.
+
+### Trusted no-input startup drilldown (not PDF acceptance)
+
+The native harness additionally probes bare JVM `-version` and the trusted
+veraPDF CLI `--version`, before giving either process any PDF/XML input. This
+distinguishes JVM startup from CLI initialization (including configuration),
+without assuming which dependency is missing. Both use the exact compiled
+production command/resource/environment recipe and confinement policy, in a
+fresh private empty directory; CLI defaults and all read/write/network/process
+restrictions remain unchanged. No application environment is inherited.
+
+Only these synthetic no-document startup probes may record a sanitized
+diagnostic excerpt: known private workdir, other paths, URIs, controls and
+credential-looking assignments are redacted, with a shared maximum of 4096
+UTF-8 bytes across both probes. Successful probes retain no output. No raw
+production validation output, exception text, document data or credentials are
+recorded. `startup.json` is diagnostic only; the unchanged actual production
+source/final validation, derivation, API, archive-byte and pixel assertions
+remain mandatory. A diagnostic probe is never an alternate validator or proof
+of PDF/A compliance, and never enables a write grant or fallback. Pure mocked
+tests cover the empty/version-only boundary, inherited-secret exclusion,
+redaction/UTF-8 cap, output/wall bounds and group-kill/close-before-cleanup.
