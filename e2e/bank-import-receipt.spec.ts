@@ -80,6 +80,21 @@ for (const width of [1440, 360, 390]) test(`bank evidence: bounded save/recovery
     await page.screenshot({ path: info.outputPath('bank-evidence-reopened-390.png'), fullPage: false });
   }
   await page.getByRole('button', { name: 'Zurück zum Importverlauf', exact: true }).click(); await expect(opener).toBeFocused();
+  // A new keyboard open/close cycle must retain logical focus; this is not a
+  // retry of the required focus assertion above.
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Importquittung', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Zurück zum Importverlauf', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(opener).toBeFocused();
+  // If the user moves elsewhere while a receipt loads, its late response must
+  // not take focus back. Synchronize on the actual request, never a timed sleep.
+  let release!: () => void, requested!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { requested = resolve; });
+  await page.route(`**/api/bank-imports/${savedBatch.stableKey}?page=0`, async route => { requested(); await held; await route.continue(); }, { times: 1 });
+  await page.keyboard.press('Enter'); await started;
+  const fileChooser = page.getByLabel('Bank-CSV auswählen', { exact: true }); await fileChooser.focus(); release();
+  await expect(page.getByRole('heading', { name: 'Importquittung', exact: true })).toBeVisible(); await expect(fileChooser).toBeFocused();
+  await page.getByRole('button', { name: 'Zurück zum Importverlauf', exact: true }).click(); await expect(opener).toBeFocused();
   await preview(page, csv); await page.getByLabel(/Ich habe Kontoalias, Spalten, Vorzeichen und Kontrollsummen geprüft/u).check();
   await page.getByRole('button', { name: 'Geprüfte Umsätze speichern', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Gespeicherte Quittung', exact: true })).toBeVisible(); expect(posts).toBe(2); // Existing owned receipt from 409, no new batch.
