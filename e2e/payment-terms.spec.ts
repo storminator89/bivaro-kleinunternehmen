@@ -4,6 +4,7 @@ import { PDFDocument } from 'pdf-lib';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
+import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 
 // Authored for the supported hosted acceptance runner only. Its fresh temporary
 // database and tenant files are synthetic; do not point this at a deployed tenant.
@@ -12,6 +13,7 @@ test.use({ timezoneId: 'Europe/Berlin' });
 
 async function fixture(page: Page) {
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
+  await isolateSyntheticLoginIpBudget();
   const password = 'SyntheticPaymentTerms123!';
   const user = await prisma.user.create({ data: { email: `payment-terms-${randomUUID()}@example.test`, name: 'Synthetic payment terms', password: await hashPassword(password), role: 'USER' } });
   const customer = await prisma.customer.create({ data: { userId: user.id, name: 'SYNTHETISCH · Firmenvorgabe', email: 'synthetic-buyer@example.test', address: 'Testweg 1', zipCode: '10115', city: 'Berlin', paymentTermDays: null } });
@@ -42,26 +44,32 @@ async function geometry(page: Page, width: number) {
 
 // Use actual scrolling/hit testing; never conceal controls or alter their CSS.
 async function reachable(locator: Locator) {
-  await locator.scrollIntoViewIfNeeded();
-  await locator.evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    const dialog = element.closest('[role="dialog"]');
-    if (dialog) dialog.scrollBy({ top: rect.top - dialog.getBoundingClientRect().top - 32, behavior: 'instant' });
-    else {
-      const header = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0).map(rect => rect.bottom));
-      window.scrollBy({ top: rect.top - header - 32, behavior: 'instant' });
-    }
-  });
-  await expect.poll(() => locator.evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    const dialog = element.closest('[role="dialog"]')?.getBoundingClientRect();
-    const header = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0).map(rect => rect.bottom));
-    if (rect.width <= 0 || rect.height <= 0 || rect.left < Math.max(0, dialog?.left ?? 0) || rect.right > Math.min(innerWidth, dialog?.right ?? innerWidth) || rect.top < (dialog ? Math.max(0, dialog.top) : header) || rect.bottom > Math.min(innerHeight, dialog?.bottom ?? innerHeight)) return false;
-    return [[rect.left + 3, rect.top + 3], [rect.right - 3, rect.bottom - 3], [rect.left + rect.width / 2, rect.top + rect.height / 2]].every(([x, y]) => {
-      const hit = document.elementFromPoint(x, y);
-      return hit !== null && (element === hit || element.contains(hit));
+  // Resizing can reflow the editor and update native scroll anchoring after the
+  // first scroll. Re-align on each observation; never accept an occluded control.
+  await expect.poll(async () => {
+    await locator.scrollIntoViewIfNeeded();
+    await locator.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      const dialog = element.closest('[role="dialog"]');
+      if (dialog) dialog.scrollBy({ top: rect.top - dialog.getBoundingClientRect().top - 32, behavior: 'instant' });
+      else {
+        const header = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0).map(rect => rect.bottom));
+        window.scrollBy({ top: rect.top - header - 32, behavior: 'instant' });
+      }
     });
-  })).toBe(true);
+    return locator.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      const dialog = element.closest('[role="dialog"]')?.getBoundingClientRect();
+      const header = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0).map(rect => rect.bottom));
+      const clip = { left: Math.max(0, dialog?.left ?? 0), right: Math.min(innerWidth, dialog?.right ?? innerWidth), top: dialog ? Math.max(0, dialog.top) : header, bottom: Math.min(innerHeight, dialog?.bottom ?? innerHeight) };
+      if (rect.width <= 0 || rect.height <= 0 || rect.left < clip.left || rect.right > clip.right || rect.top < clip.top || rect.bottom > clip.bottom) return `Outside visible bounds: ${JSON.stringify({ rect: rect.toJSON(), clip })}`;
+      const hits = [[rect.left + 3, rect.top + 3], [rect.right - 3, rect.bottom - 3], [rect.left + rect.width / 2, rect.top + rect.height / 2]].map(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        return { x, y, reachable: hit !== null && (element === hit || element.contains(hit)), hit: hit ? `${hit.tagName}#${hit.id}.${hit.className}` : null };
+      });
+      return hits.every(hit => hit.reachable) ? 'reachable' : `Occluded control: ${JSON.stringify({ rect: rect.toJSON(), clip, hits })}`;
+    });
+  }).toBe('reachable');
 }
 
 async function noFinancialWrites(userId: string, invoices = 0) {
@@ -341,7 +349,9 @@ test('template loading and quote conversion never import an old payment-term sel
   const quoteBefore = await prisma.invoice.findUniqueOrThrow({ where: { id: quote.id } });
   const originalQuote = await page.request.get(`/api/quotes/download?id=${quote.id}&download=true`); expect(originalQuote.ok()).toBe(true); const quoteBytes = await originalQuote.body();
   await page.goto('/dashboard?tab=quotes');
-  await page.getByRole('button', { name: 'Angebot SYNTHETIC-PAYMENT-TERMS-QUOTE in Rechnung umwandeln', exact: true }).filter({ visible: true }).click();
+  const quoteCard = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'SYNTHETIC-PAYMENT-TERMS-QUOTE', exact: true }) });
+  await expect(quoteCard).toBeVisible();
+  await quoteCard.getByRole('button', { name: 'In Rechnung', exact: true }).click();
   await page.getByRole('dialog', { name: 'Rechnungsentwurf prüfen?', exact: true }).getByRole('button', { name: 'Entwurf prüfen', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Rechnung erstellen', exact: true });
   await expect(editor.locator('#invoice-item-description-0')).toHaveValue('SYNTHETISCH · Vorlagenposition');

@@ -3,11 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
+import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 
 // The supported runner owns this exact fresh synthetic database. No deployed
 // tenant, bank connection, real data or hosted credentials are used.
 async function account(page: Page) {
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
+  await isolateSyntheticLoginIpBudget();
   const password = 'SyntheticBankEvidence123!';
   const user = await prisma.user.create({ data: { email: `bank-evidence-${randomUUID()}@example.test`, name: 'Synthetic bank evidence', password: await hashPassword(password), role: 'USER' } });
   await page.goto('/login'); await page.getByLabel('E-Mail').fill(user.email); await page.getByLabel('Passwort', { exact: true }).fill(password);
@@ -70,6 +72,7 @@ for (const width of [1440, 360, 390]) test(`bank evidence: bounded save/recovery
   await expect(page.getByRole('heading', { name: 'Importquittung', exact: true })).toBeFocused();
   await expect(page.getByText('Import gespeichert, noch keine Zahlungen zugeordnet', { exact: true })).toBeVisible();
   await expect(page.getByText('Betrag nicht bestätigt', { exact: false })).toBeVisible();
+  if (width === 390) await page.screenshot({ path: info.outputPath('bank-evidence-reopened-390.png'), fullPage: false });
   await page.getByRole('button', { name: 'Zurück zum Importverlauf', exact: true }).click(); await expect(opener).toBeFocused();
   await preview(page, csv); await page.getByLabel(/Ich habe Kontoalias, Spalten, Vorzeichen und Kontrollsummen geprüft/u).check();
   await page.getByRole('button', { name: 'Geprüfte Umsätze speichern', exact: true }).click();
@@ -79,5 +82,4 @@ for (const width of [1440, 360, 390]) test(`bank evidence: bounded save/recovery
   expect(await prisma.bankImportBatch.count({ where: { userId } })).toBe(1);
   expect(await prisma.bankImportBatch.findFirstOrThrow({ where: { userId } })).toEqual(savedBatch);
   expect(await prisma.bankImportRow.findMany({ where: { userId }, orderBy: { sourceRow: 'asc' } })).toEqual(savedRows);
-  if (width === 390) await page.screenshot({ path: info.outputPath('bank-evidence-reopened-390.png'), fullPage: false });
 });

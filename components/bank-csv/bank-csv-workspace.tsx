@@ -52,9 +52,18 @@ function BankCsvContent() {
   const mappingHeading = useRef<HTMLHeadingElement>(null);
   const previewHeading = useRef<HTMLHeadingElement>(null);
   const resultsHeading = useRef<HTMLHeadingElement>(null);
+  const resultsFocus = useRef<{ owner: Element | null; generation: number } | null>(null);
   const previewButton = useRef<HTMLButtonElement>(null);
   const matchesButton = useRef<HTMLButtonElement>(null);
   useEffect(() => () => { generation.current++; request.current?.abort(); }, []);
+  useEffect(() => {
+    const pending = resultsFocus.current;
+    if (!candidates || !pending) return;
+    resultsFocus.current = null;
+    // Concurrent rendering may commit the results after the next animation
+    // frame. Deliver focus only once the heading exists, without stealing it.
+    if (generation.current === pending.generation && (document.activeElement === pending.owner || document.activeElement === document.body)) resultsHeading.current?.focus();
+  }, [candidates]);
 
   function invalidate() {
     generation.current++;
@@ -111,8 +120,8 @@ function BankCsvContent() {
     try {
       const result = await loadBankInvoiceCandidates(controller.signal);
       if (current !== generation.current) return;
+      resultsFocus.current = { owner, generation: current };
       setCandidates(result);
-      focusIfOwned(resultsHeading, owner, current);
     } catch (failure) {
       if (current === generation.current && !controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Rechnungen konnten nicht geprüft werden. Die Vorschau bleibt erhalten.');
     } finally { if (current === generation.current) { controller.abort(); setBusy(false); request.current = null; } }
