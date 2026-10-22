@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/third-party-notices/build-notices.mjs",
     "start": "node .next/standalone/server.js",
     "start:next": "next start",
     "lint": "eslint . --max-warnings 0",

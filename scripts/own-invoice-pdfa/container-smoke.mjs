@@ -9,8 +9,9 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { access, lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 
 const ORIGIN = 'http://127.0.0.1:3000';
 const DATABASE_URL = 'file:/tmp/bivaro-container-smoke.db';
@@ -152,6 +153,105 @@ async function financialSnapshot(userId) {
   return Object.fromEntries(Object.keys(queries).map((key, index) => [key, counts[index]]));
 }
 
+// BEGIN isolated runtime-notice inspection (unit tests extract only this function).
+export async function inspectRuntimeNotices(appRoot, veraRoot, expected = {
+  pdfkit: '5f0d5197d2b5d91f41de43143b0be42fb55515bc2b894f2a9b62de9f7056c0f8',
+  font: 'f32df582a2aab128c07b2f7e36e7b928dc5f6bd82657b905c04f91459f9e5cf9',
+  cli: '19f6edd5c92841a38d9b3b018a555b7ba173b13e4e0d29edecc232e5ba6c1d70',
+}) {
+  // Expected digests are injectable only for synthetic unit files. The actual
+  // container invocation below passes fixed image roots and no overrides.
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+  const roots = [appRoot, veraRoot].map(root => path.resolve(root));
+  for (const root of roots) {
+    assert((await lstat(root)).isDirectory() && await realpath(root) === root, 'Unsafe notice root.');
+  }
+  async function read(root, relative, maximum = 512 * 1024) {
+    assert(typeof relative === 'string' && relative.length <= 1024 && !path.isAbsolute(relative)
+      && !relative.includes('\\') && !relative.includes('\0')
+      && relative.split('/').every(part => part && part !== '.' && part !== '..'), 'Unsafe notice path.');
+    let target = root;
+    const parts = relative.split('/');
+    for (const [index, part] of parts.entries()) {
+      target = path.join(target, part);
+      const info = await lstat(target);
+      assert(!info.isSymbolicLink(), 'Notice symlink traversal is forbidden.');
+      assert(index === parts.length - 1 ? info.isFile() : info.isDirectory(), 'Notice path is not regular.');
+    }
+    assert(await realpath(target) === target && target.startsWith(root + path.sep), 'Notice escaped its root.');
+    const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const info = await handle.stat();
+      assert(info.isFile() && info.size > 0 && info.size <= maximum, 'Notice file exceeded its bound.');
+      const bytes = Buffer.alloc(info.size + 1);
+      let length = 0;
+      while (length < bytes.length) {
+        const result = await handle.read(bytes, length, bytes.length - length, null);
+        if (!result.bytesRead) break;
+        length += result.bytesRead;
+      }
+      assert(length === info.size, 'Notice file changed while reading.');
+      return bytes.subarray(0, length);
+    } finally { await handle.close(); }
+  }
+  const [app, vera] = roots;
+  const appSources = await read(app, 'THIRD_PARTY_SOURCES.json');
+  const appNotice = await read(app, 'THIRD_PARTY_NOTICES.txt');
+  const npm = JSON.parse(appSources);
+  assert(npm.schemaVersion === 1 && npm.roots.pdfkit === '0.20.2' && npm.roots.fontkit === '2.0.4', 'Wrong PDF notice versions.');
+  assert(Array.isArray(npm.packages) && npm.packages.length > 0 && npm.packages.length <= 128, 'Invalid npm notice inventory.');
+  let npmNoticeFiles = 0;
+  for (const item of npm.packages) {
+    assert(typeof item.metadata === 'string' && item.metadata.startsWith('licenses/npm/'), 'Unsafe npm metadata path.');
+    const metadata = JSON.parse(await read(app, item.metadata));
+    assert(metadata.name === item.name && metadata.version === item.version, 'Copied npm metadata mismatch.');
+    assert(Array.isArray(item.notices) && item.notices.length <= 32, 'Invalid npm notice list.');
+    for (const notice of item.notices) {
+      assert(typeof notice.file === 'string' && notice.file.startsWith('licenses/npm/'), 'Unsafe npm notice path.');
+      assert(/^[a-f0-9]{64}$/u.test(notice.sha256) && hash(await read(app, notice.file)) === notice.sha256, 'Recorded npm notice hash mismatch.');
+      npmNoticeFiles++;
+    }
+  }
+  assert(hash(await read(app, 'licenses/npm/pdfkit/LICENSE')) === expected.pdfkit, 'PDFKit license changed.');
+  const fontkit = npm.packages.find(item => item.name === 'fontkit' && item.version === '2.0.4');
+  const fontkitMetadata = JSON.parse(await read(app, 'licenses/npm/fontkit/package.json'));
+  assert(fontkit && fontkitMetadata.license === 'MIT' && fontkit.notices.length === 0 && fontkit.limitations.length > 0
+    && appNotice.toString('utf8').includes('attribution remains unresolved'), 'Missing fontkit attribution limit.');
+  const font = await read(app, 'licenses/invoice-fonts/FONT-LICENSE.txt');
+  assert(hash(font) === expected.font && hash(await read(app, 'public/fonts/invoice/FONT-LICENSE.txt')) === expected.font, 'Original OFL notice changed.');
+  const veraSources = await read(vera, 'THIRD_PARTY_SOURCES.json');
+  const veraNotice = await read(vera, 'THIRD-PARTY-NOTICES.txt');
+  const verifier = JSON.parse(veraSources);
+  assert(verifier.schemaVersion === 1 && verifier.veraPDF.version === '1.30.3'
+    && verifier.veraPDF.binary === 'bin/cli-1.30.3.jar' && verifier.veraPDF.binarySha256 === expected.cli
+    && verifier.veraPDF.selectedLicense === 'MPL-2.0 for dual-licensed veraPDF components, not the entire shaded JAR'
+    && verifier.veraPDF.license === 'licenses/MPL-2.0.txt', 'Wrong veraPDF notice/version selection.');
+  const cliHash = hash(await read(vera, verifier.veraPDF.binary, 64 * 1024 * 1024));
+  assert(cliHash === expected.cli, 'Pinned veraPDF CLI hash mismatch.');
+  assert(Array.isArray(verifier.copiedFiles) && verifier.copiedFiles.length > 0 && verifier.copiedFiles.length <= 256, 'Invalid embedded notice inventory.');
+  for (const file of verifier.copiedFiles) {
+    assert(typeof file.file === 'string' && file.file.startsWith('licenses/'), 'Unsafe embedded notice path.');
+    assert(/^[a-f0-9]{64}$/u.test(file.sha256) && hash(await read(vera, file.file)) === file.sha256, 'Embedded notice hash mismatch.');
+  }
+  assert(['licenses/MPL-2.0.txt', 'licenses/GPL-3.0.txt'].every(file => verifier.copiedFiles.some(item => item.file === file)), 'Missing upstream license texts.');
+  const modules = ['org.verapdf.apps:apps', 'org.verapdf.apps:cli', ...['core', 'feature-reporting', 'metadata-fixer', 'parser', 'pdf-model', 'validation-model', 'verapdf-xmp-core'].map(name => `org.verapdf:${name}`)].sort();
+  assert(Array.isArray(verifier.artifacts) && verifier.artifacts.length <= 128, 'Invalid Maven inventory.');
+  const sources = verifier.artifacts.filter(item => item.sourceArtifact);
+  assert.deepEqual(sources.map(item => `${item.groupId}:${item.artifactId}`).sort(), modules, 'Incomplete veraPDF source mappings.');
+  for (const item of sources) {
+    assert(item.version === '1.30.3' && item.sourceArtifact === `https://repo.maven.apache.org/maven2/${item.groupId.replaceAll('.', '/')}/${item.artifactId}/1.30.3/${item.artifactId}-1.30.3-sources.jar`
+      && item.selectedLicense === (item.artifactId === 'verapdf-xmp-core' ? null : 'MPL-2.0'), 'Wrong module source/license mapping.');
+  }
+  assert(verifier.artifacts.filter(item => !item.sourceArtifact).every(item => item.selectedLicense === null), 'MPL must not be applied to separate dependencies.');
+  assert(npm.scope.includes('not an application/container SBOM') && npm.limitations.length > 0
+    && verifier.scope.includes('incomplete inventory') && verifier.limitations.length > 0, 'Audit limits were omitted.');
+  return { status: 'passed', npmPackages: npm.packages.length, npmNoticeFiles, veraCopiedFiles: verifier.copiedFiles.length,
+    veraSourceModules: sources.length, appSourcesSha256: hash(appSources), appNoticeSha256: hash(appNotice),
+    veraSourcesSha256: hash(veraSources), veraNoticeSha256: hash(veraNotice), originalFontNoticeSha256: hash(font),
+    cliSha256: cliHash, explicitAuditLimitsRetained: true };
+}
+// END isolated runtime-notice inspection.
+
 async function main() {
   assert(process.platform === 'linux' && typeof process.getuid === 'function' && process.getuid() !== 0,
     'A non-root Linux container is mandatory.');
@@ -169,6 +269,9 @@ async function main() {
   }
   await mkdir(EVIDENCE_DIRECTORY, { mode: 0o700 });
   evidenceCreated = true;
+
+  stage = 'read-only-image-notices';
+  const runtimeNotices = await inspectRuntimeNotices('/app', '/opt/verapdf');
 
   // Native decoder, authentication and database packages come from production.
   // Next bundles pdf-lib/qrcode; independent inspection uses the separately
@@ -361,7 +464,7 @@ async function main() {
   await prisma.$disconnect();
   prisma = undefined;
   await writeFile(`${EVIDENCE_DIRECTORY}/manifest.json`, `${JSON.stringify({
-    status: 'passed', syntheticIsolatedFixture: true, ...platform, pages: finalPdf.getPageCount(),
+    status: 'passed', syntheticIsolatedFixture: true, ...platform, runtimeNotices, pages: finalPdf.getPageCount(),
     finalSha256, previewSha256: sha256(previewBytes), sourceSha256: sha256(sourceJson), xmlSha256: sha256(xmlBytes),
     originalLogoSha256: sha256(alphaLogo), normalizedLogoSha256, normalizedQrSha256,
     finalByteCount: finalBytes.length, previewAndFinalPageStreamsEqual: true,
