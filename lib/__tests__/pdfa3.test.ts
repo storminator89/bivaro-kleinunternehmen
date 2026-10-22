@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { execFileSync } from 'child_process';
 import {
   PDFArray,
   PDFDict,
@@ -9,10 +8,8 @@ import {
   PDFRef,
   PDFStream,
   PDFString,
-  StandardFonts,
 } from 'pdf-lib';
 import { addFacturXPdfA3Metadata, FACTUR_X_XML_FILENAME, getSrgbIccProfileBytes } from '@/lib/pdfa3';
-import { createPdfA3Invoice } from '@/lib/server/pdfa3-converter';
 
 function decodePdfText(value: unknown): string | null {
   if (value instanceof PDFString || value instanceof PDFHexString) {
@@ -39,28 +36,6 @@ function lookupFacturXFileSpec(pdfDoc: PDFDocument): PDFDict {
 
   throw new Error('Factur-X attachment was not found');
 }
-
-function hasGhostscript(): boolean {
-  try {
-    execFileSync('gs', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function hasEmbeddedFontProgram(font: PDFDict): boolean {
-  const descriptor = font.lookupMaybe(PDFName.of('FontDescriptor'), PDFDict);
-  if (!descriptor) return false;
-
-  return (
-    descriptor.has(PDFName.of('FontFile')) ||
-    descriptor.has(PDFName.of('FontFile2')) ||
-    descriptor.has(PDFName.of('FontFile3'))
-  );
-}
-
-const itWithGhostscript = hasGhostscript() ? it : it.skip;
 
 describe('PDF/A-3 Factur-X metadata', () => {
   it('embeds the Factur-X XML as an associated file with output intent and XMP metadata', async () => {
@@ -109,30 +84,4 @@ describe('PDF/A-3 Factur-X metadata', () => {
     expect(String.fromCharCode(...iccProfile.slice(36, 40))).toBe('acsp');
   });
 
-  itWithGhostscript('normalizes the visual PDF before adding the Factur-X attachment', async () => {
-    const basePdf = await PDFDocument.create();
-    const page = basePdf.addPage();
-    const font = await basePdf.embedFont(StandardFonts.Helvetica);
-    page.drawText('Rechnung RE-2025-002', { x: 50, y: 750, font, size: 12 });
-
-    const pdfA3Bytes = await createPdfA3Invoice({
-      basePdfBytes: await basePdf.save(),
-      xmlContent: '<rsm:CrossIndustryInvoice />',
-      invoiceNumber: 'RE-2025-002',
-    });
-
-    const pdfA3 = await PDFDocument.load(pdfA3Bytes);
-    expect(lookupFacturXFileSpec(pdfA3).lookup(PDFName.of('AFRelationship'), PDFName).toString()).toBe('/Alternative');
-    expect(pdfA3.catalog.lookup(PDFName.of('OutputIntents'), PDFArray).size()).toBe(1);
-
-    const fonts = pdfA3.context
-      .enumerateIndirectObjects()
-      .map(([, object]) => object)
-      .filter((object): object is PDFDict => (
-        object instanceof PDFDict && object.lookupMaybe(PDFName.of('Type'), PDFName)?.toString() === '/Font'
-      ));
-
-    expect(fonts.length).toBeGreaterThan(0);
-    expect(fonts.every(hasEmbeddedFontProgram)).toBe(true);
-  });
 });

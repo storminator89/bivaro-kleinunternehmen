@@ -23,6 +23,7 @@ vi.mock('fs/promises', () => ({
   rm: mocks.rm,
 }));
 
+import { PdfA3ValidationError, validatePdfA3 } from '@/lib/server/pdfa-validator';
 import { OwnInvoicePdfAValidationError, validateOwnInvoicePdfA3 } from '@/lib/server/own-invoice-pdfa-validator';
 
 const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]);
@@ -439,5 +440,37 @@ describe('private veraPDF process-group lifecycle (only mocked children and sign
     expect(mocks.writeFile).not.toHaveBeenCalled();
     expect(process.kill).not.toHaveBeenCalled();
     expect(mocks.rm).toHaveBeenCalledExactlyOnceWith(mocks.directory, { recursive: true, force: true });
+  });
+});
+
+describe('shared foreign-PDF verifier classification', () => {
+  it('accepts the exact already-PDF/A-3b report without normalization', async () => {
+    await expect(validatePdfA3(bytes)).resolves.toBeUndefined();
+    expect(mocks.spawn).toHaveBeenCalledTimes(2);
+  });
+  it('classifies only a coherent complete nonconforming report as unsupported, not infrastructure', async () => {
+    const report = compliantReport();
+    report.report.jobs[0].validationResult[0].compliant = false;
+    report.report.jobs[0].validationResult[0].details.failedChecks = 2;
+    report.report.jobs[0].validationResult[0].details.failedRules = 1;
+    report.report.batchSummary.validationSummary.compliantPdfaCount = 0;
+    report.report.batchSummary.validationSummary.nonCompliantPdfaCount = 1;
+    mocks.report = JSON.stringify(report);
+    await expect(validatePdfA3(bytes)).rejects.toMatchObject({ kind: 'unsupported', status: 422 });
+  });
+  it.each(['{}', 'not JSON'])('does not mislabel unknown reports as bad user input (%s)', async report => {
+    mocks.report = report;
+    await expect(validatePdfA3(bytes)).rejects.toMatchObject({ kind: 'unavailable', status: 503 });
+  });
+  it('keeps the own-invoice 20MiB bound while accepting an explicitly server-owned foreign bound up to 40MiB', async () => {
+    const large = new Uint8Array(MAX_PDF_INPUT_BYTES + 1);
+    const report = compliantReport(); report.report.jobs[0].itemDetails.size = large.length;
+    mocks.report = JSON.stringify(report);
+    await expect(validatePdfA3(large, { maxBytes: MAX_PDF_INPUT_BYTES * 2 })).resolves.toBeUndefined();
+    await expect(validateOwnInvoicePdfA3(large)).rejects.toMatchObject({status: 500});
+  });
+  it('rejects an unbounded verifier request before process creation', async () => {
+    await expect(validatePdfA3(bytes, { maxBytes: MAX_PDF_INPUT_BYTES * 2 + 1 })).rejects.toBeInstanceOf(PdfA3ValidationError);
+    expect(mocks.spawn).not.toHaveBeenCalled();
   });
 });

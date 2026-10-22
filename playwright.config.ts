@@ -8,7 +8,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: 'security-hardening.spec.ts',
+  testIgnore: ['security-hardening.spec.ts', '**/ai-receipt-native.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 2 : 0,
@@ -44,7 +44,7 @@ export default defineConfig({
     {
       name: 'chromium',
       dependencies: ['chromium-bootstrap'],
-      testIgnore: ['**/auth-dashboard-invoice.spec.ts', '**/security-hardening.spec.ts'],
+      testIgnore: ['**/auth-dashboard-invoice.spec.ts', '**/security-hardening.spec.ts', '**/ai-receipt-native.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],

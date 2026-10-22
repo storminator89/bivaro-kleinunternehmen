@@ -64,6 +64,10 @@ COPY --from=deps /app/prisma ./prisma
 # Copy source code
 COPY . .
 
+# Compile exact parent launcher and trusted synthetic fixtures for the
+# architecture-native runtime gate before build dependencies are pruned.
+RUN node scripts/ai-pdf/build-native-smoke.mjs
+
 # Build the application
 RUN npm run build
 
@@ -78,7 +82,7 @@ FROM node:22.23.4-trixie-slim AS runner
 
 # Install security updates and dumb-init for proper signal handling
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates ghostscript util-linux default-jre-headless && \
+    apt-get install -y --no-install-recommends openssl dumb-init curl ca-certificates ghostscript util-linux util-linux-extra default-jre-headless && \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' ghostscript)" ge '10.05.1~dfsg-1+deb13u3' && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -104,6 +108,25 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# PDF.js runs outside Next's app heap in a separately confined Node child.
+# Copy the exact public runtime closure explicitly; never grant the child /app.
+COPY --from=builder /app/scripts/ai-pdf ./scripts/ai-pdf
+COPY --from=builder /app/node_modules/pdfjs-dist ./node_modules/pdfjs-dist
+COPY --from=builder /app/node_modules/@napi-rs ./node_modules/@napi-rs
+# Architecture-native policy DATA only. No PDFs or native syscall probes are
+# executed while generating this filter, and no host security setting changes.
+RUN sh scripts/ai-pdf/build-sandbox-filter.sh "scripts/ai-pdf/sandbox-$(node -p process.arch).bpf"
+
+# Narrow foreign-PDF processing uses its own independently confined worker.
+# Keep the exact CJS runtime closure, including pdf-lib's nested tslib copy.
+COPY --from=builder /app/scripts/foreign-pdf ./scripts/foreign-pdf
+COPY --from=builder /app/node_modules/pdf-lib ./node_modules/pdf-lib
+COPY --from=builder /app/node_modules/@pdf-lib ./node_modules/@pdf-lib
+COPY --from=builder /app/node_modules/pako ./node_modules/pako
+COPY --from=builder /app/node_modules/tslib ./node_modules/tslib
+COPY --from=builder /app/node_modules/sax ./node_modules/sax
+RUN sh scripts/foreign-pdf/build-sandbox-filter.sh "scripts/foreign-pdf/sandbox-$(node -p process.arch).bpf"
+
 # Read-only, original-hash-verified tools/rules; no external validation service.
 COPY --from=einvoice-assets /opt/bivaro/einvoice /opt/bivaro/einvoice
 COPY --from=einvoice-assets /opt/verapdf /opt/verapdf

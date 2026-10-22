@@ -4,6 +4,12 @@ on:
     branches: [main]
     paths:
       - 'Dockerfile'
+      - 'Dockerfile.ai-browser'
+      - 'Dockerfile.ai-browser.dockerignore'
+      - '.dockerignore'
+      - 'playwright.ai-pdf.config.ts'
+      - 'e2e/ai-receipt-native.spec.ts'
+      - 'next.config.ts'
       - 'docker-entrypoint.sh'
       - 'scripts/database-runtime.mjs'
       - 'scripts/upgrade-database.mjs'
@@ -11,6 +17,17 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/container-runtime-smoke.sh'
+      - 'scripts/ai-pdf/**'
+      - 'lib/purchase-documents/**'
+      - 'lib/ai-provider/**'
+      - 'components/purchases/**'
+      - 'app/api/purchase-documents/**'
+      - 'app/api/settings/ai-provider/**'
+      - 'scripts/run-e2e.mjs'
+      - 'scripts/e2e-*.mjs'
+      - 'scripts/prepare-e2e.mjs'
+      - 'lib/prisma.ts'
+      - 'lib/password.ts'
       - 'e2e/own-invoice-*.spec.ts'
       - 'scripts/own-invoice-pdfa/**'
       - 'lib/server/own-invoice-*.ts'
@@ -19,13 +36,18 @@ on:
       - 'lib/zugferd-generator.ts'
       - 'app/api/invoices/render/**'
       - 'public/fonts/invoice/**'
-      - 'next.config.ts'
       - 'lib/__tests__/fixtures/incoming-validation/**'
       - '.github/workflows/container-runtime.yml'
   push:
     branches: [main]
     paths:
       - 'Dockerfile'
+      - 'Dockerfile.ai-browser'
+      - 'Dockerfile.ai-browser.dockerignore'
+      - '.dockerignore'
+      - 'playwright.ai-pdf.config.ts'
+      - 'e2e/ai-receipt-native.spec.ts'
+      - 'next.config.ts'
       - 'docker-entrypoint.sh'
       - 'scripts/database-runtime.mjs'
       - 'scripts/upgrade-database.mjs'
@@ -33,6 +55,17 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/container-runtime-smoke.sh'
+      - 'scripts/ai-pdf/**'
+      - 'lib/purchase-documents/**'
+      - 'lib/ai-provider/**'
+      - 'components/purchases/**'
+      - 'app/api/purchase-documents/**'
+      - 'app/api/settings/ai-provider/**'
+      - 'scripts/run-e2e.mjs'
+      - 'scripts/e2e-*.mjs'
+      - 'scripts/prepare-e2e.mjs'
+      - 'lib/prisma.ts'
+      - 'lib/password.ts'
       - 'e2e/own-invoice-*.spec.ts'
       - 'scripts/own-invoice-pdfa/**'
       - 'lib/server/own-invoice-*.ts'
@@ -41,7 +74,6 @@ on:
       - 'lib/zugferd-generator.ts'
       - 'app/api/invoices/render/**'
       - 'public/fonts/invoice/**'
-      - 'next.config.ts'
       - 'lib/__tests__/fixtures/incoming-validation/**'
       - '.github/workflows/container-runtime.yml'
 permissions:
@@ -99,3 +131,8 @@ jobs:
           path: ${{ runner.temp }}/bivaro-own-invoice-container
           if-no-files-found: warn
           retention-days: 1
+
+      - name: Build test-only browser derivative of the exact production runtime
+        run: docker build --file Dockerfile.ai-browser --tag bivaro-ai-browser .
+      - name: Real PDF AI browser journey with isolated production renderer
+        run: docker run --rm --network=none --shm-size=256m bivaro-ai-browser

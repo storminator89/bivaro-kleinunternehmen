@@ -82,7 +82,7 @@ Bivaro ist eine moderne, webbasierte Buchhaltungsanwendung, die speziell für Kl
 | Datenabruf | [TanStack Query v5](https://tanstack.com/query) |
 | Datenbank | [SQLite](https://www.sqlite.org/) via [Prisma 6](https://www.prisma.io/) ORM |
 | Authentifizierung | [NextAuth.js v4](https://next-auth.js.org/) |
-| PDF-Generierung | [pdf-lib](https://pdf-lib.js.org/) + [Ghostscript](https://www.ghostscript.com/) für PDF/A-3-Normalisierung |
+| PDF-Generierung | PDFKit + eingebettete Schriften; unabhängige veraPDF-Prüfung der eigenen PDF/A-3b-Rechnungen; pdf-lib für XML-Einbettung |
 | QR-Code | [qrcode](https://github.com/soldair/node-qrcode) |
 | Unit-Tests | [Vitest](https://vitest.dev/) |
 | E2E-Tests | [Playwright](https://playwright.dev/) |
@@ -150,16 +150,26 @@ bivaro-kleinunternehmen/
 
 ### Voraussetzungen
 
-- [Node.js](https://nodejs.org/) **Version 18 oder neuer** (empfohlen: aktuelles LTS)
+- [Node.js](https://nodejs.org/) **Version 22.23.4** (Container-/CI-Version; weitere erlaubte Versionen siehe `package.json`)
 - [npm](https://www.npmjs.com/) (wird mit Node.js mitgeliefert)
 - [Git](https://git-scm.com/)
-- [Ghostscript](https://www.ghostscript.com/) für die PDF/A-3-Normalisierung von ZUGFeRD-/Factur-X-PDFs (im Docker-Image enthalten)
+- Ghostscript wird übergangsweise noch in Container-/CI-Kompatibilitätsprüfungen mitgeführt. Der produktive PDF-Code verwendet jetzt getrennt isoliertes PDF.js für die KI-Analyse sowie geprüftes PDF/A-3b für die alte XML-Anhangsschnittstelle; die endgültige Paketentfernung folgt erst nach gemeinsamer nativer Abnahme.
 
 Prüfen Sie Ihre Versionen im Terminal:
 ```bash
-node --version   # sollte v18+ anzeigen
+node --version   # Container/CI: v22.23.4
 npm --version
 ```
+
+### Kompatibilität der alten Fremd-PDF-Schnittstelle
+
+`POST /api/pdfa3` repariert keine beliebigen Fremd-PDFs mehr. Für eine zusätzliche
+Rechnungs-XML werden zunächst nur bereits unabhängig gültige PDF/A-3b-Dateien
+angenommen. Signierte oder verschlüsselte Dateien, Formulare und vorhandene
+Anhänge werden ausdrücklich abgelehnt, nicht entfernt oder umgewandelt. Eigene
+Rechnungen und die allgemeine Belegverwaltung bleiben davon getrennt. Die
+Schnittstelle archiviert ihre Eingaben nicht und bestätigt keine vollständige
+Factur-X-/XML-Geschäftsregelkonformität. [Vertrag und Abnahmestand](docs/testing/foreign-pdf-preservation-2026-10-22.md).
 
 ### Schritt 1 – Repository klonen
 
