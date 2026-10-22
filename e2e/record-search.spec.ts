@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 import { prisma } from '../lib/prisma';
@@ -26,12 +26,13 @@ async function snapshot(userId: string) {
   return { invoices: await prisma.invoice.findMany({ where: { userId }, orderBy: { id: 'asc' } }), receipts: await prisma.purchaseDocument.findMany({ where: { userId }, orderBy: { id: 'asc' } }), customers: await prisma.customer.findMany({ where: { userId }, orderBy: { id: 'asc' } }), audit: await prisma.auditLog.count({ where: { userId } }), payments: await prisma.paymentJournalEvent.count({ where: { userId } }), incomes: await prisma.income.count({ where: { userId } }), expenses: await prisma.expense.count({ where: { userId } }) };
 }
 
-test('record search is bounded, owned and read-only with keyboard/mobile/navigation/retry/stale/session handling', async ({ page }, testInfo) => {
+test('record search is bounded, owned and read-only with keyboard/mobile/navigation/retry/stale/session handling', async ({ page, browser }, testInfo) => {
   test.setTimeout(120_000);
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
   const password = 'SyntheticRecordSearch123!';
   const owner = await prisma.user.create({ data: { email: `record-owner-${randomUUID()}@example.test`, name: 'Synthetic search owner', password: await hashPassword(password), role: 'USER' } });
   const foreign = await prisma.user.create({ data: { email: `record-foreign-${randomUUID()}@example.test`, name: 'Synthetic other account', password: await hashPassword(password), role: 'USER' } });
+  let replacementContext: BrowserContext | undefined;
   try {
     const customers: { id: number; name: string }[] = [];
     for (let i = 0; i < 7; i++) customers.push(await prisma.customer.create({ data: { userId: owner.id, name: `SYN-SEARCH Kunde ${i}`, internalNote: 'PRIVATE-NOTE-NOT-SEARCHABLE' } }));
@@ -151,8 +152,10 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     await expect(page.locator('body')).not.toContainText('SYN-SEARCH');
     await signIn(page, owner.email, password);
 
-    // Replace an authenticated cookie directly through a real independent UI
-    // login, without an intervening anonymous-session redirect race. Revalidate
+    // The authenticated /login route intentionally redirects to /dashboard.
+    // Use a fresh context for real UI credentials login, then atomically copy
+    // only its server-issued session cookies: no forged session or anonymous
+    // gap in the original context. Revalidate
     // the original SessionProvider without navigating that page; old in-flight
     // results must not render under the newly authenticated identity.
     ({ dialog, input } = await openPalette(page)); await input.fill('SYN-SEARCH'); await expect(dialog.getByRole('option', { name: 'SYN-SEARCH-OUT', exact: false })).toBeVisible();
@@ -161,14 +164,19 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     await page.route('**/api/record-search', async route => { if (route.request().postDataJSON().query === 'ACCOUNT-OLD') { accountStarted(); await accountGate; try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [{ type: 'customer', hasMore: false, items: [{ type: 'customer', id: customers[0].id, label: 'ACCOUNT-PRIVATE-OLD', href: `/customers?customer=${customers[0].id}` }] }] }) }); } catch { /* Aborted prior-account transport. */ } } else await route.continue(); });
     await input.fill('ACCOUNT-OLD'); await accountHeld;
     const unchangedUrl = page.url();
-    const sibling = await page.context().newPage();
+    replacementContext = await browser.newContext({ baseURL: testInfo.project.use.baseURL });
+    const sibling = await replacementContext.newPage();
     await signIn(sibling, foreign.email, password);
     const replacement = await (await sibling.request.get('/api/auth/session')).json();
     expect(replacement.user.id).toBe(foreign.id);
+    const sessionCookies = (await replacementContext.cookies()).filter(cookie => /^(?:__Secure-)?next-auth\.session-token(?:\.\d+)?$/.test(cookie.name));
+    expect(sessionCookies.length).toBeGreaterThan(0);
+    await page.context().addCookies(sessionCookies);
+    const updatedSession = await (await page.request.get('/api/auth/session')).json();
+    expect(updatedSession.user.id).toBe(foreign.id);
     await page.bringToFront(); await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await expect(dialog).toBeHidden(); accountRelease();
     await expect(page).toHaveURL(unchangedUrl);
     ({ dialog, input } = await openPalette(page)); await expect(input).toHaveValue(''); await input.fill('SYN-SEARCH'); await expect(dialog.getByRole('option', { name: foreignCustomer.name, exact: false })).toBeVisible(); await expect(dialog).not.toContainText('SYN-SEARCH Kunde 0'); await expect(dialog).not.toContainText('SYN-SEARCH-IN.pdf'); await expect(dialog).not.toContainText('ACCOUNT-PRIVATE-OLD');
-    await sibling.close();
-  } finally { await prisma.$disconnect(); }
+  } finally { await replacementContext?.close(); await prisma.$disconnect(); }
 });
