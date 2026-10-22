@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { nextReviewDocument, reviewQueueSnapshot, sameReviewDraft, type IncomingNavigationGuard } from '@/components/purchases/incoming-review-queue';
-import { captureReviewNavigationSource, createReviewNavigationIntents, createReviewTraversalGuard } from '@/components/purchases/incoming-review-history';
+import { createReviewNavigationIntents, createReviewTraversalGuard, createReviewPopDispatcher } from '@/components/purchases/incoming-review-history';
 import { IncomingRequestError } from '@/components/purchases/incoming-document-ui';
 import type { IncomingDocument, IncomingDocumentList } from '@/lib/purchase-documents/types';
 
@@ -167,30 +167,32 @@ describe('explicit review navigation is guarded before any location change', () 
   });
 });
 
-describe('browser precommit source capture', () => {
-  it('captures a history push committed after the last router render before dirty Back', () => {
-    let index = 0;
-    const navigation = new EventTarget(); const go = vi.fn(); const request = vi.fn();
-    const guard = createReviewTraversalGuard({ getIndex: () => index, go, getGuard: () => ({ blocked: true, request }), onReplay: vi.fn() });
-    const cleanup = captureReviewNavigationSource(navigation, guard);
-    index = 1; // Next commits its source history entry after component layout.
-    navigation.dispatchEvent(new Event('navigate')); // Browser still at source.
-    index = 0; guard({ stopImmediatePropagation: vi.fn() });
-    expect(go).toHaveBeenLastCalledWith(1);
-    // The restore's own precommit must not replace the original source index.
-    navigation.dispatchEvent(new Event('navigate'));
-    index = 1; guard({ stopImmediatePropagation: vi.fn() });
-    expect(request).toHaveBeenCalledTimes(1);
-    const proceed = request.mock.calls[0][0]; proceed();
-    navigation.dispatchEvent(new Event('navigate')); // Conscious replay retains lock.
-    index = 0; expect(guard({ stopImmediatePropagation: vi.fn() })).toBeUndefined();
-    expect(go.mock.calls).toEqual([[1], [-1]]); cleanup();
+describe('root-owned review popstate dispatch', () => {
+  it('guards dirty Back before synchronous router cleanup, then permits conscious replay', () => {
+    const target = new EventTarget(); const dispatcher = createReviewPopDispatcher();
+    target.addEventListener('popstate', event => dispatcher.dispatch(event as PopStateEvent), true);
+    let index = 1; const go = vi.fn(); const choices: Array<() => void> = [];
+    const controller = createReviewTraversalGuard({ getIndex: () => index, go, getGuard: () => ({ blocked: true, request: proceed => choices.push(proceed) }), onReplay: vi.fn() });
+    const unregister = dispatcher.register(controller);
+    const router = vi.fn(() => unregister());
+    // Next installs its listener during a root passive effect. It can commit
+    // the destination synchronously and remove a route-owned listener before
+    // that later listener runs; the earlier root dispatcher must protect first.
+    target.addEventListener('popstate', router);
+    index = 0; target.dispatchEvent(new Event('popstate'));
+    expect(go).toHaveBeenLastCalledWith(1); expect(router).not.toHaveBeenCalled();
+    index = 1; target.dispatchEvent(new Event('popstate'));
+    expect(choices).toHaveLength(1); expect(router).not.toHaveBeenCalled();
+    choices[0](); expect(go).toHaveBeenLastCalledWith(-1);
+    index = 0; target.dispatchEvent(new Event('popstate')); expect(router).toHaveBeenCalledTimes(1);
+    // The completed route cleanup releases only that route's handler.
+    target.dispatchEvent(new Event('popstate')); expect(router).toHaveBeenCalledTimes(2);
   });
-  it('removes only its own listener and leaves unsupported browser fallback unchanged', () => {
-    const navigation = new EventTarget(); const syncIndex = vi.fn();
-    const cleanup = captureReviewNavigationSource(navigation, { syncIndex });
-    navigation.dispatchEvent(new Event('navigate')); expect(syncIndex).toHaveBeenCalledTimes(1);
-    cleanup(); navigation.dispatchEvent(new Event('navigate')); expect(syncIndex).toHaveBeenCalledTimes(1);
-    expect(() => captureReviewNavigationSource(undefined, { syncIndex })()).not.toThrow();
+  it('does not let stale route cleanup unregister the new active review', () => {
+    const dispatcher = createReviewPopDispatcher(); const old = vi.fn(); const current = vi.fn();
+    const cleanupOld = dispatcher.register(old); const cleanupCurrent = dispatcher.register(current);
+    cleanupOld(); dispatcher.dispatch(new Event('popstate') as PopStateEvent);
+    expect(old).not.toHaveBeenCalled(); expect(current).toHaveBeenCalledTimes(1);
+    cleanupCurrent(); dispatcher.dispatch(new Event('popstate') as PopStateEvent); expect(current).toHaveBeenCalledTimes(1);
   });
 });

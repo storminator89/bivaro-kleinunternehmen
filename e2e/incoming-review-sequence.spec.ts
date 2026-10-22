@@ -103,14 +103,32 @@ test('page-bounded filtered receipt sequence saves safely after unknown response
 });
 
 test('dirty keyboard Back/Forward preserves entries, allows stay/discard and keeps failed-save input on mobile', async ({ page }, testInfo) => {
-  test.setTimeout(120_000); const user = await signIn(page); const first = await upload(page, 1); await upload(page, 2);
+  test.setTimeout(120_000);
+  await page.addInitScript(() => {
+    const state = window as Window & { receiptListenerTrace?: Array<{ action: string; listener: number; capture: boolean }> };
+    const ids = new WeakMap<object, number>(); let nextId = 0;
+    const record = (action: string, callback: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) => {
+      if (!callback) return;
+      if (!ids.has(callback)) ids.set(callback, ++nextId);
+      (state.receiptListenerTrace ??= []).push({ action, listener: ids.get(callback)!, capture: typeof options === 'boolean' ? options : !!options?.capture });
+    };
+    const add = EventTarget.prototype.addEventListener; const remove = EventTarget.prototype.removeEventListener;
+    EventTarget.prototype.addEventListener = function (type, callback, options) {
+      if (this === window && type === 'popstate') record('add', callback, options);
+      return add.call(this, type, callback, options);
+    };
+    EventTarget.prototype.removeEventListener = function (type, callback, options) {
+      if (this === window && type === 'popstate') record('remove', callback, options);
+      return remove.call(this, type, callback, options);
+    };
+  });
+  const user = await signIn(page); const first = await upload(page, 1); await upload(page, 2);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.evaluate(() => {
     const state = window as Window & { navigation?: { currentEntry?: { index: number } }; receiptTraversalTrace?: Array<{ path: string; index?: number; kind: string }> };
     const trace = (kind: string) => (state.receiptTraversalTrace ??= []).push({ kind, path: location.pathname + location.search, index: state.navigation?.currentEntry?.index });
     trace('dashboard'); window.addEventListener('popstate', () => trace('pop'), true);
   });
-  page.on('console', message => { if (message.text().startsWith('BIVARO_RECEIPT_LIFECYCLE')) console.warn(message.text()); });
   // This link stays in the same app document, exercising the actual app-router popstate boundary.
   await page.locator('a[href="/purchases"]').first().click(); await expect(page).toHaveURL(/\/purchases$/);
   await page.getByRole('list', { name: 'Eingangsbelege', exact: true }).getByRole('button').first().click();
@@ -123,8 +141,8 @@ test('dirty keyboard Back/Forward preserves entries, allows stay/discard and kee
   });
   try { await expect(chooser(page)).toBeVisible(); } catch (failure) {
     const diagnostic = await page.evaluate(() => {
-      const state = window as Window & { navigation?: { currentEntry?: { index: number } }; receiptTraversalTrace?: unknown };
-      return { path: location.pathname + location.search, index: state.navigation?.currentEntry?.index, trace: state.receiptTraversalTrace, reviewOpen: !!document.querySelector('[role=dialog]'), unsavedLabel: document.body.textContent?.includes('Ungespeicherte Änderungen'), noteRetained: (document.querySelector('#review-draft-note') as HTMLTextAreaElement | null)?.value === 'Keep this draft while deciding.' };
+      const state = window as Window & { navigation?: { currentEntry?: { index: number } }; receiptTraversalTrace?: unknown; receiptListenerTrace?: unknown };
+      return { listeners: state.receiptListenerTrace, path: location.pathname + location.search, index: state.navigation?.currentEntry?.index, trace: state.receiptTraversalTrace, reviewOpen: !!document.querySelector('[role=dialog]'), unsavedLabel: document.body.textContent?.includes('Ungespeicherte Änderungen'), noteRetained: (document.querySelector('#review-draft-note') as HTMLTextAreaElement | null)?.value === 'Keep this draft while deciding.' };
     });
     throw new Error(`Dirty Back must retain review and show explicit choices: ${JSON.stringify(diagnostic)}`, { cause: failure });
   }

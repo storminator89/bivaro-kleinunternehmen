@@ -89,7 +89,7 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [draftDirty, setDraftDirty] = useState(false);
   const navigationState = useRef({ dirty: false, busy: false, draftBusy: false });
-  const updateDraftDirty = useCallback((dirty: boolean) => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'dirty-change', dirty })); navigationState.current.dirty = dirty; setDraftDirty(dirty); }, []);
+  const updateDraftDirty = useCallback((dirty: boolean) => { navigationState.current.dirty = dirty; setDraftDirty(dirty); }, []);
   const updateDraftBusy = useCallback((busy: boolean) => { navigationState.current.draftBusy = busy; setDraftBusy(busy); }, []);
   const [historyGuardSupported, setHistoryGuardSupported] = useState<boolean | null>(null);
   useEffect(() => { setHistoryGuardSupported(typeof (window as Window & { navigation?: { currentEntry?: { index?: number } } }).navigation?.currentEntry?.index === 'number'); }, []);

@@ -13,7 +13,7 @@ export function createReviewTraversalGuard(options: {
   let restoring: { original: number; destination: number; intent: number } | null = null;
   let replay = false;
   const onPop = (event: { stopImmediatePropagation: () => void }) => {
-    const nextIndex = options.getIndex(); console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'pop-controller', currentIndex, nextIndex, blocked: options.getGuard()?.blocked ?? null, restoring: !!restoring, replay }));
+    const nextIndex = options.getIndex();
     if (replay) { replay = false; currentIndex = nextIndex; options.onReplay(); return; }
     if (restoring) {
       event.stopImmediatePropagation();
@@ -43,7 +43,7 @@ export function createReviewTraversalGuard(options: {
     options.go(currentIndex - nextIndex);
   };
   return Object.assign(onPop, {
-    syncIndex: () => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'sync-source', currentIndex, nextIndex: options.getIndex(), restoring: !!restoring, replay })); if (!restoring && !replay) currentIndex = options.getIndex(); },
+    syncIndex: () => { if (!restoring && !replay) currentIndex = options.getIndex(); },
   });
 }
 
@@ -65,12 +65,15 @@ export function createReviewNavigationIntents(readLocation: () => string) {
   };
 }
 
-/** Capture the real source before browser traversal, not a lagging router render. */
-export function captureReviewNavigationSource(
-  navigation: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> | undefined,
-  guard: { syncIndex: () => void },
-) {
-  const captureSource = () => guard.syncIndex();
-  navigation?.addEventListener('navigate', captureSource);
-  return () => navigation?.removeEventListener('navigate', captureSource);
+/** One root-owned listener runs before router teardown; only the active review owns it. */
+export function createReviewPopDispatcher() {
+  let active: ((event: PopStateEvent) => void) | null = null;
+  return {
+    register: (handler: (event: PopStateEvent) => void) => {
+      active = handler;
+      return () => { if (active === handler) active = null; };
+    },
+    dispatch: (event: PopStateEvent) => { active?.(event); },
+  };
 }
+export const reviewPopDispatcher = createReviewPopDispatcher();

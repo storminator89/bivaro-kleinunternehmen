@@ -8,6 +8,7 @@ import AuthProvider from "@/components/auth/auth-provider";
 import { AppShell } from "@/components/app-shell";
 import { Toaster } from "@/components/ui/toaster";
 import { RouteProgress } from "@/components/route-progress";
+import { IncomingReviewHistoryBoundary } from "@/components/purchases/incoming-review-history-boundary";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -42,6 +43,7 @@ export default async function RootLayout({
       <body
         className="min-h-screen bg-background antialiased"
       >
+        <IncomingReviewHistoryBoundary />
         <AuthProvider>
           <ThemeProvider
             nonce={nonce}

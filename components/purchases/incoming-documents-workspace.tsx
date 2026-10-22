@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import type { IncomingDocument, IncomingDocumentList, IncomingDocumentResponse } from '@/lib/purchase-documents/types';
 import { IncomingUpload } from './incoming-upload';
 import { IncomingDocumentReview } from './incoming-document-review';
-import { captureReviewNavigationSource, createReviewNavigationIntents, createReviewTraversalGuard } from './incoming-review-history';
+import { createReviewNavigationIntents, createReviewTraversalGuard, reviewPopDispatcher } from './incoming-review-history';
 import { nextReviewDocument, reviewQueueSnapshot, type IncomingNavigationGuard } from './incoming-review-queue';
 import { documentIdFromQuery, errorMessage, extractionLabel, formatSourceAmount, formatSourceDate, incomingJson, INCOMING_PAGE_SIZE, reviewLabel, type IncomingFilter } from './incoming-document-ui';
 
@@ -47,7 +47,7 @@ function IncomingDocumentsWorkspaceContent() {
   const navigationGuard = useRef<IncomingNavigationGuard | null>(null);
   const navigationIntents = useRef(createReviewNavigationIntents(() => window.location.href));
   const historyGuard = useRef<ReturnType<typeof createReviewTraversalGuard> | null>(null);
-  const registerNavigationGuard = useCallback((guard: IncomingNavigationGuard | null) => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'register', hasGuard: !!guard, blocked: guard?.blocked ?? null })); navigationGuard.current = guard; }, []);
+  const registerNavigationGuard = useCallback((guard: IncomingNavigationGuard | null) => { navigationGuard.current = guard; }, []);
   const [queue, setQueue] = useState<readonly number[]>([]);
   const [queueBusy, setQueueBusy] = useState(false);
   const [queueMessage, setQueueMessage] = useState<string | null>(null);
@@ -97,26 +97,25 @@ function IncomingDocumentsWorkspaceContent() {
     // Traversals cannot be cancelled. Restore/replay their exact index instead
     // of replacing entries (which would silently destroy Back/Forward history).
     const intents = navigationIntents.current;
-    const navigation = (window as Window & { navigation?: EventTarget & { currentEntry?: { index: number } } }).navigation;
+    const navigation = (window as Window & { navigation?: { currentEntry?: { index: number } } }).navigation;
     const handlePop = createReviewTraversalGuard({
       getIndex: () => navigation?.currentEntry?.index,
       go: delta => window.history.go(delta),
       getGuard: () => navigationGuard.current,
       onReplay: () => {},
     });
-    const onPop = (event: PopStateEvent) => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'workspace-pop', blocked: navigationGuard.current?.blocked ?? null }));
+    const onPop = (event: PopStateEvent) => {
       intents.invalidate();
       navigationGuard.current?.cancelPending?.();
       queueRequest.current?.abort(); queueMoving.current = false; setQueueBusy(false);
       handlePop(event);
     };
-    // The router can publish history after a component's layout effects. Read
-    // the actual source at Navigation API's precommit boundary; restorations
-    // and deliberate replay keep their controller-owned indexes unchanged.
-    const stopCapturingSource = captureReviewNavigationSource(navigation, handlePop);
-    console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'mount-history' })); historyGuard.current = handlePop;
-    window.addEventListener('popstate', onPop, true);
-    return () => { console.warn('BIVARO_RECEIPT_LIFECYCLE', JSON.stringify({ phase: 'cleanup-history' })); window.removeEventListener('popstate', onPop, true); stopCapturingSource(); intents.invalidate(); historyGuard.current = null; };
+    historyGuard.current = handlePop;
+    // Root's stable listener precedes Next's router listener. A route-owned
+    // listener can otherwise be removed by synchronous router teardown before
+    // its callback runs, losing the dirty review before a choice is possible.
+    const unregisterPop = reviewPopDispatcher.register(onPop);
+    return () => { unregisterPop(); intents.invalidate(); historyGuard.current = null; };
   }, []);
   useLayoutEffect(() => { historyGuard.current?.syncIndex(); }, [activeId, queryString]);
   useEffect(() => () => queueRequest.current?.abort(), []);
