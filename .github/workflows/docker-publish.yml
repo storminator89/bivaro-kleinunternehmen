@@ -41,6 +41,12 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
+          # Do not infer a blanket image license from repository detection.
+          # The standard aggregate label is deliberately empty; app SPDX is separate.
+          labels: |
+            org.opencontainers.image.licenses=
+            org.bivaro.application.license=Apache-2.0
+            org.bivaro.application.license.scope=Application only; third-party components retain their own licenses and source obligations. See /app/THIRD_PARTY_NOTICES.txt.
           tags: |
             # Set latest tag for main branch
             type=raw,value=latest,enable={{is_default_branch}}

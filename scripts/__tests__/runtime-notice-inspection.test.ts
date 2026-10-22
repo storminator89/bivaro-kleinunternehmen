@@ -46,7 +46,7 @@ async function fixture() {
   await file(app, 'public/fonts/invoice/FONT-LICENSE.txt', font);
   await file(app, 'THIRD_PARTY_NOTICES.txt', 'Synthetic: attribution remains unresolved.');
   const npm = { schemaVersion: 1, roots: { pdfkit: '0.20.2', fontkit: '2.0.4', 'pdfjs-dist': '6.4.299' }, packages,
-    application: { declaredLicense: 'AGPL-3.0-only', file: 'LICENSE', sha256: expected.applicationLicense },
+    application: { declaredLicense: 'Apache-2.0', file: 'LICENSE', sha256: expected.applicationLicense },
     supplemental: { file: 'licenses/third-party-sources.json', sha256: expected.supplemental, noticeFiles: 1, verifiedRuntimeFiles: 1 },
     scope: 'not an application/container SBOM', limitations: ['Synthetic incomplete inventory.'] };
   await file(app, 'THIRD_PARTY_SOURCES.json', JSON.stringify(npm));

@@ -22,7 +22,9 @@ describe('owner-reviewed public offer schema', () => {
     expect(output).toContain('Konzept – kein verbindliches Angebot');
     expect(output).toContain('Preis und Steuerdarstellung noch offen');
     expect(output).toContain('keine Laufzeitzuordnung');
-    expect(output).toContain('AGPL-3.0-only');
+    expect(output).toContain('Apache-2.0');
+    expect(output).toContain('Drittkomponenten behalten ihre eigenen Lizenzen.');
+    expect(output).not.toContain('AGPL-3.0-only');
     expect(output).toContain('Kein Supportkontakt hinterlegt');
     expect(output).not.toMatch(/mailto:|tel:|<form|<button|checkout\/|FICTIONAL|FIKTIV/);
   });

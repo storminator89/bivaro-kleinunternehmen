@@ -136,7 +136,10 @@ Protokollrelativität, URL-Zugangsdaten oder mailto-Headerparameter.
 
 ## Source-/Lizenzcheck vor einem echten Release
 
-`package.json`, `LICENSE` und README benennen AGPL-3.0-only. Das öffentliche
+`package.json`, `LICENSE` und beide READMEs benennen Apache-2.0 für die
+Bivaro-Anwendung; Drittkomponenten behalten ihre eigenen Lizenzen und
+Quellcodepflichten. Die [Lizenzumstellung](../legal/application-license-transition.md)
+bewahrt den früheren AGPL-Stand. Das öffentliche
 Projekt-Repository ist `https://github.com/storminator89/bivaro-kleinunternehmen`.
 Ein Projekt-/Branchlink allein belegt nicht den tatsächlich ausgelieferten
 vollständigen korrespondierenden Quellstand. Vor Freigabe dessen Revision und
