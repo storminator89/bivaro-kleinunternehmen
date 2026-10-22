@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import JSZip from 'jszip';
 import { collectPdfNotices, writePdfNotices } from '../third-party-notices/build-notices.mjs';
 import { collectVerapdfMetadata, writeVerapdfNotices, VERAPDF_CLI_SHA256 } from '../own-invoice-pdfa/runtime-notices.mjs';
@@ -47,6 +49,34 @@ describe('offline PDF runtime notice packaging (synthetic files only)', () => {
     expect(first.files.has('licenses/npm/fontkit/LICENSE')).toBe(false);
     expect(first.files.get('licenses/MIT-reference.txt')?.toString()).toContain('<copyright holders>');
     expect(first.files.get('THIRD_PARTY_SOURCES.json')?.toString()).not.toContain(root);
+  });
+
+  it('normalizes a trailing root separator before dependency traversal', async () => {
+    const root = await fixture();
+    const normalized = await collectPdfNotices(root);
+    const trailing = await collectPdfNotices(root + path.sep);
+    expect([...trailing.files]).toEqual([...normalized.files]);
+    expect(trailing.manifest.packages).toHaveLength(4);
+  });
+
+  it('runs the genuine CLI default-root entrypoint against a synthetic standalone marker only', async () => {
+    const root = await fixture();
+    const scripts = path.join(root, 'scripts/third-party-notices');
+    const standalone = path.join(root, '.next/standalone');
+    await mkdir(scripts, { recursive: true });
+    await mkdir(standalone, { recursive: true });
+    await writeFile(path.join(standalone, 'server.js'), '// synthetic marker, never executed');
+    for (const filename of ['build-notices.mjs', 'MIT-reference.txt']) {
+      await copyFile(new URL(`../third-party-notices/${filename}`, import.meta.url), path.join(scripts, filename));
+    }
+    // Execute only the offline notice collector, never server.js or PDF tools.
+    await promisify(execFile)(process.execPath, [path.join(scripts, 'build-notices.mjs')], {
+      cwd: root, env: { PATH: path.dirname(process.execPath), NODE_ENV: 'test' }, timeout: 10_000, maxBuffer: 32 * 1024,
+    });
+    const manifest = JSON.parse(await readFile(path.join(standalone, 'THIRD_PARTY_SOURCES.json'), 'utf8'));
+    expect(manifest.packages).toHaveLength(4);
+    expect(await readFile(path.join(standalone, 'licenses/npm/pdfkit/LICENSE'), 'utf8')).toBe('Exact synthetic license 0.20.2\r\n');
+    expect(await readFile(path.join(standalone, 'licenses/invoice-fonts/FONT-LICENSE.txt'))).toEqual(await readFile(path.join(root, 'public/fonts/invoice/FONT-LICENSE.txt')));
   });
 
   it('hooks notice collection after the build and retains Docker standalone propagation without relicensing', async () => {

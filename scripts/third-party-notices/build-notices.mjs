@@ -30,6 +30,8 @@ async function resolvePackage(name, from, root) {
 }
 
 export async function collectPdfNotices(projectRoot = ROOT) {
+  // Directory URLs keep their trailing separator; traversal boundaries must not.
+  projectRoot = path.resolve(projectRoot);
   const lock = JSON.parse(await readFile(path.join(projectRoot, 'package-lock.json'), 'utf8'));
   const files = new Map();
   const packages = new Map();

@@ -88,6 +88,8 @@ npx vitest run scripts/__tests__/pdf-runtime-notices.test.ts scripts/__tests__/o
 They cover deterministic byte preservation, nested dependency versions, missing
 upstream-text flags, standalone packaging, lock/version mismatch rejection,
 MPL selection boundaries, source-coordinate mapping and CLI hash rejection.
+They also execute the actual default-root notice CLI against synthetic package
+files and an inert standalone marker, and check trailing-separator equivalence.
 They do not run Java, a validator, browser/server, or container. A final image
 build/inspection remains separate release evidence; do not infer it from unit
 results.
