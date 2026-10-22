@@ -110,6 +110,18 @@ async function screenshot(page: Page, testInfo: TestInfo, filename: string) {
   // Exactly two unchanged, normal-viewport PNGs across this suite; no crops,
   // injected CSS, concealed content, postprocessing or retry duplicates.
   if (testInfo.retry !== 0) return;
+  // Fast close/reopen can finish its GET before the shared 200ms enter fade.
+  // Observe the real animation reaching rest; never disable or alter it.
+  await expect.poll(() => page.getByRole('dialog').evaluate(element => {
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+    const nodes = overlay ? [element, overlay] : [element];
+    return {
+      dialogOpacity: getComputedStyle(element).opacity,
+      overlayOpacity: overlay ? getComputedStyle(overlay).opacity : null,
+      activeAnimations: nodes.flatMap(node => node.getAnimations())
+        .filter(animation => animation.pending || animation.playState === 'running').length,
+    };
+  })).toEqual({ dialogOpacity: '1', overlayOpacity: '1', activeAnimations: 0 });
   const path = testInfo.outputPath(filename);
   await page.screenshot({ path, fullPage: false });
   expect((await stat(path)).size).toBeLessThan(5 * 1024 * 1024);
