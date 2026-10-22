@@ -60,9 +60,12 @@ that every semantic visual discrepancy in an arbitrary PDF can be detected.
   and return ENOSYS for clone3 so libc can use clone for legitimate threads.
   Numbers absent from the build's complete architecture syscall inventory
   are denied too, so newer host syscalls cannot bypass the named denylist.
-  Separate processes, process-group/session escape, sockets/networking,
+  Separate processes, process-group/session escape, arbitrary socket creation/network access,
   io_uring, cross-process memory/handles/signals, IPC, namespace changes and
-  filesystem metadata mutations not mediated by Landlock are denied.
+  filesystem metadata mutations not mediated by Landlock are denied. The sole
+  ioctl exception is FIONBIO on fd 1/2, with both argument high words zero; all
+  other commands/descriptors remain denied. This supports inherited pipe stdio,
+  not socket creation or access to an additional file/device.
 - The child pins `--openssl-config=/dev/null`. Node initializes OpenSSL before
   JavaScript; the renderer must not read host OpenSSL configuration or inherit
   `OPENSSL_CONF`. `/dev/null` is already read-allowed, so this adds no filesystem
@@ -70,8 +73,10 @@ that every semantic visual discrepancy in an arbitrary PDF can be detected.
   or adopt an operator's global TLS/provider configuration.
 - Child environment is constructed from fixed values only. No inherited API
   keys, proxy variables, database URL, PATH, NODE_OPTIONS or credentials; stdio
-  contains only anonymous pipes/no terminal. Parent kills the detached process
-  group on every outcome, awaits close, and deletes temporary files in finally.
+  uses private inherited stdout/stderr channels and ignored stdin, no terminal.
+  On accepted Node/libuv these channels may be Unix socketpair endpoints, not
+  anonymous pipe inodes; this grants no arbitrary socket creation/network access.
+  Parent kills the detached process group on every outcome, awaits close, and deletes temporary files in finally.
 
 Node's JavaScript permission model is only defense in depth. `--allow-addons`
 necessarily allows native canvas; Node permissions do **not** confine that
@@ -236,7 +241,7 @@ independent Docker/LSM policy or native compatibility.
 | ptrace, process_vm, pidfd and signal-sending calls | No cross-process access is intended. A failure/abort path may itself need thread signals; a reported EPERM alone does not justify enabling them. |
 | Session/group changes, namespace/mount/fs-context APIs, handle-based opens | Not part of the supported loader or renderer contract; confinement/process-group escape remains denied. |
 | chmod/chown, xattr mutation, timestamp mutation, truncate/ftruncate | No file/metadata mutation is intended before input parsing. Later output is written to precreated files without truncation. |
-| ioctl | Exact Node/libuv source requires FIONBIO to initialize inherited pipe stdio; blanket denial is a compatibility candidate, not yet a confirmed cause or permission change. Other commands can mutate files/devices and must not become broadly available. |
+| ioctl | Both native CI architectures confirmed inherited-stdio EPERM before parsing. Exact Node/libuv source identifies FIONBIO on fd 1/2 as the relevant operation; a constrained exception is under review/native confirmation, not a broad ioctl grant. |
 | bpf/perf/userfaultfd, memfd, kernel/module/kexec/reboot and keyring APIs | No such application operation is intended. V8/native mapping behavior is a separate native-runtime prerequisite; an error must be identified, not guessed around. |
 
 Landlock file denial normally produces EACCES; Node permission denial has
@@ -244,8 +249,9 @@ ERR_ACCESS_DENIED. Neither distinction is an exhaustive proof of the origin of
 an arbitrary failure. Controlled diagnostics emit only fixed stage/reason,
 allowlisted error/operation/context tokens, a bounded byte count, exit and signal;
 raw stderr, document text, paths and arbitrary error codes are never returned or
-logged. The next ordinary-profile native run must identify the operation before
-any narrow compatibility proposal is accepted.
+logged. The ordinary-profile native run identifies the failing stdio path; it is not
+a direct syscall trace. The source-bound compatibility proposal below still
+requires independent policy review and genuine native positive/negative gates.
 
 Static inspected accepted Node 22.23.4/libuv 1.51.0 path:
 `getStdout/getStderr -> createWritableStdioStream -> net.Socket -> handle.open`.
@@ -260,3 +266,74 @@ Primary implementation references:
 [libuv pipe](https://github.com/libuv/libuv/blob/v1.51.0/src/unix/pipe.c),
 [libuv Linux nonblocking selection](https://github.com/libuv/libuv/blob/v1.51.0/src/unix/internal.h),
 [Node-embedded libuv ioctl](https://github.com/nodejs/node/blob/v22.23.4/deps/uv/src/unix/core.c).
+
+### Constrained inherited-stdio FIONBIO exception (native confirmation pending)
+
+[Native run 39775689737](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39775689737)
+at source 35cee8ec86d3e96c0506ef75476808e9f99e4579 failed on both native
+architectures with stage `launcher`, reason `stdio-setup`, code EPERM and fixed
+context `node-stdio`; no page was parsed and the real-PDF browser gate was not
+reached. This identifies Node's inherited-stdio initialization, not a measured
+successful render. The proposed exception follows the inspected primary source
+path above; it does not suppress the failure or change a host/Docker policy.
+
+The native x64 ioctl number is 16 and native arm64 is 29; any differing or missing
+inventory mapping fails policy construction. The request is exactly Linux
+[FIONBIO 0x5421](https://github.com/torvalds/linux/blob/v6.17/include/uapi/asm-generic/ioctls.h),
+and fd is exactly 1 or 2. Both fd/request arguments are checked as full 64-bit
+values: their upper words must be zero. Argument 2 is a pointer to an int; classic
+seccomp cannot inspect the pointee. Either int boolean merely changes the open
+file description's nonblocking flag. No blanket ioctl, descriptor 0/3+, tty
+control, file clone, file-flag mutation or high-word alias is enabled.
+
+A descriptor number is not an immutable object identity. Native code could close
+and reuse 1/2 or duplicate another allowed descriptor there. Such an operation
+still cannot create a socket or open an object outside the unchanged Landlock
+path rights; the exception would only toggle nonblocking on that otherwise
+obtainable descriptor. The child starts with private inherited stdout/stderr
+channels and ignored stdin, no terminal, directory descriptor or inherited
+sensitive file descriptor. Accepted Node/libuv implements UV_CREATE_PIPE with
+Unix socketpair endpoints; a private existing channel is not arbitrary socket
+creation or a network-addressable capability. This is not an
+inode-bound seccomp policy or a claim that native code is memory-safe.
+
+The 13 new instruction indices below are relative to the exception block.
+Index 13 is the unchanged enosys body, which reloads the syscall number. Every
+jump remains after the validated audit-architecture gate, x32 rejection,
+unknown-number ENOSYS gate and clone rules.
+
+| Index | Operation | True / false target |
+| --- | --- | --- |
+| 0 | Load syscall number | 1 |
+| 1 | Compare native ioctl number | 2 / 13 |
+| 2 | Load fd high word | 3 |
+| 3 | Compare zero | 4 / 12 |
+| 4 | Load fd low word | 5 |
+| 5 | Compare fd 1 | 7 / 6 |
+| 6 | Compare fd 2 | 7 / 12 |
+| 7 | Load request high word | 8 |
+| 8 | Compare zero | 9 / 12 |
+| 9 | Load request low word | 10 |
+| 10 | Compare 0x5421 | 11 / 12 |
+| 11 | Return ALLOW | terminal |
+| 12 | Return EPERM | terminal |
+
+Pure bytecode tests cover both architectures; fd 1/2 positives; invalid, signed
+and upper-word arguments; representative tty/file-mutation
+commands; wrong architecture; x32; unknown calls; preserved named denial and
+legitimate thread-clone decisions. Pointer values are deliberately not presented
+as verified. These tests install no filter and do not establish kernel/native
+compatibility. The unchanged real native matrix and production-derived real PDF
+browser gate remain release requirements. The inspected upstream
+[ordinary Docker profile](https://github.com/moby/profiles/blob/main/seccomp/default.json)
+already lists ioctl among allowed calls; this is static compatibility research,
+not proof of the exact profile/kernel deployed by a particular operator.
+
+
+Inherited-channel implementation and FIONBIO semantics are independently
+confirmed in primary source: [Node-embedded libuv process setup](https://github.com/nodejs/node/blob/v22.23.4/deps/uv/src/unix/process.c#L187-L198)
+uses a Unix SOCK_STREAM socketpair for UV_CREATE_PIPE;
+[Linux FIONBIO handling](https://github.com/torvalds/linux/blob/v6.17/fs/ioctl.c#L319-L340)
+changes only the open file description's O_NONBLOCK flag. These facts explain
+the narrow request allowance without claiming that descriptors are anonymous
+pipe inodes or that arbitrary network access is allowed.

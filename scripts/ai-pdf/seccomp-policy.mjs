@@ -4,10 +4,13 @@
 export function completeSandboxPolicy(base, arch, syscallList) {
   if (!['x86_64', 'aarch64'].includes(arch)) throw new Error('Unsupported policy target');
   const syscalls = new Map(syscallList.split('\n').map(line => line.trim().split(/\s+/)).filter(pair => pair.length === 2).map(([number, name]) => [name, Number(number)]));
-  const clone = syscalls.get('clone'), clone3 = syscalls.get('clone3');
+  const clone = syscalls.get('clone'), clone3 = syscalls.get('clone3'), ioctl = syscalls.get('ioctl');
   const knownNumbers = [...new Set(syscalls.values())].sort((a, b) => a - b);
   if (!knownNumbers.length || knownNumbers.some(number => !Number.isSafeInteger(number) || number < 0 || number >= 0x40000000)) throw new Error('Invalid syscall inventory');
   if (!Number.isInteger(clone) || !Number.isInteger(clone3)) throw new Error('Missing clone policy support');
+  // FIONBIO and seccomp_data argument-word offsets are reviewed only for these
+  // native little-endian ABIs. Do not infer another ABI from a partial list.
+  if (ioctl !== (arch === 'x86_64' ? 16 : 29)) throw new Error('Missing native ioctl policy support');
   const auditArch = arch === 'x86_64' ? 0xc000003e : 0xc00000b7;
   // Validate the maintained enosys architecture gate and number reload before
   // adding instructions. Never extend unknown compiler output optimistically.
@@ -33,6 +36,25 @@ export function completeSandboxPolicy(base, arch, syscallList) {
   add(0x20, 0, 0, 16); // LD low 32 bits of args[0], little-endian targets only.
   add(0x45, 1, 0, 0x10000); // CLONE_THREAD required: no separate process budget.
   add(0x06, 0, 0, 0x50001);
+  // libuv opens inherited stdout/stderr pipes with ioctl(FIONBIO). Permit only
+  // that request on fd 1/2, including checks of BOTH full 64-bit arguments.
+  // The third argument is an int pointer; seccomp cannot inspect its pointee.
+  // Either boolean only changes the allowed descriptor's nonblocking state.
+  // Closing/reusing 1/2 cannot confer another path or socket-creation right.
+  // Jump offsets below are relative to the next instruction, not this one:
+  add(0x20, 0, 0, 0); // Reload nr after the clone flags branch.
+  add(0x15, 0, 11, ioctl); // Non-ioctl -> unchanged enosys body.
+  add(0x20, 0, 0, 20); // args[0] high: reject fd truncation/sign-extension.
+  add(0x15, 0, 8, 0); // Nonzero high word -> final EPERM.
+  add(0x20, 0, 0, 16); // args[0] low: only inherited stdout/stderr numbers.
+  add(0x15, 1, 0, 1); // fd=1 -> request check.
+  add(0x15, 0, 5, 2); // fd!=2 -> final EPERM.
+  add(0x20, 0, 0, 28); // args[1] high: no request truncation/ABI alias.
+  add(0x15, 0, 3, 0); // Nonzero high word -> final EPERM.
+  add(0x20, 0, 0, 24); // args[1] low: Linux FIONBIO on both supported ABIs.
+  add(0x15, 0, 1, 0x5421); // Every other command -> final EPERM.
+  add(0x06, 0, 0, 0x7fff0000); // ALLOW this one descriptor/request combination.
+  add(0x06, 0, 0, 0x50001); // EPERM for all other ioctl arguments.
   // Remaining enosys policy reloads the syscall number. Relative jumps in its
   // unchanged body still target exactly the same denylist/return instructions.
   const result = Buffer.concat([base.subarray(0, 24), ...instructions, base.subarray(24)]);

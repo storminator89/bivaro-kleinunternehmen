@@ -117,7 +117,7 @@ async function renderPdf(input: string, output: string, signal?: AbortSignal): P
       const codes = ['ERR_ACCESS_DENIED', 'ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_DLOPEN_FAILED', 'ERR_UNKNOWN_FILE_EXTENSION', 'ERR_INVALID_ARG_VALUE', 'ERR_INVALID_ARG_TYPE', 'ERR_WORKER_INIT_FAILED', 'ERR_SYSTEM_ERROR', 'EMFILE', 'ENOMEM', 'EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'EISDIR', 'EBADF', 'EIO', 'SyntaxError', 'ReferenceError', 'TypeError', 'RangeError'];
       startupCode = codes.find(value => new RegExp(`\\b${value}\\b`).test(diagnosticText)) ?? null;
       const operations = ['open', 'read', 'write', 'realpath', 'readlink', 'stat', 'lstat', 'fstat', 'access', 'scandir', 'opendir', 'close', 'uv_cwd', 'uv_chdir', 'uv_pipe_open', 'uv_tty_init', 'uv_os_get_passwd', 'uv_os_homedir', 'uv_signal_start', 'uv_loop_init', 'uv_thread_create', 'pthread_create', 'socket', 'socketpair', 'connect', 'getaddrinfo', 'ioctl', 'fcntl', 'mmap', 'mprotect', 'getrandom', 'epoll_ctl', 'getcwd'];
-      startupOperation = operations.find(value => new RegExp(`(?:syscall:\\s*['"]${value}['"]|\\b(?:EPERM|EACCES|ENOENT|EMFILE)\\b[^\\n]*,\\s*${value}(?:[\\s'":]|$))`).test(diagnosticText)) ?? null;
+      startupOperation = operations.find(value => new RegExp(`(?:syscall:\\s*['"]${value}['"]|\\b(?:EPERM|EACCES|ENOENT|EMFILE)\\b[^\\n]*,\\s*${value}(?:[\\s'":]|$)|\\b${value}\\s+(?:EPERM|EACCES|ENOENT|EMFILE)\\b)`).test(diagnosticText)) ?? null;
 
       const contexts: [string, RegExp][] = [
         ['node-stdio', /createWritableStdioStream|getStdout|getStderr/],

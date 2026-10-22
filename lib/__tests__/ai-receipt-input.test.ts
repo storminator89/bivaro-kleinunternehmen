@@ -91,6 +91,7 @@ describe('bounded original input preparation', () => {
   it.each([
     ["Error: EPERM: operation not permitted, open; syscall: 'open'; private stack", 'open'],
     ["Error: EACCES: permission denied, realpath '/private/path'", 'realpath'],
+    ['Error: open EPERM\n at createWritableStdioStream (private stack)', 'open'],
     ["Error: EPERM; syscall: 'PRIVATE_OPERATION'", null],
   ])('reports only reviewed startup operations from %s', async (stderr, startupOperation) => {
     Object.assign(state, { exitCode: 1, stderr });
