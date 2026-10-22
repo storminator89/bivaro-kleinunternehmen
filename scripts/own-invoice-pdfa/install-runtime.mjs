@@ -2,13 +2,13 @@
 /** Build-time only: authentic, version/digest-pinned official veraPDF CLI. */
 import { createHash } from 'node:crypto';
 import { execFile as execFileCallback } from 'node:child_process';
-import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import JSZip from 'jszip';
+import { writeVerapdfNotices } from './runtime-notices.mjs';
 
 export const VERAPDF_ASSET = Object.freeze({
   version: '1.30.3',
@@ -61,6 +61,22 @@ export function automatedInstallation(destination) {
 </AutomatedInstallation>\n`;
 }
 
+/**
+ * Build-only startup probe. These bounds never configure document validation.
+ * @param {string} binary
+ * @param {string} temporary
+ * @param {(file: string, args: string[], options: import('node:child_process').ExecFileOptions) => Promise<{stdout: string, stderr: string}>} [executor]
+ */
+export async function probeInstalledVersion(binary, temporary, executor = execFile) {
+  // Fixed allowlist: never inherit operator/JVM injection environment variables.
+  const env = { PATH: '/usr/bin:/bin', HOME: temporary, TMPDIR: temporary, LANG: 'C.UTF-8', TZ: 'UTC', NODE_ENV: 'production',
+    JAVACMD: '/usr/bin/java', JAVA_OPTS: '-Xms16m -Xmx192m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.awt.headless=true' };
+  const version = await executor(binary, ['--version'], {
+    cwd: temporary, env, timeout: 120_000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024,
+  });
+  if (version.stdout.trim().split(/\r?\n/u)[0] !== `veraPDF ${VERAPDF_ASSET.version}`) throw new Error('Installed veraPDF version mismatch.');
+}
+
 export async function installRuntime(destination) {
   if (!path.isAbsolute(destination) || destination === path.parse(destination).root) throw new Error('An absolute installation directory is required.');
   const archive = await downloadArchive();
@@ -88,20 +104,8 @@ export async function installRuntime(destination) {
     });
     const binary = path.join(destination, 'verapdf');
     await chmod(binary, 0o755);
-    const version = await execFile(binary, ['--version'], { cwd: temporary, env, timeout: 30_000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 });
-    if (version.stdout.trim().split(/\r?\n/u)[0] !== `veraPDF ${VERAPDF_ASSET.version}`) throw new Error('Installed veraPDF version mismatch.');
-    const licenseRoot = path.join(destination, 'licenses');
-    await mkdir(licenseRoot);
-    for (const name of ['GPL-3.0.txt', 'MPL-2.0.txt']) {
-      await copyFile(fileURLToPath(new URL(`./licenses/${name}`, import.meta.url)), path.join(licenseRoot, name), constants.COPYFILE_EXCL);
-    }
-    await writeFile(path.join(destination, 'THIRD-PARTY-NOTICES.txt'), [
-      `veraPDF CLI ${VERAPDF_ASSET.version}: GPLv3+ OR MPLv2+; retain upstream copyright notices and unmodified JAR dependency notices.`,
-      VERAPDF_ASSET.url, `SHA-256 ${VERAPDF_ASSET.sha256}`,
-      `This digest was pinned after detached GPG signature verification with official fingerprint ${VERAPDF_ASSET.signingFingerprint}.`,
-      'Official verification documentation: https://docs.verapdf.org/install/',
-      'The build checks the pinned digest; it does not claim a new GPG verification on each build.',
-    ].join('\n') + '\n', { flag: 'wx', mode: 0o644 });
+    await probeInstalledVersion(binary, temporary);
+    await writeVerapdfNotices(destination, VERAPDF_ASSET);
     return binary;
   } catch (error) {
     if (created) await rm(destination, { recursive: true, force: true });
