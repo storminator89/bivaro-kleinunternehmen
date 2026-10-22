@@ -41,6 +41,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+          cache: npm
+      - name: Install locked independent report parser for the test only
+        run: npm ci --ignore-scripts
       - name: Build current runtime without publishing
         run: docker build --pull --tag bivaro-runtime-smoke .
       - name: Check isolated non-root runtime and synthetic PDF/database
@@ -48,4 +54,5 @@ jobs:
           docker run --rm --network=none --entrypoint sh
           --mount type=bind,src="$PWD/scripts/container-runtime-smoke.sh",dst=/tmp/container-runtime-smoke.sh,readonly
           --mount type=bind,src="$PWD/lib/__tests__/fixtures/incoming-validation",dst=/tmp/validator-fixtures,readonly
+          --mount type=bind,src="$PWD/node_modules/sax",dst=/tmp/smoke-sax,readonly
           bivaro-runtime-smoke /tmp/container-runtime-smoke.sh

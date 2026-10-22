@@ -16,7 +16,8 @@ describe('patched container compatibility gate',()=>{
     expect(workflow).toContain('docker build --pull');
     expect(workflow).toContain('--network=none');
     expect(workflow).not.toContain('docker push');
-    expect(workflow.match(/readonly/g)).toHaveLength(2);
+    expect(workflow.match(/readonly/g)).toHaveLength(3);
+    expect(workflow).toContain('npm ci --ignore-scripts');
   });
   it('checks actual entrypoint, database, renderer and real offline validation with bounded polling',()=>{
     const script=read('scripts/container-runtime-smoke.sh');

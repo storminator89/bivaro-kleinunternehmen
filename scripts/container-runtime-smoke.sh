@@ -31,7 +31,7 @@ for format in cii ubl; do
   node - "$directory" <<'NODE'
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const sax = require('/app/node_modules/sax');
+const sax = require('/tmp/smoke-sax');
 const dir = process.argv[2];
 const xml = fs.readFileSync(`${dir}/source-report.xml`, 'utf8');
 if (!xml.length || Buffer.byteLength(xml)>2*1024*1024 || /<!DOCTYPE|<!ENTITY/i.test(xml)) throw Error('Invalid report');
