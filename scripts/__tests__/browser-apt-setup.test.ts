@@ -157,8 +157,10 @@ describe('per-command browser dependency transport bounds', () => {
     expect(workflow).toContain('        timeout-minutes: 25');
     expect(workflow).toContain('--retries=0');
     const allowed = workflow.split('          allowed = {')[1].split('          }')[0].match(/'[^']+\.png'/g);
-    expect(allowed).toHaveLength(50);
-    expect(new Set(allowed).size).toBe(50);
+    expect(allowed).toHaveLength(52);
+    expect(new Set(allowed).size).toBe(52);
+    expect(allowed).toContain("'receipt-sequence-desktop-1440.png'");
+    expect(allowed).toContain("'receipt-sequence-mobile-390.png'");
     expect(workflow).toContain('limit = 5 * 1024 * 1024');
     expect(workflow).toContain('          retention-days: 1');
     expect(workflow).toContain('          compression-level: 0');

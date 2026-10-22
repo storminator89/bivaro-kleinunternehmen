@@ -6,7 +6,7 @@ PR119 browser run [39773046663](https://github.com/storminator89/bivaro-kleinunt
 
 ## Narrow workflow change
 
-Base: local font-integrated PR119 commit `0c2aa3767c4f649d54f0f3bf64aca97e2c4a2c12`.
+Original transport-candidate base: local font-integrated PR119 commit `0c2aa3767c4f649d54f0f3bf64aca97e2c4a2c12`. The current budget integration incorporates accepted main `3c4fd511d34be384c4b3f1cdfde467ffff89f36a` (local `7d8a7c8f24c91ef441c04904b5ba96c553eef918`, tree `7ad3006e2ab1229e687401055bb94b582d57d9ea`) without changing any main-relative application/PDF/E2E/dependency bytes.
 
 Each dependency setup step creates its own private `mktemp` configuration beneath the required `RUNNER_TEMP`, removes it on shell exit, and sets exactly:
 
@@ -22,9 +22,9 @@ Hosted run [39779270998](https://github.com/storminator89/bivaro-kleinunternehme
 
 The installed Playwright1.59.1 dependency source executes `apt-get update` and its own exact browser dependency list. Its usual non-root `sudo -- sh -c` escalation does not preserve the caller's APT_CONFIG. Therefore the workflow invokes the installed Node executable and installed Playwright CLI explicitly as root for `install-deps chromium`, then invokes that same CLI without sudo for `install chromium`. No `npx` package lookup is needed, no dependency list is copied or reduced, and browser downloads remain in the original runner-user cache.
 
-The existing PDF/display apt update and install keep the exact package arguments `ghostscript xvfb xauth default-jre-headless util-linux poppler-utils`, and retain all executable/version probes. No mirror, repository, signature/TLS verification, host configuration file, dependency version or functional assertion is changed. These are connection/data-idle limits and one failed-file retry, not an absolute bound on total setup time. Failed setup remains a failed gate; there is no retry-until-green loop.
+The PDF/display apt update and install keep accepted main's exact package arguments `ghostscript xvfb xauth default-jre-headless util-linux poppler-utils`, and retain all executable/version probes. The additional Poppler dependency comes from the already accepted own-invoice PDF integration, not this budget delta. No main-relative mirror, repository, signature/TLS verification, host configuration file, dependency version or functional assertion is changed. These are connection/data-idle limits and one failed-file retry, not an absolute bound on total setup time. Failed setup remains a failed gate; there is no retry-until-green loop.
 
-The full-suite command and the entire workflow section from the hash-pinned official validator onward remain byte-identical to the base. This includes zero browser retries, all50 evidence names, lossless proof checks,5MiB cap, one-day retention and artifact compression settings.
+The full-suite command remains byte-identical to accepted main. The workflow section from the hash-pinned official validator onward preserves main's own-invoice PDF-A verifier, real final-byte browser cases, Poppler page rendering and PDF artifact retention; the receipt guard adds only its two screenshot allowlist entries there. Zero browser retries, all52 screenshot names, lossless proof checks,5MiB cap, one-day retention and screenshot compression settings remain intact. Accepted main's PDF/E2E source bytes and the existing receipt-navigation assertions are preserved; combined case discovery is checked without executing functional test bodies locally.
 
 ## Measured whole-job budget
 
@@ -36,7 +36,7 @@ The whole hosted job has a 45-minute orchestration ceiling instead of 30 minutes
 
 Measured slow setup 26m 20s + functional 8m 51s + evidence 5m 40s is about 40m 51s, so even 40 minutes is insufficient; 45 leaves about 4 minutes for ordinary variance/overhead. This does not guarantee completion under arbitrary network slowness. It permits at most 15 additional runner-minutes per execution, not guaranteed extra usage or a new service.
 
-Only the whole-job orchestration ceiling changes. The 25-minute functional-step limit, 20-minute Playwright global timeout, 30-second PDF subprocess sandbox, browser retries 0, per-connection transport bounds, dependency/package lists, mirrors, signature checks, 50-image allowlist, 5MiB artifact cap and one-day retention remain unchanged. No current run is cancelled or rerun by this change.
+Only the whole-job orchestration ceiling changes. The 25-minute functional-step limit, 20-minute Playwright global timeout, 30-second PDF subprocess sandbox, browser retries 0, per-connection transport bounds, dependency/package lists, mirrors, signature checks, 52-image allowlist, 5MiB artifact cap and one-day retention remain unchanged. No current run is cancelled or rerun by this change.
 
 ## Verification
 
@@ -44,6 +44,6 @@ Only the whole-job orchestration ceiling changes. The 25-minute functional-step 
 - Cases cover both setup paths with20,15 and1-second bounds; independent invalid HTTP/HTTPS values, missing/empty/duplicate/unexpected output, retries other than1, dependency failure preventing browser download, apt-update failure preventing package installation, exact package arguments and temporary-file cleanup.
 - YAML parsing, Bash syntax, exact three-key configuration, protected workflow prefix/tail comparison and `git diff --check` pass.
 - Focused ESLint and full no-emit TypeScript checks pass with Node22.23.4.
-- No local apt/install/browser checks or new GitHub workflow runs were performed for this candidate. Complete exact-published-source hosted acceptance and the final50-image artifact remain required.
+- No local apt/install/browser checks or new GitHub workflow runs were performed for this candidate. Complete exact-published combined-source hosted acceptance and the final52-image artifact remain required.
 
 Primary references: [APT configuration and retries](https://manpages.debian.org/bookworm/apt/apt.conf.5.en.html), [HTTP transport timeout](https://manpages.debian.org/bookworm/apt/apt-transport-http.1.en.html), [HTTPS inheritance](https://manpages.debian.org/bookworm/apt/apt-transport-https.1.en.html), [official Playwright dependency installation and root environment guidance](https://playwright.dev/docs/browsers#install-system-dependencies).

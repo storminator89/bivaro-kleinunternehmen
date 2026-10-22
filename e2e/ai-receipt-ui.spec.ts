@@ -144,8 +144,9 @@ test('mocked optional AI settings and dirty-safe receipt suggestions', async ({ 
     await expect(dialog.getByAltText('Unverändertes Foto-Original: synthetic-ai-receipt.png', { exact: true })).toBeVisible();
     await dialog.getByLabel('Lieferant', { exact: true }).fill('Eigener unveränderlicher Entwurf');
     await expect(dialog.getByRole('button', { name: 'Diesen Beleg mit KI auslesen', exact: true })).toBeDisabled();
-    page.once('dialog', confirmation => confirmation.dismiss());
     await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
+    await expect(dialog.getByRole('alertdialog', { name: 'Ungespeicherter Prüfentwurf', exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Hier bleiben', exact: true }).click();
     await expect(dialog.getByLabel('Lieferant', { exact: true })).toHaveValue('Eigener unveränderlicher Entwurf');
     await dialog.getByRole('button', { name: 'Prüfentwurf speichern', exact: true }).click();
     await expect(dialog.getByText('Prüfentwurf gespeichert · nicht gebucht', { exact: true })).toBeVisible();

@@ -1,8 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { ReviewLink as Link } from "@/components/purchases/review-link";
 import { useSession, signOut } from "next-auth/react";
 import { LogOut, Settings, User as UserIcon } from "lucide-react";
+
+import { useReviewNavigation } from "@/components/purchases/use-review-navigation";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -24,6 +26,7 @@ function getInitials(name?: string | null, email?: string | null) {
 
 export function UserMenu() {
   const { data: session, status } = useSession();
+  const requestNavigation = useReviewNavigation();
 
   if (status !== "authenticated" || !session?.user) return null;
 
@@ -74,7 +77,7 @@ export function UserMenu() {
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={() => requestNavigation(() => { void signOut({ callbackUrl: "/" }); })}
           className="cursor-pointer text-destructive focus:text-destructive"
         >
           <LogOut className="mr-2 h-4 w-4" /> Abmelden

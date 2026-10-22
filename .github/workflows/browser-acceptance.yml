@@ -205,6 +205,8 @@ jobs:
               'incoming-validation-mobile-390.png',
               'mocked-email-accepted-1440.png',
               'mocked-email-unknown-390.png',
+              'receipt-sequence-desktop-1440.png',
+              'receipt-sequence-mobile-390.png',
               'record-search-1440.png',
               'record-search-390.png',
               'payment-terms-settings-1440.png',
