@@ -12,6 +12,10 @@ async function signIn(page: Page, email: string, password: string) {
   await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click(); await expect(page).toHaveURL(/\/dashboard/);
 }
 async function openPalette(page: Page) {
+  // A hard navigation initially renders the SessionProvider loading shell,
+  // before the authenticated palette and its key listener exist. Wait for the
+  // real authenticated trigger; do not retry/toggle a missed shortcut.
+  await expect(page.getByRole('button', { name: 'Befehlspalette öffnen', exact: true }).filter({ visible: true }).first()).toBeVisible();
   await page.keyboard.press('Control+k');
   const dialog = page.getByRole('dialog', { name: 'Befehlspalette', exact: true });
   await expect(dialog).toBeVisible();
