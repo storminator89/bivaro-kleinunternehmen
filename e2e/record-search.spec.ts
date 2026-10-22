@@ -83,7 +83,15 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     await expect(page).toHaveURL(new RegExp(`/customers\\?customer=${customers[0].id}`));
     await expect(page.getByText('Ausgewählter Kunde', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'SYN-SEARCH Kunde 0 bearbeiten', exact: true }).filter({ visible: true })).toBeVisible();
-    await page.goBack(); await page.goForward(); await page.reload(); await expect(page.getByText('Ausgewählter Kunde', { exact: true })).toBeVisible();
+    // App Router history transitions do not perform a document load. Observe
+    // each destination before issuing the next history operation or Reload.
+    await page.goBack(); await expect(page).toHaveURL(/\/customers$/);
+    await expect(page.getByRole('button', { name: 'SYN-SEARCH Kunde 1 bearbeiten', exact: true }).filter({ visible: true })).toBeVisible();
+    await page.goForward(); await expect(page).toHaveURL(new RegExp(`/customers\\?customer=${customers[0].id}`));
+    await expect(page.getByText('Ausgewählter Kunde', { exact: true })).toBeVisible();
+    await page.reload(); await expect(page).toHaveURL(new RegExp(`/customers\\?customer=${customers[0].id}`));
+    await expect(page.getByText('Ausgewählter Kunde', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'SYN-SEARCH Kunde 0 bearbeiten', exact: true }).filter({ visible: true })).toBeVisible();
     await page.goto(`/customers?customer=${foreignCustomer.id}`); await expect(page.getByText('Kunde nicht gefunden oder nicht verfügbar.', { exact: true })).toBeVisible(); await expect(page.getByText(foreignCustomer.name, { exact: true })).toHaveCount(0);
     await page.goto('/dashboard');
     ({ dialog, input } = await openPalette(page)); await input.fill('SYN-SEARCH-OUT');
