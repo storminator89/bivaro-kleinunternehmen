@@ -1,11 +1,82 @@
 # Zentrale Ticketübersicht
 
-Stand: 20.09.2026, 21:29:59 Europe/Berlin (Statusdokumentation der laufenden Arbeitswelle)
+Historischer Ticketstand: 20.09.2026, 21:29:59 Europe/Berlin (Statusdokumentation der damaligen Arbeitswelle)
 Audit-/Backlogbasis: `85972ed9fe61d268b6640882ea2ddc6e616d1859`
 Quelle: `/home/pmeyhoefer/Downloads/Bivaro_Agent_Backlog.json` (nur gelesen; Originaldatei unverändert)
 Git-Basis zum Dokumentationsstand: `0208c62f26ff60cf855dfef21e74e0ff6466e7c9` (`main`); Welle 6 startete auf dem uncommitted Welle-5-Arbeitsbaum und erhält diese Änderungen unverändert. Zum Dokumentationsstand liegen zusätzliche uncommitted Welle-6-Agentenänderungen vor; Details und Fremdänderungen siehe unten.
 
 Diese Übersicht enthält alle 160 Backlog-Tickets. Der Status ist der aktuelle Arbeitsstand dieser Welle und ersetzt weder die im Backlog offenen ACs noch fachliche, rechtliche oder produktive Freigaben. „Vorgeschlagen“ bedeutet ausdrücklich, dass in dieser Welle keine Umsetzung vorliegt. Architektur-Discovery ist separat von Produktimplementierung ausgewiesen.
+
+## Integrationscheckpoint vom 22.10.2026, 18:39:07 UTC
+
+Dieser zusätzliche Checkpoint trennt den bestätigten Integrationsstand von der
+historischen AC-Bewertung oben und unten. Alle **160 Ticketobjekte**, die Summen
+**3 abgeschlossen / 21 teilumgesetzt / 4 Discovery / 132 vorgeschlagen** sowie
+bestehende Vorfälle und Auditquellen bleiben unverändert. GitHub-Nummern wie
+**#116 und #127 sind keine BV-Ticket-IDs**. Grüne Integrationsläufe schließen
+nicht automatisch historische ACs oder fachliche/produktive Freigaben.
+
+### Integrierte Basis: PR #123 / main
+
+[PR #123](https://github.com/storminator89/bivaro-kleinunternehmen/pull/123)
+wurde am 22.10.2026 um **17:35:23 UTC** gemergt;
+[Issue #116](https://github.com/storminator89/bivaro-kleinunternehmen/issues/116)
+ist geschlossen. Bestätigte Basis ist Commit
+`8f9f6264dab78b3f3d4991278df5a23d7a8394ce`, Tree
+`53d5597fa649252ecc5ce841d279edfb71d7a954`.
+Alle **fünf Workflows und zehn Jobs** dieser Basis waren im **ersten Versuch**
+erfolgreich:
+
+| Workflow | Lauf / tatsächliches Ergebnis |
+|---|---|
+| Own-invoice PDF-A conformance | [39824036507](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036507): erfolgreich |
+| CI | [39824036377](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036377): erfolgreich |
+| Docker Publish | [39824036332](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036332): erfolgreich |
+| Container runtime compatibility | [39824036331](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036331): erfolgreich |
+| Browser acceptance | [39824036238](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036238): 124 bestanden |
+
+Die Bildabnahme umfasst **153 aktuelle Bilder: 38 frische vollständige
+Originalbildprüfungen plus 115 Wiederverwendungen nach exaktem Identitätsbeleg**.
+Das sind ausdrücklich **nicht 153 frische Browseraktionen**. Das vollständige,
+read-only auf Größe und Hash geprüfte Postmerge-Evidenzsiegel heißt
+`postmerge-acceptance-main8f9f626.json` (extern aufbewahrte Evidenz, nicht Teil
+dieses Repositorys): **19.868 Bytes**, SHA-256
+`4c2b797beafa03631c210a47f9ba9abd6680cae8a814f2f3ac0b1a77d5fb4834`.
+
+### Offene Integrationsvorfälle: PR #126 / Issue #127
+
+[PR #126](https://github.com/storminator89/bivaro-kleinunternehmen/pull/126)
+ist weiterhin offen und Draft; dokumentierter kanonischer Commit
+`a8a93820d30361b6379f830eef2ea8ee659d66a5`, Tree
+`42ebb210367a68437989e65327adf7c6652011f9`, ist **nicht main**.
+
+| Workflow | Lauf / tatsächliches Ergebnis und Restabnahme |
+|---|---|
+| CI | [39827040238](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040238): erfolgreich |
+| Own-invoice PDF-A conformance | [39827040198](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040198): erfolgreich |
+| Container runtime compatibility | [39827040190](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040190): erfolgreich |
+| Foreign-PDF | [39827040211](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040211): fehlgeschlagen; JVM- und CLI-Startup auf x64/arm64 erfolgreich, danach `source-precheck-vector-text` mit `validation-result` / `nonzero-exit` / `UNCLASSIFIED_FAILURE`. Die Ursache bleibt ungeklärt; kein nativer Erfolgsnachweis. |
+| Browser acceptance | [39827040240](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040240): fehlgeschlagen, 123/124 bestanden; Tastatur-Rückkehrfokus des E-Mail-Dialogs fehlerhaft. Der abschließende PDF-Render-Schritt wurde übersprungen und ist nicht abgenommen. |
+
+[Issue #127](https://github.com/storminator89/bivaro-kleinunternehmen/issues/127)
+ist offen. Die lokal geprüfte Fokuskorrektur ist noch **nicht hosted abgenommen**.
+Der nächste lokale Foreign-PDF-Kandidat umfasst die strikte Ablehnung von
+Validator-Exit 1 / Nichtkonformität und eine Diagnose mit festem synthetischem
+Eingang; das ist **keine Behauptung eines nativen Erfolgs**. Native Abnahme der
+Fremd-PDF-Verarbeitung, grüne Browserabnahme und finale PDF-Render-Abnahme bleiben
+für diese Änderung offen; Erfolge auf main ersetzen diese Nachweise nicht.
+
+Ghostscript ist weiterhin installiert; die Anwendungslizenz bleibt AGPL.
+Apache-2.0 und die DE/EN-README-Finalisierung folgen erst nach Entfernung von
+Ghostscript. Die vorbereitete README auf `docs/bilingual-product-readme`,
+kanonischer Commit `7b87ff0f9798ec0edc9c31347d85f776a2cecbac`, ist nicht gemergt.
+
+Die Angaben sind ein datierter Evidenzcheckpoint, keine laufende Statusabfrage.
+Für diese Dokumentationsänderung wurden keine Builds, nativen Tests,
+Browserläufe oder neuen GitHub-CI-Läufe gestartet. Das JSON ergänzt ausschließlich
+`integrationCheckpoint`; die vorhandenen Ticketstatuswerte werden weder erweitert
+noch neu bewertet. Historische Aussagen zu damaligen uncommitted Arbeitsbäumen,
+lokalen Tests und fehlender Remote-CI gelten nur für ihre jeweilige frühere Welle.
 
 ## Test-/Legacy-Audit vom 17.10.2026
 

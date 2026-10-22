@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { foreignFailureDiagnostic } from './diagnostics.mjs';
 import { probeTrustedVerifierStartup } from './startup-probe.mjs';
+import { probeTrustedFixtureValidation } from './fixture-validation-probe.mjs';
 const ORIGIN='http://127.0.0.1:3000';
 const permittedPaths=new Set(['/api/auth/register','/api/auth/csrf','/api/auth/callback/credentials','/api/auth/session','/api/pdfa3','/api/purchase-documents']);
 const FIXTURE='/tmp/foreign-pdf-test',EVIDENCE='/tmp/foreign-pdf-evidence';
@@ -157,6 +158,11 @@ try{
   const startup=await probeTrustedVerifierStartup({foreignVerifierCommand,veraPdfSpawnSpecification,prepareForeignVerifierConfig,assertForeignVerifierConfigOnly});
   console.error(JSON.stringify(startup));
   await writeFile(`${EVIDENCE}/startup.json`,JSON.stringify(startup,null,2),{flag:'wx',mode:0o600});
+  // Additional fixed-synthetic-only diagnosis; NEVER a substitute for the
+  // unchanged mandatory production source/final/worker/API checks below.
+  const fixtureDiagnostic=startup.results.length===2&&startup.results.every(result=>result.outcome==='passed')?await probeTrustedFixtureValidation({foreignVerifierCommand,veraPdfSpawnSpecification,prepareForeignVerifierConfig,assertForeignVerifierConfigOnly},process.env.BIVARO_FOREIGN_SOURCE_CHECKOUT):{event:'foreign-pdf-trusted-fixture-validation',outcome:'startup-unavailable'};
+  console.error(JSON.stringify(fixtureDiagnostic));
+  await writeFile(`${EVIDENCE}/fixture-validation.json`,JSON.stringify(fixtureDiagnostic,null,2),{flag:'wx',mode:0o600});
   for(const name of allCases.positive){
     const bytes=await original(name);
     // Additional confined diagnostic prerequisite, never a substitute for the
@@ -188,6 +194,9 @@ try{
   assert.deepEqual(await snapshot(),before);
   assert.equal(startup.configuration?.templates.length,5);
   assert(startup.results.length===2&&startup.results.every(result=>result.outcome==='passed'));
+  assert.equal(fixtureDiagnostic.outcome,'passed');
+  assert.equal(fixtureDiagnostic.report?.verdict,'coherent-compliant');
+  assert.equal(fixtureDiagnostic.provenance?.fixture.sha256,inputHashes.get('vector-text'));
   await writeFile(`${EVIDENCE}/manifest.json`,JSON.stringify({status:'passed',syntheticOnly:true,platform:process.platform,architecture:process.arch,node:process.version,verifier:'1.30.3',cases,rejected,originalFilesPreserved:true,archivedOriginalAndAttachmentPreserved:true,statelessFinancialCountsBefore:before,statelessFinancialCountsAfter:await snapshot(),limits:'No claim of cryptographic signature validation or full XML/business-rule conformance; synthetic signature dictionary is a conservative rejection fixture.'},null,2),{flag:'wx',mode:0o600});
   console.log(`Genuine foreign PDF compatibility gate passed (${process.arch}).`);
 }catch(error){

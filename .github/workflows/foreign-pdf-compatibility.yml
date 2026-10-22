@@ -54,7 +54,7 @@ jobs:
         run: |
           node -e 'if(process.platform!=="linux" || process.arch!==process.env.EXPECTED_ARCHITECTURE)throw Error("Native architecture required")'
           npm ci --ignore-scripts
-          node scripts/foreign-pdf/build-native-fixtures.mjs "$RUNNER_TEMP/foreign-pdf-fixtures"
+          node scripts/foreign-pdf/build-native-fixtures.mjs "$RUNNER_TEMP/foreign-pdf-fixtures" "$GITHUB_SHA"
       - name: Build exact production Dockerfile without publishing
         run: docker build --pull --tag bivaro-foreign-compatibility .
       - name: Exercise actual isolated worker, verifier, API and existing-original downloads
@@ -66,6 +66,7 @@ jobs:
           status=0
           docker run --name bivaro-foreign-compatibility --network=none --entrypoint sh \
             --env DATABASE_URL=file:/tmp/bivaro-foreign-compatibility.db \
+            --env BIVARO_FOREIGN_SOURCE_CHECKOUT="$GITHUB_SHA" \
             --mount type=bind,src="$RUNNER_TEMP/foreign-pdf-fixtures",dst=/tmp/foreign-pdf-test,readonly \
             --mount type=bind,src="$PWD/node_modules",dst=/tmp/foreign-pdf-test/node_modules,readonly \
             bivaro-foreign-compatibility scripts/foreign-pdf/container-gate.sh || status=$?

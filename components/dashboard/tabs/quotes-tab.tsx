@@ -137,6 +137,7 @@ export function QuotesTab({
     const [confirmConvert, setConfirmConvert] = useState<Quote | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<Quote | null>(null);
     const [emailQuote, setEmailQuote] = useState<Quote | null>(null);
+    const emailReturnFocusRef = React.useRef<HTMLButtonElement | null>(null);
 
     const handleConvert = async () => {
         if (!confirmConvert) return;
@@ -256,7 +257,7 @@ export function QuotesTab({
                                 {!quote.convertedInvoice && !quoteConversionBlockReason(quote, workflowDate) && (
                                     <Button variant="outline" size="sm" className="min-h-11" disabled={convertingId === quote.id} onClick={() => setConfirmConvert(quote)}>In Rechnung</Button>
                                 )}
-                                <Button variant="outline" size="sm" disabled={quote.status === 'REJECTED' || quote.status === 'EXPIRED'} onClick={() => setEmailQuote(quote)}><Mail className="h-4 w-4" aria-hidden="true" />E-Mail</Button>
+                                <Button variant="outline" size="sm" disabled={quote.status === 'REJECTED' || quote.status === 'EXPIRED'} data-email-preview-return={`quote:${quote.id}`} onClick={(event) => { emailReturnFocusRef.current = event.currentTarget; setEmailQuote(quote); }}><Mail className="h-4 w-4" aria-hidden="true" />E-Mail</Button>
                                 <Button variant="ghost" size="sm" onClick={() => window.open(`/api/quotes/download?id=${quote.id}&download=true`, '_blank')}><Download className="h-4 w-4" aria-hidden="true" />PDF</Button>
                                 <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={deletingId === quote.id} onClick={() => setConfirmDelete(quote)}>Löschen</Button>
                             </div>
@@ -343,8 +344,9 @@ export function QuotesTab({
                                                                  variant="outline"
                                                                  size="icon"
                                                                  aria-label={`Angebot ${quote.invoiceNumber || quote.id} per E-Mail senden`}
+                                                                 data-email-preview-return={`quote:${quote.id}`}
                                                                  className="border-notice/30 text-notice hover:bg-notice-surface"
-                                                                 onClick={() => setEmailQuote(quote)}
+                                                                 onClick={(event) => { emailReturnFocusRef.current = event.currentTarget; setEmailQuote(quote); }}
                                                                  disabled={quote.status === 'REJECTED' || quote.status === 'EXPIRED'}
                                                              >
                                                                  <Mail className="h-4 w-4" />
@@ -498,6 +500,7 @@ export function QuotesTab({
             <EmailPreviewDialog
                 open={!!emailQuote}
                 onOpenChange={(open) => !open && setEmailQuote(null)}
+                returnFocusRef={emailReturnFocusRef}
                 documentType="quote"
                 documentId={emailQuote?.id ?? null}
                 onSent={() => loadQuotes(page, pageSize)}

@@ -152,7 +152,7 @@ export function veraPdfSpawnSpecification(binary: string, args: string[], direct
       stdio: ['ignore', 'pipe', 'pipe'] as ['ignore', 'pipe', 'pipe'],
   } };
 }
-function runVeraPdf(binary: string, args: string[], directory: string, confined?: (args: string[]) => string[]): Promise<string> {
+function runVeraPdf(binary: string, args: string[], directory: string, confined?: (args: string[]) => string[], expectedReport?: { path: string; bytes: number }): Promise<string> {
   return new Promise((resolve, reject) => {
     const spec = veraPdfSpawnSpecification(binary, args, directory, confined);
     const child = spawn(spec.binary, spec.args, spec.options);
@@ -164,6 +164,7 @@ function runVeraPdf(binary: string, args: string[], directory: string, confined?
     // without retaining full stderr or exposing either stream to the harness.
     const tails = [Buffer.alloc(0), Buffer.alloc(0)];
     let failed = false;
+    let eligibleNoncomplianceExit = false;
     let groupKillAttempted = false;
     let totalBytes = 0;
     const stdout: Buffer[] = [];
@@ -201,7 +202,7 @@ function runVeraPdf(binary: string, args: string[], directory: string, confined?
       tails[channel] = Buffer.from(bounded.subarray(-256));
       const category = classifyPdfA3StartupText(bounded.toString('utf8'));
       if (category !== 'unknown' && (startupCategory === 'unknown' || startupCategory === 'java-vm-initialization')) startupCategory = category;
-      if (keep && !failed)
+      if (keep && (!failed || (eligibleNoncomplianceExit && processOutcome === 'unknown')))
         stdout.push(chunk);
     };
     child.stdout.on('data', (chunk: Buffer) => consume(chunk, true));
@@ -210,6 +211,9 @@ function runVeraPdf(binary: string, args: string[], directory: string, confined?
     child.stderr.on('error', () => fail('stream-error'));
     child.once('error', () => { launchFailed = true; fail('launch-error'); });
     child.once('exit', (code, signal) => {
+      // Pipes may deliver their final buffered JSON after exit but before close.
+      // Retain that bounded tail ONLY for this strict foreign-rejection check.
+      eligibleNoncomplianceExit = !!expectedReport && prefix === 'validation' && code === 1 && !signal && !failed;
       if (code !== 0 || signal)
         failed = true;
       // The official shell execs Java. Still kill the entire private group on
@@ -222,6 +226,19 @@ function runVeraPdf(binary: string, args: string[], directory: string, confined?
       // Wait for close, not error/exit: all output descriptors must be gone
       // before the caller deletes private files or releases processing capacity.
       if (failed || code !== 0 || signal) {
+        // Pinned CLI INVALID(1) means coherent noncompliance, but an uncaught
+        // exception can also exit1. Only the complete exact-byte/profile report
+        // can justify foreign unsupported422. Never accept a nonzero result,
+        // reinterpret a version failure or override another lifecycle failure.
+        if (expectedReport && prefix === 'validation' && code === 1 && !signal && !launchFailed && processOutcome === 'unknown') {
+          try { requireSingleCompliantReport(Buffer.concat(stdout).toString('utf8'), expectedReport.path, expectedReport.bytes); }
+          catch (error) {
+            if (error instanceof PdfA3ValidationError && error.kind === 'unsupported') {
+              reject(new PdfA3ValidationError('unsupported', 'validation-result', startupCategory, 'nonzero-exit'));
+              return;
+            }
+          }
+        }
         if (processOutcome === 'unknown') {
           processOutcome = signal === 'SIGSYS' ? 'signal-sigsys' : signal === 'SIGKILL' ? 'signal-sigkill'
             : signal === 'SIGABRT' ? 'signal-sigabrt' : signal === 'SIGSEGV' ? 'signal-sigsegv'
@@ -275,7 +292,7 @@ export async function validatePdfA3(bytes: Uint8Array, options: {
       '--maxfailuresdisplayed', '10',
       '--loglevel', '0',
       pdfPath,
-    ], workDir, confinement);
+    ], workDir, confinement, options.confined ? { path: pdfPath, bytes: finalBytes.byteLength } : undefined);
     validatorStage = 'report';
     requireSingleCompliantReport(report, pdfPath, finalBytes.byteLength);
   }

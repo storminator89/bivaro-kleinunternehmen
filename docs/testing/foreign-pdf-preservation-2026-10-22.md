@@ -309,3 +309,52 @@ excerpt cap remains. Actual production source/final, worker/API, archive-byte
 and independent pixel/text gates are still mandatory. No unconfined runtime
 retry, core wrapper, write grant or compliance heuristic is introduced. New
 native success is unverified until the exact subsequent hosted gates pass.
+
+## Fixed synthetic validation-stage diagnosis (candidate)
+
+At exact canonical `a8a93820d30361b6379f830eef2ea8ee659d66a5`,
+[native run39827040211](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040211)
+passed bare-JVM and confined CLI version startup on both genuine architectures.
+All five packaged/copied default configuration hashes were identical between
+architectures and remained unchanged. The subsequent mandatory vector source
+precheck failed at validation-result/nonzero-exit with unavailable503. Neither
+source noncompliance nor a specific infrastructure cause is established by that
+closed diagnostic; no final/worker/API/archive-after/pixel acceptance exists.
+
+The additional diagnostic accepts only the fixed, freshly generated synthetic
+`vector-text.pdf`, bound by exact byte count/SHA-256, actual checkout revision,
+generator/font/lock snapshots and PDFKit0.20.2's actual **ESM** entry digest.
+PDFKit's default date/document ID makes bytes run-specific: no deterministic
+hash or raw-PDFKit conformance is assumed. The source checkout is genuine
+`GITHUB_SHA` (the merge checkout on PRs), not mislabeled as the canonical PR
+head. Its checkout tree must independently match the reviewed candidate tree.
+Snapshots stay on the existing read-only fixture mount; ESM code and its
+package-export/version evidence come from the existing read-only dependency
+mount. No incidental `/app` lock/source packaging or unexported package.json
+resolution is assumed, and no new mount or customer/production input is added.
+
+After strict provenance verification, a fresh private directory contains only
+the authenticated config and exact copied vector PDF. Tree, regular-file,
+ownership/mode and byte hashes are checked before and after the exact shared
+production validation command. All credentials exclusion, caps, no-write/
+network confinement, process-group termination, close/reaping and cleanup
+remain unchanged. The diagnostic records a closed exit bucket and a strict
+exact-identity/size/profile/job/count coherent-report verdict. Coherent
+noncompliance emits only bounded numeric rule references/counts, never check
+contexts/document text. Only infrastructure/parser failures may emit a maximum
+4KiB sanitized **synthetic-only** excerpt. No production/API stream capture is
+added; unknown exceptions remain undisclosed. Mandatory production source/final,
+worker/API, original-archive and independent pixel/text gates still follow and
+cannot be replaced by this probe.
+
+Pinned [CLI exit codes](https://github.com/veraPDF/veraPDF-apps/blob/v1.30.3/cli/src/main/java/org/verapdf/cli/CliConstants.java)
+and [summary handling](https://github.com/veraPDF/veraPDF-apps/blob/v1.30.3/cli/src/main/java/org/verapdf/cli/VeraPdfCliProcessor.java)
+also establish a separate rejection-contract defect: coherent noncompliance
+exits1. Only confined validation exit1 **plus** the complete existing strict
+noncompliance report can now take unsupported422; it can never pass validation.
+Compliant/ambiguous/malformed reports, other exits, version failures and earlier
+stream/output/time/lifecycle errors remain503. Bounded late pipe data is drained
+through close before this decision. Own-invoice invocation and its public500
+contract are unchanged. This correction does not establish the vector fixture's
+actual conformance or explain its current failure; genuine new native evidence
+is still required.

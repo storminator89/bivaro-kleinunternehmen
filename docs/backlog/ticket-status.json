@@ -1930,5 +1930,142 @@
         "Historical operator-review incidents remain documented; remote CI, deployment and backlog AC acceptance are outside this audit."
       ]
     }
-  ]
+  ],
+  "integrationCheckpoint": {
+    "recordedAt": "2026-10-22T18:39:07Z",
+    "scope": "Dated integration evidence only; all 160 historical ticket objects, status counts, existing incidents and audit records are unchanged. GitHub issue/PR numbers are not BV ticket IDs.",
+    "basis": "Supplied confirmed integration checkpoint; main commit/tree and postmerge seal bytes/hash independently checked read-only. No new hosted status query or execution performed by this documentation change.",
+    "integratedMain": {
+      "pullRequest": {
+        "number": 123,
+        "url": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/123",
+        "state": "merged",
+        "mergedAt": "2026-10-22T17:35:23Z"
+      },
+      "issue": {
+        "number": 116,
+        "url": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/116",
+        "state": "closed"
+      },
+      "commit": "8f9f6264dab78b3f3d4991278df5a23d7a8394ce",
+      "tree": "53d5597fa649252ecc5ce841d279edfb71d7a954",
+      "workflows": {
+        "ownInvoicePdfa": {
+          "runId": 39824036507,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036507",
+          "conclusion": "success"
+        },
+        "ci": {
+          "runId": 39824036377,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036377",
+          "conclusion": "success"
+        },
+        "dockerPublish": {
+          "runId": 39824036332,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036332",
+          "conclusion": "success"
+        },
+        "containerRuntime": {
+          "runId": 39824036331,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036331",
+          "conclusion": "success"
+        },
+        "browser": {
+          "runId": 39824036238,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39824036238",
+          "conclusion": "success",
+          "passedCases": 124
+        }
+      },
+      "successfulWorkflows": 5,
+      "successfulJobs": 10,
+      "allRunAttempts": 1,
+      "imageAcceptance": {
+        "currentImages": 153,
+        "freshWholeOriginalReviews": 38,
+        "exactIdentityReviewReuses": 115,
+        "limitation": "153 current accepted images do not mean 153 fresh browser actions."
+      },
+      "postmergeSeal": {
+        "file": "postmerge-acceptance-main8f9f626.json",
+        "bytes": 19868,
+        "sha256": "4c2b797beafa03631c210a47f9ba9abd6680cae8a814f2f3ac0b1a77d5fb4834",
+        "storage": "Externally retained evidence; not a repository-relative file."
+      }
+    },
+    "openIntegration": {
+      "pullRequest": {
+        "number": 126,
+        "url": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/126",
+        "state": "open",
+        "draft": true
+      },
+      "canonicalCommit": "a8a93820d30361b6379f830eef2ea8ee659d66a5",
+      "tree": "42ebb210367a68437989e65327adf7c6652011f9",
+      "mergedIntoMain": false,
+      "workflows": {
+        "ci": {
+          "runId": 39827040238,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040238",
+          "conclusion": "success"
+        },
+        "ownInvoicePdfa": {
+          "runId": 39827040198,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040198",
+          "conclusion": "success"
+        },
+        "containerRuntime": {
+          "runId": 39827040190,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040190",
+          "conclusion": "success"
+        },
+        "foreignPdf": {
+          "runId": 39827040211,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040211",
+          "conclusion": "failure",
+          "startup": "JVM and CLI passed on both x64 and arm64.",
+          "failureStage": "source-precheck-vector-text",
+          "validatorStage": "validation-result",
+          "processOutcome": "nonzero-exit",
+          "code": "UNCLASSIFIED_FAILURE",
+          "cause": "unknown",
+          "nativeAcceptance": false
+        },
+        "browser": {
+          "runId": 39827040240,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39827040240",
+          "conclusion": "failure",
+          "passedCases": 123,
+          "totalCases": 124,
+          "failure": "Email-dialog keyboard return focus.",
+          "finalPdfRenderStep": "skipped"
+        }
+      },
+      "issue": {
+        "number": 127,
+        "url": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/127",
+        "state": "open",
+        "correction": "Locally reviewed; not yet hosted accepted."
+      },
+      "nextLocalCandidate": "Strict rejection of validator exit 1 / noncompliance and a fixed-synthetic diagnostic; not a native success claim.",
+      "remainingAcceptanceCriteria": [
+        "Native foreign-PDF acceptance.",
+        "Green browser acceptance including email-dialog keyboard return focus.",
+        "Final PDF-render acceptance; skipped step is not passed."
+      ],
+      "evidenceLimit": "Successful main results do not establish acceptance of PR #126 or the local correction."
+    },
+    "licenseAndReadme": {
+      "ghostscriptInstalled": true,
+      "applicationLicense": "AGPL unchanged",
+      "pendingSequence": "Apache-2.0 and final DE/EN README only after Ghostscript removal.",
+      "preparedReadme": {
+        "branch": "docs/bilingual-product-readme",
+        "canonicalCommit": "7b87ff0f9798ec0edc9c31347d85f776a2cecbac",
+        "mergedIntoMain": false
+      }
+    },
+    "ticketStatusChanges": [],
+    "documentationChangeOnly": "No builds, native tests, browser runs or new GitHub CI runs started; no ticket-status vocabulary changes."
+  }
 }

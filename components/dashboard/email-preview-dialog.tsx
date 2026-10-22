@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import { AlertCircle, CheckCircle2, Loader2, Mail, Paperclip, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -131,6 +131,7 @@ function formatAttemptDate(value: string) {
 type EmailPreviewDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  returnFocusRef: RefObject<HTMLElement | null>;
   documentType: EmailPreviewDocumentType;
   documentId: number | null;
   reminder?: EmailPreviewReminderContext;
@@ -146,6 +147,7 @@ const DOCUMENT_LABELS: Record<EmailPreviewDocumentType, string> = {
 export function EmailPreviewDialog({
   open,
   onOpenChange,
+  returnFocusRef,
   documentType,
   documentId,
   reminder,
@@ -177,6 +179,15 @@ export function EmailPreviewDialog({
   const generationRef = useRef(0);
   const pendingRef = useRef<PendingRequest | null>(null);
   const storageKeyRef = useRef<string | null>(null);
+  const focusOriginRef = useRef<{ element: HTMLElement | null; documentType: EmailPreviewDocumentType; documentId: number | null } | null>(null);
+  const dialogOpenRef = useRef(open);
+
+  useLayoutEffect(() => {
+    dialogOpenRef.current = open;
+    // Capture each controlled opening, including reopening during the close
+    // animation when Radix keeps the same content mounted. Menu items expire.
+    if (open) focusOriginRef.current = { element: returnFocusRef.current, documentType, documentId };
+  }, [open, documentType, documentId, returnFocusRef]);
 
   const rememberPending = (value: PendingRequest | null) => {
     // Persist before dispatch: a lost response must never silently create a new attempt.
@@ -469,6 +480,30 @@ export function EmailPreviewDialog({
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!mutationRef.current) onOpenChange(nextOpen); }}>
       <DialogContent
         className="!max-w-none !w-screen !h-dvh !top-0 !left-0 !translate-x-0 !translate-y-0 !rounded-none p-0 flex flex-col gap-0 overflow-hidden"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          // Radix defers this event; an old close must not consume a new origin.
+          if (dialogOpenRef.current) return;
+          const origin = focusOriginRef.current;
+          focusOriginRef.current = null;
+          if (!origin) return;
+          const active = document.activeElement;
+          // The event is dispatched on Radix's closing FocusScope. A later
+          // deliberate focus outside it takes precedence over our old invoker.
+          if (active?.isConnected && active !== document.body && active !== document.documentElement
+            && !(event.currentTarget as HTMLElement | null)?.contains(active)) return;
+          const usable = (element: HTMLElement | null): element is HTMLElement => Boolean(element
+            && element.isConnected && element.getClientRects().length > 0
+            && getComputedStyle(element).visibility === 'visible'
+            && !element.matches(':disabled, [aria-disabled="true"]')
+            && !element.closest('[inert], [hidden], [role="dialog"], [role="menu"]'));
+          // A refresh or responsive reflow may replace the invoker while open.
+          // Keep the opened document's identity even after onOpenChange clears it.
+          const target = usable(origin.element) ? origin.element : origin.documentId !== null && Number.isSafeInteger(origin.documentId) && origin.documentId > 0
+            ? Array.from(document.querySelectorAll<HTMLElement>(`[data-email-preview-return="${origin.documentType}:${origin.documentId}"]`)).find(usable)
+            : null;
+          target?.focus({ preventScroll: true });
+        }}
       >
         {/* Header */}
         <DialogHeader className="px-4 sm:px-6 pt-5 pb-4 pr-12 border-b shrink-0">

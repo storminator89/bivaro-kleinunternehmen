@@ -115,18 +115,24 @@ export function InvoicesTab({
   isDeleting,
 }: InvoicesTabProps) {
   const [emailInvoice, setEmailInvoice] = React.useState<Invoice | null>(null);
+  const emailReturnFocusRef = React.useRef<HTMLButtonElement | null>(null);
 
   const paidCount = invoices.filter(invoice => invoice.status !== 'CANCELLED' && (invoice.paymentSummary?.paid || (invoice.status === 'PAID' && !invoice.paymentReviewRequired))).length;
   const openCount = invoices.filter(invoice => invoice.status !== 'CANCELLED' && invoice.paymentSummary && !invoice.paymentSummary.paid).length;
 
   const renderInvoiceActions = (invoice: Invoice) => (
 <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                            {/* Radix opens on pointerdown before focusing the button. */}
+                            <DropdownMenuTrigger asChild
+                              onPointerDown={(event) => { emailReturnFocusRef.current = event.currentTarget; }}
+                              onKeyDown={(event) => { emailReturnFocusRef.current = event.currentTarget; }}
+                            >
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="gap-2"
                                 aria-label={`Weitere Aktionen fuer Rechnung ${invoice.invoiceNumber || invoice.id}`}
+                                data-email-preview-return={`invoice:${invoice.id}`}
                               >
                                 <MoreHorizontal className="h-4 w-4" />
                                 <span>Mehr</span>
@@ -511,6 +517,7 @@ export function InvoicesTab({
       <EmailPreviewDialog
         open={!!emailInvoice}
         onOpenChange={(open) => !open && setEmailInvoice(null)}
+        returnFocusRef={emailReturnFocusRef}
         documentType="invoice"
         documentId={emailInvoice?.id ?? null}
         onSent={() => loadInvoices(page, pageSize)}

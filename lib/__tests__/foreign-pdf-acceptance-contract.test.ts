@@ -52,6 +52,18 @@ describe('mandatory foreign PDF release evidence contract (static only)',()=>{
     expect(source).toContain('await validatePdfA3(original, { confined: true })');
     expect(source).toContain('await validatePdfA3(candidate, { maxBytes: MAX_OUTPUT_BYTES, confined: true })');
   });
+  it('binds the additional harness diagnostic to exact synthetic bytes and leaves all production gates mandatory',()=>{
+    const workflow=read('.github/workflows/foreign-pdf-compatibility.yml'),smoke=read('scripts/foreign-pdf/native-smoke.mjs'),fixture=read('scripts/foreign-pdf/build-native-fixtures.mjs'),probe=read('scripts/foreign-pdf/fixture-validation-probe.mjs');
+    expect(workflow).toContain('"$RUNNER_TEMP/foreign-pdf-fixtures" "$GITHUB_SHA"');
+    expect(workflow).toContain('--env BIVARO_FOREIGN_SOURCE_CHECKOUT="$GITHUB_SHA"');
+    expect(fixture).toContain('vector:base');expect(fixture).toContain('sourceCheckout:process.argv[3]');
+    expect(probe).toContain('assertFixtureProvenance(manifest,expected)');
+    expect(probe.match(/await boundary\(directory,configuration,expected.fixture\)/g)).toHaveLength(2);
+    expect(probe).toContain("const args=['--flavour','3b','--format','json','--maxfailuresdisplayed','10','--loglevel','0',pdfPath]");
+    expect(smoke.indexOf('probeTrustedFixtureValidation({')).toBeLessThan(smoke.indexOf('stage=`source-precheck-${name}`'));
+    expect(smoke.indexOf("assert.equal(fixtureDiagnostic.outcome,'passed')")).toBeGreaterThan(smoke.indexOf('assert.deepEqual(await snapshot(),before)'));
+    for(const file of ['app/api/pdfa3/route.ts','lib/server/pdfa-validator.ts','lib/server/pdfa3-converter.ts','scripts/foreign-pdf/worker.mjs'])expect(read(file)).not.toContain('fixture-validation-probe');
+  });
   it('packages the reviewed runtime closure in the actual Dockerfile without prematurely removing Ghostscript',()=>{
     const patch=read('scripts/foreign-pdf/Dockerfile.integration.patch'),docker=read('Dockerfile'),doc=read('docs/testing/foreign-pdf-preservation-2026-10-22.md');
     for(const name of ['pdf-lib','@pdf-lib','pako','tslib','sax'])expect(docker).toContain(`COPY --from=builder /app/node_modules/${name}`);
