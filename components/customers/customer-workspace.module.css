@@ -164,6 +164,7 @@
   .importTemplate button { max-width: 100%; height: auto; white-space: normal; }
   .previewCounts > div { padding-inline: var(--space-sm); }
   .importActions { align-items: stretch; flex-direction: column; }
+  .importRows { max-height: none; overflow: visible; scrollbar-gutter: auto; }
 }
 .mobileDetails a, .contactLinks a { display: flex; align-items: center; min-height: 2.75rem; }
 .mobileDetails dt { align-self: center; }

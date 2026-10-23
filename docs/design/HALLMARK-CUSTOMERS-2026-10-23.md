@@ -123,3 +123,20 @@ delivered, and no visual acceptance is claimed from that run. The staging-only
 allowance is now 12 minutes; the 45-minute job, 25-minute functional step and all
 byte/count/pixel-equivalence/trust guards remain unchanged. A new exact-head run
 must establish complete artifact delivery before screenshot-first acceptance.
+
+
+### Visual refinement
+
+Hosted image review identified two presentation issues: a city-only desktop
+record incorrectly displayed the missing-address placeholder, and expanded
+mobile CSV records could hide their final fields behind an inner scroll pane.
+The directory now renders available postal/city data even without a street;
+phone preview rows expand in normal page flow. Existing data, requests, actions
+and confirmations are unchanged. Coverage additionally checks partial-address
+visibility and that expanded phone rows have no internal vertical clipping.
+
+The existing count strings “1 Kunden übernommen” and “1 Datensätze jetzt
+importieren” remain unchanged to preserve the current copy and exact test
+contracts. This is a kept-copy finish note, not a claim of corrected singular
+wording. Updated hosted pixels and functional results remain required for the
+refined presentation.

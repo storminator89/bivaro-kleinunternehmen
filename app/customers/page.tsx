@@ -496,7 +496,7 @@ function CustomersWorkspace() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {customer.address ? <div className={styles.address}><span>{customer.address}</span><span>{customer.zipCode} {customer.city}</span></div> : <span className={styles.missingValue}>- keine Adresse -</span>}
+                      {customer.address || customer.zipCode || customer.city ? <div className={styles.address}>{customer.address && <span>{customer.address}</span>}{(customer.zipCode || customer.city) && <span>{customer.zipCode} {customer.city}</span>}</div> : <span className={styles.missingValue}>- keine Adresse -</span>}
                     </TableCell>
                     <TableCell>{customer.taxNumber || <span className={styles.missingValue}>-</span>}</TableCell>
                     <TableCell>

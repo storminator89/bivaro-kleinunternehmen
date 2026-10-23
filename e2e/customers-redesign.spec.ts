@@ -189,6 +189,17 @@ async function importScreens(page: Page, info: TestInfo, kind: Kind, value: Them
   if (value === 'dark' && width === 1440) await region.getByText('Importregeln', { exact: true }).click();
   if (value === 'dark' && width === 375) await rows.evaluate(element => element.scrollTo({ top: element.scrollHeight, behavior: 'instant' }));
   await expect(region.getByRole('status').first()).toContainText('Noch nichts gespeichert');
+  if (width === 375) {
+    await expect.poll(() => rows.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+    const finalLabel = kind === 'customers' ? 'Steuernummer' : value === 'light' ? 'Gespeicherter Netto-Einzelpreis' : 'Steuersatz 0 / 7 / 19';
+    const finalValue = kind === 'customers' ? value === 'light' ? 'DE123456789' : 'Nicht angegeben' : value === 'light' ? '100,00 € · 19 % Steuer (Quelle)' : '0';
+    const finalField = row.locator('dl > div').filter({ has: page.getByText(finalLabel, { exact: true }) });
+    await expect(finalField).toHaveCount(1);
+    await expect(finalField.locator('dd')).toHaveText(finalValue);
+    await finalField.scrollIntoViewIfNeeded();
+    await expect(finalField).toBeVisible();
+    await expect(finalField).toBeInViewport({ ratio: 1 });
+  }
   await capture(page, info, `csv-redesign-${label}-preview-${value}-${width}.png`);
   await region.getByRole('checkbox').check();
   await expect(region.getByRole('button', { name: '1 Datensätze jetzt importieren', exact: true })).toBeEnabled();
@@ -208,6 +219,7 @@ for (const value of ['light', 'dark'] as const) for (const { width, height } of 
       await theme(page, value);
       await page.goto('/customers');
       await expect(page.getByRole('heading', { name: customerName, exact: true }).filter({ visible: true })).toBeVisible();
+      await expect(page.locator('.customer-directory').getByText('Musterort', { exact: true }).filter({ visible: true })).toBeVisible();
       for (const link of await page.locator('.customer-directory').getByRole('link').filter({ visible: true }).all()) {
         expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       }
