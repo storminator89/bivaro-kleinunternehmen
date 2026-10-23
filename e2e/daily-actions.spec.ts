@@ -77,7 +77,21 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
         else expect(taskBounds!.y + taskBounds!.height).toBeLessThan(analysisBounds!.y);
         expect(await page.evaluate(() => window.document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         for (const link of await preview.getByRole('link').all()) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-        await page.screenshot({ path: testInfo.outputPath(`dashboard-overview-${theme}-${width}.png`), fullPage: false });
+        if (width === 390) {
+          const height = await page.evaluate(() => window.document.documentElement.scrollHeight);
+          expect(height).toBeLessThanOrEqual(8000);
+          expect(width * height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
+        }
+        // Keep the top fold while also proving the lower mobile tasks/analysis;
+        // the same four allowlisted files and all staging budgets remain intact.
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+        const image = await page.screenshot({ path: testInfo.outputPath(`dashboard-overview-${theme}-${width}.png`), fullPage: width === 390 });
+        expect(image.length).toBeLessThanOrEqual(5 * 1024 * 1024);
+        expect(image.readUInt32BE(16)).toBe(width);
+        if (width === 390) {
+          expect(image.readUInt32BE(20)).toBeLessThanOrEqual(8000);
+          expect(image.readUInt32BE(20)).toBeGreaterThanOrEqual(Math.ceil(analysisBounds!.y + analysisBounds!.height));
+        }
       }
     }
     await page.getByRole('button', { name: 'Helles Farbschema aktivieren', exact: true }).click();

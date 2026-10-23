@@ -134,7 +134,12 @@ Nach Freigabe des Entwurfs-PRs wurde der bestehende synthetische
 vier echte MetricCards vor den Aufgaben, Desktop-Analyse links/Aufgaben rechts,
 mobile Reihenfolge, keine Seitenüberbreite und mindestens 44px hohe Tasklinks.
 Der Fall erfasst den tatsächlichen oberen Viewport in Light/Dark bei
-1440×1000 und 390×844. Seine bestehenden Finanz-, Audit-, Originaldatei-,
+1440×1000 und die vollständige mobile Seite aus einem 390×844-Viewport,
+weiterhin ab Scrollposition null. So bleiben auch die vierte Kennzahl,
+Aufgaben/CTA und die nachfolgende Analyse visuell prüfbar. Die mobile Aufnahme
+ist zusätzlich auf 8.000px Höhe und 16 MiB rohe RGBA-Pixel begrenzt; jede
+erzeugte Aufnahme muss unter der bestehenden 5-MiB-Dateigrenze bleiben.
+Seine bestehenden Finanz-, Audit-, Originaldatei-,
 Task-Navigations- und Unterbrechungsassertionen bleiben unverändert.
 
 Die vier ausdrücklich synthetischen Bildnamen wurden der bestehenden
