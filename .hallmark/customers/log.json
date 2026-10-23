@@ -1,0 +1,19 @@
+[
+  {
+    "version": "2.0.0",
+    "mode": "redesign",
+    "depth": "full",
+    "scope": "app",
+    "routes": ["/customers", "/customers/import"],
+    "theme": "Bivaro Ledger (locked design.md)",
+    "shape": "app screen",
+    "signature": "contact directory; flat CSV preview beside explicit confirmation",
+    "nav": "existing AppShell, unchanged",
+    "footer": "existing AppShell, unchanged",
+    "keptCaptionInterpretation": "Gate 63 allows one dot in a caption; exact record-identity and source-price captions remain",
+    "capturePlan": { "required": 19, "conditionalDesktopEdit": 1, "baselineAllowlist": 59, "totalAllowlist": 79 },
+    "checks": { "node": "22.23.4", "build": "passed", "types": "passed", "targetedLint": "passed", "pureTests": 104 },
+    "hostedVisualQA": "pending at publication",
+    "automatedHallmarkLint": "not run; no automated gate counts or render pass claimed"
+  }
+]
