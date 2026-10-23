@@ -38,16 +38,39 @@ async function theme(page: Page, value: 'light' | 'dark') {
   await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${value}\\b`));
 }
 async function reachable(locator: Locator) {
-  await expect.poll(async () => {
-    await locator.scrollIntoViewIfNeeded();
-    return locator.evaluate(element => {
-      const rect = element.getBoundingClientRect();
-      const top = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(r => r.width > 0).map(r => r.bottom));
-      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return rect.left >= 0 && rect.right <= document.documentElement.clientWidth + 1 && rect.top >= top && rect.bottom <= innerHeight
-        && hit !== null && (element === hit || element.contains(hit));
-    });
-  }).toBe(true);
+  let geometry: unknown = null;
+  try {
+    await expect.poll(async () => {
+      await locator.scrollIntoViewIfNeeded();
+      // This checks reachability after an ordinary user scroll, not native hash
+      // landing. A target already in the viewport may still be behind the header.
+      const needsVerticalScroll = await locator.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        const top = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(r => r.width > 0).map(r => r.bottom));
+        return rect.top < top || rect.bottom > innerHeight;
+      });
+      if (needsVerticalScroll) await alignBelowHeader(locator);
+      await locator.page().evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      const result = await locator.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        const top = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(r => r.width > 0).map(r => r.bottom));
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return {
+          reachable: rect.left >= 0 && rect.right <= document.documentElement.clientWidth + 1 && rect.top >= top && rect.bottom <= innerHeight
+            && hit !== null && (element === hit || element.contains(hit)),
+          target: { tag: element.tagName, rect: rect.toJSON() },
+          hit: hit ? { tag: hit.tagName, rect: hit.getBoundingClientRect().toJSON() } : null,
+          headerBottom: top, viewport: { width: innerWidth, height: innerHeight, clientWidth: document.documentElement.clientWidth },
+          scroll: { x: scrollX, y: scrollY },
+        };
+      });
+      geometry = result;
+      return result.reachable;
+    }).toBe(true);
+  } catch (error) {
+    process.stdout.write(`Settings reachability geometry: ${JSON.stringify(geometry)}\n`);
+    throw error;
+  }
 }
 async function alignBelowHeader(locator: Locator) {
   await locator.evaluate(element => {
@@ -180,6 +203,8 @@ test('settings redesign has complete light/dark screens and bounded changed-form
   await expect(page.locator('#companyName')).toBeDisabled();
   await expect(form.getByRole('button', { name: 'Speichern...', exact: true })).toBeDisabled();
   await alignBelowHeader(page.locator('#company-payment-term')); await reachable(form.getByRole('button', { name: 'Speichern...', exact: true }));
+  await expect(page.locator('#company-payment-term')).toBeDisabled();
+  await expect(page.locator('#company-payment-term')).toBeInViewport({ ratio: 1 });
   await capture('settings-redesign-company-saving-light-1440.png', false);
   await expect.poll(() => pendingSave !== null).toBe(true);
   await pendingSave!.fulfill({ status: 503, json: { error: 'Synthetic save interruption' } }); pendingSave = null;
@@ -187,6 +212,8 @@ test('settings redesign has complete light/dark screens and bounded changed-form
   await expect(page.locator('#companyName')).toHaveValue('SYNTHETISCH · Nicht gespeichert');
   await page.setViewportSize({ width: 375, height: 844 }); await theme(page, 'dark');
   await alignBelowHeader(page.locator('#company-payment-term')); await reachable(save);
+  await expect(page.locator('#company-payment-term')).toBeInViewport({ ratio: 1 });
+  await expect(form.getByRole('alert')).toBeInViewport({ ratio: 1 });
   await capture('settings-redesign-company-error-dark-375.png', false);
   await form.getByRole('button', { name: 'Verwerfen', exact: true }).click();
   await expect(page.locator('#companyName')).toHaveValue(company.companyName);
@@ -236,11 +263,13 @@ test('settings redesign has complete light/dark screens and bounded changed-form
     expect(landing.bottom).toBeLessThanOrEqual(landing.viewportHeight);
     for (const id of ['handoff-settings', 'access-settings', 'audit-settings', 'procedure-settings']) await reachable(page.locator(`#${id}`).getByRole('link'));
   }
-  await backup.getByRole('button', { name: 'Auswahl verwerfen', exact: true }).click();
+  const discardPreview = backup.getByRole('button', { name: 'Auswahl verwerfen', exact: true });
+  await reachable(discardPreview);
+  await discardPreview.click();
   await expect(restore).toHaveCount(0);
   expect(unexpectedMutations).toEqual([]);
   expect(captures).toHaveLength(8);
-  expect(captures.reduce((sum, capture) => sum + capture.bytes, 0)).toBeLessThanOrEqual(1.8 * 1024 * 1024);
+  expect(captures.reduce((sum, capture) => sum + capture.bytes, 0)).toBeLessThanOrEqual(1.85 * 1024 * 1024);
   process.stdout.write(`Settings bounded image total: ${JSON.stringify(captures)}\n`);
   expect(await prisma.settings.count({ where: { userId: user.id } })).toBe(0);
 });

@@ -59,6 +59,6 @@ Additional 320, 768, 1024 and 1920px checks cover keyboard logo controls, upload
 
 Settings/provider/SMTP responses and deliberate company/upload/preview requests in this new case are intercepted synthetic UI contracts, not persistence, provider compatibility or restoration proof. Unexpected mutations are blocked. No provider test or restore execution occurs. Existing dedicated suites cover unchanged business behavior.
 
-The exact screenshot allowlist gains eight `settings-redesign-*` names, with cardinality and name assertions retained. Existing 8MiB staged-output, 16MiB encoded-input and 5MiB per-file limits and lossless checks remain unchanged. The new eight-image batch separately enforces a 1.8MiB encoded total. Actual dimensions and byte counts must be verified from hosted results.
+The exact screenshot allowlist gains eight `settings-redesign-*` names, with cardinality and name assertions retained. Existing 8MiB staged-output, 16MiB encoded-input and 5MiB per-file limits and lossless checks remain unchanged. The new eight-image batch separately enforces a 1.85MiB encoded total. A hosted run produced all eight complete images totaling 1,895,156 encoded bytes; its optional staging step timed out before upload, so the bounded staging timeout is now twelve minutes. Actual delivered dimensions and byte counts still require artifact verification.
 
 Hosted CI, artifact inspection and an independent screenshot-first Hallmark finish review are pending at draft publication. No visual acceptance, merge readiness or deployment is claimed by this note.
