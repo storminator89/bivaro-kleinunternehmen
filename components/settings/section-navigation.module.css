@@ -1,0 +1,26 @@
+/* Hallmark · v2.0.0 · genre: modern-minimal · theme: locked Bivaro Ledger · scope: app · shape: app screen · redesign: full · copy: verbatim · built: existing section anchors */
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 · weakest: execution, anchor focus and responsive layout await hosted QA. */
+.sectionNav { display: none; min-width: 0; }
+.sectionNav p { margin-bottom: var(--space-xs); padding: 0 var(--space-sm) var(--space-sm); color: var(--color-ink-2); font-size: var(--text-sm); line-height: 1.5; font-weight: 600; }
+.mobileNav { min-width: 0; border: 1px solid var(--color-rule); border-radius: var(--radius-input); background: var(--color-paper); }
+.mobileNav summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); min-height: 44px; padding: var(--space-sm) var(--space-md); list-style: none; color: var(--color-ink); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.mobileNav summary::-webkit-details-marker { display: none; }
+.mobileNav summary svg { width: var(--space-md); height: var(--space-md); flex-shrink: 0; }
+.mobileNav[open] summary { border-bottom: 1px solid var(--color-rule); }
+.mobileNav nav { display: grid; gap: var(--space-2xs); padding: var(--space-xs); }
+.sectionNav a, .mobileNav a { display: flex; align-items: center; gap: var(--space-sm); min-height: 44px; min-width: 0; padding: var(--space-sm); border-radius: var(--radius-input); color: var(--bivaro-color-muted); font-size: var(--text-sm); line-height: 1.45; text-decoration: none; }
+.sectionNav a svg, .mobileNav a svg { width: var(--space-md); height: var(--space-md); flex-shrink: 0; }
+.sectionNav a span, .mobileNav a span { min-width: 0; }
+.sectionNav a[href="#backup-settings"] { margin-top: var(--space-sm); }
+.sectionNav a:focus-visible, .mobileNav a:focus-visible, .mobileNav summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) {
+  .sectionNav a:hover, .mobileNav a:hover, .mobileNav summary:hover { background: var(--color-paper-3); color: var(--color-ink); }
+}
+.sectionNav a:active, .mobileNav a:active, .mobileNav summary:active { background: var(--color-paper-3); color: var(--color-ink); }
+@media (min-width: 1024px) {
+  .sectionNav { display: block; position: sticky; top: 6rem; }
+  .mobileNav { display: none; }
+}
+@media (max-width: 639px) {
+  .mobileNav summary, .mobileNav a { font-size: var(--text-base); }
+}

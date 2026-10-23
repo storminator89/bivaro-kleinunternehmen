@@ -168,8 +168,9 @@ describe('per-command browser dependency transport bounds', () => {
     expect(workflow).toContain('        timeout-minutes: 25');
     expect(workflow).toContain('--retries=0');
     const allowed = workflow.split('          allowed = {')[1].split('          }')[0].match(/'[^']+\.png'/g);
-    expect(allowed).toHaveLength(59); // All 55 accepted images plus four populated overview views.
-    expect(new Set(allowed).size).toBe(59);
+    expect(allowed).toHaveLength(67); // 59 accepted views plus eight bounded settings captures.
+    expect(new Set(allowed).size).toBe(67);
+    for (const name of ['settings-redesign-light-1440.png', 'settings-redesign-light-375.png', 'settings-redesign-dark-1440.png', 'settings-redesign-dark-375.png', 'settings-redesign-backup-light-1440.png', 'settings-redesign-backup-dark-375.png', 'settings-redesign-company-saving-light-1440.png', 'settings-redesign-company-error-dark-375.png']) expect(allowed).toContain(`'${name}'`);
     for (const theme of ['light', 'dark']) for (const width of [1440, 390]) expect(allowed).toContain(`'dashboard-overview-${theme}-${width}.png'`);
     for (const name of ['bank-allocation-confirmation-1440.png', 'bank-allocation-move-390.png', 'bank-allocation-current-origin-360.png']) expect(allowed).toContain(`'${name}'`);
     expect(allowed).toContain("'receipt-sequence-desktop-1440.png'");

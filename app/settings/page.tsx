@@ -1,7 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
-import styles from "@/components/settings/admin-workspace.module.css";
+import styles from "@/components/settings/settings-page.module.css";
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsSectionNavigation } from "@/components/settings/section-navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Save, Upload, X, Shield, Download, UploadCloud, Database, AlertTriangle, Key, ChevronRight, History, FileText } from "lucide-react";
 import {
@@ -471,14 +471,14 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen" role="status" aria-label="Einstellungen werden geladen">
+      <div className={styles.loading} role="status" aria-label="Einstellungen werden geladen">
         <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
       </div>
     );
   }
 
   if (loadError) {
-    return <div className={`${styles.workspace} space-y-6`}>
+    return <div className={styles.workspace}>
       <PageHeader title="Einstellungen" />
       <Alert variant="destructive"><AlertTitle>Einstellungen nicht geladen</AlertTitle><AlertDescription>Ihre gespeicherten Angaben konnten nicht geladen werden. Laden Sie sie erneut, bevor Sie Änderungen vornehmen.</AlertDescription></Alert>
       <Button type="button" onClick={() => setLoadAttempt(previous => previous + 1)}>Erneut laden</Button>
@@ -486,19 +486,20 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className={`${styles.workspace} space-y-6`}>
+    <div className={styles.workspace}>
       <PageHeader title="Einstellungen" />
 
       <div className={styles.settingsLayout}><SettingsSectionNavigation isAdmin={isAdmin} /><div className={styles.settingsContent}>
       <form id="company-settings" onSubmit={handleSubmit}>
         <fieldset disabled={saving} className="min-w-0">
-        <Card className={styles.surface}>
+        <Card className={`${styles.surface} ${styles.companyPanel}`}>
           <CardHeader>
-            <CardTitle>Rechnungsdaten</CardTitle>
+            <h2 className={styles.sectionTitle}>Rechnungsdaten</h2>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className={styles.companyContent}>
+            <div className={styles.companyColumns}>
             <fieldset className={styles.fieldGroup}><legend>Unternehmen & Kontakt</legend>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={styles.identityFields}>
               <div className="space-y-2">
                 <Label htmlFor="companyName">Firmenname</Label>
                 <Input
@@ -533,6 +534,7 @@ export default function SettingsPage() {
               />
             </div>
 
+            <div className={styles.contactFields}>
             <div className="space-y-2">
               <Label htmlFor="email">E-Mail Adresse</Label>
               <Input
@@ -557,12 +559,13 @@ export default function SettingsPage() {
               />
             </div>
 
+            </div>
             </fieldset>
-            <fieldset className={styles.fieldGroup}><legend>Bankverbindung</legend>
+            <fieldset className={`${styles.fieldGroup} ${styles.bankGroup}`}><legend>Bankverbindung</legend>
             <div className="space-y-2">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="bankName" className="text-xs text-muted-foreground">Bankname</Label>
+                  <Label htmlFor="bankName">Bankname</Label>
                   <Input
                     id="bankName"
                     name="bankName"
@@ -571,9 +574,9 @@ export default function SettingsPage() {
                     placeholder="Musterbank"
                   />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={styles.bankFields}>
                   <div className="space-y-2">
-                    <Label htmlFor="iban" className="text-xs text-muted-foreground">IBAN</Label>
+                    <Label htmlFor="iban">IBAN</Label>
                     <Input
                       id="iban"
                       name="iban"
@@ -583,7 +586,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="bic" className="text-xs text-muted-foreground">BIC</Label>
+                    <Label htmlFor="bic">BIC</Label>
                     <Input
                       id="bic"
                       name="bic"
@@ -597,11 +600,16 @@ export default function SettingsPage() {
             </div>
 
             </fieldset>
-            <fieldset className={styles.fieldGroup}><legend>Darstellung auf Belegen</legend>
-            <div className="space-y-2">
+            </div>
+            <fieldset className={`${styles.fieldGroup} ${styles.documentGroup}`}><legend>Darstellung auf Belegen</legend>
+            <div className={styles.documentFields}>
+            <div className={styles.documentDefaults}>
+              <div className="space-y-2">
               <Label htmlFor="company-payment-term">Zahlungsziel für neue Rechnungen (Tage)</Label>
               <Input id="company-payment-term" name="paymentTermDays" type="number" min={0} max={365} step={1} value={formData.paymentTermDays} onChange={handleChange} aria-describedby="company-payment-term-help" placeholder="Standard: 14" />
               <p id="company-payment-term-help" className="text-xs text-muted-foreground">Leer: 14 Tage. 0: fällig am Rechnungsdatum. Bestehende Rechnungen bleiben unverändert.</p>
+              </div>
+              <div className="space-y-2">
               <Label htmlFor="footerText">Fußzeile (Optional)</Label>
               <Input
                 id="footerText"
@@ -612,46 +620,47 @@ export default function SettingsPage() {
               />
             </div>
 
+              </div>
             <div className="space-y-2">
               <Label>Firmenlogo (Optional)</Label>
               <div className={styles.logoRow}>
                 {formData.logoUrl ? (
-                  <div className="relative border rounded-md p-2 bg-muted/10">
+                  <div className={styles.logoPreview}>
                     <Image
                       src={formData.logoUrl}
                       alt="Logo"
                       width={128}
                       height={128}
-                      className="max-h-32 w-auto object-contain rounded border"
+                      className="max-h-32 w-auto object-contain"
                       unoptimized // Logo URL is local API, might need unoptimized or proper loader
                     />
                     <button
                       type="button"
                       onClick={removeLogo}
                       aria-label="Firmenlogo entfernen"
-                      className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90"
+                      className={styles.removeLogo}
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center w-full max-w-xs h-24 border-2 border-dashed rounded-md border-muted-foreground/25 bg-muted/5">
+                  <div className={styles.logoEmpty}>
                     <span className="text-xs text-muted-foreground">Kein Logo ausgewählt</span>
                   </div>
                 )}
 
-                <div className="flex flex-col gap-2">
+                <div className={styles.logoUpload}>
                   <Input
                     id="logo-upload"
                     type="file"
                     accept="image/png, image/jpeg"
                     onChange={handleLogoUpload}
-                    className="hidden"
+                    className="sr-only"
                     disabled={uploading}
                   />
                   <Label
                     htmlFor="logo-upload"
-                    className={`flex items-center justify-center px-4 py-2 border rounded-md cursor-pointer hover:bg-muted transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={styles.uploadControl}
                   >
                     {uploading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -667,9 +676,10 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            </div>
             </fieldset>
             {companyMessage && <p role={companyMessage.type === 'error' ? 'alert' : 'status'} className={companyMessage.type === 'error' ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>{companyMessage.text}</p>}
-            <div className={`${styles.formActions} flex-wrap gap-3`}>
+            <div className={styles.formActions}>
               {companyChanged && <p className="mr-auto self-center text-sm text-muted-foreground">Ungespeicherte Firmendaten</p>}
               <Button type="button" variant="outline" disabled={saving || uploading || !companyChanged} onClick={() => { setFormData(savedCompanyData); setCompanyMessage(null); }}>Verwerfen</Button>
               <Button type="submit" disabled={saving || uploading}>
@@ -702,7 +712,7 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              <CardTitle>Admin-Einstellungen</CardTitle>
+              <h2 className={styles.sectionTitle}>Admin-Einstellungen</h2>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -721,21 +731,12 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      <Card className={`${styles.surface} ${styles.destination}`} id="handoff-settings">
-        <CardHeader>
-          <CardTitle>Unterlagen übergeben</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button asChild><Link href="/handoff" aria-label="Unterlagen übergeben"><FileText aria-hidden="true" />Öffnen</Link></Button>
-        </CardContent>
-      </Card>
-
       {/* Backup & Restore */}
-      <Card className={`${styles.surface} mt-6`} id="backup-settings">
+      <Card className={`${styles.surface} ${styles.backupPanel}`} id="backup-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Database className="h-5 w-5" />
-            <CardTitle>Datensicherung</CardTitle>
+            <h2 className={styles.sectionTitle}>Datensicherung</h2>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -751,12 +752,14 @@ export default function SettingsPage() {
             </Alert>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className={styles.backupOptions}>
             {/* Backup erstellen */}
             <div className="space-y-3">
-              <h4 className="font-medium">JSON · Ohne Dateien</h4>
+              <h3 className={styles.backupTitle}>JSON · Ohne Dateien</h3>
 
               <Button
+                type="button"
+                variant="outline"
                 onClick={handleBackupDownload}
                 disabled={backupLoading}
                 className="w-full"
@@ -777,9 +780,11 @@ export default function SettingsPage() {
 
             {/* Vollständiges Backup */}
             <div className="space-y-3">
-              <h4 className="font-medium">ZIP · Mit Dateien</h4>
+              <h3 className={styles.backupTitle}>ZIP · Mit Dateien</h3>
 
               <Button
+                type="button"
+                variant="outline"
                 onClick={handleFullBackupDownload}
                 disabled={fullBackupLoading}
                 className="w-full"
@@ -828,7 +833,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Restore Buttons */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={styles.restoreOptions}>
               <div>
                 <input
                   ref={fileInputRef}
@@ -908,7 +913,7 @@ export default function SettingsPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <div className={styles.restoreCounts}>
                       <span>Kunden: {restorePreview.preview.counts.customers}</span>
                       <span>Projekte: {restorePreview.preview.counts.serviceProjects ?? 0}</span>
                       <span>Leistungsnotizen: {restorePreview.preview.counts.billingNotes}</span>
@@ -933,7 +938,7 @@ export default function SettingsPage() {
                       </div>
                     )}
 
-                    <div className="flex flex-col sm:flex-row gap-2">
+                    <div className={styles.restoreActions}>
                       <Button
                         onClick={executeRestore}
                         disabled={restoreLoading}
@@ -965,12 +970,22 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <div className={styles.destinationList}>
+      <Card className={`${styles.surface} ${styles.destination}`} id="handoff-settings">
+        <CardHeader>
+          <h2 className={styles.sectionTitle}>Unterlagen übergeben</h2>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button variant="outline" asChild><Link href="/handoff" aria-label="Unterlagen übergeben"><FileText aria-hidden="true" />Öffnen</Link></Button>
+        </CardContent>
+      </Card>
+
       {/* API Keys */}
       <Card className={`${styles.surface} ${styles.destination}`} id="access-settings">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Key className="h-5 w-5" />
-            <CardTitle>API-Zugang</CardTitle>
+            <h2 className={styles.sectionTitle}>API-Zugang</h2>
           </div>
         </CardHeader>
         <CardContent>
@@ -990,7 +1005,7 @@ export default function SettingsPage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <History className="h-5 w-5" />
-            <CardTitle>Audit-Log</CardTitle>
+            <h2 className={styles.sectionTitle}>Audit-Log</h2>
           </div>
         </CardHeader>
         <CardContent>
@@ -1010,7 +1025,7 @@ export default function SettingsPage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            <CardTitle>GoBD Verfahrensdokumentation</CardTitle>
+            <h2 className={styles.sectionTitle}>GoBD Verfahrensdokumentation</h2>
           </div>
         </CardHeader>
         <CardContent>
@@ -1024,6 +1039,7 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
       </div></div>
     </div>
   );

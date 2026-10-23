@@ -223,8 +223,16 @@ jobs:
               'customer-timeline-mobile-360.png',
               'service-statement-preview-1440.png',
               'service-statement-preview-390.png',
+              'settings-redesign-light-1440.png',
+              'settings-redesign-light-375.png',
+              'settings-redesign-dark-1440.png',
+              'settings-redesign-dark-375.png',
+              'settings-redesign-backup-light-1440.png',
+              'settings-redesign-backup-dark-375.png',
+              'settings-redesign-company-saving-light-1440.png',
+              'settings-redesign-company-error-dark-375.png',
           }
-          # Bounded output for all 59 known images, including dashboard views.
+          # Bounded output for all 67 known images, including the complete settings capture plan.
           limit = 8 * 1024 * 1024
           per_file_input_limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
