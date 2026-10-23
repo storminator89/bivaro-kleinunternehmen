@@ -85,6 +85,8 @@
   .restoreCounts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @container settings-backup (max-width: 34rem) {
+  .restorePreview { padding-inline: var(--space-sm); }
+  .restorePreview > :global([data-slot="alert-description"]) { grid-column: 1 / -1; min-width: 0; width: 100%; }
   .backupOptions :global([data-slot="button"]), .restoreOptions :global([data-slot="button"]), .restoreActions :global([data-slot="button"]) { width: 100%; justify-content: center; padding-inline: var(--space-xs); font-size: var(--text-xs); }
 }
 @media (min-width: 1024px) {

@@ -122,7 +122,7 @@ test('settings redesign has complete light/dark screens and bounded changed-form
 
   loadFails = true;
   await page.goto('/settings');
-  await expect(page.getByRole('alert')).toContainText('Einstellungen nicht geladen');
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('Einstellungen nicht geladen');
   await expect(page.locator('#company-settings')).toHaveCount(0);
   loadFails = false;
   await page.getByRole('button', { name: 'Erneut laden', exact: true }).click();
@@ -227,7 +227,13 @@ test('settings redesign has complete light/dark screens and bounded changed-form
       await mobile.getByRole('link', { name: 'Datensicherung', exact: true }).click();
     } else await page.getByRole('navigation', { name: 'Einstellungsbereiche', exact: true }).getByRole('link', { name: 'Datensicherung', exact: true }).click();
     await expect(page).toHaveURL(/#backup-settings$/);
-    await reachable(backup.getByRole('heading', { name: 'Datensicherung', exact: true }));
+    const landing = await backup.getByRole('heading', { name: 'Datensicherung', exact: true }).evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      const header = Math.max(0, ...Array.from(document.querySelectorAll('.app-topbar')).map(node => node.getBoundingClientRect()).filter(r => r.width > 0).map(r => r.bottom));
+      return { top: rect.top, bottom: rect.bottom, header, viewportHeight: innerHeight };
+    });
+    expect(landing.top).toBeGreaterThanOrEqual(landing.header + 8);
+    expect(landing.bottom).toBeLessThanOrEqual(landing.viewportHeight);
     for (const id of ['handoff-settings', 'access-settings', 'audit-settings', 'procedure-settings']) await reachable(page.locator(`#${id}`).getByRole('link'));
   }
   await backup.getByRole('button', { name: 'Auswahl verwerfen', exact: true }).click();

@@ -11,4 +11,10 @@ describe('settings logo upload presentation', () => {
     expect(css).toContain('.logoUpload:has(input:focus-visible) .uploadControl');
     expect(readFileSync('app/settings/page.tsx', 'utf8')).toMatch(/id="logo-upload"[\s\S]*?className="sr-only"/u);
   });
+  it('gives narrow restore preview content the full alert width without hiding overflow', () => {
+    const css = readFileSync('components/settings/settings-page.module.css', 'utf8');
+    expect(css).toContain('.restorePreview { padding-inline: var(--space-sm); }');
+    expect(css).toContain('.restorePreview > :global([data-slot="alert-description"]) { grid-column: 1 / -1; min-width: 0; width: 100%; }');
+    expect(readFileSync('app/settings/page.tsx', 'utf8')).toContain('className={`${styles.restorePreview} mt-4`}');
+  });
 });

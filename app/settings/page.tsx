@@ -896,7 +896,7 @@ export default function SettingsPage() {
             </div>
 
             {restorePreview && (
-              <Alert className="mt-4">
+              <Alert className={`${styles.restorePreview} mt-4`}>
                 <Database className="h-4 w-4" />
                 <AlertTitle>Backup-Vorschau bereit</AlertTitle>
                 <AlertDescription>
