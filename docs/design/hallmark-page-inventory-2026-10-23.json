@@ -1,0 +1,367 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-23",
+  "baselineCommit": "155eee2f3bb8019e9166e46fa289df5297f597e1",
+  "baselineTree": "399d8b08e5cf2f7e2a5e108cbfde6346bcc8f364",
+  "pageRoutes": 27,
+  "additionalDashboardQueryTabs": 6,
+  "scope": "Source-owner inventory and bounded audit agenda; not complete visual or functional acceptance.",
+  "lockedSystem": [
+    "design.md",
+    "tokens.css",
+    "app/globals.css",
+    "app/fonts.css"
+  ],
+  "upstream": {
+    "repository": "https://github.com/Nutlope/hallmark",
+    "commit": "7ec868225c6caa040558c321ee0fefa0e73f83a8",
+    "version": "2.0.0",
+    "installationStatus": "blocked-before-installer-execution"
+  },
+  "records": [
+    {
+      "route": "/",
+      "kind": "public",
+      "routeFile": "app/page.tsx",
+      "owner": "app/page.tsx",
+      "job": "Produkt verstehen; Zugang wählen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Hero und echte Produktdarstellung gegen beide kleinen Bildschirmgrößen prüfen; keine neue Behauptung.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/login",
+      "kind": "public-access",
+      "routeFile": "app/login/page.tsx",
+      "owner": "app/login/page.tsx",
+      "job": "Anmelden und ursprüngliches Ziel erreichen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Formular, Fehlermeldung und Passwortanzeige; callbackUrl und Sign-in unverändert.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/register",
+      "kind": "public-access",
+      "routeFile": "app/register/page.tsx",
+      "owner": "app/register/page.tsx",
+      "job": "Zulässigen Installationszugang anlegen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Lade-, deaktivierter und Freigabestatus vor Formular; keine Änderung an Registrierungspolitik.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/help",
+      "kind": "public-document",
+      "routeFile": "app/help/page.tsx",
+      "owner": "app/help/page.tsx",
+      "job": "Aufgabenbezogene Hilfe finden",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Lesemaß und Sprungindex; alle Fragmente, Grenzen und Steuerhinweise erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/help/access",
+      "kind": "public-document",
+      "routeFile": "app/help/access/page.tsx",
+      "owner": "app/help/access/page.tsx",
+      "job": "Zugang oder Betriebsstörung klären",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Wiederherstellungsschritte und Kontaktzugänge; keine erfundene Self-Service-Funktion.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard",
+      "kind": "app",
+      "routeFile": "app/dashboard/page.tsx",
+      "owner": "components/dashboard/dashboard-content.tsx",
+      "job": "Aktuellen Finanzstand und nächste Aufgabe erkennen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Hosted-Prüfung der neuen Kennzahlen-/Aufgaben-/Analyse-Hierarchie und ihrer Lade-, Fehler-, Leer- und Vollzustände; Query-Tabs bleiben unverändert.",
+      "implementation": "metric-led-overview-presentation-implemented-awaiting-hosted-acceptance",
+      "presentationOwners": [
+        "components/dashboard/dashboard-client.tsx",
+        "components/dashboard/dashboard-overview.tsx",
+        "components/dashboard/dashboard-header.tsx"
+      ],
+      "auditDocument": "docs/design/HALLMARK-DASHBOARD-2026-10-23.md"
+    },
+    {
+      "route": "/dashboard/today",
+      "kind": "app",
+      "routeFile": "app/dashboard/today/page.tsx",
+      "owner": "components/daily-actions/daily-actions-workspace.tsx",
+      "job": "Nächsten fachlich belegten Schritt prüfen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Vorhandene Aufgabenliste ist direkt; lange CTA bei 1440px sichtbar zweizeilig. Erst im Seitenpaket klären, ohne Finanzwarnungen zu kürzen.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard/invoices/new",
+      "kind": "app-editor",
+      "routeFile": "app/dashboard/invoices/new/page.tsx",
+      "owner": "components/dashboard/editors/invoice-editor-page.tsx",
+      "job": "Rechnung oder vorhandenen Serviceentwurf prüfen und erstellen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "CreateInvoiceModal in components/dashboard/create-invoice-modal.tsx: Zeilen, Steuer/Bezahlung, Entwurfsparameter und Ausgabe-/PDF-Wahl bleiben vollständig.",
+      "implementation": "unchanged",
+      "delegatedUiOwner": "components/dashboard/create-invoice-modal.tsx"
+    },
+    {
+      "route": "/dashboard/quotes/new",
+      "kind": "app-editor",
+      "routeFile": "app/dashboard/quotes/new/page.tsx",
+      "owner": "components/dashboard/editors/quote-page-editor.tsx",
+      "job": "Angebot erstellen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Delegierter quote-editor: Gliederung, Positionen, mobile Aktionsleiste; alle Angebotszustände bleiben.",
+      "implementation": "unchanged",
+      "delegatedUiOwner": "components/dashboard/editors/quote-editor.tsx"
+    },
+    {
+      "route": "/history",
+      "kind": "app",
+      "routeFile": "app/history/page.tsx",
+      "owner": "components/history/invoice-history-workspace.tsx",
+      "job": "Rechnungsstand und Zahlungsjournal nachvollziehen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Tabelle/Datensätze plus unveränderliche Belege und Korrekturen; Zahlungen, PDF-Quellen und Rückkehrfokus erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard/reminders",
+      "kind": "app",
+      "routeFile": "app/dashboard/reminders/page.tsx",
+      "owner": "app/dashboard/reminders/page.tsx",
+      "job": "Forderung prüfen und Mahnung bewusst erfassen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Forderungsübersicht, Journal und Bestätigungen bleiben; keine Mahnung als Versand oder Zahlung ausgeben.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/customers",
+      "kind": "app",
+      "routeFile": "app/customers/page.tsx",
+      "owner": "app/customers/page.tsx",
+      "job": "Kunden suchen und bearbeiten",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Verzeichnis, mobile Datensätze und Timeline; Rückkehranker für Leistungsnotizen/Verlauf erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/customers/import",
+      "kind": "app-wizard",
+      "routeFile": "app/customers/import/page.tsx",
+      "owner": "components/dashboard/csv-import-wizard.tsx",
+      "job": "Kunden oder Artikel aus CSV prüfen und importieren",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "CsvImportWizard: Feldzuordnung, Vorschau, Fehler, Bestätigung; kind-Query und Importsemantik erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/customers/articles",
+      "kind": "app",
+      "routeFile": "app/customers/articles/page.tsx",
+      "owner": "app/customers/articles/page.tsx",
+      "job": "Artikel und Leistungen suchen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Katalog enthält einzelne Datensatzkarten; nicht ungeprüft durch eine neue Tabelle ersetzen. Netto/Brutto/Steuer sichtbar halten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/service-billing",
+      "kind": "app",
+      "routeFile": "app/service-billing/page.tsx",
+      "owner": "components/service-billing/service-billing-workspace.tsx",
+      "job": "Servicepläne bearbeiten und Entwürfe vorbereiten",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Planliste und Editor, Entwurfslinks und Lade-/Fehlerzustände; kein automatischer Versand oder Umsatz.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/purchases",
+      "kind": "app",
+      "routeFile": "app/purchases/page.tsx",
+      "owner": "components/purchases/incoming-documents-workspace.tsx",
+      "job": "Belege prüfen und manuell als Ausgabe freigeben",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Queue und SourcePreview/ReviewDraft getrennt priorisieren; ungespeicherte Prüfung, History-Boundary und KI-Freigabe unberührt.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/expenses/[id]",
+      "kind": "app-detail",
+      "routeFile": "app/expenses/[id]/page.tsx",
+      "owner": "components/purchases/expense-detail.tsx",
+      "job": "Gespeicherte Ausgabe und Herkunft ansehen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Belegdaten und Herkunftsstatus; id-Prüfung, Ladefehlerwarnung und Rückweg erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/bank-csv",
+      "kind": "app-wizard",
+      "routeFile": "app/bank-csv/page.tsx",
+      "owner": "components/bank-csv/bank-csv-workspace.tsx",
+      "job": "Bankevidenz prüfen und Zahlung bewusst zuordnen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Getrenntes Hochrisiko-Seitenpaket: Quittung, Vorschau, gespeicherte Historie/Zuordnung. Quelle enthält tracked-cap Kontobezeichnung und geschachtelte Flächen; kein Eingriff im Fundamentpaket.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/cashbook",
+      "kind": "app",
+      "routeFile": "app/cashbook/page.tsx",
+      "owner": "app/cashbook/page.tsx",
+      "job": "Kassenbewegungen erfassen und prüfen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Ausgewählte Kasse, Tageszeitraum und Journal direkt lesbar; Bestände/Filter und Löschbestätigungen erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/steuer-simulation",
+      "kind": "app",
+      "routeFile": "app/steuer-simulation/page.tsx",
+      "owner": "app/steuer-simulation/page.tsx",
+      "job": "Annahmen und unverbindliches Ergebnis vergleichen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Quelle, Parameter und Ergebnisrail; mobile Ergebnisverknüpfung und sämtliche Einschränkungen erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/handoff",
+      "kind": "app",
+      "routeFile": "app/handoff/page.tsx",
+      "owner": "components/handoff/handoff-workspace.tsx",
+      "job": "Unterlagenpaket bewusst auswählen und exportieren",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Jahr/Auswahl, Bereitschaft und Exportgrenzen; Query-Auswahl und kein DATEV/ELSTER-/Backup-Versprechen.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/settings",
+      "kind": "app",
+      "routeFile": "app/settings/page.tsx",
+      "owner": "app/settings/page.tsx",
+      "job": "Installation und eigenes Profil konfigurieren",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Verankerte Bereichsnavigation vorhanden; Dark-Mode-Kontextformular gesichtet. Lange Formulare über Disclosure gliedern, ohne Zustimmung/Datensicherung zu ändern.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/settings/api-keys",
+      "kind": "app",
+      "routeFile": "app/settings/api-keys/page.tsx",
+      "owner": "app/settings/api-keys/page.tsx",
+      "job": "API-Zugriff bewusst verwalten",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Schlüsselzustände und sensible Einmalanzeige; Berechtigungen, Widerruf und Bestätigung erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/settings/api-keys/docs",
+      "kind": "app-document",
+      "routeFile": "app/settings/api-keys/docs/page.tsx",
+      "owner": "app/settings/api-keys/docs/page.tsx",
+      "job": "Vorhandene API-Verträge nachschlagen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Lesemaß, Codeblöcke und Tabs; Endpunkte, Beispiele und Kopieraktionen nicht inhaltlich verändern.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/settings/audit-logs",
+      "kind": "app",
+      "routeFile": "app/settings/audit-logs/page.tsx",
+      "owner": "app/settings/audit-logs/page.tsx",
+      "job": "Sicherheits- und Systemaktionen nachvollziehen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Filter/Journal auf Datendichte prüfen; Rollenprüfung, Seitennavigation und Werte nicht ändern.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/settings/documentation",
+      "kind": "app-document",
+      "routeFile": "app/settings/documentation/page.tsx",
+      "owner": "app/settings/documentation/page.tsx",
+      "job": "Verfahrensdokumentation pflegen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Dokumentstruktur und Ausgabeaktionen; fachliche Vollständigkeit und Druckinhalt erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/users",
+      "kind": "app-admin",
+      "routeFile": "app/users/page.tsx",
+      "owner": "app/users/page.tsx",
+      "job": "Benutzer und Rollen administrieren",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Admin- und verweigerter Zugriff sind eigene Zustände; Rollen, Deaktivierung und Sessiongrenzen unverändert.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard?tab=invoices",
+      "kind": "app-query-tab",
+      "routeFile": "app/dashboard/page.tsx",
+      "owner": "components/dashboard/tabs/invoices-tab.tsx",
+      "controller": "components/dashboard/dashboard-content.tsx",
+      "job": "Rechnungen filtern und nächsten Beleg bearbeiten",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Bestand, Statusfilter, page-scoped Summe und mobile Datensätze; Zahlungen/Versand/Dateien im bestehenden Owner.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard?tab=quotes",
+      "kind": "app-query-tab",
+      "routeFile": "app/dashboard/page.tsx",
+      "owner": "components/dashboard/tabs/quotes-tab.tsx",
+      "controller": "components/dashboard/dashboard-content.tsx",
+      "job": "Angebote und Rückmeldung prüfen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Angebotsstatus, Nachfassen, bestehende Entwürfe; kein Angebotsbetrag als Umsatz.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard?tab=incomes",
+      "kind": "app-query-tab",
+      "routeFile": "app/dashboard/page.tsx",
+      "owner": "components/dashboard/tabs/incomes-tab.tsx",
+      "controller": "components/dashboard/dashboard-content.tsx",
+      "job": "Einnahmen erfassen und nachvollziehen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Erfassung, Suche, Filter, Sortierung vor Pagination und belegte Summen erhalten.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard?tab=expenses",
+      "kind": "app-query-tab",
+      "routeFile": "app/dashboard/page.tsx",
+      "owner": "components/dashboard/tabs/expenses-tab.tsx",
+      "controller": "components/dashboard/dashboard-content.tsx",
+      "job": "Ausgaben erfassen und belegen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Erfassung, Quellen/Belege, Sortierung und Lesestatus; keine Mehrfachbuchung.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard?tab=eur",
+      "kind": "app-query-tab",
+      "routeFile": "app/dashboard/page.tsx",
+      "owner": "components/dashboard/tabs/eur-tab.tsx",
+      "controller": "components/dashboard/dashboard-content.tsx",
+      "job": "Jahresbezogene EÜR-Arbeitsunterlage prüfen",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Unterstütztes Jahr, Quelle, Zeilenzuordnung, Export und steuerliche Grenzen bleiben.",
+      "implementation": "unchanged"
+    },
+    {
+      "route": "/dashboard?tab=gwg",
+      "kind": "app-query-tab",
+      "routeFile": "app/dashboard/page.tsx",
+      "owner": "components/dashboard/tabs/gwg-tab.tsx",
+      "controller": "components/dashboard/dashboard-content.tsx",
+      "job": "Wirtschaftsgüter prüfen und exportieren",
+      "auditStatus": "preliminary-source-map-not-full-page-acceptance",
+      "nextAudit": "Bestehende Werte, Abschreibung und Exporte nur neu gliedern; keine Rechenänderung.",
+      "implementation": "unchanged"
+    }
+  ]
+}

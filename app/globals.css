@@ -684,7 +684,7 @@
 .page-header h1 { font-size: var(--text-page-title); line-height: 1.2; font-weight: 700; letter-spacing: -.04em; overflow-wrap: anywhere; }
 .page-header-description { max-width: 70ch; margin-top: var(--space-xs); color: var(--muted-foreground); font-size: var(--text-sm); line-height: 1.6; }
 .page-header .workbench-actions { gap: var(--space-sm); }
-.app-sidebar h3 { font-size: var(--text-xs); letter-spacing: .1em; font-weight: 600; }
+.app-sidebar h3 { font-size: var(--text-xs); letter-spacing: normal; font-weight: 600; }
 .app-sidebar .app-nav-link { gap: var(--space-sm); min-height: 2.75rem; }
 .app-sidebar .app-nav-link svg { height: 1.125rem; width: 1.125rem; margin-right: 0; stroke-width: 1.65; }
 .app-sidebar .sidebar-header { min-height: var(--layout-topbar); padding-block: var(--space-md); }
@@ -729,6 +729,19 @@
 .invoice-file-symbol { width: 2.5rem; height: 2.75rem; color: var(--foreground); }
 .invoice-ledger td button[aria-label^="Details zu Rechnung"] { min-height: 1.5rem; }
 .dashboard-layout { display: flex; flex-direction: column; gap: var(--space-lg); }
+.dashboard-overview-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--space-lg); align-items: start; }
+.dashboard-overview-actions, .dashboard-overview-analysis { min-width: 0; }
+.dashboard-overview-analysis { display: grid; gap: var(--space-lg); }
+.dashboard-overview-actions article { grid-template-columns: minmax(0,1fr); }
+.dashboard-overview-actions article > div:last-child { flex-direction: column; align-items: flex-start; }
+.dashboard-overview-actions article > div:last-child > div { text-align: left; }
+.dashboard-overview-actions article [data-slot=button] { height: auto; min-height: 2.75rem; white-space: normal; }
+@media (min-width: 1280px) {
+  .dashboard-overview-grid { grid-template-columns: minmax(0,1.65fr) minmax(20rem,1fr); grid-template-areas: "analysis actions"; }
+  .dashboard-overview-actions { grid-area: actions; }
+  .dashboard-overview-analysis { grid-area: analysis; }
+  .dashboard-overview-grid-tasks-only { grid-template-columns: minmax(0,1fr); grid-template-areas: "actions"; }
+}
 .dashboard-summary { display: contents; }
 .dashboard-metrics { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--space-md); }
 .dashboard-metric { position: relative; display: flex; align-items: flex-start; gap: var(--space-md); min-width: 0; padding: var(--space-lg); border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper); box-shadow: var(--shadow-card); transition: border-color var(--dur-short) var(--ease-out); }

@@ -23,8 +23,9 @@ describe('bounded lossless synthetic screenshot evidence', () => {
     expect(workflow).toContain("'payment-adjustment-confirmation-desktop-1440.png'");
     const allowlist = workflow.match(/allowed = \{([\s\S]*?)\n\s*\}/u)?.[1] ?? '';
     const screenshots = [...allowlist.matchAll(/'([^']+\.png)'/gu)].map(match => match[1]);
-    expect(screenshots).toHaveLength(55); // All 52 accepted images plus three allocation views.
-    expect(new Set(screenshots).size).toBe(55);
+    expect(screenshots).toHaveLength(59); // All 55 accepted images plus four populated overview views.
+    expect(new Set(screenshots).size).toBe(59);
+    for (const theme of ['light', 'dark']) for (const width of [1440, 390]) expect(screenshots).toContain(`dashboard-overview-${theme}-${width}.png`);
     for (const name of ['bank-allocation-confirmation-1440.png', 'bank-allocation-move-390.png', 'bank-allocation-current-origin-360.png']) expect(screenshots).toContain(name);
   });
 });

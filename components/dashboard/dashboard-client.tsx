@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { RevenueIndicatorBasis } from "@/lib/revenue-indicators";
 import type { YearComparisonData } from "@/types/dashboard";
@@ -11,6 +11,7 @@ import { YearComparison } from "./year-comparison";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
+import { DashboardOverview } from "./dashboard-overview";
 
 interface KpiData {
   revenueThisMonth: number;
@@ -25,7 +26,7 @@ interface KpiData {
   yearComparison?: YearComparisonData;
 }
 
-export function DashboardClient() {
+export function DashboardClient({ tasks }: { tasks: ReactNode }) {
   const [data, setData] = useState<KpiData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,25 +73,23 @@ export function DashboardClient() {
 
   if (loading) {
     return (
-      <div role="status" aria-label="Finanzübersicht wird geladen" className="space-y-4">
+      <DashboardOverview tasks={tasks} summary={<div role="status" aria-label="Finanzübersicht wird geladen" className="space-y-4">
         <span className="sr-only">Finanzübersicht wird geladen…</span>
-        <Skeleton className="h-6 w-40" />
         <div className="dashboard-metrics">{Array.from({length:4}, (_,index) => <Skeleton key={index} className="h-40 w-full rounded-xl" />)}</div>
-        <div className="dashboard-analysis-grid"><Skeleton className="h-80 w-full rounded-xl" /><Skeleton className="h-80 w-full rounded-xl" /></div>
-      </div>
+      </div>} analysis={<><Skeleton className="h-80 w-full rounded-xl" /><Skeleton className="h-80 w-full rounded-xl" /></>} />
     );
   }
 
   if (error || !data) {
-    return <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-critical/40 bg-critical-surface p-6 text-sm text-critical-foreground" role="alert"><p>{error ?? "Fehler beim Laden der Daten."}</p><Button variant="outline" onClick={() => setAttempt(value => value + 1)}><RefreshCw className="h-4 w-4" aria-hidden="true" />Erneut laden</Button></div>;
+    return <DashboardOverview tasks={tasks} summary={<div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-critical/40 bg-critical-surface p-6 text-sm text-critical-foreground" role="alert"><p>{error ?? "Fehler beim Laden der Daten."}</p><Button variant="outline" onClick={() => setAttempt(value => value + 1)}><RefreshCw className="h-4 w-4" aria-hidden="true" />Erneut laden</Button></div>} />;
   }
 
   return (
-    <div className="dashboard-layout">
-      <DashboardHeader data={data} />
-      <p role="note" className="text-xs text-muted-foreground">Zahlungsübersicht · steuerlich ungeprüft.</p>
-      <div className="dashboard-analysis-grid">
-      {data.yearComparison && (
+    <DashboardOverview
+      summary={<DashboardHeader data={data} />}
+      tasks={tasks}
+      showDataNote
+      analysis={<>{data.yearComparison && (
         <YearComparison
           data={selectedYear === referenceYear ? data.yearComparison : comparisonQuery.data ?? data.yearComparison}
           selectedYear={selectedYear}
@@ -102,7 +101,7 @@ export function DashboardClient() {
         />
       )}
       <DashboardActivityFeed activities={data.recentActivities} />
-      </div>
-    </div>
+      </>}
+    />
   );
 }

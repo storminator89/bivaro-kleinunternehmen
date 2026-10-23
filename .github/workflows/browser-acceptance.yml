@@ -193,6 +193,10 @@ jobs:
               'revenue-indicators-amounts-1440.png',
               'daily-actions-390.png',
               'daily-actions-1440.png',
+              'dashboard-overview-light-1440.png',
+              'dashboard-overview-light-390.png',
+              'dashboard-overview-dark-1440.png',
+              'dashboard-overview-dark-390.png',
               'service-plan-review-mobile-390.png',
               'payment-adjustment-confirmation-desktop-1440.png',
               'bank-csv-mapping-desktop-1440.png',
@@ -220,7 +224,7 @@ jobs:
               'service-statement-preview-1440.png',
               'service-statement-preview-390.png',
           }
-          # Bounded output for all 55 known images, including allocation views.
+          # Bounded output for all 59 known images, including dashboard views.
           limit = 8 * 1024 * 1024
           per_file_input_limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'

@@ -55,6 +55,74 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     finally { releaseRead(); }
     await expect(preview.getByRole('listitem')).toHaveCount(3);
     await expect(preview.getByText('80,00 €', { exact: true })).toBeVisible();
+
+    // Read-only evidence of this exact populated overview, not the standalone
+    // task page or a scrolled revenue disclosure. Financial assertions below stay.
+    const metrics = page.locator('.dashboard-metrics');
+    const analysis = page.locator('.dashboard-overview-analysis');
+    await expect(metrics.locator('.dashboard-metric')).toHaveCount(4);
+    await expect(analysis.getByRole('heading', { name: 'Jahresvergleich', exact: true })).toBeVisible();
+    await page.evaluate(async () => { await window.document.fonts.ready; });
+    for (const theme of ['light', 'dark'] as const) {
+      const dark = await page.locator('html').evaluate(element => element.classList.contains('dark'));
+      if (dark !== (theme === 'dark')) await page.getByRole('button', { name: theme === 'dark' ? 'Dunkles Farbschema aktivieren' : 'Helles Farbschema aktivieren', exact: true }).click();
+      await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`));
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+        await page.evaluate(async () => {
+          await window.document.fonts.ready;
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        });
+        const metricBounds = await metrics.boundingBox(), taskBounds = await preview.boundingBox(), analysisBounds = await analysis.boundingBox();
+        expect(metricBounds).not.toBeNull(); expect(taskBounds).not.toBeNull(); expect(analysisBounds).not.toBeNull();
+        expect(metricBounds!.y + metricBounds!.height).toBeLessThanOrEqual(taskBounds!.y);
+        if (width === 1440) expect(analysisBounds!.x + analysisBounds!.width).toBeLessThan(taskBounds!.x);
+        else expect(taskBounds!.y + taskBounds!.height).toBeLessThan(analysisBounds!.y);
+        expect(await page.evaluate(() => window.document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        for (const link of await preview.getByRole('link').all()) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        await expect(preview.getByRole('listitem')).toHaveCount(3);
+        const activity = page.locator('.dashboard-activity-feed'), context = page.locator('.dashboard-context');
+        await expect(activity).toBeVisible(); await expect(context).toBeVisible();
+        const activityBounds = await activity.boundingBox(), contextBounds = await context.boundingBox();
+        expect(activityBounds).not.toBeNull(); expect(contextBounds).not.toBeNull();
+        const surface = await page.evaluate(() => {
+          const root = window.document.documentElement, body = window.document.body;
+          return { innerWidth: window.innerWidth, innerHeight: window.innerHeight, scrollY: window.scrollY,
+            documentClientWidth: root.clientWidth, documentScrollWidth: root.scrollWidth,
+            bodyClientWidth: body.clientWidth, bodyScrollWidth: body.scrollWidth,
+            height: Math.max(root.scrollHeight, body.scrollHeight, root.offsetHeight, body.offsetHeight, root.clientHeight, body.clientHeight) };
+        });
+        process.stdout.write(`Dashboard full-page surface: ${JSON.stringify({ theme, viewport: page.viewportSize(), ...surface, taskBounds, analysisBounds, activityBounds, contextBounds })}\n`);
+        expect(surface.innerWidth).toBe(width);
+        expect(surface.scrollY).toBe(0);
+        expect(surface.documentScrollWidth).toBeLessThanOrEqual(surface.documentClientWidth);
+        expect(surface.bodyScrollWidth).toBeLessThanOrEqual(surface.bodyClientWidth);
+        expect(surface.height).toBeLessThanOrEqual(8000);
+        expect(width * surface.height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
+        // All four settled pages include the top fold AND complete lower content;
+        // unchanged allowlist names/count and staging budgets bound the evidence.
+        const image = await page.screenshot({ path: testInfo.outputPath(`dashboard-overview-${theme}-${width}.png`), fullPage: true });
+        const pngWidth = image.readUInt32BE(16), pngHeight = image.readUInt32BE(20);
+        expect(image.length).toBeLessThanOrEqual(5 * 1024 * 1024);
+        // Headed Chromium's full-page image excludes the measured scrollbar;
+        // the viewport remains 1440/390, with overflow checked independently.
+        expect(pngWidth).toBe(surface.documentClientWidth);
+        expect(pngHeight).toBe(surface.height);
+        expect(pngWidth * pngHeight * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
+        for (const bounds of [taskBounds!, analysisBounds!, activityBounds!, contextBounds!]) {
+          expect(pngHeight).toBeGreaterThanOrEqual(Math.ceil(bounds.y + bounds.height));
+        }
+        const taskEntries = await preview.getByRole('listitem').evaluateAll(items => items.map(item => ({
+          text: item.textContent, bottom: item.getBoundingClientRect().bottom,
+          actions: [...item.querySelectorAll('a')].map(link => ({ text: link.textContent, href: link.getAttribute('href') })),
+        })));
+        process.stdout.write(`Dashboard full-page capture proof: ${JSON.stringify({ theme, viewport: page.viewportSize(), url: page.url(),
+          fullPage: true, ...surface, pngWidth, pngHeight, encodedBytes: image.length,
+          taskBounds, analysisBounds, activityBounds, contextBounds, taskEntries })}\n`);
+      }
+    }
+    await page.getByRole('button', { name: 'Helles Farbschema aktivieren', exact: true }).click();
     await preview.getByRole('link', { name: 'Alle Schritte', exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard\/today$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Heute erledigen', exact: true })).toBeVisible();
