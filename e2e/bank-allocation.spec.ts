@@ -47,7 +47,7 @@ async function saveReviewed(page: Page, dialog: Locator, path: string, moving = 
   expect((await saved).status()).toBe(201);
   const success = page.getByRole('dialog', { name: 'Zuordnung gespeichert', exact: true });
   await expect(success.getByRole('status')).toBeFocused();
-  await success.getByRole('button', { name: 'Schließen', exact: true }).click();
+  await success.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
   return success;
 }
 async function assertMoved(page: Page, a: number, b: number, originalId: number) {
@@ -117,7 +117,7 @@ for (const width of [1440, 390, 360]) test(`bank allocation: 120 minus 40, whole
     const recordedDialog = page.getByRole('dialog', { name: 'Zuordnung gespeichert', exact: true });
     await expect(recordedDialog.getByRole('status')).toContainText('Zahlung erfasst');
     await expect(recordedDialog.getByRole('status')).toBeFocused();
-    await recordedDialog.getByRole('button', { name: 'Schließen', exact: true }).click();
+    await recordedDialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
     await pendingCleared(page);
     const recorded = await allocationSnapshot(userId);
     expect(recorded.payments).toHaveLength(1); expect(recorded.incomes).toHaveLength(1);
@@ -191,7 +191,7 @@ for (const width of [1440, 390, 360]) test(`bank allocation: 120 minus 40, whole
         const success = page.getByRole('dialog', { name: 'Zuordnung gespeichert', exact: true });
         await expect(success).toContainText(`Gespeicherter Wechsel: ${a.invoiceNumber} → ${b.invoiceNumber}`);
         await expect(success).toContainText(`Aktuelle Zuordnung: ${b.invoiceNumber}`);
-        await success.getByRole('button', { name: 'Schließen', exact: true }).click();
+        await success.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
       } else {
         expect(await allocationSnapshot(userId)).toEqual(recorded);
         await row.getByRole('button', { name: 'Ergebnis prüfen', exact: true }).click();

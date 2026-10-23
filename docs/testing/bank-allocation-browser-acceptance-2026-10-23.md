@@ -1,6 +1,16 @@
-# Issue #96 — prepared hosted browser acceptance
+# Issue #96 — hosted browser acceptance recovery checkpoint
 
-Status: **prepared, not browser-verified**. This note records the additive acceptance package on `feat/bank-allocation-integration`; it does not replace historical audit or backlog evidence.
+Status at **2026-10-23, 05:47 UTC**: **partial hosted verification; recovery prepared, exact recovery rerun pending**. This note records the additive acceptance package and its subsequent bounded recovery on `feat/bank-allocation-integration`; it does not replace historical audit or backlog evidence or claim final acceptance.
+
+## Confirmed hosted result and current recovery
+
+For the exact tested hosted head **`9a23633cd264b13171ed3cd787c256705e16babe`**, tree `ee72b3e9b753b5b8f7323bf62d7856cd078c014e`, [CI 39905018417](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39905018417) passed **3,957 tests / 20 skips**; [own-invoice PDF-A 39905018441](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39905018441) passed on x64 and ARM, and [container 39905018427](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39905018427) passed on x64 and ARM. These are hosted results, not local native reproduction.
+
+[Browser acceptance 39905018436](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39905018436) passed **122 of 130 cases**, with **8 failures**: four strict-mode Close-button locator ambiguities, one stale adjusted-CSV review assertion, and three stale foreign-currency label assertions. Of the six new #96 cases below, **two recovery cases passed and four were locator-blocked**. Passing the two cases does not establish the remaining whole-root, refund/correction or screenshot acceptance.
+
+The pending source recovery narrows Close-button selection to the success dialog footer without removing focus, arithmetic, no-write or immutability checks. Adjusted CSV history is separately checked using the server's genuine v2 fallback and its checked v3 projection; no journal body or success is fabricated. Foreign-currency evidence uses the current exact review label and still asserts that invoice selection is disabled. These changes are prepared, **not yet verified by a hosted rerun of the exact recovery candidate**.
+
+The initial visual artifact **`12481385882`** shows that the 5 MiB screenshot-output cap was effectively exhausted before all three new views were produced: **52 of the 55 known images, 5,241,047 of 5,242,880 bytes**, leaving only **1,833 bytes**. That bounded initial result does not establish production, delivery or visual inspection of the three new allocation views. The explicitly authorized output-only recovery is described below; it is not a new image allowlist or relaxed input/codec boundary.
 
 ## Real fixtures and authority boundaries
 
@@ -31,14 +41,28 @@ Exactly three normal-viewport PNGs are added:
 - `bank-allocation-move-390.png`
 - `bank-allocation-current-origin-360.png`
 
-The optional upload allowlist is the exact accepted 52-name union plus these three names (**55**). Existing 5 MiB aggregate/16 MiB input limits, lossless full-pixel checks, safe regular-file/no-symlink/no-follow/inode checks, duplicate rejection, one-day retention and all previous screenshots/assertions remain. Actual screenshot production, aggregate delivery and visual inspection are **pending**, not established by the static count test.
+The optional upload allowlist remains the exact accepted 52-name union plus these three names (**55**). The specifically authorized recovery raises only the aggregate **encoded screenshot output** cap from **5 MiB to 8 MiB (8,388,608 bytes)** for those exact 55 known images after the observed 52-image budget exhaustion. The source recovery keeps these boundaries unchanged:
 
-## Verification boundary
+- **5 MiB encoded input per file** and **16 MiB aggregate encoded input**;
+- codec **64 MiB pixel/decode bound** and **16 MiB strong-filter bound**;
+- safe regular paths, no symlink traversal, no-follow opens and inode/device identity checks;
+- duplicate-basename rejection, lossless full-pixel proof, exact allowlist and one-day retention;
+- all previous screenshot names and substantive browser assertions.
+
+This is a bounded output-cap correction, not permission to enlarge input/decode/filter budgets or accept arbitrary images. The exact recovery candidate still needs hosted execution, delivery of all expected new views and actual visual inspection. Neither the static allowlist assertions nor the initial 52-image output establish that result.
+
+## Historical acceptance-package checks — `82935f6`
+
+The following checks belong to the original prepared acceptance-package checkpoint, **not the current uncommitted recovery** or the hosted head above. They are retained as historical evidence only:
 
 - Node 22.23.4 whole-tree TypeScript `--noEmit --incremental false`: passed after final review edits.
 - Focused ESLint, zero warnings: passed after final source edits.
-- Focused static screenshot-workflow unit assertion: **1 passed, 1 unrelated codec test intentionally not run**; verifies the exact 55-name count and unchanged aggregate cap. No PNG filter/codec execution was needed.
+- Focused static screenshot-workflow unit assertion: **1 passed, 1 unrelated codec test intentionally not run**; verified the exact 55-name count and the then-current 5 MiB aggregate output cap. It does not verify the new 8 MiB source recovery. No PNG filter/codec execution was needed.
 - `git diff --check`: passed.
-- Browser, PDF/native/JVM/filter/installer execution, full hosted acceptance, new screenshots and visual QA: **not run locally**. The existing hosted Browser acceptance workflow already provisions the actual PDF validators and headed Chromium prerequisites; the authorized parent must run and inspect that full stage for the exact published candidate SHA.
+- Browser, PDF/native/JVM/filter/installer execution, full hosted acceptance, new screenshots and visual QA: **not run locally**. The subsequent hosted results are reported separately above; the hosted workflow already provisions the actual PDF validators and headed Chromium prerequisites.
 
-No application implementation, database migration, production deployment, GitHub write, workflow dispatch or external service change is part of this acceptance-only package. The previous integrated implementation's unit/build result is not re-labelled as browser acceptance.
+## Current verification boundary
+
+The locator/assertion/output-cap recovery is uncommitted and pending publication at this observation; no current candidate SHA is assigned. Independent source review found no remaining issue. Local bounded verification passed **39 pure/static tests**, with **54 skipped tests**, plus focused lint and whole-tree TypeScript checking. The 54 skipped tests are not passing evidence; these bounded checks do not establish hosted or visual acceptance. The exact hosted recovery result is still pending. No local browser/native/JVM/PDF/filter/installer execution is authorized or reported by this note; ordinary permitted type/static checks remain distinct from hosted browser evidence.
+
+This acceptance-only recovery does not change application implementation, database migrations, production deployment or an external service. The prior implementation/package checks and the hosted unit/PDF-A/container passes are not re-labelled as complete #96 browser acceptance. Final acceptance remains open until the exact recovery candidate passes the required hosted stages and its new screenshot evidence is actually reviewed.

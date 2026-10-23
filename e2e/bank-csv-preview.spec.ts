@@ -128,7 +128,7 @@ for (const width of [360, 390]) {
   });
 }
 
-test('adjusted v2 history is explicitly review-only and never recycles corrected original receipts', async ({ page }, testInfo) => {
+for (const contract of [2, 3]) test(`adjusted history: genuine v${contract} projection never recycles corrected original receipts`, async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const userId = await account(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -141,20 +141,44 @@ test('adjusted v2 history is explicitly review-only and never recycles corrected
   const journal = await journalResponse.json();
   const corrected = await page.request.post(`/api/invoices/${created.id}/payments/adjustments`, { data: { kind: 'PAYMENT_CORRECTION', originalPaymentId: original.event.id, amount: '40.00', actionDate: '2026-10-21', reason: 'Synthetic receipt was never received', reference: 'Synthetic statement correction', declarationNeverReceived: true, expectedLedgerVersion: journal.ledgerVersion, idempotencyKey: randomUUID() } });
   expect(corrected.status()).toBe(201);
+  const authoritative = await page.request.get(`/api/invoices/${created.id}/payments`, { headers: { 'X-Bivaro-Payment-Contract': '3' } });
+  expect(authoritative.status()).toBe(200);
+  expect(await authoritative.json()).toMatchObject({
+    events: [{ id: original.event.id, amountCents: '12000' }],
+    ledger: { version: 3, originCash: { originalReceivedCents: '12000', correctedCents: '4000', validReceivedCents: '8000' }, collectibleOpenCents: '4000' },
+    effectivePayments: [{ originalPaymentId: original.event.id, validReceivedCents: '8000' }],
+  });
+  if (contract === 2) {
+    // Exercise the promised historical fallback with the server's genuine v2
+    // projection. No journal/body/success is fabricated and no write is routed.
+    await page.route(`**/api/invoices/${created.id}/payments`, async route => {
+      expect(route.request().method()).toBe('GET');
+      const response = await route.fetch({ headers: { ...route.request().headers(), 'x-bivaro-payment-contract': '2' } });
+      expect(response.status()).toBe(200);
+      await route.fulfill({ response });
+    });
+  }
   const before = await snapshot(page, userId, created.id);
   const writes: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/') && !['GET', 'HEAD'].includes(request.method())) writes.push(request.method()); });
   await page.goto('/bank-csv'); await upload(page, single); await preview(page);
   await page.getByRole('button', { name: 'Rechnungsvorschläge prüfen', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Rechnungsvorschläge geprüft', exact: true })).toBeVisible();
-  await expect(page.getByText(/1 Rechnungen mit Korrektur oder Erstattung/u)).toBeVisible();
   const bankRow = page.getByRole('article', { name: 'Bankzeile 2', exact: true });
-  await expect(bankRow).toContainText('Kein eindeutiger Rechnungsvorschlag');
-  await expect(bankRow.getByRole('heading', { name: 'RE-BANK-120', exact: true })).toHaveCount(0);
   await expect(bankRow.getByText(/Möglicherweise bereits erfasst/u)).toHaveCount(0);
-  await page.getByText('Betroffene Rechnungen anzeigen', { exact: true }).click();
-  await expect(page.getByRole('link', { name: 'RE-BANK-120 · Journal prüfen', exact: true })).toHaveAttribute('href', `/history?invoiceId=${created.id}`);
-  await page.screenshot({ path: testInfo.outputPath('bank-csv-adjusted-review-only.png'), fullPage: true });
+  if (contract === 2) {
+    await expect(page.getByText(/1 Rechnungen mit Korrektur oder Erstattung/u)).toBeVisible();
+    await expect(bankRow).toContainText('Kein eindeutiger Rechnungsvorschlag');
+    await expect(bankRow.getByRole('heading', { name: 'RE-BANK-120', exact: true })).toHaveCount(0);
+    await page.getByText('Betroffene Rechnungen anzeigen', { exact: true }).click();
+    await expect(page.getByRole('link', { name: 'RE-BANK-120 · Journal prüfen', exact: true })).toHaveAttribute('href', `/history?invoiceId=${created.id}`);
+    await page.screenshot({ path: testInfo.outputPath('bank-csv-adjusted-review-only.png'), fullPage: true });
+  } else {
+    await expect(bankRow.getByRole('heading', { name: 'RE-BANK-120', exact: true })).toBeVisible();
+    await expect(bankRow).toContainText('Geprüfter Rechnungsrest: 40,00 €');
+    await expect(bankRow).toContainText('Nur Vorschlag · keine Zahlung erfasst');
+    await expect(page.getByText(/1 Rechnungen mit Korrektur oder Erstattung/u)).toHaveCount(0);
+  }
   expect(await snapshot(page, userId, created.id)).toEqual(before); expect(writes).toEqual([]);
 });
 

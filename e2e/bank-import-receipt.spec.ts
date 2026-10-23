@@ -71,7 +71,9 @@ for (const width of [1440, 360, 390]) test(`bank evidence: bounded save/recovery
   const opener = page.getByRole('button', { name: 'Quittung öffnen', exact: true }).first(); await opener.focus(); await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Importquittung', exact: true })).toBeFocused();
   await expect(page.getByText('Import gespeichert, noch keine Zahlungen zugeordnet', { exact: true })).toBeVisible();
-  await expect(page.getByText('Betrag nicht bestätigt', { exact: false })).toBeVisible();
+  const foreignCurrency = page.getByRole('article', { name: 'Gespeicherte Bankzeile 5', exact: true });
+  await expect(foreignCurrency.getByText('Betrag / Währung prüfen', { exact: true })).toBeVisible();
+  await expect(foreignCurrency.getByRole('button', { name: 'Rechnung wählen', exact: true })).toBeDisabled();
   if (width === 390) {
     await page.getByRole('heading', { name: 'Importquittung', exact: true }).evaluate(element => {
       element.scrollIntoView({ block: 'start', behavior: 'instant' });

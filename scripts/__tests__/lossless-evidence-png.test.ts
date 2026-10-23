@@ -14,9 +14,12 @@ describe('bounded lossless synthetic screenshot evidence', () => {
   });
   it('preserves the exact screenshot count and aggregate limit rather than hiding evidence', () => {
     const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
-    expect(workflow).toContain('limit = 5 * 1024 * 1024');
+    expect(workflow).toContain('limit = 8 * 1024 * 1024');
+    expect(workflow).toContain('per_file_input_limit = 5 * 1024 * 1024');
+    expect(workflow).toContain('total > 16 * 1024 * 1024');
+    expect(workflow).toContain('handle.read(per_file_input_limit + 1)');
     expect(workflow).toContain('recompress_png(data)');
-    expect(workflow).toContain('combined read size exceeds 5 MiB');
+    expect(workflow).toContain('combined read size exceeds 8 MiB');
     expect(workflow).toContain("'payment-adjustment-confirmation-desktop-1440.png'");
     const allowlist = workflow.match(/allowed = \{([\s\S]*?)\n\s*\}/u)?.[1] ?? '';
     const screenshots = [...allowlist.matchAll(/'([^']+\.png)'/gu)].map(match => match[1]);
