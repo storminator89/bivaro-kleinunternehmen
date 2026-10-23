@@ -901,8 +901,7 @@ export function DashboardContent() {
         {!tabParam ? (
           <>
             <GettingStarted />
-            <DailyActionsPanel compact />
-            <DashboardClient />
+            <DashboardClient tasks={<DailyActionsPanel compact />} />
           </>
         ) : (
         <div className="space-y-4">

@@ -210,7 +210,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
 
           return (
             <div key={section.title}>
-              <h3 className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <h3 className="px-3 mb-2 text-xs font-semibold text-muted-foreground">
                 {section.title}
               </h3>
               <ul className="space-y-1">
@@ -243,7 +243,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
         {/* Auth items when expanded */}
         {status === "unauthenticated" && (
           <div>
-            <h3 className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <h3 className="px-3 mb-2 text-xs font-semibold text-muted-foreground">
               Konto
             </h3>
             <ul className="space-y-1">

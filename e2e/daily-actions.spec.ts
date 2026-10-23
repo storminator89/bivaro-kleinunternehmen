@@ -55,6 +55,32 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     finally { releaseRead(); }
     await expect(preview.getByRole('listitem')).toHaveCount(3);
     await expect(preview.getByText('80,00 €', { exact: true })).toBeVisible();
+
+    // Read-only evidence of this exact populated overview, not the standalone
+    // task page or a scrolled revenue disclosure. Financial assertions below stay.
+    const metrics = page.locator('.dashboard-metrics');
+    const analysis = page.locator('.dashboard-overview-analysis');
+    await expect(metrics.locator('.dashboard-metric')).toHaveCount(4);
+    await expect(analysis.getByRole('heading', { name: 'Jahresvergleich', exact: true })).toBeVisible();
+    await page.evaluate(async () => { await window.document.fonts.ready; });
+    for (const theme of ['light', 'dark'] as const) {
+      const dark = await page.locator('html').evaluate(element => element.classList.contains('dark'));
+      if (dark !== (theme === 'dark')) await page.getByRole('button', { name: theme === 'dark' ? 'Dunkles Farbschema aktivieren' : 'Helles Farbschema aktivieren', exact: true }).click();
+      await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`));
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+        const metricBounds = await metrics.boundingBox(), taskBounds = await preview.boundingBox(), analysisBounds = await analysis.boundingBox();
+        expect(metricBounds).not.toBeNull(); expect(taskBounds).not.toBeNull(); expect(analysisBounds).not.toBeNull();
+        expect(metricBounds!.y + metricBounds!.height).toBeLessThanOrEqual(taskBounds!.y);
+        if (width === 1440) expect(analysisBounds!.x + analysisBounds!.width).toBeLessThan(taskBounds!.x);
+        else expect(taskBounds!.y + taskBounds!.height).toBeLessThan(analysisBounds!.y);
+        expect(await page.evaluate(() => window.document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        for (const link of await preview.getByRole('link').all()) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        await page.screenshot({ path: testInfo.outputPath(`dashboard-overview-${theme}-${width}.png`), fullPage: false });
+      }
+    }
+    await page.getByRole('button', { name: 'Helles Farbschema aktivieren', exact: true }).click();
     await preview.getByRole('link', { name: 'Alle Schritte', exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard\/today$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Heute erledigen', exact: true })).toBeVisible();

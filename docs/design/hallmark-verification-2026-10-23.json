@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-23",
+  "baselineCommit": "155eee2f3bb8019e9166e46fa289df5297f597e1",
+  "foundationCommit": "375c6842ccfbd84e592d26fe81474418ee54c944",
+  "node": "22.23.4",
+  "checks": {
+    "lint": {
+      "status": "passed",
+      "eslintWarnings": 0,
+      "log": "/tmp/bivaro-hallmark-dashboard-lint-confirmed.log"
+    },
+    "focusedUnit": {
+      "status": "passed",
+      "files": 8,
+      "tests": 78,
+      "log": "/tmp/bivaro-hallmark-dashboard-tests-final.log"
+    },
+    "productionBuild": {
+      "status": "passed-including-types-and-postbuild-notices",
+      "existingTurbopackTracingWarnings": 9,
+      "log": "/tmp/bivaro-hallmark-dashboard-build-final.log"
+    },
+    "independentStaticReview": {
+      "status": "no-blocking-findings",
+      "scope": "Runtime source diff, task lifecycle structure, responsive CSS reasoning; not browser acceptance"
+    },
+    "diffWhitespace": "passed",
+    "pageInventory": {
+      "routes": 27,
+      "queryTabs": 6
+    }
+  },
+  "protectedSourceBoundaries": [
+    {
+      "file": "components/dashboard/dashboard-header.tsx",
+      "sha256": "cc0944327110be6a7a423de9a69453e5979b56098ae6c1247778c9f47a6440ec",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "components/dashboard/metric-card.tsx",
+      "sha256": "cdcccbff4ae2e273a854101a520d6c2fa4b32fd56bdc91d87a0c469b64d512ca",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "components/dashboard/year-comparison.tsx",
+      "sha256": "8a5c8489191230f3d87b29387161b1f43c2577ba897e2ef61dafd117d855164f",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "components/dashboard/dashboard-activity-feed.tsx",
+      "sha256": "41eff14c54d6f2d4a8daf6bdb08c91c1387746a1b1bb88737accdecde1311d55",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "components/daily-actions/daily-actions-workspace.tsx",
+      "sha256": "4a8e6bd660bf122a4c64731eafde720af7206002c20399d00e26d2fdf50bc0cd",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "hooks/use-dashboard-data.ts",
+      "sha256": "3ea07063407657da211c7c89e5286805dc3bc10935e51feb6f5cf53f90f363f3",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "lib/money.ts",
+      "sha256": "b7c9d7579b31b3c040373fae3d8c0e0447fbf09c6d08c75b9024756eb53942e0",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "lib/payment-dashboard-refresh.ts",
+      "sha256": "3a8a1bcce1c113794ae806997b2438cc89c4f66153854ef82617a2eda9c36ce1",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "components/purchases/review-link.tsx",
+      "sha256": "ee8d0fb977dba08bb1bcd610478a68776330a59c9b7a701ede16dbec7218f91c",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "components/purchases/use-review-navigation.ts",
+      "sha256": "26970f5a484162fd00c9b3afbd21616d3b750d426f43bc4925281c0dd0b8fbc2",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "app/layout.tsx",
+      "sha256": "6dcceabc2b56e80dbf338d32ba47b5206f3b31b3f34cb2ff48289d0d0ec68785",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "proxy.ts",
+      "sha256": "fda451b308d8874ea50d746066c93a737aecec94e3936a1011a7aa7b75ea06ed",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "next.config.ts",
+      "sha256": "b27bad678fce8aa996a74eb92cb4d48b9d5b824e7b8aeef18c8441a0dd0993fa",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "prisma/schema.prisma",
+      "sha256": "de59ab9745b74132ac66c824b52af3187e8625fbf869791d9ad43dd6b3a243a5",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "tokens.css",
+      "sha256": "acbe9a1d0deed7c501ac4e1d6a5a5b34c9536ce0a78e4efe90fbbaab2f7edfe2",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "design.md",
+      "sha256": "a930954123e2d65294a645078fbb27998ad30005a618480d2f0f4736b30f6df8",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "package.json",
+      "sha256": "23d5a1cd3a7bb78bfe699ec9c6646aa183e0c1b5a14f266a9bebc394b28e04ba",
+      "identicalToBaseline": true
+    },
+    {
+      "file": "package-lock.json",
+      "sha256": "68e5d51df16fc157aecc51f77f6ab3b4afce2a829bbb5ce4e804a10b19240283",
+      "identicalToBaseline": true
+    }
+  ],
+  "notRun": [
+    "full-unit-suite",
+    "local-browser-e2e",
+    "hosted-after-acceptance",
+    "hallmark-sloplint",
+    "hallmark-render-capture",
+    "native-JVM-PDF-validation",
+    "new-GitHub-CI-run"
+  ],
+  "hallmarkInstallation": {
+    "status": "blocked-before-python",
+    "destination": ".agents/skills/hallmark",
+    "destinationExists": false,
+    "upstreamCommit": "7ec868225c6caa040558c321ee0fefa0e73f83a8",
+    "upstreamVersion": "2.0.0",
+    "error": "bwrap: Can't create file at /home/agent/.codex/sessions: Read-only file system",
+    "attempts": 1,
+    "upstreamScriptsExecuted": false,
+    "alternativeInstallAttempted": false
+  },
+  "publication": {
+    "pushed": false,
+    "pullRequestCreated": false,
+    "merged": false,
+    "deployed": false
+  },
+  "remaining": [
+    "Resolve trusted installer launcher boundary without accessing denied path",
+    "Exact-head hosted before/after and interaction acceptance",
+    "Root review before any GitHub write"
+  ]
+}
