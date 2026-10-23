@@ -173,7 +173,7 @@ export function useDashboardData({
   });
   const invoicesQuery = useQuery({
     queryKey: ["dashboard", "invoices", "list", invoicesQueryString],
-    queryFn: ({ signal }) => fetchJson<PaginatedResponse<Invoice>>(`/api/invoices?${invoicesQueryString}`, signal, { 'X-Bivaro-Payment-Contract': '2' }),
+    queryFn: ({ signal }) => fetchJson<PaginatedResponse<Invoice>>(`/api/invoices?${invoicesQueryString}`, signal, { 'X-Bivaro-Payment-Contract': '3' }),
     enabled: activeTab === "invoices",
   });
   const quotesQuery = useQuery({

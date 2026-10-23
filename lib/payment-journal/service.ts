@@ -1,3 +1,4 @@
+import { loadInvoicePaymentState, updateInvoicePaymentProjection, invoicePaymentResponse, invoiceHasAllocationHistory } from './allocation-ledger';
 import { validateAdjustmentEvidence } from './adjustment-evidence';
 import { reducePaymentLedger, paymentLedgerVersion } from './adjustment-contract';
 import { Prisma } from '@prisma/client';
@@ -8,12 +9,16 @@ import { getEInvoiceBookingRejection } from '@/lib/e-invoice-parser';
 import { formatMoneyEUR } from '@/lib/money';
 import { exactPaymentCents, paymentDate, paymentSummary, paymentText, PaymentJournalError, type FullPaymentInput } from './contract';
 
-export async function ownedInvoice(tx: Prisma.TransactionClient, userId: string, invoiceId: number) {
+export async function ownedInvoice(tx: Prisma.TransactionClient, userId: string, invoiceId: number, relationLimit = 10_000) {
   if (!Number.isSafeInteger(invoiceId) || invoiceId <= 0) throw new PaymentJournalError('Ungültige Rechnungs-ID');
   const invoice = await tx.invoice.findFirst({ where: { id: invoiceId, userId }, include: {
-    incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } }, paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } },
+    incomes: { include: { cashTransaction: true }, orderBy: { id: 'asc' }, take: relationLimit + 1 },
+    paymentJournalEvents: { orderBy: { id: 'asc' }, take: relationLimit + 1 },
+    paymentAdjustments: { orderBy: { id: 'asc' }, take: relationLimit + 1 },
+    creditNotes: { orderBy: { id: 'asc' }, take: relationLimit + 1 },
   } });
   if (!invoice) throw new PaymentJournalError('Rechnung nicht gefunden', 404, 'INVOICE_NOT_FOUND');
+  if ([invoice.incomes, invoice.paymentJournalEvents, invoice.paymentAdjustments, invoice.creditNotes].some(rows => rows.length > relationLimit)) throw review();
   if (invoice.customerId !== null && !await tx.customer.findFirst({ where: { id: invoice.customerId, userId }, select: { id: true } })) {
     throw new PaymentJournalError('Die Kundenzuordnung der Rechnung muss vor der Zahlung geprüft werden.', 409, 'PAYMENT_REVIEW_REQUIRED');
   }
@@ -103,12 +108,16 @@ export async function recordFullPaymentInTransaction(tx: Prisma.TransactionClien
       || priorKey.paidAt?.getTime() !== paidAt.getTime() || priorKey.reference !== reference || priorKey.source !== input.source) {
       throw new PaymentJournalError('Idempotenzschlüssel gehört zu einer anderen Zahlung. Bitte Eingabe prüfen.', 409, 'IDEMPOTENCY_CONFLICT');
     }
-    return { event: priorKey, summary: ledgerSummary(invoice), replayed: true };
+    const current = await loadInvoicePaymentState(tx, userId, invoiceId);
+    return { ...(current.requiresV3 ? invoicePaymentResponse(current) : {}), event: priorKey, summary: current.summary, replayed: true };
   }
   if (operation) throw new PaymentJournalError('Finanzaktionsbeleg ohne passende Originalzahlung; Prüfung erforderlich.', 409, 'PAYMENT_REVIEW_REQUIRED');
-  const summary = ledgerSummary(invoice);
-  if (invoice.paymentAdjustments.length && input.expectedLedgerVersion !== paymentLedgerVersion(invoice)) {
-    throw new PaymentJournalError('Zahlungsjournal geändert. Bitte neu laden und bewusst bestätigen.', 409, 'PAYMENT_STATE_CHANGED', summary, paymentLedgerVersion(invoice));
+  const current = await loadInvoicePaymentState(tx, userId, invoiceId);
+  const summary = current.summary;
+  const currentVersion = current.requiresV3 ? current.ledgerVersion : paymentLedgerVersion(invoice);
+  const validVersion = input.expectedLedgerVersion === current.ledgerVersion || (!current.requiresV3 && input.expectedLedgerVersion === currentVersion);
+  if ((current.requiresV3 || invoice.paymentAdjustments.length > 0 || input.expectedLedgerVersion !== undefined) && !validVersion) {
+    throw new PaymentJournalError('Zahlungsjournal geändert. Bitte neu laden und bewusst bestätigen.', 409, 'PAYMENT_STATE_CHANGED', summary, currentVersion);
   }
   if (!['DRAFT', 'SENT', 'PAID'].includes(invoice.status)) throw new PaymentJournalError('Diese Rechnung kann nicht bezahlt werden.', 409, 'UNSUPPORTED_DOCUMENT');
   if (input.source === 'LEGACY_STATUS' && invoice.paymentJournalEvents.length > 0) {
@@ -134,15 +143,12 @@ export async function recordFullPaymentInTransaction(tx: Prisma.TransactionClien
     customerId: invoice.customerId, description: `Rechnung ${invoice.invoiceNumber ?? invoiceId}`, taxRelevant: true } });
   const event = await tx.paymentJournalEvent.create({ data: { userId, invoiceId, incomeId: income.id, amountCents, currency: 'EUR', paidAt,
     dateCertainty: 'ACTUAL', source: input.source, reference, idempotencyKey } });
-  const allocations = [...invoice.paymentJournalEvents, event];
-  const reduction = reducePaymentLedger(invoice.totalAmount!, allocations, invoice.paymentAdjustments, invoice.status);
-  const nextSummary = reduction.summary;
-  const latestDate = reduction.settlementDate;
-  await tx.invoice.update({ where: { id: invoiceId, userId }, data: {
-    status: nextSummary.paid ? 'PAID' : 'SENT', paidAt: nextSummary.paid ? latestDate : null, issuanceState: 'ISSUED',
-  } });
+  const next = await loadInvoicePaymentState(tx, userId, invoiceId, { validateProjection: false });
+  const nextSummary = next.summary;
+  await updateInvoicePaymentProjection(tx, next);
   await auditPayment(tx, userId, invoiceId, invoice.invoiceNumber, { paymentJournalEventId: event.id, amountCents, paidAt, source: event.source, reference, incomeId: income.id }, false);
-  return { event, summary: nextSummary, replayed: false };
+  const refreshed = current.requiresV3 ? await loadInvoicePaymentState(tx, userId, invoiceId) : null;
+  return { ...(refreshed ? invoicePaymentResponse(refreshed) : {}), event, summary: nextSummary, replayed: false };
 }
 
 export async function recordFullPayment(userId: string, invoiceId: number, input: FullPaymentInput) {
@@ -163,6 +169,9 @@ export async function recordFullPayment(userId: string, invoiceId: number, input
 export async function adoptLegacyPaidInvoice(userId: string, invoiceId: number) {
   return inTransaction(async tx => {
     const invoice = await ownedInvoice(tx, userId, invoiceId);
+    if (await invoiceHasAllocationHistory(tx, userId, invoiceId)) {
+      throw new PaymentJournalError('Diese Rechnung besitzt bereits aktuelle oder historische Bankzuordnungen. Eine zusätzliche Legacy-Zahlung darf daraus nicht erzeugt werden.', 409, 'PAYMENT_REVIEW_REQUIRED');
+    }
     const cents = await assertBookable(invoice);
     if (invoice.paymentJournalEvents.length > 0) {
       if (invoice.paymentJournalEvents.length !== 1 || invoice.paymentJournalEvents[0].source !== 'LEGACY_IMPORT') throw review();
@@ -184,10 +193,21 @@ export async function adoptLegacyPaidInvoice(userId: string, invoiceId: number) 
 }
 
 /** Legacy unknown balances are explicit, never guessed as unpaid. */
-export async function readInvoicePaymentJournal(userId: string, invoiceId: number) {
+async function readInvoicePaymentJournalInternal(userId: string, invoiceId: number, contractVersion: 2 | 3 = 2) {
   return prisma.$transaction(async tx => {
   const invoice = await ownedInvoice(tx, userId, invoiceId);
   await assertBookable(invoice);
+  if (contractVersion === 3) {
+    try { return invoicePaymentResponse(await loadInvoicePaymentState(tx, userId, invoiceId)); }
+    catch (error) {
+      if (!(error instanceof PaymentJournalError) || error.code !== 'PAYMENT_REVIEW_REQUIRED') throw error;
+      const allocationAware = await invoiceHasAllocationHistory(tx, userId, invoiceId);
+      if (allocationAware) throw error; // Never downgrade a corrupt v3 graph into plausible origin-only arithmetic.
+    }
+  } else {
+    const allocationAware = await invoiceHasAllocationHistory(tx, userId, invoiceId);
+    if (allocationAware) throw new PaymentJournalError('Dieser Zahlungsstand erfordert Zahlungsjournal-Vertrag 3.', 409, 'PAYMENT_CAPABILITY_REQUIRED');
+  }
   const legacyAdoptionRequired = invoice.status === 'PAID' && invoice.paymentJournalEvents.length === 0;
   let summary = null;
   let reviewRequired = false;
@@ -198,7 +218,7 @@ export async function readInvoicePaymentJournal(userId: string, invoiceId: numbe
   }
   const reduction = summary ? reducePaymentLedger(invoice.totalAmount!, invoice.paymentJournalEvents, invoice.paymentAdjustments, invoice.status) : null;
   const adjustmentEligibility = await import('./adjustment-service').then(module => module.adjustmentEligibility(invoice));
-  return { ledger: reduction?.ledger ?? null, ledgerVersion: paymentLedgerVersion(invoice),
+  return { paymentContractVersion: 2 as const, originEvents: invoice.paymentJournalEvents, effectivePayments: [], rootCapabilities: [], allocationHistory: [], ledger: reduction?.ledger ?? null, ledgerVersion: paymentLedgerVersion(invoice),
     adjustments: invoice.paymentAdjustments.map(adjustment => ({ ...adjustment, fiscalMappingStatus: 'UNREVIEWED' as const })),
     adjustmentCapacities: reduction?.adjustmentCapacities ?? [], ...adjustmentEligibility,
     currency: 'EUR' as const, events: invoice.paymentJournalEvents,
@@ -207,4 +227,12 @@ export async function readInvoicePaymentJournal(userId: string, invoiceId: numbe
     canRecordPayment: !reviewRequired && !!summary && !summary.paid && ['DRAFT', 'SENT'].includes(invoice.status),
   };
   });
+}
+
+type JournalRead = Awaited<ReturnType<typeof readInvoicePaymentJournalInternal>>;
+export function readInvoicePaymentJournal(userId: string, invoiceId: number, contractVersion?: 2): Promise<Extract<JournalRead, { paymentContractVersion: 2 }>>;
+export function readInvoicePaymentJournal(userId: string, invoiceId: number, contractVersion: 3): Promise<JournalRead>;
+export function readInvoicePaymentJournal(userId: string, invoiceId: number, contractVersion: 2 | 3): Promise<JournalRead>;
+export function readInvoicePaymentJournal(userId: string, invoiceId: number, contractVersion: 2 | 3 = 2): Promise<JournalRead> {
+  return readInvoicePaymentJournalInternal(userId, invoiceId, contractVersion);
 }

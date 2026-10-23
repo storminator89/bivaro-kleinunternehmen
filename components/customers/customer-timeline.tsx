@@ -37,11 +37,13 @@ function documentType(type: string) {
 function entryTitle(entry: TimelineEntry) {
   const document = `${documentType(entry.document.type)} ${entry.document.number || 'ohne Nummer'}`;
   return entry.kind === 'PAYMENT' ? `Zahlungsnachweis · ${document}`
+    : entry.kind === 'ALLOCATION' ? `Rechnungszuordnung geändert · ${document}`
     : entry.kind === 'ADJUSTMENT' ? `Korrektur / Erstattung · ${document}` : document;
 }
 
 function businessDateLabel(entry: TimelineEntry) {
   if (entry.kind === 'DOCUMENT') return 'Belegdatum';
+  if (entry.kind === 'ALLOCATION') return 'Entdeckungsdatum';
   if (entry.kind === 'ADJUSTMENT') return 'Datum des Nachweises';
   return entry.dateCertainty === 'ACTUAL' ? 'Zahlungsdatum' : 'Historischer Datumsnachweis';
 }
@@ -52,7 +54,7 @@ function isTimelinePage(value: unknown, customerId: number): value is TimelinePa
   return page.customer?.id === customerId && typeof page.customer.name === 'string'
     && Array.isArray(page.entries) && page.entries.length <= 20
     && page.entries.every(entry => entry && typeof entry.key === 'string'
-      && ['DOCUMENT', 'PAYMENT', 'ADJUSTMENT'].includes(entry.kind)
+      && ['DOCUMENT', 'PAYMENT', 'ADJUSTMENT', 'ALLOCATION'].includes(entry.kind)
       && typeof entry.recordedAt === 'string' && typeof entry.statusLabel === 'string'
       && entry.document && Number.isSafeInteger(entry.document.id)
       && typeof entry.document.type === 'string' && typeof entry.document.status === 'string'
@@ -124,7 +126,7 @@ function TimelineEntries({ customerId }: { customerId: number }) {
     setError(null);
     try {
       const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
-      const response = await fetch(`/api/customers/${customerId}/timeline${query}`, { cache: 'no-store', signal: controller.signal });
+      const response = await fetch(`/api/customers/${customerId}/timeline${query}`, { cache: 'no-store', headers: { 'X-Bivaro-Payment-Contract': '3' }, signal: controller.signal });
       const data: unknown = await response.json().catch(() => null);
       if (!response.ok) {
         if (response.status === 401) throw new TimelineRequestError('Bitte erneut anmelden, um den Verlauf zu öffnen.');
@@ -192,7 +194,7 @@ function TimelineEntries({ customerId }: { customerId: number }) {
               <div className={styles.facts}>
                 {collectible && entry.balance.state === 'KNOWN' && open !== null && <p>Aktueller Rest <strong>{open}</strong></p>}
                 {entry.balance.state === 'REVIEW' && <p className={styles.review}>Zahlungsstand zu prüfen</p>}
-                {entry.kind !== 'DOCUMENT' && amount !== null && <p>Nachweisbetrag <strong>{amount}</strong></p>}
+                {entry.kind !== 'DOCUMENT' && amount !== null && <p>{entry.kind === 'ALLOCATION' ? 'Zuordnungsbetrag · kein Geldfluss' : 'Nachweisbetrag'} <strong>{amount}</strong></p>}
                 {entry.kind === 'DOCUMENT' && entry.document.type === 'QUOTE' && <p>Keine Forderung</p>}
                 {entry.kind === 'DOCUMENT' && entry.document.type === 'INVOICE' && entry.document.status === 'DRAFT' && <p>Entwurf · kein Umsatznachweis</p>}
                 {entry.kind === 'DOCUMENT' && entry.document.status === 'CANCELLED' && <p>Storniert · keine offene Forderung</p>}
@@ -201,7 +203,7 @@ function TimelineEntries({ customerId }: { customerId: number }) {
             </div>
             <details className={styles.details}>
               <summary>Einzelheiten</summary>
-              <dl><div><dt>Erfasst am</dt><dd><time dateTime={entry.recordedAt}>{dateLabel(entry.recordedAt, true)}</time></dd></div>
+              <dl>{entry.attribution && <div><dt>{entry.kind === 'ALLOCATION' ? 'Rechnungswechsel' : 'Original / aktuelle Zuordnung'}</dt><dd>{entry.kind === 'ALLOCATION' ? `Rechnung #${entry.attribution.fromInvoiceId} → Rechnung #${entry.attribution.toInvoiceId}` : `Ursprung #${entry.attribution.originInvoiceId} → aktuell #${entry.attribution.allocatedInvoiceId}`}</dd></div>}<div><dt>Erfasst am</dt><dd><time dateTime={entry.recordedAt}>{dateLabel(entry.recordedAt, true)}</time></dd></div>
                 <div><dt>{businessDateLabel(entry)}</dt><dd>{entry.businessDate ? <time dateTime={entry.businessDate}>{dateLabel(entry.businessDate)}</time> : 'Unbekannt'}</dd></div>
                 {entry.kind === 'PAYMENT' && entry.dateCertainty !== 'ACTUAL' && <div><dt>Datumsqualität</dt><dd>Historischer Nachweis, kein bestätigtes tatsächliches Zahlungsdatum</dd></div>}
               </dl>

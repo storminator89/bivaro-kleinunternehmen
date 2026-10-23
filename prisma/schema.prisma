@@ -71,6 +71,8 @@ model User {
   paymentJournalEvents PaymentJournalEvent[]
   paymentAdjustments PaymentAdjustment[]
   paymentOperations PaymentOperation[]
+  bankPaymentBindings BankPaymentBinding[]
+  paymentAllocationChanges PaymentAllocationChange[]
   dataImportBatches DataImportBatch[]
   bankImportBatches BankImportBatch[]
   bankImportRows BankImportRow[]
@@ -168,6 +170,8 @@ model Invoice {
   paymentJournalEvents PaymentJournalEvent[]
   paymentAdjustments PaymentAdjustment[] @relation("AdjustedInvoice")
   refundBasisAdjustments PaymentAdjustment[] @relation("RefundBasis")
+  allocationChangesFrom PaymentAllocationChange[] @relation("AllocationFrom")
+  allocationChangesTo PaymentAllocationChange[] @relation("AllocationTo")
   billingNotes  BillingNote[]
   emailOutbox EmailOutbox[]
   reminders     Reminder[]
@@ -548,6 +552,7 @@ model PaymentJournalEvent {
   idempotencyKey String
   createdAt      DateTime @default(now())
   adjustments PaymentAdjustment[]
+  bankPaymentBinding BankPaymentBinding?
 
   @@unique([userId, idempotencyKey])
   @@index([userId, paidAt])
@@ -676,6 +681,8 @@ model PaymentOperation {
   kind String
   createdAt DateTime @default(now())
   adjustment PaymentAdjustment?
+  bankPaymentBinding BankPaymentBinding?
+  allocationChange PaymentAllocationChange?
   @@unique([userId, idempotencyKey])
 }
 
@@ -703,11 +710,18 @@ model PaymentAdjustment {
   operation PaymentOperation @relation(fields: [userId, idempotencyKey], references: [userId, idempotencyKey], onDelete: Restrict, onUpdate: Restrict)
   semanticFingerprint String
   contractVersion Int @default(2)
+  allocationBindingId Int?
+  allocationBinding BankPaymentBinding? @relation(fields: [allocationBindingId], references: [id], onDelete: Restrict)
+  allocationRevision Int?
+  allocationChangeId Int?
+  allocationChange PaymentAllocationChange? @relation(fields: [allocationChangeId], references: [id], onDelete: Restrict)
+  allocationBasisSnapshot Json?
   recordedAt DateTime @default(now())
   @@unique([userId, idempotencyKey])
   @@unique([userId, payoutEvidenceIdentity])
   @@index([userId, invoiceId, id])
   @@index([userId, accountingEffectiveOn])
+  @@index([originalPaymentId, id])
 }
 
 // Immutable, manually confirmed envelopes. Never a queue or delivery/read proof.
@@ -825,9 +839,70 @@ model BankImportRow {
   contentKey   String?
   dayAmountKey String?
 
+  bankPaymentBinding BankPaymentBinding?
+
   @@unique([userId, stableKey])
   @@unique([batchId, sourceRow])
   @@index([userId, externalKey])
   @@index([userId, contentKey])
   @@index([userId, dayAmountKey])
+}
+
+// The physical receipt and Income stay at their immutable origin invoice.
+model BankPaymentBinding {
+  id Int @id @default(autoincrement())
+  stableKey String @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  bankImportRowId Int
+  bankImportRow BankImportRow @relation(fields: [bankImportRowId], references: [id], onDelete: Restrict)
+  paymentJournalEventId Int
+  paymentJournalEvent PaymentJournalEvent @relation(fields: [paymentJournalEventId], references: [id], onDelete: Restrict)
+  idempotencyKey String
+  operation PaymentOperation @relation(fields: [userId, idempotencyKey], references: [userId, idempotencyKey], onDelete: Restrict, onUpdate: Restrict)
+  semanticFingerprint String
+  basisSnapshot Json
+  contractVersion Int @default(1)
+  createdAt DateTime @default(now())
+  allocationChanges PaymentAllocationChange[]
+  adjustments PaymentAdjustment[]
+  @@unique([bankImportRowId])
+  @@unique([paymentJournalEventId])
+  @@unique([userId, bankImportRowId])
+  @@unique([userId, paymentJournalEventId])
+  @@unique([userId, idempotencyKey])
+  @@unique([userId, stableKey])
+}
+
+model PaymentAllocationChange {
+  id Int @id @default(autoincrement())
+  stableKey String @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  bindingId Int
+  binding BankPaymentBinding @relation(fields: [bindingId], references: [id], onDelete: Restrict)
+  revision Int
+  previousChangeId Int? @unique
+  previousChange PaymentAllocationChange? @relation("AllocationPredecessor", fields: [previousChangeId], references: [id], onDelete: Restrict)
+  nextChange PaymentAllocationChange? @relation("AllocationPredecessor")
+  fromInvoiceId Int
+  fromInvoice Invoice @relation("AllocationFrom", fields: [fromInvoiceId], references: [id], onDelete: Restrict)
+  toInvoiceId Int
+  toInvoice Invoice @relation("AllocationTo", fields: [toInvoiceId], references: [id], onDelete: Restrict)
+  amountCents String
+  currency String @default("EUR")
+  actionDate DateTime
+  reason String
+  idempotencyKey String
+  operation PaymentOperation @relation(fields: [userId, idempotencyKey], references: [userId, idempotencyKey], onDelete: Restrict, onUpdate: Restrict)
+  semanticFingerprint String
+  basisSnapshot Json
+  contractVersion Int @default(1)
+  recordedAt DateTime @default(now())
+  adjustments PaymentAdjustment[]
+  @@unique([bindingId, revision])
+  @@unique([userId, idempotencyKey])
+  @@unique([userId, stableKey])
+  @@index([userId, fromInvoiceId, id])
+  @@index([userId, toInvoiceId, id])
 }

@@ -1,3 +1,4 @@
+import { portableBankAllocations } from '@/lib/bank-allocation-backup';
 import { readAnnualContextRevision } from '@/lib/annual-business-context';
 import { prisma } from '@/lib/prisma';
 import { hashBytes, hashJson, redactAuditLog } from '@/lib/backup-manifest';
@@ -89,6 +90,8 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       paymentJournalEvents,
       paymentAdjustments,
       paymentOperations,
+      bankPaymentBindings,
+      paymentAllocationChanges,
       invoices,
       purchaseDocuments,
       purchaseValidationReports,
@@ -122,6 +125,8 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       tx.paymentJournalEvent.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.paymentAdjustment.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.paymentOperation.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
+      tx.bankPaymentBinding.findMany({ where: { userId }, orderBy: { stableKey: 'asc' } }),
+      tx.paymentAllocationChange.findMany({ where: { userId }, orderBy: [{ bindingId: 'asc' }, { revision: 'asc' }] }),
       tx.invoice.findMany({ where: { userId } }),
       tx.purchaseDocument.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.purchaseValidationReport.findMany({ where: { userId }, orderBy: [{ checkedAt: 'asc' }, { id: 'asc' }] }),
@@ -133,7 +138,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
         parserVersion: true, mappingVersion: true, accountAlias: true, delimiter: true, mapping: true, receipt: true, createdAt: true,
       } }),
       tx.bankImportRow.findMany({ where: { userId, batch: { userId } }, orderBy: [{ batch: { stableKey: 'asc' } }, { sourceRow: 'asc' }], select: {
-        stableKey: true, sourceRow: true, evidence: true, externalKey: true, contentKey: true, dayAmountKey: true,
+        id: true, stableKey: true, sourceRow: true, evidence: true, externalKey: true, contentKey: true, dayAmountKey: true,
         batch: { select: { stableKey: true } },
       } }),
       tx.settings.findUnique({ where: { userId } }),
@@ -159,14 +164,20 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       tx.invoiceNumberCounter.findMany({ where: { userId }, orderBy: [{ type: 'asc' }, { year: 'asc' }] }),
     ]);
 
+    const allocations = portableBankAllocations(bankPaymentBindings, paymentAllocationChanges, bankImportRows, paymentJournalEvents);
     const includedOriginalHashes = new Set(purchaseDocuments.map(document => document.originalSha256));
     return {
       user: { id: user?.id, email: user?.email, name: user?.name },
       expenses: expenses.map((item) => ({ ...item, userId: undefined })),
       incomes: incomes.map((item) => ({ ...item, userId: undefined })),
-      paymentAdjustments: paymentAdjustments.map((item) => ({ ...item, userId: undefined })),
+      paymentAdjustments: paymentAdjustments.map(({ allocationBindingId, allocationChangeId, allocationRevision, allocationBasisSnapshot, ...item }) => ({ ...item, userId: undefined,
+        ...(item.contractVersion === 3 ? { allocationBindingStableKey: bankPaymentBindings.find(binding => binding.id === allocationBindingId)?.stableKey, allocationRevision,
+          allocationChangeStableKey: allocationChangeId == null ? null : paymentAllocationChanges.find(change => change.id === allocationChangeId)?.stableKey, allocationBasisSnapshot } : {}),
+      })),
+      bankPaymentBindings: allocations.bindings,
+      paymentAllocationChanges: allocations.changes,
       paymentOperations: paymentOperations.map((item) => ({ ...item, userId: undefined })),
-      paymentJournalEvents: paymentJournalEvents.map((item) => ({ ...item, userId: undefined })),
+      paymentJournalEvents: paymentJournalEvents.map((item) => ({ ...item, userId: undefined, bankPaymentBindingStableKey: bankPaymentBindings.find(binding => binding.paymentJournalEventId === item.id)?.stableKey ?? null })),
       invoices: invoices.map((item) => ({ ...item, userId: undefined })),
       purchaseDocuments: purchaseDocuments.map((item) => ({ ...item, userId: undefined })),
       // Orphaned historical proof remains target-owned but is not exported without its original.
@@ -176,7 +187,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       annualBusinessContextRevisions: annualBusinessContextRevisions.map(readAnnualContextRevision),
       serviceArticles: serviceArticles.map((item) => ({ ...item, userId: undefined })),
       bankImportBatches,
-      bankImportRows: bankImportRows.map(({ batch, ...row }) => ({ ...row, batchStableKey: batch.stableKey })),
+      bankImportRows: bankImportRows.map(({ id: _localId, batch, ...row }) => { void _localId; return { ...row, batchStableKey: batch.stableKey }; }),
       settings: settings ? { ...settings, userId: undefined } : null,
       templates: templates.map((item) => ({ ...item, userId: undefined })),
       serviceBillingPlans: serviceBillingPlans.map((item) => ({ ...item, userId: undefined })),

@@ -12,7 +12,9 @@ export const LEGACY_BACKUP_VERSION = '2.0';
 /** Exact combined capability identity. Historical standalone and union identities never gain features. */
 export const PAYMENT_TERMS_SCHEMA_VERSION = '20261022040000_add_payment_terms';
 export const BANK_IMPORT_EVIDENCE_SCHEMA_VERSION = '20261022050000_add_bank_import_evidence';
-export const CURRENT_SCHEMA_VERSION = '20261022060000_combine_payment_terms_bank_import_evidence';
+export const PAYMENT_BANK_IMPORT_SCHEMA_VERSION = '20261022060000_combine_payment_terms_bank_import_evidence';
+export const BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION = '20261023010000_add_bank_payment_allocations';
+export const CURRENT_SCHEMA_VERSION = BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION;
 export const PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION = '20261022030000_combine_projects_outbox_validation';
 // Compatibility name used by the independent bank-evidence candidate.
 export const PROJECT_OUTBOX_VALIDATION_SCHEMA_VERSION = PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION;
@@ -39,11 +41,12 @@ export const PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021054000_add_purc
 export const PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_DATA_IMPORT_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_ANNUAL_CONTEXT_SCHEMA_VERSION = PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
-export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
-export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
+export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
+export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
 /** Closed registry: new unions add identities; timestamps never infer capabilities. */
-export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean; recurringServiceDrafts: boolean; paymentAdjustments: boolean; projectServiceTimes: boolean; emailOutbox: boolean; purchaseValidationReports: boolean; paymentTerms: boolean; bankImportEvidence: boolean }>> = Object.freeze({
-  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true }),
+export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean; recurringServiceDrafts: boolean; paymentAdjustments: boolean; projectServiceTimes: boolean; emailOutbox: boolean; purchaseValidationReports: boolean; paymentTerms: boolean; bankImportEvidence: boolean; bankPaymentAllocations?: boolean }>> = Object.freeze({
+  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true }),
+  [PAYMENT_BANK_IMPORT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true }),
   [PAYMENT_TERMS_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: false }),
   [BANK_IMPORT_EVIDENCE_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: false, bankImportEvidence: true }),
   [PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: false, bankImportEvidence: false }),
@@ -67,6 +70,18 @@ export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoA
   [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false, emailOutbox: false, purchaseValidationReports: false, paymentTerms: false, bankImportEvidence: false }),
   [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false, emailOutbox: false, purchaseValidationReports: false, paymentTerms: false, bankImportEvidence: false }),
 });
+export function backupSchemaSupportsBankPaymentAllocations(schemaVersion?: string): boolean {
+  return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.bankPaymentAllocations === true;
+}
+export function validateBankAllocationCapability(data: BackupManifestData, schemaVersion?: string): void {
+  for (const key of ['bankPaymentBindings', 'paymentAllocationChanges']) {
+    if (!backupSchemaSupportsBankPaymentAllocations(schemaVersion)) {
+      if (Object.hasOwn(data, key)) throw new Error(`Älteres Backupschema darf keinen ${key}-Abschnitt enthalten`);
+    } else if (!Array.isArray(data[key])) throw new Error(`Backup-Daten enthalten keinen erforderlichen Abschnitt: ${key}`);
+  }
+  if (!backupSchemaSupportsBankPaymentAllocations(schemaVersion) && Array.isArray(data.paymentJournalEvents) && data.paymentJournalEvents.some(row => row && typeof row === 'object' && Object.hasOwn(row, 'bankPaymentBindingStableKey'))) throw new Error('Älteres Backupschema unterstützt keine portable Bankbindungsidentität der Originalzahlung.');
+  if (!backupSchemaSupportsBankPaymentAllocations(schemaVersion) && Array.isArray(data.paymentAdjustments) && data.paymentAdjustments.some(row => row && typeof row === 'object' && ((row as Record<string, unknown>).contractVersion === 3 || ['allocationBindingId','allocationBindingStableKey','allocationRevision','allocationChangeId','allocationChangeStableKey','allocationBasisSnapshot'].some(key => Object.hasOwn(row, key))))) throw new Error('Älteres Backupschema unterstützt keine Zuordnungsnachweise der Zahlungsberichtigung.');
+}
 export function backupSchemaSupportsBankImportEvidence(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.bankImportEvidence === true;
 }
@@ -194,6 +209,8 @@ const COVERAGE = [
   { model: 'DataImportBatch', key: 'dataImportBatches', mode: 'excluded' as const, reason: 'Operational CSV replay receipts are target-owned; imported business records are included in customers/serviceArticles.' },
   { model: 'BankImportBatch', key: 'bankImportBatches', mode: 'included' as const, reason: 'Immutable unallocated bank evidence and receipts; restore never creates a payment.' },
   { model: 'BankImportRow', key: 'bankImportRows', mode: 'included' as const, reason: 'Source-position identities, validation and duplicate evidence remain unchanged.' },
+  { model: 'BankPaymentBinding', key: 'bankPaymentBindings', mode: 'included' as const },
+  { model: 'PaymentAllocationChange', key: 'paymentAllocationChanges', mode: 'included' as const },
   { model: 'ServiceArticle', key: 'serviceArticles', mode: 'included' as const },
   { model: 'Customer', key: 'customers', mode: 'included' as const },
   { model: 'Supplier', key: 'suppliers', mode: 'included' as const },
@@ -506,7 +523,9 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (!backupSchemaSupportsPurchaseValidation(value.schemaVersion) && data.purchaseValidationReports !== undefined) throw new Error('Älteres Backupschema darf keine technischen Eingangsprüfberichte enthalten');
   validationReportsFromBackup(data, backupSchemaSupportsPurchaseValidation(value.schemaVersion));
   bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(value.schemaVersion));
+  validateBankAllocationCapability(data, value.schemaVersion);
   const expectedCoverage = COVERAGE.filter((entry) =>
+    (backupSchemaSupportsBankPaymentAllocations(value.schemaVersion) || !['BankPaymentBinding', 'PaymentAllocationChange'].includes(entry.model)) &&
     (backupSchemaSupportsBankImportEvidence(value.schemaVersion) || !['BankImportBatch', 'BankImportRow'].includes(entry.model)) &&
     (backupSchemaSupportsEmailOutbox(value.schemaVersion) || !['EmailOutbox', 'EmailOutboxAttempt'].includes(entry.model)) &&
     (backupSchemaSupportsPurchaseValidation(value.schemaVersion) || entry.model !== 'PurchaseValidationReport') &&

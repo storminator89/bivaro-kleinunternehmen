@@ -2099,5 +2099,85 @@
   "publicDocumentation": {
     "preparedAt": "2026-10-22T19:59:21Z",
     "scope": "Public status summary; personal paths, private operational narratives/decisions and links to sensitive source reports omitted. Ticket identities/statuses, counts, dates, non-sensitive test outcomes and unresolved assurance/acceptance limits retained."
+  },
+  "issue96IntegrationCheckpoint": {
+    "recordedAt": "2026-10-23T00:28:00Z",
+    "scope": "GitHub issue #96 local bank-payment allocation integration only; not BV-096 and not a historical ticket reclassification.",
+    "issueUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/96",
+    "status": "partial_local_integration",
+    "sourceBaseCommit": "40508a9",
+    "approvedLaneIntegrationCommit": "98d1ff74019dabc2194004ff64c6fec0cfb30bd0",
+    "verifiedCodeAndTestCommit": "bcafb22566f441b4b97225afc1508dbade1117cd",
+    "checkpointState": "Paired documentation prepared locally after the verified code/test commit; no remote publication.",
+    "implemented": [
+      "Immutable bank receipt bindings and cash-neutral invoice reallocation with checked effective-payment projection, adjustment/cancellation evidence and root-specific recovery.",
+      "Allocation-aware lifecycle/accounting consumers, portable backup/restore graphs and reviewed UI controls with safe intent recovery across reloads.",
+      "Fourteen approved lane patches integrated cleanly; all fourteen stable patch IDs match their sources, without duplicated dependency patches."
+    ],
+    "testOnlyFollowup": {
+      "commit": "bcafb22566f441b4b97225afc1508dbade1117cd",
+      "filesChanged": 3,
+      "staleAssertionsAligned": 4,
+      "changes": [
+        "Exclude the later allocation migration from two legacy migration fixtures.",
+        "Expect payment contract version 3 in the KPI response marker and dashboard request header."
+      ],
+      "runtimeBeyondApprovedLanePatchesChanged": false,
+      "v2CompatibilityExpectationsRetained": true
+    },
+    "localVerification": {
+      "nodeVersion": "22.23.4",
+      "isolatedSqliteAndPureRegression": {
+        "passedSuites": 60,
+        "passedTests": 1003,
+        "durationSeconds": 45.29,
+        "includedAllocationSuites": 10,
+        "includedAllocationTests": 152,
+        "wholeRepositoryAcceptance": false
+      },
+      "prismaSchemaValidate": "passed",
+      "prismaClientGeneration": "passed",
+      "fullLintExit": 0,
+      "fullTypecheckExit": 0,
+      "ordinaryNode22BuildAndNoticePostbuildExit": 0,
+      "existingDynamicFilesystemTracingWarnings": 9,
+      "databaseScope": "Explicit fresh temporary SQLite fixtures only; no repository or production database used.",
+      "evidence": [
+        {
+          "file": "bivaro-issue96-integrated-final-regressions.log",
+          "sha256": "c2109c048c91f828963bc58146f658e25c90029938fd9306c4b11d2561189fc7",
+          "availability": "Local verification log only, not hosted acceptance evidence."
+        },
+        {
+          "file": "bivaro-issue96-integrated-build.log",
+          "sha256": "bd6b38b15f525464ca4f6324d480d9beacb45aa1bba6ebc7d7eeef4dfc0ce74a",
+          "availability": "Local verification log only, not hosted acceptance evidence."
+        }
+      ],
+      "lintAndTypecheckRepeatedAfterTestOnlyFollowup": true,
+      "standaloneInspection": {
+        "allocationRoutesInBuildManifest": 4,
+        "generatedPrismaIncludesBankPaymentBinding": true,
+        "ownNodeModulesWithoutSharedMutablePrisma": true,
+        "repositoryPrismaDevDatabaseCreated": false
+      }
+    },
+    "preservedUntrackedWork": {
+      "file": "e2e/helpers/bank-allocations.ts",
+      "sha256": "11d782cb5db260c76f4269ca99206b6f2edcd16ef3838cd81b78c9653b0726aa",
+      "state": "Untracked, unchanged and outside the integrated commits."
+    },
+    "remainingAcceptance": [
+      "Hosted/browser acceptance of this exact integrated candidate has not run.",
+      "Release/production acceptance remains open; local regression and build results are not a publication or deployment approval."
+    ],
+    "notPerformed": [
+      "No local application-server or browser run.",
+      "No native PDF/JVM/compiler/filter/installer execution; ordinary TypeScript checking and the ordinary application build are the stated exceptions.",
+      "No push, pull request, merge, deployment or public comment; no production-data access."
+    ],
+    "ticketStatusChanges": [],
+    "historicalTicketObjectsPreserved": 160,
+    "historicalStatusSummaryUnchanged": true
   }
 }

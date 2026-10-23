@@ -3,7 +3,7 @@ import { operationalIncomeEntriesSql } from '@/lib/payment-journal/accounting-so
 import { readAnnualContextRevision } from '@/lib/annual-business-context';
 import { buildRevenueIndicatorBasis } from '@/lib/revenue-indicators';
 import { hasServiceBillingDraftMarker, isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
-import { ledgerSummary } from '@/lib/payment-journal/service';
+import { loadInvoicePaymentStates } from '@/lib/payment-journal/allocation-ledger';
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -48,6 +48,10 @@ type RecentActivity = {
   type: "income" | "expense";
   movementKind?: 'RECEIPT' | 'PAYMENT_CORRECTION' | 'CUSTOMER_REFUND';
   invoiceId?: number | null;
+  originInvoiceId?: number | null;
+  allocatedInvoiceId?: number | null;
+  invoiceAttribution?: 'IMMUTABLE_CASH_ORIGIN' | 'CURRENT_ADJUSTMENT';
+  paymentAllocationReviewRequired?: boolean;
 };
 
 function sumRows(rows: MonthlyAggregateRow[], year?: number): number {
@@ -186,7 +190,8 @@ export async function GET(request: Request) {
 
     // Four compact raw projections plus the open-invoice aggregate replace
     // loading every income and expense row into Node.js.
-    const [incomeRows, expenseRows, recentIncomes, recentExpenses, openInvoices, annualContext, adjustedInvoices] = await prisma.$transaction(async tx => Promise.all([
+    const [incomeRows, expenseRows, recentIncomes, recentExpenses, openInvoices, annualContext, openBalances, recentAttribution] = await prisma.$transaction(async tx => {
+      const [incomeRows, expenseRows, recentIncomes, recentExpenses, annualContext] = await Promise.all([
       tx.$queryRaw<MonthlyAggregateRow[]>(buildMonthlyAggregateQuery(
         "Income",
         userId,
@@ -205,18 +210,33 @@ export async function GET(request: Request) {
       )),
       tx.$queryRaw<RecentIncomeRow[]>(buildRecentIncomeQuery(userId)),
       tx.$queryRaw<RecentExpenseRow[]>(buildRecentExpenseQuery(userId)),
-      tx.invoice.findMany({
-        where: { userId, type: 'INVOICE', status: { in: ['DRAFT', 'SENT'] } },
-        include: { incomes: { include: { cashTransaction: true } }, paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } } },
-      }),
       tx.annualBusinessContextRevision.findMany({ where: { userId, contextYear: currentYear }, orderBy: { revision: 'asc' } }),
-      tx.invoice.findMany({ where: { userId, paymentAdjustments: { some: { userId } } }, include: { customer: { select: { userId: true } }, incomes: { include: { cashTransaction: true } }, paymentJournalEvents: { orderBy: { id: 'asc' } }, paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } } } }),
-    ]));
-
-    for (const invoice of adjustedInvoices) {
-      if (invoice.customer && invoice.customer.userId !== userId) throw new PaymentJournalError('Kundenzuordnung des berichtigten Zahlungsjournals benötigt Prüfung.', 409, 'PAYMENT_REVIEW_REQUIRED');
-      ledgerSummary(invoice);
-    }
+    ]);
+      const projections = await tx.invoice.findMany({ where: { userId, type: 'INVOICE', OR: [
+        { status: { in: ['DRAFT', 'SENT'] } }, { paymentAdjustments: { some: { userId } } },
+        { id: { in: recentIncomes.flatMap(entry => entry.invoiceId == null ? [] : [Number(entry.invoiceId)]) } },
+      ] }, include: { customer: { select: { userId: true } }, _count: { select: { paymentAdjustments: true } } }, take: 10_001 });
+      if (projections.length > 10_000) throw new PaymentJournalError('Zu viele Zahlungsjournale für eine vollständige KPI-Prüfung.', 413, 'SOURCE_LIMIT');
+      const states = await loadInvoicePaymentStates(tx, userId, projections.filter(invoice => !hasServiceBillingDraftMarker(invoice.parsedData)).map(invoice => invoice.id), { onReview: 'omit' });
+      for (const invoice of projections.filter(invoice => invoice._count.paymentAdjustments > 0)) {
+        if ((invoice.customer && invoice.customer.userId !== userId) || !states.has(invoice.id)) throw new PaymentJournalError('Das berichtigte Zahlungsjournal benötigt Prüfung.', 409, 'PAYMENT_REVIEW_REQUIRED');
+      }
+      const openInvoices = projections.filter(invoice => ['DRAFT', 'SENT'].includes(invoice.status));
+      const openBalances = new Map([...states].map(([id, state]) => [id, state.summary.openCents]));
+      const recentAttribution = new Map<number, { originInvoiceId: number | null; allocatedInvoiceId: number | null; paymentAllocationReviewRequired: boolean }>();
+      for (const entry of recentIncomes) {
+        if (entry.invoiceId === null) continue;
+        try {
+          const state = states.get(Number(entry.invoiceId));
+          if (!state) throw new Error('Current allocation needs review');
+          const root = entry.movementKind === 'RECEIPT'
+            ? state.rootStates.find(value => value.root.incomeId === Number(entry.id))
+            : state.rootStates.find(value => value.adjustments.some(adjustment => adjustment.id === -Number(entry.id)));
+          recentAttribution.set(Number(entry.id), { originInvoiceId: root?.root.invoiceId ?? null, allocatedInvoiceId: root?.allocatedInvoiceId ?? null, paymentAllocationReviewRequired: !root });
+        } catch { recentAttribution.set(Number(entry.id), { originInvoiceId: null, allocatedInvoiceId: null, paymentAllocationReviewRequired: true }); }
+      }
+      return [incomeRows, expenseRows, recentIncomes, recentExpenses, openInvoices, annualContext, openBalances, recentAttribution] as const;
+    });
 
     let openCents = BigInt(0);
     let openInvoicesReviewRequired = 0;
@@ -227,7 +247,7 @@ export async function GET(request: Request) {
         if (!isUnrenderedServiceBillingDraft(invoice)) openInvoicesReviewRequired++;
         continue;
       }
-      try { openCents += BigInt(ledgerSummary(invoice).openCents); }
+      try { const balance = openBalances.get(invoice.id); if (balance === undefined) throw new Error('Unverified balance'); openCents += BigInt(balance); }
       catch { openInvoicesReviewRequired++; }
     }
     const recentActivities: RecentActivity[] = [
@@ -236,6 +256,7 @@ export async function GET(request: Request) {
         description: item.description,
         amount: Number(item.amount),
         date: toDate(item.bookingDate),
+        ...recentAttribution.get(Number(item.id)), invoiceAttribution: item.movementKind === 'RECEIPT' ? 'IMMUTABLE_CASH_ORIGIN' as const : 'CURRENT_ADJUSTMENT' as const,
         type: "income" as const, movementKind: item.movementKind, invoiceId: item.invoiceId == null ? null : Number(item.invoiceId),
       })),
       ...recentExpenses.map((item) => ({
@@ -261,7 +282,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       operationalMovements: { allTime: operationalMovementTotals(incomeRows), selectedYear: operationalMovementTotals(incomeRows, selectedYear) },
-      paymentContractVersion: 2, revenueMovementBasis: 'operational-signed-receipts-corrections-refunds', fiscalMappingStatus: 'UNREVIEWED',
+      paymentContractVersion: 3, revenueMovementBasis: 'operational-signed-receipts-corrections-refunds', fiscalMappingStatus: 'UNREVIEWED',
       revenueThisMonth,
       revenueThisYear: revenueThisYearTotal,
       expensesThisMonth,

@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestDatabase } from './helpers/database';
 import { stripEmptyBankImportsForLegacy } from './helpers/backup-schema';
 import {
-  BACKUP_FEATURE_CAPABILITIES, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION,
+  BACKUP_FEATURE_CAPABILITIES, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION,
   PAYMENT_TERMS_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION,
   backupSchemaSupportsBankImportEvidence, backupSchemaSupportsPaymentTerms, createBackupManifest,
 } from '@/lib/backup-manifest';
@@ -83,18 +83,18 @@ describe('payment terms and bank evidence exact combined backup contract', () =>
     expect(PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION).toBe('20261022030000_combine_projects_outbox_validation');
     expect(PAYMENT_TERMS_SCHEMA_VERSION).toBe('20261022040000_add_payment_terms');
     expect(BANK_IMPORT_EVIDENCE_SCHEMA_VERSION).toBe('20261022050000_add_bank_import_evidence');
-    expect(CURRENT_SCHEMA_VERSION).toBe('20261022060000_combine_payment_terms_bank_import_evidence');
+    expect(PAYMENT_BANK_IMPORT_SCHEMA_VERSION).toBe('20261022060000_combine_payment_terms_bank_import_evidence');
     for (const [schema, paymentTerms, bankImportEvidence] of [
       [PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, false, false],
       [PAYMENT_TERMS_SCHEMA_VERSION, true, false], [BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, false, true],
-      [CURRENT_SCHEMA_VERSION, true, true],
+      [PAYMENT_BANK_IMPORT_SCHEMA_VERSION, true, true],
     ] as const) {
       expect(backupSchemaSupportsPaymentTerms(schema)).toBe(paymentTerms);
       expect(backupSchemaSupportsBankImportEvidence(schema)).toBe(bankImportEvidence);
       expect(BACKUP_FEATURE_CAPABILITIES[schema]).toEqual({ ...BACKUP_FEATURE_CAPABILITIES[PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION], paymentTerms, bankImportEvidence });
       expect(Object.isFrozen(BACKUP_FEATURE_CAPABILITIES[schema])).toBe(true);
     }
-    for (const schema of [undefined, `${CURRENT_SCHEMA_VERSION}_future`, '20991231060000_combine_payment_terms_bank_import_evidence']) {
+    for (const schema of [undefined, `${PAYMENT_BANK_IMPORT_SCHEMA_VERSION}_future`, '20991231060000_combine_payment_terms_bank_import_evidence']) {
       expect(backupSchemaSupportsPaymentTerms(schema)).toBe(false);
       expect(backupSchemaSupportsBankImportEvidence(schema)).toBe(false);
     }
@@ -111,6 +111,7 @@ describe('payment terms and bank evidence exact combined backup contract', () =>
     const bankOnly = structuredClone(source); withoutPaymentTerms(bankOnly.data);
     bankOnly.manifest = createBackupManifest({ sourceUserId: sourceId, generatedAt: fixed.toISOString(), data: bankOnly.data });
     bankOnly.manifest.schemaVersion = BANK_IMPORT_EVIDENCE_SCHEMA_VERSION;
+    stripEmptyBankImportsForLegacy(bankOnly);
     expect(() => restore.validateBackupForRestore(bankOnly)).not.toThrow();
     const historic = structuredClone(paymentOnly); withoutPaymentTerms(historic.data);
     historic.manifest = createBackupManifest({ sourceUserId: sourceId, generatedAt: fixed.toISOString(), data: historic.data });

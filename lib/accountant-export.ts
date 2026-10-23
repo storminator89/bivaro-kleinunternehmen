@@ -1,6 +1,7 @@
 import { isPhotoMedia } from '@/lib/purchase-documents/manual-photo-contract';
 import { stableManualPhotoSnapshot, validateManualPhotoSnapshot } from '@/lib/purchase-documents/manual-photo-review';
 import { Prisma } from '@prisma/client';
+import { loadInvoicePaymentStates } from '@/lib/payment-journal/allocation-ledger';
 import JSZip from 'jszip';
 import { realpath, lstat } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -79,7 +80,9 @@ const TEXT_COLUMNS = {
   PurchaseDocument: ['reviewedSourceSnapshot', 'reviewDraft'],
   Expense: ['description', 'category', 'receiptFileName', 'storedReceiptFileName'],
   Income: ['description'],
-  PaymentAdjustment: ['kind', 'amountCents', 'reason', 'reference', 'payoutEvidenceIdentity', 'basisSnapshot', 'idempotencyKey', 'semanticFingerprint'],
+  PaymentAdjustment: ['kind', 'amountCents', 'reason', 'reference', 'payoutEvidenceIdentity', 'basisSnapshot', 'idempotencyKey', 'semanticFingerprint', 'allocationBasisSnapshot'],
+  BankPaymentBinding: ['stableKey', 'idempotencyKey', 'semanticFingerprint', 'basisSnapshot'],
+  PaymentAllocationChange: ['stableKey', 'amountCents', 'currency', 'reason', 'idempotencyKey', 'semanticFingerprint', 'basisSnapshot'],
   PaymentJournalEvent: ['amountCents', 'currency', 'dateCertainty', 'source', 'reference'],
   Invoice: ['type', 'fileName', 'storedFileName', 'invoiceNumber', 'status', 'issuanceState', 'cancellationReason'],
   CashTransaction: ['type', 'description', 'category', 'receiptNumber'],
@@ -120,6 +123,8 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
       { invoiceDate: range }, { invoiceDate: null, uploadedAt: range }, { paidAt: range },
       { incomes: { some: incomeWhere } },
       { paymentAdjustments: { some: { userId, OR: [{ accountingEffectiveOn: range }, { recordedAt: range }] } } },
+      { allocationChangesFrom: { some: { userId, OR: [{ actionDate: range }, { recordedAt: range }] } } },
+      { allocationChangesTo: { some: { userId, OR: [{ actionDate: range }, { recordedAt: range }] } } },
       { refundBasisAdjustments: { some: { userId, OR: [{ accountingEffectiveOn: range }, { recordedAt: range }] } } },
     ] };
     const counts = await Promise.all([
@@ -178,13 +183,50 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
         if (row.originalInvoiceId && !seen.has(row.originalInvoiceId)) pending.push(row.originalInvoiceId);
       }
     }
-    const adjustmentWhere: Prisma.PaymentAdjustmentWhereInput = { userId, invoiceId: { in: [...seen] } };
+    const selectedInvoiceIds = [...seen];
+    // Close the immutable allocation lineage before following adjustment roots.
+    // Cash remains at origin; current invoice/cancellation context is separate.
+    const bindingWhere: Prisma.BankPaymentBindingWhereInput = { userId, OR: [
+      { paymentJournalEvent: { userId, invoiceId: { in: [...seen] } } },
+      { allocationChanges: { some: { userId, OR: [{ fromInvoiceId: { in: [...seen] } }, { toInvoiceId: { in: [...seen] } }] } } },
+    ] };
+    recordCount += await tx.bankPaymentBinding.count({ where: bindingWhere }); check();
+    const bindingIds = await tx.bankPaymentBinding.findMany({ where: bindingWhere, select: { id: true } });
+    await reserveSourceText(tx, userId, 'BankPaymentBinding', bindingIds.map(row => row.id), textBudget);
+    const bindings = await tx.bankPaymentBinding.findMany({ where: bindingWhere, orderBy: { id: 'asc' }, select: {
+      id: true, stableKey: true, bankImportRow: { select: { stableKey: true } }, paymentJournalEventId: true,
+      paymentJournalEvent: { select: { invoiceId: true } }, idempotencyKey: true, semanticFingerprint: true, basisSnapshot: true, contractVersion: true, createdAt: true,
+    } });
+    const changeWhere = { userId, bindingId: { in: bindings.map(row => row.id) } };
+    recordCount += await tx.paymentAllocationChange.count({ where: changeWhere }); check();
+    const changeIds = await tx.paymentAllocationChange.findMany({ where: changeWhere, select: { id: true } });
+    await reserveSourceText(tx, userId, 'PaymentAllocationChange', changeIds.map(row => row.id), textBudget);
+    const allocationChanges = await tx.paymentAllocationChange.findMany({ where: changeWhere, orderBy: [{ bindingId: 'asc' }, { revision: 'asc' }], select: {
+      id: true, stableKey: true, bindingId: true, revision: true, previousChangeId: true, fromInvoiceId: true, toInvoiceId: true,
+      amountCents: true, currency: true, actionDate: true, reason: true, idempotencyKey: true, semanticFingerprint: true, basisSnapshot: true, contractVersion: true, recordedAt: true,
+    } });
+    const allocationContextIds = [...new Set([...bindings.map(row => row.paymentJournalEvent.invoiceId), ...allocationChanges.flatMap(row => [row.fromInvoiceId, row.toInvoiceId])])].filter(id => !seen.has(id));
+    if (allocationContextIds.length) {
+      recordCount += allocationContextIds.length; check();
+      await reserveSourceText(tx, userId, 'Invoice', allocationContextIds, textBudget);
+      const context = await tx.invoice.findMany({ where: { userId, id: { in: allocationContextIds }, type: 'INVOICE' }, select: invoiceSelect });
+      if (context.length !== allocationContextIds.length) throw new AccountantExportError('Rechnungszuordnung enthält unaufgelösten oder fremden Ursprungskontext.', 409);
+      for (const row of context) { invoices.push(row); seen.add(row.id); }
+    }
+    // Shared batch loader validates full row/binding/head/adjustment evidence.
+    // Export must not make a second, weaker validator or per-invoice cash engine.
+    await loadInvoicePaymentStates(tx, userId, [...new Set(bindings.map(row => row.paymentJournalEvent.invoiceId))]);
+    const adjustmentWhere: Prisma.PaymentAdjustmentWhereInput = { userId, OR: [
+      { invoiceId: { in: selectedInvoiceIds } }, { originalPayment: { userId, invoiceId: { in: selectedInvoiceIds } } }, { originalPaymentId: { in: bindings.map(row => row.paymentJournalEventId) } },
+    ] };
+
     recordCount += await tx.paymentAdjustment.count({ where: adjustmentWhere }); check();
     const adjustmentIds = await tx.paymentAdjustment.findMany({ where: adjustmentWhere, select: { id: true, cancellationInvoiceId: true } });
     await reserveSourceText(tx, userId, 'PaymentAdjustment', adjustmentIds.map(row => row.id), textBudget);
     const adjustments = await tx.paymentAdjustment.findMany({ where: adjustmentWhere, orderBy: { id: 'asc' }, select: {
       id: true, invoiceId: true, originalPaymentId: true, kind: true, amountCents: true, currency: true, actionDate: true, accountingEffectiveOn: true,
       reason: true, reference: true, payoutEvidenceIdentity: true, cancellationInvoiceId: true, basisSnapshot: true, idempotencyKey: true, semanticFingerprint: true, contractVersion: true, recordedAt: true,
+      allocationBindingId: true, allocationRevision: true, allocationChangeId: true, allocationBasisSnapshot: true,
     } });
     const basisIds = [...new Set(adjustments.flatMap(row => row.cancellationInvoiceId != null && !seen.has(row.cancellationInvoiceId) ? [row.cancellationInvoiceId] : []))];
     if (basisIds.length) {
@@ -192,7 +234,7 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
       const bases = await tx.invoice.findMany({ where: { userId, id: { in: basisIds }, type: 'CREDIT_NOTE' }, select: invoiceSelect });
       for (const row of bases) { invoices.push(row); seen.add(row.id); recordCount++; check(); }
     }
-    const paymentWhere: Prisma.PaymentJournalEventWhereInput = { userId, invoiceId: { in: [...seen] } };
+    const paymentWhere: Prisma.PaymentJournalEventWhereInput = { userId, OR: [{ invoiceId: { in: selectedInvoiceIds } }, { id: { in: adjustments.map(row => row.originalPaymentId) } }, { id: { in: bindings.map(row => row.paymentJournalEventId) } }] };
     recordCount += await tx.paymentJournalEvent.count({ where: paymentWhere }); check();
     const paymentIds = await tx.paymentJournalEvent.findMany({ where: paymentWhere, select: { id: true } });
     await reserveSourceText(tx, userId, 'PaymentJournalEvent', paymentIds.map(row => row.id), textBudget);
@@ -200,6 +242,14 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
       id: true, invoiceId: true, incomeId: true, amountCents: true, currency: true, paidAt: true,
       dateCertainty: true, source: true, reference: true, createdAt: true,
     } });
+    const originInvoiceIds = [...new Set(payments.map(row => row.invoiceId))].filter(id => !seen.has(id));
+    if (originInvoiceIds.length) {
+      recordCount += originInvoiceIds.length; check();
+      await reserveSourceText(tx, userId, 'Invoice', originInvoiceIds, textBudget);
+      const context = await tx.invoice.findMany({ where: { userId, id: { in: originInvoiceIds }, type: 'INVOICE' }, select: invoiceSelect });
+      if (context.length !== originInvoiceIds.length) throw new AccountantExportError('Originalzahlung ohne eigenen Rechnungskontext.', 409);
+      for (const row of context) { invoices.push(row); seen.add(row.id); }
+    }
     const knownIncomeIds = new Set(incomes.map(row => row.id));
     const contextIncomeIds = payments.flatMap(row => row.incomeId != null && !knownIncomeIds.has(row.incomeId) ? [row.incomeId] : []);
     if (contextIncomeIds.length) {
@@ -221,17 +271,19 @@ async function readAccountantSnapshot(userId: string, period: AccountantExportPe
       tx.cashBook.findMany({ where: { userId, id: { in: cashBookIds } }, orderBy: { id: 'asc' }, select: { id: true, name: true, currency: true } }),
     ]);
     recordCount += customers.length + cashBooks.length; check();
-    return { company, expenses, incomes, invoices, payments, adjustments, cashTransactions, customers, cashBooks };
+    return { company, expenses, incomes, invoices, payments, adjustments, bindings, allocationChanges, cashTransactions, customers, cashBooks };
   });
   const endedAt = new Date().toISOString();
   return { data, info: { id: hashJson(data), startedAt, endedAt, consistency: 'single-read-transaction' as const } };
 }
 
 const README = `Bivaro – Übergabepaket an die Steuerberatung (Format 2)
-Zahlungsjournal-Vertrag 2: Positive Originale und unveränderte Einnahmenprojektionen sind nicht zu addieren.
+Zahlungsjournal-Vertrag 2/3: Positive Originale und unveränderte Einnahmenprojektionen sind nicht zu addieren.
 Zahlungsberichtigungen mindern nie geflossene Beträge am ursprünglichen Zahlungsdatum. Tatsächliche
-Kundenrückzahlungen sind separate negative operative Bewegungen am Auszahlungstag. Stornobelege erzeugen
-keine Geldbewegung. accountingEffectiveInPeriod/contextOnly trennen Zeitraum und Belegkontext.
+Kundenrückzahlungen sind separate negative operative Bewegungen am Auszahlungstag. Stornobelege und Rechnungszuordnungsänderungen erzeugen
+keine Geldbewegung. bindings/allocationChanges dokumentieren nur die Zuordnung des unveränderten
+Originaleingangs. originInvoiceId bleibt Ursprung, allocatedInvoiceId ist die aktuelle Zuordnung.
+Kontextzeilen außerhalb des Zeitraums haben periodEffectCents=0 und dürfen nicht erneut summiert werden. accountingEffectiveInPeriod/contextOnly trennen Zeitraum und Belegkontext.
 Alle Berichtigungs-/Erstattungszuordnungen sind fiscalMappingStatus=UNREVIEWED; keine freigegebene EÜR-Zeile,
 keine Änderung einer abgegebenen Steuererklärung. Frühere Auswertungen betroffener Jahre müssen geprüft werden.
 Dieses Paket ist eine begrenzte Arbeitsunterlage, kein DATEV-Format, keine DATEV-Zertifizierung,
@@ -247,7 +299,7 @@ Angebote, nicht gebuchte Eingangsbeleg-Inbox, wiederkehrende Vorlagen und nicht 
 invoiceId/originalInvoiceId/customerId/expenseId/incomeId/cashBookId sind Datenbank-Verknüpfungen,
 keine Konten; nicht jede referenzierte Buchung liegt im Zeitraum. Unaufgelöste Bezüge stehen in warnings.
 Zahlungsmodell: jede bestätigte positive Teilzahlung hat eine eigene Einnahme und unveränderlichen Journalbezug;
-keine Bankabstimmung, kein eigenständiges Erstattungsjournal. Storno ist keine Rückzahlung.
+CSV-Bankevidenz ist keine Bankauthentifizierung; Zuordnungsänderung ist keine Zahlung oder Erstattung. Storno ist keine Rückzahlung.
 payments.csv enthält auch historische Nachweise ohne Einnahme; Unsicherheit und fehlende Daten bleiben explizit.
 Die Tabellen sind unterschiedliche Sichten: Rechnung, Einnahme und verknüpfte Kasse NIEMALS addieren;
 dies würde denselben Vorgang doppelt zählen. Entwürfe und steuerlich irrelevante Datensätze bleiben sichtbar.
@@ -377,15 +429,21 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
     return { ...rest, sourceReviewProvenance: manualSourceReview?.provenance ?? null, manualSourceReview, purchaseDocumentId: source?.id ?? null, originalSha256: source?.originalSha256 ?? null, ...money(amount, 'expense', row.id), paymentDateSource: 'expense.date (stored booking/outflow date)', originalFileName,
       originalZipPath: originalByRecord.get(`expense:${row.id}`)?.zipPath ?? null };
   });
+  const currentAllocation = (rootId: number) => {
+    const binding = snapshot.data.bindings.find(row => row.paymentJournalEventId === rootId);
+    const head = binding ? snapshot.data.allocationChanges.filter(row => row.bindingId === binding.id).at(-1) : null;
+    const originInvoiceId = snapshot.data.payments.find(row => row.id === rootId)?.invoiceId ?? null;
+    return { originInvoiceId, allocatedInvoiceId: head?.toInvoiceId ?? originInvoiceId, bindingStableKey: binding?.stableKey ?? null, allocationRevision: binding ? head?.revision ?? 0 : null };
+  };
   const incomes = snapshot.data.incomes.map(row => {
     const invoice = row.invoiceId ? invoiceById.get(row.invoiceId) ?? null : null;
     checkRef(row.customerId, customers, 'income', row.id, 'customerId');
     checkRef(row.invoiceId, invoiceIds, 'income', row.id, 'invoiceId');
     const accountingDate = getIncomeAccountingDate({ ...row, invoice });
-    return { ...row, paymentJournalEventId: row.paymentJournalEvent?.id ?? null,
+    return { ...row, ...(row.paymentJournalEvent ? currentAllocation(row.paymentJournalEvent.id) : { originInvoiceId: row.invoiceId, allocatedInvoiceId: row.invoiceId, bindingStableKey: null, allocationRevision: null }), paymentJournalEventId: row.paymentJournalEvent?.id ?? null,
       paymentDate: row.paymentJournalEvent?.paidAt ?? null, paymentDateCertainty: row.paymentJournalEvent?.dateCertainty ?? null,
       paymentSource: row.paymentJournalEvent?.source ?? null, paymentReference: row.paymentJournalEvent?.reference ?? null,
-      ...money(row.amount, 'income', row.id), accountingDate: formatBusinessDate(accountingDate),
+      ...money(row.amount, 'income', row.id), periodEffectCents: !inPeriod(accountingDate) ? '0' : inspectMoneyEUR(row.amount).normalizedCents?.toString() ?? null, accountingDate: formatBusinessDate(accountingDate),
       contextOnly: !inPeriod(accountingDate), accountingDateInPeriod: inPeriod(accountingDate), cashRealized: row.invoiceId != null && !invoice ? null : isCashRealizedIncome({ ...row, invoice }),
       invoiceStatus: invoice?.status ?? null, invoicePaidAt: invoice?.paidAt ?? null };
   });
@@ -400,24 +458,29 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
   const payments = snapshot.data.payments.map(row => {
     if (row.dateCertainty !== 'ACTUAL') warnings.push({ code: 'PAYMENT_DATE_UNCERTAIN', recordType: 'payment', recordId: row.id,
       message: 'Historischer Zahlungsnachweis: Quelle, Unsicherheit und fehlendes Datum bleiben erhalten; kein erfundenes Ist-Datum.' });
-    return { ...row, contextOnly: !row.paidAt || !inPeriod(row.paidAt), signedEffectCents: row.dateCertainty === 'ACTUAL' ? row.amountCents : null, movementKind: row.dateCertainty === 'ACTUAL' ? 'RECEIPT' : 'LEGACY_EVIDENCE', fiscalMappingStatus: snapshot.data.adjustments.some(adjustment => adjustment.originalPaymentId === row.id) ? 'UNREVIEWED' : 'UNCHANGED', paymentDateInPeriod: row.paidAt ? inPeriod(row.paidAt) : null };
+    return { ...row, ...currentAllocation(row.id), periodEffectCents: row.dateCertainty === 'ACTUAL' && row.paidAt && inPeriod(row.paidAt) ? row.amountCents : '0', contextOnly: !row.paidAt || !inPeriod(row.paidAt), signedEffectCents: row.dateCertainty === 'ACTUAL' ? row.amountCents : null, movementKind: row.dateCertainty === 'ACTUAL' ? 'RECEIPT' : 'LEGACY_EVIDENCE', fiscalMappingStatus: snapshot.data.adjustments.some(adjustment => adjustment.originalPaymentId === row.id) ? 'UNREVIEWED' : 'UNCHANGED', paymentDateInPeriod: row.paidAt ? inPeriod(row.paidAt) : null };
   });
   const adjustments = snapshot.data.adjustments.map(row => {
     warnings.push({ code: 'PAYMENT_ADJUSTMENTS_UNREVIEWED', recordType: 'paymentAdjustment', recordId: row.id, message: 'Operativer Nachweis ohne fachlich freigegebene Steuer-/EÜR-Zuordnung; betroffene Originalperioden und frühere Auswertungen prüfen.' });
-    return { ...row, fiscalMappingStatus: 'UNREVIEWED', signedEffectCents: `-${row.amountCents}`, accountingEffectiveInPeriod: inPeriod(row.accountingEffectiveOn),
+    return { ...row, ...currentAllocation(row.originalPaymentId), periodEffectCents: inPeriod(row.accountingEffectiveOn) ? `-${row.amountCents}` : '0', fiscalMappingStatus: 'UNREVIEWED', signedEffectCents: `-${row.amountCents}`, accountingEffectiveInPeriod: inPeriod(row.accountingEffectiveOn),
       recordedAtInPeriod: inPeriod(row.recordedAt), contextOnly: !inPeriod(row.accountingEffectiveOn) };
   });
-  const records = { paymentContractVersion: 2, fiscalMappingStatus: adjustments.length ? 'UNREVIEWED' : 'UNCHANGED', company: snapshot.data.company, invoices, expenses, incomes, payments, adjustments, cashTransactions, customers: snapshot.data.customers, cashBooks: snapshot.data.cashBooks, originals };
+  const bindings = snapshot.data.bindings.map(({ bankImportRow, paymentJournalEvent, ...row }) => ({ ...row, rowStableKey: bankImportRow.stableKey, originInvoiceId: paymentJournalEvent.invoiceId, allocatedInvoiceId: currentAllocation(row.paymentJournalEventId).allocatedInvoiceId, cashEffectCents: '0' }));
+  const allocationChanges = snapshot.data.allocationChanges.map(row => ({ ...row, movementKind: 'ALLOCATION_CHANGE', cashEffectCents: '0', actionDateInPeriod: inPeriod(row.actionDate), recordedAtInPeriod: inPeriod(row.recordedAt), contextOnly: !inPeriod(row.actionDate) && !inPeriod(row.recordedAt) }));
+  const paymentContractVersion = bindings.length || adjustments.some(row => row.contractVersion === 3) ? 3 : 2;
+  const records = { paymentContractVersion, fiscalMappingStatus: adjustments.length ? 'UNREVIEWED' : 'UNCHANGED', company: snapshot.data.company, invoices, expenses, incomes, payments, adjustments, bindings, allocationChanges, cashTransactions, customers: snapshot.data.customers, cashBooks: snapshot.data.cashBooks, originals };
   addEntry('README.txt', Buffer.from(README, 'utf8'), 'metadata');
   addEntry('records.json', Buffer.from(JSON.stringify(records, null, 2), 'utf8'), 'metadata');
-  const tables = { invoices, expenses, incomes, payments, adjustments, cashTransactions, customers: snapshot.data.customers, cashBooks: snapshot.data.cashBooks, originals };
+  const tables = { invoices, expenses, incomes, payments, adjustments, bindings, allocationChanges, cashTransactions, customers: snapshot.data.customers, cashBooks: snapshot.data.cashBooks, originals };
   // Fixed schemas also make an empty package useful and machine-readable.
   const headers: Record<keyof typeof tables, string[]> = {
-    adjustments: ['id','invoiceId','originalPaymentId','kind','amountCents','signedEffectCents','currency','actionDate','accountingEffectiveOn','recordedAt','reason','reference','payoutEvidenceIdentity','cancellationInvoiceId','idempotencyKey','semanticFingerprint','contractVersion','fiscalMappingStatus','accountingEffectiveInPeriod','recordedAtInPeriod','contextOnly'],
+    adjustments: ['id','invoiceId','originalPaymentId','kind','amountCents','signedEffectCents','currency','actionDate','accountingEffectiveOn','recordedAt','reason','reference','payoutEvidenceIdentity','cancellationInvoiceId','idempotencyKey','semanticFingerprint','contractVersion','originInvoiceId','allocatedInvoiceId','allocationBindingId','allocationRevision','allocationChangeId','allocationBasisSnapshot','periodEffectCents','fiscalMappingStatus','accountingEffectiveInPeriod','recordedAtInPeriod','contextOnly'],
+    bindings: ['id','stableKey','rowStableKey','paymentJournalEventId','originInvoiceId','allocatedInvoiceId','idempotencyKey','semanticFingerprint','basisSnapshot','contractVersion','createdAt','cashEffectCents'],
+    allocationChanges: ['id','stableKey','bindingId','revision','previousChangeId','fromInvoiceId','toInvoiceId','amountCents','currency','actionDate','reason','idempotencyKey','semanticFingerprint','basisSnapshot','contractVersion','recordedAt','movementKind','cashEffectCents','actionDateInPeriod','recordedAtInPeriod','contextOnly'],
     invoices: ['contextOnly','id', 'type', 'invoiceNumber', 'invoiceDate', 'uploadedAt', 'dueDate', 'status', 'issuanceState', 'paidAt', 'customerId', 'originalInvoiceId', 'cancellationReason', 'currency', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'documentDateSource', 'documentDateInPeriod', 'paymentDateInPeriod', 'originalFileName', 'originalZipPath'],
     expenses: ['id', 'date', 'description', 'category', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'taxDeductiblePercentage', 'depreciationYears', 'paymentDateSource', 'originalFileName', 'originalZipPath', 'purchaseDocumentId', 'originalSha256', 'sourceReviewProvenance'],
-    incomes: ['contextOnly','id', 'date', 'description', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'customerId', 'invoiceId', 'accountingDate', 'accountingDateInPeriod', 'cashRealized', 'invoiceStatus', 'invoicePaidAt', 'paymentJournalEventId', 'paymentDate', 'paymentDateCertainty', 'paymentSource', 'paymentReference'],
-    payments: ['contextOnly','movementKind','signedEffectCents','fiscalMappingStatus','id', 'invoiceId', 'incomeId', 'amountCents', 'currency', 'paidAt', 'dateCertainty', 'source', 'reference', 'createdAt', 'paymentDateInPeriod'],
+    incomes: ['contextOnly','id', 'date', 'description', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'taxRelevant', 'customerId', 'invoiceId', 'originInvoiceId','allocatedInvoiceId','bindingStableKey','allocationRevision', 'periodEffectCents', 'accountingDate', 'accountingDateInPeriod', 'cashRealized', 'invoiceStatus', 'invoicePaidAt', 'paymentJournalEventId', 'paymentDate', 'paymentDateCertainty', 'paymentSource', 'paymentReference'],
+    payments: ['contextOnly','originInvoiceId','allocatedInvoiceId','bindingStableKey','allocationRevision','periodEffectCents','movementKind','signedEffectCents','fiscalMappingStatus','id', 'invoiceId', 'incomeId', 'amountCents', 'currency', 'paidAt', 'dateCertainty', 'source', 'reference', 'createdAt', 'paymentDateInPeriod'],
     cashTransactions: ['id', 'date', 'type', 'description', 'currency', 'amount', 'amountCents', 'amountRoundingDifferenceCents', 'runningBalance', 'runningBalanceCents', 'runningBalanceRoundingDifferenceCents', 'category', 'receiptNumber', 'taxRelevant', 'cashBookId', 'expenseId', 'incomeId'],
     customers: ['id', 'name', 'address', 'zipCode', 'city', 'taxNumber'], cashBooks: ['id', 'name', 'currency'],
     originals: ['recordType', 'recordId', 'originalFileName', 'status', 'zipPath', 'purchaseDocumentId', 'originalSha256'],
@@ -426,7 +489,7 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
     const lines = [headers[key].map(accountantCsvCell).join(';')];
     for (const row of tables[key]) lines.push(headers[key].map(field => {
       const value = (row as Record<string, unknown>)[field];
-      return accountantCsvCell(value instanceof Date ? value.toISOString() : value);
+      return accountantCsvCell(value instanceof Date ? value.toISOString() : value && typeof value === 'object' ? JSON.stringify(value) : value);
     }).join(';'));
     addEntry(`${key}.csv`, Buffer.from(`${lines.join('\r\n')}\r\n`, 'utf8'), 'metadata');
   }
@@ -434,10 +497,10 @@ async function buildAccountantExport(userId: string, period: AccountantExportPer
     if (await getBackupFileVersion(source.path) !== source.version || await realpath(source.path) !== resolve(source.path)) throw new BackupFileConsistencyError('Ein Original wurde während des Exports verändert. Bitte erneut exportieren.');
   }
   const manifest = {
-    format: 'bivaro-accountant-handoff', formatVersion: 2, paymentContractVersion: 2, fiscalMappingStatus: adjustments.length ? 'UNREVIEWED' : 'UNCHANGED', generatedAt: snapshot.info.endedAt,
+    format: 'bivaro-accountant-handoff', formatVersion: 2, paymentContractVersion, fiscalMappingStatus: adjustments.length ? 'UNREVIEWED' : 'UNCHANGED', generatedAt: snapshot.info.endedAt,
     period: { from: period.from, to: period.to, timezone: 'UTC', inclusive: true },
     scope: { purpose: 'bounded accountant working package', dateSelection: 'See README.txt; document and cash views must not be summed',
-      paymentModel: 'v2 immutable-positive-allocations as originals plus original-linked never-flowed corrections and actual cancelled-invoice refunds; signed operational evidence, no approved fiscal mapping; Income is not counted again',
+      paymentModel: 'v2/v3 immutable-positive-allocations as origin receipts and Income, separate cash-neutral allocation lineage, root-linked never-received corrections and actual current-cancellation refunds; contextOnly cash has zero periodEffectCents; no approved fiscal mapping; Income is not counted again',
       excluded: ['quotes', 'unbooked incoming inbox', 'unrelated master data', 'user accounts', 'passwords', 'API keys', 'SMTP/host settings', 'security/access/change logs', 'customer internal notes'],
       datevCertified: false, elsterSubmission: false, completeAuditExport: false, restorableBackup: false },
     snapshot: snapshot.info, moneyPolicy: MONEY_POLICY_VERSION, limits: ACCOUNTANT_EXPORT_LIMITS,

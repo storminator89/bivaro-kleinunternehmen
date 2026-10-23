@@ -1,4 +1,4 @@
-import { backupSchemaSupportsBankImportEvidence, backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
+import { backupSchemaSupportsBankPaymentAllocations, backupSchemaSupportsBankImportEvidence, backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
 /** Construct a genuine pre-CSV fixture, rather than relabelling a future schema. */
 export function stripCsvCatalogForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
   stripEmptyPaymentAdjustmentsForLegacy(backup);
@@ -52,7 +52,8 @@ export function stripEmptyPaymentAdjustmentsForLegacy(backup: { data: Record<str
 }
 export function legacyPaymentData<T extends Record<string, unknown>>(data: T): T {
   const copy = { ...data };
-  for (const key of ['bankImportBatches', 'bankImportRows', 'purchaseValidationReports', 'paymentAdjustments', 'paymentOperations']) if (Array.isArray(copy[key]) && (copy[key] as unknown[]).length === 0) delete copy[key];
+  for (const key of ['bankPaymentBindings', 'paymentAllocationChanges', 'bankImportBatches', 'bankImportRows', 'purchaseValidationReports', 'paymentAdjustments', 'paymentOperations']) if (Array.isArray(copy[key]) && (copy[key] as unknown[]).length === 0) delete copy[key];
+  if (Array.isArray(copy.paymentJournalEvents)) Object.assign(copy, { paymentJournalEvents: copy.paymentJournalEvents.map(root => { const row = { ...root }; if (row.bankPaymentBindingStableKey === null) delete row.bankPaymentBindingStableKey; return row; }) });
   if (Array.isArray(copy.serviceProjects) && copy.serviceProjects.length === 0) delete copy.serviceProjects;
   if (Array.isArray(copy.billingNotes)) Object.assign(copy, { billingNotes: copy.billingNotes.map(note => {
     const item = { ...note };
@@ -78,6 +79,17 @@ export function stripEmptyProjectServiceTimesForLegacy(backup: { data: Record<st
 
 /** Bank evidence is a new exact capability, not inferred from a later date. */
 export function stripEmptyBankImportsForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
+  if (!backupSchemaSupportsBankPaymentAllocations(backup.manifest.schemaVersion)) {
+    if (Array.isArray(backup.data.paymentJournalEvents)) {
+      for (const root of backup.data.paymentJournalEvents) if (root.bankPaymentBindingStableKey === null) delete root.bankPaymentBindingStableKey;
+      const coverage = backup.manifest.modelCoverage.find(entry => entry.model === 'PaymentJournalEvent') as { sha256?: string } | undefined;
+      if (coverage) coverage.sha256 = hashJson(backup.data.paymentJournalEvents);
+    }
+    for (const [key, model] of [['bankPaymentBindings', 'BankPaymentBinding'], ['paymentAllocationChanges', 'PaymentAllocationChange']]) {
+      const value = backup.data[key];
+      if (value === undefined || (Array.isArray(value) && value.length === 0)) { delete backup.data[key]; backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => entry.model !== model); }
+    }
+  }
   if (backupSchemaSupportsBankImportEvidence(backup.manifest.schemaVersion)) return;
   for (const [key, model] of [['bankImportBatches', 'BankImportBatch'], ['bankImportRows', 'BankImportRow']]) {
     const value = backup.data[key];

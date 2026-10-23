@@ -6,7 +6,7 @@ export type AdjustmentKind = 'PAYMENT_CORRECTION' | 'CUSTOMER_REFUND';
 export type AdjustmentInput = {
   kind: AdjustmentKind; originalPaymentId: number; amount: string; actionDate: string;
   reason: string; reference: string; idempotencyKey: string; expectedLedgerVersion: string;
-  cancellationInvoiceId?: number; declarationNeverReceived?: boolean;
+  cancellationInvoiceId?: number; declarationNeverReceived?: boolean; expectedAllocationRevision?: number;
 };
 export type LedgerRoot = PaymentAllocation & { id: number };
 export type LedgerAdjustment = { originalPaymentId: number; kind: string; amountCents: string };

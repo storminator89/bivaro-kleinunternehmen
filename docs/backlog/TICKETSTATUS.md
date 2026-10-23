@@ -8,6 +8,59 @@ Historische Git-Basis: `0208c62f26ff60cf855dfef21e74e0ff6466e7c9`; keine Aussage
 
 Diese Übersicht enthält alle 160 Backlog-Tickets. Der Status ist der aktuelle Arbeitsstand dieser Welle und ersetzt weder die im Backlog offenen ACs noch fachliche, rechtliche oder produktive Freigaben. „Vorgeschlagen“ bedeutet ausdrücklich, dass in dieser Welle keine Umsetzung vorliegt. Architektur-Discovery ist separat von Produktimplementierung ausgewiesen.
 
+## Lokaler Integrationscheckpoint: GitHub-Issue #96 vom 23.10.2026, 00:28 UTC
+
+[GitHub-Issue #96](https://github.com/storminator89/bivaro-kleinunternehmen/issues/96)
+ist **nicht BV-096**. Alle 160 historischen Ticketobjekte und Statussummen
+bleiben unverändert: **3 abgeschlossen / 21 teilumgesetzt / 4 Discovery /
+132 vorgeschlagen**. Dieser separate Checkpoint ist **teilweise lokale
+Integration**, keine abgeschlossene Hosted-/Browser- oder Releaseabnahme.
+
+Auf Basis `40508a9` wurden 14 freigegebene Lane-Patches ohne Konflikt und ohne
+doppelte Abhängigkeitspatches integriert; alle 14 stabilen Patch-IDs stimmen
+mit ihren Quellen überein. Integrationsstand:
+`98d1ff74019dabc2194004ff64c6fec0cfb30bd0`. Enthalten sind unveränderliche
+Bankeingangsbindungen, zahlungsneutrale Rechnungs-Neuzuordnung, geprüfte
+effektive Zahlungsprojektionen und Anpassungs-/Stornonachweise, angepasste
+Lifecycle-/Buchhaltungsleser, portable Backup-/Restore-Graphen sowie geprüfte
+UI-Steuerung und sichere Intent-Wiederaufnahme nach einem Reload.
+
+Verifizierter Code-/Teststand: `bcafb22566f441b4b97225afc1508dbade1117cd`.
+Der rein testbezogene Folgecommit gleicht genau vier veraltete Assertions in
+drei Dateien ab: spätere Allocation-Migration aus zwei Legacy-Fixtures
+ausschließen; KPI-Vertragsmarker und Dashboard-Requestheader auf Version 3.
+Darüber hinaus ist der Laufzeitcode gegenüber den freigegebenen Patches
+unverändert; die v2-Kompatibilitätserwartungen bleiben erhalten.
+
+Tatsächliche lokale Nachweise unter **Node 22.23.4**: **60 Suites / 1.003 Tests
+bestanden in 45,29 s**, einschließlich aller **10 neuen Allocation-Suites /
+152 Tests**. SQLite-Versuche nutzten ausschließlich explizite neue temporäre
+Fixtures, keine Repository- oder Produktionsdatenbank. Prisma-Schemavalidierung
+und Clientgenerierung, vollständiger Lint, vollständige Typprüfung sowie
+gewöhnlicher Produktionsbuild einschließlich Notice-Postbuild bestanden
+(Exit 0); Lint und Typprüfung wurden nach dem Testabgleich erneut bestanden.
+Buildmanifest und Standalone enthalten alle vier Allocation-Routen bzw. das
+generierte `BankPaymentBinding`-Modell; der eigene Paketbaum teilt keinen
+veränderlichen Prisma-Client. Neun bestehende dynamische
+Dateisystem-Tracing-Warnungen bleiben;
+dies ist **kein vollständiger Repository-/Native-/Browser-Abnahmelauf**.
+Die lokalen Logs `bivaro-issue96-integrated-final-regressions.log` (SHA-256
+`c2109c048c91f828963bc58146f658e25c90029938fd9306c4b11d2561189fc7`) und
+`bivaro-issue96-integrated-build.log` (SHA-256
+`bd6b38b15f525464ca4f6324d480d9beacb45aa1bba6ebc7d7eeef4dfc0ce74a`)
+sind lokale Evidenz, keine Hosted-Abnahmebelege.
+
+Die fremde ungetrackte Arbeit `e2e/helpers/bank-allocations.ts` bleibt
+unverändert außerhalb der Commits (SHA-256
+`11d782cb5db260c76f4269ca99206b6f2edcd16ef3838cd81b78c9653b0726aa`).
+Keine lokalen Anwendungsserver-/Browserläufe und keine nativen PDF-/JVM-/
+Compiler-/Filter-/Installerläufe; gewöhnliche Typprüfung und Anwendungsbuild
+sind die genannten Ausnahmen. Kein Push, PR, Merge, Deployment oder
+öffentlicher Kommentar und kein Zugriff auf Produktionsdaten.
+**Hosted-/Browserabnahme des exakten Kandidaten und Release-/Produktivabnahme
+bleiben offen.** Diese gepaarte Dokumentation wird lokal nach dem verifizierten
+Code-/Testcommit vorbereitet; keine Veröffentlichung wird behauptet.
+
 ## Integrationscheckpoint vom 22.10.2026, 22:07:35 UTC
 
 Alle 160 historischen Ticketobjekte und Statussummen bleiben unverändert:

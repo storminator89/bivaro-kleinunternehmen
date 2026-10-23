@@ -1,5 +1,6 @@
 "use client";
 
+import Link from 'next/link';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { CheckCircle, Loader2 } from 'lucide-react';
@@ -102,7 +103,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
     setPreflight(null);
     void (async () => {
       try {
-        const response = await fetch(`/api/invoices/${invoice.id}/payments`, { cache: 'no-store', headers: { 'X-Bivaro-Payment-Contract': '2' }, signal: controller.signal });
+        const response = await fetch(`/api/invoices/${invoice.id}/payments`, { cache: 'no-store', headers: { 'X-Bivaro-Payment-Contract': '3' }, signal: controller.signal });
         const data: unknown = await response.json();
         if (!response.ok) throw new Error(paymentFailure(data));
         try {
@@ -211,7 +212,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
       pendingBaseline.current = draft.expectedPaidCents;
       pendingLedgerVersion.current = draft.expectedLedgerVersion ?? null;
       const response = await fetch(`/api/invoices/${invoice.id}/payments`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bivaro-Payment-Contract': '3' },
         body: JSON.stringify({ amount: draft.amount, currency: 'EUR', paidAt: draft.paidAt, source: 'MANUAL', reference: draft.reference.trim(), idempotencyKey: draft.idempotencyKey, expectedPaidCents: draft.expectedPaidCents, ...(draft.expectedLedgerVersion ? { expectedLedgerVersion: draft.expectedLedgerVersion } : {}) }),
       });
       const data: unknown = await response.json();
@@ -272,7 +273,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
           <DialogTitle>Zahlungen und Korrekturen</DialogTitle>
           <DialogDescription className="break-words">Rechnung {invoice.invoiceNumber || invoice.fileName}. Nur bereits tatsächlich eingegangene Zahlungen erfassen; es wird kein Geld überwiesen.</DialogDescription>
         </DialogHeader>
-        <PaymentHistory events={history} adjustments={adjustmentJournal?.adjustments} />
+        <PaymentHistory events={history} adjustments={adjustmentJournal?.adjustments} effectivePayments={adjustmentJournal?.effectivePayments} originAssignments={adjustmentJournal?.originAssignments} allocationHistory={adjustmentJournal?.allocationHistory} />
         {adjustmentJournal && <PaymentAdjustmentPanel invoiceId={invoice.id} tenantId={tenantId} journal={adjustmentJournal}
           disabled={isSubmitting || uncertain || Boolean(pendingKey.current) || Boolean(confirmed)} loading={isLoading}
           onEditingChange={setAdjustmentEditing} onBusyChange={busy => { adjustmentSubmitting.current = busy; setAdjustmentBusy(busy); }}
@@ -287,14 +288,14 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
               <p className="text-2xl font-semibold tabular-nums">{displayPaymentAmount(confirmed.amountCents)}</p>
               <p>Tatsächliches Zahlungsdatum: <strong>{formatBusinessDateDisplay(confirmed.paidAt)}</strong></p>
               <p className="break-words text-sm">Referenz: {confirmed.reference}</p>
-              <p className="text-sm text-muted-foreground">Zahlungsnachweis #{confirmed.id} · Einnahme ist erfasst. {confirmed.summary.paid ? 'Rechnung vollständig bezahlt.' : `Noch offen: ${displayPaymentAmount(confirmed.summary.openCents)}.`}</p>
+              <p className="text-sm text-muted-foreground">Zahlungsnachweis #{confirmed.id} · Einnahme ist erfasst. {confirmed.currentAssignment ? <>Aktuell zugeordnet: <Link className="text-primary underline underline-offset-4" href={`/history?invoiceId=${confirmed.currentAssignment.allocatedInvoiceId}`}>Rechnung #{confirmed.currentAssignment.allocatedInvoiceId}</Link> · Stand {confirmed.currentAssignment.allocationRevision ?? 'manuell'}. Aktuellen Rechnungsstand im Journal prüfen.</> : confirmed.summary.paid ? 'Rechnung vollständig bezahlt.' : `Noch offen: ${displayPaymentAmount(confirmed.summary.openCents)}.`}</p>
             </div>
             {loadError && <div className="space-y-2"><p role="alert" className="text-sm text-destructive">Die Zahlung ist gespeichert, aber der aktuelle Journalstand konnte nicht geladen werden. Nicht erneut buchen.</p><Button type="button" variant="outline" className="h-auto min-h-11 max-w-full whitespace-normal" disabled={isLoading || isSubmitting} onClick={reloadPaymentData}>Journal erneut laden</Button></div>}
             {refreshError && <p role="alert" className="text-sm text-destructive">Die Zahlung ist gespeichert, aber die Listen konnten nicht aktualisiert werden. Nicht erneut buchen.</p>}
             <DialogFooter>{refreshError && <Button type="button" variant="outline" className="min-h-11" onClick={() => void refreshLists()}>Listen aktualisieren</Button>}<Button type="button" className="min-h-11" disabled={isSubmitting} onClick={close}>Schließen</Button></DialogFooter>
           </>
         ) : preflight && !preflight.canRecordPayment && !pendingKey.current ? <>
-          {!adjustmentJournal && <dl className="grid grid-cols-3 gap-3 text-sm"><div><dt>Gesamt</dt><dd>{displayPaymentAmount(preflight.summary.totalCents)}</dd></div><div><dt>Erhalten</dt><dd>{displayPaymentAmount(preflight.summary.paidCents)}</dd></div><div><dt>Noch offen</dt><dd>{displayPaymentAmount(preflight.summary.openCents)}</dd></div></dl>}
+          {!adjustmentJournal && <dl className="grid grid-cols-3 gap-3 text-sm"><div><dt>Gesamt</dt><dd>{displayPaymentAmount(preflight.summary.totalCents)}</dd></div><div><dt>{preflight.ledger?.version === 3 ? 'Zugeordnet' : 'Erhalten'}</dt><dd>{displayPaymentAmount(preflight.summary.paidCents)}</dd></div><div><dt>Noch offen</dt><dd>{displayPaymentAmount(preflight.summary.openCents)}</dd></div></dl>}
           <p className="text-sm">{preflight.ledger?.documentState === 'CANCELLED' ? 'Rechnung vollständig storniert; kein weiterer Betrag einzuziehen. Eine offene Erstattung wird separat ausgewiesen.' : preflight.summary.paid ? 'Gültige Zahlungseingänge decken den Rechnungsbetrag. Mögliche Erstattungen werden separat ausgewiesen.' : 'Für diesen Rechnungsstatus kann keine neue Zahlung erfasst werden.'}</p>
           <DialogFooter><Button type="button" className="min-h-11" onClick={close}>Schließen</Button></DialogFooter>
         </> : (
@@ -302,7 +303,7 @@ function FullPaymentDialogForm({ invoice, onClose, onSuccess, tenantId }: Props 
             <div className="border-y py-4">
               {isLoading ? <p role="status" className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Zahlungssaldo wird geprüft …</p> : preflight ? <dl className="grid grid-cols-3 gap-3 text-sm">
                 <div><dt>Gesamt</dt><dd className="font-semibold tabular-nums">{displayPaymentAmount(preflight.summary.totalCents)}</dd></div>
-                <div><dt>Erhalten</dt><dd className="font-semibold tabular-nums">{displayPaymentAmount(preflight.summary.paidCents)}</dd></div>
+                <div><dt>{preflight.ledger?.version === 3 ? 'Zugeordnet' : 'Erhalten'}</dt><dd className="font-semibold tabular-nums">{displayPaymentAmount(preflight.summary.paidCents)}</dd></div>
                 <div><dt>Noch offen</dt><dd className="font-semibold tabular-nums">{displayPaymentAmount(preflight.summary.openCents)}</dd></div>
               </dl> : <p className="font-medium">Nicht buchbar</p>}
               <p className="mt-2 text-sm text-muted-foreground">Teilzahlungen sind möglich, Überzahlungen und Mahngebühren nicht. Bestätigte Zahlungen bleiben unveränderlich erhalten.</p>

@@ -9,6 +9,7 @@ it('adds adjustment capability without rewriting any original finance row or ori
   const directory = mkdtempSync(path.join(tmpdir(), 'bivaro-adjustment-upgrade-'));
   const prismaDirectory = path.join(directory, 'prisma');
   const migration = '20261021150000_add_payment_adjustments';
+  const allocationMigration = '20261023010000_add_bank_payment_allocations';
   const source = path.resolve('prisma');
   const url = `file:${path.join(directory, 'synthetic.db')}`;
   // eslint-disable-next-line no-restricted-syntax -- explicit fresh temporary migration fixture only.
@@ -17,7 +18,7 @@ it('adds adjustment capability without rewriting any original finance row or ori
     mkdirSync(prismaDirectory); writeFileSync(url.slice(5), '');
     cpSync(path.join(source, 'schema.prisma'), path.join(prismaDirectory, 'schema.prisma'));
     cpSync(path.join(source, 'migrations'), path.join(prismaDirectory, 'migrations'), {
-      recursive: true, filter: filename => !filename.includes(path.join('migrations', migration)),
+      recursive: true, filter: filename => !filename.includes(path.join('migrations', migration)) && !filename.includes(path.join('migrations', allocationMigration)),
     });
     const deploy = () => execFileSync(process.execPath, [path.resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy', '--schema', path.join(prismaDirectory, 'schema.prisma')], {
       env: { ...process.env, DATABASE_URL: url }, cwd: directory, stdio: 'pipe', timeout: 60_000,
@@ -30,6 +31,7 @@ it('adds adjustment capability without rewriting any original finance row or ori
     const triggers = await client.$queryRawUnsafe(`SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='PaymentJournalEvent' ORDER BY name`);
     await client.$disconnect();
     cpSync(path.join(source, 'migrations', migration), path.join(prismaDirectory, 'migrations', migration), { recursive: true });
+    cpSync(path.join(source, 'migrations', allocationMigration), path.join(prismaDirectory, 'migrations', allocationMigration), { recursive: true });
     deploy(); deploy();
     // The supported startup boundary must see no physical drift. In
     // particular, the composite command FK must be represented in Prisma.
@@ -41,7 +43,7 @@ it('adds adjustment capability without rewriting any original finance row or ori
     expect(await client.paymentJournalEvent.findUniqueOrThrow({ where: { id: root.id } })).toEqual(root);
     expect(await client.paymentAdjustment.count()).toBe(0); expect(await client.paymentOperation.count()).toBe(0);
     const after = await client.$queryRawUnsafe<{ name: string; sql: string }[]>(`SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='PaymentJournalEvent' ORDER BY name`);
-    expect(after.filter(row => row.name !== 'PaymentJournalEvent_operation_insert')).toEqual(triggers);
+    expect(after.filter(row => !['PaymentJournalEvent_operation_insert', 'PaymentJournalEvent_no_legacy_allocation_insert'].includes(row.name))).toEqual(triggers);
     await expect(client.paymentJournalEvent.update({ where: { id: root.id }, data: { reference: 'forbidden' } })).rejects.toThrow();
     await expect(client.paymentJournalEvent.delete({ where: { id: root.id } })).rejects.toThrow();
   } finally { await client.$disconnect(); rmSync(directory, { recursive: true, force: true }); }

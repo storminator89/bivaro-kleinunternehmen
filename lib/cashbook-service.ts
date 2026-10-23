@@ -102,9 +102,16 @@ export async function createCashTransaction(userId: string, body: Record<string,
   const entry = await inTransaction(async tx => {
     if (!await tx.cashBook.findFirst({ where: { id: cashBookId, userId, isActive: true } })) throw new CashbookError('Kassenbuch nicht gefunden oder inaktiv', 404);
     if (incomeId) {
-      const income = await tx.income.findFirst({ where: { id: incomeId, userId }, select: { amount: true, date: true, invoice: { select: { paymentAdjustments: { select: { id: true }, take: 1 } } }, cashTransaction: { select: { id: true } } } });
+      const income = await tx.income.findFirst({ where: { id: incomeId, userId }, select: { amount: true, date: true, paymentJournalEvent: { select: { id: true } }, cashTransaction: { select: { id: true } } } });
       if (!income) throw new CashbookError('Einnahme nicht gefunden', 404);
-      if (income.invoice?.paymentAdjustments.length) throw new CashbookError('Rechnungen mit Zahlungsberichtigungen oder Rückzahlungen können hier nicht mit dem Kassenbuch verknüpft werden.', 409);
+      if (income.paymentJournalEvent) {
+        const rootId = income.paymentJournalEvent.id;
+        const [binding, adjustment] = await Promise.all([
+          tx.bankPaymentBinding.findFirst({ where: { userId, paymentJournalEventId: rootId }, select: { id: true } }),
+          tx.paymentAdjustment.findFirst({ where: { userId, originalPaymentId: rootId }, select: { id: true } }),
+        ]);
+        if (binding || adjustment) throw new CashbookError('Dieser Zahlungsnachweis ist bereits mit Bankevidenz oder einer Zahlungsanpassung verknüpft und kann nicht zusätzlich als Bargeld erfasst werden.', 409);
+      }
       if (income.cashTransaction) throw new CashbookError('Einnahme ist bereits mit dem Kassenbuch verknüpft', 409);
       if (cents(income.amount) !== cents(amount) || !sameBusinessDate(income.date, date)) {
         throw new CashbookError('Betrag und Datum müssen mit der verknüpften Einnahme übereinstimmen', 409);

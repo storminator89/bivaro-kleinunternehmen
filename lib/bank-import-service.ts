@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { inTransaction } from '@/lib/db-transaction';
 import { BANK_IMPORT_PAGE_SIZE, BankImportError, bankImportUuid, parseBankImportInput, type BankImportReceipt, type BankImportEvidence, type BankImportDetail } from '@/lib/bank-import-contract';
+import { readBankAllocationRowsInTransaction } from '@/lib/bank-allocation-service';
 import { bankImportEvidenceHash, bankImportRowKeys, bankImportTotals, prepareBankImport } from '@/lib/bank-import-evidence';
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -73,9 +74,13 @@ export async function listBankImports(userId: string, page: number): Promise<{ r
 }
 export async function readBankImport(userId: string, stableKey: string, page: number): Promise<BankImportDetail> {
   bankImportUuid(stableKey);
-  const batch = await prisma.bankImportBatch.findUnique({ where: { userId_stableKey: { userId, stableKey } }, select: { id: true, receipt: true } });
+  return prisma.$transaction(async tx => {
+  const batch = await tx.bankImportBatch.findUnique({ where: { userId_stableKey: { userId, stableKey } }, select: { id: true, receipt: true } });
   if (!batch) throw new BankImportError('Importquittung nicht gefunden.', 404);
   const receipt = receiptOf(batch.receipt);
-  const rows = await prisma.bankImportRow.findMany({ where: { userId, batchId: batch.id }, orderBy: { sourceRow: 'asc' }, skip: page * BANK_IMPORT_PAGE_SIZE, take: BANK_IMPORT_PAGE_SIZE, select: { evidence: true } });
-  return { receipt, rows: rows.map(row => row.evidence as unknown as BankImportEvidence), page, pages: Math.ceil(receipt.counts.total / BANK_IMPORT_PAGE_SIZE) };
+  const rows = await tx.bankImportRow.findMany({ where: { userId, batchId: batch.id }, orderBy: { sourceRow: 'asc' }, skip: page * BANK_IMPORT_PAGE_SIZE, take: BANK_IMPORT_PAGE_SIZE, select: { evidence: true, stableKey: true } });
+  const assignmentCount = await tx.bankPaymentBinding.count({ where: { userId, bankImportRow: { batchId: batch.id } } });
+  const rowEnvelopes = await readBankAllocationRowsInTransaction(tx, userId, rows);
+  return { receipt, rows: rows.map(row => row.evidence as unknown as BankImportEvidence), rowEnvelopes, assignmentCount, page, pages: Math.ceil(receipt.counts.total / BANK_IMPORT_PAGE_SIZE) };
+  });
 }

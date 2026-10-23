@@ -112,7 +112,7 @@ describe('saved-payment dashboard refresh', () => {
     expect(refresh).toContain('new Event(PAYMENT_DASHBOARD_REFRESH_EVENT)');
     expect(refresh).not.toContain('CustomEvent');
     const hook = readFileSync('hooks/use-dashboard-data.ts', 'utf8');
-    expect(hook).toContain("`/api/invoices?${invoicesQueryString}`, signal, { 'X-Bivaro-Payment-Contract': '2' }");
+    expect(hook).toContain("`/api/invoices?${invoicesQueryString}`, signal, { 'X-Bivaro-Payment-Contract': '3' }");
     expect(hook).toContain('summaryIsFetching: summaryQuery.isFetching');
   });
   it('conservatively rechecks fiscal views on focus, visible return and restored pages, even after a missed cross-tab event', () => {

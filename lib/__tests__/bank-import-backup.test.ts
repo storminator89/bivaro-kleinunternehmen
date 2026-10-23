@@ -4,7 +4,7 @@ import { inferBankCsvMapping, parseBankCsv } from '@/lib/bank-csv';
 import { BANK_IMPORT_MAPPING_VERSION, BANK_IMPORT_PARSER_VERSION, type BankImportReceipt } from '@/lib/bank-import-contract';
 import { bankImportEvidenceHash, bankImportRowKeys, bankImportTotals, prepareBankImport } from '@/lib/bank-import-evidence';
 import { bankImportsFromBackup, type PortableBankImportBatch, type PortableBankImportRow } from '@/lib/bank-import-backup';
-import { BACKUP_FEATURE_CAPABILITIES, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, PROJECT_OUTBOX_VALIDATION_SCHEMA_VERSION, backupSchemaSupportsBankImportEvidence } from '@/lib/backup-manifest';
+import { BACKUP_FEATURE_CAPABILITIES, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PROJECT_OUTBOX_VALIDATION_SCHEMA_VERSION, backupSchemaSupportsBankImportEvidence } from '@/lib/backup-manifest';
 
 function fixture(csv = 'Datum;Betrag;Währung;Verwendungszweck;Umsatz-ID\n21.10.2026;12,34;EUR;synthetisch;id-a\n21.10.2026;-0,29;EUR;synthetisch;id-b\n21.10.2026;2,00;USD;synthetisch;id-c') {
   const mapping = { ...inferBankCsvMapping(parseBankCsv(csv).headers), accountAlias: 'Synthetisches Konto' };
@@ -19,8 +19,8 @@ function fixture(csv = 'Datum;Betrag;Währung;Verwendungszweck;Umsatz-ID\n21.10.
 describe('portable immutable bank evidence boundary', () => {
   it('adds an exact capability without changing the accepted triple identity', () => {
     expect(BANK_IMPORT_EVIDENCE_SCHEMA_VERSION).toBe('20261022050000_add_bank_import_evidence');
-    expect(CURRENT_SCHEMA_VERSION).toBe('20261022060000_combine_payment_terms_bank_import_evidence');
-    expect(backupSchemaSupportsBankImportEvidence(CURRENT_SCHEMA_VERSION)).toBe(true);
+    expect(PAYMENT_BANK_IMPORT_SCHEMA_VERSION).toBe('20261022060000_combine_payment_terms_bank_import_evidence');
+    expect(backupSchemaSupportsBankImportEvidence(PAYMENT_BANK_IMPORT_SCHEMA_VERSION)).toBe(true);
     expect(backupSchemaSupportsBankImportEvidence(PROJECT_OUTBOX_VALIDATION_SCHEMA_VERSION)).toBe(false);
     expect(backupSchemaSupportsBankImportEvidence('20991231000000_unknown')).toBe(false);
     expect({ ...BACKUP_FEATURE_CAPABILITIES[BANK_IMPORT_EVIDENCE_SCHEMA_VERSION], bankImportEvidence: false }).toEqual(BACKUP_FEATURE_CAPABILITIES[PROJECT_OUTBOX_VALIDATION_SCHEMA_VERSION]);

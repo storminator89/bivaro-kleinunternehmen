@@ -8,7 +8,7 @@ type Context = { params: Promise<{ id: string }> };
 
 function errorResponse(error: unknown) {
   if (error instanceof UnauthorizedError) return unauthorizedResponse();
-  if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code, ...(error.summary ? { summary: error.summary } : {}), ...(error.ledgerVersion ? { ledgerVersion: error.ledgerVersion } : {}) }, { status: error.status });
+  if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code, ...(error.code === 'PAYMENT_CAPABILITY_REQUIRED' ? { requiredContract: 3 } : {}), ...(error.summary ? { summary: error.summary } : {}), ...(error.ledgerVersion ? { ledgerVersion: error.ledgerVersion } : {}) }, { status: error.status });
   throw error;
 }
 
@@ -16,8 +16,8 @@ export async function GET(request: Request, context: Context) {
   try {
     const userId = await requireUserId();
     const { id } = await context.params;
-    const journal = await readInvoicePaymentJournal(userId, Number(id));
-    if (journal.adjustments.length && request.headers.get('X-Bivaro-Payment-Contract') !== '2') return NextResponse.json({ error: 'Dieser Zahlungsstand erfordert einen Client mit Zahlungsjournal-Vertrag 2.', code: 'PAYMENT_CAPABILITY_REQUIRED', requiredContract: 2 }, { status: 409 });
+    const journal = await readInvoicePaymentJournal(userId, Number(id), request.headers.get('X-Bivaro-Payment-Contract') === '3' ? 3 : 2);
+    if (journal.adjustments.length && !['2', '3'].includes(request.headers.get('X-Bivaro-Payment-Contract') ?? '')) return NextResponse.json({ error: 'Dieser Zahlungsstand erfordert einen Client mit Zahlungsjournal-Vertrag 2.', code: 'PAYMENT_CAPABILITY_REQUIRED', requiredContract: 2 }, { status: 409 });
     return NextResponse.json(journal);
   } catch (error) { return errorResponse(error); }
 }

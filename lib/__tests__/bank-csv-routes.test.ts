@@ -48,7 +48,7 @@ async function snapshot() {
   return { invoices: await database.client.invoice.findMany({ where: { userId: state.userId }, orderBy: { id: 'asc' } }), payments: await database.client.paymentJournalEvent.findMany({ where: { userId: state.userId }, orderBy: { id: 'asc' } }), adjustments: await database.client.paymentAdjustment.findMany({ where: { userId: state.userId }, orderBy: { id: 'asc' } }), incomes: await database.client.income.findMany({ where: { userId: state.userId }, orderBy: { id: 'asc' } }), audit: await database.client.auditLog.count({ where: { userId: state.userId } }) };
 }
 
-describe('bank candidate integration through authoritative v2 routes', () => {
+describe('bank candidate integration through authoritative v3-capable routes', () => {
   it('proves the original missing-list-header regression against the real capability gate', async () => {
     await invoice(true);
     const old = await invoiceList(new Request('http://localhost/api/invoices?page=1&pageSize=100'));
@@ -57,24 +57,24 @@ describe('bank candidate integration through authoritative v2 routes', () => {
     await expect(loadBankInvoiceCandidates(new AbortController().signal, fetcher)).rejects.toThrow(/Rechnungen.*nicht erreichbar/u);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
-  it('loads a mixed normal/adjusted selection using contract 2 on both list and journals, without writes', async () => {
+  it('loads a mixed normal/adjusted selection using contract 3 on both list and journals, without writes', async () => {
     const normal = await invoice(), corrected = await invoice(true);
     const other = `bank-other-${++sequence}`;
     await database.client.user.create({ data: { id: other, email: `${other}@example.invalid`, password: 'synthetic fixture only' } });
     const foreign = await invoice(false, other);
     const before = await snapshot(), fetcher = routeFetch();
     const result = await loadBankInvoiceCandidates(new AbortController().signal, fetcher);
-    expect(result).toMatchObject({ checked: 2, unavailable: 0, truncated: false, invoices: [{ id: normal.id, openCents: '12000', canRecordPayment: true }], reviewInvoices: [{ id: corrected.id, invoiceNumber: corrected.invoiceNumber }] });
+    expect(result).toMatchObject({ checked: 2, unavailable: 0, truncated: false, invoices: [{ id: normal.id, openCents: '12000', canRecordPayment: true }, { id: corrected.id, openCents: '4000', existingPayments: [{ amountCents: '8000' }] }], reviewInvoices: [] });
     expect(result.invoices.some(row => row.id === foreign.id)).toBe(false);
     expect(result.reviewInvoices.some(row => row.id === foreign.id)).toBe(false);
     expect(fetcher).toHaveBeenCalledTimes(3);
-    for (const [, init] of fetcher.mock.calls) expect(init).toMatchObject({ method: 'GET', headers: { 'X-Bivaro-Payment-Contract': '2' }, cache: 'no-store', credentials: 'same-origin' });
+    for (const [, init] of fetcher.mock.calls) expect(init).toMatchObject({ method: 'GET', headers: { 'X-Bivaro-Payment-Contract': '3' }, cache: 'no-store', credentials: 'same-origin' });
     expect(await snapshot()).toEqual(before);
   });
-  it('loads an adjusted-only real selection as explicit review-only, not an outage or new receipt', async () => {
+  it('loads a validated adjusted-only v3 selection as read-only evidence, not an outage or automatic new receipt', async () => {
     const corrected = await invoice(true), before = await snapshot();
     const result = await loadBankInvoiceCandidates(new AbortController().signal, routeFetch());
-    expect(result).toEqual({ invoices: [], reviewInvoices: [{ id: corrected.id, invoiceNumber: corrected.invoiceNumber }], checked: 1, unavailable: 0, truncated: false });
+    expect(result).toMatchObject({ invoices: [{ id: corrected.id, invoiceNumber: corrected.invoiceNumber, openCents: '4000', existingPayments: [{ amountCents: '8000' }] }], reviewInvoices: [], checked: 1, unavailable: 0, truncated: false });
     expect(await snapshot()).toEqual(before);
   });
 });

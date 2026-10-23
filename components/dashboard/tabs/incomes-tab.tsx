@@ -2,6 +2,7 @@
 
 import { LedgerSortControl, SortableLedgerHead } from '@/components/dashboard/ledger-sort-control';
 import React from 'react';
+import Link from 'next/link';
 import { QueryFeedback } from '@/components/dashboard/query-feedback';
 import { DashboardIcon } from "@/components/brand/dashboard-icon";
 import { ChevronDown } from "lucide-react";
@@ -28,6 +29,12 @@ import { Income, Customer, FilterState } from "@/types/dashboard";
 import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
 import { formatCurrency } from "@/lib/dashboard-utils";
 import { formatBusinessDateDisplay } from "@/lib/business-date";
+
+/** Income remains immutable origin cash; invoice allocation is a separate live view. */
+export function IncomeInvoiceAttribution({ income }: { income: Income }) {
+  if (!income.originInvoiceId) return null;
+  return <div className="mt-1 space-y-1 text-xs font-normal text-muted-foreground"><p>Originaleingang: <Link className="text-primary underline underline-offset-4" href={`/history?invoiceId=${income.originInvoiceId}`}>{income.originInvoiceNumber || `Rechnung #${income.originInvoiceId}`}</Link></p>{income.paymentAllocationReviewRequired ? <p role="status">Aktuelle Zuordnung prüfen</p> : income.allocatedInvoiceId ? <p>Aktuell zugeordnet: <Link className="text-primary underline underline-offset-4" href={`/history?invoiceId=${income.allocatedInvoiceId}`}>{income.allocatedInvoiceNumber || `Rechnung #${income.allocatedInvoiceId}`}</Link>{income.allocationRevision !== null && income.allocationRevision !== undefined ? ` · Stand ${income.allocationRevision}` : ''}</p> : null}</div>;
+}
 
 type NewIncome = {
   description: string;
@@ -392,7 +399,7 @@ export function IncomesTab({
                   </div>
                   <p className="shrink-0 font-semibold tabular-nums text-positive">{formatCurrency(income.amount)}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">{income.taxRelevant ? 'Steuerrelevant' : 'Nicht steuerrelevant'}</p>
+                <IncomeInvoiceAttribution income={income} /><p className="text-xs text-muted-foreground">{income.taxRelevant ? 'Steuerrelevant' : 'Nicht steuerrelevant'}</p>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" className="min-h-11" onClick={() => onEdit(income)}>Bearbeiten</Button>
                   <Button variant="outline" size="sm" className="min-h-11" onClick={() => onDuplicate(income)}>Duplizieren</Button>
@@ -412,7 +419,7 @@ export function IncomesTab({
                   <SortableLedgerHead field="description" label="Beschreibung" sort={sort} onChange={next => setFilters({ ...filters, ...next })} />
                   <TableHead className="font-medium">Kunde</TableHead>
                   <TableHead className="text-center font-medium">Steuerrelevant</TableHead>
-                  <TableHead className="text-center font-medium">Rechnungsstatus</TableHead>
+                  <TableHead className="text-center font-medium">Ursprungsbeleg</TableHead>
                   <SortableLedgerHead field="amount" label="Betrag" sort={sort} onChange={next => setFilters({ ...filters, ...next })} numeric />
                   <TableHead className="text-right font-medium">Aktionen</TableHead>
                 </TableRow>
@@ -422,7 +429,7 @@ export function IncomesTab({
                   incomes.map((income) => (
                     <TableRow key={income.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="text-muted-foreground">{formatBusinessDateDisplay(income.date)}</TableCell>
-                      <TableCell className="font-medium">{income.description}</TableCell>
+                      <TableCell className="font-medium">{income.description}<IncomeInvoiceAttribution income={income} /></TableCell>
                       <TableCell className="text-muted-foreground">
                         {income.customerName ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
@@ -447,11 +454,12 @@ export function IncomesTab({
                       </TableCell>
                       <TableCell className="text-center">
                         {income.invoiceStatus ? (
+                          <div className="space-y-1"><p className="text-xs text-muted-foreground">Original-Rechnung</p>
                           <StatusBadge
                             status={income.invoiceStatus}
                             availableStatuses={[]}
                             onStatusChange={(newStatus) => onInvoiceStatusChange(income.invoiceId, newStatus)}
-                          />
+                          /></div>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}

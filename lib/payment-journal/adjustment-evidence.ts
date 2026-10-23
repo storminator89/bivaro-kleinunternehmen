@@ -22,9 +22,11 @@ export function adjustmentBasisSnapshot(invoice: Row, basis: Row) {
     cancellationReason: String(basis.cancellationReason), parsedDataHash: financialHash(basis.parsedData), documentType: 'CREDIT_NOTE', issuanceState: 'ISSUED' };
 }
 export function adjustmentFingerprint(adjustment: Row, root: Row, basisSnapshot: unknown) {
-  return financialHash({ kind: adjustment.kind, rootKey: root.idempotencyKey, amountCents: adjustment.amountCents,
+  const evidence = { kind: adjustment.kind, rootKey: root.idempotencyKey, amountCents: adjustment.amountCents,
     actionDate: evidenceDate(adjustment.actionDate), accountingEffectiveOn: evidenceDate(adjustment.accountingEffectiveOn),
-    reason: adjustment.reason, reference: adjustment.reference, basisSnapshot });
+    reason: adjustment.reason, reference: adjustment.reference, basisSnapshot };
+  // Preserve every historical v2 fingerprint byte-for-byte. Local allocation IDs never enter v3 hashes.
+  return financialHash(adjustment.contractVersion === 3 ? { ...evidence, contractVersion: 3, allocationBasisSnapshot: adjustment.allocationBasisSnapshot } : evidence);
 }
 /** Shared evidence graph checks for live projections and backup/restore. */
 export function assertOrdinaryAdjustmentInvoice(invoice: Row) {
@@ -42,15 +44,22 @@ export function assertOrdinaryAdjustmentInvoice(invoice: Row) {
     adjustmentReview('Nur ausdrücklich belegte gewöhnliche EUR-Kleinunternehmerrechnungen ohne Umsatzsteuer sind hier unterstützt. Unklare Altbelege, Sonderfälle und Umsatzsteuerfälle benötigen fachliche Prüfung.');
   }
 }
-export function validateAdjustmentEvidence(invoice: Row, roots: Row[], adjustments: Row[], bases: Row[], cashLinkedIncomeIds: Set<number>) {
-  if (adjustments.length) assertOrdinaryAdjustmentInvoice(invoice);
+export type AdjustmentAllocationProof = { bindingId: number; revision: number; changeId: number | null; snapshot: unknown };
+export function validateAdjustmentEvidence(invoice: Row, roots: Row[], adjustments: Row[], bases: Row[], cashLinkedIncomeIds: Set<number>, allocationProofs: Map<number, AdjustmentAllocationProof> = new Map()) {
+  if (adjustments.some(adjustment => adjustment.contractVersion !== 3)) assertOrdinaryAdjustmentInvoice(invoice);
   const keys = new Set<string>(), payouts = new Set<string>();
   for (const adjustment of adjustments) {
     const root = roots.find(row => row.id === adjustment.originalPaymentId);
+    const proof = allocationProofs.get(Number(adjustment.originalPaymentId));
+    const allocationValid = adjustment.contractVersion === 3 && proof
+      && adjustment.allocationBindingId === proof.bindingId && adjustment.allocationRevision === proof.revision
+      && adjustment.allocationChangeId === proof.changeId && financialHash(adjustment.allocationBasisSnapshot) === financialHash(proof.snapshot);
     if (!root || root.dateCertainty !== 'ACTUAL' || !['MANUAL', 'LEGACY_STATUS'].includes(String(root.source))
-      || root.invoiceId !== invoice.id || (root.userId !== undefined && root.userId !== invoice.userId)
+      || (adjustment.contractVersion === 2 ? root.invoiceId !== invoice.id || proof != null
+        || adjustment.allocationBindingId != null || adjustment.allocationRevision != null || adjustment.allocationChangeId != null || adjustment.allocationBasisSnapshot != null : !allocationValid)
+      || (root.userId !== undefined && root.userId !== invoice.userId)
       || adjustment.invoiceId !== invoice.id || (adjustment.userId !== undefined && adjustment.userId !== invoice.userId)
-      || adjustment.currency !== 'EUR' || adjustment.contractVersion !== 2 || cashLinkedIncomeIds.has(Number(root.incomeId))) adjustmentReview();
+      || adjustment.currency !== 'EUR' || ![2, 3].includes(Number(adjustment.contractVersion)) || cashLinkedIncomeIds.has(Number(root.incomeId))) adjustmentReview();
     if (paymentText(adjustment.reason, 'Begründung', 1000) !== adjustment.reason || paymentText(adjustment.reference, 'Nachweis', 255) !== adjustment.reference
       || paymentText(adjustment.idempotencyKey, 'Idempotenzschlüssel', 128) !== adjustment.idempotencyKey || keys.has(String(adjustment.idempotencyKey))) adjustmentReview();
     keys.add(String(adjustment.idempotencyKey));

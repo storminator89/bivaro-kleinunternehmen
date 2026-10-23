@@ -1,3 +1,4 @@
+import { loadInvoicePaymentStates } from '@/lib/payment-journal/allocation-ledger';
 import { PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, assertPositiveOnlySnapshot, PaymentAdjustmentConsumerError } from '@/lib/payment-journal/consumer-guard';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { parseLedgerSort, LedgerSortError } from '@/lib/ledger-sort';
@@ -152,9 +153,9 @@ export async function GET(request: Request) {
       ];
     }
 
-    const [incomes, total] = await prisma.$transaction(async tx => {
+    const [incomes, total, states] = await prisma.$transaction(async tx => {
       await assertPositiveOnlySnapshot(tx, userId);
-      return Promise.all([
+      const [incomes, total] = await Promise.all([
       tx.income.findMany({
         where,
         orderBy: [{ [sort.sortBy]: sort.sortOrder }, { id: sort.sortOrder }],
@@ -175,16 +176,28 @@ export async function GET(request: Request) {
       }),
       tx.income.count({ where }),
       ]);
+      const states = await loadInvoicePaymentStates(tx, userId, [...new Set(incomes.flatMap(income => income.invoiceId !== null && income.paymentJournalEvent ? [income.invoiceId] : []))], { onReview: 'omit' });
+      return [incomes, total, states] as const;
     });
 
-    const items = incomes.map(income => ({
+    const items = incomes.map(income => {
+      const root = income.invoiceId === null ? undefined : states.get(income.invoiceId)?.rootStates.find(value => value.root.id === income.paymentJournalEvent?.id);
+      return ({
       ...income,
+      originInvoiceId: income.invoiceId,
+      originInvoiceNumber: income.invoice?.invoiceNumber ?? null,
+      allocatedInvoiceId: root?.allocatedInvoiceId ?? (income.paymentJournalEvent ? null : income.invoiceId),
+      allocatedInvoiceNumber: root?.currentInvoice.invoiceNumber ?? (income.paymentJournalEvent ? null : income.invoice?.invoiceNumber ?? null),
+      allocationRevision: root?.allocationRevision ?? null,
+      paymentProvenance: root?.binding ? 'BANK_CSV' : income.paymentJournalEvent ? income.paymentJournalEvent.dateCertainty === 'ACTUAL' ? 'MANUAL' : 'LEGACY' : null,
+      paymentAllocationReviewRequired: Boolean(income.paymentJournalEvent && !root),
+      invoiceAttribution: 'IMMUTABLE_CASH_ORIGIN',
       invoiceStatus: income.invoice ? income.invoice.status : undefined,
       invoicePaidAt: income.invoice?.paidAt ?? null,
       customerName: income.customer ? income.customer.name : undefined,
       invoice: undefined,
       customer: undefined,
-    }));
+    }); });
 
     return NextResponse.json({ items, total, page, pageSize });
   } catch (error) {
