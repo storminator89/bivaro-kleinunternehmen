@@ -67,11 +67,16 @@ async function geometry(page: Page, workspace: string) {
       // Native file controls can retain intrinsic dimensions while their painted
       // content is fully clipped. Do not exempt other inputs or partial clipping.
       const fullyClippedFile = node instanceof HTMLInputElement && node.type === 'file'
-        && style.position === 'absolute' && style.overflow === 'hidden'
+        && style.position === 'absolute'
         && /^inset\(50%(?:\s+50%){0,3}\)$/.test(style.clipPath);
       if (screenReaderOnly || fullyClippedFile) return false;
       return r.width > 0 && r.height > 0 && (r.left < -1 || r.right > root.clientWidth + 1 || node.scrollWidth > node.clientWidth + 1);
-    }).map(node => ({ tag: node.tagName, text: node.textContent?.trim().slice(0, 100), width: node.clientWidth, scrollWidth: node.scrollWidth }));
+    }).map(node => {
+      const style = getComputedStyle(node);
+      return { tag: node.tagName, id: node.id, type: node.getAttribute('type'), text: node.textContent?.trim().slice(0, 100),
+        width: node.clientWidth, scrollWidth: node.scrollWidth, rect: node.getBoundingClientRect().toJSON(),
+        position: style.position, overflow: style.overflow, clipPath: style.clipPath };
+    });
     return { width: innerWidth, clientWidth: root.clientWidth, scrollWidth: root.scrollWidth, overflowing };
   });
   expect(result.scrollWidth, JSON.stringify(result)).toBeLessThanOrEqual(result.clientWidth);
@@ -172,6 +177,13 @@ for (const kind of ['income', 'expense'] as const) {
             await expect(entry.getByText('Bis 800 € netto: leer lassen.', { exact: true })).toBeVisible();
             await entry.locator('#receipt').focus();
             await expect(entry.locator('#receipt')).toBeFocused();
+            const filePaint = await entry.locator('#receipt').evaluate(element => {
+              const style = getComputedStyle(element);
+              return { position: style.position, overflow: style.overflow, clipPath: style.clipPath };
+            });
+            process.stdout.write(`Cashflow clipped file proof: ${JSON.stringify(filePaint)}\n`);
+            expect(filePaint.position).toBe('absolute');
+            expect(filePaint.clipPath).toMatch(/^inset\(50%(?:\s+50%){0,3}\)$/);
             expect(await entry.locator('#receipt').evaluate(element => getComputedStyle(element.parentElement!).outlineStyle)).toBe('solid');
             await entry.locator('#description').focus();
           }
