@@ -16,6 +16,18 @@ function adjusted(id: number, refund = false) {
     eligibleCancellationBasis: refund ? { invoiceId: 99, invoiceNumber: 'ST-99' } : null,
   };
 }
+function allocationLedger(id: number, incoming = true, corrected = false) {
+  const value = ledger(id, incoming ? corrected ? '3000' : '4000' : '0');
+  const rootId = 99, binding = '11111111-1111-4111-8111-111111111111', change = '22222222-2222-4222-8222-222222222222';
+  const valid = corrected ? '3000' : '4000', correction = corrected ? '1000' : '0';
+  const roots = incoming ? [{ originalPaymentId: rootId, originInvoiceId: 999, allocatedInvoiceId: id, amountCents: '4000', validReceivedCents: valid, refundedCents: '0', retainedCents: valid, paidAt: '2026-10-20T00:00:00.000Z', dateCertainty: 'ACTUAL', source: 'MANUAL', bindingStableKey: binding, allocationRevision: 1, allocationChangeStableKey: change, provenance: 'BANK_CSV' }] : [];
+  return { ...value, paymentContractVersion: 3, events: incoming ? [] : [{ ...ledger(id, '4000').events[0], id: rootId }], originAssignments: incoming ? [] : [{ originalPaymentId: rootId, originInvoiceId: id, allocatedInvoiceId: 999, amountCents: '4000', validReceivedCents: '4000', refundedCents: '0', retainedCents: '4000', paidAt: '2026-10-20T00:00:00.000Z', dateCertainty: 'ACTUAL', source: 'MANUAL', bindingStableKey: binding, allocationRevision: 1, allocationChangeStableKey: change, provenance: 'BANK_CSV' }], allocationHistory: [],
+    ledger: { version: 3, documentState: 'SENT', originCash: { originalReceivedCents: incoming ? '0' : '4000', correctedCents: '0', validReceivedCents: incoming ? '0' : '4000', refundedCents: '0', netRetainedCents: incoming ? '0' : '4000' }, allocation: { originalAllocatedCents: incoming ? '4000' : '0', correctedAllocatedCents: incoming ? correction : '0', validAllocatedCents: incoming ? valid : '0', refundedAllocatedCents: '0', retainedAllocatedCents: incoming ? valid : '0' }, collectibleOpenCents: value.summary.openCents, refundDueCents: '0' }, effectivePayments: roots,
+    rootCapabilities: incoming ? [{ originalPaymentId: rootId, correctableCents: valid, refundableCents: '0', canCorrect: true, canRefund: false, canReallocate: !corrected, correctionReviewReason: null, refundReviewReason: 'Stornobasis fehlt.', reallocationReviewReason: corrected ? 'Nach Korrektur eingefroren.' : null }] : [],
+    adjustmentCapacities: incoming ? [{ originalPaymentId: rootId, correctableCents: valid, refundableCents: '0' }] : [], canRecordAdjustment: incoming,
+    adjustments: corrected ? [{ id: 1, originalPaymentId: rootId, invoiceId: id, kind: 'PAYMENT_CORRECTION', amountCents: '1000', currency: 'EUR', actionDate: '2026-10-21T00:00:00.000Z', accountingEffectiveOn: '2026-10-20T00:00:00.000Z', reason: 'Synthetic factually mistaken receipt portion.', reference: 'Synthetic counter-evidence', idempotencyKey: 'synthetic-correction', cancellationInvoiceId: null, fiscalMappingStatus: 'UNREVIEWED', contractVersion: 3, allocationBindingId: 1, allocationRevision: 1, allocationChangeId: 1, allocationBasisSnapshot: { contractVersion: 1, bindingStableKey: binding, rowStableKey: binding, originalPaymentKey: 'synthetic-root', allocationRevision: 1, allocationChangeStableKey: change, originInvoiceNumber: 'ORIGIN-999', currentInvoiceNumber: `RE-${id}`, amountCents: '4000', currency: 'EUR', originCommercialHash: 'a'.repeat(64), currentCommercialHash: 'b'.repeat(64) } }] : [],
+  };
+}
 function json(value: unknown, status = 200) { return new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } }); }
 function fixture(items = [identity(1)], overrides: Record<number, () => Response | Promise<Response>> = {}, total = items.length) {
   return vi.fn<typeof fetch>(async input => {
@@ -36,10 +48,20 @@ describe('read-only bank invoice candidate adapter', () => {
     for (const [url, init] of fetcher.mock.calls) {
       expect(String(url)).toMatch(/^\/api\/invoices(?:\?|\/)/u);
       expect(init).toMatchObject({ method: 'GET', cache: 'no-store', credentials: 'same-origin' });
-      expect(init?.headers).toEqual({ 'X-Bivaro-Payment-Contract': '2' });
+      expect(init?.headers).toEqual({ 'X-Bivaro-Payment-Contract': '3' });
       expect(init?.body).toBeUndefined();
     }
-    expect(fetcher.mock.calls[1][1]?.headers).toEqual({ 'X-Bivaro-Payment-Contract': '2' });
+    expect(fetcher.mock.calls[1][1]?.headers).toEqual({ 'X-Bivaro-Payment-Contract': '3' });
+  });
+  it('uses incoming v3 effective receipts, never original roots which moved away, as current comparison evidence', async () => {
+    const value = await loadBankInvoiceCandidates(new AbortController().signal, fixture([identity(1), identity(2)], { 1: () => json(allocationLedger(1, true)), 2: () => json(allocationLedger(2, false)) }));
+    expect(value).toMatchObject({ checked: 2, unavailable: 0, reviewInvoices: [] });
+    expect(value.invoices[0]).toMatchObject({ id: 1, openCents: '8000', existingPayments: [{ amountCents: '4000', reference: null }] });
+    expect(value.invoices[1]).toMatchObject({ id: 2, openCents: '12000', existingPayments: [] });
+  });
+  it('keeps validated v3 unrelated adjustment history usable and compares only valid received amount', async () => {
+    const value = await loadBankInvoiceCandidates(new AbortController().signal, fixture([identity(1)], { 1: () => json(allocationLedger(1, true, true)) }));
+    expect(value).toMatchObject({ checked: 1, unavailable: 0, reviewInvoices: [], invoices: [{ id: 1, openCents: '9000', existingPayments: [{ amountCents: '3000' }] }] });
   });
   it('keeps paid journals available only as existing-payment evidence, never new capacity', async () => {
     const value = await loadBankInvoiceCandidates(new AbortController().signal, fixture([identity(1)], { 1: () => json(ledger(1, '12000')) }));

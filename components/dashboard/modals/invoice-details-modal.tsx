@@ -13,6 +13,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import { invoicePaymentAmounts } from '@/components/payments/payment-presentation';
 import { displayPaymentAmount } from '@/lib/full-payment-form';
 import { Invoice } from "@/types/dashboard";
 
@@ -50,6 +51,7 @@ function DetailItem({
 
 export function InvoiceDetailsModal({ isOpen, onClose, invoice, onPaymentHistory }: InvoiceDetailsModalProps) {
   if (!invoice) return null;
+  const amounts = invoice.paymentLedger ? invoicePaymentAmounts(invoice.paymentLedger) : null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -81,7 +83,7 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice, onPaymentHistory
             <div><p className="text-xs text-muted-foreground">Rechnungsbetrag</p><p className="invoice-detail-amount">{invoice.totalAmount != null ? new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(invoice.totalAmount) : 'Nicht verfügbar'}</p></div>
             <StatusBadge status={invoice.status} paymentState={invoice.paymentSummary?.paymentState} />
           </section>
-          {invoice.status === 'CANCELLED' ? invoice.paymentLedger ? <dl className="grid grid-cols-2 gap-4"><DetailItem label="Tatsächlich erstattet">{displayPaymentAmount(invoice.paymentLedger.refundedCents)}</DetailItem><DetailItem label="Noch zu erstatten">{displayPaymentAmount(invoice.paymentLedger.refundDueCents)}</DetailItem></dl> : <p className="text-sm">Erstattungsstand prüfen; aus dem Rechnungsstorno folgt keine Auszahlung.</p> : invoice.paymentSummary && <dl className="grid grid-cols-2 gap-4"><DetailItem label="Gültig erhalten">{displayPaymentAmount(invoice.paymentLedger?.validReceivedCents ?? invoice.paymentSummary.paidCents)}</DetailItem><DetailItem label="Noch offen">{displayPaymentAmount(invoice.paymentLedger?.collectibleOpenCents ?? invoice.paymentSummary.openCents)}</DetailItem>{invoice.paymentLedger && invoice.paymentLedger.correctedCents !== '0' && <DetailItem label="Nie erhalten / korrigiert">{displayPaymentAmount(invoice.paymentLedger.correctedCents)}</DetailItem>}</dl>}
+          {invoice.status === 'CANCELLED' ? invoice.paymentLedger ? <dl className="grid grid-cols-2 gap-4"><DetailItem label="Tatsächlich erstattet">{displayPaymentAmount(amounts!.refunded)}</DetailItem><DetailItem label="Noch zu erstatten">{displayPaymentAmount(amounts!.refundDue)}</DetailItem></dl> : <p className="text-sm">Erstattungsstand prüfen; aus dem Rechnungsstorno folgt keine Auszahlung.</p> : invoice.paymentSummary && <dl className="grid grid-cols-2 gap-4"><DetailItem label={invoice.paymentLedger?.version === 3 ? 'Gültig zugeordnet' : 'Gültig erhalten'}>{displayPaymentAmount(amounts?.valid ?? invoice.paymentSummary.paidCents)}</DetailItem><DetailItem label="Noch offen">{displayPaymentAmount(amounts?.open ?? invoice.paymentSummary.openCents)}</DetailItem>{invoice.paymentLedger && amounts!.corrected !== '0' && <DetailItem label="Nie erhalten / korrigiert">{displayPaymentAmount(amounts!.corrected)}</DetailItem>}</dl>}
           {invoice.paymentReviewRequired && <p role="status" className="text-sm">Zahlungsstand muss anhand der historischen Nachweise geprüft werden.</p>}
           {onPaymentHistory && invoice.type !== 'CREDIT_NOTE' && <Button type="button" variant="outline" onClick={onPaymentHistory}>Zahlungsverlauf ansehen</Button>}
           <dl className="invoice-detail-dates grid min-w-0 grid-cols-2 gap-4">

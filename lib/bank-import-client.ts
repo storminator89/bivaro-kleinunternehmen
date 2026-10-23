@@ -1,4 +1,5 @@
 import { BANK_IMPORT_MAPPING_VERSION, BANK_IMPORT_PARSER_VERSION, BankImportError, type BankImportReceipt, type BankImportDetail } from '@/lib/bank-import-contract';
+import { readBankAllocationRowEnvelope } from '@/lib/bank-allocation-client';
 import type { BankCsvDelimiter, BankCsvMapping } from '@/lib/bank-csv';
 
 export function bankImportOriginalBase64(bytes: Uint8Array): string {
@@ -17,7 +18,16 @@ export async function saveBankImport(input: { originalBase64: string; mapping: B
     body: JSON.stringify({ ...input, parserVersion: BANK_IMPORT_PARSER_VERSION, mappingVersion: BANK_IMPORT_MAPPING_VERSION, reviewed: true }) }));
 }
 export function recoverBankImportReceipt(requestId: string, signal: AbortSignal, fetcher: typeof fetch = fetch) { return read<{ receipt: BankImportReceipt | null }>(`/api/bank-imports?requestId=${encodeURIComponent(requestId)}`, signal, fetcher); }
-export function loadBankImportReceipt(id: string, page: number, signal: AbortSignal, fetcher: typeof fetch = fetch) { return read<BankImportDetail>(`/api/bank-imports/${encodeURIComponent(id)}?page=${page}`, signal, fetcher); }
+export async function loadBankImportReceipt(id: string, page: number, signal: AbortSignal, fetcher: typeof fetch = fetch) {
+  const detail = await read<BankImportDetail>(`/api/bank-imports/${encodeURIComponent(id)}?page=${page}`, signal, fetcher);
+  if (detail.assignmentCount !== undefined && (!Number.isSafeInteger(detail.assignmentCount) || detail.assignmentCount < 0 || detail.assignmentCount > detail.receipt.counts.total)) throw new BankImportError('Der aktuelle Zuordnungsstand konnte nicht sicher geprüft werden.', 502);
+  if (detail.rowEnvelopes !== undefined) {
+    if (!Array.isArray(detail.rowEnvelopes) || !Array.isArray(detail.rows) || detail.rowEnvelopes.length !== detail.rows.length) throw new BankImportError('Die gespeicherten Umsatzzeilen konnten nicht sicher geprüft werden.', 502);
+    detail.rowEnvelopes = detail.rowEnvelopes.map((row, index) => { const envelope = readBankAllocationRowEnvelope(row); const checkedEvidence = readBankAllocationRowEnvelope({ ...envelope, evidence: detail.rows[index] }).evidence; if (JSON.stringify(envelope.evidence) !== JSON.stringify(checkedEvidence)) throw new BankImportError('Die gespeicherten Umsatzzeilen konnten nicht sicher geprüft werden.', 502); return envelope; });
+    if (new Set(detail.rowEnvelopes.map(row => row.rowStableKey)).size !== detail.rowEnvelopes.length || new Set(detail.rowEnvelopes.map(row => row.evidence.rowNumber)).size !== detail.rowEnvelopes.length || detail.assignmentCount !== undefined && detail.rowEnvelopes.filter(row => row.bindingStableKey !== null).length > detail.assignmentCount) throw new BankImportError('Der aktuelle Zuordnungsstand konnte nicht sicher geprüft werden.', 502);
+  }
+  return detail;
+}
 export function loadBankImportHistory(page: number, signal: AbortSignal, fetcher: typeof fetch = fetch) { return read<{ receipts: BankImportReceipt[]; page: number; hasMore: boolean }>(`/api/bank-imports?page=${page}`, signal, fetcher); }
 
 /** Unknown response retries always ask for the SAME UUID before resubmission. */

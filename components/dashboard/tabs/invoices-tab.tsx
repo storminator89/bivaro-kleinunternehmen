@@ -28,6 +28,7 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { EmailPreviewDialog } from "@/components/dashboard/email-preview-dialog";
 import { Invoice, FilterState } from "@/types/dashboard";
 import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
+import { invoicePaymentAmounts } from '@/components/payments/payment-presentation';
 import { displayPaymentAmount } from '@/lib/full-payment-form';
 import { formatCurrency } from "@/lib/dashboard-utils";
 
@@ -47,10 +48,11 @@ function availableInvoiceStatuses(invoice: Invoice): string[] {
 
 export function InvoiceBalance({ invoice }: { invoice: Invoice }) {
   if (invoice.paymentReviewRequired) return <p className="mt-1 text-xs text-caution-foreground">Zahlungsstand prüfen</p>;
-  if (invoice.status === 'CANCELLED') return <p className="mt-1 text-xs text-muted-foreground tabular-nums">{invoice.paymentLedger ? <>Tatsächlich erstattet {displayPaymentAmount(invoice.paymentLedger.refundedCents)} · Noch zu erstatten {displayPaymentAmount(invoice.paymentLedger.refundDueCents)}</> : 'Erstattungsstand prüfen'}</p>;
-  if (invoice.paymentLedger?.correctedCents && invoice.paymentLedger.correctedCents !== '0') return <p className="mt-1 text-xs text-muted-foreground tabular-nums">Gültig erhalten {displayPaymentAmount(invoice.paymentLedger.validReceivedCents)} · Nie erhalten / korrigiert {displayPaymentAmount(invoice.paymentLedger.correctedCents)} · Offen {displayPaymentAmount(invoice.paymentLedger.collectibleOpenCents)}</p>;
+  const amounts = invoice.paymentLedger ? invoicePaymentAmounts(invoice.paymentLedger) : null;
+  if (invoice.status === 'CANCELLED') return <p className="mt-1 text-xs text-muted-foreground tabular-nums">{invoice.paymentLedger ? <>Tatsächlich erstattet {displayPaymentAmount(amounts!.refunded)} · Noch zu erstatten {displayPaymentAmount(amounts!.refundDue)}</> : 'Erstattungsstand prüfen'}</p>;
+  if (amounts && amounts.corrected !== '0') return <p className="mt-1 text-xs text-muted-foreground tabular-nums">{invoice.paymentLedger?.version === 3 ? 'Gültig zugeordnet' : 'Gültig erhalten'} {displayPaymentAmount(amounts!.valid)} · Nie erhalten / korrigiert {displayPaymentAmount(amounts!.corrected)} · Offen {displayPaymentAmount(amounts!.open)}</p>;
   if (!invoice.paymentSummary) return null;
-  return <p className="mt-1 text-xs text-muted-foreground tabular-nums">Erhalten {displayPaymentAmount(invoice.paymentSummary.paidCents)} · Offen {displayPaymentAmount(invoice.paymentSummary.openCents)}</p>;
+  return <p className="mt-1 text-xs text-muted-foreground tabular-nums">{invoice.paymentLedger?.version === 3 ? 'Zugeordnet' : 'Erhalten'} {displayPaymentAmount(invoice.paymentSummary.paidCents)} · Offen {displayPaymentAmount(invoice.paymentSummary.openCents)}</p>;
 }
 
 type InvoicesTabProps = {

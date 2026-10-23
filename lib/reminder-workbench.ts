@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { ledgerSummary, type LedgerInvoice } from '@/lib/payment-journal/service';
+import { loadInvoicePaymentState, type InvoicePaymentState } from '@/lib/payment-journal/allocation-ledger';
 import { parseMoneyEUR, formatMoneyEUR } from '@/lib/money';
 import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 
@@ -27,7 +28,7 @@ const money = (value: string) => {
 };
 
 /** Shared eligibility: only explained, positive EUR balances, never guessed legacy evidence. */
-export function reminderBalance(invoice: LedgerInvoice): ReminderBalanceSnapshot {
+export function reminderBalance(invoice: LedgerInvoice, state?: InvoicePaymentState): ReminderBalanceSnapshot {
   // Shared by fresh preview, TXT and recording paths; a planning marker is not
   // a receivable, even when malformed or JSON-string encoded. Prior immutable
   // idempotent command replay stays ahead of this fresh-eligibility boundary.
@@ -37,24 +38,24 @@ export function reminderBalance(invoice: LedgerInvoice): ReminderBalanceSnapshot
   if (invoice.type !== 'INVOICE' || !['DRAFT', 'SENT'].includes(invoice.status)) {
     throw new ReminderWorkbenchError('Mahnungen können nur für offene Rechnungen erfasst werden', 409, 'INVOICE_NOT_OPEN');
   }
-  if (invoice.paymentAdjustments.length) throw new ReminderWorkbenchError('Berichtigte Zahlungsnachweise erfordern eine erneute fachliche Restbetragsprüfung; dieser Mahnvertrag unterstützt keine Berichtigungen.', 409, 'PAYMENT_ADJUSTMENTS_REVIEW_REQUIRED');
+  if ((state?.adjustments ?? invoice.paymentAdjustments).length) throw new ReminderWorkbenchError('Berichtigte Zahlungsnachweise erfordern eine erneute fachliche Restbetragsprüfung; dieser Mahnvertrag unterstützt keine Berichtigungen.', 409, 'PAYMENT_ADJUSTMENTS_REVIEW_REQUIRED');
   const parsed = invoice.parsedData;
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.currency != null && parsed.currency !== 'EUR') {
     throw new ReminderWorkbenchError('Bitte die Rechnungswährung prüfen. Nur EUR wird unterstützt.', 409, 'PAYMENT_REVIEW_REQUIRED');
   }
   let summary;
-  try { summary = ledgerSummary(invoice); }
+  try { summary = state?.summary ?? ledgerSummary(invoice); }
   catch { throw new ReminderWorkbenchError('Zahlungsnachweise müssen zuerst im Zahlungsjournal geprüft werden.', 409, 'PAYMENT_REVIEW_REQUIRED'); }
-  if (summary.paid || invoice.paymentJournalEvents.some(event => event.dateCertainty !== 'ACTUAL' || !event.paidAt)) {
+  if (summary.paid || (state ? state.effectivePayments : invoice.paymentJournalEvents).some(event => event.dateCertainty !== 'ACTUAL' || !event.paidAt)) {
     throw new ReminderWorkbenchError('Kein eindeutig belegter offener Restbetrag vorhanden.', 409, 'PAYMENT_REVIEW_REQUIRED');
   }
   const events = [...invoice.paymentJournalEvents].sort((a, b) => a.id - b.id);
   return {
     version: 1,
     balanceVersion: hash([invoice.userId, invoice.id, invoice.status, invoice.totalAmount, invoice.paidAt,
-      invoice.invoiceNumber, invoice.dueDate, events.map(event => [event.id, event.amountCents, event.paidAt, event.reference, event.incomeId])]),
+      invoice.invoiceNumber, invoice.dueDate, state?.ledgerVersion ?? null, events.map(event => [event.id, event.amountCents, event.paidAt, event.reference, event.incomeId])]),
     totalCents: summary.totalCents, paidCents: summary.paidCents, openCents: summary.openCents,
-    paymentHistory: events.map(event => ({ amountCents: event.amountCents, paidAt: event.paidAt!.toISOString(), reference: event.reference })),
+    paymentHistory: state ? state.effectivePayments.filter(event => event.validReceivedCents !== '0').map(event => ({ amountCents: event.validReceivedCents, paidAt: new Date(event.paidAt!).toISOString(), reference: `Originalzahlung ${event.originalPaymentId} · Ursprung ${event.originInvoiceId} · Zuordnung ${event.allocatedInvoiceId}` })) : events.map(event => ({ amountCents: event.amountCents, paidAt: event.paidAt!.toISOString(), reference: event.reference })),
   };
 }
 
@@ -115,7 +116,11 @@ export function composeReminderText(invoiceNumber: string, balance: ReminderBala
 
 async function previewInTransaction(tx: Prisma.TransactionClient, userId: string, invoiceId: number, input: ReminderOptions, requireConfirmation: boolean) {
   const invoice = await ownedReminderInvoice(tx, userId, invoiceId);
-  const balance = reminderBalance(invoice);
+  if (invoice.type !== 'INVOICE' || !['DRAFT', 'SENT'].includes(invoice.status)) throw new ReminderWorkbenchError('Mahnungen können nur für offene Rechnungen erfasst werden', 409, 'INVOICE_NOT_OPEN');
+  let state: InvoicePaymentState;
+  try { state = await loadInvoicePaymentState(tx, userId, invoiceId); }
+  catch { throw new ReminderWorkbenchError('Zahlungsnachweise müssen zuerst im Zahlungsjournal geprüft werden.', 409, 'PAYMENT_REVIEW_REQUIRED'); }
+  const balance = reminderBalance(invoice, state);
   assertReminderBalance(balance, input.expectedBalanceVersion, requireConfirmation || input.expectedBalanceVersion !== undefined);
   const options = normalizeReminderOptions(input, Math.min((invoice.reminders[0]?.reminderLevel ?? 0) + 1, 4));
   const settings = await tx.settings.findUnique({ where: { userId }, select: { companyName: true } });

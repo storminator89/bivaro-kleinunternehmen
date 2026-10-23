@@ -9,7 +9,8 @@ export function formatTimelineMoney(value: string | null): string | null {
 
 export type TimelineEntry = {
   key: string;
-  kind: 'DOCUMENT' | 'PAYMENT' | 'ADJUSTMENT';
+  kind: 'DOCUMENT' | 'PAYMENT' | 'ADJUSTMENT' | 'ALLOCATION';
+  attribution?: { originInvoiceId: number; allocatedInvoiceId: number; fromInvoiceId?: number; toInvoiceId?: number; cancellationInvoiceId?: number | null };
   recordedAt: string;
   document: { id: number; type: string; number: string | null; status: string; href: string; convertedInvoice?: { id: number; number: string | null; href: string } };
   businessDate: string | null;

@@ -17,7 +17,7 @@ it('additive journal migration preserves complete legacy finance rows and never 
     mkdirSync(prismaDirectory); writeFileSync(url.slice('file:'.length), '');
     cpSync(path.join(sourcePrisma, 'schema.prisma'), path.join(prismaDirectory, 'schema.prisma'));
     cpSync(path.join(sourcePrisma, 'migrations'), path.join(prismaDirectory, 'migrations'), {
-      recursive: true, filter: source => !source.includes(path.join('migrations', '20261021150000_add_payment_adjustments')) && !source.includes(path.join('migrations', migration)) && !source.includes(path.join('migrations', '20261021043000_add_partial_payments')),
+      recursive: true, filter: source => !source.includes(path.join('migrations', '20261021150000_add_payment_adjustments')) && !source.includes(path.join('migrations', '20261023010000_add_bank_payment_allocations')) && !source.includes(path.join('migrations', migration)) && !source.includes(path.join('migrations', '20261021043000_add_partial_payments')),
     });
     const deploy = () => execFileSync(process.execPath, [path.resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy', '--schema', path.join(prismaDirectory, 'schema.prisma')], {
       cwd: directory, env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe', timeout: 60_000,
@@ -51,7 +51,7 @@ it('plural-index migration preserves singleton history and immutable/link/cent t
     mkdirSync(prismaDirectory); writeFileSync(url.slice(5), '');
     cpSync(path.join(sourcePrisma, 'schema.prisma'), path.join(prismaDirectory, 'schema.prisma'));
     cpSync(path.join(sourcePrisma, 'migrations'), path.join(prismaDirectory, 'migrations'), {
-      recursive: true, filter: source => !source.includes(path.join('migrations', '20261021150000_add_payment_adjustments')) && !source.includes(path.join('migrations', migration)),
+      recursive: true, filter: source => !source.includes(path.join('migrations', '20261021150000_add_payment_adjustments')) && !source.includes(path.join('migrations', '20261023010000_add_bank_payment_allocations')) && !source.includes(path.join('migrations', migration)),
     });
     const deploy = () => execFileSync(process.execPath, [path.resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy', '--schema', path.join(prismaDirectory, 'schema.prisma')], {
       cwd: directory, env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe', timeout: 60_000,

@@ -1,3 +1,5 @@
+import { bankAllocationsFromBackup, validateBankAllocationGraph, restoreBankAllocations, portableBankAllocations } from '@/lib/bank-allocation-backup';
+import { loadInvoicePaymentState, updateInvoicePaymentProjection } from '@/lib/payment-journal/allocation-ledger';
 import { bankImportsFromBackup, restoreBankImports } from '@/lib/bank-import-backup';
 import { assertPaymentTermDocument, validatePaymentTermSelection } from '@/lib/payment-terms';
 import { validationReportsFromBackup, restoreValidationReports } from '@/lib/purchase-documents/validation-backup';
@@ -32,6 +34,7 @@ import {
   CURRENT_BACKUP_VERSION,
   CURRENT_SCHEMA_VERSION,
   backupSchemaSupportsBankImportEvidence,
+  backupSchemaSupportsBankPaymentAllocations,
   backupSchemaSupportsReminderBalance,
   backupSchemaSupportsPurchaseValidation,
   backupSchemaSupportsServiceBilling,
@@ -103,6 +106,8 @@ type RestoreResult = {
   serviceArticles: { imported: number; skipped: number };
   bankImportBatches: { imported: number; skipped: number };
   bankImportRows: { imported: number; skipped: number };
+  bankPaymentBindings: { imported: number; skipped: number };
+  paymentAllocationChanges: { imported: number; skipped: number };
   serviceProjects: { imported: number; skipped: number };
   billingNotes: { imported: number; skipped: number };
   expenses: { imported: number; skipped: number };
@@ -563,6 +568,10 @@ function groupByInvoice<T>(rows: readonly T[], invoiceId: (row: T) => number | n
 }
 
 function validatePaymentJournalBackup(data: JsonRecord, version: string, schemaVersion?: string): void {
+  let allocationAffectedInvoiceIds = new Set<number>();
+  try {
+    if (backupSchemaSupportsBankPaymentAllocations(schemaVersion)) allocationAffectedInvoiceIds = validateBankAllocationGraph(data, schemaVersion).affectedInvoiceIds;
+  } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zuordnungsgraph ungültig'); }
   const events = asArray(data, 'paymentJournalEvents');
   if (version === LEGACY_BACKUP_VERSION && events.length) {
     throw new BackupValidationError('Legacy-Backups ohne Manifest dürfen keine Zahlungsereignisse enthalten');
@@ -619,6 +628,7 @@ function validatePaymentJournalBackup(data: JsonRecord, version: string, schemaV
     }
   }
   for (const [invoiceId, allocations] of eventsByInvoice) {
+    if (allocationAffectedInvoiceIds.has(invoiceId)) continue; // full v3 graph/projector already checked, cash origin is not effective allocation
     const invoice = invoices.get(invoiceId)!;
     if (schemaVersion === FULL_PAYMENT_JOURNAL_SCHEMA_VERSION && allocations.length !== 1) {
       throw new BackupValidationError('Das Vollzahlungs-Backup-Schema unterstützt keine mehreren Zahlungsereignisse je Rechnung');
@@ -1064,6 +1074,8 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     serviceArticles: { imported: 0, skipped: 0 },
     bankImportBatches: { imported: 0, skipped: 0 },
     bankImportRows: { imported: 0, skipped: 0 },
+    bankPaymentBindings: { imported: 0, skipped: 0 },
+    paymentAllocationChanges: { imported: 0, skipped: 0 },
     serviceProjects: { imported: 0, skipped: 0 },
     billingNotes: { imported: 0, skipped: 0 },
     expenses: { imported: 0, skipped: 0 },
@@ -1406,7 +1418,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
   result.warnings.push(...validationWarnings);
   const documents = asArray(data, 'purchaseDocuments');
   const bankImports = bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(manifest?.schemaVersion));
-  if (bankImports.batches.length) result.warnings.push('Bankimport-Evidenz wird unverändert und unzugeordnet wiederhergestellt. Bestehende Quittungen bleiben erhalten; keine Zahlung wird ausgeführt.');
+  const allocationGraph = validateBankAllocationGraph(data, manifest?.schemaVersion);
+  const bankAllocations = bankAllocationsFromBackup(data, manifest?.schemaVersion);
+  if (bankImports.batches.length) result.warnings.push('Bankimport-Evidenz wird unverändert wiederhergestellt. Bestehende Quittungen bleiben erhalten; keine Zahlung wird ausgeführt.');
   const validationReports = validationReportsFromBackup(data, backupSchemaSupportsPurchaseValidation(manifest?.schemaVersion));
   if (validationReports.length) result.warnings.push('Technische Eingangsprüfberichte werden ausschließlich als historische Nachweise übernommen. Keine erneute Prüfung und keine aktuelle Freigabe.');
   if (documents.length > 0 && !resolveFile) {
@@ -1613,6 +1627,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const existingAdjustments = await tx.paymentAdjustment.findMany({ where: { userId } });
       const existingOperations = await tx.paymentOperation.findMany({ where: { userId } });
       const existingPaymentEvents = await tx.paymentJournalEvent.findMany({ where: { userId } });
+      const existingAllocationBindings = await tx.bankPaymentBinding.findMany({ where: { userId } });
+      const existingAllocationChanges = await tx.paymentAllocationChange.findMany({ where: { userId } });
+      const existingAllocationRoots = new Set(existingAllocationBindings.map(binding => binding.paymentJournalEventId));
+      const existingAllocationInvoices = new Set(existingPaymentEvents.filter(root => existingAllocationRoots.has(root.id)).map(root => root.invoiceId));
+      for (const change of existingAllocationChanges) { existingAllocationInvoices.add(change.fromInvoiceId); existingAllocationInvoices.add(change.toInvoiceId); }
       for (const root of paymentJournalEvents) if (existingOperations.some(operation => operation.idempotencyKey === root.idempotencyKey && operation.kind !== 'PAYMENT_RECEIVED')) throw new BackupValidationError('Finanzaktionsschlüssel kollidiert mit einer anderen Zahlungsaktion.');
       for (const adjustment of paymentAdjustments) if (existingPaymentEvents.some(root => root.idempotencyKey === adjustment.idempotencyKey)) throw new BackupValidationError('Berichtigungsschlüssel kollidiert mit Originalzahlung.');
       const existingPaymentByKey = new Map(existingPaymentEvents.map((event) => [event.idempotencyKey, event]));
@@ -1967,14 +1986,29 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           }
           validatePaymentTermMerge(existing as unknown as JsonRecord, invoice, restoredParsedData);
           const targetPayments = existingPaymentsByInvoice.get(existing.id) ?? [];
+          const allocationAware = allocationGraph.affectedInvoiceIds.has(sourceId);
+          if (existingAllocationInvoices.has(existing.id) && !allocationAware) throw new BackupValidationError('Backup ohne vollständige Zuordnungsevidenz darf bestehende Bankzahlungshistorie nicht zurücksetzen.');
+          if (allocationAware) {
+            if (existing.type !== invoice.type || existing.invoiceNumber !== invoiceNumber || existing.totalAmount !== asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount')
+              || hashJson(existing.parsedData ?? {}) !== hashJson(restoredParsedData ?? {})) throw new BackupValidationError('Zielrechnung weicht vom unveränderlichen Zuordnungsnachweis ab.');
+            if (existing.status === 'CANCELLED' && invoice.status !== 'CANCELLED') throw new BackupValidationError('Backup darf eine Stornierung nicht zurücksetzen.');
+            for (const event of targetPayments) if (!sourcePayments.some(source => source.idempotencyKey === event.idempotencyKey && samePaymentEvidence(event as unknown as JsonRecord, source))) throw new BackupValidationError('Ältere Zuordnungssicherung enthält nicht die vollständige Originalzahlungshistorie des Ziels.');
+            const sourceAdjustmentKeys = new Set(paymentAdjustments.filter(row => row.invoiceId === sourceId).map(row => String(row.idempotencyKey)));
+            if (existingAdjustments.some(row => row.invoiceId === existing.id && !sourceAdjustmentKeys.has(row.idempotencyKey))) throw new BackupValidationError('Backup würde neuere Zahlungsberichtigungen zurücksetzen.');
+            for (const event of sourcePayments) { const target = existingPaymentByKey.get(String(event.idempotencyKey)); if (target) {
+              if (target.invoiceId !== existing.id || !samePaymentEvidence(target as unknown as JsonRecord, event)) throw new BackupValidationError('Abweichende Originalzahlung im Zuordnungsgraph.');
+              if (event.incomeId != null && target.incomeId != null) replayIncomeBySource.set(Number(event.incomeId), target.incomeId);
+            } }
+            projectionUpdates.set(existing.id, { status: String(invoice.status), paidAt: asDate(invoice.paidAt, 'invoice.paidAt'), cancellationReason: asOptionalString(invoice.cancellationReason, 'invoice.cancellationReason', 1_000) });
+          }
           if (sourcePayments.length || targetPayments.length) {
             if (mappedJournalInvoices.has(existing.id)) throw new BackupValidationError('Mehrere Quellrechnungen dürfen nicht auf dieselbe Zahlungsrechnung abgebildet werden');
             mappedJournalInvoices.add(existing.id);
           }
-          if (!sourcePayments.length && targetPayments.length) {
+          if (!allocationAware && !sourcePayments.length && targetPayments.length) {
             throw new BackupValidationError('Altes Backup ohne Zahlungsidentitäten kann nicht mit einer Rechnung mit unveränderlichen Zahlungsereignissen zusammengeführt werden. Bitte getrennt prüfen.');
           }
-          if (sourcePayments.length) {
+          if (sourcePayments.length && !allocationAware) {
             if (existing.type !== invoice.type || existing.invoiceNumber !== invoiceNumber
               || existing.totalAmount !== asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount')
               || existing.customerId !== relationMapValue(customerMap, invoice.customerId, 'invoice.customerId')
@@ -2392,6 +2426,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         }, tx);
       }
 
+      const restoredAllocations = await restoreBankAllocations(tx, userId, bankAllocations, invoiceMap,
+        new Map(paymentJournalEvents.map(row => [String(row.idempotencyKey), paymentJournalMap.get(Number(row.id))!])));
+      result.bankPaymentBindings = restoredAllocations.bindings;
+      result.paymentAllocationChanges = restoredAllocations.changes;
+
       // Verified lifecycle advancement belongs before refund insertion: the DB
       // ownership trigger checks the already-cancelled original, in this same transaction.
       for (const [invoiceId, projection] of projectionUpdates) {
@@ -2402,9 +2441,12 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const invoiceId = relationMapValue(invoiceMap, adjustment.invoiceId, 'adjustment.invoiceId')!;
         const originalPaymentId = relationMapValue(paymentJournalMap, adjustment.originalPaymentId, 'adjustment.originalPaymentId')!;
         const cancellationInvoiceId = relationMapValue(invoiceMap, adjustment.cancellationInvoiceId, 'adjustment.cancellationInvoiceId');
+        const allocationBindingId = adjustment.contractVersion === 3 ? restoredAllocations.bindingMap.get(String(adjustment.allocationBindingStableKey)) : undefined;
+        const allocationChangeId = adjustment.contractVersion === 3 && adjustment.allocationChangeStableKey != null ? restoredAllocations.changeMap.get(String(adjustment.allocationChangeStableKey)) : null;
+        if (adjustment.contractVersion === 3 && (allocationBindingId === undefined || allocationChangeId === undefined)) throw new BackupValidationError('Fehlende explizite Berichtigungs-Zuordnungsabbildung.');
         const existing = existingAdjustments.find(row => row.idempotencyKey === adjustment.idempotencyKey);
         if (existing) {
-          if (existing.invoiceId !== invoiceId || existing.originalPaymentId !== originalPaymentId || existing.cancellationInvoiceId !== cancellationInvoiceId || !sameAdjustmentEvidence(existing as unknown as JsonRecord, adjustment)) throw new BackupValidationError('Kollision mit abweichender Zahlungsberichtigung.');
+          if (existing.invoiceId !== invoiceId || existing.originalPaymentId !== originalPaymentId || existing.cancellationInvoiceId !== cancellationInvoiceId || (adjustment.contractVersion === 3 && (existing.allocationBindingId !== allocationBindingId || existing.allocationChangeId !== allocationChangeId)) || !sameAdjustmentEvidence(existing as unknown as JsonRecord, adjustment)) throw new BackupValidationError('Kollision mit abweichender Zahlungsberichtigung.');
           const sourceId = asOptionalInt(adjustment.id, 'adjustment.id')!;
           const identity = JSON.stringify([sourceUserId, sourceId]);
           if (sourceUserId && !existingAdjustmentSourceIdentities.has(identity) && !(sourceUserId === userId && sourceId === existing.id)) {
@@ -2417,7 +2459,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           }
           result.paymentAdjustments.skipped++; continue;
         }
-        const created = await tx.paymentAdjustment.create({ data: { ...paymentAdjustmentValues(adjustment), userId, invoiceId, originalPaymentId, cancellationInvoiceId } });
+        const created = await tx.paymentAdjustment.create({ data: { ...paymentAdjustmentValues(adjustment), userId, invoiceId, originalPaymentId, cancellationInvoiceId, ...(adjustment.contractVersion === 3 ? { allocationBindingId, allocationChangeId } : {}) } });
         result.paymentAdjustments.imported++;
         await createFinancialAuditLog({ userId, action: 'RESTORE', entityType: 'Invoice', entityId: invoiceId,
           newValues: { paymentAdjustmentId: created.id, originalPaymentId, kind: created.kind, amountCents: created.amountCents, actionDate: created.actionDate, accountingEffectiveOn: created.accountingEffectiveOn, sourceAdjustmentId: adjustment.id, sourceUserId, fiscalMappingStatus: 'UNREVIEWED' },
@@ -2429,7 +2471,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       // created documents. No restore writer can commit a hidden orphan or
       // aggregate overpayment even if source-to-target mappings overlap.
       const journalInvoiceIds = [...new Set([...sourcePaymentsByInvoice.keys()].map((id) => invoiceMap.get(id)!))];
-      if (journalInvoiceIds.length) {
+      if (journalInvoiceIds.length && !bankAllocations.bindings.length) {
         const [targetInvoices, targetIncomes, targetEvents] = await Promise.all([
           tx.invoice.findMany({ where: { userId, id: { in: journalInvoiceIds } } }),
           tx.income.findMany({ where: { userId, invoiceId: { in: journalInvoiceIds } } }),
@@ -2778,7 +2820,25 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       const completeGraph = { user: { id: userId }, invoices: await tx.invoice.findMany({ where: { userId } }), incomes: await tx.income.findMany({ where: { userId } }),
           paymentJournalEvents: await tx.paymentJournalEvent.findMany({ where: { userId } }), paymentAdjustments: await tx.paymentAdjustment.findMany({ where: { userId } }),
           paymentOperations: await tx.paymentOperation.findMany({ where: { userId } }), auditLogs: await tx.auditLog.findMany({ where: { userId } }), cashTransactions: await tx.cashTransaction.findMany({ where: { userId } }) };
-      try { validatePaymentAdjustmentBackup(completeGraph, CURRENT_SCHEMA_VERSION); } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zahlungsberichtigungsgraph ungültig'); }
+      const targetBindings = await tx.bankPaymentBinding.findMany({ where: { userId } });
+      const targetChanges = await tx.paymentAllocationChange.findMany({ where: { userId } });
+      const targetBankRows = await tx.bankImportRow.findMany({ where: { userId } });
+      const portable = portableBankAllocations(targetBindings, targetChanges, targetBankRows, completeGraph.paymentJournalEvents);
+      const financialGraph = { ...completeGraph,
+        paymentJournalEvents: completeGraph.paymentJournalEvents.map(root => ({ ...root, bankPaymentBindingStableKey: targetBindings.find(binding => binding.paymentJournalEventId === root.id)?.stableKey ?? null })),
+        bankImportRows: targetBankRows, bankPaymentBindings: portable.bindings, paymentAllocationChanges: portable.changes,
+        paymentAdjustments: completeGraph.paymentAdjustments.map(({ allocationBindingId, allocationChangeId, allocationRevision, allocationBasisSnapshot, ...row }) => ({ ...row,
+          ...(row.contractVersion === 3 ? { allocationBindingStableKey: targetBindings.find(value => value.id === allocationBindingId)?.stableKey,
+            allocationChangeStableKey: allocationChangeId == null ? null : targetChanges.find(value => value.id === allocationChangeId)?.stableKey, allocationRevision, allocationBasisSnapshot } : {}),
+        })) };
+      try {
+        validatePaymentAdjustmentBackup(financialGraph, CURRENT_SCHEMA_VERSION);
+        validatePaymentJournalBackup(financialGraph, CURRENT_BACKUP_VERSION, CURRENT_SCHEMA_VERSION);
+        for (const sourceId of allocationGraph.affectedInvoiceIds) {
+          const state = await loadInvoicePaymentState(tx, userId, invoiceMap.get(sourceId)!, { validateProjection: false });
+          await updateInvoicePaymentProjection(tx, state);
+        }
+      } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zahlungsberichtigungsgraph ungültig'); }
 
       await createFinancialAuditLog({
         userId,

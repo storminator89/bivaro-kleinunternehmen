@@ -10,7 +10,8 @@ async function postHandler(request: Request, context: { params: Promise<{ id: st
     const { id } = await context.params;
     let value: unknown;
     try { value = await request.json(); } catch { throw new PaymentJournalError('Ungültiges JSON.'); }
-    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['kind', 'originalPaymentId', 'amount', 'actionDate', 'reason', 'reference', 'idempotencyKey', 'expectedLedgerVersion', 'cancellationInvoiceId', 'declarationNeverReceived'].includes(key))) throw new PaymentJournalError('Nicht unterstützte Finanzaktionsfelder.');
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['kind', 'originalPaymentId', 'amount', 'actionDate', 'reason', 'reference', 'idempotencyKey', 'expectedLedgerVersion', 'cancellationInvoiceId', 'declarationNeverReceived', 'expectedAllocationRevision'].includes(key))) throw new PaymentJournalError('Nicht unterstützte Finanzaktionsfelder.');
+    if ('expectedAllocationRevision' in value && request.headers.get('X-Bivaro-Payment-Contract') !== '3') return NextResponse.json({ error: 'Diese Finanzaktion erfordert Zahlungsjournal-Vertrag 3.', code: 'PAYMENT_CAPABILITY_REQUIRED', requiredContract: 3 }, { status: 409 });
     const result = await recordPaymentAdjustment(userId, Number(id), value as AdjustmentInput);
     return NextResponse.json(result, { status: result.replayed ? 200 : 201 });
   } catch (error) {

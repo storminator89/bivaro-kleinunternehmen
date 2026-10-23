@@ -171,7 +171,7 @@ describe('operational append-only adjustment contract', () => {
     expect(prior.yearComparison.revenueThisYearTotal).toBe(beforePrior.yearComparison.revenueThisYearTotal-20);
     expect(current.yearComparison.revenueThisYearTotal).toBe(beforeCurrent.yearComparison.revenueThisYearTotal);
     expect(BigInt(prior.operationalMovements.selectedYear.correctedCents)).toBe(BigInt(beforePrior.operationalMovements.selectedYear.correctedCents)+BigInt(2000));
-    expect(current).toMatchObject({ paymentContractVersion: 2, fiscalMappingStatus: 'UNREVIEWED' });
+    expect(current).toMatchObject({ paymentContractVersion: 3, fiscalMappingStatus: 'UNREVIEWED' });
     expect(current.recentActivities.some((row: Record<string, unknown>) => row.movementKind === 'CUSTOMER_REFUND' && typeof row.invoiceId === 'number')).toBe(true);
   });
   it('rolls adjustment, operation, lifecycle and mandatory audit back on audit failure', async () => {

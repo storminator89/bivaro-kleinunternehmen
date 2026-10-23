@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTestDatabase } from './helpers/database';
 import {
-  BACKUP_FEATURE_CAPABILITIES, PAYMENT_TERMS_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION,
+  BACKUP_FEATURE_CAPABILITIES, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION,
   backupSchemaSupportsPaymentTerms, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsEmailOutbox,
   backupSchemaSupportsPurchaseValidation, createBackupManifest, validatePaymentTermBackupFields,
 } from '@/lib/backup-manifest';
@@ -68,7 +68,7 @@ afterAll(async () => { await database?.cleanup(); if (directory) await rm(direct
 describe('closed additive payment-term backup contract', () => {
   it('adds one exact capability identity without changing any historical feature set', () => {
     expect(PAYMENT_TERMS_SCHEMA_VERSION).toBe('20261022040000_add_payment_terms');
-    expect(CURRENT_SCHEMA_VERSION).toBe('20261022060000_combine_payment_terms_bank_import_evidence');
+    expect(PAYMENT_BANK_IMPORT_SCHEMA_VERSION).toBe('20261022060000_combine_payment_terms_bank_import_evidence');
     expect(PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION).toBe('20261022030000_combine_projects_outbox_validation');
     expect(backupSchemaSupportsPaymentTerms(CURRENT_SCHEMA_VERSION)).toBe(true);
     for (const schema of Object.keys(BACKUP_FEATURE_CAPABILITIES).filter(key => !backupSchemaSupportsPaymentTerms(key))) expect(backupSchemaSupportsPaymentTerms(schema)).toBe(false);
@@ -232,7 +232,7 @@ describe('closed additive payment-term backup contract', () => {
     const row = invoice(source.data);
     Object.assign(row, { totalAmount: 100, status: 'PAID', issuanceState: 'ISSUED', paidAt: fixed.toISOString() });
     source.data.incomes = [{ id: 991, invoiceId: row.id, customerId: row.customerId, description: 'Synthetic payment', amount: 100, date: fixed.toISOString(), taxRelevant: true }];
-    source.data.paymentJournalEvents = [{ id: 992, invoiceId: row.id, incomeId: 991, amountCents: '10000', currency: 'EUR', paidAt: fixed.toISOString(),
+    source.data.paymentJournalEvents = [{ bankPaymentBindingStableKey: null, id: 992, invoiceId: row.id, incomeId: 991, amountCents: '10000', currency: 'EUR', paidAt: fixed.toISOString(),
       dateCertainty: 'ACTUAL', source: 'MANUAL', reference: 'Synthetic payment', idempotencyKey: 'synthetic-payment-term-allocation', createdAt: fixed.toISOString() }];
     const backup = pack(source.data), target = await owner('journal');
     await restore.restoreBackupData({ userId: target, overwrite: false, backup, resolveFile });

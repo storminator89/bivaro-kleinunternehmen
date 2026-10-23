@@ -1,3 +1,4 @@
+import { loadInvoicePaymentStates, type InvoicePaymentState } from '@/lib/payment-journal/allocation-ledger';
 import { reducePaymentLedger } from '@/lib/payment-journal/adjustment-contract';
 import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
 import { protectMutation } from '@/lib/request-security';
@@ -16,7 +17,6 @@ import {
   MAX_INVOICE_UPLOAD_BYTES,
   MAX_JSON_REQUEST_BYTES,
 } from '@/lib/resource-limits';
-import { ledgerSummary } from '@/lib/payment-journal/service';
 import { PaymentJournalError } from '@/lib/payment-journal/contract';
 import { deleteInvoice, InvoicePaymentError, updateInvoiceStatus } from '@/lib/invoice-payments';
 
@@ -222,8 +222,10 @@ export async function GET(request: Request) {
       ];
     }
 
-    const items = await prisma.$transaction(tx => tx.invoice.findMany({
+    const { items, states } = await prisma.$transaction(async tx => {
+      const items = await tx.invoice.findMany({
         where,
+        take: 10_001,
         orderBy: { uploadedAt: 'desc' },
         select: {
           id: true,
@@ -247,22 +249,31 @@ export async function GET(request: Request) {
           convertedFromQuoteId: true,
           customerId: true,
           userId: true,
-          incomes: { include: { cashTransaction: true } },
-          paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } },
+          incomes: { select: { id: true, amount: true, date: true }, take: 10_001 },
+          paymentAdjustments: { select: { id: true }, take: 1 },
           customer: { select: { id: true, name: true, userId: true } },
         },
-      }));
+      });
+      if (items.length > 10_000) throw new PaymentJournalError('Zu viele Rechnungen. Bitte die Auswahl eingrenzen.', 413, 'SOURCE_LIMIT');
+      const states = await loadInvoicePaymentStates(tx, userId, items.filter(invoice => invoice.type === 'INVOICE' && !isUnrenderedServiceBillingDraft(invoice)).map(invoice => invoice.id), { onReview: 'omit' });
+      return { items, states };
+    });
 
-    const supportsPaymentV2 = request.headers.get('X-Bivaro-Payment-Contract') === '2';
+    const supportsPaymentV3 = request.headers.get('X-Bivaro-Payment-Contract') === '3';
+    if (!supportsPaymentV3 && [...states.values()].some(state => state.requiresV3)) return NextResponse.json({ error: 'Diese Rechnungsauswahl benötigt Zahlungsjournal-Vertrag 3.', code: 'PAYMENT_CAPABILITY_REQUIRED', requiredContract: 3 }, { status: 409 });
+    const supportsPaymentV2 = supportsPaymentV3 || request.headers.get('X-Bivaro-Payment-Contract') === '2';
     if (!supportsPaymentV2 && items.some(invoice => invoice.paymentAdjustments.length > 0)) return NextResponse.json({ error: 'Diese Rechnungsauswahl enthält Berichtigungen und erfordert Zahlungsjournal-Vertrag 2.', code: 'PAYMENT_CAPABILITY_REQUIRED', requiredContract: 2 }, { status: 409 });
-    const checkedItems = await Promise.all(items.map(async ({ parsedData, paymentJournalEvents, paymentAdjustments, creditNotes, incomes, customer, ...invoice }) => {
-      let summary: ReturnType<typeof ledgerSummary> | null = null;
+    const checkedItems = await Promise.all(items.map(async ({ parsedData, paymentAdjustments: _adjustments, incomes, customer, ...invoice }) => {
+      void _adjustments;
+      const state = states.get(invoice.id);
+      let summary: InvoicePaymentState['summary'] | null = null;
       let paymentReviewRequired = false;
       let canRecordPayment = false;
       const serviceDraftEditable = isUnrenderedServiceBillingDraft({ ...invoice, parsedData });
       if (invoice.type === 'INVOICE' && !serviceDraftEditable) {
         try {
-          summary = ledgerSummary({ ...invoice, parsedData, paymentJournalEvents, paymentAdjustments, creditNotes, incomes });
+          if (!state) throw new Error('Unverified payment state');
+          summary = state.summary;
           if (customer && customer.userId !== userId) throw new Error('Invalid customer ownership');
           const currency = parsedData && typeof parsedData === 'object' && !Array.isArray(parsedData) ? parsedData.currency : null;
           if (currency != null && currency !== 'EUR') throw new Error('Unsupported currency');
@@ -278,7 +289,8 @@ export async function GET(request: Request) {
         incomes: incomes.map(income => ({ id: income.id, amount: income.amount, date: income.date })),
         customer: customer && customer.userId === userId ? { id: customer.id, name: customer.name } : null,
         paymentSummary: summary,
-        paymentLedger: summary ? reducePaymentLedger(invoice.totalAmount!, paymentJournalEvents, paymentAdjustments, invoice.status).ledger : null,
+        paymentLedger: summary ? supportsPaymentV3 || state!.requiresV3 ? state!.ledger : reducePaymentLedger(state!.invoice.totalAmount!, state!.originEvents, state!.adjustments, state!.invoice.status).ledger : null,
+        paymentContractVersion: summary ? supportsPaymentV3 || state!.requiresV3 ? 3 : 2 : null,
         paymentReviewRequired,
         canRecordPayment,
         serviceDraftEditable,
@@ -297,6 +309,7 @@ export async function GET(request: Request) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     throw error;
   }
 }

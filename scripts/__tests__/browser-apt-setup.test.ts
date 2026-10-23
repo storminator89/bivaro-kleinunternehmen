@@ -168,11 +168,15 @@ describe('per-command browser dependency transport bounds', () => {
     expect(workflow).toContain('        timeout-minutes: 25');
     expect(workflow).toContain('--retries=0');
     const allowed = workflow.split('          allowed = {')[1].split('          }')[0].match(/'[^']+\.png'/g);
-    expect(allowed).toHaveLength(52);
-    expect(new Set(allowed).size).toBe(52);
+    expect(allowed).toHaveLength(55); // The accepted 52-name union plus three allocation views.
+    expect(new Set(allowed).size).toBe(55);
+    for (const name of ['bank-allocation-confirmation-1440.png', 'bank-allocation-move-390.png', 'bank-allocation-current-origin-360.png']) expect(allowed).toContain(`'${name}'`);
     expect(allowed).toContain("'receipt-sequence-desktop-1440.png'");
     expect(allowed).toContain("'receipt-sequence-mobile-390.png'");
-    expect(workflow).toContain('limit = 5 * 1024 * 1024');
+    expect(workflow).toContain('limit = 8 * 1024 * 1024');
+    expect(workflow).toContain('per_file_input_limit = 5 * 1024 * 1024');
+    expect(workflow).toContain('total > 16 * 1024 * 1024');
+    expect(workflow).toContain('handle.read(per_file_input_limit + 1)');
     expect(workflow).toContain('          retention-days: 1');
     expect(workflow).toContain('          compression-level: 0');
     for (const name of [chromium, pdf]) {

@@ -4,7 +4,7 @@ import { getEInvoiceBookingRejection } from '@/lib/e-invoice-parser';
 import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 import { formatBusinessDate, parseBusinessDate } from '@/lib/business-date';
 import { exactPaymentCents } from '@/lib/payment-journal/contract';
-import { ledgerSummary } from '@/lib/payment-journal/service';
+import { loadInvoicePaymentStates } from '@/lib/payment-journal/allocation-ledger';
 import { quoteBusinessToday, quoteNextAction } from '@/lib/quote-workflow';
 import { AI_RECEIPT_MAX_JOBS } from '@/lib/purchase-documents/ai-contract';
 import { parseMoneyEUR } from '@/lib/money';
@@ -35,11 +35,11 @@ export async function readDailyActions(userId: string, now = new Date()): Promis
   const today = quoteBusinessToday(now);
   const day = parseBusinessDate(today);
   const nextDay = new Date(day.getTime() + 86_400_000);
-  const [invoices, quotes, receipts, receiptEvidence] = await prisma.$transaction(async tx => {
+  const [invoices, quotes, receipts, receiptEvidence, paymentOpenById] = await prisma.$transaction(async tx => {
     const [invoices, quotes, receipts] = await Promise.all([
     tx.invoice.findMany({
       where: { userId, type: 'INVOICE', status: 'SENT', dueDate: { lt: nextDay } },
-      include: { customer: { select: { name: true, userId: true } }, incomes: { include: { cashTransaction: true } }, paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } } },
+      include: { customer: { select: { name: true, userId: true } } },
       orderBy: [{ dueDate: 'asc' }, { id: 'asc' }], take: SOURCE_LIMIT + 1,
     }),
     tx.invoice.findMany({
@@ -91,7 +91,9 @@ export async function readDailyActions(userId: string, now = new Date()): Promis
           ELSE NULL END AS "aiSourceRevision"
       FROM "PurchaseDocument" WHERE "userId" = ${userId} AND "id" IN (${Prisma.join(receipts.map(receipt => receipt.id))})
     `) : [];
-    return [invoices, quotes, receipts, receiptEvidence] as const;
+    const states = await loadInvoicePaymentStates(tx, userId, invoices.slice(0, SOURCE_LIMIT).filter(invoice => !hasServiceBillingDraftMarker(invoice.parsedData)).map(invoice => invoice.id), { onReview: 'omit' });
+    const paymentOpenById = new Map([...states].map(([id, state]) => [id, state.summary.openCents]));
+    return [invoices, quotes, receipts, receiptEvidence, paymentOpenById] as const;
   });
   const evidenceByReceipt = new Map(receiptEvidence.map(evidence => [Number(evidence.id), evidence]));
   const actions: DailyAction[] = [];
@@ -103,7 +105,7 @@ export async function readDailyActions(userId: string, now = new Date()): Promis
     const date = formatBusinessDate(invoice.dueDate!);
     let openCents: string | null = null;
     try {
-      if (!planningMarker && currencyIsEUR(invoice.parsedData) && (!invoice.customer || invoice.customer.userId === userId) && !await getEInvoiceBookingRejection(invoice.parsedData)) openCents = ledgerSummary(invoice).openCents;
+      if (!planningMarker && currencyIsEUR(invoice.parsedData) && (!invoice.customer || invoice.customer.userId === userId) && !await getEInvoiceBookingRejection(invoice.parsedData)) openCents = paymentOpenById.get(invoice.id) ?? null;
     } catch { /* Unknown historical balance is a review, never an estimated debt. */ }
     if (openCents === '0') continue;
     const overdue = date < today;

@@ -27,6 +27,14 @@ export type Income = {
   customerId?: number;
   customerName?: string;
   taxRelevant: boolean;
+  originInvoiceId?: number | null;
+  originInvoiceNumber?: string | null;
+  allocatedInvoiceId?: number | null;
+  allocatedInvoiceNumber?: string | null;
+  allocationRevision?: number | null;
+  paymentProvenance?: 'BANK_CSV' | 'MANUAL' | 'LEGACY' | null;
+  paymentAllocationReviewRequired?: boolean;
+  invoiceAttribution?: 'IMMUTABLE_CASH_ORIGIN';
   invoicePaidStatus?: boolean;
   invoiceStatus?: string;
   invoiceId?: number;

@@ -1,3 +1,5 @@
+import { loadInvoicePaymentState } from '@/lib/payment-journal/allocation-ledger';
+import { exactPaymentCents } from '@/lib/payment-journal/contract';
 import { cancellationReasonInput } from '@/lib/invoice-cancellation-input';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
@@ -255,11 +257,27 @@ async function postHandler(request: Request) {
             if (!current || current.status === 'CANCELLED' || current.creditNotes.length) {
                 throw new Error('Die Rechnung wurde bereits storniert');
             }
-            // Legacy paid invoices may have an income date but no paidAt. Keep
-            // that realized booking date when the original is cancelled.
-            const cancellationPaidAt = current.paidAt ?? (
-                current.status === 'PAID' && current.incomes.length === 1 ? current.incomes[0].date : null
-            );
+            // Retain only the historical document-only legacy case: one own,
+            // face-matching Income, PAID without paidAt, and no journal/allocation/
+            // adjustment history at all. This preserves an existing date marker;
+            // it does not create a receipt, balance, or refund capability.
+            const income = current.incomes.length === 1 ? current.incomes[0] : null;
+            let legacyDocumentDate: Date | null = null;
+            if (current.status === 'PAID' && current.paidAt === null && income
+                && income.userId === userId && income.invoiceId === current.id
+                && income.customerId === current.customerId && Number.isFinite(income.date.getTime())
+                && exactPaymentCents(income.amount) === exactPaymentCents(current.totalAmount!)) {
+                const [roots, adjustments, bindings, changes] = await Promise.all([
+                    tx.paymentJournalEvent.count({ where: { userId, invoiceId: current.id } }),
+                    tx.paymentAdjustment.count({ where: { userId, OR: [{ invoiceId: current.id }, { originalPayment: { invoiceId: current.id } }] } }),
+                    tx.bankPaymentBinding.count({ where: { userId, OR: [{ paymentJournalEvent: { invoiceId: current.id } }, { allocationChanges: { some: { OR: [{ fromInvoiceId: current.id }, { toInvoiceId: current.id }] } } }] } }),
+                    tx.paymentAllocationChange.count({ where: { userId, OR: [{ fromInvoiceId: current.id }, { toInvoiceId: current.id }] } }),
+                ]);
+                if (roots === 0 && adjustments === 0 && bindings === 0 && changes === 0) legacyDocumentDate = income.date;
+            }
+            // Allocation-aware cases always use the verified shared projection.
+            // Discovery dates and origin-only Income never determine settlement.
+            const cancellationPaidAt = legacyDocumentDate ?? (await loadInvoicePaymentState(tx, userId, originalInvoice.id)).settlementDate;
             const reserved = await getNextDocumentNumber(tx, userId, 'CREDIT_NOTE', year);
             if (reserved !== creditNoteNumber) throw new Error('Nummer wurde zwischenzeitlich vergeben. Bitte erneut versuchen.');
             const created = await tx.invoice.create({ data: {
@@ -284,7 +302,7 @@ async function postHandler(request: Request) {
                 entityId: originalInvoice.id,
                 entityName: current.invoiceNumber || current.fileName,
                 oldValues: { status: current.status, paidAt: current.paidAt },
-                newValues: { status: 'CANCELLED', cancellationReason: cancellationReason, creditNoteId: created.id },
+                newValues: { status: 'CANCELLED', cancellationReason: cancellationReason, creditNoteId: created.id, paymentEvidence: legacyDocumentDate ? 'LEGACY_LINKED_INCOME_DATE_ONLY' : 'VERIFIED_EFFECTIVE_ALLOCATION' },
                 metadata: {
                     actorId: userId,
                     tenantId: userId,

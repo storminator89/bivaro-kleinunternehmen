@@ -1,6 +1,7 @@
 import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
 import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
+import { loadInvoicePaymentState } from '@/lib/payment-journal/allocation-ledger';
 import { recordFullPaymentInTransaction } from '@/lib/payment-journal/service';
 import { paymentDate, PaymentJournalError } from '@/lib/payment-journal/contract';
 
@@ -80,6 +81,19 @@ export async function updateInvoiceStatus(
       throw new InvoicePaymentError('Kunde nicht gefunden', 404);
     }
     const nextStatus = status ?? old.status;
+    const allocationHistory = await tx.bankPaymentBinding.findFirst({ where: { userId, OR: [
+      { paymentJournalEvent: { invoiceId: id } },
+      { allocationChanges: { some: { userId, OR: [{ fromInvoiceId: id }, { toInvoiceId: id }] } } },
+    ] }, select: { id: true } });
+    if (allocationHistory) {
+      // Incoming allocations may have neither a local Income nor an origin root.
+      // Verify the effective projection before accepting even an idempotent no-op.
+      await loadInvoicePaymentState(tx, userId, id);
+      const dateChanged = paidAt !== undefined && (paidAt === null ? null : new Date(paidAt).getTime()) !== (old.paidAt?.getTime() ?? null);
+      if (nextStatus !== old.status || dateChanged || (customerId !== undefined && customerId !== old.customerId)) {
+        throw new PaymentJournalError('Diese Rechnung hat unveränderliche Bank- oder Rechnungszuordnungshistorie. Zahlung, Berichtigung oder Zuordnungsänderung bitte im jeweiligen Zahlungsablauf prüfen; Status, Zahlungsdatum und Kunde können hier nicht überschrieben werden.', 409, 'PAYMENT_ALLOCATION_WORKFLOW_REQUIRED');
+      }
+    }
     if ((old.status === 'PAID' && nextStatus !== 'PAID')
       || (old.status === 'SENT' && nextStatus === 'DRAFT')) {
       throw new InvoicePaymentError('Ausgestellte Rechnungen können nicht wieder geöffnet werden; bitte stornieren Sie sie über eine Gutschrift.', 409);

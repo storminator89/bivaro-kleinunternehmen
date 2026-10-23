@@ -181,6 +181,7 @@ describe('adjustment fields and immutable history presentation', () => {
   });
   it('shows cancellation liabilities and actual refunds rather than an open collectible debt', () => {
     const checked = readPaymentAdjustmentPreflight(journal(true), 7);
+    if (checked.ledger.version !== 2) throw new Error('Expected historical v2 fixture');
     const invoice: Invoice = { id: 7, fileName: 'Invoice', uploadedAt: original.paidAt, status: 'CANCELLED', paymentSummary: checked.summary, paymentLedger: { ...checked.ledger, refundedCents: '2000', netRetainedCents: '6000', refundDueCents: '6000' } };
     const html = renderToStaticMarkup(createElement(InvoiceBalance, { invoice }));
     for (const content of ['Tatsächlich erstattet 20,00', 'Noch zu erstatten 60,00']) expect(html).toContain(content);
@@ -208,7 +209,7 @@ describe('adjustment fields and immutable history presentation', () => {
     const sequence = ['setConfirmed(saved);', 'clearIdentity();', 'setAdjustmentJournal(null);', 'setPreflight(null);', 'setLoadError(null);', 'setIsLoading(true);', 'setReload(value => value + 1);', 'await refreshLists();'];
     let previous = -1;
     for (const step of sequence) { const index = save.indexOf(step); expect(index).toBeGreaterThan(previous); previous = index; }
-    expect(dialog).toContain("headers: { 'X-Bivaro-Payment-Contract': '2' }, signal: controller.signal");
+    expect(dialog).toContain("headers: { 'X-Bivaro-Payment-Contract': '3' }, signal: controller.signal");
     expect(dialog).toContain('setAdjustmentJournal(adjustments)');
     const savedView = dialog.slice(dialog.indexOf(' : confirmed ? ('), dialog.indexOf(') : preflight &&'));
     for (const content of ['isLoading &&', 'Aktueller Journalstand wird geprüft', 'ref={successRef}', 'Zahlung gespeichert', 'confirmed.amountCents', 'loadError &&', 'der aktuelle Journalstand konnte nicht geladen werden', 'Nicht erneut buchen.', 'onClick={reloadPaymentData}>Journal erneut laden']) expect(savedView).toContain(content);
@@ -225,8 +226,9 @@ describe('adjustment fields and immutable history presentation', () => {
     expect(verified).toBeGreaterThan(-1); expect(authority).toBeGreaterThan(verified);
     expect(authority).toBeLessThan(panel.indexOf('setConfirmed(saved); clearPending();'));
     expect(panel).toContain('confirmedLedger && !journal.adjustments.some(event => event.id === confirmed?.id) ? confirmedLedger : journal.ledger');
-    for (const axis of ['validReceivedCents', 'correctedCents', 'refundedCents', 'netRetainedCents', 'collectibleOpenCents', 'refundDueCents']) {
-      expect(panel).toContain(`displayPaymentAmount(displayLedger.${axis})`);
+    expect(panel).toContain('const displayAmounts = invoicePaymentAmounts(displayLedger)');
+    for (const axis of ['valid', 'corrected', 'refunded', 'retained', 'open', 'refundDue']) {
+      expect(panel).toContain(`displayPaymentAmount(displayAmounts.${axis})`);
       expect(panel).not.toContain(`displayPaymentAmount(journal.ledger.${axis})`);
     }
     const recovery = panel.slice(panel.indexOf('useEffect(() => {'), panel.indexOf('useEffect(() => { if (error)'));

@@ -86,7 +86,8 @@ test('treats a later deliberate equal amount/date/reference as a distinct alloca
       await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
       const history = dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true });
       if (payloads.length > 2) await history.locator('summary').first().click();
-      await expect(history.getByRole('listitem')).toHaveCount(payloads.length);
+      await expect(history.locator('ol').first().locator(':scope > li')).toHaveCount(payloads.length);
+      await expect(history.locator('ul').first().locator(':scope > li')).toHaveCount(payloads.length);
       await dialog.locator('[data-slot="dialog-footer"]').getByRole('button', { name: 'Schließen', exact: true }).click();
     }
     expect(new Set(payloads.map(payload => payload.idempotencyKey)).size).toBe(3);

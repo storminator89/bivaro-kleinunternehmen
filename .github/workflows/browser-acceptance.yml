@@ -212,12 +212,17 @@ jobs:
               'payment-terms-editor-390.png',
               'bank-evidence-saved-1440.png',
               'bank-evidence-reopened-390.png',
+              'bank-allocation-confirmation-1440.png',
+              'bank-allocation-move-390.png',
+              'bank-allocation-current-origin-360.png',
               'customer-timeline-desktop-1440.png',
               'customer-timeline-mobile-360.png',
               'service-statement-preview-1440.png',
               'service-statement-preview-390.png',
           }
-          limit = 5 * 1024 * 1024
+          # Bounded output for all 55 known images, including allocation views.
+          limit = 8 * 1024 * 1024
+          per_file_input_limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
 
           def skip(reason):
@@ -256,8 +261,8 @@ jobs:
                   current = os.fstat(handle.fileno())
                   if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (expected.st_dev, expected.st_ino):
                       skip('an image changed during staging')
-                  data = handle.read(limit + 1)
-              if len(data) > limit:
+                  data = handle.read(per_file_input_limit + 1)
+              if len(data) > per_file_input_limit:
                   skip('an input PNG exceeds the per-file read budget')
               try:
                   data, proof = recompress_png(data)
@@ -266,7 +271,7 @@ jobs:
               print(f'Lossless PNG proof: {source.name} {json.dumps(proof, sort_keys=True)}')
               images[source.name] = data
               if sum(map(len, images.values())) > limit:
-                  skip('combined read size exceeds 5 MiB')
+                  skip('combined read size exceeds 8 MiB')
               if not data.startswith(b'\x89PNG\r\n\x1a\n'):
                   skip('an allowlisted file is not a PNG')
           print(f'Synthetic screenshot budget after lossless verification: {len(images)}/{len(allowed)} files, {sum(map(len, images.values()))}/{limit} bytes.')

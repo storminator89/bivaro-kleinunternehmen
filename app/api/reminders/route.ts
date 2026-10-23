@@ -1,6 +1,6 @@
 import { reminderBalance, recordReminder, ReminderWorkbenchError } from '@/lib/reminder-workbench';
 import { hasServiceBillingDraftMarker } from '@/lib/service-billing';
-import { ledgerSummary } from '@/lib/payment-journal/service';
+import { loadInvoicePaymentStates } from '@/lib/payment-journal/allocation-ledger';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
@@ -37,11 +37,11 @@ export async function GET(request: Request) {
       whereClause.dueDate = { lt: today };
     }
 
-    const invoices = await prisma.invoice.findMany({
+    const enrichedInvoices = await prisma.$transaction(async tx => {
+    const invoices = await tx.invoice.findMany({
       where: whereClause,
       include: {
         customer: true,
-        paymentAdjustments: { orderBy: { id: 'asc' } }, creditNotes: { orderBy: { id: 'asc' } }, paymentJournalEvents: { orderBy: { id: 'asc' } },
         incomes: {
           include: {
             cashTransaction: true,
@@ -52,17 +52,21 @@ export async function GET(request: Request) {
           orderBy: { sentAt: 'desc' }
         }
       },
+      take: 10_001,
       orderBy: { dueDate: 'asc' }
     });
 
     // Rechnungen mit zusätzlichen Infos anreichern
     // No-file planning records are not reminder candidates, including
     // damaged markers. The underlying invoice remains visible for review.
-    const enrichedInvoices = invoices.filter(invoice => !hasServiceBillingDraftMarker(invoice.parsedData)).map(invoice => {
+    if (invoices.length > 10_000) throw new ReminderWorkbenchError('Zu viele Rechnungen. Bitte die Auswahl eingrenzen.', 413, 'SOURCE_LIMIT');
+    const states = await loadInvoicePaymentStates(tx, userId, invoices.filter(invoice => !hasServiceBillingDraftMarker(invoice.parsedData)).map(invoice => invoice.id), { onReview: 'omit' });
+    return Promise.all(invoices.filter(invoice => !hasServiceBillingDraftMarker(invoice.parsedData)).map(async invoice => {
       let summary = null;
-      try { summary = ledgerSummary(invoice); } catch { /* Explicit review, no guessed balance. */ }
+      const state = states.get(invoice.id);
+      try { if (state) summary = state.summary; } catch { /* Explicit review, no guessed balance. */ }
       let balance = null;
-      try { balance = reminderBalance(invoice); } catch { /* Fail closed for unexplained balances. */ }
+      try { if (state) balance = reminderBalance(state.invoice, state); } catch { /* Fail closed for unexplained balances. */ }
       const canCreateReminder = balance !== null && balance.paidCents === '0';
       const latestReminder = invoice.reminders[0];
       const currentLevel = latestReminder ? latestReminder.reminderLevel : 0;
@@ -98,6 +102,7 @@ export async function GET(request: Request) {
         totalFees,
         isOverdue: daysOverdue > 0
       };
+    }));
     });
 
     // Statistiken berechnen

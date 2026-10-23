@@ -26,10 +26,10 @@ function dateLabel(value: string | null) { return value ? `${value.slice(8, 10)}
 export function BankCsvWorkspace() {
   const { data: session } = useSession();
   // No file, reference or preview survives an account switch or sign-out.
-  return <BankCsvContent key={session?.user?.id ?? 'signed-out'} />;
+  return <BankCsvContent key={session?.user?.id ?? 'signed-out'} accountScope={session?.user?.id ?? null} />;
 }
 
-function BankCsvContent() {
+function BankCsvContent({ accountScope }: { accountScope: string | null }) {
   const [source, setSource] = useState('');
   const [fileName, setFileName] = useState('');
   const [originalBase64, setOriginalBase64] = useState('');
@@ -169,7 +169,7 @@ function BankCsvContent() {
       <BankImportSave originalBase64={originalBase64} mapping={mapping} delimiter={parsed!.delimiter} onPending={setImportPending} onSaved={() => { setCurrentSaved(true); setHistoryRefresh(value => value + 1); }} />
       <section aria-label="Bankumsätze in der Vorschau" className="space-y-3">{visibleRows.map(row => <BankCsvPreviewRowCard key={row.rowNumber} row={row} candidates={candidates} />)}{pageCount > 1 && <nav aria-label="Umsatzseiten" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3"><Button variant="outline" onClick={() => setPage(current => current - 1)} disabled={page === 0}>Vorherige</Button><span role="status" className="text-xs text-muted-foreground">Seite {page + 1} / {pageCount}</span><Button variant="outline" onClick={() => setPage(current => current + 1)} disabled={page + 1 >= pageCount}>Nächste</Button></nav>}</section>
     </>}
-    <BankImportHistory refresh={historyRefresh} />
+    <BankImportHistory refresh={historyRefresh} accountScope={accountScope} />
     <footer className="flex flex-col items-start justify-between gap-3 border-t pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center"><p>Die Vorschau bleibt bis zur Bestätigung lokal. Speichern erzeugt nur unzugeordnete Evidenz, keine Zahlung. Gespeicherte Quittungen bleiben nach Reload im Importverlauf.</p>{source && <Button type="button" variant="ghost" size="sm" disabled={importPending} onClick={reset}>Datei verwerfen</Button>}</footer>
   </div>;
 }

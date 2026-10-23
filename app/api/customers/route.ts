@@ -9,6 +9,7 @@ import { BillingNoteInputError, parseNoteVisibility } from '@/lib/billing-notes'
 
 const MAX_CUSTOMER_FIELD_LENGTH = 2_000;
 const MAX_CUSTOMER_NAME_LENGTH = 500;
+const allocationHistoryResponse = () => NextResponse.json({ error: 'Dieser Kunde muss für unveränderliche Bank- und Rechnungszuordnungsnachweise erhalten bleiben. Der Name kann weiterhin geändert werden.', code: 'CUSTOMER_ALLOCATION_HISTORY_REQUIRED' }, { status: 409 });
 
 function parseJsonObject(body: Uint8Array): Record<string, unknown> {
   const parsed: unknown = JSON.parse(new TextDecoder().decode(body));
@@ -176,6 +177,14 @@ async function deleteHandler(request: Request) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
+    // Frozen bank/allocation context requires the original non-null customer.
+    // Renaming remains supported; deletion must not detach immutable evidence.
+    const allocationHistory = await prisma.invoice.findFirst({ where: { userId, customerId: customer.id, OR: [
+      { paymentJournalEvents: { some: { userId, bankPaymentBinding: { isNot: null } } } },
+      { allocationChangesFrom: { some: { userId } } }, { allocationChangesTo: { some: { userId } } },
+    ] }, select: { id: true } });
+    if (allocationHistory) return allocationHistoryResponse();
+
     const projectCount = await prisma.serviceProject.count({ where: { customerId: customer.id, userId } });
     if (projectCount > 0) return NextResponse.json({ error: 'Kunden mit Projekten müssen für den Leistungsverlauf erhalten bleiben.' }, { status: 409 });
 
@@ -201,6 +210,8 @@ async function deleteHandler(request: Request) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    // SQL remains authoritative if allocation evidence wins a race after the read guard.
+    if (error instanceof Error && error.message.includes('Customer must be retained for immutable bank allocation evidence')) return allocationHistoryResponse();
     if ((error as { code?: string }).code === 'P2003') {
       return NextResponse.json({ error: 'Kunde kann wegen verknüpfter Daten nicht gelöscht werden' }, { status: 409 });
     }

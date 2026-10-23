@@ -1,3 +1,4 @@
+import type { BankAllocationRowEnvelope } from '@/lib/bank-allocation-contract';
 import { MAX_BANK_CSV_BYTES, MAX_BANK_CSV_ROWS, type BankCsvDelimiter, type BankCsvMapping, type BankCsvPreviewRow } from '@/lib/bank-csv';
 
 export const BANK_IMPORT_PARSER_VERSION = 'bank-csv-v1';
@@ -18,7 +19,7 @@ export type BankImportReceipt = {
   period: { from: string | null; to: string | null };
   evidenceSha256: string; sameFilePreviouslySaved: boolean;
 };
-export type BankImportDetail = { receipt: BankImportReceipt; rows: BankImportEvidence[]; page: number; pages: number };
+export type BankImportDetail = { receipt: BankImportReceipt; rows: BankImportEvidence[]; rowEnvelopes?: BankAllocationRowEnvelope[]; assignmentCount?: number; page: number; pages: number };
 export function bankImportUuid(value: unknown): string {
   if (typeof value !== 'string' || !BANK_IMPORT_UUID.test(value)) throw new BankImportError('Ungültige Importkennung.');
   return value;

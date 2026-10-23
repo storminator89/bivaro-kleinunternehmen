@@ -1,5 +1,5 @@
 /** Small public DTO: never expose raw audit payloads, file paths or bank data. */
-export const HISTORY_ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'CANCELLED', 'STATUS_CHANGED', 'PAYMENT_RECEIVED', 'PAYMENT_CORRECTION', 'CUSTOMER_REFUND', 'IMPORT', 'EMAIL_SENT'] as const;
+export const HISTORY_ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'CANCELLED', 'STATUS_CHANGED', 'PAYMENT_RECEIVED', 'PAYMENT_ALLOCATION_CHANGED', 'PAYMENT_CORRECTION', 'CUSTOMER_REFUND', 'IMPORT', 'EMAIL_SENT'] as const;
 export type HistoryAction = typeof HISTORY_ACTIONS[number];
 export type HistoryPagination = { page: number; pageSize: number; total: number; totalPages: number };
 export type HistoryDocument = {
@@ -17,9 +17,11 @@ export type HistoryList = { kind: 'list'; documents: HistoryDocument[]; paginati
 export type HistoryDetail = {
   kind: 'detail'; selectedId: number; originalId: number; missingOriginal: boolean;
   documents: HistoryDocument[]; events: HistoryEvent[]; pagination: HistoryPagination;
-  payments: { id: number; amountCents: string; currency: string; paidAt: string | null; dateCertainty: string; source: string }[];
+  paymentReviewRequired?: boolean;
+  allocationHistory?: { id: number; stableKey: string; fromInvoiceId: number; toInvoiceId: number; amountCents: string; currency: string; actionDate: string; reason: string; revision: number; recordedAt: string }[];
+  payments: { id: number; originInvoiceId?: number; allocatedInvoiceId?: number | null; amountCents: string; currency: string; paidAt: string | null; dateCertainty: string; source: string }[];
   paymentCount: number;
-  adjustments?: { id: number; originalPaymentId: number; kind: string; amountCents: string; actionDate: string; accountingEffectiveOn: string; recordedAt: string; reason: string; cancellationInvoiceId: number | null; fiscalMappingStatus: 'UNREVIEWED' }[];
+  adjustments?: { id: number; invoiceId?: number; originInvoiceId?: number; allocatedInvoiceId?: number; originalPaymentId: number; kind: string; amountCents: string; actionDate: string; accountingEffectiveOn: string; recordedAt: string; reason: string; cancellationInvoiceId: number | null; fiscalMappingStatus: 'UNREVIEWED' }[];
   adjustmentCount?: number;
 };
 export const HISTORY_STATUS: Record<string, string> = { DRAFT: 'Entwurf', SENT: 'Versendet', PAID: 'Bezahlt (Status)', CANCELLED: 'Storniert' };
