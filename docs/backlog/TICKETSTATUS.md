@@ -61,6 +61,66 @@ sind die genannten Ausnahmen. Kein Push, PR, Merge, Deployment oder
 bleiben offen.** Diese gepaarte Dokumentation wird lokal nach dem verifizierten
 Code-/Testcommit vorbereitet; keine Veröffentlichung wird behauptet.
 
+### Veröffentlichung und Recovery-Beobachtung zu #96 vom 23.10.2026, 05:08 UTC
+
+Dieser spätere Stand ergänzt den datierten lokalen Snapshot von 00:28 UTC;
+dessen damalige Nichtveröffentlichung ist keine Aussage zum heutigen PR-Stand.
+Bestätigt ist der **Draft-[PR #131](https://github.com/storminator89/bivaro-kleinunternehmen/pull/131)**:
+Remote-Head `c1ccdf7f77f554cdc1e9169c76dc553eb2fa9ec3`, Tree
+`0131b8878f3bc687fecf77fe1bc6b6c004a91b92`, tree-identisch zum lokalen
+Commit `82935f614e16614c50401977e6320e436bff5075`, Basis
+`40508a91c6258064a2bb219a0b6a897d94032554`. **Keine Gesamt-/Browserabnahme.**
+
+Erste Hosted-Ergebnisse für diesen Remote-Head:
+
+| Prüfung | Tatsächlicher Stand |
+|---|---|
+| [Own-invoice PDF-A 39902868192](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39902868192) | x64 und ARM erfolgreich, je 13 Konformitätstests bestanden. |
+| [Container 39902868219](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39902868219) | x64 und ARM erfolgreich. |
+| [CI 39902868184](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39902868184) | Security sowie Lint/Typen bestanden; voller Unit-Lauf: 11 fehlgeschlagen / 3.938 bestanden / 20 übersprungen, fünf Fehlerdateien; Build übersprungen. |
+| [Browser 39902868206](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39902868206) | Veraltete v3-Surface-Assertion nach 15 bestandenen Tests fehlgeschlagen; 114 nicht ausgeführt. Keine neue #96-Browserabnahme und keine neuen #96-Screenshots. |
+
+Der lokale Recovery-Commit **`a83657ea09ba20a3c511e3f61ec63171dbd78ce3`**
+umfasst acht Code-/Testdateien auf `82935f6`. Neun veraltete Unit-Fixture-Fälle
+wurden in drei Testdateien korrigiert: als Zwischenprüfung bestanden 96 reine
+Tests und separat ein statischer Allowlist-Test;
+53 installerbezogene Tests wurden bewusst **nicht ausgeführt**. Drei weitere
+Browser-Testdateien gleichen v3-Surfaces und UI-Token-Assertions ab und erhalten
+v2-Kompatibilitätsleser; das ist kein ausgeführter Browsernachweis.
+
+Ein echter KPI-Consumerfehler ließ einen gültigen Serviceentwurf fälschlich
+als Rechnungs-Prüffall erscheinen. Die enge Korrektur prüft strikt die
+Metadaten-/Nachweisform, ohne den gemeinsamen Validator zu ändern. Fünf Suites
+mit 52 isolierten Tests bestanden, einschließlich: echter gültiger Entwurf
+**0** Prüffälle, fehlerhafter Entwurf **1**, neue Finanznachweise bzw.
+fremde Kundenbindung **1**. Diese fokussierten Nachweise sind keine finale
+Gesamtprüfung der Recovery.
+
+**Die lokale Recovery ist abschließend im erlaubten lokalen Umfang geprüft.**
+Das unabhängige Runtime-Review hat keinen verbleibenden Befund: gemeinsamer
+strikter Validator, Tenant-Grenzen, Leermengen-Guards und Geldarithmetik bleiben
+unverändert; Count-Aggregate betreffen nur die bestehende begrenzte Abfrage.
+Der finale Regressionslauf bestand **65 Suites / 1.124 Tests in 54,75 s**.
+Vollständiger Lint, `tsc --noEmit --incremental false` und gewöhnlicher
+Node-22-Build einschließlich Notice-Postbuild bestanden jeweils mit Exit 0;
+neun bestehende Tracing-Warnungen bleiben. Lokale Evidenz:
+`bivaro-pr131-final-regressions.log`, SHA-256
+`f180fba51849721e828bcca454f576821f0c24bfdb2c5bac6752e05fb3ebc833`,
+und `bivaro-pr131-recovery-build.log`, SHA-256
+`f159b1b406fe7c5d5f7376f3679a47b54467aee7cccfcfd8bd9a66e17af42a25`.
+Die fokussierten Zwischenprüfungen werden nicht zusätzlich auf den finalen
+Testzähler aufgeschlagen; dies bleibt keine vollständige Repository-/Native-/
+Browserabnahme.
+
+**Veröffentlichung des exakten kombinierten Recovery-/Dokumentationskandidaten
+und dessen Hosted-Wiederholung stehen noch aus.** Lokales Grün ersetzt keine
+Hosted-Abnahme. Hosted-/Browser- und Release-/Produktivabnahme bleiben offen.
+PDF-A-/Container-Erfolge sind Hosted-Nachweise, keine lokale Reproduktion;
+keine lokalen Browser-/nativen PDF-/JVM-/Compiler-/Filter-/Installerläufe
+(gewöhnliche Typprüfung/Build ausgenommen). Diese Dokumentationsänderung
+führt weder externe Writes noch neue Hosted-Läufe aus. Alle 160 historischen
+Ticketobjekte, Statussummen und älteren Checkpoints bleiben unverändert.
+
 ## Integrationscheckpoint vom 22.10.2026, 22:07:35 UTC
 
 Alle 160 historischen Ticketobjekte und Statussummen bleiben unverändert:

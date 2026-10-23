@@ -215,7 +215,10 @@ export async function GET(request: Request) {
       const projections = await tx.invoice.findMany({ where: { userId, type: 'INVOICE', OR: [
         { status: { in: ['DRAFT', 'SENT'] } }, { paymentAdjustments: { some: { userId } } },
         { id: { in: recentIncomes.flatMap(entry => entry.invoiceId == null ? [] : [Number(entry.invoiceId)]) } },
-      ] }, include: { customer: { select: { userId: true } }, _count: { select: { paymentAdjustments: true } } }, take: 10_001 });
+      ] }, include: { customer: { select: { id: true, userId: true } }, _count: { select: {
+        paymentAdjustments: true, incomes: true, paymentJournalEvents: true, creditNotes: true,
+        refundBasisAdjustments: true, reminders: true, billingNotes: true,
+      } } }, take: 10_001 });
       if (projections.length > 10_000) throw new PaymentJournalError('Zu viele Zahlungsjournale für eine vollständige KPI-Prüfung.', 413, 'SOURCE_LIMIT');
       const states = await loadInvoicePaymentStates(tx, userId, projections.filter(invoice => !hasServiceBillingDraftMarker(invoice.parsedData)).map(invoice => invoice.id), { onReview: 'omit' });
       for (const invoice of projections.filter(invoice => invoice._count.paymentAdjustments > 0)) {
@@ -244,7 +247,10 @@ export async function GET(request: Request) {
       // Planning records stay in the invoice workspace, but are not issued
       // receivables. A damaged marker needs review, never a guessed balance.
       if (hasServiceBillingDraftMarker(invoice.parsedData)) {
-        if (!isUnrenderedServiceBillingDraft(invoice)) openInvoicesReviewRequired++;
+        // Query metadata is not document evidence. Preserve the strict draft
+        // shape and its empty-financial-relation boundary without loading rows.
+        const { _count, ...draftProjection } = invoice;
+        if (Object.values(_count).some(count => count !== 0) || !isUnrenderedServiceBillingDraft(draftProjection)) openInvoicesReviewRequired++;
         continue;
       }
       try { const balance = openBalances.get(invoice.id); if (balance === undefined) throw new Error('Unverified balance'); openCents += BigInt(balance); }

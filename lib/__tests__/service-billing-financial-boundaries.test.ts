@@ -117,6 +117,22 @@ describe('planning drafts are not receivables or reminders before conscious nati
     expect(await kpis()).toMatchObject({ openInvoices: 25.5, openInvoicesReviewRequired: 1 });
     expect(await businessState()).toEqual(before);
   });
+  it('keeps a planning marker with financial evidence under review without adding it to receivables', async () => {
+    await ordinaryInvoice(); const planned = await draft();
+    await database.client.income.create({ data: { userId: state.userId, invoiceId: planned.id, amount: 1, date: new Date('2026-01-01'), description: 'Synthetic inconsistent planning evidence' } });
+    const before = await businessState();
+    expect(await kpis()).toMatchObject({ openInvoices: 25.5, openInvoicesReviewRequired: 1 });
+    expect(await businessState()).toEqual(before);
+  });
+  it('keeps a planning marker with a foreign customer under review', async () => {
+    await ordinaryInvoice(); const planned = await draft();
+    const foreignUser = await database.client.user.create({ data: { email: `foreign-planning-${randomUUID()}@example.invalid`, password: 'unused fixture' } });
+    const foreignCustomer = await database.client.customer.create({ data: { userId: foreignUser.id, name: 'Synthetic foreign customer' } });
+    await database.client.invoice.update({ where: { id: planned.id }, data: { customerId: foreignCustomer.id } });
+    const before = await businessState();
+    expect(await kpis()).toMatchObject({ openInvoices: 25.5, openInvoicesReviewRequired: 1 });
+    expect(await businessState()).toEqual(before);
+  });
   it('restores ordinary KPI and reminder behavior after native file rendering replaces the SAME invoice', async () => {
     const planned = await draft(); const requestId = randomUUID();
     const form = new FormData();

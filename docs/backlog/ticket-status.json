@@ -2178,6 +2178,130 @@
     ],
     "ticketStatusChanges": [],
     "historicalTicketObjectsPreserved": 160,
-    "historicalStatusSummaryUnchanged": true
+    "historicalStatusSummaryUnchanged": true,
+    "publicationRecoveryObservation": {
+      "recordedAt": "2026-10-23T05:06:00Z",
+      "scope": "Later issue #96 publication/recovery observation; the preceding 00:28 local verification snapshot remains historical, not a claim of current acceptance.",
+      "currentStatus": "local_recovery_verified_pending_publication_and_exact_hosted_rerun",
+      "draftPullRequest": {
+        "number": 131,
+        "url": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/131",
+        "draft": true,
+        "confirmedRemoteHead": "c1ccdf7f77f554cdc1e9169c76dc553eb2fa9ec3",
+        "tree": "0131b8878f3bc687fecf77fe1bc6b6c004a91b92",
+        "treeEquivalentLocalCommit": "82935f614e16614c50401977e6320e436bff5075",
+        "baseCommit": "40508a91c6258064a2bb219a0b6a897d94032554"
+      },
+      "initialHostedResults": {
+        "appliesToRemoteHead": "c1ccdf7f77f554cdc1e9169c76dc553eb2fa9ec3",
+        "ownInvoicePdfa": {
+          "runId": 39902868192,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39902868192",
+          "x64": "success",
+          "arm": "success",
+          "conformanceTestsPassedPerArchitecture": 13
+        },
+        "container": {
+          "runId": 39902868219,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39902868219",
+          "x64": "success",
+          "arm": "success"
+        },
+        "ci": {
+          "runId": 39902868184,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39902868184",
+          "security": "passed",
+          "lintAndTypes": "passed",
+          "unitTests": {
+            "failed": 11,
+            "passed": 3938,
+            "skipped": 20,
+            "failedFiles": 5
+          },
+          "build": "skipped"
+        },
+        "browser": {
+          "runId": 39902868206,
+          "url": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39902868206",
+          "failure": "Stale payment-v3 surface assertion.",
+          "passedBeforeFailure": 15,
+          "notRun": 114,
+          "newIssue96BrowserAcceptance": false,
+          "newIssue96Screenshots": false
+        },
+        "aggregateAcceptance": "failed_incomplete"
+      },
+      "remainingAcceptance": [
+        "Publish the exact combined recovery/documentation candidate; no recovery publication is established by this local checkpoint.",
+        "Rerun required hosted checks on that exact candidate; initial failures and incomplete browser coverage are not acceptance.",
+        "Obtain new issue #96 hosted/browser evidence and release/production acceptance; no merge or deployment is established."
+      ],
+      "executionLimits": [
+        "Reported PDF-A/container execution is hosted evidence, not local reproduction.",
+        "No local browser/native PDF/JVM/compiler/filter/installer execution during recovery; ordinary TypeScript checking/build remain the stated exceptions.",
+        "This documentation edit makes no external write and does not rerun hosted jobs."
+      ],
+      "ticketStatusChanges": [],
+      "historicalTicketObjectsPreserved": 160,
+      "historicalStatusSummaryUnchanged": true,
+      "updatedAt": "2026-10-23T05:08:00Z",
+      "verifiedLocalRecovery": {
+        "baseLocalCommit": "82935f614e16614c50401977e6320e436bff5075",
+        "staleUnitFixtures": {
+          "correctedCases": 9,
+          "testFiles": 3,
+          "pureTestsPassed": 96,
+          "staticAllowlistTestsPassedSeparately": 1,
+          "installerRelatedTestsIntentionallyNotRun": 53
+        },
+        "v3BrowserTestContractAlignment": {
+          "testFiles": 3,
+          "scope": "Align payment-v3 surfaces and UI token assertions; retain v2 compatibility reads.",
+          "localBrowserExecution": false,
+          "hostedRerun": "pending_exact_recovery_candidate"
+        },
+        "genuineKpiConsumerFix": {
+          "problem": "Valid service draft incorrectly surfaced as an invoice-review task.",
+          "scope": "Narrow KPI-consumer correction requiring strict metadata/evidence shape; shared validator unchanged.",
+          "isolatedSuitesPassed": 5,
+          "isolatedTestsPassed": 52,
+          "regressions": "Valid genuine draft: zero review; malformed draft: one review; new financial evidence or foreign-customer mismatch: one review."
+        },
+        "independentReview": "passed_no_remaining_runtime_findings",
+        "finalLocalReruns": "passed_within_authorized_local_scope",
+        "finalRecoveryVerificationClaimed": true,
+        "recoveryCommit": "a83657ea09ba20a3c511e3f61ec63171dbd78ce3",
+        "exactHostedRecoveryRerun": "pending",
+        "filesChanged": 8,
+        "independentReviewScope": "Shared strict validator, tenant boundaries, empty-relation guards and cash arithmetic unchanged; count aggregates only in the bounded existing query.",
+        "verificationLimit": "Final local recovery verification only; not whole-repository native/browser or hosted recovery acceptance.",
+        "finalLocalVerification": {
+          "nodeVersion": "22.23.4",
+          "regression": {
+            "passedSuites": 65,
+            "passedTests": 1124,
+            "durationSeconds": 54.75,
+            "scope": "Authorized isolated SQLite/pure regression suites; not full repository/native/browser acceptance."
+          },
+          "fullLintExit": 0,
+          "fullTypecheckNoEmitIncrementalFalseExit": 0,
+          "ordinaryBuildAndNoticePostbuildExit": 0,
+          "existingDynamicFilesystemTracingWarnings": 9,
+          "evidence": [
+            {
+              "file": "bivaro-pr131-final-regressions.log",
+              "sha256": "f180fba51849721e828bcca454f576821f0c24bfdb2c5bac6752e05fb3ebc833",
+              "availability": "Local verification log only, not hosted acceptance evidence."
+            },
+            {
+              "file": "bivaro-pr131-recovery-build.log",
+              "sha256": "f159b1b406fe7c5d5f7376f3679a47b54467aee7cccfcfd8bd9a66e17af42a25",
+              "availability": "Local verification log only, not hosted acceptance evidence."
+            }
+          ]
+        }
+      },
+      "nextPublishedRecoveryCandidate": "pending_documentation_checkpoint_and_exact_tree_publication"
+    }
   }
 }

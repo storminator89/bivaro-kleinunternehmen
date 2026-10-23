@@ -46,6 +46,16 @@ function observesPost(request: Request, path: string) { return request.method() 
 function metric(panel: Locator, label: string) {
   return panel.locator('dt').filter({ hasText: new RegExp(`^${label}$`) }).locator('..').locator('dd');
 }
+// UI preflights negotiate v3. Keep loadJournal's explicit v2 compatibility
+// reads, but compare UI concurrency tokens with the same negotiated state.
+async function uiLedgerVersion(page: Page, invoiceId: number) {
+  const response = await page.request.get(`/api/invoices/${invoiceId}/payments`, { headers: { 'X-Bivaro-Payment-Contract': '3' } });
+  expect(response.status()).toBe(200);
+  const journal = await response.json() as { paymentContractVersion: number; ledgerVersion: string };
+  expect(journal.paymentContractVersion).toBe(3);
+  expect(journal.ledgerVersion).toMatch(/^[a-f0-9]{64}$/u);
+  return journal.ledgerVersion;
+}
 async function openJournalWithKeyboard(page: Page, invoiceNumber: string) {
   const trigger = page.getByRole('button', { name: `Weitere Aktionen fuer Rechnung ${invoiceNumber}`, exact: true });
   await trigger.focus(); await page.keyboard.press('Enter');
@@ -116,6 +126,7 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     const original = await allocate(page, invoice.id, '120.00', originalDate, '0');
     const before = await snapshot(userId, invoice.id);
     const initialJournal = await loadJournal(page, invoice.id);
+    const initialUiVersion = await uiLedgerVersion(page, invoice.id);
     const path = adjustmentPath(invoice.id), posts: Payload[] = [];
     page.on('request', request => { if (observesPost(request, path)) posts.push(request.postDataJSON() as Payload); });
     await page.goto(`/dashboard?tab=invoices&document=${invoice.id}`);
@@ -150,12 +161,13 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     expect(response.status()).toBe(201);
     const savedBody = await response.json();
     await expectSuccessfulCorrection(panel, '120,00');
-    await expect(metric(panel, 'Gültig eingegangen')).toHaveText(/^0,00\s*€$/u);
+    await expect(metric(panel, 'Gültig zugeordnet')).toHaveText(/^0,00\s*€$/u);
     await expect(metric(panel, 'Noch einzuziehen')).toHaveText(/^120,00\s*€$/u);
     expect(posts).toHaveLength(1);
-    expect(posts[0]).toMatchObject({ kind: 'PAYMENT_CORRECTION', originalPaymentId: original.event.id, amount: '120.00', actionDate: correctionDate, reason, reference, declarationNeverReceived: true, expectedLedgerVersion: initialJournal.ledgerVersion });
+    expect(posts[0]).toMatchObject({ kind: 'PAYMENT_CORRECTION', originalPaymentId: original.event.id, amount: '120.00', actionDate: correctionDate, reason, reference, declarationNeverReceived: true, expectedLedgerVersion: initialUiVersion });
     expect(savedBody.adjustment).toMatchObject({ originalPaymentId: original.event.id, kind: 'PAYMENT_CORRECTION', amountCents: '12000', accountingEffectiveOn: `${originalDate}T00:00:00.000Z`, fiscalMappingStatus: 'UNREVIEWED' });
     const corrected = await loadJournal(page, invoice.id);
+    const correctedUiVersion = await uiLedgerVersion(page, invoice.id);
     expect(corrected.events).toEqual(initialJournal.events);
     expect(corrected.ledger).toMatchObject({ originalReceivedCents: '12000', correctedCents: '12000', validReceivedCents: '0', refundedCents: '0', collectibleOpenCents: '12000', refundDueCents: '0' });
     const afterCorrection = await snapshot(userId, invoice.id);
@@ -200,7 +212,7 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     const received = page.waitForResponse(result => new URL(result.url()).pathname === delayedJournalPath && result.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true }).focus(); await page.keyboard.press('Enter');
     const receiptResponse = await received; expect(receiptResponse.status()).toBe(201);
-    expect(receiptResponse.request().postDataJSON()).toMatchObject({ amount: '120.00', paidAt: replacementDate, expectedPaidCents: '0', expectedLedgerVersion: corrected.ledgerVersion });
+    expect(receiptResponse.request().postDataJSON()).toMatchObject({ amount: '120.00', paidAt: replacementDate, expectedPaidCents: '0', expectedLedgerVersion: correctedUiVersion });
     const savedProof = dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) });
     await expect(savedProof).toBeFocused();
     await expect(savedProof.getByText('Zahlung gespeichert', { exact: true })).toBeInViewport({ ratio: 1 });
@@ -215,7 +227,7 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     releaseDelayedJournal!();
     expect((await deliveredJournal).status()).toBe(200);
     const replacementPanel = dialog.getByRole('region', { name: panelName, exact: true });
-    await expect(metric(replacementPanel, 'Gültig eingegangen')).toHaveText(/^120,00\s*€$/u);
+    await expect(metric(replacementPanel, 'Gültig zugeordnet')).toHaveText(/^120,00\s*€$/u);
     await expect(metric(replacementPanel, 'Noch einzuziehen')).toHaveText(/^0,00\s*€$/u);
     await expect(userClose).toBeFocused(); // A late journal must not take focus back from the user.
     expect(replacementPosts).toBe(1);
@@ -236,6 +248,7 @@ test('stale correction preserves the draft, rejects without writes and requires 
     const invoice = await createInvoice(page, 'ADJUSTMENT-UI-STALE-120');
     const original = await allocate(page, invoice.id, '120.00', originalDate, '0');
     const baseline = await loadJournal(page, invoice.id), path = adjustmentPath(invoice.id), posts: Payload[] = [];
+    const baselineUiVersion = await uiLedgerVersion(page, invoice.id);
     page.on('request', request => { if (observesPost(request, path)) posts.push(request.postDataJSON() as Payload); });
     await page.goto(`/dashboard?tab=invoices&document=${invoice.id}`);
     const dialog = await openJournal(page, invoice.invoiceNumber), panel = await enterCorrection(page, dialog);
@@ -245,6 +258,7 @@ test('stale correction preserves the draft, rejects without writes and requires 
     const concurrent = await page.request.post(path, { data: { kind: 'PAYMENT_CORRECTION', originalPaymentId: original.event.id, amount: '20.00', actionDate: correctionDate, reason: 'Synthetic concurrent never-received portion', reference: 'Synthetic concurrent statement', idempotencyKey: randomUUID(), expectedLedgerVersion: baseline.ledgerVersion, declarationNeverReceived: true } });
     expect(concurrent.status()).toBe(201);
     const concurrentBody = await concurrent.json(), afterConcurrent = await snapshot(userId, invoice.id);
+    const concurrentUiVersion = await uiLedgerVersion(page, invoice.id);
     const rejected = page.waitForResponse(response => new URL(response.url()).pathname === path && response.request().method() === 'POST');
     await panel.getByRole('button', { name: 'Korrektur verbindlich speichern', exact: true }).click();
     const staleResponse = await rejected; expect(staleResponse.status()).toBe(409);
@@ -257,15 +271,15 @@ test('stale correction preserves the draft, rejects without writes and requires 
     await expect(panel.getByRole('button', { name: 'Korrektur verbindlich speichern', exact: true })).toHaveCount(0);
     const reviewed = panel.getByRole('button', { name: 'Aktuellen Journalstand geprüft', exact: true });
     await expect(reviewed).toBeEnabled();
-    await expect(metric(panel, 'Gültig eingegangen')).toHaveText(/^100,00\s*€$/u);
-    expect(posts).toHaveLength(1); expect(posts[0].expectedLedgerVersion).toBe(baseline.ledgerVersion);
+    await expect(metric(panel, 'Gültig zugeordnet')).toHaveText(/^100,00\s*€$/u);
+    expect(posts).toHaveLength(1); expect(posts[0].expectedLedgerVersion).toBe(baselineUiVersion);
     await reviewed.focus(); await page.keyboard.press('Enter');
     const retried = page.waitForResponse(response => new URL(response.url()).pathname === path && response.request().method() === 'POST');
     await panel.getByRole('button', { name: 'Korrektur verbindlich speichern', exact: true }).focus(); await page.keyboard.press('Enter');
     const retryResponse = await retried; expect(retryResponse.status()).toBe(201);
     await expectSuccessfulCorrection(panel, '40,00');
     expect(posts).toHaveLength(2); expect(posts[1].idempotencyKey).not.toBe(posts[0].idempotencyKey);
-    expect(posts[1]).toMatchObject({ amount: '40.00', reason, reference, expectedLedgerVersion: concurrentBody.ledgerVersion });
+    expect(posts[1]).toMatchObject({ amount: '40.00', reason, reference, expectedLedgerVersion: concurrentUiVersion });
     const after = await snapshot(userId, invoice.id), journal = await loadJournal(page, invoice.id);
     expect(after.events).toEqual(afterConcurrent.events); expect(after.incomes).toEqual(afterConcurrent.incomes);
     expect(after.adjustments).toHaveLength(2); expect(after.operations).toHaveLength(afterConcurrent.operations.length + 1);
