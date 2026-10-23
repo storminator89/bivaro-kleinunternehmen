@@ -94,7 +94,8 @@ Uncaptured states are not described as visually reviewed.
 
 The workflow retains all 59 baseline screenshots and adds 20 exact allowlisted
 names: 19 required and one conditional. The original 8MiB output, 16MiB input,
-5MiB per-file, timeout, retention and trust guards remain unchanged. Required
+5MiB per-file, functional/job timeout, retention and trust guards remain unchanged.
+The screenshot-staging allowance is 12 minutes for the 79 bounded images. Required
 images must not be dropped to satisfy a byte budget.
 
 ## Verification
@@ -111,3 +112,14 @@ Hosted browser execution, exact artifact counts/bytes and screenshot-first
 Hallmark app-screen finish review remain pending at publication. No local
 browser, native/PDF run or automated Hallmark sloplint/render pass is claimed.
 Draft publication does not constitute merge or deployment approval.
+
+
+### First hosted run
+
+The first hosted run passed all 135 browser cases. It generated all 79 allowlisted
+screenshots, including the conditional twentieth redesign image, but screenshot
+staging exceeded its previous eight-minute allowance. No visual artifact was
+delivered, and no visual acceptance is claimed from that run. The staging-only
+allowance is now 12 minutes; the 45-minute job, 25-minute functional step and all
+byte/count/pixel-equivalence/trust guards remain unchanged. A new exact-head run
+must establish complete artifact delivery before screenshot-first acceptance.
