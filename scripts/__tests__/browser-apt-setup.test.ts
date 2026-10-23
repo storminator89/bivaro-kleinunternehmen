@@ -168,14 +168,34 @@ describe('per-command browser dependency transport bounds', () => {
     expect(workflow).toContain('        timeout-minutes: 25');
     expect(workflow).toContain('--retries=0');
     const allowed = workflow.split('          allowed = {')[1].split('          }')[0].match(/'[^']+\.png'/g);
-    expect(allowed).toHaveLength(67); // 59 accepted views plus eight bounded settings captures.
-    expect(new Set(allowed).size).toBe(67);
+    expect(allowed).toHaveLength(87); // 59 baseline + 20 customer/import + eight settings views.
+    expect(new Set(allowed).size).toBe(87);
     for (const name of ['settings-redesign-light-1440.png', 'settings-redesign-light-375.png', 'settings-redesign-dark-1440.png', 'settings-redesign-dark-375.png', 'settings-redesign-backup-light-1440.png', 'settings-redesign-backup-dark-375.png', 'settings-redesign-company-saving-light-1440.png', 'settings-redesign-company-error-dark-375.png']) expect(allowed).toContain(`'${name}'`);
     for (const theme of ['light', 'dark']) for (const width of [1440, 390]) expect(allowed).toContain(`'dashboard-overview-${theme}-${width}.png'`);
+    expect(allowed).toContain("'customer-redesign-directory-light-1440.png'");
+    expect(allowed).toContain("'csv-redesign-customer-preview-light-1440.png'");
+    expect(allowed).toContain("'csv-redesign-article-preview-light-1440.png'");
+    expect(allowed).toContain("'customer-redesign-directory-light-375.png'");
+    expect(allowed).toContain("'csv-redesign-customer-preview-light-375.png'");
+    expect(allowed).toContain("'csv-redesign-article-preview-light-375.png'");
+    expect(allowed).toContain("'customer-redesign-directory-dark-1440.png'");
+    expect(allowed).toContain("'csv-redesign-customer-preview-dark-1440.png'");
+    expect(allowed).toContain("'csv-redesign-article-preview-dark-1440.png'");
+    expect(allowed).toContain("'customer-redesign-directory-dark-375.png'");
+    expect(allowed).toContain("'csv-redesign-customer-preview-dark-375.png'");
+    expect(allowed).toContain("'csv-redesign-article-preview-dark-375.png'");
+    expect(allowed).toContain("'customer-redesign-edit-light-1440.png'");
+    expect(allowed).toContain("'customer-redesign-edit-bottom-light-1440.png'");
+    expect(allowed).toContain("'customer-redesign-edit-top-light-375.png'");
+    expect(allowed).toContain("'customer-redesign-edit-bottom-light-375.png'");
+    expect(allowed).toContain("'csv-redesign-article-setup-light-1440.png'");
+    expect(allowed).toContain("'csv-redesign-customer-mapping-light-375.png'");
+    expect(allowed).toContain("'csv-redesign-article-mapping-dark-1440.png'");
+    expect(allowed).toContain("'csv-redesign-result-dark-375.png'");
     for (const name of ['bank-allocation-confirmation-1440.png', 'bank-allocation-move-390.png', 'bank-allocation-current-origin-360.png']) expect(allowed).toContain(`'${name}'`);
     expect(allowed).toContain("'receipt-sequence-desktop-1440.png'");
     expect(allowed).toContain("'receipt-sequence-mobile-390.png'");
-    expect(workflow).toContain('limit = 8 * 1024 * 1024');
+    expect(workflow).toContain('limit = 10 * 1024 * 1024');
     expect(workflow).toContain('per_file_input_limit = 5 * 1024 * 1024');
     expect(workflow).toContain('total > 16 * 1024 * 1024');
     expect(workflow).toContain('handle.read(per_file_input_limit + 1)');

@@ -223,6 +223,26 @@ jobs:
               'customer-timeline-mobile-360.png',
               'service-statement-preview-1440.png',
               'service-statement-preview-390.png',
+              'customer-redesign-directory-light-1440.png',
+              'csv-redesign-customer-preview-light-1440.png',
+              'csv-redesign-article-preview-light-1440.png',
+              'customer-redesign-directory-light-375.png',
+              'csv-redesign-customer-preview-light-375.png',
+              'csv-redesign-article-preview-light-375.png',
+              'customer-redesign-directory-dark-1440.png',
+              'csv-redesign-customer-preview-dark-1440.png',
+              'csv-redesign-article-preview-dark-1440.png',
+              'customer-redesign-directory-dark-375.png',
+              'csv-redesign-customer-preview-dark-375.png',
+              'csv-redesign-article-preview-dark-375.png',
+              'customer-redesign-edit-light-1440.png',
+              'customer-redesign-edit-bottom-light-1440.png',
+              'customer-redesign-edit-top-light-375.png',
+              'customer-redesign-edit-bottom-light-375.png',
+              'csv-redesign-article-setup-light-1440.png',
+              'csv-redesign-customer-mapping-light-375.png',
+              'csv-redesign-article-mapping-dark-1440.png',
+              'csv-redesign-result-dark-375.png',
               'settings-redesign-light-1440.png',
               'settings-redesign-light-375.png',
               'settings-redesign-dark-1440.png',
@@ -232,8 +252,8 @@ jobs:
               'settings-redesign-company-saving-light-1440.png',
               'settings-redesign-company-error-dark-375.png',
           }
-          # Bounded output for all 67 known images, including the complete settings capture plan.
-          limit = 8 * 1024 * 1024
+          # Bounded output: 59 baseline + 20 customer/import + eight settings views (87 exact names).
+          limit = 10 * 1024 * 1024
           per_file_input_limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
 
@@ -283,7 +303,7 @@ jobs:
               print(f'Lossless PNG proof: {source.name} {json.dumps(proof, sort_keys=True)}')
               images[source.name] = data
               if sum(map(len, images.values())) > limit:
-                  skip('combined read size exceeds 8 MiB')
+                  skip('combined read size exceeds 10 MiB')
               if not data.startswith(b'\x89PNG\r\n\x1a\n'):
                   skip('an allowlisted file is not a PNG')
           print(f'Synthetic screenshot budget after lossless verification: {len(images)}/{len(allowed)} files, {sum(map(len, images.values()))}/{limit} bytes.')

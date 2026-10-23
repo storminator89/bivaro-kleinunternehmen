@@ -7,8 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ServiceWorkbench } from '@/components/customers/service-workbench';
 import { CustomerTimeline } from '@/components/customers/customer-timeline';
-import styles from "@/components/dashboard/sales-workspace.module.css";
-import { Card, CardContent } from "@/components/ui/card";
+import styles from "@/components/customers/customer-workspace.module.css";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,7 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ClipboardList, History, Loader2 } from "lucide-react";
+import { ClipboardList, History, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 type Customer = {
   id: number;
@@ -114,23 +113,23 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
-        <DialogHeader className="border-b pb-4">
+      <DialogContent className={styles.customerDialog}>
+        <DialogHeader className={styles.dialogHeader}>
           <DialogTitle className="text-xl font-semibold">{customer ? 'Kunden bearbeiten' : 'Neuer Kunde'}</DialogTitle>
           <DialogDescription className="sr-only">
             Kontakt- und Rechnungsanschrift
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-5 pt-4">
-          <div className="space-y-2">
-            <Label htmlFor="name" className="text-sm font-medium">Firmenname / Name <span className="text-red-500">*</span></Label>
+        <form onSubmit={handleSubmit} className={styles.customerForm}>
+          <div className={styles.fullField}>
+            <Label htmlFor="name" className="text-sm font-medium">Firmenname / Name <span className="text-destructive">*</span></Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
               placeholder="z.B. Musterfirma GmbH"
-              className="h-10"
+              className="min-h-11"
             />
           </div>
 
@@ -141,11 +140,11 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
               value={formData.contactPerson || ''}
               onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
               placeholder="z.B. Max Mustermann"
-              className="h-10"
+              className="min-h-11"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className={styles.fieldPair}>
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">E-Mail Adresse</Label>
               <Input
@@ -154,7 +153,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
                 value={formData.email || ''}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="kontakt@musterfirma.de"
-                className="h-10"
+                className="min-h-11"
               />
             </div>
             <div className="space-y-2">
@@ -165,7 +164,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
                 value={formData.phone || ''}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="+49 123 456789"
-                className="h-10"
+                className="min-h-11"
               />
             </div>
           </div>
@@ -177,29 +176,29 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
               value={formData.address || ''}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               placeholder="Musterstraße 123"
-              className="h-10"
+              className="min-h-11"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2 col-span-1">
+          <div className={styles.addressPair}>
+            <div className="space-y-2">
               <Label htmlFor="zipCode" className="text-sm font-medium">PLZ</Label>
               <Input
                 id="zipCode"
                 value={formData.zipCode || ''}
                 onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
                 placeholder="12345"
-                className="h-10"
+                className="min-h-11"
               />
             </div>
-            <div className="space-y-2 col-span-2">
+            <div className="space-y-2">
               <Label htmlFor="city" className="text-sm font-medium">Stadt</Label>
               <Input
                 id="city"
                 value={formData.city || ''}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                 placeholder="Musterstadt"
-                className="h-10"
+                className="min-h-11"
               />
             </div>
           </div>
@@ -211,7 +210,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
               value={formData.taxNumber || ''}
               onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
               placeholder="DE123456789"
-              className="h-10"
+              className="min-h-11"
             />
           </div>
 
@@ -221,7 +220,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
             <p id="customer-payment-term-help" className="text-xs text-muted-foreground">Leer: Firmenvorgabe, sonst 14 Tage. 0: fällig am Rechnungsdatum.</p>
           </div>
 
-          <details open={Boolean(customer?.internalNote)} className="space-y-3 border-t pt-3">
+          <details open={Boolean(customer?.internalNote)} className={styles.noteDisclosure}>
             <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">Interner Hinweis</summary>
             <div>
               <Label htmlFor="internalNote" className="text-sm font-medium">Interner Kundenhinweis</Label>
@@ -242,7 +241,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
                 id="noteVisibility"
                 value={formData.noteVisibility || 'EDITOR'}
                 onChange={(e) => setFormData({ ...formData, noteVisibility: e.target.value as NoteVisibility })}
-                className="flex min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring"
+                className={styles.select}
               >
                 <option value="EDITOR">Rechnungserstellung</option>
                 <option value="SEND">E-Mail-Versand</option>
@@ -251,7 +250,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
             </div>
           </details>
 
-          <DialogFooter className="border-t pt-4 mt-6">
+          <DialogFooter className={styles.dialogFooter}>
             <Button type="button" variant="outline" onClick={onClose}>
               Abbrechen
             </Button>
@@ -398,254 +397,139 @@ function CustomersWorkspace() {
 
   return (
     <div className={`customer-workspace ${styles.directory}`}>
-      <div className="space-y-6">
-        <PageHeader title="Kunden" actions={<>
-<div className="mt-4 md:mt-0 flex flex-wrap gap-3">
-            <Button variant="outline" asChild><Link href="/customers/import">CSV importieren</Link></Button>
-            <Button variant="outline" asChild><Link href="/customers/articles">Artikel und Leistungen</Link></Button>
-            <div className="hidden items-center text-sm text-muted-foreground md:flex">
-              <span className="font-medium">
-                {customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}
-              </span>
-            </div>
-            <Button onClick={openAddModal}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Neuer Kunde
-            </Button>
-          </div>
-</>} />
+      <PageHeader
+        title="Kunden"
+        actions={<Button type="button" onClick={openAddModal}><Plus aria-hidden="true" />Neuer Kunde</Button>}
+      />
 
-        {selectedId !== null && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4 text-sm"><p>{!isLoadingCustomers && !loadError && !filteredCustomers.length ? 'Kunde nicht gefunden oder nicht verfügbar.' : 'Ausgewählter Kunde'}</p><Button variant="outline" asChild><Link href="/customers">Alle Kunden anzeigen</Link></Button></div>}
-        <div className="grid gap-6">
-          <Card className="customer-directory overflow-hidden border bg-card shadow-none">
-          <div className={styles.directoryToolbar}>
-            <div className="relative w-full sm:w-96">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
+      <div className={styles.directoryNavigation}>
+        <span className={styles.directoryCount}>
+          {isLoadingCustomers || loadError ? '—' : customers.length} {customers.length === 1 ? 'Kunde' : 'Kunden'}
+        </span>
+        <div className={styles.directoryLinks}>
+          <Button variant="ghost" asChild><Link href="/customers/import">CSV importieren</Link></Button>
+          <Button variant="ghost" asChild><Link href="/customers/articles">Artikel und Leistungen</Link></Button>
+        </div>
+      </div>
+
+      {selectedId !== null && <div className={styles.selectedCustomer}>
+        <p>{!isLoadingCustomers && !loadError && !filteredCustomers.length ? 'Kunde nicht gefunden oder nicht verfügbar.' : 'Ausgewählter Kunde'}</p>
+        <Button variant="outline" asChild><Link href="/customers">Alle Kunden anzeigen</Link></Button>
+      </div>}
+
+      <section className={`customer-directory ${styles.directorySurface}`} aria-label="Kundenverzeichnis">
+        <div className={styles.directoryToolbar}>
+          <div className={styles.searchField}>
+            <Label htmlFor="customer-search">Kunden suchen</Label>
+            <div className={styles.searchInput}>
+              <Search aria-hidden="true" />
               <Input
+                id="customer-search"
                 aria-label="Kunden suchen"
                 placeholder="Name, Kontakt oder Ort suchen…"
-                className="pl-9 bg-background"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="text-sm text-muted-foreground">
-              Zeige {filteredCustomers.length} von {customers.length} Einträgen
-            </div>
           </div>
-
-            <CardContent className="p-0">
-              {isLoadingCustomers && <div role="status" className="flex items-center gap-2 border-b p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Kunden werden geladen …</div>}
-              {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b p-4 text-sm text-destructive"><p>{loadError}</p><Button variant="outline" onClick={fetchCustomers}>Erneut laden</Button></div>}
-              <div className={`customer-mobile-list xl:hidden ${isLoadingCustomers || loadError ? "hidden" : ""}`} aria-label="Kundenliste">
-                {filteredCustomers.length ? filteredCustomers.map(customer => <article key={customer.id}>
-                  <div className="customer-record-heading"><span className="customer-monogram">{getInitials(customer.name)}</span><div><h2>{customer.name}</h2><p>{customer.contactPerson || 'Geschäftskontakt'}{customer.city ? ` · ${customer.city}` : ''}</p></div></div>
-                  <dl>{customer.email && <div><dt>E-Mail</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>}{customer.phone && <div><dt>Telefon</dt><dd><a href={`tel:${customer.phone}`}>{customer.phone}</a></dd></div>}</dl>
-                  <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openEditModal(customer)} aria-label={`${customer.name} bearbeiten`}>Bearbeiten</Button><Button variant="ghost" size="sm" onClick={() => setNotesCustomer(customer)} data-service-workbench-return={customer.id} aria-label={`Leistungsnotizen für ${customer.name}`}>Leistungsnotizen</Button><Button variant="ghost" size="sm" onClick={() => setTimelineCustomer(customer)} data-customer-timeline-return={customer.id} aria-label={`Verlauf für ${customer.name}`}>Verlauf</Button><Button variant="ghost" size="sm" className="text-destructive" disabled={isDeleting} onClick={() => handleDeleteCustomer(customer.id)} aria-label={`${customer.name} löschen`}>Löschen</Button></div>
-                </article>) : <div className="ledger-empty"><h2>Keine Kunden gefunden</h2>{!searchTerm && selectedId === null && <Button variant="outline" onClick={openAddModal}>Ersten Kunden anlegen</Button>}</div>}
-              </div>
-              <div className={`hidden ${isLoadingCustomers || loadError ? "" : "xl:block"} overflow-hidden bg-card`}>
-                <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead className="w-[50px]"></TableHead>
-                      <TableHead className="font-semibold">Name / Firma</TableHead>
-                      <TableHead className="font-semibold">Ansprechpartner</TableHead>
-                      <TableHead className="font-semibold">Kontakt</TableHead>
-                      <TableHead className="font-semibold">Anschrift</TableHead>
-                      <TableHead className="font-semibold">Steuer-Nr.</TableHead>
-                      <TableHead className="text-right font-semibold">Aktionen</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCustomers.length > 0 ? (
-                      filteredCustomers.map((customer) => (
-                        <TableRow key={customer.id} className="hover:bg-muted/50 transition-colors group">
-                          <TableCell>
-                            <div
-                              className={styles.avatar}
-                            >
-                              {getInitials(customer.name)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-semibold text-base text-foreground">{customer.name}</div>
-                            <div className="text-xs text-muted-foreground">Kunde seit {new Date(customer.createdAt).getFullYear()}</div>
-                          </TableCell>
-                          <TableCell>
-                            {customer.contactPerson ? (
-                              <div className="flex items-center text-sm">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
-                                <span>{customer.contactPerson}</span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground/50 text-sm italic">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              {customer.email ? (
-                                <div className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                  </svg>
-                                  <a href={`mailto:${customer.email}`}>{customer.email}</a>
-                                </div>
-                              ) : null}
-                              {customer.phone ? (
-                                <div className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                  </svg>
-                                  <a href={`tel:${customer.phone}`}>{customer.phone}</a>
-                                </div>
-                              ) : null}
-                              {!customer.email && !customer.phone && (
-                                <span className="text-muted-foreground/50 text-sm italic">- keine Kontaktdaten -</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {customer.address ? (
-                                <div className="flex flex-col">
-                                  <span>{customer.address}</span>
-                                  <span className="text-muted-foreground">
-                                    {customer.zipCode} {customer.city}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground/50 italic">- keine Adresse -</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {customer.taxNumber ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border">
-                                {customer.taxNumber}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground/50 text-sm italic">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" aria-label={`${customer.name} bearbeiten`} onClick={() => openEditModal(customer)} className="h-8 w-8">
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                      </svg>
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Bearbeiten</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => setNotesCustomer(customer)}
-                                      data-service-workbench-return={customer.id}
-                                      className="h-8 w-8"
-                                      aria-label={`Leistungsnotizen für ${customer.name}`}
-                                    >
-                                      <ClipboardList className="h-4 w-4" aria-hidden="true" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Leistungsnotizen</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => setTimelineCustomer(customer)}
-                                      data-customer-timeline-return={customer.id}
-                                      className="h-8 w-8"
-                                      aria-label={`Verlauf für ${customer.name}`}
-                                    >
-                                      <History className="h-4 w-4" aria-hidden="true" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Verlauf</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                      aria-label={`${customer.name} löschen`}
-                                      onClick={() => handleDeleteCustomer(customer.id)}
-                                      disabled={isDeleting}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                      </svg>
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Löschen</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-16 text-muted-foreground">
-                          <div className="flex flex-col items-center justify-center">
-                            <div className="bg-muted/50 p-4 rounded-full mb-4">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h-10a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v12a2 2 0 01-2 2zM12 5v14" />
-                              </svg>
-                            </div>
-                            <h3 className="text-lg font-medium text-foreground mb-1">Keine Kunden gefunden</h3>
-                            {searchTerm && <p className="text-sm max-w-sm mx-auto mb-6">Suche ändern.</p>}
-                            {!searchTerm && selectedId === null && (
-                              <Button onClick={openAddModal} variant="outline">
-                                Ersten Kunden anlegen
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          {isModalOpen && (
-            <CustomerModal
-              isOpen={isModalOpen}
-              onClose={() => setIsModalOpen(false)}
-              onSave={handleSaveCustomer}
-              customer={selectedCustomer}
-            />
-          )}
+          <p className={styles.resultCount}>
+            Zeige {isLoadingCustomers || loadError ? '—' : filteredCustomers.length} von {isLoadingCustomers || loadError ? '—' : customers.length} Einträgen
+          </p>
         </div>
-      </div>
+
+        {isLoadingCustomers && <div role="status" className={styles.loading}>
+          <p><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Kunden werden geladen …</p>
+          <div className={styles.loadingRows} aria-hidden="true"><span /><span /><span /></div>
+        </div>}
+        {loadError && <div role="alert" className={styles.loadError}><p>{loadError}</p><Button type="button" variant="outline" onClick={fetchCustomers}>Erneut laden</Button></div>}
+
+        {!isLoadingCustomers && !loadError && <>
+          {filteredCustomers.length ? <>
+            <div className={`customer-mobile-list ${styles.mobileList}`} aria-label="Kundenliste">
+              {filteredCustomers.map(customer => <article key={customer.id} className={styles.mobileRecord}>
+                <div className={`customer-record-heading ${styles.recordHeading}`}>
+                  <span className={`customer-monogram ${styles.avatar}`}>{getInitials(customer.name)}</span>
+                  <div><h2>{customer.name}</h2><p>{customer.contactPerson || 'Geschäftskontakt'}</p></div>
+                </div>
+                <dl className={styles.mobileDetails}>
+                  {customer.email && <div><dt>E-Mail</dt><dd><a href={`mailto:${customer.email}`}>{customer.email}</a></dd></div>}
+                  {customer.phone && <div><dt>Telefon</dt><dd><a href={`tel:${customer.phone}`}>{customer.phone}</a></dd></div>}
+                  {!customer.email && !customer.phone && <div><dt>Kontakt</dt><dd>- keine Kontaktdaten -</dd></div>}
+                  {(customer.address || customer.zipCode || customer.city) && <div><dt>Anschrift</dt><dd>{customer.address && <span>{customer.address}</span>}{(customer.zipCode || customer.city) && <span>{customer.zipCode} {customer.city}</span>}</dd></div>}
+                  {customer.taxNumber && <div><dt>Steuer-Nr.</dt><dd>{customer.taxNumber}</dd></div>}
+                  <div><dt>Kunde seit</dt><dd>{new Date(customer.createdAt).getFullYear()}</dd></div>
+                </dl>
+                <div className={styles.mobileActions}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => openEditModal(customer)} aria-label={`${customer.name} bearbeiten`}>Bearbeiten</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setNotesCustomer(customer)} data-service-workbench-return={customer.id} aria-label={`Leistungsnotizen für ${customer.name}`}>Leistungsnotizen</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setTimelineCustomer(customer)} data-customer-timeline-return={customer.id} aria-label={`Verlauf für ${customer.name}`}>Verlauf</Button>
+                  <Button type="button" variant="ghost" size="sm" className="text-destructive" disabled={isDeleting} onClick={() => handleDeleteCustomer(customer.id)} aria-label={`${customer.name} löschen`}>Löschen</Button>
+                </div>
+              </article>)}
+            </div>
+
+            <div className={styles.desktopList}>
+              <Table className={styles.directoryTable}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name / Firma</TableHead>
+                    <TableHead>Kontakt</TableHead>
+                    <TableHead>Anschrift</TableHead>
+                    <TableHead className={styles.taxColumn}>Steuer-Nr.</TableHead>
+                    <TableHead className={styles.actionsColumn}>Aktionen</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCustomers.map(customer => <TableRow key={customer.id}>
+                    <TableCell>
+                      <div className={styles.recordHeading}>
+                        <span className={styles.avatar}>{getInitials(customer.name)}</span>
+                        <div><h2>{customer.name}</h2><p>Kunde seit {new Date(customer.createdAt).getFullYear()}</p></div>
+                      </div>
+                      {customer.contactPerson && <dl className={styles.contactPerson}><dt>Ansprechpartner</dt><dd>{customer.contactPerson}</dd></dl>}
+                    </TableCell>
+                    <TableCell>
+                      <div className={styles.contactLinks}>
+                        {customer.email && <a href={`mailto:${customer.email}`}>{customer.email}</a>}
+                        {customer.phone && <a href={`tel:${customer.phone}`}>{customer.phone}</a>}
+                        {!customer.email && !customer.phone && <span className={styles.missingValue}>- keine Kontaktdaten -</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {customer.address || customer.zipCode || customer.city ? <div className={styles.address}>{customer.address && <span>{customer.address}</span>}{(customer.zipCode || customer.city) && <span>{customer.zipCode} {customer.city}</span>}</div> : <span className={styles.missingValue}>- keine Adresse -</span>}
+                    </TableCell>
+                    <TableCell>{customer.taxNumber || <span className={styles.missingValue}>-</span>}</TableCell>
+                    <TableCell>
+                      <div className={styles.rowActions}>
+                        <TooltipProvider delayDuration={800}>
+                          <Tooltip><TooltipTrigger asChild>
+                            <Button type="button" variant="ghost" size="icon" aria-label={`${customer.name} bearbeiten`} onClick={() => openEditModal(customer)}><Pencil aria-hidden="true" /></Button>
+                          </TooltipTrigger><TooltipContent>Bearbeiten</TooltipContent></Tooltip>
+                          <Tooltip><TooltipTrigger asChild>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => setNotesCustomer(customer)} data-service-workbench-return={customer.id} aria-label={`Leistungsnotizen für ${customer.name}`}><ClipboardList aria-hidden="true" /></Button>
+                          </TooltipTrigger><TooltipContent>Leistungsnotizen</TooltipContent></Tooltip>
+                          <Tooltip><TooltipTrigger asChild>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => setTimelineCustomer(customer)} data-customer-timeline-return={customer.id} aria-label={`Verlauf für ${customer.name}`}><History aria-hidden="true" /></Button>
+                          </TooltipTrigger><TooltipContent>Verlauf</TooltipContent></Tooltip>
+                          <Tooltip><TooltipTrigger asChild>
+                            <Button type="button" variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" aria-label={`${customer.name} löschen`} onClick={() => handleDeleteCustomer(customer.id)} disabled={isDeleting}><Trash2 aria-hidden="true" /></Button>
+                          </TooltipTrigger><TooltipContent>Löschen</TooltipContent></Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </TableCell>
+                  </TableRow>)}
+                </TableBody>
+              </Table>
+            </div>
+          </> : <div className={styles.empty}>
+            <h2>Keine Kunden gefunden</h2>
+            {searchTerm && <p>Suche ändern.</p>}
+            {!searchTerm && selectedId === null && <Button type="button" onClick={openAddModal} variant="outline">Ersten Kunden anlegen</Button>}
+          </div>}
+        </>}
+      </section>
+
+      {isModalOpen && <CustomerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveCustomer} customer={selectedCustomer} />}
       <ServiceWorkbench
         customer={notesCustomer}
         open={Boolean(notesCustomer)}
