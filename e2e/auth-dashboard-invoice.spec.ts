@@ -927,7 +927,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true }).focus();
       await page.keyboard.press('Enter');
       await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toBeVisible();
-      await expect(dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) })).toContainText('Aktuell zugeordnet:');
+      await expect(dialog.getByRole('status').filter({ has: page.getByText('Zahlung gespeichert', { exact: true }) })).toContainText('Rechnung vollständig bezahlt.');
       const history = dialog.getByRole('region', { name: 'Zahlungsverlauf', exact: true });
       await expect(history.locator('ol').first().locator(':scope > li')).toHaveCount(2);
       await expect(history.locator('ul').first().locator(':scope > li')).toHaveCount(2);
