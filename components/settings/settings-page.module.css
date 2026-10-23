@@ -39,7 +39,8 @@
 .logoPreview { display: flex; align-items: flex-start; gap: var(--space-xs); }
 .logoPreview img { max-width: 8rem; border-radius: var(--radius-input); }
 .logoEmpty { display: grid; place-items: center; flex: 0 1 8rem; min-width: 8rem; min-height: 6rem; padding: var(--space-sm); border-radius: var(--radius-input); background: var(--color-paper-3); text-align: center; }
-.logoUpload { display: grid; gap: var(--space-xs); max-width: 100%; }
+.logoUpload { position: relative; display: grid; gap: var(--space-xs); max-width: 100%; }
+.logoUpload > :global(input[type="file"]) { position: absolute; inset: 0 auto auto 0; width: 1px; height: 1px; min-width: 0; min-height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .logoUpload p { min-height: 1lh; line-height: 1.6; }
 .uploadControl { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: var(--space-xs) var(--space-md); border: 1px solid var(--color-rule-2); border-radius: var(--radius-input); color: var(--color-ink); font-size: var(--text-sm); white-space: nowrap; cursor: pointer; }
 .logoUpload:has(input:focus-visible) .uploadControl { outline: 2px solid var(--color-focus); outline-offset: 2px; }
