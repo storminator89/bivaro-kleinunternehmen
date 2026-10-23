@@ -66,6 +66,8 @@ for (const kind of ['incomes', 'expenses'] as const) {
       expect(css).toContain('overflow-wrap: anywhere');
       expect(css).toContain('min-height: 2.75rem');
       expect(css).toContain(':focus-visible');
+      expect(css).toContain('@media (max-width: 479px)');
+      expect(css).toContain('.workspace .filters { grid-template-columns: minmax(0, 1fr); }');
     });
   });
 }

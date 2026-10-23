@@ -38,3 +38,7 @@ Use synthetic fixtures only and the existing hosted browser harness after coordi
 | 7–8 | `/dashboard?tab=expenses`, entry open with long attachment filename and tax/AfA fields | 1440px | light/dark |
 
 Without additional screenshots, check widths 320/375/414/768/1280/1440, keyboard search/reset/file selection and visible focus, loading/error/retry, empty/filtered-empty states, 10/20/50 pagination, unchanged edit/duplicate/delete/export behavior and origin-versus-current income attribution. Check overflowing amounts, dropdowns and source-linked expense actions. Preserve the existing functional financial suites rather than replacing them with visual assertions.
+
+## First hosted pass and focused correction
+
+The first hosted run passed all 138 existing browser cases. Its two new cases stopped before capture: the income identity locator incorrectly required the whole desktop cell to contain only the description despite its attribution, and the expense case revealed clipped native filter labels at 320px. The locator is now scoped to description cells/headings, and the actual narrow-phone filter grid uses one full-width column below 480px. The original 95-image artifact remained complete within its unchanged budget; zero new cashflow captures were claimed as accepted. A new hosted run is required for the corrected head.

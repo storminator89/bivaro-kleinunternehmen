@@ -121,7 +121,10 @@ for (const kind of ['income', 'expense'] as const) {
     await documentNavigation(page, '/dashboard', () => page.goto(`/dashboard?tab=${plural}`));
     const workspace = page.locator('.bookkeeping-workspace');
     const entry = workspace.locator(`#${kind}-entry`);
-    const visibleRecord = () => page.getByText(records[0].description, { exact: true }).filter({ visible: true });
+    // Desktop income cells also contain immutable-origin/current-allocation text.
+    // Match the full description inside only the identity cell or mobile heading.
+    const visibleRecord = () => workspace.locator('article h3, tbody td:nth-child(2)')
+      .filter({ hasText: records[0].description }).filter({ visible: true });
     await expect(visibleRecord()).toBeVisible();
     await expect(entry).toBeHidden();
     for (const value of ['light', 'dark'] as const) {
