@@ -1,5 +1,5 @@
 import { Building2, Mail, HardDrive, KeyRound, FileCheck, ChevronDown, ShieldCheck, History } from 'lucide-react';
-import styles from '@/components/settings/admin-workspace.module.css';
+import styles from '@/components/settings/section-navigation.module.css';
 
 export function SettingsSectionNavigation({ isAdmin }: { isAdmin: boolean }) {
   const items = [

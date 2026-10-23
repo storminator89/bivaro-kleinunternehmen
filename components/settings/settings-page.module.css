@@ -1,0 +1,107 @@
+/* Hallmark · v2.0.0 · genre: modern-minimal · theme: locked Bivaro Ledger · scope: app · shape: app screen · redesign: full · copy: verbatim · built: existing settings and handlers */
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 · weakest: execution, hosted responsive and state QA still required; navigation destinations reduced to one directory. */
+/* Hallmark · answered F4 · independent settings forms retain their own existing save action; exports and navigation use secondary outlines. */
+.workspace { min-width: 0; color: var(--color-ink); }
+.workspace > * + * { margin-top: var(--space-lg); }
+.loading { display: grid; place-items: center; min-height: 20rem; color: var(--bivaro-color-muted); }
+.settingsLayout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: var(--space-lg); }
+.settingsContent { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); min-width: 0; }
+.settingsContent > * { min-width: 0; margin: 0; }
+.settingsContent :global([id]) { scroll-margin-top: 7rem; }
+.settingsContent > :global([data-slot="card"]), .surface, .smtpPanel > :global([data-slot="card"]) { min-width: 0; border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper); box-shadow: none; }
+.settingsContent > :global([data-slot="card"]) > :global([data-slot="card-header"]), .surface > :global([data-slot="card-header"]), .smtpPanel :global([data-slot="card-header"]) { padding: var(--space-lg); }
+.settingsContent > :global([data-slot="card"]) > :global([data-slot="card-content"]), .surface > :global([data-slot="card-content"]), .smtpPanel :global([data-slot="card-content"]) { padding: 0 var(--space-lg) var(--space-lg); }
+.sectionTitle, .settingsContent > :global(section) > header h2, .settingsContent :global([data-slot="card-title"]) { min-width: 0; font-size: var(--text-xl); font-weight: 600; line-height: 1.4; letter-spacing: normal; overflow-wrap: break-word; }
+.workspace form, .workspace fieldset, .workspace input, .workspace textarea, .workspace select, .workspace :global(.grid) > * { min-width: 0; }
+.workspace input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .workspace select, .workspace :global([role="combobox"]), .workspace :global([data-slot="button"]) { min-height: 44px; }
+.workspace :global([data-slot="button"]), .workspace summary { max-width: 100%; }
+.workspace :global([data-slot="button"]):disabled, .workspace input:disabled, .workspace textarea:disabled, .workspace select:disabled { cursor: not-allowed; opacity: .55; }
+.workspace a:focus-visible, .workspace button:focus-visible, .workspace summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.workspace input:focus-visible, .workspace textarea:focus-visible, .workspace select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -3px; }
+.workspace :global(code) { overflow-wrap: anywhere; }
+.workspace :global(pre) { max-width: 100%; overflow-x: auto; }
+.companyPanel { container: settings-form / inline-size; }
+.companyContent { display: grid; gap: var(--space-lg); }
+.companyColumns, .identityFields, .contactFields, .bankFields, .documentFields, .documentDefaults { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-md); min-width: 0; }
+.companyColumns { gap: var(--space-lg); padding-bottom: var(--space-lg); border-bottom: 1px solid var(--color-rule); }
+.fieldGroup { min-width: 0; padding: 0; border: 0; margin: 0; }
+.fieldGroup legend { width: 100%; margin-bottom: var(--space-md); color: var(--color-ink-2); font-size: var(--text-sm); line-height: 1.5; font-weight: 600; }
+.fieldGroup > * + * { margin-top: var(--space-md); }
+.bankGroup { min-width: 0; }
+.documentGroup { min-width: 0; }
+.documentDefaults :global([name="paymentTermDays"]) { max-width: 12rem; }
+.documentDefaults p { min-height: 1lh; line-height: 1.6; }
+.formActions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-sm); padding-top: var(--space-md); border-top: 1px solid var(--color-rule); }
+.formActions > p { flex-basis: 100%; }
+.formActions :global([type="submit"]) { min-width: 8rem; }
+.logoRow { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-md); }
+.logoRow > * { min-width: 0; max-width: 100%; }
+.logoPreview { display: flex; align-items: flex-start; gap: var(--space-xs); }
+.logoPreview img { max-width: 8rem; border-radius: var(--radius-input); }
+.logoEmpty { display: grid; place-items: center; flex: 0 1 8rem; min-width: 8rem; min-height: 6rem; padding: var(--space-sm); border-radius: var(--radius-input); background: var(--color-paper-3); text-align: center; }
+.logoUpload { position: relative; display: grid; gap: var(--space-xs); max-width: 100%; }
+.logoUpload > :global(input[type="file"]) { position: absolute; inset: 0 auto auto 0; width: 1px; height: 1px; min-width: 0; min-height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.logoUpload p { min-height: 1lh; line-height: 1.6; }
+.uploadControl { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: var(--space-xs) var(--space-md); border: 1px solid var(--color-rule-2); border-radius: var(--radius-input); color: var(--color-ink); font-size: var(--text-sm); white-space: nowrap; cursor: pointer; }
+.logoUpload:has(input:focus-visible) .uploadControl { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.logoUpload:has(input:disabled) .uploadControl { opacity: .55; cursor: not-allowed; }
+.removeLogo { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border: 1px solid var(--color-rule-2); border-radius: var(--radius-input); color: var(--color-danger-ink); background: var(--color-paper); }
+.registration { display: flex; align-items: center; justify-content: space-between; gap: var(--space-lg); }
+.registration label { display: flex; align-items: center; min-height: 44px; line-height: 1.5; }
+.backupPanel { container: settings-backup / inline-size; }
+.restoreOptions, .restoreCounts, .restoreActions { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-md); min-width: 0; }
+.restoreCounts { gap: var(--space-xs); font-size: var(--text-xs); line-height: 1.6; }
+.restoreCounts > span { min-width: 0; overflow-wrap: anywhere; }
+.restoreActions { gap: var(--space-xs); }
+.backupOptions { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); }
+.backupTitle { font-size: var(--text-sm); font-weight: 600; line-height: 1.5; }
+.backupOptions :global([data-slot="button"]) { width: auto; justify-content: flex-start; }
+.destinationList { display: grid; min-width: 0; border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper); }
+.destinationList > .destination { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-md); border: 0; border-radius: 0; background: none; }
+.destinationList > .destination + .destination { border-top: 1px solid var(--color-rule); }
+.destinationList .destination > :global([data-slot="card-header"]) { padding: var(--space-md) 0 var(--space-md) var(--space-lg); }
+.destinationList .destination > :global([data-slot="card-content"]) { padding: var(--space-md) var(--space-lg) var(--space-md) 0; }
+.destinationList .sectionTitle { font-size: var(--text-base); }
+.destinationList :global(svg) { flex-shrink: 0; color: var(--bivaro-color-muted); }
+@media (hover: hover) {
+  .uploadControl:hover, .removeLogo:hover { background: var(--color-paper-3); }
+}
+.uploadControl:active, .removeLogo:active { background: var(--color-paper-2); }
+@container settings-form (min-width: 34rem) {
+  .identityFields, .contactFields, .bankFields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container settings-form (min-width: 48rem) {
+  .companyColumns, .documentFields { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--space-lg); }
+  .bankGroup { padding-top: 0; padding-left: var(--space-lg); border-top: 0; border-left: 1px solid var(--color-rule); }
+  .bankFields { grid-template-columns: minmax(0, 1fr); }
+}
+@container settings-backup (min-width: 34rem) {
+  .restoreCounts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container settings-backup (min-width: 40rem) {
+  .backupOptions, .restoreOptions, .restoreActions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container settings-backup (min-width: 54rem) {
+  .restoreCounts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@container settings-backup (max-width: 34rem) {
+  .restorePreview { padding-inline: var(--space-sm); }
+  .restorePreview > :global([data-slot="alert-description"]) { grid-column: 1 / -1; min-width: 0; width: 100%; }
+  .backupOptions :global([data-slot="button"]), .restoreOptions :global([data-slot="button"]), .restoreActions :global([data-slot="button"]) { width: 100%; justify-content: center; padding-inline: var(--space-xs); font-size: var(--text-xs); }
+}
+@media (min-width: 1024px) {
+  .settingsLayout { grid-template-columns: 12rem minmax(0, 1fr); }
+}
+@media (max-width: 639px) {
+  .settingsContent > :global([data-slot="card"]) > :global([data-slot="card-header"]), .surface > :global([data-slot="card-header"]), .smtpPanel :global([data-slot="card-header"]) { padding: var(--space-md); }
+  .settingsContent > :global([data-slot="card"]) > :global([data-slot="card-content"]), .surface > :global([data-slot="card-content"]), .smtpPanel :global([data-slot="card-content"]) { padding: 0 var(--space-md) var(--space-md); }
+  .formActions :global([data-slot="button"]) { flex: 1; }
+  .destinationList > .destination { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .destinationList .destination > :global([data-slot="card-header"]) { padding: var(--space-md) var(--space-md) var(--space-xs); }
+  .destinationList .destination > :global([data-slot="card-content"]) { padding: 0 var(--space-md) var(--space-md); }
+  .destinationList :global([data-slot="button"]) { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace :global(.animate-spin) { animation: none; }
+  .workspace :global([data-slot="button"]) { transition: none; transform: none; }
+}
