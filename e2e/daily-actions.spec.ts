@@ -85,9 +85,13 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
         // Keep the top fold while also proving the lower mobile tasks/analysis;
         // the same four allowlisted files and all staging budgets remain intact.
         expect(await page.evaluate(() => window.scrollY)).toBe(0);
+        expect(await page.evaluate(() => window.innerWidth)).toBe(width);
+        const documentWidth = await page.evaluate(() => window.document.documentElement.clientWidth);
         const image = await page.screenshot({ path: testInfo.outputPath(`dashboard-overview-${theme}-${width}.png`), fullPage: width === 390 });
         expect(image.length).toBeLessThanOrEqual(5 * 1024 * 1024);
-        expect(image.readUInt32BE(16)).toBe(width);
+        // Headed Chromium omits the scrollbar from full-page image pixels,
+        // unlike its normal viewport capture. Verify the measured surface.
+        expect(image.readUInt32BE(16)).toBe(width === 390 ? documentWidth : width);
         if (width === 390) {
           expect(image.readUInt32BE(20)).toBeLessThanOrEqual(8000);
           expect(image.readUInt32BE(20)).toBeGreaterThanOrEqual(Math.ceil(analysisBounds!.y + analysisBounds!.height));
