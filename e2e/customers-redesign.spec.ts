@@ -173,8 +173,11 @@ async function importScreens(page: Page, info: TestInfo, kind: Kind, value: Them
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     let held = false;
+    let continued: Promise<void> | undefined;
     const holdPreview = async (route: import('@playwright/test').Route) => {
-      held = true; await gate; await route.continue();
+      held = true;
+      continued = gate.then(() => route.continue());
+      await continued;
     };
     // Hold every preview request until all busy controls are inspected atomically.
     // A one-shot route can be consumed before a later request reaches the guard.
@@ -190,7 +193,13 @@ async function importScreens(page: Page, info: TestInfo, kind: Kind, value: Them
           file: file?.matches(':disabled'), label: fieldset.querySelector('label[for="import-file"]')?.textContent };
       });
       expect(locked).toEqual({ fieldset: true, kind: true, file: true, label: 'CSV-Datei auswählen' });
-    } finally { release(); await page.unroute('**/api/data-import', holdPreview); }
+    } finally {
+      release();
+      // Finish the intercepted request before removing interception; otherwise
+      // Chromium can auto-continue it while this callback is still resuming.
+      await continued;
+      await page.unroute('**/api/data-import', holdPreview);
+    }
   } else await page.getByRole('button', { name: 'Vorschau prüfen', exact: true }).click();
   const region = page.getByRole('region', { name: `Vorschau: ${kind === 'customers' ? 'Kunden' : 'Artikel und Leistungen'}`, exact: true });
   await expect(region).toBeVisible();
