@@ -57,6 +57,11 @@ async function geometry(page: Page, workspace: string) {
     const root = document.documentElement;
     const overflowing = [...element.querySelectorAll('button,a,input,select,summary,td,h3')].filter(node => {
       const r = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      // Screen-reader-only labels are intentionally clipped, not painted overflow.
+      const screenReaderOnly = node.classList.contains('sr-only') && style.position === 'absolute'
+        && style.overflow === 'hidden' && r.width <= 1 && r.height <= 1;
+      if (screenReaderOnly) return false;
       return r.width > 0 && r.height > 0 && (r.left < -1 || r.right > root.clientWidth + 1 || node.scrollWidth > node.clientWidth + 1);
     }).map(node => ({ tag: node.tagName, text: node.textContent?.trim().slice(0, 100), width: node.clientWidth, scrollWidth: node.scrollWidth }));
     return { width: innerWidth, clientWidth: root.clientWidth, scrollWidth: root.scrollWidth, overflowing };
