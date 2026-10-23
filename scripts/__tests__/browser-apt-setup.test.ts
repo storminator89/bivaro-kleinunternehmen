@@ -168,8 +168,8 @@ describe('per-command browser dependency transport bounds', () => {
     expect(workflow).toContain('        timeout-minutes: 25');
     expect(workflow).toContain('--retries=0');
     const allowed = workflow.split('          allowed = {')[1].split('          }')[0].match(/'[^']+\.png'/g);
-    expect(allowed).toHaveLength(87); // 59 baseline + 20 customer/import + eight settings views.
-    expect(new Set(allowed).size).toBe(87);
+    expect(allowed).toHaveLength(95); // All 87 existing views plus eight invoice/quote views.
+    expect(new Set(allowed).size).toBe(95);
     for (const name of ['settings-redesign-light-1440.png', 'settings-redesign-light-375.png', 'settings-redesign-dark-1440.png', 'settings-redesign-dark-375.png', 'settings-redesign-backup-light-1440.png', 'settings-redesign-backup-dark-375.png', 'settings-redesign-company-saving-light-1440.png', 'settings-redesign-company-error-dark-375.png']) expect(allowed).toContain(`'${name}'`);
     for (const theme of ['light', 'dark']) for (const width of [1440, 390]) expect(allowed).toContain(`'dashboard-overview-${theme}-${width}.png'`);
     expect(allowed).toContain("'customer-redesign-directory-light-1440.png'");

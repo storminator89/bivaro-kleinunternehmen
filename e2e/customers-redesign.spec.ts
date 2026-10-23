@@ -172,13 +172,34 @@ async function importScreens(page: Page, info: TestInfo, kind: Kind, value: Them
   if (kind === 'customers' && value === 'light' && width === 1440) {
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
-    await page.route('**/api/data-import', async route => { await gate; await route.continue(); }, { times: 1 });
+    let held = false;
+    let continued: Promise<void> | undefined;
+    const holdPreview = async (route: import('@playwright/test').Route) => {
+      held = true;
+      continued = gate.then(() => route.continue());
+      await continued;
+    };
+    // Hold every preview request until all busy controls are inspected atomically.
+    // A one-shot route can be consumed before a later request reaches the guard.
+    await page.route('**/api/data-import', holdPreview);
     try {
       await page.getByRole('button', { name: 'Vorschau prüfen', exact: true }).click();
+      await expect.poll(() => held).toBe(true);
       await expect(page.getByRole('button', { name: 'Vorschau wird geprüft …', exact: true })).toBeDisabled();
-      await expect(page.getByLabel('Datenart', { exact: true })).toBeDisabled();
-      await expect(page.getByLabel('CSV-Datei auswählen', { exact: true })).toBeDisabled();
-    } finally { release(); }
+      const locked = await page.locator('fieldset').evaluate(fieldset => {
+        const kind = fieldset.querySelector('#import-kind');
+        const file = fieldset.querySelector('#import-file');
+        return { fieldset: fieldset.matches(':disabled'), kind: kind?.matches(':disabled'),
+          file: file?.matches(':disabled'), label: fieldset.querySelector('label[for="import-file"]')?.textContent };
+      });
+      expect(locked).toEqual({ fieldset: true, kind: true, file: true, label: 'CSV-Datei auswählen' });
+    } finally {
+      release();
+      // Finish the intercepted request before removing interception; otherwise
+      // Chromium can auto-continue it while this callback is still resuming.
+      await continued;
+      await page.unroute('**/api/data-import', holdPreview);
+    }
   } else await page.getByRole('button', { name: 'Vorschau prüfen', exact: true }).click();
   const region = page.getByRole('region', { name: `Vorschau: ${kind === 'customers' ? 'Kunden' : 'Artikel und Leistungen'}`, exact: true });
   await expect(region).toBeVisible();
