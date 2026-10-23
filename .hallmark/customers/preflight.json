@@ -1,0 +1,9 @@
+{
+  "system": "Bivaro Ledger, locked design.md",
+  "scope": ["/customers", "/customers/import"],
+  "fonts": "Existing Inter product typography; unchanged",
+  "palette": "Existing evergreen, mint, emerald, cool canvas and white surface tokens",
+  "preserved": ["AppShell", "all routes and both CSV modes", "API/auth/session behavior", "filter/save/delete/import logic", "field IDs, handlers, labels and return hooks", "legal and confirmation wording"],
+  "introduced": ["directory task hierarchy", "five-column directory", "complete mobile contact metadata", "flat CSV preview and desktop confirmation rail"],
+  "evidenceLimit": "Retained synthetic timeline captures obscure much of the previous directory; new unobscured hosted captures required"
+}
