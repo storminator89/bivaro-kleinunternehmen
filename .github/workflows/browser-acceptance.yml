@@ -155,6 +155,8 @@ jobs:
           export PYTHONPATH="$RUNNER_TEMP/bivaro-evidence-codec${PYTHONPATH:+:$PYTHONPATH}"
           python3 - <<'PY'
           import json
+          from concurrent.futures import ProcessPoolExecutor
+          from multiprocessing import get_context
           import os
           from pathlib import Path
           import stat
@@ -251,8 +253,16 @@ jobs:
               'settings-redesign-backup-dark-375.png',
               'settings-redesign-company-saving-light-1440.png',
               'settings-redesign-company-error-dark-375.png',
+              'invoice-redesign-light-1600.png',
+              'invoice-redesign-light-390.png',
+              'invoice-redesign-dark-1600.png',
+              'invoice-redesign-dark-390.png',
+              'quote-redesign-light-1440.png',
+              'quote-redesign-light-390.png',
+              'quote-redesign-dark-1440.png',
+              'quote-redesign-dark-390.png',
           }
-          # Bounded output: 59 baseline + 20 customer/import + eight settings views (87 exact names).
+          # Bounded output: all 87 existing views + eight invoice/quote views (95 exact names).
           limit = 10 * 1024 * 1024
           per_file_input_limit = 5 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
@@ -286,8 +296,8 @@ jobs:
           if total > 16 * 1024 * 1024:
               skip('encoded evidence input exceeds its bounded read budget')
 
-          images = {}
-          for source, expected in matches:
+          inputs = []
+          for source, expected in sorted(matches, key=lambda match: match[0].name):
               fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
               with os.fdopen(fd, 'rb') as handle:
                   current = os.fstat(handle.fileno())
@@ -296,16 +306,24 @@ jobs:
                   data = handle.read(per_file_input_limit + 1)
               if len(data) > per_file_input_limit:
                   skip('an input PNG exceeds the per-file read budget')
+              inputs.append((source.name, data))
+          def recompress_checked(data):
+              return recompress_png(data)
+          images = {}
+          # At most two bounded decodes/compressors; deterministic output order.
+          # Do not relax pixel/metadata proofs, aggregate budgets or stage timeout.
+          with ProcessPoolExecutor(max_workers=2, mp_context=get_context('fork')) as pool:
               try:
-                  data, proof = recompress_png(data)
+                  results = pool.map(recompress_checked, (data for _, data in inputs), chunksize=1)
+                  for (name, _), (data, proof) in zip(inputs, results, strict=True):
+                      print(f'Lossless PNG proof: {name} {json.dumps(proof, sort_keys=True)}')
+                      images[name] = data
+                      if sum(map(len, images.values())) > limit:
+                          skip('combined read size exceeds 10 MiB')
+                      if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+                          skip('an allowlisted file is not a PNG')
               except Exception:
                   skip('lossless PNG structure, color metadata or full-pixel verification failed')
-              print(f'Lossless PNG proof: {source.name} {json.dumps(proof, sort_keys=True)}')
-              images[source.name] = data
-              if sum(map(len, images.values())) > limit:
-                  skip('combined read size exceeds 10 MiB')
-              if not data.startswith(b'\x89PNG\r\n\x1a\n'):
-                  skip('an allowlisted file is not a PNG')
           print(f'Synthetic screenshot budget after lossless verification: {len(images)}/{len(allowed)} files, {sum(map(len, images.values()))}/{limit} bytes.')
           staging = Path(tempfile.mkdtemp(prefix='bivaro-synthetic-visuals-', dir=os.environ['RUNNER_TEMP']))
           for name, data in images.items():

@@ -19,12 +19,19 @@ describe('bounded lossless synthetic screenshot evidence', () => {
     expect(workflow).toContain('total > 16 * 1024 * 1024');
     expect(workflow).toContain('handle.read(per_file_input_limit + 1)');
     expect(workflow).toContain('recompress_png(data)');
+    expect(workflow).toContain("ProcessPoolExecutor(max_workers=2, mp_context=get_context('fork'))");
+    expect(workflow).toContain('zip(inputs, results, strict=True)');
+    expect(workflow).toContain('chunksize=1');
     expect(workflow).toContain('combined read size exceeds 10 MiB');
     expect(workflow).toContain("'payment-adjustment-confirmation-desktop-1440.png'");
     const allowlist = workflow.match(/allowed = \{([\s\S]*?)\n\s*\}/u)?.[1] ?? '';
     const screenshots = [...allowlist.matchAll(/'([^']+\.png)'/gu)].map(match => match[1]);
-    expect(screenshots).toHaveLength(87); // 59 baseline + 20 customer/import + eight settings views.
-    expect(new Set(screenshots).size).toBe(87);
+    expect(screenshots).toHaveLength(95); // All 87 existing views plus eight invoice/quote views.
+    expect(new Set(screenshots).size).toBe(95);
+    for (const theme of ['light', 'dark']) {
+      for (const width of [1600, 390]) expect(screenshots).toContain(`invoice-redesign-${theme}-${width}.png`);
+      for (const width of [1440, 390]) expect(screenshots).toContain(`quote-redesign-${theme}-${width}.png`);
+    }
     for (const name of ['settings-redesign-light-1440.png', 'settings-redesign-light-375.png', 'settings-redesign-dark-1440.png', 'settings-redesign-dark-375.png', 'settings-redesign-backup-light-1440.png', 'settings-redesign-backup-dark-375.png', 'settings-redesign-company-saving-light-1440.png', 'settings-redesign-company-error-dark-375.png']) expect(screenshots).toContain(name);
     for (const theme of ['light', 'dark']) for (const width of [1440, 390]) expect(screenshots).toContain(`dashboard-overview-${theme}-${width}.png`);
     expect(screenshots).toContain('customer-redesign-directory-light-1440.png');
