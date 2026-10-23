@@ -61,4 +61,10 @@ Settings/provider/SMTP responses and deliberate company/upload/preview requests 
 
 The exact screenshot allowlist gains eight `settings-redesign-*` names, with cardinality and name assertions retained. Existing 8MiB staged-output, 16MiB encoded-input and 5MiB per-file limits and lossless checks remain unchanged. The new eight-image batch separately enforces a 1.85MiB encoded total. A hosted run produced all eight complete images totaling 1,895,156 encoded bytes; its optional staging step timed out before upload, so the bounded staging timeout is now twelve minutes. Actual delivered dimensions and byte counts still require artifact verification.
 
-Hosted CI, artifact inspection and an independent screenshot-first Hallmark finish review are pending at draft publication. No visual acceptance, merge readiness or deployment is claimed by this note.
+## Hosted evidence
+
+At commit `e69c0b7`, hosted lint/types, security, build and unit checks passed (3,969 tests passed, 20 skipped). All 131 pre-existing browser cases passed. The new settings case completed its layout, state, anchor and reachability checks but failed its final mutation guard on a NextAuth diagnostic beacon; this is not a passing functional result.
+
+The [hosted browser run](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/39962704976) delivered all 67 allowlisted images at 7,541,751 bytes, below the unchanged 8MiB staged limit. All eight settings images were verified against their artifact hashes and dimensions. The four primary pages are complete full-page captures; the four focused states retain their planned viewports. An independent screenshot-first Hallmark finish review found no outstanding visual-finish issues.
+
+The follow-up fixture correction waits for each real session fetch to finish before document navigation and separately records only sanitized diagnostic codes; unexpected authentication diagnostics and business mutations still fail the case. Its exact-head hosted functional result remains pending. Visual review is not proof of persistence/restoration, merge readiness or deployment.

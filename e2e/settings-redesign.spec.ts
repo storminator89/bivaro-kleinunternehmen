@@ -88,22 +88,45 @@ async function noClipping(page: Page) {
   }).map(element => ({ text: element.textContent, width: element.clientWidth, scrollWidth: element.scrollWidth })));
   expect(clipped).toEqual([]);
 }
+async function sessionSettledDocument(page: Page, destination: '/login' | '/dashboard' | '/settings', navigate: () => Promise<unknown>) {
+  // Each fresh document mounts SessionProvider. Do not cancel its real session
+  // fetch with the next fixture navigation and manufacture a client auth error.
+  const session = page.waitForResponse(response => response.request().method() === 'GET'
+    && new URL(response.url()).pathname === '/api/auth/session'
+    && new URL(page.url()).pathname === destination);
+  await navigate();
+  const response = await session;
+  expect(response.status()).toBe(200);
+  expect(await response.finished()).toBeNull();
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
 
 test('settings redesign has complete light/dark screens and bounded changed-form states without settings mutations', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
   await isolateSyntheticLoginIpBudget();
+  const authDiagnostics: { level: string; code: string }[] = [];
+  await page.route('**/api/auth/_log', async route => {
+    if (route.request().method() !== 'POST' || new URL(route.request().url()).pathname !== '/api/auth/_log') return route.fallback();
+    const diagnostic = new URLSearchParams(route.request().postData() ?? '');
+    const level = diagnostic.get('level') ?? '', code = diagnostic.get('code') ?? '';
+    // Never retain/export message, stack, URL, session or request metadata.
+    authDiagnostics.push({ level: ['error', 'warn', 'debug'].includes(level) ? level : 'unrecognized',
+      code: /^[A-Z][A-Z0-9_]{0,79}$/.test(code) ? code : 'UNRECOGNIZED' });
+    await route.fulfill({ status: 204 });
+  });
   const password = 'SyntheticSettingsLayout123!';
   const user = await prisma.user.create({ data: { email: `settings-layout-${randomUUID()}@example.test`, name: 'Synthetic settings layout', password: await hashPassword(password), role: 'ADMIN' } });
-  await page.goto('/login');
+  await sessionSettledDocument(page, '/login', () => page.goto('/login'));
   await page.getByLabel('E-Mail').fill(user.email);
   await page.getByLabel('Passwort', { exact: true }).fill(password);
-  await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click();
+  await sessionSettledDocument(page, '/dashboard', () => page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click());
   await expect(page).toHaveURL(/\/dashboard/);
 
   const unexpectedMutations: string[] = [];
   await page.route('**/api/**', async route => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(route.request().method())) return route.continue();
+    if (route.request().method() === 'POST' && new URL(route.request().url()).pathname === '/api/auth/_log') return route.fallback();
     unexpectedMutations.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
     await route.abort('blockedbyclient');
   });
@@ -144,7 +167,7 @@ test('settings redesign has complete light/dark screens and bounded changed-form
   };
 
   loadFails = true;
-  await page.goto('/settings');
+  await sessionSettledDocument(page, '/settings', () => page.goto('/settings'));
   await expect(page.getByRole('main').getByRole('alert')).toContainText('Einstellungen nicht geladen');
   await expect(page.locator('#company-settings')).toHaveCount(0);
   loadFails = false;
@@ -153,7 +176,7 @@ test('settings redesign has complete light/dark screens and bounded changed-form
 
   for (const value of ['light', 'dark'] as const) for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
-    await page.goto('/settings');
+    await sessionSettledDocument(page, '/settings', () => page.goto('/settings'));
     await theme(page, value);
     await expect(page.locator('#companyName')).toHaveValue(company.companyName);
     await expect(page.locator('#ai-receipt-settings')).toContainText('Kein Schlüssel');
@@ -179,7 +202,7 @@ test('settings redesign has complete light/dark screens and bounded changed-form
     process.stdout.write(`Settings primary disclosure state: ${JSON.stringify({ theme: value, width, expanded })}\n`);
   }
 
-  await page.goto('/settings');
+  await sessionSettledDocument(page, '/settings', () => page.goto('/settings'));
   const form = page.locator('#company-settings'), save = form.getByRole('button', { name: 'Speichern', exact: true });
   const upload = page.locator('#logo-upload');
   await page.keyboard.press('Tab');
@@ -267,6 +290,8 @@ test('settings redesign has complete light/dark screens and bounded changed-form
   await reachable(discardPreview);
   await discardPreview.click();
   await expect(restore).toHaveCount(0);
+  process.stdout.write(`Settings auth diagnostic codes: ${JSON.stringify(authDiagnostics)}\n`);
+  expect(authDiagnostics).toEqual([]);
   expect(unexpectedMutations).toEqual([]);
   expect(captures).toHaveLength(8);
   expect(captures.reduce((sum, capture) => sum + capture.bytes, 0)).toBeLessThanOrEqual(1.85 * 1024 * 1024);
