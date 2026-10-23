@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
+import { expect, test, type CDPSession, type Locator, type Page, type Request } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { readBankAllocationPreflight } from '../lib/bank-allocation-client';
@@ -17,6 +17,25 @@ const movePath = (binding: string) => `/api/bank-allocations/${binding}/changes`
 const panelName = 'Zahlung korrigieren oder Erstattung dokumentieren';
 function observes(request: Request, path: string, method = 'POST') { return request.method() === method && new URL(request.url()).pathname === path; }
 function deferred() { let release!: () => void; const promise = new Promise<void>(resolve => { release = resolve; }); return { promise, release }; }
+
+type NativeFocusEvent = { sequence: number; event: string; trusted: boolean; visibilityState: DocumentVisibilityState; hasFocus: boolean };
+async function observeNativeFocus(page: Page) {
+  await page.addInitScript(() => {
+    const events: NativeFocusEvent[] = [];
+    Object.defineProperty(window, '__bivaroAllocationFocus', { value: events, configurable: true });
+    let sequence = 0;
+    const record = (event: Event) => {
+      events.push({ sequence: ++sequence, event: event.type, trusted: event.isTrusted, visibilityState: document.visibilityState, hasFocus: document.hasFocus() });
+      if (events.length > 80) events.shift();
+    };
+    // Passive observations only; never dispatch a synthetic lifecycle event.
+    for (const name of ['focus', 'blur']) window.addEventListener(name, record);
+    for (const name of ['visibilitychange', 'pointerdown']) document.addEventListener(name, record);
+  });
+}
+async function nativeFocusState(page: Page) {
+  return page.evaluate(() => ({ visibilityState: document.visibilityState, hasFocus: document.hasFocus(), events: [...((window as typeof window & { __bivaroAllocationFocus?: NativeFocusEvent[] }).__bivaroAllocationFocus ?? [])] }));
+}
 
 async function pending(page: Page, userId: string, rowStableKey: string, kind: 'record' | 'move') {
   const raw = await page.evaluate(key => sessionStorage.getItem(key), BANK_ALLOCATION_PENDING_KEY);
@@ -72,6 +91,7 @@ for (const width of [1440, 390, 360]) test(`bank allocation: 120 minus 40, whole
   await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
   const { userId, customerId } = await bankAllocationAccount(page);
   let observer: Page | undefined;
+  let editorFocusSession: CDPSession | undefined, observerFocusSession: CDPSession | undefined;
   try {
     const suffix = `${width}-${randomUUID().slice(0, 8)}`;
     const a = await issueAllocationInvoice(page, userId, customerId, `BANK-A-${suffix}`);
@@ -137,7 +157,16 @@ for (const width of [1440, 390, 360]) test(`bank allocation: 120 minus 40, whole
 
     let staleInput: Record<string, unknown> | undefined;
     if (width === 1440) {
-      observer = await context.newPage(); await observer.goto('/bank-csv');
+      observer = await context.newPage();
+      // Match the established hosted tax-focus-fallback fixture: Playwright
+      // otherwise emulates every Chromium page as focused. Restore native tab
+      // focus on both pages; never fabricate DOM visibility/focus or a GET.
+      editorFocusSession = await context.newCDPSession(page);
+      observerFocusSession = await context.newCDPSession(observer);
+      await editorFocusSession.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+      await observerFocusSession.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+      await observeNativeFocus(observer);
+      await observer.goto('/bank-csv');
       expect(await observer.evaluate(key => sessionStorage.getItem(key), BANK_ALLOCATION_PENDING_KEY)).toBeNull();
       const otherRow = await openAllocationReceipt(observer);
       const checked = observer.waitForResponse(response => observes(response.request(), `/api/bank-allocations/${binding.stableKey}/preflight`) && response.request().postDataJSON().invoiceId === b.id);
@@ -145,7 +174,14 @@ for (const width of [1440, 390, 360]) test(`bank allocation: 120 minus 40, whole
       await chooseAllocationInvoice(otherDialog, b.id, b.invoiceNumber!, true);
       const old = readBankAllocationPreflight(await (await checked).json());
       staleInput = { invoiceId: b.id, idempotencyKey: randomUUID(), expectedAllocationRevision: old.row.assignment!.allocationRevision, expectedSourceLedgerVersion: old.row.assignment!.allocatedInvoice.ledgerVersion, expectedTargetLedgerVersion: old.selection!.ledgerVersion, actionDate: '2026-02-02', reason: 'SYNTHETISCH · veralteter zweiter Tab', cashNeutralReviewed: true };
+      await otherDialog.getByRole('heading', { name: 'Zuordnung ändern', exact: true }).click();
+      await expect.poll(async () => { const state = await nativeFocusState(observer!); return { visibilityState: state.visibilityState, hasFocus: state.hasFocus }; }).toEqual({ visibilityState: 'visible', hasFocus: true });
+      const beforeAway = await nativeFocusState(observer);
       await page.bringToFront();
+      await dialog.getByRole('heading', { name: 'Zuordnung ändern', exact: true }).click();
+      await expect.poll(async () => { const state = await nativeFocusState(observer!); return state.visibilityState !== 'visible' || !state.hasFocus; }).toBe(true);
+      const away = await nativeFocusState(observer), sequence = beforeAway.events.at(-1)?.sequence ?? 0;
+      expect(away.events.some(event => event.sequence > sequence && event.trusted && ['blur', 'visibilitychange'].includes(event.event) && (event.visibilityState !== 'visible' || !event.hasFocus))).toBe(true);
     }
     const changePosts: Record<string, unknown>[] = [];
     page.on('request', request => { if (observes(request, changePath)) changePosts.push(request.postDataJSON() as Record<string, unknown>); });
@@ -164,11 +200,16 @@ for (const width of [1440, 390, 360]) test(`bank allocation: 120 minus 40, whole
       expect(changePosts).toHaveLength(1);
       if (observer && staleInput) {
         const receipt = recorded.batches[0];
+        const beforeReturn = await nativeFocusState(observer);
         const refreshed = observer.waitForResponse(response => new URL(response.url()).pathname === `/api/bank-imports/${receipt.stableKey}` && response.request().method() === 'GET');
         await observer.bringToFront();
         // The receipt heading is behind the open Radix modal. A real pointer
         // action on its own inert title returns trusted content focus instead.
         await observer.getByRole('dialog', { name: 'Zuordnung ändern', exact: true }).getByRole('heading', { name: 'Zuordnung ändern', exact: true }).click();
+        await expect.poll(async () => { const state = await nativeFocusState(observer!); return { visibilityState: state.visibilityState, hasFocus: state.hasFocus }; }).toEqual({ visibilityState: 'visible', hasFocus: true });
+        const returned = await nativeFocusState(observer), sequence = beforeReturn.events.at(-1)?.sequence ?? 0;
+        expect(returned.events.some(event => event.sequence > sequence && event.trusted && ['focus', 'visibilitychange'].includes(event.event) && event.visibilityState === 'visible')).toBe(true);
+        expect(returned.events.some(event => event.sequence > sequence && event.event === 'pointerdown' && event.trusted)).toBe(true);
         expect((await refreshed).status()).toBe(200);
         const otherDialog = observer.getByRole('dialog', { name: 'Zuordnung ändern', exact: true });
         await expect(otherDialog.getByRole('button', { name: 'Zuordnung ändern', exact: true })).toBeDisabled();
@@ -228,7 +269,11 @@ for (const width of [1440, 390, 360]) test(`bank allocation: 120 minus 40, whole
       await page.screenshot({ path: info.outputPath('bank-allocation-current-origin-360.png'), fullPage: false });
       await cancelAndRefund(page, userId, a.id, a.invoiceNumber!, b.id, b.invoiceNumber!, moved);
     }
-  } finally { await observer?.close(); await prisma.$disconnect(); }
+  } finally {
+    await editorFocusSession?.detach().catch(() => {});
+    await observerFocusSession?.detach().catch(() => {});
+    await observer?.close(); await prisma.$disconnect();
+  }
 });
 
 async function cancelAndRefund(page: Page, userId: string, originId: number, originNumber: string, invoiceId: number, number: string, before: Awaited<ReturnType<typeof allocationSnapshot>>) {
