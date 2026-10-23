@@ -69,7 +69,11 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`));
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
-        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+        await page.evaluate(async () => {
+          await window.document.fonts.ready;
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        });
         const metricBounds = await metrics.boundingBox(), taskBounds = await preview.boundingBox(), analysisBounds = await analysis.boundingBox();
         expect(metricBounds).not.toBeNull(); expect(taskBounds).not.toBeNull(); expect(analysisBounds).not.toBeNull();
         expect(metricBounds!.y + metricBounds!.height).toBeLessThanOrEqual(taskBounds!.y);
@@ -77,25 +81,45 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
         else expect(taskBounds!.y + taskBounds!.height).toBeLessThan(analysisBounds!.y);
         expect(await page.evaluate(() => window.document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         for (const link of await preview.getByRole('link').all()) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-        if (width === 390) {
-          const height = await page.evaluate(() => window.document.documentElement.scrollHeight);
-          expect(height).toBeLessThanOrEqual(8000);
-          expect(width * height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
-        }
-        // Keep the top fold while also proving the lower mobile tasks/analysis;
-        // the same four allowlisted files and all staging budgets remain intact.
-        expect(await page.evaluate(() => window.scrollY)).toBe(0);
-        expect(await page.evaluate(() => window.innerWidth)).toBe(width);
-        const documentWidth = await page.evaluate(() => window.document.documentElement.clientWidth);
-        const image = await page.screenshot({ path: testInfo.outputPath(`dashboard-overview-${theme}-${width}.png`), fullPage: width === 390 });
+        await expect(preview.getByRole('listitem')).toHaveCount(3);
+        const activity = page.locator('.dashboard-activity-feed'), context = page.locator('.dashboard-context');
+        await expect(activity).toBeVisible(); await expect(context).toBeVisible();
+        const activityBounds = await activity.boundingBox(), contextBounds = await context.boundingBox();
+        expect(activityBounds).not.toBeNull(); expect(contextBounds).not.toBeNull();
+        const surface = await page.evaluate(() => {
+          const root = window.document.documentElement, body = window.document.body;
+          return { innerWidth: window.innerWidth, innerHeight: window.innerHeight, scrollY: window.scrollY,
+            documentClientWidth: root.clientWidth, documentScrollWidth: root.scrollWidth,
+            bodyClientWidth: body.clientWidth, bodyScrollWidth: body.scrollWidth,
+            height: Math.max(root.scrollHeight, body.scrollHeight, root.offsetHeight, body.offsetHeight, root.clientHeight, body.clientHeight) };
+        });
+        process.stdout.write(`Dashboard full-page surface: ${JSON.stringify({ theme, viewport: page.viewportSize(), ...surface, taskBounds, analysisBounds, activityBounds, contextBounds })}\n`);
+        expect(surface.innerWidth).toBe(width);
+        expect(surface.scrollY).toBe(0);
+        expect(surface.documentScrollWidth).toBeLessThanOrEqual(surface.documentClientWidth);
+        expect(surface.bodyScrollWidth).toBeLessThanOrEqual(surface.bodyClientWidth);
+        expect(surface.height).toBeLessThanOrEqual(8000);
+        expect(width * surface.height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
+        // All four settled pages include the top fold AND complete lower content;
+        // unchanged allowlist names/count and staging budgets bound the evidence.
+        const image = await page.screenshot({ path: testInfo.outputPath(`dashboard-overview-${theme}-${width}.png`), fullPage: true });
+        const pngWidth = image.readUInt32BE(16), pngHeight = image.readUInt32BE(20);
         expect(image.length).toBeLessThanOrEqual(5 * 1024 * 1024);
-        // Headed Chromium omits the scrollbar from full-page image pixels,
-        // unlike its normal viewport capture. Verify the measured surface.
-        expect(image.readUInt32BE(16)).toBe(width === 390 ? documentWidth : width);
-        if (width === 390) {
-          expect(image.readUInt32BE(20)).toBeLessThanOrEqual(8000);
-          expect(image.readUInt32BE(20)).toBeGreaterThanOrEqual(Math.ceil(analysisBounds!.y + analysisBounds!.height));
+        // Headed Chromium's full-page image excludes the measured scrollbar;
+        // the viewport remains 1440/390, with overflow checked independently.
+        expect(pngWidth).toBe(surface.documentClientWidth);
+        expect(pngHeight).toBe(surface.height);
+        expect(pngWidth * pngHeight * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
+        for (const bounds of [taskBounds!, analysisBounds!, activityBounds!, contextBounds!]) {
+          expect(pngHeight).toBeGreaterThanOrEqual(Math.ceil(bounds.y + bounds.height));
         }
+        const taskEntries = await preview.getByRole('listitem').evaluateAll(items => items.map(item => ({
+          text: item.textContent, bottom: item.getBoundingClientRect().bottom,
+          actions: [...item.querySelectorAll('a')].map(link => ({ text: link.textContent, href: link.getAttribute('href') })),
+        })));
+        process.stdout.write(`Dashboard full-page capture proof: ${JSON.stringify({ theme, viewport: page.viewportSize(), url: page.url(),
+          fullPage: true, ...surface, pngWidth, pngHeight, encodedBytes: image.length,
+          taskBounds, analysisBounds, activityBounds, contextBounds, taskEntries })}\n`);
       }
     }
     await page.getByRole('button', { name: 'Helles Farbschema aktivieren', exact: true }).click();
