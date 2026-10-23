@@ -1,5 +1,7 @@
 "use client";
 
+import styles from './cashflow-workspace.module.css';
+
 import { ExpenseRowActions } from '@/components/dashboard/expense-row-actions';
 import { LedgerSortControl, SortableLedgerHead } from '@/components/dashboard/ledger-sort-control';
 import { DashboardIcon } from "@/components/brand/dashboard-icon";
@@ -149,7 +151,7 @@ export function ExpensesTab({
   const sort = { sortBy: filters.sortBy ?? 'date', sortOrder: filters.sortOrder ?? 'desc' };
   const hasFilters = Boolean(filters.searchTerm || filters.dateRange !== 'all' || filters.taxRelevant !== 'all' || filters.category || filters.hasReceipt !== 'all');
   return (
-    <div className="bookkeeping-workspace space-y-6">
+    <div className={`bookkeeping-workspace ${styles.workspace}`}>
       <details id="expense-entry" hidden={!entryOpen} className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-6">
           <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><DashboardIcon name="tile-expenses" size={44} /></span><span><span className="block text-sm font-semibold">Neue Ausgabe</span></span></span>
@@ -158,8 +160,8 @@ export function ExpensesTab({
         <div className="border-t p-4 sm:p-6">
           {onOpenRecurringExpenses && <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Button variant="outline" size="sm" onClick={onOpenRecurringExpenses}>Wiederkehrende Ausgaben</Button></div>}
           <form onSubmit={onSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+            <div className={styles.entryFields}>
+              <div className={styles.entryDescription}>
                 <Label htmlFor="description" className="text-sm font-medium">Beschreibung</Label>
                 <Input
                   id="description"
@@ -203,19 +205,19 @@ export function ExpensesTab({
                 />
 
               </div>
-              <div className="space-y-2">
+              <div className={styles.attachmentField}>
                 <Label htmlFor="receipt" className="text-sm font-medium">Beleg hochladen (optional)</Label>
-                <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center transition-colors hover:border-primary/50 hover:bg-muted/50">
+                <div className={styles.attachment}>
                   <Input
                     id="receipt"
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
                     onChange={(e) => setExpenseReceipt(e.target.files ? e.target.files[0] : null)}
-                    className="hidden"
+                    className={styles.fileInput}
                   />
                   <Label
                     htmlFor="receipt"
-                    className="cursor-pointer flex flex-col items-center justify-center"
+                    className={styles.attachmentLabel}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-muted-foreground mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -230,7 +232,7 @@ export function ExpensesTab({
                 </div>
 
               </div>
-              <div className="flex items-center space-x-2 h-full pt-6">
+              <div className={styles.taxToggle}>
                 <div className="relative inline-flex items-center">
                   <input
                     type="checkbox"
@@ -242,7 +244,7 @@ export function ExpensesTab({
                   <Label htmlFor="taxRelevant" className="ml-2 text-sm font-medium">Steuerlich relevant</Label>
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className={styles.taxFields}>
                 <div className="space-y-2">
                   <Label htmlFor="taxDeductiblePercentage" className="text-sm font-medium">Steuerlich ansetzbar (%)</Label>
                   <Input
@@ -290,11 +292,43 @@ export function ExpensesTab({
       </details>
 
       {/* Expenses List */}
-      <div className="ledger-list bg-card rounded-xl border overflow-hidden">
-        <div className="px-6 pt-6 pb-4 border-b">
+      <div className={`ledger-list ${styles.ledger}`}>
+        <div className={styles.ledgerHeader}>
           <LedgerListHeading icon="nav-expenses" isLoading={isLoading} isError={isError} title="Ihre Ausgaben" total={total} amounts={isError || isLoading ? [] : expenses.map(item => item.amount)} />
           <div className="ledger-filters">
-            <div className="ledger-filter-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className={styles.filters}>
+              {/* Search */}
+              <div className={styles.search}>
+                <Label htmlFor="expense-search" className="text-xs font-medium block mb-1.5 text-muted-foreground">Suche</Label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <Input
+                    id="expense-search"
+                    type="text"
+                    placeholder="Beschreibung, Kategorie..."
+                    value={filters.searchTerm}
+                    className="pl-9 pr-8 h-10"
+                    onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
+                  />
+                  {filters.searchTerm && (
+                    <button
+                      type="button"
+                      aria-label="Suche leeren"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                      onClick={() => setFilters({ ...filters, searchTerm: '' })}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Category Filter */}
               <div>
                 <Label htmlFor="expense-category-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Kategorie</Label>
@@ -385,41 +419,11 @@ export function ExpensesTab({
                 </div>
               </div>
 
-              {/* Search */}
-              <div>
-                <Label htmlFor="expense-search" className="text-xs font-medium block mb-1.5 text-muted-foreground">Suche</Label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <Input
-                    id="expense-search"
-                    type="text"
-                    placeholder="Beschreibung, Kategorie..."
-                    value={filters.searchTerm}
-                    className="pl-9 pr-8 h-10"
-                    onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
-                  />
-                  {filters.searchTerm && (
-                    <button
-                      type="button"
-                      aria-label="Suche leeren"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
-                      onClick={() => setFilters({ ...filters, searchTerm: '' })}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
+
             </div>
 
             {/* Filter Actions */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+            <div className={styles.filterActions}>
               <div className="ledger-result-summary">
                 <div className="text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">{expenses.length}</span> Ausgaben auf dieser Seite
@@ -486,24 +490,24 @@ export function ExpensesTab({
           <div hidden={isLoading || isError}>
           <div className="divide-y xl:hidden" aria-label="Ausgabenliste">
             {expenses.length > 0 ? expenses.map((expense) => (
-              <article key={expense.id} className="ledger-record space-y-3 p-4">
-                <div className="flex items-start justify-between gap-4">
+              <article key={expense.id} className={`ledger-record ${styles.record}`}>
+                <div className={styles.recordHeading}>
                   <div className="min-w-0">
-                    <h3 className="truncate font-semibold">{expense.description}</h3>
+                    <h3 className={styles.recordTitle}>{expense.description}</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {new Date(expense.date).toLocaleDateString('de-DE')} · {expense.category || 'Sonstiges'}
                     </p>
                   </div>
-                  <p className="shrink-0 font-semibold tabular-nums text-critical">{formatCurrency(expense.amount)}</p>
+                  <p className={`${styles.recordAmount} text-critical`}>{formatCurrency(expense.amount)}</p>
                 </div>
                 <p className="text-xs text-muted-foreground">{expense.taxRelevant ? 'Steuerrelevant' : 'Nicht steuerrelevant'}</p>
-                <ExpenseRowActions expense={expense} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} />
+                <div className={styles.recordActions}><ExpenseRowActions expense={expense} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} /></div>
               </article>
             )) : (
               <p className="p-6 text-center text-sm text-muted-foreground">Noch keine Ausgaben.</p>
             )}
           </div>
-          <div className="hidden overflow-x-auto p-6 xl:block">
+          <div className={`hidden xl:block ${styles.desktopList}`}>
             <Table>
               <TableCaption className="sr-only">Ausgaben passend zu den ausgewählten Filtern</TableCaption>
               <TableHeader>
@@ -566,7 +570,7 @@ export function ExpensesTab({
 
           </div>
           {/* Pagination */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 pb-6">
+          <div className={styles.pagination}>
             <div className="text-sm text-muted-foreground">
               Seite {page} von {totalPages} · {total} Einträge
             </div>
