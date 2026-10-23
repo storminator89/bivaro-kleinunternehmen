@@ -23,8 +23,8 @@ Independent read-only review found no material source regression. It identified 
 - Node 22.23.4: full ESLint with zero warnings, production build (117 static pages plus notice generation), and separate `tsc --noEmit` passed. Nine existing filesystem-tracing warnings remain in unchanged server modules. Dependencies were copied privately; no shared Prisma generation or production database access occurred.
 - Focused source-contract suites: 21/21 passed (cashflow, invoice, quote). Receipt actions, source-linked expense actions, allocation presentation and purchase-expense presentation: 54/54 passed. Total focused pure/source tests: 75/75 across seven suites.
 - Hosted preparation: two additional cases and eight exact captures are discoverable without browser execution; new bounds/source checks pass. Independent source review fixes keep the clipped file input at 1px and bound actual aggregate image reads, including same-inode size changes.
-- Browser acceptance: **not run / not accepted**. No local browser, native renderer, JVM or PDF execution is part of this package.
-- GitHub publication, CI, merge and deployment: **not performed** by this local package.
+- Browser acceptance: **hosted runs performed; not yet accepted**. No local browser, native renderer, JVM or PDF execution is part of this package.
+- Published as draft PR #136. CI and PDF/A checks passed; merge and deployment remain outside this package.
 
 ## Future hosted acceptance plan — at most eight images
 
@@ -42,3 +42,7 @@ Without additional screenshots, check widths 320/375/414/768/1280/1440, keyboard
 ## First hosted pass and focused correction
 
 The first hosted run passed all 138 existing browser cases. Its two new cases stopped before capture: the income identity locator incorrectly required the whole desktop cell to contain only the description despite its attribution, and the expense case revealed clipped native filter labels at 320px. The locator is now scoped to description cells/headings, and the actual narrow-phone filter grid uses one full-width column below 480px. The original 95-image artifact remained complete within its unchanged budget; zero new cashflow captures were claimed as accepted. A new hosted run is required for the corrected head.
+
+## Second hosted pass and precise measurement correction
+
+The second run passed 139 browser cases, including the complete income case and all four income captures. The expense case stopped on the deliberately fully clipped native file input: its intrinsic scroll width is not painted content, and the page itself had no horizontal overflow. The geometry exclusion is restricted to absolute, overflow-hidden file inputs with strictly parsed fully clipped `inset(50%)` values; visible filename bounds, keyboard focus and the parent focus outline remain separately asserted. All other geometry and artifact limits are unchanged. The existing 95 captures remained complete (10,245,639 PNG bytes); the new exact-eight gate correctly withheld the incomplete four-image cashflow artifact. Current-head hosted rerun and actual image review are still required.

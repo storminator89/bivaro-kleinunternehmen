@@ -62,9 +62,14 @@ async function geometry(page: Page, workspace: string) {
       const r = node.getBoundingClientRect();
       const style = getComputedStyle(node);
       // Screen-reader-only labels are intentionally clipped, not painted overflow.
-      const screenReaderOnly = (node.classList.contains('sr-only') || style.clipPath === 'inset(50%)') && style.position === 'absolute'
+      const screenReaderOnly = node.classList.contains('sr-only') && style.position === 'absolute'
         && style.overflow === 'hidden' && r.width <= 1 && r.height <= 1;
-      if (screenReaderOnly) return false;
+      // Native file controls can retain intrinsic dimensions while their painted
+      // content is fully clipped. Do not exempt other inputs or partial clipping.
+      const fullyClippedFile = node instanceof HTMLInputElement && node.type === 'file'
+        && style.position === 'absolute' && style.overflow === 'hidden'
+        && /^inset\(50%(?:\s+50%){0,3}\)$/.test(style.clipPath);
+      if (screenReaderOnly || fullyClippedFile) return false;
       return r.width > 0 && r.height > 0 && (r.left < -1 || r.right > root.clientWidth + 1 || node.scrollWidth > node.clientWidth + 1);
     }).map(node => ({ tag: node.tagName, text: node.textContent?.trim().slice(0, 100), width: node.clientWidth, scrollWidth: node.scrollWidth }));
     return { width: innerWidth, clientWidth: root.clientWidth, scrollWidth: root.scrollWidth, overflowing };
@@ -148,7 +153,19 @@ for (const kind of ['income', 'expense'] as const) {
           await entry.locator(kind === 'income' ? '#incomeDescription' : '#description').fill('SYNTHETISCHER ungespeicherter Eintrag');
           if (kind === 'expense') {
             await entry.locator('#receipt').setInputFiles({ name: 'SYNTHETISCH-vollständig-lesbarer-langer-Belegname.xml.png', mimeType: 'image/png', buffer: Buffer.from('synthetic-selected-not-uploaded') });
-            await expect(entry.getByText('SYNTHETISCH-vollständig-lesbarer-langer-Belegname.xml.png', { exact: true })).toBeVisible();
+            const filename = entry.locator('label[for="receipt"] span').filter({ hasText: 'SYNTHETISCH-vollständig-lesbarer-langer-Belegname.xml.png' });
+            await expect(filename).toBeVisible();
+            await expect(filename).toHaveText('SYNTHETISCH-vollständig-lesbarer-langer-Belegname.xml.png');
+            const filenameBounds = await filename.evaluate(element => {
+              const bounds = element.getBoundingClientRect();
+              return { left: bounds.left, right: bounds.right, width: bounds.width, height: bounds.height,
+                viewport: document.documentElement.clientWidth, clientWidth: element.clientWidth, scrollWidth: element.scrollWidth };
+            });
+            expect(filenameBounds.width).toBeGreaterThan(0);
+            expect(filenameBounds.height).toBeGreaterThan(0);
+            expect(filenameBounds.left).toBeGreaterThanOrEqual(-1);
+            expect(filenameBounds.right).toBeLessThanOrEqual(filenameBounds.viewport + 1);
+            expect(filenameBounds.scrollWidth).toBeLessThanOrEqual(filenameBounds.clientWidth + 1);
             await entry.locator('#taxRelevant').uncheck();
             await expect(entry.locator('#taxDeductiblePercentage')).toBeVisible();
             await expect(entry.locator('#depreciationYears')).toBeVisible();
