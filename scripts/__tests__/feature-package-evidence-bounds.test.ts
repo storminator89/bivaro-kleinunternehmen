@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
 const start = workflow.indexOf('      - name: Stage bounded profile and numbering screenshots separately');
-const original = workflow.slice(0, start), partition = workflow.slice(start);
+const end = workflow.indexOf('      - name: Stage bounded bank and billing screenshots separately', start);
+const original = workflow.slice(0, start), partition = workflow.slice(start, end < 0 ? undefined : end);
 const namesIn = (text: string) => [...text.matchAll(/allowed = \{([\s\S]*?)\n\s*\}/g)].flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
 describe('bounded feature profile and numbering evidence partition', () => {
   it('preserves every prior image and budget without raising the functional job timeout or permissions', () => {
