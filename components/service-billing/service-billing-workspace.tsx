@@ -11,6 +11,7 @@ import { calculateInvoiceAmounts } from '@/lib/invoice-calculation';
 import { ServicePlanEditor } from './service-plan-editor';
 import { CADENCE_LABELS, serviceCurrency, serviceDate, serviceJson, type ServiceBillingList, type ServiceBillingPlanDto } from './service-billing-types';
 import styles from './service-billing-workspace.module.css';
+import { captureServiceDialogOpener, restoreServiceDialogOpener } from './service-dialog-focus';
 
 type Review = { plan: ServiceBillingPlanDto; action: 'GENERATE' | 'SKIP' };
 type ReviewResult = { invoiceId: number | null; idempotent: boolean; unrendered: boolean };
@@ -49,6 +50,7 @@ export function PlanCard({ plan, disabled, onEdit, onReview, onToggle }: {
 }
 
 function PeriodReview({ review, onClose, onSaved }: { review: Review; onClose: () => void; onSaved: (message: string, result: ReviewResult) => void }) {
+  const openerRef = useRef<HTMLElement | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -59,11 +61,20 @@ function PeriodReview({ review, onClose, onSaved }: { review: Review; onClose: (
     setBusy(true); setError('');
     try {
       const result = await serviceJson<ReviewResult>('/api/service-billing/period', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId: plan.id, revision: plan.revision, periodIndex: plan.nextPeriod, action, confirmed: true }) });
+      // Successful reviews already move focus to the refreshed list heading.
+      openerRef.current = null;
       onSaved(result.idempotent ? 'Dieser Zeitraum wurde bereits bearbeitet. Den vorhandenen Entwurf findest du unter „Bearbeitete Zeiträume“; es wurde nichts doppelt erzeugt.' : generating ? 'Rechnungsentwurf vorbereitet. Öffne ihn unter „Bearbeitete Zeiträume“ im normalen Rechnungseditor. Nichts wurde versendet oder als Einnahme gebucht.' : 'Genau dieser Zeitraum wurde bewusst übersprungen. Es wurde keine Rechnung erzeugt.', result);
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Die Prüfung konnte nicht gespeichert werden.'); }
     finally { setBusy(false); }
   }
-  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent showCloseButton={!busy} className={styles.reviewDialog}><DialogHeader className="text-left"><DialogTitle>{generating ? 'Einen Rechnungsentwurf vorbereiten?' : 'Diesen Zeitraum überspringen?'}</DialogTitle><DialogDescription>{generating ? 'Ein Zeitraum, ein nicht ausgestellter Entwurf.' : 'Dieser eine Zeitraum wird als bewusst übersprungen gespeichert. Das lässt sich hier nicht rückgängig machen.'}</DialogDescription></DialogHeader><div className="space-y-4"><div className={styles.reviewSummary}><div><p className={styles.reviewName}>{plan.name}</p><p className={styles.hint}>{plan.customer.name}</p><p className={styles.reviewDates}>{serviceDate(plan.preview.periodStart)} – {serviceDate(plan.preview.periodEnd)}</p></div>{generating && <PlanAmount plan={plan} />}</div><p className="text-sm leading-6 text-muted-foreground">{generating ? 'Ohne Rechnungsnummer, Versand, Zahlung oder Einnahme. Danach im Rechnungseditor bearbeiten. Keine automatische Nachholung.' : 'Keine Rechnung, kein Versand und keine Einnahme. Nur der nächste offene Zeitraum wird angezeigt; es werden keine weiteren Zeiträume übersprungen oder nachgeholt.'}</p><label className={styles.confirmation}><input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-primary" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy} />{generating ? 'Ich habe Kunde, Leistungen und Zeitraum geprüft und möchte genau einen Entwurf vorbereiten.' : 'Ich möchte genau diesen Zeitraum ohne Rechnung überspringen.'}</label>{error && <div role="alert" className="space-y-2 rounded-lg border border-destructive/40 p-3 text-sm"><p>{error}</p><p className="text-xs text-muted-foreground">Bei einer unterbrochenen Verbindung ist die erneute Bestätigung desselben Zeitraums gegen doppelte Entwürfe geschützt. Bei einem geänderten Plan: abbrechen und den aktuellen Stand laden.</p></div>}</div><DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Abbrechen</Button><Button type="button" onClick={submit} disabled={!confirmed || busy}>{busy && <Loader2 className="animate-spin" aria-hidden="true" />}{busy ? 'Wird gespeichert…' : generating ? 'Nur diesen Entwurf anlegen' : 'Nur diesen Zeitraum überspringen'}</Button></DialogFooter></DialogContent></Dialog>;
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent showCloseButton={!busy} className={styles.reviewDialog}
+    onOpenAutoFocus={() => { openerRef.current = captureServiceDialogOpener(document); }}
+    onCloseAutoFocus={event => {
+      event.preventDefault();
+      const opener = openerRef.current;
+      openerRef.current = null;
+      restoreServiceDialogOpener(opener);
+    }}><DialogHeader className="text-left"><DialogTitle>{generating ? 'Einen Rechnungsentwurf vorbereiten?' : 'Diesen Zeitraum überspringen?'}</DialogTitle><DialogDescription>{generating ? 'Ein Zeitraum, ein nicht ausgestellter Entwurf.' : 'Dieser eine Zeitraum wird als bewusst übersprungen gespeichert. Das lässt sich hier nicht rückgängig machen.'}</DialogDescription></DialogHeader><div className="space-y-4"><div className={styles.reviewSummary}><div><p className={styles.reviewName}>{plan.name}</p><p className={styles.hint}>{plan.customer.name}</p><p className={styles.reviewDates}>{serviceDate(plan.preview.periodStart)} – {serviceDate(plan.preview.periodEnd)}</p></div>{generating && <PlanAmount plan={plan} />}</div><p className="text-sm leading-6 text-muted-foreground">{generating ? 'Ohne Rechnungsnummer, Versand, Zahlung oder Einnahme. Danach im Rechnungseditor bearbeiten. Keine automatische Nachholung.' : 'Keine Rechnung, kein Versand und keine Einnahme. Nur der nächste offene Zeitraum wird angezeigt; es werden keine weiteren Zeiträume übersprungen oder nachgeholt.'}</p><label className={styles.confirmation}><input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-primary" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy} />{generating ? 'Ich habe Kunde, Leistungen und Zeitraum geprüft und möchte genau einen Entwurf vorbereiten.' : 'Ich möchte genau diesen Zeitraum ohne Rechnung überspringen.'}</label>{error && <div role="alert" className="space-y-2 rounded-lg border border-destructive/40 p-3 text-sm"><p>{error}</p><p className="text-xs text-muted-foreground">Bei einer unterbrochenen Verbindung ist die erneute Bestätigung desselben Zeitraums gegen doppelte Entwürfe geschützt. Bei einem geänderten Plan: abbrechen und den aktuellen Stand laden.</p></div>}</div><DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Abbrechen</Button><Button type="button" onClick={submit} disabled={!confirmed || busy}>{busy && <Loader2 className="animate-spin" aria-hidden="true" />}{busy ? 'Wird gespeichert…' : generating ? 'Nur diesen Entwurf anlegen' : 'Nur diesen Zeitraum überspringen'}</Button></DialogFooter></DialogContent></Dialog>;
 }
 
 export function ServiceBillingWorkspace() {

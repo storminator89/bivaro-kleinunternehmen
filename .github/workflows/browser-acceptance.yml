@@ -784,6 +784,8 @@ jobs:
               'bank-billing-service-editor-light-390.png',
               'bank-billing-service-editor-dark-1440.png',
               'bank-billing-service-editor-dark-390.png',
+              'bank-billing-service-editor-bottom-light-390.png',
+              'bank-billing-service-editor-bottom-dark-390.png',
               'bank-billing-today-light-1440.png',
               'bank-billing-today-light-390.png',
               'bank-billing-today-dark-1440.png',
@@ -821,7 +823,7 @@ jobs:
           if len(matches) > len(allowed) or len({source.name for source, _ in matches}) != len(matches):
               skip('file count exceeds the exact allowlist or basenames are duplicated')
           if {source.name for source, _ in matches} != allowed:
-              skip('bank-billing-workspace proof is incomplete; all 28 exact images are required')
+              skip('bank-billing-workspace proof is incomplete; all 30 exact images are required')
           total = sum(info.st_size for _, info in matches)
           print(f'Synthetic screenshot source bytes: {len(matches)}/{len(allowed)} files, {total} bytes.')
           for source, info in sorted(matches, key=lambda match: match[0].name):

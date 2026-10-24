@@ -16,14 +16,18 @@ describe('bounded hosted bank and billing redesign acceptance', () => {
     const names = namesIn(original); expect(names).toHaveLength(125); expect(new Set(names).size).toBe(125);
     for (const value of ['timeout-minutes: 45', 'limit = 10 * 1024 * 1024', 'limit = 2 * 1024 * 1024', 'contents: read', '--retries=0']) expect(original).toContain(value);
   });
-  it('requires all 28 unique 1440/390 light/dark captures in a separate bounded lossless partition', () => {
-    const names = namesIn(partition); expect(names).toHaveLength(28); expect(new Set(names).size).toBe(28);
+  it('requires the original 28 captures plus both actually scrolled mobile editor views in a separate bounded lossless partition', () => {
+    const names = namesIn(partition); expect(names).toHaveLength(30); expect(new Set(names).size).toBe(30);
     for (const surface of ['bank-preview', 'bank-history', 'bank-allocation', 'service-plans', 'service-editor', 'today', 'today-compact']) for (const theme of ['light', 'dark']) for (const width of [1440, 390]) expect(names).toContain(`bank-billing-${surface}-${theme}-${width}.png`);
+    for (const theme of ['light', 'dark']) expect(names).toContain(`bank-billing-service-editor-bottom-${theme}-390.png`);
     for (const value of ['limit = 4 * 1024 * 1024', 'per_file_input_limit = 1 * 1024 * 1024', 'total > 8 * 1024 * 1024', 'actual_input_bytes > 8 * 1024 * 1024', 'timeout-minutes: 6', 'retention-days: 1', 'bank-billing-workspace-synthetic-visuals', '{source.name for source, _ in matches} != allowed', 'os.O_NOFOLLOW | os.O_NONBLOCK', 'stat.S_ISREG', 'source.resolve().is_relative_to(root)', 'current.st_size != expected.st_size', 'recompress_png_strong as recompress_png', 'zip(inputs, results, strict=True)', 'color metadata or full-pixel verification failed']) expect(partition).toContain(value);
+  });
+  it('requires actual nested scrolling and unobscured mobile editor controls without replacing top captures', () => {
+    for (const value of ['mobileEditorBottom(page, info, editor)', 'unobscuredEditorControl', 'scrollIntoViewIfNeeded()', 'document.elementFromPoint', 'expect(scroll.scrollTop).toBeGreaterThan(0)', 'expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight)', 'bank-billing-service-editor-bottom-${value}-390.png']) expect(browser).toContain(value);
   });
   it('adds four presentation cases without replacing genuine mutation coverage or weakening screenshot proofs', () => {
     expect([...browser.matchAll(/^test\('/gm)]).toHaveLength(4);
-    for (const value of ['e2eDatabasePath()', 'noBusinessWrites', "route.abort('blockedbyclient')", "route.abort('connectionreset')", 'expect(payloads[0]).toEqual(payloads[1])', 'history.failHistory(true)', "getByText('Importverlauf laden…'", 'gridTemplateColumns', '16 * 1024 * 1024', 'fullPage: true', 'png.readUInt32BE(16)', 'png.readUInt32BE(20)', "page.goBack()", 'page.goForward()']) expect(browser).toContain(value);
+    for (const value of ['e2eDatabasePath()', 'noBusinessWrites', "route.abort('blockedbyclient')", "route.abort('connectionreset')", 'expect(payloads[0]).toEqual(payloads[1])', 'history.failHistory(true)', "page.getByRole('region', { name: 'Gespeicherte Importe', exact: true })", "historyRegion.getByRole('alert')", "page.getByRole('region', { name: 'Servicepläne', exact: true }).getByRole('alert')", "getByText('Importverlauf laden…'", 'gridTemplateColumns', '16 * 1024 * 1024', 'fullPage: true', 'png.readUInt32BE(16)', 'png.readUInt32BE(20)', "page.goBack()", 'page.goForward()']) expect(browser).toContain(value);
     for (const value of ['test.skip(', 'test.only(', 'force: true', 'route.fetch(']) expect(browser).not.toContain(value);
     for (const file of ['e2e/bank-allocation.spec.ts', 'e2e/bank-import-receipt.spec.ts', 'e2e/service-billing.spec.ts']) expect(readFileSync(file, 'utf8')).toContain('prisma.');
   });

@@ -112,11 +112,18 @@ describe('split authoring workbench fixture presentation', () => {
 
 function sourceContracts(text: string) {
   const tree = ts.createSourceFile('fixture.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const bindings: string[] = [], logic: string[] = [], ids: string[] = [];
+  const bindings: string[] = [], logic: string[] = [], ids: string[] = [], autofocus: string[] = [];
   function visit(node: ts.Node) {
     if (ts.isJsxAttribute(node)) {
       const name = node.name.getText(tree);
-      if (/^(on[A-Z].*|href|name|type|key|value|defaultValue|checked|required|disabled|min|max|step|inputMode|maxLength|showCloseButton)$/.test(name)) bindings.push(node.getText(tree).replace(/\s+/g, ' '));
+      const opening = node.parent.parent;
+      const reviewedAutofocus = (ts.isJsxOpeningElement(opening) || ts.isJsxSelfClosingElement(opening))
+        && opening.tagName.getText(tree) === 'DialogContent'
+        && (name === 'onOpenAutoFocus' || name === 'onCloseAutoFocus');
+      // Only these additive DialogContent handlers are classified separately;
+      // every original binding and all other event attributes keep the main baseline.
+      if (reviewedAutofocus) autofocus.push(node.getText(tree).replace(/\s+/g, ' '));
+      else if (/^(on[A-Z].*|href|name|type|key|value|defaultValue|checked|required|disabled|min|max|step|inputMode|maxLength|showCloseButton)$/.test(name)) bindings.push(node.getText(tree).replace(/\s+/g, ' '));
       if (name === 'id') ids.push(node.getText(tree));
     }
     if (ts.isCallExpression(node) && /^(useState|useEffect|calculateInvoiceAmounts|readServiceBillingPlanInput|serviceJson|fetch|JSON.stringify|dailyActionAmount)$/.test(node.expression.getText(tree))) logic.push(node.getText(tree).replace(/\s+/g, ' '));
@@ -124,7 +131,7 @@ function sourceContracts(text: string) {
   }
   visit(tree);
   const hash = (values: string[]) => createHash('sha256').update(values.sort().join('\n')).digest('hex');
-  return { bindings: hash(bindings), logic: hash(logic), ids };
+  return { bindings: hash(bindings), logic: hash(logic), ids, autofocus };
 }
 
 describe('presentation-only source contracts against accepted main 17cd6f1', () => {
@@ -134,6 +141,34 @@ describe('presentation-only source contracts against accepted main 17cd6f1', () 
     ['components/daily-actions/daily-actions-workspace.tsx', 'bd08e38741b93a5ddaba5890239d8fd2cd6fe4e06fbc230ee2d0b1daffedba1c', '105e52a0b85f72ee68e1e5f3d8cdd6264cb33a08bfe505f72e170ea5ac4668d8'],
   ])('preserves every owned binding, guard, request body and hook in %s', (file, bindings, logic) => {
     expect(sourceContracts(readFileSync(file, 'utf8'))).toMatchObject({ bindings, logic });
+  });
+  it.each([
+    'components/service-billing/service-billing-workspace.tsx',
+    'components/service-billing/service-plan-editor.tsx',
+  ])('adds only the reviewed opener capture and guarded restoration handlers in %s', file => {
+    const source = readFileSync(file, 'utf8');
+    expect(sourceContracts(source).autofocus).toEqual([
+      'onOpenAutoFocus={() => { openerRef.current = captureServiceDialogOpener(document); }}',
+      'onCloseAutoFocus={event => { event.preventDefault(); const opener = openerRef.current; openerRef.current = null; restoreServiceDialogOpener(opener); }}',
+    ]);
+    const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const clearsBeforeSaved: string[] = [];
+    function visit(node: ts.Node) {
+      if (ts.isCallExpression(node) && node.expression.getText(tree) === 'onSaved') {
+        const statement = node.parent;
+        expect(ts.isExpressionStatement(statement) && ts.isBlock(statement.parent)).toBe(true);
+        if (ts.isExpressionStatement(statement) && ts.isBlock(statement.parent)) {
+          const index = statement.parent.statements.indexOf(statement);
+          clearsBeforeSaved.push(statement.parent.statements[index - 1]?.getText(tree).replace(/\s+/g, ' ') ?? '<missing-clear>');
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(tree);
+    expect(clearsBeforeSaved).toEqual(['openerRef.current = null;']);
+  });
+  it('does not add any unreviewed autofocus handlers to the Today workspace', () => {
+    expect(sourceContracts(readFileSync('components/daily-actions/daily-actions-workspace.tsx', 'utf8')).autofocus).toEqual([]);
   });
   it('retains the original field and list-heading identifiers', () => {
     const workspace = sourceContracts(readFileSync('components/service-billing/service-billing-workspace.tsx', 'utf8'));

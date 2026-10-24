@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { calculateInvoiceAmounts } from '@/lib/invoice-calculation';
 import { readServiceBillingPlanInput } from '@/lib/service-billing';
 import { CADENCE_LABELS, SERVICE_SELECT_CLASS, serviceCurrency, serviceDate, serviceJson, type ServiceBillingLine, type ServiceBillingPlanDto } from './service-billing-types';
 import styles from './service-billing-workspace.module.css';
+import { captureServiceDialogOpener, restoreServiceDialogOpener } from './service-dialog-focus';
 
 type LineDraft = Omit<ServiceBillingLine, 'quantity' | 'unitPrice'> & { quantity: string; unitPrice: string };
 const blankLine = (): LineDraft => ({ description: '', quantity: '1', unitPrice: '', unit: 'Pauschal', taxRate: 0, taxCategory: 'E' });
@@ -22,6 +23,7 @@ export function ServicePlanEditor({ plan, today, onClose, onSaved }: {
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const openerRef = useRef<HTMLElement | null>(null);
   const [requestId] = useState(() => globalThis.crypto.randomUUID());
   const [name, setName] = useState(plan?.name ?? '');
   const [customerId, setCustomerId] = useState(plan ? String(plan.customerId) : '');
@@ -73,13 +75,22 @@ export function ServicePlanEditor({ plan, today, onClose, onSaved }: {
         method: plan ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...(plan ? { id: plan.id, revision: plan.revision } : { cadence: checked.cadence, anchorDate: checked.anchorDate, requestId }), name: checked.name, customerId: checked.customerId, taxMode: checked.taxMode, items: checked.items }),
       });
+      // Successful saves already move focus to the refreshed list heading.
+      openerRef.current = null;
       onSaved();
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Der Serviceplan konnte nicht gespeichert werden.'); }
     finally { setBusy(false); }
   }
 
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <DialogContent showCloseButton={!busy} className={styles.editorDialog}>
+    <DialogContent showCloseButton={!busy} className={styles.editorDialog}
+      onOpenAutoFocus={() => { openerRef.current = captureServiceDialogOpener(document); }}
+      onCloseAutoFocus={event => {
+        event.preventDefault();
+        const opener = openerRef.current;
+        openerRef.current = null;
+        restoreServiceDialogOpener(opener);
+      }}>
       <DialogHeader className={styles.editorHeader}><DialogTitle>{plan ? 'Serviceplan bearbeiten' : 'Neuer Serviceplan'}</DialogTitle><DialogDescription>Speichern erstellt noch keine Rechnung.</DialogDescription></DialogHeader>
       <form onSubmit={submit} className={styles.editorForm}>
         <div className={styles.editorScroll}>

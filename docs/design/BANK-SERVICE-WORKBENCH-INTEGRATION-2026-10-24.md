@@ -1,10 +1,10 @@
 # Bank and service workbench integration
 
-**Status:** integrated locally; no remote publication, CI, merge or deployment.
+**Status:** [draft PR #141](https://github.com/storminator89/bivaro-kleinunternehmen/pull/141); corrective hosted reacceptance pending. No merge or separate deployment.
 **Accepted main:** `17cd6f124b96260efa32607d9c1866aa3e3e802b`.
 **Accepted tree:** `2a4667456891cbcb1ab451ee75b7466b1db2b8e0`.
-**Runtime integration commit:** `817e6b5d8b8a7999bd3e5f9d5abbcec27b673e0d`.
-**Runtime integration tree:** `ee3b3da90199ca4eb4ba9ee1456e5c55b20cabaa`.
+**Initial runtime integration commit:** `817e6b5d8b8a7999bd3e5f9d5abbcec27b673e0d`.
+**Initial runtime integration tree:** `ee3b3da90199ca4eb4ba9ee1456e5c55b20cabaa`.
 
 ## Separate ownership, combined review
 
@@ -121,3 +121,49 @@ Before calling the package fully verified: resolve the pure-test authorization
 block, establish the corrected test result, run hosted acceptance for the exact
 published candidate and inspect the required visual artifacts. Until then the
 redesign is not described as released or fully accepted.
+
+
+## Hosted verification and corrective acceptance update
+
+The first published candidate `9789edcf0309d13c6e7de19f90babb027c3b5515`
+was independently verified to have the exact reviewed local tree above and the
+unchanged accepted-main parent. Full GitHub CI passed: **4,228 tests / 270 files**,
+**20 tests / 3 files skipped**, zero failures; security, lint/type and production
+build passed. Both x64 and arm64 own-invoice final-byte conformance jobs passed.
+This establishes the full hosted unit result without bypassing the denied local
+process. The historical local-run disclosure above remains accurate.
+
+The first Chromium run (40101527932) completed with **150 passed / 2 failed**,
+zero retries. All 148 prior cases passed. The two new-case findings were:
+
+- The bank history error locator also matched Next's global route announcer.
+  Application-error assertions now target their named owning region; no assertion,
+  timeout, retry or product state was weakened. The identical global-alert pattern
+  in the service load-error assertion is scoped too.
+- Escape from the controlled service editor did not restore its external opener.
+  Installed Radix suppresses fallback restoration while its trigger ref is null.
+  The scoped editor and period-review dialogs now capture/restore a connected,
+  visible, enabled, non-inert opener; refs clear before successful save/review so
+  existing reload-to-heading focus remains authoritative. Busy guards and all
+  financial/request logic are unchanged. Original accepted-main AST hashes are
+  retained; exactly two additive autofocus handlers per dialog are separately
+  asserted. New pure fixture regressions await GitHub execution, not local tests.
+
+All original **28** new screenshots were generated and losslessly delivered in
+artifact **12564070817**, with **3,622,038 PNG bytes** inside the unchanged 4 MiB
+output budget. The archive digest, each PNG hash and all decoded full-pixel hashes
+were independently matched. All 28 actual original-resolution images were opened
+by the integration/visual-review team. No blocking rendered defect was observed.
+However, the two mobile editor stills showed setup and footer, not the lower inner
+scroll content; they are **not** treated as full editor visual approval.
+
+To close that evidence gap, retain all 28 named captures and add exactly **two**
+`bank-billing-service-editor-bottom-<light|dark>-390.png` captures. Hosted checks
+perform real nested scrolling, prove positive scroll position, verify every line
+field/add/article control by clipping-aware hit tests, then capture the lower
+editor/total with reachable footer actions. Complete evidence now requires **30**
+new PNGs. The fifth partition remains **4 MiB output / 8 MiB input**, with unchanged
+per-file/pixel/lossless/timeout protections; the original 125 proofs and all
+previous assertions remain intact. Combined evidence is bounded to 155 PNGs /
+20 MiB output. Corrected-head full CI, Chromium and actual 30-image review remain
+pending; this is not a release or merge approval.

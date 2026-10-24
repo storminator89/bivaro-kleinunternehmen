@@ -84,6 +84,45 @@ async function chooseCsv(page: Page) {
   await page.getByLabel('Bank-CSV auswählen', { exact: true }).setInputFiles({ name: 'SYNTHETISCHER-langer-Dateiname-für-die-vollständige-Bankprüfung.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
   await page.getByLabel('Kontoalias *', { exact: true }).fill(alias);
 }
+// Real hosted hit-testing: visibility alone does not prove a control is outside
+// the nested editor clip or unobscured by its fixed header/footer.
+async function unobscuredEditorControl(control: Locator) {
+  await control.scrollIntoViewIfNeeded();
+  await expect(control).toBeInViewport();
+  expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expect.poll(() => control.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    let left = 0, top = 0, right = innerWidth, bottom = innerHeight;
+    for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      const style = getComputedStyle(ancestor), box = ancestor.getBoundingClientRect();
+      if (/(auto|scroll|hidden|clip)/u.test(style.overflowX)) { left = Math.max(left, box.left); right = Math.min(right, box.right); }
+      if (/(auto|scroll|hidden|clip)/u.test(style.overflowY)) { top = Math.max(top, box.top); bottom = Math.min(bottom, box.bottom); }
+    }
+    if (rect.width <= 0 || rect.height <= 0 || rect.left < left || rect.right > right || rect.top < top || rect.bottom > bottom) return false;
+    return [[rect.left + 4, rect.top + 4], [rect.right - 4, rect.top + 4], [rect.left + 4, rect.bottom - 4], [rect.right - 4, rect.bottom - 4], [rect.left + rect.width / 2, rect.top + rect.height / 2]].every(([x, y]) => {
+      const hit = document.elementFromPoint(x, y); return hit !== null && (hit === element || element.contains(hit));
+    });
+  })).toBe(true);
+}
+async function mobileEditorBottom(page: Page, info: TestInfo, editor: Locator) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const value of ['light', 'dark'] as const) {
+    await theme(page, value);
+    for (const label of ['Leistungsbeschreibung 1', 'Menge 1', 'Einheit 1', 'Netto-Preis 1 (€)', 'USt. 1']) await unobscuredEditorControl(editor.getByLabel(label, { exact: true }));
+    for (const name of ['Position ergänzen', 'Aus Artikelkatalog übernehmen']) await unobscuredEditorControl(editor.getByRole('button', { name, exact: true }));
+    const total = editor.getByRole('region', { name: 'Leistungen und Vorschau', exact: true }).getByText('235,62 €', { exact: true });
+    await total.scrollIntoViewIfNeeded(); await expect(total).toBeInViewport();
+    const scroll = await total.evaluate(element => {
+      let scroller = element.parentElement;
+      while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/u.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+      return { scrollTop: scroller?.scrollTop ?? 0, scrollHeight: scroller?.scrollHeight ?? 0, clientHeight: scroller?.clientHeight ?? 0 };
+    });
+    expect(scroll.scrollTop).toBeGreaterThan(0); expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+    await dialogFooter(editor); await unobscuredEditorControl(editor.getByRole('button', { name: 'Serviceplan speichern', exact: true }));
+    process.stdout.write(`Service editor actual scroll proof: ${JSON.stringify({ theme: value, width: 390, ...scroll })}\n`);
+    await capture(page, info, `bank-billing-service-editor-bottom-${value}-390.png`);
+  }
+}
 async function dialogFooter(dialog: Locator) { const cancel = dialog.getByRole('button', { name: 'Abbrechen', exact: true }); await cancel.scrollIntoViewIfNeeded(); await expect(cancel).toBeInViewport(); expect((await cancel.boundingBox())!.height).toBeGreaterThanOrEqual(44); }
 test.afterAll(async () => { await prisma.$disconnect(); });
 
@@ -123,7 +162,7 @@ test('saved bank history uses desktop columns, retries without a false loading s
   await page.keyboard.press('Escape'); await expect(saved.getByRole('button', { name: 'Rechnung wählen', exact: true })).toBeFocused(); await saved.getByRole('button', { name: 'Rechnung wählen', exact: true }).click(); await expect(dialog.getByLabel('Rechnung', { exact: true })).toHaveValue(''); await dialog.getByRole('button', { name: 'Abbrechen', exact: true }).click();
   const assigned = page.getByRole('article', { name: 'Gespeicherte Bankzeile 3', exact: true }); await assigned.getByRole('button', { name: 'Andere Rechnung', exact: true }).click(); const moving = page.getByRole('dialog', { name: 'Zuordnung ändern', exact: true }); await moving.getByLabel('Rechnung', { exact: true }).selectOption(String(invoice.invoiceId)); await expect(moving).toContainText('Offen 75,00 € → 100,00 €'); await expect(moving).toContainText('Offen 100,00 € → 75,00 €'); await matrix(page, info, null); await moving.getByRole('button', { name: 'Abbrechen', exact: true }).click();
   await page.getByRole('button', { name: 'Zurück zum Importverlauf', exact: true }).click(); await expect(opener).toBeFocused(); await opener.click(); await page.getByRole('button', { name: 'Zurück zum Importverlauf', exact: true }).click(); await expect(opener).toBeFocused();
-  history.failHistory(true); await navigate(page, '/bank-csv'); await expect(page.getByRole('alert')).toContainText('Der Importverlauf konnte nicht geladen werden'); await expect(page.getByText('Importverlauf laden…', { exact: true })).toHaveCount(0);
+  history.failHistory(true); await navigate(page, '/bank-csv'); const historyRegion = page.getByRole('region', { name: 'Gespeicherte Importe', exact: true }); await expect(historyRegion.getByRole('alert')).toContainText('Der Importverlauf konnte nicht geladen werden'); await expect(page.getByText('Importverlauf laden…', { exact: true })).toHaveCount(0);
   history.failHistory(false); await page.getByRole('button', { name: 'Verlauf erneut laden', exact: true }).click(); await expect(opener).toBeEnabled(); await noBusinessWrites(user.id, unexpected);
 });
 
@@ -132,14 +171,14 @@ test('service plan ledger, editor and period review keep inputs, close guards an
   await page.route('**/api/service-billing', async route => { if (route.request().method() !== 'GET') { commands++; payloads.push(route.request().postDataJSON()); if (commands === 1) await commandGate; await route.abort('connectionreset'); return; } if (!listReleased) await listGate; await route.fulfill({ status: mode === 'error' ? 503 : 200, json: mode === 'error' ? { error: 'Synthetic service list interruption' } : { today: '2026-10-24', plans: mode === 'empty' ? [] : [plan] } }); });
   await page.route('**/api/customers', route => route.request().method() === 'GET' ? route.fulfill({ json: [plan.customer] }) : route.fallback()); await page.route('**/api/service-articles', route => route.request().method() === 'GET' ? route.fulfill({ json: [] }) : route.fallback());
   try { await navigate(page, '/service-billing'); await expect(page.getByRole('status').filter({ hasText: 'Servicepläne werden geladen' })).toBeVisible(); } finally { listReleased = true; releaseList(); } const card = page.getByRole('article', { name: `Serviceplan ${plan.name}`, exact: true }); await expect(card).toContainText('235,62'); await matrix(page, info, 'service-plans');
-  const edit = card.getByRole('button', { name: 'Plan bearbeiten', exact: true }); await edit.click(); const editor = page.getByRole('dialog', { name: 'Serviceplan bearbeiten', exact: true }); await expect(editor.getByLabel('Rhythmus', { exact: true })).toHaveCount(0); await matrix(page, info, 'service-editor', async () => { await dialogFooter(editor); });
+  const edit = card.getByRole('button', { name: 'Plan bearbeiten', exact: true }); await edit.click(); const editor = page.getByRole('dialog', { name: 'Serviceplan bearbeiten', exact: true }); await expect(editor.getByLabel('Rhythmus', { exact: true })).toHaveCount(0); await matrix(page, info, 'service-editor', async () => { await dialogFooter(editor); }); await mobileEditorBottom(page, info, editor);
   await editor.getByLabel('Planname', { exact: true }).fill('Unbestätigte synthetische Änderung'); await page.keyboard.press('Escape'); await expect(editor).toBeHidden(); await expect(edit).toBeFocused(); await edit.click(); await expect(editor.getByLabel('Planname', { exact: true })).toHaveValue(plan.name);
   await editor.getByRole('button', { name: 'Position ergänzen', exact: true }).click(); await expect(editor.getByLabel('Leistungsbeschreibung 2', { exact: true })).toBeVisible(); await editor.getByRole('button', { name: 'Position 2 entfernen', exact: true }).click(); await expect(editor.getByLabel('Leistungsbeschreibung 2', { exact: true })).toHaveCount(0);
   await editor.getByLabel('Netto-Preis 1 (€)', { exact: true }).fill('101.00'); try { await editor.getByRole('button', { name: 'Serviceplan speichern', exact: true }).click(); await expect.poll(() => commands).toBe(1); await expect(editor.getByRole('button', { name: 'Abbrechen', exact: true })).toBeDisabled(); await expect(editor.getByRole('button', { name: 'Wird gespeichert…', exact: true })).toBeDisabled(); await page.keyboard.press('Escape'); await expect(editor).toBeVisible(); } finally { releaseCommand(); } await expect(editor.getByRole('alert')).toContainText('Keine eindeutige Antwort erhalten'); await expect(editor.getByLabel('Netto-Preis 1 (€)', { exact: true })).toHaveValue('101.00'); await editor.getByRole('button', { name: 'Serviceplan speichern', exact: true }).click(); await expect.poll(() => commands).toBe(2); expect(payloads[0]).toEqual(payloads[1]); await editor.getByRole('button', { name: 'Abbrechen', exact: true }).click();
   await page.getByRole('button', { name: 'Neuer Serviceplan', exact: true }).click(); const fresh = page.getByRole('dialog', { name: 'Neuer Serviceplan', exact: true }); await expect(fresh.getByLabel('Umsatzsteuer', { exact: true })).toHaveValue(''); await expect(fresh.getByLabel('Rhythmus', { exact: true })).toBeVisible(); await fresh.getByRole('button', { name: 'Abbrechen', exact: true }).click();
   await card.getByRole('button', { name: 'Entwurf vorbereiten', exact: true }).click(); const review = page.getByRole('dialog', { name: 'Einen Rechnungsentwurf vorbereiten?', exact: true }); await expect(review.getByRole('button', { name: 'Nur diesen Entwurf anlegen', exact: true })).toBeDisabled(); await matrix(page, info, null); await page.keyboard.press('Escape'); await expect(review).toBeHidden(); await expect(card.getByRole('button', { name: 'Entwurf vorbereiten', exact: true })).toBeFocused();
   await card.getByRole('button', { name: 'Zeitraum überspringen', exact: true }).click(); const skip = page.getByRole('dialog', { name: 'Diesen Zeitraum überspringen?', exact: true }); await expect(skip.getByRole('button', { name: 'Nur diesen Zeitraum überspringen', exact: true })).toBeDisabled(); await skip.getByRole('button', { name: 'Abbrechen', exact: true }).click(); expect(commands).toBe(2);
-  mode = 'error'; await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('Synthetic service list interruption'); await expect(card).toHaveCount(0); mode = 'empty'; await page.getByRole('button', { name: 'Aktuellen Stand erneut laden', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Noch keine Servicepläne', exact: true })).toBeVisible(); await noBusinessWrites(user.id, unexpected);
+  mode = 'error'; await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click(); await expect(page.getByRole('region', { name: 'Servicepläne', exact: true }).getByRole('alert')).toContainText('Synthetic service list interruption'); await expect(card).toHaveCount(0); mode = 'empty'; await page.getByRole('button', { name: 'Aktuellen Stand erneut laden', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Noch keine Servicepläne', exact: true })).toBeVisible(); await noBusinessWrites(user.id, unexpected);
 });
 
 test('Today full and compact queues preserve exact amounts, read-only recovery and Back/Forward destinations', async ({ page }, info) => {
