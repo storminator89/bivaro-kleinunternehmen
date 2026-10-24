@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-24",
+  "baseCommit": "17cd6f124b96260efa32607d9c1866aa3e3e802b",
+  "baseTree": "2a4667456891cbcb1ab451ee75b7466b1db2b8e0",
+  "scope": "app",
+  "mode": "redesign",
+  "depth": "full",
+  "system": "Bivaro Ledger / Design System 2.0, locked in design.md",
+  "sources": ["design.md", "components/service-billing/service-billing-workspace.tsx", "components/service-billing/service-plan-editor.tsx", "components/daily-actions/daily-actions-workspace.tsx", "components/customers/service-workbench.tsx", "components/dashboard/reminder-workbench-dialog.tsx", "components/history/invoice-history-workspace.tsx"],
+  "preserved": ["shared theme and shell", "all owned handlers and form bindings", "all state/effect and API payload expressions", "canonical amount calculation", "explicit tax choice", "single-period review and idempotency", "fixed calendar anchor", "tenant state reset", "draft and history destinations", "all legal and financial warnings"],
+  "introduced": ["continuous reviewed-period ledger", "flat services and period-history rows", "split setup and line-item authoring layout", "container-responsive prioritized action queue", "static loading skeleton"],
+  "imagery": "none; actual workflow data carries the screen",
+  "verificationLimits": ["No local app server or functional browser tests", "Hallmark reference package contains no executable lint or capture scripts", "Hosted 1440/390 light/dark acceptance awaits publication approval", "No publication, remote push, merge or deployment performed"]
+}

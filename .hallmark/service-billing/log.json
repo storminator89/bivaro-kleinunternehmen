@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-24",
+  "scope": "app",
+  "mode": "redesign",
+  "depth": "full",
+  "theme": "Bivaro Ledger (locked)",
+  "shape": "reviewed-period ledger and split authoring workbench",
+  "signature": "one customer, one next period and one deliberate draft decision",
+  "chrome": "existing application shell, routes and navigation retained",
+  "motion": "state only, reduced motion supported",
+  "imagery": "none",
+  "copyChanges": ["Header separator changed to a sentence boundary", "Count, cadence, date, source, tax and amount metadata separated by structure rather than middle dots", "Editor notice made visible", "Added a presentational Plan und Kunde group heading"],
+  "dropped": [],
+  "checks": {"pureFixtureTests": "55 passed in 4 files", "eslint": "full repository passed, zero warnings", "typescript": "tsc --noEmit --incremental false passed", "cssParser": "both scoped modules parsed", "hostedVisual": "pending", "fullBuild": "coordinated integration stage, not run in this worktree", "automatedHallmarkLint": "unavailable in reference-only skill"}
+}
