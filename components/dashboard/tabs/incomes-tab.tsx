@@ -1,5 +1,7 @@
 "use client";
 
+import styles from './cashflow-workspace.module.css';
+
 import { LedgerSortControl, SortableLedgerHead } from '@/components/dashboard/ledger-sort-control';
 import React from 'react';
 import Link from 'next/link';
@@ -120,7 +122,7 @@ export function IncomesTab({
   const sort = { sortBy: filters.sortBy ?? 'date', sortOrder: filters.sortOrder ?? 'desc' };
   const hasFilters = Boolean(filters.searchTerm || filters.dateRange !== 'all' || filters.taxRelevant !== 'all' || filters.customer);
   return (
-    <div className="bookkeeping-workspace space-y-6">
+    <div className={`bookkeeping-workspace ${styles.workspace}`}>
       <details id="income-entry" hidden={!entryOpen} className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-6">
           <span className="flex min-w-0 items-center gap-3"><span className="entry-symbol"><DashboardIcon name="tile-incomes" size={44} /></span><span><span className="block text-sm font-semibold">Neue Einnahme</span></span></span>
@@ -128,8 +130,8 @@ export function IncomesTab({
         </summary>
         <div className="border-t p-4 sm:p-6">
           <form onSubmit={onSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+            <div className={styles.entryFields}>
+              <div className={styles.entryDescription}>
                 <Label htmlFor="incomeDescription" className="text-sm font-medium">Beschreibung</Label>
                 <Input
                   id="incomeDescription"
@@ -184,7 +186,7 @@ export function IncomesTab({
                   ))}
                 </select>
               </div>
-              <div className="flex items-center space-x-2 h-full pt-6">
+              <div className={styles.taxToggle}>
                 <div className="relative inline-flex items-center">
                   <input
                     type="checkbox"
@@ -215,11 +217,43 @@ export function IncomesTab({
       </details>
 
       {/* Incomes List */}
-      <div className="ledger-list bg-card rounded-xl border overflow-hidden">
-        <div className="px-6 pt-6 pb-4 border-b">
+      <div className={`ledger-list ${styles.ledger}`}>
+        <div className={styles.ledgerHeader}>
           <LedgerListHeading icon="nav-incomes" isLoading={isLoading} isError={isError} title="Ihre Einnahmen" total={total} amounts={isError || isLoading ? [] : incomes.map(item => item.amount)} />
           <div className="ledger-filters">
-            <div className="ledger-filter-grid grid gap-4 md:grid-cols-4">
+            <div className={styles.filters}>
+              {/* Search */}
+              <div className={styles.search}>
+                <Label htmlFor="income-search" className="text-xs font-medium block mb-1.5 text-muted-foreground">Suche</Label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <Input
+                    id="income-search"
+                    type="text"
+                    placeholder="Beschreibung, Kunde..."
+                    value={filters.searchTerm}
+                    className="pl-9 pr-8 h-10"
+                    onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
+                  />
+                  {filters.searchTerm && (
+                    <button
+                      type="button"
+                      aria-label="Suche leeren"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                      onClick={() => setFilters({ ...filters, searchTerm: '' })}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Customer Filter */}
               <div>
                 <Label htmlFor="income-customer-filter" className="text-xs font-medium block mb-1.5 text-muted-foreground">Kunde</Label>
@@ -288,41 +322,11 @@ export function IncomesTab({
                 </div>
               </div>
 
-              {/* Search */}
-              <div>
-                <Label htmlFor="income-search" className="text-xs font-medium block mb-1.5 text-muted-foreground">Suche</Label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <Input
-                    id="income-search"
-                    type="text"
-                    placeholder="Beschreibung, Kunde..."
-                    value={filters.searchTerm}
-                    className="pl-9 pr-8 h-10"
-                    onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
-                  />
-                  {filters.searchTerm && (
-                    <button
-                      type="button"
-                      aria-label="Suche leeren"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
-                      onClick={() => setFilters({ ...filters, searchTerm: '' })}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
+
             </div>
 
             {/* Filter Actions */}
-            <div className="flex flex-col gap-3 mt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className={styles.filterActions}>
               <div className="ledger-result-summary">
                 <div className="text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">{incomes.length}</span> Einnahmen auf dieser Seite
@@ -389,18 +393,18 @@ export function IncomesTab({
           <div hidden={isLoading || isError}>
           <div className="divide-y xl:hidden" aria-label="Einnahmenliste">
             {incomes.length > 0 ? incomes.map((income) => (
-              <article key={income.id} className="ledger-record space-y-3 p-4">
-                <div className="flex items-start justify-between gap-4">
+              <article key={income.id} className={`ledger-record ${styles.record}`}>
+                <div className={styles.recordHeading}>
                   <div className="min-w-0">
-                    <h3 className="truncate font-semibold">{income.description}</h3>
+                    <h3 className={styles.recordTitle}>{income.description}</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {formatBusinessDateDisplay(income.date)}{income.customerName ? ` · ${income.customerName}` : ''}
                     </p>
                   </div>
-                  <p className="shrink-0 font-semibold tabular-nums text-positive">{formatCurrency(income.amount)}</p>
+                  <p className={`${styles.recordAmount} text-positive`}>{formatCurrency(income.amount)}</p>
                 </div>
                 <IncomeInvoiceAttribution income={income} /><p className="text-xs text-muted-foreground">{income.taxRelevant ? 'Steuerrelevant' : 'Nicht steuerrelevant'}</p>
-                <div className="flex flex-wrap gap-2">
+                <div className={styles.recordActions}>
                   <Button variant="outline" size="sm" className="min-h-11" onClick={() => onEdit(income)}>Bearbeiten</Button>
                   <Button variant="outline" size="sm" className="min-h-11" onClick={() => onDuplicate(income)}>Duplizieren</Button>
                   <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={isDeleting} onClick={() => onDelete(income.id)}>Löschen</Button>
@@ -410,7 +414,7 @@ export function IncomesTab({
               <p className="p-6 text-center text-sm text-muted-foreground">{hasFilters ? 'Keine passenden Einnahmen.' : 'Noch keine Einnahmen.'}</p>
             )}
           </div>
-          <div className="hidden overflow-x-auto p-6 xl:block">
+          <div className={`hidden xl:block ${styles.desktopList}`}>
             <Table>
               <TableCaption className="sr-only">Einnahmen passend zu den ausgewählten Filtern</TableCaption>
               <TableHeader>
@@ -544,7 +548,7 @@ export function IncomesTab({
 
           </div>
           {/* Pagination */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 pb-6">
+          <div className={styles.pagination}>
             <div className="text-sm text-muted-foreground">
               Seite {page} von {totalPages} · {total} Einträge
             </div>
