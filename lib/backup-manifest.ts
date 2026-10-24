@@ -1,3 +1,6 @@
+import { validateQuoteCreateBackup, validateQuoteOriginalManifest } from '@/lib/quote-create-backup';
+import { bankMappingProfilesFromBackup } from '@/lib/bank-mapping-profile-backup';
+import { numberingPoliciesFromBackup } from '@/lib/document-numbering-policy-backup';
 import { bankImportsFromBackup } from '@/lib/bank-import-backup';
 import { assertPaymentTermDocument, validatePaymentTermSelection } from '@/lib/payment-terms';
 import { REMINDER_BALANCE_SCHEMA_VERSION, validateReminderBackupFields } from '@/lib/reminder-backup';
@@ -14,7 +17,11 @@ export const PAYMENT_TERMS_SCHEMA_VERSION = '20261022040000_add_payment_terms';
 export const BANK_IMPORT_EVIDENCE_SCHEMA_VERSION = '20261022050000_add_bank_import_evidence';
 export const PAYMENT_BANK_IMPORT_SCHEMA_VERSION = '20261022060000_combine_payment_terms_bank_import_evidence';
 export const BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION = '20261023010000_add_bank_payment_allocations';
-export const CURRENT_SCHEMA_VERSION = BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION;
+export const BANK_MAPPING_PROFILES_SCHEMA_VERSION = '20261024010000_add_bank_mapping_profiles';
+export const DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION = '20261024020000_add_document_numbering_policy';
+/** Explicit capability union; the marker migration changes no business data. */
+export const MAPPING_NUMBERING_SCHEMA_VERSION = '20261024030000_combine_mapping_profiles_numbering';
+export const CURRENT_SCHEMA_VERSION = MAPPING_NUMBERING_SCHEMA_VERSION;
 export const PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION = '20261022030000_combine_projects_outbox_validation';
 // Compatibility name used by the independent bank-evidence candidate.
 export const PROJECT_OUTBOX_VALIDATION_SCHEMA_VERSION = PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION;
@@ -41,11 +48,14 @@ export const PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021054000_add_purc
 export const PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_DATA_IMPORT_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_ANNUAL_CONTEXT_SCHEMA_VERSION = PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
-export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
-export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
+export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, BANK_MAPPING_PROFILES_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
+export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, BANK_MAPPING_PROFILES_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
 /** Closed registry: new unions add identities; timestamps never infer capabilities. */
-export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean; recurringServiceDrafts: boolean; paymentAdjustments: boolean; projectServiceTimes: boolean; emailOutbox: boolean; purchaseValidationReports: boolean; paymentTerms: boolean; bankImportEvidence: boolean; bankPaymentAllocations?: boolean }>> = Object.freeze({
-  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true }),
+export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean; recurringServiceDrafts: boolean; paymentAdjustments: boolean; projectServiceTimes: boolean; emailOutbox: boolean; purchaseValidationReports: boolean; paymentTerms: boolean; bankImportEvidence: boolean; bankPaymentAllocations?: boolean; bankMappingProfiles?: boolean; documentNumberingPolicies?: boolean }>> = Object.freeze({
+  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, bankMappingProfiles: true, documentNumberingPolicies: true }),
+  [BANK_MAPPING_PROFILES_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, bankMappingProfiles: true }),
+  [DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, documentNumberingPolicies: true }),
+  [BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true }),
   [PAYMENT_BANK_IMPORT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true }),
   [PAYMENT_TERMS_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: false }),
   [BANK_IMPORT_EVIDENCE_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: false, bankImportEvidence: true }),
@@ -70,6 +80,12 @@ export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoA
   [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false, emailOutbox: false, purchaseValidationReports: false, paymentTerms: false, bankImportEvidence: false }),
   [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false, emailOutbox: false, purchaseValidationReports: false, paymentTerms: false, bankImportEvidence: false }),
 });
+export function backupSchemaSupportsBankMappingProfiles(schemaVersion?: string): boolean {
+  return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.bankMappingProfiles === true;
+}
+export function backupSchemaSupportsDocumentNumberingPolicies(schemaVersion?: string): boolean {
+  return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.documentNumberingPolicies === true;
+}
 export function backupSchemaSupportsBankPaymentAllocations(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.bankPaymentAllocations === true;
 }
@@ -207,6 +223,10 @@ const COVERAGE = [
   { model: 'EmailOutboxAttempt', key: 'emailOutboxAttempts', mode: 'excluded' as const, reason: 'Target-owned attempt history; restore cannot replay or reactivate a send.' },
   { model: 'RateLimitBucket', key: 'rateLimitBuckets', mode: 'excluded' as const, reason: 'Operational runtime state is not restorable business data.' },
   { model: 'DataImportBatch', key: 'dataImportBatches', mode: 'excluded' as const, reason: 'Operational CSV replay receipts are target-owned; imported business records are included in customers/serviceArticles.' },
+  { model: 'BankMappingProfile', key: 'bankMappingProfiles', mode: 'included' as const, reason: 'Profile identities and deletion tombstones are retained; restore never reactivates deleted profiles.' },
+  { model: 'BankMappingProfileRevision', key: 'bankMappingProfileRevisions', mode: 'included' as const, reason: 'Immutable reusable configuration only; no raw headers, samples or bank records.' },
+  { model: 'QuoteCreateReceipt', key: 'quoteCreateReceipts', mode: 'included' as const, reason: 'Immutable request and original-PDF identities survive document deletion as tenant-owned tombstones.' },
+  { model: 'DocumentNumberingPolicy', key: 'documentNumberingPolicies', mode: 'included' as const, reason: 'Append-only format history; divergent revisions reject and counters never decrease.' },
   { model: 'BankImportBatch', key: 'bankImportBatches', mode: 'included' as const, reason: 'Immutable unallocated bank evidence and receipts; restore never creates a payment.' },
   { model: 'BankImportRow', key: 'bankImportRows', mode: 'included' as const, reason: 'Source-position identities, validation and duplicate evidence remain unchanged.' },
   { model: 'BankPaymentBinding', key: 'bankPaymentBindings', mode: 'included' as const },
@@ -522,9 +542,14 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   if (data.emailOutbox !== undefined || data.emailOutboxAttempts !== undefined) throw new Error('Versandaufträge und Versuchshistorie dürfen nicht importiert oder reaktiviert werden.');
   if (!backupSchemaSupportsPurchaseValidation(value.schemaVersion) && data.purchaseValidationReports !== undefined) throw new Error('Älteres Backupschema darf keine technischen Eingangsprüfberichte enthalten');
   validationReportsFromBackup(data, backupSchemaSupportsPurchaseValidation(value.schemaVersion));
-  bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(value.schemaVersion));
+  bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(value.schemaVersion), backupSchemaSupportsBankMappingProfiles(value.schemaVersion));
+  bankMappingProfilesFromBackup(data, backupSchemaSupportsBankMappingProfiles(value.schemaVersion));
+  numberingPoliciesFromBackup(data, backupSchemaSupportsDocumentNumberingPolicies(value.schemaVersion));
+  validateQuoteCreateBackup(data, backupSchemaSupportsDocumentNumberingPolicies(value.schemaVersion));
   validateBankAllocationCapability(data, value.schemaVersion);
   const expectedCoverage = COVERAGE.filter((entry) =>
+    (backupSchemaSupportsBankMappingProfiles(value.schemaVersion) || !['BankMappingProfile', 'BankMappingProfileRevision'].includes(entry.model)) &&
+    (backupSchemaSupportsDocumentNumberingPolicies(value.schemaVersion) || !['DocumentNumberingPolicy', 'QuoteCreateReceipt'].includes(entry.model)) &&
     (backupSchemaSupportsBankPaymentAllocations(value.schemaVersion) || !['BankPaymentBinding', 'PaymentAllocationChange'].includes(entry.model)) &&
     (backupSchemaSupportsBankImportEvidence(value.schemaVersion) || !['BankImportBatch', 'BankImportRow'].includes(entry.model)) &&
     (backupSchemaSupportsEmailOutbox(value.schemaVersion) || !['EmailOutbox', 'EmailOutboxAttempt'].includes(entry.model)) &&
@@ -619,6 +644,7 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
     if (seenFiles.has(fileKey)) throw new Error(`Backup-Manifest enthält die Datei doppelt: ${fileKey}`);
     seenFiles.add(fileKey);
   }
+  validateQuoteOriginalManifest(data, value.fileManifest, false);
   if (value.snapshot !== undefined) {
     const snapshot = value.snapshot;
     if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)

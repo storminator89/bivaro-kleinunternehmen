@@ -10,7 +10,7 @@ import { bankImportEvidenceHash, bankImportRowKeys, bankImportTotals, prepareBan
 import { bankAllocationsFromBackup, validateBankAllocationGraph } from '@/lib/bank-allocation-backup';
 import { allocationBasisSnapshot, allocationChangeBasisSnapshot, bankBindingBasisSnapshot } from '@/lib/payment-journal/allocation-evidence';
 import { adjustmentBasisSnapshot, adjustmentFingerprint, financialHash } from '@/lib/payment-journal/adjustment-evidence';
-import { createBackupManifest, CURRENT_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, BACKUP_FEATURE_CAPABILITIES, backupSchemaSupportsBankPaymentAllocations } from '@/lib/backup-manifest';
+import { createBackupManifest, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, BACKUP_FEATURE_CAPABILITIES, backupSchemaSupportsBankPaymentAllocations } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 
 type Row = Record<string, unknown>;
@@ -44,6 +44,7 @@ function fixture(kind: 'move' | 'refund' | 'correction' = 'move', amount = 40): 
   const data: Row = { user: { id: source }, customers: [{ id: 5, name: 'Synthetic allocation customer', createdAt: date }], invoices: [a,b], incomes: [{ id: 20, invoiceId: 10, customerId: 5, description: 'Ein echter Originaleingang', amount, date, taxRelevant: true }],
     paymentJournalEvents: [root], paymentAdjustments: [], paymentOperations: [{ id: 40, idempotencyKey: 'root-once', kind: 'PAYMENT_RECEIVED', createdAt: recorded }, { id: 41, idempotencyKey: 'move-once', kind: 'PAYMENT_ALLOCATION_CHANGED', createdAt: recorded }],
     bankImportBatches: [batch], bankImportRows: [bankRow], bankPaymentBindings: [binding], paymentAllocationChanges: [change],
+    bankMappingProfiles: [], bankMappingProfileRevisions: [], documentNumberingPolicies: [], quoteCreateReceipts: [],
     auditLogs: [], invoiceNumberCounters: [], suppliers: [], expenses: [], purchaseDocuments: [], purchaseValidationReports: [], serviceProjects: [], serviceArticles: [], serviceBillingPlans: [], serviceBillingPeriods: [] };
   if (kind !== 'move') {
     const basis: Row | null = kind === 'refund' ? { id: 12, userId: source, customerId: 5, type: 'CREDIT_NOTE', invoiceNumber: '2026-S', originalInvoiceId: 11, totalAmount: -120, status: 'SENT', issuanceState: 'ISSUED',
@@ -75,7 +76,7 @@ function pack(data: Row, sourceUserId = source) { return { version: '3.0', type:
 
 describe('allocation backup portable complete graph', () => {
   it('adds one exact capability and requires both new arrays, without granting historical600 new semantics', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe('20261023010000_add_bank_payment_allocations');
+    expect(BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION).toBe('20261023010000_add_bank_payment_allocations');
     expect(backupSchemaSupportsBankPaymentAllocations(PAYMENT_BANK_IMPORT_SCHEMA_VERSION)).toBe(false);
     expect(BACKUP_FEATURE_CAPABILITIES[PAYMENT_BANK_IMPORT_SCHEMA_VERSION]).not.toHaveProperty('bankPaymentAllocations');
     expect(() => bankAllocationsFromBackup({}, CURRENT_SCHEMA_VERSION)).toThrow(/Abschnitt/);

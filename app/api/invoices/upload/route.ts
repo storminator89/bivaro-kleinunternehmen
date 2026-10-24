@@ -9,7 +9,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
-import { getNextDocumentNumber } from '@/lib/invoice-numbers';
+import { DocumentNumberingError } from '@/lib/document-numbering-policy';
+import { consumeDocumentNumberSelection, getNextDocumentNumber } from '@/lib/invoice-numbers';
 import { ProcessingCapacityError, withProcessingSlot } from '@/lib/processing-limit';
 import { inTransaction } from '@/lib/db-transaction';
 import { createFinancialAuditLog } from '@/lib/audit-log';
@@ -43,6 +44,10 @@ class QuoteConversionError extends Error {
     super(message);
     this.name = 'QuoteConversionError';
   }
+}
+
+class InvoiceNumberConflictError extends Error {
+  readonly status = 409;
 }
 
 class UploadIdempotencyConflictError extends Error {
@@ -233,6 +238,12 @@ async function postHandler(request: NextRequest) {
     const boundedBody = await readRequestBodyWithinLimit(request, MAX_INVOICE_UPLOAD_BYTES + 128 * 1024);
     const formData = await requestWithBody(request, boundedBody).formData();
     const file = formData.get('file');
+    let numberingSelection: unknown = null;
+    const rawNumberingSelection = formData.get('numberingSelection');
+    if (rawNumberingSelection !== null) {
+      if (typeof rawNumberingSelection !== 'string' || rawNumberingSelection.length > 1024) throw new DocumentNumberingError('Ungültige Nummernvorschau.', 400);
+      try { numberingSelection = JSON.parse(rawNumberingSelection); } catch { throw new DocumentNumberingError('Ungültige Nummernvorschau.', 400); }
+    }
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 });
@@ -397,19 +408,6 @@ async function postHandler(request: NextRequest) {
       await inTransaction(tx => ownedServiceBillingDraft(tx, userId, serviceDraftId, serviceDraftToken));
     }
 
-    if (parsedInvoice.invoiceNumber) {
-      const existingInvoice = await prisma.invoice.findFirst({
-        where: { invoiceNumber: parsedInvoice.invoiceNumber, userId },
-      });
-
-      if (existingInvoice) {
-        return NextResponse.json(
-          { error: `Eine Rechnung mit der Nummer ${parsedInvoice.invoiceNumber} existiert bereits.` },
-          { status: 409 }
-        );
-      }
-    }
-
     let storedFileName: string | null = null;
     try {
       storedFileName = await writeTenantFile(userId, file.name, buffer);
@@ -443,6 +441,20 @@ async function postHandler(request: NextRequest) {
             return { invoice: existing, idempotent: true };
           }
         }
+
+        // A request-marker miss is only a preflight observation. An identical
+        // upload may commit before we enter this transaction, so replay must
+        // precede the duplicate-number decision in the same serialized work.
+        if (parsedInvoice.invoiceNumber) {
+          const existingInvoice = await tx.invoice.findFirst({
+            where: { invoiceNumber: parsedInvoice.invoiceNumber, userId },
+          });
+          if (existingInvoice) {
+            throw new InvoiceNumberConflictError(`Eine Rechnung mit der Nummer ${parsedInvoice.invoiceNumber} existiert bereits.`);
+          }
+        }
+
+        await consumeDocumentNumberSelection(tx, userId, 'INVOICE', invoiceDate.getFullYear(), parsedInvoice.invoiceNumber || null, numberingSelection, generatedRequestId !== null);
 
         if (currentQuote) {
           const blockReason = quoteConversionBlockReason(currentQuote);
@@ -606,6 +618,7 @@ async function postHandler(request: NextRequest) {
     if (error instanceof RequestBodyLimitError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    if (error instanceof DocumentNumberingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof PaymentTermError) return NextResponse.json({ error: error.message, code: error.status === 409 ? 'PAYMENT_TERM_STALE' : 'INVALID_PAYMENT_TERM' }, { status: error.status });
     if (error instanceof ServiceBillingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof QuoteConversionError) {
@@ -614,7 +627,7 @@ async function postHandler(request: NextRequest) {
     if (error instanceof BillingNoteClaimError || error instanceof BillingNoteInputError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    if (error instanceof UploadIdempotencyConflictError) {
+    if (error instanceof UploadIdempotencyConflictError || error instanceof InvoiceNumberConflictError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     if ((error as { code?: string }).code === 'P2002') {

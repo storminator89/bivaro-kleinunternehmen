@@ -1,3 +1,4 @@
+import { validateQuoteOriginalManifest } from '@/lib/quote-create-backup';
 import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
 import { NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
@@ -151,6 +152,7 @@ export async function GET() {
       }
     }
 
+    validateQuoteOriginalManifest(data, fileManifest, true);
     const backup = {
       version: CURRENT_BACKUP_VERSION,
       type: 'full',
@@ -180,6 +182,10 @@ export async function GET() {
         apiKeys: count('apiKeys'),
         auditLogs: count('auditLogs'),
         invoiceNumberCounters: count('invoiceNumberCounters'),
+        bankMappingProfiles: count('bankMappingProfiles'),
+        bankMappingProfileRevisions: count('bankMappingProfileRevisions'),
+        documentNumberingPolicies: count('documentNumberingPolicies'),
+        quoteCreateReceipts: count('quoteCreateReceipts'),
       },
     };
     const metadata = JSON.stringify(backup, null, 2);

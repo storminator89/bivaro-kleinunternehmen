@@ -1,3 +1,4 @@
+import { parseBankMappingProfileReference } from '@/lib/bank-mapping-profile-contract';
 import type { Prisma } from '@prisma/client';
 import { MAX_BANK_CSV_BYTES, MAX_BANK_CSV_FIELD_LENGTH, MAX_BANK_CSV_ROWS, type BankCsvDelimiter, type BankCsvMapping } from '@/lib/bank-csv';
 import { BANK_IMPORT_HASH, BANK_IMPORT_MAPPING_VERSION, BANK_IMPORT_PARSER_VERSION, bankImportUuid, parseBankImportMapping, type BankImportEvidence, type BankImportReceipt } from '@/lib/bank-import-contract';
@@ -76,8 +77,15 @@ export function readBankImportEvidence(value: unknown): BankImportEvidence {
   if (!errors.length && (!row.date || row.amountCents === null || row.currency !== 'EUR')) fail('Gültige Zeilen benötigen Datum und EUR-Centbetrag.');
   return row as unknown as BankImportEvidence;
 }
-export function readBankImportReceipt(value: unknown): BankImportReceipt {
-  const row = record(value, RECEIPT_FIELDS, 'Quittung');
+export function readBankImportReceipt(value: unknown, supportsProfiles = false): BankImportReceipt {
+  const hasProfile = value !== null && typeof value === 'object' && Object.hasOwn(value, 'mappingProfile');
+  if (hasProfile && !supportsProfiles) fail('Dieses Backupschema unterstützt keine Profilherkunft.');
+  const row = record(value, hasProfile ? [...RECEIPT_FIELDS, 'mappingProfile'] : RECEIPT_FIELDS, 'Quittung');
+  if (hasProfile) {
+    const profile = record(row.mappingProfile, ['id', 'revision', 'name'], 'Profilherkunft');
+    parseBankMappingProfileReference({ id: profile.id, revision: profile.revision });
+    if (typeof profile.name !== 'string' || !profile.name.trim() || profile.name.length > 80 || /[\u0000-\u001f\u007f]/u.test(profile.name)) fail('Historischer Profilname ist ungültig.');
+  }
   if (row.version !== 1 || typeof row.sameFilePreviouslySaved !== 'boolean') fail('Quittungsversion ist ungültig.');
   bankImportUuid(row.id); bankImportUuid(row.requestId); iso(row.savedAt, 'Speicherzeit');
   hash(row.sourceSha256, 'Originalhash'); hash(row.evidenceSha256, 'Zeilenbeleghash');
@@ -93,7 +101,7 @@ export function readBankImportReceipt(value: unknown): BankImportReceipt {
 }
 
 /** Structural integrity only, not a bank signature or proof that an export is authentic. */
-export function bankImportsFromBackup(data: RecordValue, supported: boolean): BankImportBackup {
+export function bankImportsFromBackup(data: RecordValue, supported: boolean, supportsProfiles = false): BankImportBackup {
   if (!supported) {
     if (Object.hasOwn(data, 'bankImportBatches') || Object.hasOwn(data, 'bankImportRows')) fail('Dieses Backupschema unterstützt keine Bankimport-Evidenz.');
     return { batches: [], rows: [] };
@@ -114,7 +122,7 @@ export function bankImportsFromBackup(data: RecordValue, supported: boolean): Ba
     const active = ['date', 'currency', 'counterparty', 'reference', 'externalId', ...(mapping.amountMode === 'signed' ? ['amount'] : ['credit', 'debit'])] as (keyof BankCsvMapping)[];
     const columns = active.map(field => mapping[field]).filter(column => column !== null);
     if (mapping.date === null || (mapping.amountMode === 'signed' ? mapping.amount === null : mapping.credit === null || mapping.debit === null) || (mapping.currency === null && mapping.defaultCurrency !== 'EUR') || new Set(columns).size !== columns.length) fail('Mapping enthält keine eindeutigen Pflichtspalten.');
-    const savedAt = iso(row.createdAt, 'Batchzeit'), checkedReceipt = readBankImportReceipt(row.receipt);
+    const savedAt = iso(row.createdAt, 'Batchzeit'), checkedReceipt = readBankImportReceipt(row.receipt, supportsProfiles);
     if (checkedReceipt.id !== stableKey || checkedReceipt.requestId !== requestId || checkedReceipt.savedAt !== savedAt || checkedReceipt.accountAlias !== row.accountAlias || checkedReceipt.sourceSha256 !== sourceSha256 || checkedReceipt.sourceBytes !== row.sourceBytes || checkedReceipt.parserVersion !== row.parserVersion || checkedReceipt.mappingVersion !== row.mappingVersion) fail('Quittung stimmt nicht mit ihrem Batch überein.');
     return { ...row, createdAt: savedAt } as PortableBankImportBatch;
   });

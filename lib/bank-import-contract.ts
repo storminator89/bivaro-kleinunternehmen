@@ -9,9 +9,10 @@ export const BANK_IMPORT_HASH = /^[0-9a-f]{64}$/u;
 export class BankImportError extends Error {
   constructor(message: string, public readonly status = 400, public readonly existingReceiptId?: string) { super(message); this.name = 'BankImportError'; }
 }
-export type BankImportInput = { requestId: string; originalBase64: string; delimiter: BankCsvDelimiter; mapping: BankCsvMapping; parserVersion: typeof BANK_IMPORT_PARSER_VERSION; mappingVersion: typeof BANK_IMPORT_MAPPING_VERSION };
+export type BankImportInput = { mappingProfile?: { id: string; revision: number }; requestId: string; originalBase64: string; delimiter: BankCsvDelimiter; mapping: BankCsvMapping; parserVersion: typeof BANK_IMPORT_PARSER_VERSION; mappingVersion: typeof BANK_IMPORT_MAPPING_VERSION };
 export type BankImportEvidence = Omit<BankCsvPreviewRow, 'fingerprint'> & { priorMatches: { external: number; content: number; dayAmount: number } };
 export type BankImportReceipt = {
+  mappingProfile?: { id: string; revision: number; name: string };
   version: 1; id: string; requestId: string; savedAt: string; accountAlias: string;
   sourceSha256: string; sourceBytes: number; parserVersion: string; mappingVersion: string;
   counts: { total: number; valid: number; invalid: number; incoming: number; outgoing: number; duplicates: number; overlapRows: number };
@@ -55,12 +56,18 @@ export function parseBankImportMapping(value: unknown): BankCsvMapping {
 }
 export function parseBankImportInput(value: unknown): BankImportInput {
   const input = record(value);
-  closed(input, ['requestId', 'originalBase64', 'delimiter', 'mapping', 'parserVersion', 'mappingVersion', 'reviewed']);
+  closed(input, ['requestId', 'originalBase64', 'delimiter', 'mapping', 'parserVersion', 'mappingVersion', 'reviewed', 'mappingProfile']);
   if (input.reviewed !== true) throw new BankImportError('Bitte die Vorschau ausdrücklich bestätigen.');
   if (input.parserVersion !== BANK_IMPORT_PARSER_VERSION || input.mappingVersion !== BANK_IMPORT_MAPPING_VERSION) throw new BankImportError('Die Vorschauversion hat sich geändert. Bitte Datei erneut prüfen.', 409);
   if (typeof input.originalBase64 !== 'string' || !input.originalBase64.length || input.originalBase64.length > Math.ceil(MAX_BANK_CSV_BYTES / 3) * 4
     || input.originalBase64.length % 4 !== 0 || (input.originalBase64.length / 4 * 3 - (input.originalBase64.endsWith('==') ? 2 : input.originalBase64.endsWith('=') ? 1 : 0)) > MAX_BANK_CSV_BYTES || /[^A-Za-z0-9+/]/u.test(input.originalBase64.replace(/={1,2}$/u, ''))) throw new BankImportError('Ungültige oder zu große Originaldatei.');
   if (![';', ',', '\t'].includes(String(input.delimiter))) throw new BankImportError('Ungültiges Trennzeichen.');
-  return { requestId: bankImportUuid(input.requestId), originalBase64: input.originalBase64, delimiter: input.delimiter as BankCsvDelimiter, mapping: parseBankImportMapping(input.mapping), parserVersion: BANK_IMPORT_PARSER_VERSION, mappingVersion: BANK_IMPORT_MAPPING_VERSION };
+  let mappingProfile: BankImportInput['mappingProfile'];
+  if (input.mappingProfile !== undefined) {
+    const profile = record(input.mappingProfile); closed(profile, ['id', 'revision']);
+    if (!Number.isSafeInteger(profile.revision) || Number(profile.revision) < 1 || Number(profile.revision) > 200) throw new BankImportError('Ungültige Profilrevision.');
+    mappingProfile = { id: bankImportUuid(profile.id), revision: Number(profile.revision) };
+  }
+  return { ...(mappingProfile ? { mappingProfile } : {}), requestId: bankImportUuid(input.requestId), originalBase64: input.originalBase64, delimiter: input.delimiter as BankCsvDelimiter, mapping: parseBankImportMapping(input.mapping), parserVersion: BANK_IMPORT_PARSER_VERSION, mappingVersion: BANK_IMPORT_MAPPING_VERSION };
 }
 export function bankImportRowLimit(count: number) { if (!Number.isInteger(count) || count < 1 || count > MAX_BANK_CSV_ROWS) throw new BankImportError('Die Datei muss 1 bis 2.000 Umsatzzeilen enthalten.'); }

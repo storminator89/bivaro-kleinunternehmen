@@ -83,6 +83,10 @@ export async function GET() {
         apiKeys: count('apiKeys'),
         auditLogs: count('auditLogs'),
         invoiceNumberCounters: count('invoiceNumberCounters'),
+        bankMappingProfiles: count('bankMappingProfiles'),
+        bankMappingProfileRevisions: count('bankMappingProfileRevisions'),
+        documentNumberingPolicies: count('documentNumberingPolicies'),
+        quoteCreateReceipts: count('quoteCreateReceipts'),
       }
     };
 

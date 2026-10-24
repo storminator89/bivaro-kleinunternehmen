@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
+import { DocumentNumberingError } from '@/lib/document-numbering-policy';
+import { inTransaction } from '@/lib/db-transaction';
 import { previewDocumentNumber } from '@/lib/invoice-numbers';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const userId = await requireUserId();
-    const next = await previewDocumentNumber(prisma, userId, 'INVOICE');
-    return NextResponse.json({ nextInvoiceNumber: next.number });
+    const yearInput = new URL(request.url).searchParams.get('year');
+    const year = yearInput === null ? new Date().getFullYear() : Number(yearInput);
+    const next = await inTransaction(tx => previewDocumentNumber(tx, userId, 'INVOICE', year));
+    return NextResponse.json({ nextInvoiceNumber: next.number, numberingSelection: { version: 1, type: 'INVOICE', revision: next.revision, year: next.year, number: next.number, automatic: true } }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    if (error instanceof DocumentNumberingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof UnauthorizedError) return unauthorizedResponse();
     console.error('Document number preview failed:', error);
     return NextResponse.json({ error: 'Nummer konnte nicht ermittelt werden' }, { status: 500 });

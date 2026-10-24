@@ -22,6 +22,7 @@ import {
 import Link from "next/link";
 import { SmtpSettings } from "@/components/settings/smtp-settings";
 import { AiProviderSettings } from "@/components/settings/ai-provider-settings";
+import { DocumentNumberingSettings } from "@/components/settings/document-numbering-settings";
 import { AnnualBusinessContextSettings } from "@/components/settings/annual-business-context";
 import { FiscalProfileSettings } from "@/components/onboarding/fiscal-profile-settings";
 import { EMPTY_FISCAL_PROFILE, readFiscalProfile } from "@/lib/fiscal-profile";
@@ -703,6 +704,7 @@ export default function SettingsPage() {
 
       <FiscalProfileSettings initialProfile={fiscalProfile} />
       <AnnualBusinessContextSettings />
+      <DocumentNumberingSettings key={session?.user?.id ?? "signed-out"} />
 
       <AiProviderSettings key={session?.user?.id ?? "signed-out"} />
       {isAdmin && <div id="email-settings" className={styles.smtpPanel}><SmtpSettings /></div>}

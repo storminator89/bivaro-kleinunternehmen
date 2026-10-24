@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
-import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
@@ -155,13 +157,37 @@ test('settings redesign has complete light/dark screens and bounded changed-form
     const surface = await page.evaluate(() => ({ viewportWidth: innerWidth, viewportHeight: innerHeight, clientWidth: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth, scrollY, height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
       font: getComputedStyle(document.querySelector('#companyName')!).fontFamily }));
-    const image = await page.screenshot({ path: testInfo.outputPath(name), fullPage, animations: 'disabled' });
+    let image = await page.screenshot({ path: testInfo.outputPath(name), fullPage, animations: 'disabled' });
     const pngWidth = image.readUInt32BE(16), pngHeight = image.readUInt32BE(20);
     expect(image.length).toBeLessThanOrEqual(5 * 1024 * 1024);
     expect(pngWidth).toBeGreaterThanOrEqual(surface.clientWidth);
     expect(pngWidth).toBeLessThanOrEqual(surface.viewportWidth);
     expect(pngWidth * pngHeight * 4).toBeLessThanOrEqual(64 * 1024 * 1024);
     if (fullPage) { expect(surface.scrollY).toBe(0); expect(pngHeight).toBe(surface.height); }
+    // Account for the same complete screenshots after dependency-free lossless
+    // encoding, not fewer pixels. The existing codec checks every decoded pixel
+    // and retains every non-IDAT chunk byte-for-byte before returning its proof.
+    const result = spawnSync('python3', ['-c', `
+import json
+import sys
+sys.path.insert(0, 'scripts')
+from lossless_evidence_png import recompress_png
+image, proof = recompress_png(sys.stdin.buffer.read(5 * 1024 * 1024 + 1))
+sys.stdout.buffer.write(image)
+sys.stderr.write(json.dumps(proof))
+`], { input: image, timeout: 20_000, killSignal: 'SIGKILL', maxBuffer: 5 * 1024 * 1024,
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' }, stdio: 'pipe' });
+    expect(result.error, result.stderr.toString()).toBeUndefined();
+    expect(result.status, result.stderr.toString()).toBe(0);
+    const proof = JSON.parse(result.stderr.toString());
+    expect(proof).toMatchObject({ width: pngWidth, height: pngHeight, inputBytes: image.length, outputBytes: result.stdout.length,
+      inputSha256: createHash('sha256').update(image).digest('hex'), outputSha256: createHash('sha256').update(result.stdout).digest('hex') });
+    expect(proof.fullPixelSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(proof.nonIdatSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.stdout.length).toBeLessThanOrEqual(image.length);
+    image = result.stdout;
+    await writeFile(testInfo.outputPath(name), image);
+    process.stdout.write(`Settings lossless capture proof: ${JSON.stringify({ name, ...proof })}\n`);
     captures.push({ name, bytes: image.length });
     process.stdout.write(`Settings capture proof: ${JSON.stringify({ name, fullPage, theme: await page.locator('html').getAttribute('class'), url: page.url(), ...surface, pngWidth, pngHeight, encodedBytes: image.length })}\n`);
   };

@@ -72,7 +72,12 @@ describe('single-period planning, tenant/CAS boundaries and no financial side ef
     const [first, repeat] = await Promise.all([reviewServiceBillingPeriod('service-owner',body,'2026-10-21'),reviewServiceBillingPeriod('service-owner',body,'2026-10-21')]);
     expect(first.invoiceId).toBe(repeat.invoiceId); expect(repeat.idempotent).toBe(true);
     const row = await database.client.invoice.findUniqueOrThrow({ where: { id: first.invoiceId! } });
-    expect(isUnrenderedServiceBillingDraft(row)).toBe(true); expect(row).toMatchObject({ invoiceNumber:null,invoiceDate:null,dueDate:null,storedFileName:'',status:'DRAFT',issuanceState:'UNISSUED',totalAmount:119 });
+    expect(isUnrenderedServiceBillingDraft(row)).toBe(true);
+    expect(isUnrenderedServiceBillingDraft({ ...row, quoteCreateReceipts: [] })).toBe(true);
+    expect(isUnrenderedServiceBillingDraft({ ...row, quoteCreateRequestId: randomUUID() })).toBe(false);
+    expect(isUnrenderedServiceBillingDraft({ ...row, quoteCreateFingerprint: 'a'.repeat(64) })).toBe(false);
+    expect(isUnrenderedServiceBillingDraft({ ...row, quoteCreateReceipts: [{}] })).toBe(false);
+    expect(row).toMatchObject({ invoiceNumber:null,invoiceDate:null,dueDate:null,storedFileName:'',status:'DRAFT',issuanceState:'UNISSUED',totalAmount:119 });
     expect(await counts()).toEqual({ ...before,invoices:before.invoices+1,receipts:before.receipts+1 });
     expect(await plan(id)).toMatchObject({nextPeriod:1,revision:2});
     await expect(reviewServiceBillingPeriod('service-owner',{...body,action:'SKIP'},'2026-10-21')).rejects.toMatchObject({status:409});

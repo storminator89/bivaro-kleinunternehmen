@@ -61,5 +61,5 @@ export function prepareBankImport(input: BankImportInput) {
   bankImportRowLimit(preview.rows.length);
   const sourceSha256 = createHash('sha256').update(bytes).digest('hex');
   const fingerprint = bankImportFingerprint({ sourceSha256, delimiter: parsed.delimiter, mapping: input.mapping, parserVersion: BANK_IMPORT_PARSER_VERSION, mappingVersion: BANK_IMPORT_MAPPING_VERSION });
-  return { sourceSha256, sourceBytes: bytes.byteLength, fingerprint, rows: preview.rows.map(retained) };
+  return { sourceSha256, sourceBytes: bytes.byteLength, fingerprint, parsed, rows: preview.rows.map(retained) };
 }

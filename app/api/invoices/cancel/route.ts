@@ -1,3 +1,4 @@
+import { DocumentNumberingError } from '@/lib/document-numbering-policy';
 import { loadInvoicePaymentState } from '@/lib/payment-journal/allocation-ledger';
 import { exactPaymentCents } from '@/lib/payment-journal/contract';
 import { cancellationReasonInput } from '@/lib/invoice-cancellation-input';
@@ -75,7 +76,8 @@ async function postHandler(request: Request) {
         });
 
         const year = new Date().getFullYear();
-        const creditNoteNumber = (await previewDocumentNumber(prisma, userId, 'CREDIT_NOTE', year)).number;
+        const creditNumberPreview = await inTransaction(tx => previewDocumentNumber(tx, userId, 'CREDIT_NOTE', year));
+        const creditNoteNumber = creditNumberPreview.number;
 
         // Parse the original invoice data
         const parsedData = typeof originalInvoice.parsedData === 'string'
@@ -278,7 +280,7 @@ async function postHandler(request: Request) {
             // Allocation-aware cases always use the verified shared projection.
             // Discovery dates and origin-only Income never determine settlement.
             const cancellationPaidAt = legacyDocumentDate ?? (await loadInvoicePaymentState(tx, userId, originalInvoice.id)).settlementDate;
-            const reserved = await getNextDocumentNumber(tx, userId, 'CREDIT_NOTE', year);
+            const reserved = await getNextDocumentNumber(tx, userId, 'CREDIT_NOTE', year, { revision: creditNumberPreview.revision, number: creditNoteNumber });
             if (reserved !== creditNoteNumber) throw new Error('Nummer wurde zwischenzeitlich vergeben. Bitte erneut versuchen.');
             const created = await tx.invoice.create({ data: {
                 type: 'CREDIT_NOTE', fileName: creditNoteFileName, storedFileName,
@@ -349,6 +351,7 @@ async function postHandler(request: Request) {
         if (error instanceof UnauthorizedError) {
             return unauthorizedResponse();
         }
+        if (error instanceof DocumentNumberingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
         if (error instanceof CancellationUnsupportedError) {
             return NextResponse.json({ error: error.message }, { status: error.status });
         }

@@ -6,7 +6,7 @@
 "use client";
 import { ServiceArticlePicker } from "@/components/dashboard/service-article-picker";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type SyntheticEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,6 +63,13 @@ export function QuoteEditor({
 }: QuoteEditorProps) {
     const [customerAddress, setCustomerAddress] = useState("");
     const [quoteNumber, setQuoteNumber] = useState("");
+    const [numberingSelection, setNumberingSelection] = useState<import("@/lib/document-numbering-policy").DocumentNumberSelection | null>(null);
+    const [numberRefreshing, setNumberRefreshing] = useState(false);
+    const numberRequestRef = useRef(0);
+    const savingRef = useRef(false);
+    const generatedRequestIdRef = useRef<string | null>(null);
+    const activeRef = useRef(true);
+    const [numberError, setNumberError] = useState("");
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [validUntil, setValidUntil] = useState("");
     const [notes, setNotes] = useState("");
@@ -111,23 +118,25 @@ export function QuoteEditor({
         setDate(today.toISOString().split('T')[0]);
 
         let active = true;
+        activeRef.current = true;
         fetch("/api/settings", { cache: "no-store" })
             .then(res => { if (!res.ok) throw new Error("Firmenprofil konnte nicht geladen werden"); return res.json(); })
-            .then(data => { if (active) setSettings(data); })
+            .then(data => { if (active && !savingRef.current) setSettings(data); })
             .catch(err => console.error("Failed to load settings", err));
 
         fetch("/api/customers")
             .then(res => res.json())
-            .then(data => setCustomers(Array.isArray(data) ? data : []))
+            .then(data => { if (active && !savingRef.current) setCustomers(Array.isArray(data) ? data : []); })
             .catch(err => console.error("Failed to load customers", err));
 
+        const numberRequest = ++numberRequestRef.current;
         fetch("/api/quotes/next-number")
             .then(res => res.json())
             .then(data => {
-                if (data.nextQuoteNumber) setQuoteNumber(data.nextQuoteNumber);
+                if (active && numberRequest === numberRequestRef.current && data.nextQuoteNumber) { setQuoteNumber(data.nextQuoteNumber); setNumberingSelection(data.numberingSelection ?? null); }
             })
             .catch(err => console.error("Failed to load next quote number", err));
-        return () => { active = false; };
+        return () => { active = false; activeRef.current = false; numberRequestRef.current += 1; };
     }, []);
 
     useEffect(() => {
@@ -470,11 +479,27 @@ export function QuoteEditor({
         setIsGeneratingPreview(false);
     }, [showPreview, taxReady]);
 
+    const refreshNumbering = async () => {
+        if (savingRef.current || numberRefreshing) return;
+        const id = ++numberRequestRef.current;
+        setNumberRefreshing(true); setNumberError('');
+        try {
+            const response = await fetch(`/api/quotes/next-number?year=${encodeURIComponent(date.slice(0, 4))}`, { cache: 'no-store' });
+            const result = await response.json();
+            if (!response.ok || !result.numberingSelection) throw new Error(result.error || 'Nummer konnte nicht geladen werden.');
+            if (id !== numberRequestRef.current || savingRef.current) return;
+            setQuoteNumber(result.nextQuoteNumber); setNumberingSelection(result.numberingSelection);
+        } catch (error) { if (id === numberRequestRef.current) setNumberError(error instanceof Error ? error.message : 'Nummer konnte nicht geladen werden.'); }
+        finally { if (id === numberRequestRef.current) setNumberRefreshing(false); }
+    };
     const handleGenerateAndSave = async () => {
-        if (!taxReady) return;
+        if (!taxReady || savingRef.current || numberRefreshing) return;
+        savingRef.current = true;
         setIsGenerating(true);
         try {
+            generatedRequestIdRef.current ??= crypto.randomUUID();
             const pdfBytes = await generatePDFBytes();
+            if (!activeRef.current) return;
             const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
             const fileName = `Angebot_${quoteNumber}.pdf`;
 
@@ -509,12 +534,15 @@ export function QuoteEditor({
                 createdBy: 'bivaro',
             };
 
+            if (!activeRef.current) return;
             const res = await fetch('/api/quotes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fileName,
                     quoteNumber,
+                    generatedRequestId: generatedRequestIdRef.current,
+                    numberingSelection: numberingSelection ? { ...numberingSelection, automatic: quoteNumber === numberingSelection.number } : null,
                     quoteDate: date,
                     validUntil,
                     totalAmount,
@@ -524,11 +552,17 @@ export function QuoteEditor({
                 }),
             });
 
+            if (!activeRef.current) return;
             if (!res.ok) {
                 const err = await res.json();
                 alert('Fehler beim Speichern des Angebots: ' + (err.error || 'Unbekannter Fehler'));
                 return;
             }
+
+            const saved = await res.json();
+            if (!activeRef.current) return;
+            // A confirmed replay keeps the original stored PDF; do not download a newly rendered substitute.
+            if (saved.idempotent === true) { if (onQuoteCreated) onQuoteCreated(); onCancel(); return; }
 
             // Also trigger download
             const url = URL.createObjectURL(blob);
@@ -544,9 +578,10 @@ export function QuoteEditor({
             onCancel();
         } catch (error) {
             console.error("Error generating quote PDF:", error);
-            alert("Fehler beim Erstellen des Angebots.");
+            if (activeRef.current) alert("Speicherung nicht bestätigt. Erneutes Speichern verwendet dieselbe Anfrage-ID; geänderte Daten können ein bereits gespeichertes Angebot nicht ersetzen. Bitte gegebenenfalls die Angebotsliste prüfen.");
         } finally {
-            setIsGenerating(false);
+            savingRef.current = false;
+            if (activeRef.current) setIsGenerating(false);
         }
     };
 
@@ -555,20 +590,26 @@ export function QuoteEditor({
     const taxTotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice * (item.taxRate / 100), 0);
     const displayAmount = (amount: number) => Number.isFinite(amount) ? formatCurrency(amount) : '–';
 
+    const requestClose = () => { if (!savingRef.current) onCancel(); };
+    const blockBusyEditorInteraction = (event: SyntheticEvent) => {
+        if (!savingRef.current) return;
+        event.preventDefault(); event.stopPropagation();
+    };
     return (
         <section aria-labelledby="quote-editor-title" className={cn(styles.editor, variant === "dialog" && styles.dialogEditor)}>
             <header className={styles.editorHeader}>
                 <div className="flex min-w-0 items-center gap-2">
-                    <Button variant="ghost" size="icon" aria-label="Zurück zu Angeboten" className="shrink-0 text-muted-foreground" onClick={onCancel}>
+                    <Button variant="ghost" size="icon" aria-label="Zurück zu Angeboten" className="shrink-0 text-muted-foreground" onClick={requestClose} disabled={isGenerating}>
                         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     {variant === "page" ? <h1 id="quote-editor-title">Neues Angebot</h1> : <h2 id="quote-editor-title">Angebot erstellen</h2>}
                 </div>
-                <Button variant="outline" onClick={() => setShowPreview(!showPreview)} aria-pressed={showPreview} className="gap-2">
+                <Button variant="outline" disabled={isGenerating} onClick={() => { if (!savingRef.current) setShowPreview(!showPreview); }} aria-pressed={showPreview} className="gap-2">
                     {showPreview ? <><EyeOff className="h-4 w-4" aria-hidden="true" />Vorschau ausblenden</> : <><Eye className="h-4 w-4" aria-hidden="true" />Live-Vorschau</>}
                 </Button>
             </header>
-            <div className={styles.editorGrid}>
+            {isGenerating && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Angebot wird gespeichert. Angaben bleiben gesperrt; Schließen würde den Auftrag nicht zurücknehmen.</p>}
+            <div className={styles.editorGrid} inert={isGenerating} aria-busy={isGenerating} onClickCapture={blockBusyEditorInteraction} onPointerDownCapture={blockBusyEditorInteraction} onKeyDownCapture={blockBusyEditorInteraction} onChangeCapture={blockBusyEditorInteraction} onInputCapture={blockBusyEditorInteraction}>
                 <div className={styles.editorMain}>
                     <DocumentTaxProfileFields id="quote" settings={settings} issueDate={date} selection={taxSelection} acknowledged={taxAcknowledged} onAcknowledged={setTaxAcknowledged} onModeChange={handleTaxModeChange} taxCase={taxCase} onTaxCaseChange={setTaxCase} />
                     <section className={styles.section} aria-labelledby="quote-recipient-title">
@@ -586,8 +627,8 @@ export function QuoteEditor({
                     <section className={styles.section} aria-labelledby="quote-document-title">
                         <div className={styles.sectionHeading}><h2 id="quote-document-title">Angebotsdaten</h2></div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="space-y-2 sm:col-span-2"><Label htmlFor="quote-number">Angebotsnummer</Label><Input id="quote-number" value={quoteNumber} onChange={e => setQuoteNumber(e.target.value)} placeholder="AN-2026-01" /></div>
-                            <div className="space-y-2"><Label htmlFor="quote-date">Angebotsdatum</Label><Input id="quote-date" type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+                            <div className="space-y-2 sm:col-span-2"><Label htmlFor="quote-number">Angebotsnummer</Label><Input id="quote-number" value={quoteNumber} onChange={e => { numberRequestRef.current += 1; setNumberRefreshing(false); setQuoteNumber(e.target.value); }} placeholder="AN-2026-01" /><Button type="button" variant="ghost" size="sm" onClick={() => void refreshNumbering()} disabled={numberRefreshing || isGenerating}>{numberRefreshing ? "Lädt…" : "Nummer aktualisieren"}</Button>{numberError && <p role="alert" className="text-sm text-destructive">{numberError}</p>}</div>
+                            <div className="space-y-2"><Label htmlFor="quote-date">Angebotsdatum</Label><Input id="quote-date" type="date" value={date} onChange={e => { numberRequestRef.current += 1; setNumberRefreshing(false); setDate(e.target.value); }} /></div>
                             <div className="space-y-2"><Label htmlFor="valid-until">Gültig bis</Label><Input id="valid-until" type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
                         </div>
                     </section>
@@ -622,8 +663,8 @@ export function QuoteEditor({
                             <dl className={styles.totals}><div><dt>Nettobetrag</dt><dd>{displayAmount(netTotal)}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayAmount(taxTotal)}</dd></div></dl>
                             {validUntil && <p className={styles.railNote}>Gültig bis {new Date(`${validUntil}T12:00:00`).toLocaleDateString('de-DE')}</p>}
                             {!taxReady && <p id="quote-tax-blocker" className={styles.railNote}><a href="#quote-tax-heading" className="underline underline-offset-4">Steuerbehandlung bestätigen</a>.</p>}
-                            <Button className="w-full" onClick={handleGenerateAndSave} aria-describedby={!taxReady ? "quote-tax-blocker" : undefined} disabled={!taxReady || isGenerating || !customerAddress || !quoteNumber} aria-busy={isGenerating} aria-label={isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}>{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isGenerating ? "Erstelle Angebot..." : <><span className="sm:hidden">Angebot erstellen</span><span className="hidden sm:inline">Angebot erstellen & speichern</span></>}</Button>
-                            <Button variant="ghost" className="w-full" onClick={onCancel}>Abbrechen</Button>
+                            <Button className="w-full" onClick={handleGenerateAndSave} aria-describedby={!taxReady ? "quote-tax-blocker" : undefined} disabled={!taxReady || isGenerating || numberRefreshing || !customerAddress || !quoteNumber} aria-busy={isGenerating} aria-label={isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}>{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isGenerating ? "Erstelle Angebot..." : <><span className="sm:hidden">Angebot erstellen</span><span className="hidden sm:inline">Angebot erstellen & speichern</span></>}</Button>
+                            <Button variant="ghost" className="w-full" onClick={requestClose} disabled={isGenerating}>Abbrechen</Button>
                         </div>
                     </section>
                     {showPreview && <section className={styles.preview} aria-label="Angebots-Vorschau"><div className={styles.sectionHeading}><h2>PDF-Vorschau</h2><Button variant="ghost" onClick={generatePreview} disabled={isGeneratingPreview || !taxReady} aria-label="Vorschau aktualisieren">{isGeneratingPreview ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}</Button></div><div className={styles.previewFrame}>{previewUrl ? <iframe src={previewUrl} title="Angebotsvorschau" /> : <div role="status">{isGeneratingPreview ? "Vorschau wird generiert..." : !taxReady ? "Bitte zuerst Steuerbehandlung und Steuerfall bestätigen." : "Füllen Sie das Formular aus, um die Vorschau zu sehen."}</div>}</div></section>}

@@ -6,7 +6,7 @@ function nativeDraft() {
   return {
     id: 1, userId: 'synthetic-owner', customerId: 1, type: 'INVOICE', status: 'DRAFT', issuanceState: 'UNISSUED',
     fileName: 'Serviceentwurf synthetic', storedFileName: '', invoiceNumber: null, invoiceDate: null, dueDate: null, paidAt: null,
-    validUntil: null, originalInvoiceId: null, convertedFromQuoteId: null, cancellationReason: null, quoteFollowUpOn: null, quoteResponseNote: null,
+    validUntil: null, originalInvoiceId: null, convertedFromQuoteId: null, cancellationReason: null, quoteFollowUpOn: null, quoteResponseNote: null, quoteCreateRequestId: null, quoteCreateFingerprint: null,
     totalAmount: 119, parsedData: {
       _serviceBillingDraft: { version: 1, planStableKey: 'b7724bdc-df02-4995-911a-5c9f57ed2a22', periodIndex: 0, periodStart: '2026-01-31', periodEnd: '2026-02-27', taxMode: 'standard',
         items: [{ description: 'Support', quantity: 1, unitPrice: 100, unit: 'Pauschale', taxRate: 19 }], customerAddress: 'Synthetic customer', notes: 'Private planning only' },
@@ -24,6 +24,9 @@ describe('canonical no-file service planning shape', () => {
     expect(Object.keys(draft).sort()).toEqual(scalarFields);
     expect(isUnrenderedServiceBillingDraft(draft)).toBe(true);
     expect(isUnrenderedServiceBillingDraft({ ...draft, futureSourceEvidence: null })).toBe(false);
+  });
+  it.each(['quoteCreateRequestId', 'quoteCreateFingerprint'])('rejects populated durable quote identity %s on a no-file invoice seed', field => {
+    expect(isUnrenderedServiceBillingDraft({ ...nativeDraft(), [field]: 'unbound-quote-evidence' })).toBe(false);
   });
   it('recognizes only the native canonical data, independently of JSON key order', () => {
     const draft = nativeDraft();
