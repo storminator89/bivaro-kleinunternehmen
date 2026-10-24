@@ -1,3 +1,7 @@
+import { quoteCreateReceiptsFromBackup } from '@/lib/quote-create-receipt-backup';
+import { validateQuoteCreateBackup } from '@/lib/quote-create-backup';
+import { bankMappingProfilesFromBackup } from '@/lib/bank-mapping-profile-backup';
+import { numberingPoliciesFromBackup } from '@/lib/document-numbering-policy-backup';
 import { portableBankAllocations } from '@/lib/bank-allocation-backup';
 import { readAnnualContextRevision } from '@/lib/annual-business-context';
 import { prisma } from '@/lib/prisma';
@@ -100,6 +104,10 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       serviceArticles,
       bankImportBatches,
       bankImportRows,
+      bankMappingProfiles,
+      bankMappingProfileRevisions,
+      documentNumberingPolicies,
+      quoteCreateReceipts,
       settings,
       annualBusinessContextRevisions,
       templates,
@@ -141,6 +149,10 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
         id: true, stableKey: true, sourceRow: true, evidence: true, externalKey: true, contentKey: true, dayAmountKey: true,
         batch: { select: { stableKey: true } },
       } }),
+      tx.bankMappingProfile.findMany({ where: { userId }, orderBy: { id: 'asc' }, select: { id: true, revision: true, deletedAt: true, deleteMutationId: true, createdAt: true, updatedAt: true } }),
+      tx.bankMappingProfileRevision.findMany({ where: { userId, profile: { userId } }, orderBy: [{ profileId: 'asc' }, { revision: 'asc' }], select: { profileId: true, revision: true, mutationId: true, configuration: true, createdAt: true } }),
+      tx.documentNumberingPolicy.findMany({ where: { userId }, orderBy: [{ type: 'asc' }, { revision: 'asc' }], select: { type: true, revision: true, formatVersion: true, prefix: true, includeYear: true, sequenceWidth: true, startSequence: true, effectiveYear: true, createdAt: true } }),
+      tx.quoteCreateReceipt.findMany({ where: { userId }, orderBy: { requestId: 'asc' }, select: { requestId: true, fingerprint: true, pdfSha256: true, invoiceId: true, createdAt: true } }),
       tx.settings.findUnique({ where: { userId } }),
       tx.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } }),
       tx.invoiceTemplate.findMany({ where: { userId } }),
@@ -164,6 +176,12 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       tx.invoiceNumberCounter.findMany({ where: { userId }, orderBy: [{ type: 'asc' }, { year: 'asc' }] }),
     ]);
 
+    // JSON configuration blobs are validated before export, not merely trusted
+    // because the scalar select omitted tenant keys. Corrupt/unknown raw fields fail closed.
+    const mappingHistory = bankMappingProfilesFromBackup({ bankMappingProfiles, bankMappingProfileRevisions, bankImportBatches }, true);
+    const numberingHistory = numberingPoliciesFromBackup({ documentNumberingPolicies }, true);
+    validateQuoteCreateBackup({ invoices, quoteCreateReceipts }, true);
+    const quoteReceipts = quoteCreateReceiptsFromBackup({ invoices, quoteCreateReceipts }, true);
     const allocations = portableBankAllocations(bankPaymentBindings, paymentAllocationChanges, bankImportRows, paymentJournalEvents);
     const includedOriginalHashes = new Set(purchaseDocuments.map(document => document.originalSha256));
     return {
@@ -186,6 +204,10 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       suppliers: suppliers.map((item) => ({ ...item, userId: undefined })),
       annualBusinessContextRevisions: annualBusinessContextRevisions.map(readAnnualContextRevision),
       serviceArticles: serviceArticles.map((item) => ({ ...item, userId: undefined })),
+      bankMappingProfiles: mappingHistory.profiles,
+      bankMappingProfileRevisions: mappingHistory.revisions,
+      documentNumberingPolicies: numberingHistory,
+      quoteCreateReceipts: quoteReceipts,
       bankImportBatches,
       bankImportRows: bankImportRows.map(({ id: _localId, batch, ...row }) => { void _localId; return { ...row, batchStableKey: batch.stableKey }; }),
       settings: settings ? { ...settings, userId: undefined } : null,

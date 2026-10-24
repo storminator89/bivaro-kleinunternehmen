@@ -1,0 +1,2 @@
+-- Explicit backup capability union for bank mapping profiles and document numbering policy history.
+-- Both feature migrations are prerequisites. No business rows or number counters are changed.

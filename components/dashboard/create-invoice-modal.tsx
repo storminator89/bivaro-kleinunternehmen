@@ -117,6 +117,9 @@ export function CreateInvoiceModal({
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [numberingSelection, setNumberingSelection] = useState<import("@/lib/document-numbering-policy").DocumentNumberSelection | null>(null);
+  const [numberRefreshing, setNumberRefreshing] = useState(false);
+  const numberRequestRef = useRef(0);
   const [date, setDate] = useState(paymentToday());
   const [dueDate, setDueDate] = useState("");
   const [paymentTermManual, setPaymentTermManual] = useState(false);
@@ -224,6 +227,9 @@ export function CreateInvoiceModal({
     setDraftSaveMessage("");
     setCustomerAddress("");
     setInvoiceNumber("");
+    setNumberingSelection(null);
+    setNumberRefreshing(false);
+    numberRequestRef.current += 1;
     setDate(today);
     setDueDate(addPaymentCalendarDays(today, 14));
     setPaymentTermManual(false);
@@ -318,11 +324,13 @@ export function CreateInvoiceModal({
         })
         .catch(err => console.error("Failed to load customers", err));
 
+      const numberRequest = ++numberRequestRef.current;
       fetch("/api/invoices/next-number")
         .then(res => res.json())
         .then(data => {
-          if (active && !issuingRef.current && data.nextInvoiceNumber) {
+          if (active && !issuingRef.current && numberRequest === numberRequestRef.current && data.nextInvoiceNumber) {
             setInvoiceNumber(data.nextInvoiceNumber);
+            setNumberingSelection(data.numberingSelection ?? null);
           }
         })
         .catch(err => console.error("Failed to load next invoice number", err));
@@ -835,6 +843,21 @@ export function CreateInvoiceModal({
     setIsGeneratingPreview(false);
   }, [showPreview, taxReady]);
 
+  const refreshNumbering = async () => {
+    if (issuingRef.current || numberRefreshing) return;
+    const generation = editorGenerationRef.current;
+    const numberRequest = ++numberRequestRef.current;
+    setNumberRefreshing(true);
+    try {
+      const response = await fetch(`/api/invoices/next-number?year=${encodeURIComponent(date.slice(0, 4))}`, { cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok || !result.numberingSelection) throw new Error(result.error || 'Nummer konnte nicht geladen werden.');
+      if (generation !== editorGenerationRef.current || numberRequest !== numberRequestRef.current || issuingRef.current) return;
+      setInvoiceNumber(result.nextInvoiceNumber); setNumberingSelection(result.numberingSelection); setInvoiceNumberError(null);
+    } catch (error) { if (generation === editorGenerationRef.current && numberRequest === numberRequestRef.current) setInvoiceNumberError(error instanceof Error ? error.message : 'Nummer konnte nicht geladen werden.'); }
+    finally { if (generation === editorGenerationRef.current && numberRequest === numberRequestRef.current) setNumberRefreshing(false); }
+  };
+
   const buildZugferdData = () => ownInvoiceToZugferdData(buildOwnInvoiceSource());
 
   const buildInvoiceFileName = (extension: 'pdf' | 'xml') => {
@@ -845,6 +868,7 @@ export function CreateInvoiceModal({
   const uploadGeneratedInvoice = async (file: File): Promise<{ invoiceId: number | null; replayed: boolean } | null> => {
     const formData = new FormData();
     formData.append('file', file);
+    if (numberingSelection) formData.append('numberingSelection', JSON.stringify({ ...numberingSelection, automatic: invoiceNumber === numberingSelection.number }));
     formData.append('selectedCustomerId', selectedCustomerId ? String(selectedCustomerId) : '');
     const billingNoteIds = Array.from(new Set(
       items
@@ -931,7 +955,7 @@ export function CreateInvoiceModal({
 
   const createInvoiceFile = async () => {
     if (fromDraft && items.some(item => item.billingNoteId !== undefined)) { setDraftSaveMessage('Leistungsnotizen können in Serviceentwürfen nicht übernommen werden. Bitte dafür eine separate neue Rechnung verwenden.'); return; }
-    if (!taxReady || issuingRef.current) return;
+    if (!taxReady || issuingRef.current || numberRefreshing) return;
     issuingRef.current = true;
     // A term refresh started before this click must not replace the frozen
     // due date/company/customer while the same source is rendered and saved.
@@ -1217,19 +1241,20 @@ export function CreateInvoiceModal({
                 <Input
                   id="invoice-number"
                   value={invoiceNumber}
-                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                  onChange={(e) => { numberRequestRef.current += 1; setNumberRefreshing(false); setInvoiceNumber(e.target.value); }}
                   placeholder="RE-2024-001"
                   aria-invalid={Boolean(invoiceNumberError)}
                   aria-describedby={invoiceNumberError ? "invoice-number-error" : undefined}
                   className={invoiceNumberError ? "border-destructive outline-destructive" : ""}
                 />
+                <Button type="button" variant="ghost" size="sm" onClick={() => void refreshNumbering()} disabled={numberRefreshing || isGenerating}>{numberRefreshing ? "Lädt…" : "Nummer aktualisieren"}</Button>
                 {invoiceNumberError && (
                   <p id="invoice-number-error" className="min-h-[1lh] text-xs font-medium text-destructive">{invoiceNumberError}</p>
                 )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date">Rechnungsdatum</Label>
-                <Input id="date" type="date" value={date} onChange={(e) => { paymentTermRefreshRef.current += 1; setPaymentTermRefreshing(false); setDate(e.target.value); }} />
+                <Input id="date" type="date" value={date} onChange={(e) => { paymentTermRefreshRef.current += 1; setPaymentTermRefreshing(false); numberRequestRef.current += 1; setNumberRefreshing(false); setDate(e.target.value); }} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="delivery-date">Leistungsdatum</Label>

@@ -1,3 +1,8 @@
+import { quoteCreateReceiptsFromBackup, preflightQuoteCreateReceipts, restoreQuoteCreateReceipts } from '@/lib/quote-create-receipt-backup';
+import { MAX_INVOICE_UPLOAD_BYTES } from '@/lib/resource-limits';
+import { validateQuoteCreateBackup, validateQuoteCreateRestoreTargets, validateQuoteOriginalManifest } from '@/lib/quote-create-backup';
+import { bankMappingProfilesFromBackup, restoreBankMappingProfiles } from '@/lib/bank-mapping-profile-backup';
+import { numberingPoliciesFromBackup, restoreDocumentNumberingPolicies, documentNumberCounterFloors, validateQuoteCreateIdentityFields } from '@/lib/document-numbering-policy-backup';
 import { bankAllocationsFromBackup, validateBankAllocationGraph, restoreBankAllocations, portableBankAllocations } from '@/lib/bank-allocation-backup';
 import { loadInvoicePaymentState, updateInvoicePaymentProjection } from '@/lib/payment-journal/allocation-ledger';
 import { bankImportsFromBackup, restoreBankImports } from '@/lib/bank-import-backup';
@@ -25,7 +30,7 @@ import { validateAiExtractionState, validateAiDraftProvenance } from '@/lib/purc
 import { restoredAiExtractionState, validateAiApprovedSnapshot } from '@/lib/purchase-documents/ai-provenance';
 import { parsePurchaseReviewDraft } from '@/lib/purchase-documents/review-draft';
 import { originalByteLimit, purchaseOriginalName, detectPurchaseContainer, readPurchaseOriginal } from '@/lib/purchase-documents/original';
-import { getBackupFileVersion } from '@/lib/backup-snapshot';
+import { getBackupFileVersion, readStableBackupFile } from '@/lib/backup-snapshot';
 import { ProcessingCapacityError, withProcessingSlot } from '@/lib/processing-limit';
 import { CashbookError, recalculateCashBalances } from '@/lib/cashbook-service';
 import { documentNumberPrefix, maximumDocumentSequence, type DocumentType } from '@/lib/invoice-numbers';
@@ -34,6 +39,8 @@ import {
   CURRENT_BACKUP_VERSION,
   CURRENT_SCHEMA_VERSION,
   backupSchemaSupportsBankImportEvidence,
+  backupSchemaSupportsBankMappingProfiles,
+  backupSchemaSupportsDocumentNumberingPolicies,
   backupSchemaSupportsBankPaymentAllocations,
   backupSchemaSupportsReminderBalance,
   backupSchemaSupportsPurchaseValidation,
@@ -104,6 +111,10 @@ type RestoreResult = {
   customers: { imported: number; skipped: number };
   suppliers: { imported: number; skipped: number };
   serviceArticles: { imported: number; skipped: number };
+  bankMappingProfiles: { imported: number; skipped: number };
+  bankMappingProfileRevisions: { imported: number; skipped: number };
+  documentNumberingPolicies: { imported: number; skipped: number };
+  quoteCreateReceipts: { imported: number; skipped: number };
   bankImportBatches: { imported: number; skipped: number };
   bankImportRows: { imported: number; skipped: number };
   bankPaymentBindings: { imported: number; skipped: number };
@@ -919,8 +930,14 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
     warnings.push(manifestWarning(LEGACY_BACKUP_VERSION)!);
   }
 
-  try { bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(manifest?.schemaVersion)); }
+  try { bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(manifest?.schemaVersion), backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion)); }
   catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Bankimport-Evidenz ist ungültig'); }
+  try {
+    bankMappingProfilesFromBackup(data, backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion));
+    numberingPoliciesFromBackup(data, backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion));
+    validateQuoteCreateBackup(data, backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion));
+    if (root.type === 'full' && manifest) validateQuoteOriginalManifest(data, manifest.fileManifest, true);
+  } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Profil- oder Nummernhistorie ungültig'); }
   try { validateProjectServiceBackupFields(data, manifest?.schemaVersion); }
   catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Projekt- und Zeitdaten ungültig'); }
   try { validatePaymentTermBackupFields(data, manifest?.schemaVersion); }
@@ -1072,6 +1089,10 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     customers: { imported: 0, skipped: 0 },
     suppliers: { imported: 0, skipped: 0 },
     serviceArticles: { imported: 0, skipped: 0 },
+    bankMappingProfiles: { imported: 0, skipped: 0 },
+    bankMappingProfileRevisions: { imported: 0, skipped: 0 },
+    documentNumberingPolicies: { imported: 0, skipped: 0 },
+    quoteCreateReceipts: { imported: 0, skipped: 0 },
     bankImportBatches: { imported: 0, skipped: 0 },
     bankImportRows: { imported: 0, skipped: 0 },
     bankPaymentBindings: { imported: 0, skipped: 0 },
@@ -1322,7 +1343,8 @@ async function deleteUserData(tx: Prisma.TransactionClient, userId: string): Pro
   await tx.invoice.deleteMany({ where: { userId } });
   await tx.customer.deleteMany({ where: { userId } });
   await tx.settings.deleteMany({ where: { userId } });
-  // AuditLog, PurchaseValidationReport and both BankImport models are intentionally preserved as immutable history.
+  // AuditLog, PurchaseValidationReport, BankImport evidence, mapping profiles/revisions,
+  // numbering policies, quote-create receipt tombstones and counters are intentionally preserved as immutable/high-water history.
 }
 
 function purchaseOriginalIdentity(record: JsonRecord): string {
@@ -1417,7 +1439,10 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
   const result = resultTemplate(overwrite);
   result.warnings.push(...validationWarnings);
   const documents = asArray(data, 'purchaseDocuments');
-  const bankImports = bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(manifest?.schemaVersion));
+  const bankImports = bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(manifest?.schemaVersion), backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion));
+  const mappingProfiles = bankMappingProfilesFromBackup(data, backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion));
+  const numberingPolicies = numberingPoliciesFromBackup(data, backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion));
+  const quoteReceipts = quoteCreateReceiptsFromBackup(data, backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion));
   const allocationGraph = validateBankAllocationGraph(data, manifest?.schemaVersion);
   const bankAllocations = bankAllocationsFromBackup(data, manifest?.schemaVersion);
   if (bankImports.batches.length) result.warnings.push('Bankimport-Evidenz wird unverändert wiederhergestellt. Bestehende Quittungen bleiben erhalten; keine Zahlung wird ausgeführt.');
@@ -1429,13 +1454,19 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
   const stagedFiles = new Set<string>();
   const usedFiles = new Set<string>();
   const fileMap = new Map<string, string>();
+  const fileProofs = new Map<string, { sha256: string; bytes: number }>();
+  const preservedQuoteOriginals = new Map<number, { targetInvoiceId: number; storedFileName: string; path: string; version: string; sha256: string; bytes: number }>();
   const missingFiles = new Set<string>();
   const verifiedExistingOriginals = new Map<number, { identity: string; path: string; version: string }>();
 
-  const stageFile = async (kind: FileKind, sourceName: string, originalName: string, expected?: { sha256: string; bytes: number }): Promise<string> => {
+  const stageFile = async (kind: FileKind, sourceName: string, originalName: string, expected?: { sha256: string; bytes?: number }): Promise<string> => {
     const key = `${kind}:${sourceName}`;
     const known = fileMap.get(key);
-    if (known) return known;
+    if (known) {
+      const proof = fileProofs.get(key);
+      if (expected && (!proof || proof.sha256 !== expected.sha256 || (expected.bytes !== undefined && proof.bytes !== expected.bytes))) throw new BackupValidationError('Referenzierte Originaldatei hat einen widersprüchlichen Dateinachweis.');
+      return known;
+    }
     let bytes: Uint8Array | null;
     if (resolveFile) {
       bytes = await resolveFile(kind, sourceName);
@@ -1447,8 +1478,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (resolveFile && bytes === null) {
       throw new BackupValidationError(`Datei ${sourceName} fehlt im Backup`);
     }
-    if (expected && (!bytes || bytes.byteLength !== expected.bytes || hashBytes(bytes) !== expected.sha256)) {
-      throw new BackupValidationError('Integritätsprüfung eines Eingangsbeleg-Originals fehlgeschlagen');
+    if (expected && (!bytes || (expected.bytes !== undefined && bytes.byteLength !== expected.bytes) || hashBytes(bytes) !== expected.sha256)) {
+      throw new BackupValidationError(kind === 'invoice' ? 'Integritätsprüfung eines Angebots-Originals fehlgeschlagen' : 'Integritätsprüfung eines Eingangsbeleg-Originals fehlgeschlagen');
     }
     if (kind === 'purchase-document' && /\.(jpg|png)$/.test(originalName) && bytes) {
       try { await withProcessingSlot(userId, () => detectPurchaseContainer({ name: originalName, type: originalName.endsWith('.jpg') ? 'image/jpeg' : 'image/png', size: bytes!.byteLength }, Buffer.from(bytes!))); }
@@ -1462,6 +1493,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       ? createTenantStoredName(originalName)
       : await writeTenantFile(userId, originalName, bytes!);
     fileMap.set(key, storedName);
+    if (bytes) fileProofs.set(key, { sha256: hashBytes(bytes), bytes: bytes.byteLength });
     if (missing) {
       missingFiles.add(key);
       result.warnings.push(`${kind}:${sourceName} enthält keine wiederherstellbaren Dateibytes; die Dateireferenz bleibt ausdrücklich ohne Datei.`);
@@ -1518,6 +1550,17 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       result.warnings.push(`${apiKeys.length} API-Schlüssel wurden nicht übernommen; aus Sicherheitsgründen müssen neue Schlüssel erstellt werden.`);
     }
 
+    try {
+      const previous = await preflightQuoteCreateReceipts(prisma, userId, quoteReceipts);
+      const originals = await validateQuoteCreateRestoreTargets(prisma, userId, invoices, customers, previous, quoteReceipts);
+      for (const original of originals) {
+        const path = getTenantUploadPath(userId, original.storedFileName);
+        const verified = await readStableBackupFile(path, MAX_INVOICE_UPLOAD_BYTES);
+        if (!verified || verified.sha256 !== original.pdfSha256) throw new Error('Unveränderliches Angebots-Original im Ziel fehlt oder passt nicht zum gespeicherten Originalhash.');
+        preservedQuoteOriginals.set(original.sourceInvoiceId, { targetInvoiceId: original.targetInvoiceId, storedFileName: original.storedFileName, path, version: verified.sourceVersion, sha256: verified.sha256, bytes: verified.bytes.byteLength });
+      }
+    } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Angebotsanfrage-Historie kollidiert'); }
+
     // Reject known immutable-target conflicts before resolving or staging any
     // files. Repeat these checks inside the write transaction to cover races.
     if (overwrite) await validateProjectTimeOverwrite(prisma, userId, manifest?.schemaVersion);
@@ -1558,7 +1601,17 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       if (isUnrenderedServiceBillingDraft(invoice)) continue;
       const sourceName = validateStoredName(invoice.storedFileName, 'invoice.storedFileName')
         ?? `invoice-${String(invoice.id)}`;
-      await stageFile('invoice', sourceName, asRequiredString(invoice.fileName, 'invoice.fileName', 255));
+      const preserved = preservedQuoteOriginals.get(Number(invoice.id));
+      if (preserved) {
+        const key = `invoice:${sourceName}`, known = fileMap.get(key);
+        if (known && known !== preserved.storedFileName) throw new BackupValidationError('Mehrdeutige Dateireferenz unveränderlicher Angebots-Originale.');
+        fileMap.set(key, preserved.storedFileName);
+        const receipt = quoteReceipts.find(row => row.invoiceId === Number(invoice.id))!;
+        fileProofs.set(key, { sha256: receipt.pdfSha256, bytes: preserved.bytes });
+        continue;
+      }
+      const receipt = quoteReceipts.find(row => row.invoiceId === Number(invoice.id));
+      await stageFile('invoice', sourceName, asRequiredString(invoice.fileName, 'invoice.fileName', 255), receipt ? { sha256: receipt.pdfSha256 } : undefined);
     }
     for (const document of documents) {
       const sourceName = document.storedFileName as string;
@@ -1579,6 +1632,23 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (sourceLogo) await stageFile('logo', sourceLogo, sourceLogo);
 
     await prisma.$transaction(async (tx) => {
+      let previousQuoteReceipts: Awaited<ReturnType<typeof preflightQuoteCreateReceipts>>;
+      try {
+        previousQuoteReceipts = await preflightQuoteCreateReceipts(tx, userId, quoteReceipts);
+        const originals = await validateQuoteCreateRestoreTargets(tx, userId, invoices, customers, previousQuoteReceipts, quoteReceipts);
+        if (originals.length !== preservedQuoteOriginals.size) throw new Error('Angebotsanfrage-Historie wurde während der Wiederherstellung geändert.');
+        for (const original of originals) {
+          const preserved = preservedQuoteOriginals.get(original.sourceInvoiceId);
+          if (!preserved || preserved.targetInvoiceId !== original.targetInvoiceId || preserved.storedFileName !== original.storedFileName || preserved.sha256 !== original.pdfSha256 || await getBackupFileVersion(preserved.path) !== preserved.version) throw new Error('Unveränderliches Angebots-Original wurde während der Wiederherstellung verändert.');
+        }
+      } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Angebotsanfrage-Historie kollidiert'); }
+      // Both feature histories are append-only, including overwrite. A conflict rolls back every model.
+      try {
+        const profileResult = await restoreBankMappingProfiles(tx, userId, mappingProfiles);
+        result.bankMappingProfiles = profileResult.profiles;
+        result.bankMappingProfileRevisions = profileResult.revisions;
+        result.documentNumberingPolicies = await restoreDocumentNumberingPolicies(tx, userId, numberingPolicies);
+      } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Profil- oder Nummernhistorie kollidiert'); }
       // Bank evidence is additive even in overwrite mode; collisions abort the whole restore.
       const bankResult = await restoreBankImports(tx, userId, bankImports);
       result.bankImportBatches = bankResult.batches;
@@ -1943,6 +2013,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       for (const invoice of invoices) {
         const sourceId = asOptionalInt(invoice.id, 'invoice.id')!;
         const invoiceNumber = asOptionalString(invoice.invoiceNumber, 'invoice.invoiceNumber', 255);
+        const quoteCreateIdentity = validateQuoteCreateIdentityFields(invoice, backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion));
         const restoredParsedData = remappedPaymentTermParsedData(invoice.parsedData, customerMap);
         const sourcePayments = sourcePaymentsByInvoice.get(sourceId) ?? [];
         const identityMatches = sourcePayments.flatMap((event) => {
@@ -1960,17 +2031,26 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         }
         const recurringInvoiceId = recurringInvoiceIdentity.get(sourceId);
         if (recurringInvoiceId !== undefined && identityMatches[0] && recurringInvoiceId !== identityMatches[0].invoiceId) throw new BackupValidationError('Service- und Zahlungsidentitäten verweisen auf unterschiedliche Rechnungen.');
-        const existing = identityMatches[0]
+        const existingByDocument = identityMatches[0]
           ? await tx.invoice.findFirst({ where: { id: identityMatches[0].invoiceId, userId } })
           : recurringInvoiceId !== undefined ? await tx.invoice.findFirst({ where: { id: recurringInvoiceId, userId } })
             : invoiceNumber ? await tx.invoice.findFirst({ where: { userId, invoiceNumber } }) : null;
+        const existingByQuoteRequest = quoteCreateIdentity.quoteCreateRequestId ? await tx.invoice.findFirst({ where: { userId, quoteCreateRequestId: quoteCreateIdentity.quoteCreateRequestId } }) : null;
+        if (existingByDocument && existingByQuoteRequest && existingByDocument.id !== existingByQuoteRequest.id) throw new BackupValidationError('Angebotsnummer und dauerhafte Anfrage-ID verweisen auf verschiedene Zielbelege.');
+        const existing = existingByQuoteRequest ?? existingByDocument;
+        if (existing && quoteCreateIdentity.quoteCreateRequestId) {
+          try {
+            const targetIdentity = validateQuoteCreateIdentityFields(existing as unknown as JsonRecord, true);
+            if (existing.type !== 'QUOTE' || existing.invoiceNumber !== invoiceNumber || targetIdentity.quoteCreateRequestId !== quoteCreateIdentity.quoteCreateRequestId || targetIdentity.quoteCreateFingerprint !== quoteCreateIdentity.quoteCreateFingerprint) throw new Error('Dauerhafte Angebotsanfrage-Identität kollidiert mit dem Zielbeleg. Historische Anfragebelege dürfen nicht ergänzt, ersetzt oder verworfen werden.');
+          } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Angebotsanfrage-Historie kollidiert'); }
+        }
         if ((recurringInvoiceId !== undefined && !existing) || (recurringSourceInvoiceIds.has(sourceId) && existing && !sameServiceBillingInvoice(existing as unknown as JsonRecord, invoice, relationMapValue(customerMap, invoice.customerId, 'invoice.customerId')))) {
           throw new BackupValidationError('Der Service-Periodenentwurf wurde im Ziel oder im Backup verändert. Zusammenführen wird ohne Ersatz oder Duplikat abgebrochen.');
         }
         // Numeric IDs, filenames and equal amounts do not establish document
         // identity across restores. Keep accepted legacy no-write protection;
         // partial histories additionally require a verified event identity.
-        if (!sourcePayments.length && !invoiceNumber?.trim() && recurringInvoiceId === undefined && existingPaymentEvents.length) {
+        if (!sourcePayments.length && !invoiceNumber?.trim() && !quoteCreateIdentity.quoteCreateRequestId && recurringInvoiceId === undefined && existingPaymentEvents.length) {
           throw new BackupValidationError('Zusammenführen ohne eindeutige Rechnungsidentität ist bei vorhandenen unveränderlichen Zahlungsereignissen nicht möglich. Bitte den Altbeleg getrennt prüfen oder ein leeres Wiederherstellungsziel verwenden.');
         }
         if (sourcePayments.length && !invoiceNumber?.trim() && existingPaymentEvents.length && !identityMatches.length) {
@@ -2098,6 +2178,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           validUntil: asDate(invoice.validUntil, 'invoice.validUntil'),
           quoteFollowUpOn: asOptionalString(invoice.quoteFollowUpOn, 'invoice.quoteFollowUpOn', 10),
           quoteResponseNote: asOptionalString(invoice.quoteResponseNote, 'invoice.quoteResponseNote', 2000),
+          ...quoteCreateIdentity,
           parsedData: asJson(restoredParsedData, 'invoice.parsedData'),
           totalAmount: asOptionalFinite(invoice.totalAmount, 'invoice.totalAmount'),
           status: asOptionalString(invoice.status, 'invoice.status', 32) ?? 'DRAFT',
@@ -2113,6 +2194,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         createdInvoiceIds.add(sourceId);
         result.invoices.imported += 1;
       }
+
+      try { result.quoteCreateReceipts = await restoreQuoteCreateReceipts(tx, userId, quoteReceipts, invoiceMap, previousQuoteReceipts); }
+      catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Angebotsanfrage-Nachweise kollidieren'); }
 
       for (const period of serviceBillingPeriods) {
         const planId = serviceBillingPlanMap.get(String(period.planId))!;
@@ -2685,6 +2769,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         const separator = key.lastIndexOf(':');
         addCounterValue(restoredCounterValues, key.slice(0, separator), Number(key.slice(separator + 1)), value);
       }
+      const restoredNumberingPolicies = numberingPoliciesFromBackup({ documentNumberingPolicies: await tx.documentNumberingPolicy.findMany({ where: { userId }, orderBy: [{ type: 'asc' }, { revision: 'asc' }], select: { type: true, revision: true, formatVersion: true, prefix: true, includeYear: true, sequenceWidth: true, startSequence: true, effectiveYear: true, createdAt: true } }) }, true);
+      for (const counter of documentNumberCounterFloors(importedInvoiceHistory, restoredNumberingPolicies)) addCounterValue(restoredCounterValues, counter.type, counter.year, counter.value);
       const importedCounterKeys = new Set(invoiceNumberCounters.map((counter) => counterKey(String(counter.type), Number(counter.year))));
       for (const [key, value] of restoredCounterValues.entries()) {
         const separator = key.lastIndexOf(':');
@@ -2839,6 +2925,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           await updateInvoicePaymentProjection(tx, state);
         }
       } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zahlungsberichtigungsgraph ungültig'); }
+
+      for (const preserved of preservedQuoteOriginals.values()) if (await getBackupFileVersion(preserved.path) !== preserved.version) throw new BackupValidationError('Unveränderliches Angebots-Original wurde während der Wiederherstellung verändert.');
 
       await createFinancialAuditLog({
         userId,

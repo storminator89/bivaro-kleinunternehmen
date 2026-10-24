@@ -38,6 +38,7 @@ model SmtpSettings {
 }
 
 model User {
+  bankMappingProfiles BankMappingProfile[]
   id        String   @id @default(uuid())
   email     String   @unique
   password  String
@@ -80,6 +81,8 @@ model User {
   serviceArticles ServiceArticle[]
   serviceBillingPlans ServiceBillingPlan[]
   serviceBillingPeriods ServiceBillingPeriod[]
+  documentNumberingPolicies DocumentNumberingPolicy[]
+  quoteCreateReceipts QuoteCreateReceipt[]
 }
 
 // Shared, bounded rate-limit state for authentication and other API surfaces.
@@ -139,6 +142,10 @@ model Income {
 }
 
 model Invoice {
+  // Stable per-editor create identity; imports and existing documents remain null.
+  quoteCreateRequestId String?
+  quoteCreateFingerprint String?
+  quoteCreateReceipts QuoteCreateReceipt[]
   id            Int       @id @default(autoincrement())
   type          String    @default("INVOICE")  // INVOICE, CREDIT_NOTE oder QUOTE
   fileName      String
@@ -183,6 +190,8 @@ model Invoice {
   @@index([userId, type, uploadedAt])
   @@index([userId, type, quoteFollowUpOn])
   @@index([userId, status])
+  @@unique([userId, quoteCreateRequestId])
+  @@unique([userId, id])
 }
 
 model Customer {
@@ -905,4 +914,65 @@ model PaymentAllocationChange {
   @@unique([userId, stableKey])
   @@index([userId, fromInvoiceId, id])
   @@index([userId, toInvoiceId, id])
+}
+
+// Append-only bounded formats. Revision zero is the implicit legacy format.
+model DocumentNumberingPolicy {
+  userId String
+  type String
+  revision Int
+  formatVersion Int @default(1)
+  prefix String
+  includeYear Boolean
+  sequenceWidth Int
+  startSequence Int
+  effectiveYear Int
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type, revision])
+}
+
+// Immutable request identity survives quote deletion as a nullable-link tombstone.
+model QuoteCreateReceipt {
+  userId String
+  requestId String
+  fingerprint String
+  pdfSha256 String
+  invoiceUserId String?
+  invoiceId Int?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoice Invoice? @relation(fields: [invoiceUserId, invoiceId], references: [userId, id], onDelete: SetNull)
+
+  @@id([userId, requestId])
+  @@unique([invoiceUserId, invoiceId])
+}
+
+model BankMappingProfile {
+  id String
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revision Int
+  deletedAt DateTime?
+  deleteMutationId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  revisions BankMappingProfileRevision[]
+
+  @@id([userId, id])
+  @@index([userId, deletedAt])
+}
+
+model BankMappingProfileRevision {
+  userId String
+  profileId String
+  profile BankMappingProfile @relation(fields: [userId, profileId], references: [userId, id], onDelete: Cascade)
+  revision Int
+  mutationId String
+  configuration Json
+  createdAt DateTime @default(now())
+
+  @@id([userId, profileId, revision])
+  @@unique([userId, profileId, mutationId])
 }

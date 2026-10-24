@@ -1,5 +1,6 @@
 import { BANK_IMPORT_MAPPING_VERSION, BANK_IMPORT_PARSER_VERSION, BankImportError, type BankImportReceipt, type BankImportDetail } from '@/lib/bank-import-contract';
 import { readBankAllocationRowEnvelope } from '@/lib/bank-allocation-client';
+import type { BankMappingProfileReference } from './bank-mapping-profile-contract';
 import type { BankCsvDelimiter, BankCsvMapping } from '@/lib/bank-csv';
 
 export function bankImportOriginalBase64(bytes: Uint8Array): string {
@@ -13,7 +14,7 @@ async function result<T>(response: Response): Promise<T> {
   return value as T;
 }
 const read = <T>(path: string, signal: AbortSignal, fetcher: typeof fetch) => fetcher(path, { method: 'GET', cache: 'no-store', credentials: 'same-origin', signal }).then(result<T>);
-export async function saveBankImport(input: { originalBase64: string; mapping: BankCsvMapping; delimiter: BankCsvDelimiter; requestId: string }, signal: AbortSignal, fetcher: typeof fetch = fetch) {
+export async function saveBankImport(input: { mappingProfile?: BankMappingProfileReference; originalBase64: string; mapping: BankCsvMapping; delimiter: BankCsvDelimiter; requestId: string }, signal: AbortSignal, fetcher: typeof fetch = fetch) {
   return result<{ receipt: BankImportReceipt; replayed: boolean }>(await fetcher('/api/bank-imports', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, signal,
     body: JSON.stringify({ ...input, parserVersion: BANK_IMPORT_PARSER_VERSION, mappingVersion: BANK_IMPORT_MAPPING_VERSION, reviewed: true }) }));
 }

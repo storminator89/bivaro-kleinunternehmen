@@ -4,6 +4,7 @@ import styles from '@/components/settings/section-navigation.module.css';
 export function SettingsSectionNavigation({ isAdmin }: { isAdmin: boolean }) {
   const items = [
     { id: 'company-settings', label: 'Firmendaten', Icon: Building2 },
+    { id: 'document-numbering-settings', label: 'Nummernkreise', Icon: FileCheck },
     { id: 'fiscal-profile', label: 'Steuerprofil', Icon: FileCheck },
     { id: 'ai-receipt-settings', label: 'KI-Belege (optional)', Icon: FileCheck },
     ...(isAdmin ? [

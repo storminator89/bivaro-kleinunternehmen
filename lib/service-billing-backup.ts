@@ -7,7 +7,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const PLAN_FIELDS = new Set(['id', 'stableKey', 'userId', 'customerId', 'name', 'cadence', 'anchorDate', 'nextPeriod', 'status', 'revision', 'taxMode', 'items', 'createdAt', 'updatedAt']);
 // Full snapshots export Invoice scalars only. Runtime relation projections must
 // never become source evidence that scalar restore would silently discard.
-const NO_FILE_INVOICE_FIELDS = new Set(['id', 'userId', 'customerId', 'type', 'fileName', 'storedFileName', 'uploadedAt', 'invoiceDate', 'dueDate', 'invoiceNumber', 'parsedData', 'totalAmount', 'status', 'issuanceState', 'paidAt', 'validUntil', 'quoteFollowUpOn', 'quoteResponseNote', 'originalInvoiceId', 'cancellationReason', 'convertedFromQuoteId']);
+const NO_FILE_INVOICE_FIELDS = new Set(['id', 'userId', 'customerId', 'type', 'fileName', 'storedFileName', 'uploadedAt', 'invoiceDate', 'dueDate', 'invoiceNumber', 'parsedData', 'totalAmount', 'status', 'issuanceState', 'paidAt', 'validUntil', 'quoteFollowUpOn', 'quoteResponseNote', 'originalInvoiceId', 'cancellationReason', 'convertedFromQuoteId', 'quoteCreateRequestId', 'quoteCreateFingerprint']);
 const PERIOD_FIELDS = new Set(['id', 'userId', 'planId', 'periodIndex', 'periodStart', 'periodEnd', 'action', 'invoiceId', 'createdAt']);
 function record(value: unknown, label: string): RecordValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label}: Objekt erforderlich`);

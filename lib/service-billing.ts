@@ -96,7 +96,7 @@ export type ServiceBillingDraftSeed = {
   taxMode: DocumentTaxMode; items: ServiceBillingItem[]; customerAddress: string; notes: string;
 };
 const SERVICE_DRAFT_PARSED_FIELDS = ['_serviceBillingDraft', 'currency', 'documentType', 'netAmount', 'taxAmount', 'grossAmount', 'totalAmount', 'lineItems'] as const;
-const SERVICE_DRAFT_ROW_FIELDS = new Set(['id', 'userId', 'customerId', 'type', 'fileName', 'storedFileName', 'uploadedAt', 'invoiceDate', 'dueDate', 'invoiceNumber', 'parsedData', 'totalAmount', 'status', 'issuanceState', 'paidAt', 'validUntil', 'quoteFollowUpOn', 'quoteResponseNote', 'originalInvoiceId', 'cancellationReason', 'convertedFromQuoteId', 'customer', 'originalInvoice', 'creditNotes', 'convertedFromQuote', 'convertedInvoice', 'incomes', 'paymentJournalEvents', 'paymentAdjustments', 'refundBasisAdjustments', 'billingNotes', 'reminders', 'serviceBillingPeriod']);
+const SERVICE_DRAFT_ROW_FIELDS = new Set(['id', 'userId', 'customerId', 'type', 'fileName', 'storedFileName', 'uploadedAt', 'invoiceDate', 'dueDate', 'invoiceNumber', 'parsedData', 'totalAmount', 'status', 'issuanceState', 'paidAt', 'validUntil', 'quoteFollowUpOn', 'quoteResponseNote', 'originalInvoiceId', 'cancellationReason', 'convertedFromQuoteId', 'customer', 'originalInvoice', 'creditNotes', 'convertedFromQuote', 'convertedInvoice', 'incomes', 'paymentJournalEvents', 'paymentAdjustments', 'refundBasisAdjustments', 'billingNotes', 'reminders', 'serviceBillingPeriod', 'quoteCreateRequestId', 'quoteCreateFingerprint', 'quoteCreateReceipts']);
 const SERVICE_DRAFT_MARKER_FIELDS = ['version', 'planStableKey', 'periodIndex', 'periodStart', 'periodEnd', 'taxMode', 'items', 'customerAddress', 'notes'] as const;
 function hasExactlyServiceDraftFields(value: Record<string, unknown>, fields: readonly string[]): boolean {
   return Object.keys(value).length === fields.length && fields.every(field => Object.hasOwn(value, field));
@@ -133,8 +133,8 @@ export function isUnrenderedServiceBillingDraft(row: unknown): boolean {
   if (!serviceBillingRecord(row) || row.type !== 'INVOICE' || row.status !== 'DRAFT' || row.issuanceState !== 'UNISSUED'
     || Object.keys(row).some(field => !SERVICE_DRAFT_ROW_FIELDS.has(field))
     || row.storedFileName !== '' || row.invoiceNumber !== null || row.invoiceDate !== null || row.dueDate !== null || row.paidAt != null) return false;
-  if (['validUntil', 'originalInvoiceId', 'convertedFromQuoteId', 'cancellationReason', 'quoteFollowUpOn', 'quoteResponseNote', 'originalInvoice', 'convertedFromQuote', 'convertedInvoice'].some(field => row[field] != null)) return false;
-  for (const field of ['creditNotes', 'incomes', 'paymentJournalEvents', 'paymentAdjustments', 'refundBasisAdjustments', 'reminders', 'billingNotes']) {
+  if (['validUntil', 'originalInvoiceId', 'convertedFromQuoteId', 'cancellationReason', 'quoteFollowUpOn', 'quoteResponseNote', 'originalInvoice', 'convertedFromQuote', 'convertedInvoice', 'quoteCreateRequestId', 'quoteCreateFingerprint'].some(field => row[field] != null)) return false;
+  for (const field of ['creditNotes', 'incomes', 'paymentJournalEvents', 'paymentAdjustments', 'refundBasisAdjustments', 'reminders', 'billingNotes', 'quoteCreateReceipts']) {
     const relation = row[field];
     if (Object.hasOwn(row, field) && (!Array.isArray(relation) || relation.length !== 0)) return false;
   }

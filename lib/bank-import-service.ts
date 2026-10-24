@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { inTransaction } from '@/lib/db-transaction';
 import { BANK_IMPORT_PAGE_SIZE, BankImportError, bankImportUuid, parseBankImportInput, type BankImportReceipt, type BankImportEvidence, type BankImportDetail } from '@/lib/bank-import-contract';
 import { readBankAllocationRowsInTransaction } from '@/lib/bank-allocation-service';
-import { bankImportEvidenceHash, bankImportRowKeys, bankImportTotals, prepareBankImport } from '@/lib/bank-import-evidence';
+import { applyBankMappingProfile, parseBankMappingProfileConfiguration } from '@/lib/bank-mapping-profile-contract';
+import { bankImportHash, bankImportEvidenceHash, bankImportRowKeys, bankImportTotals, prepareBankImport } from '@/lib/bank-import-evidence';
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 const receiptOf = (value: Prisma.JsonValue) => value as unknown as BankImportReceipt;
@@ -17,6 +18,16 @@ export async function confirmBankImport(userId: string, value: unknown): Promise
     if (prior) {
       if (prior.fingerprint !== prepared.fingerprint) throw new BankImportError('Diese Importkennung gehört bereits zu einer anderen Datei oder Zuordnung.', 409);
       return { receipt: receiptOf(prior.receipt), replayed: true };
+    }
+    let mappingProfile: BankImportReceipt['mappingProfile'];
+    if (input.mappingProfile) {
+      const profile = await tx.bankMappingProfile.findFirst({ where: { id: input.mappingProfile.id, userId, deletedAt: null } });
+      const revision = profile && await tx.bankMappingProfileRevision.findUnique({ where: { userId_profileId_revision: { userId, profileId: profile.id, revision: input.mappingProfile.revision } } });
+      if (!revision) throw new BankImportError('Das Zuordnungsprofil wurde gelöscht oder ist nicht verfügbar. Datei ohne Profil neu prüfen.', 409);
+      const configuration = parseBankMappingProfileConfiguration(revision.configuration);
+      const applied = await applyBankMappingProfile(configuration, prepared.parsed);
+      if (!applied.matches || bankImportHash(configuration.mapping) !== bankImportHash(input.mapping)) throw new BankImportError('Die Zuordnung passt nicht mehr zur Profilrevision. Bitte erneut prüfen.', 409);
+      mappingProfile = { id: profile!.id, revision: revision.revision, name: configuration.name };
     }
     const same = await tx.bankImportBatch.findUnique({ where: { userId_fingerprint: { userId, fingerprint: prepared.fingerprint } } });
     if (same) throw new BankImportError('Diese Datei und Zuordnung wurden bereits gespeichert. Vorhandene Quittung öffnen.', 409, same.stableKey);
@@ -45,7 +56,7 @@ export async function confirmBankImport(userId: string, value: unknown): Promise
       }
     }
     const stableKey = randomUUID(), now = new Date();
-    const receipt: BankImportReceipt = { version: 1, id: stableKey, requestId: input.requestId, savedAt: now.toISOString(), accountAlias: input.mapping.accountAlias,
+    const receipt: BankImportReceipt = { ...(mappingProfile ? { mappingProfile } : {}), version: 1, id: stableKey, requestId: input.requestId, savedAt: now.toISOString(), accountAlias: input.mapping.accountAlias,
       sourceSha256: prepared.sourceSha256, sourceBytes: prepared.sourceBytes, parserVersion: input.parserVersion, mappingVersion: input.mappingVersion,
       ...bankImportTotals(rows.map(row => row.evidence)), evidenceSha256: bankImportEvidenceHash(rows), sameFilePreviouslySaved: sameFile !== null };
     const batch = await tx.bankImportBatch.create({ data: { userId, stableKey, requestId: input.requestId, fingerprint: prepared.fingerprint, sourceSha256: prepared.sourceSha256,

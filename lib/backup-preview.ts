@@ -1,6 +1,8 @@
 import {
   CURRENT_BACKUP_VERSION,
   backupSchemaSupportsPaymentJournal,
+  backupSchemaSupportsBankMappingProfiles,
+  backupSchemaSupportsDocumentNumberingPolicies,
   LEGACY_BACKUP_VERSION,
   manifestWarning,
   validateBackupManifest,
@@ -20,6 +22,10 @@ export type BackupPreview = {
     customers: number;
     suppliers: number;
     serviceArticles: number;
+    bankMappingProfiles: number;
+    bankMappingProfileRevisions: number;
+    documentNumberingPolicies: number;
+    quoteCreateReceipts: number;
     bankImportBatches: number;
     bankImportRows: number;
     bankPaymentBindings: number;
@@ -88,6 +94,10 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     customers: countArray(data, 'customers'),
     suppliers: countArray(data, 'suppliers'),
     serviceArticles: countArray(data, 'serviceArticles'),
+    bankMappingProfiles: countArray(data, 'bankMappingProfiles'),
+    bankMappingProfileRevisions: countArray(data, 'bankMappingProfileRevisions'),
+    documentNumberingPolicies: countArray(data, 'documentNumberingPolicies'),
+    quoteCreateReceipts: countArray(data, 'quoteCreateReceipts'),
     bankImportBatches: countArray(data, 'bankImportBatches'),
     bankImportRows: countArray(data, 'bankImportRows'),
     bankPaymentBindings: countArray(data, 'bankPaymentBindings'),
@@ -124,6 +134,8 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   } else {
     warnings.push(`Backup-Version ${candidate.version} kann inkompatibel sein.`);
   }
+  if (!backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion)) warnings.push('Dieses ältere Backup enthält keine Zuordnungsprofile. Bestehende Zielprofile und ihre Löschbelege bleiben unverändert.');
+  if (!backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion)) warnings.push('Dieses ältere Backup enthält keine Nummernformat-Historie. Bestehende Zielrevisionen und höhere Nummernzähler bleiben erhalten.');
   if (manifest && !backupSchemaSupportsPaymentJournal(manifest.schemaVersion)) {
     warnings.push('Dieses Backup enthält keine Zahlungsidentitäten. Zusammenführen mit bereits journalisierten Rechnungen ist nicht sicher; hierfür ein leeres Ziel verwenden.');
   }
@@ -134,6 +146,10 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     warnings.push('Eingangsbeleg-Originale sind im JSON-Backup nicht eingebettet. Zum Wiederherstellen ist ein vollständiges ZIP-Backup erforderlich.');
   }
   if (Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(document => document && typeof document === 'object' && (document as Record<string, unknown>).aiExtraction != null)) warnings.push('KI-Herkunft bleibt erhalten. Unterbrochene Analysen werden nicht fortgesetzt; Provider-Verbindungsdaten sind ausgeschlossen, vorhandene Ziel-Einstellungen bleiben unverändert.');
+  if (counts.bankMappingProfiles > 0) warnings.push('Zuordnungsprofile und unveränderliche Revisionen werden konfliktfrei ergänzt. Gelöschte Profile bleiben gelöscht; Profilherkunft bestehender Quittungen bleibt historisch.');
+  if (counts.quoteCreateReceipts > 0) warnings.push('Dauerhafte Angebotsanfragen und Löschbelege bleiben erhalten. Verbrauchte Anfrage-IDs werden nicht reaktiviert; bestehende Original-PDFs gleicher Anfrage bleiben unverändert. Abweichende Anfrage- oder Originalhashes brechen die Wiederherstellung vollständig ab.');
+  if (candidate.type !== 'full' && Array.isArray(data.quoteCreateReceipts) && data.quoteCreateReceipts.some(row => row && typeof row === 'object' && (row as Record<string, unknown>).invoiceId != null)) warnings.push('Original-PDFs dauerhafter Angebotsanfragen sind nicht eingebettet. Ohne bereits geprüftes Zieloriginal ist ein vollständiges ZIP-Backup erforderlich.');
+  if (counts.documentNumberingPolicies > 0) warnings.push('Nummernformat-Historie wird nur konfliktfrei ergänzt. Bestehende Nummern und höhere Zähler bleiben erhalten; abweichende Revisionen brechen die gesamte Wiederherstellung ab.');
   if (counts.bankImportBatches > 0) warnings.push('Bankimport-Quittungen und Bankzeilen bleiben historische Evidenz. Wiederherstellen führt keine Zahlung, Einnahme, Ausgabe oder neue Dublettenbewertung aus.');
   if (counts.bankPaymentBindings > 0) warnings.push('Bank-Zahlungsbindungen und vollständige Zuordnungsketten bleiben erhalten. Keine Zahlung, Erstattung oder Umzuordnung wird ausgeführt; CSV-Herkunft ist kein authentifizierter Geldeingangsnachweis.');
   if (counts.serviceProjects > 0) warnings.push('Projekte, archivierte Zustände und manuell erfasste Minuten bleiben erhalten. Bestehende Leistungsnotizen und Rechnungszuordnungen werden beim Zusammenführen nicht überschrieben.');

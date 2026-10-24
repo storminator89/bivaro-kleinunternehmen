@@ -1,3 +1,7 @@
+import { quoteCreateFingerprintForInvoice, quoteCreateRequestId, quoteCreatePdfSha256 } from '@/lib/quote-create-request';
+import { DocumentNumberingError } from '@/lib/document-numbering-policy';
+import { consumeDocumentNumberSelection } from '@/lib/invoice-numbers';
+import { inTransaction } from '@/lib/db-transaction';
 import { quoteBusinessToday, QUOTE_ACTION_FILTERS, type QuoteActionFilter } from '@/lib/quote-workflow';
 import { parseBusinessDate } from '@/lib/business-date';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
@@ -157,15 +161,33 @@ async function postHandler(request: Request) {
         const normalizedQuoteNumber = quoteNumber === undefined || quoteNumber === null || quoteNumber === ''
             ? null
             : String(quoteNumber).trim();
+        const requestId = quoteCreateRequestId(input.generatedRequestId);
+        const requestFingerprint = requestId ? quoteCreateFingerprintForInvoice({ fileName, invoiceNumber: normalizedQuoteNumber, invoiceDate: quoteDateValue, validUntil: validUntilValue, totalAmount: amount, parsedData }) : null;
+        const checkReplay = (existing: { type: string; quoteCreateFingerprint: string | null; customerId: number | null }) => {
+          if (existing.type !== 'QUOTE' || existing.quoteCreateFingerprint !== requestFingerprint || existing.customerId !== parsedCustomerId) throw new DocumentNumberingError('Diese Angebotsanfrage wurde bereits mit anderen Daten gespeichert. Bitte das vorhandene Angebot in der Liste prüfen.', 409, 'QUOTE_REQUEST_CONFLICT');
+        };
         let storedFileName: string | null = null;
+        let committed = false;
         try {
             storedFileName = await writeTenantFile(userId, fileName, pdfBuffer);
 
-            const quote = await prisma.invoice.create({
+            const result = await inTransaction(async tx => {
+              if (requestId) {
+                const receipt = await tx.quoteCreateReceipt.findUnique({ where: { userId_requestId: { userId, requestId } }, include: { invoice: true } });
+                if (receipt) {
+                  if (receipt.fingerprint !== requestFingerprint) throw new DocumentNumberingError('Diese Angebotsanfrage wurde bereits mit anderen Daten verarbeitet.', 409, 'QUOTE_REQUEST_CONFLICT');
+                  if (!receipt.invoice) throw new DocumentNumberingError('Dieses Angebot wurde gelöscht. Die Anfrage-ID bleibt verbraucht; für ein bewusst neues Angebot den Editor neu öffnen.', 410, 'QUOTE_REQUEST_RETIRED');
+                  checkReplay(receipt.invoice); return { quote: receipt.invoice, idempotent: true };
+                }
+              }
+              await consumeDocumentNumberSelection(tx, userId, 'QUOTE', quoteDateValue.getFullYear(), normalizedQuoteNumber, input.numberingSelection, (parsedData as Record<string, unknown>).createdBy === 'bivaro');
+              const quote = await tx.invoice.create({
                 data: {
                     type: 'QUOTE',
+                    quoteCreateRequestId: requestId,
+                    quoteCreateFingerprint: requestFingerprint,
                     fileName,
-                    storedFileName,
+                    storedFileName: storedFileName!,
                     invoiceNumber: normalizedQuoteNumber,
                     invoiceDate: quoteDateValue,
                     validUntil: validUntilValue,
@@ -175,22 +197,38 @@ async function postHandler(request: Request) {
                     status: 'DRAFT',
                     userId,
                 },
+              });
+              if (requestId && requestFingerprint) await tx.quoteCreateReceipt.create({ data: { userId, requestId, fingerprint: requestFingerprint, pdfSha256: quoteCreatePdfSha256(pdfBuffer), invoiceUserId: userId, invoiceId: quote.id } });
+              return { quote, idempotent: false };
             });
 
-            await auditCreate(userId, 'Quote', quote, quote.invoiceNumber || quote.fileName);
-
-            return NextResponse.json(quote);
+            committed = !result.idempotent;
+            if (result.idempotent) {
+              await deleteTenantFile(userId, storedFileName).catch(() => undefined);
+              return NextResponse.json({ ...result.quote, idempotent: true });
+            }
+            await auditCreate(userId, 'Quote', result.quote, result.quote.invoiceNumber || result.quote.fileName);
+            return NextResponse.json(result.quote);
         } catch (error) {
-            if (storedFileName) {
+            if (storedFileName && !committed) {
                 try { await deleteTenantFile(userId, storedFileName); } catch { /* best-effort orphan cleanup */ }
             }
             if ((error as { code?: string }).code === 'P2002') {
+                if (requestId) {
+                  const receipt = await prisma.quoteCreateReceipt.findUnique({ where: { userId_requestId: { userId, requestId } }, include: { invoice: true } });
+                  if (receipt) {
+                    if (receipt.fingerprint !== requestFingerprint) throw new DocumentNumberingError('Diese Angebotsanfrage wurde bereits mit anderen Daten verarbeitet.', 409, 'QUOTE_REQUEST_CONFLICT');
+                    if (!receipt.invoice) throw new DocumentNumberingError('Dieses Angebot wurde gelöscht. Die Anfrage-ID bleibt verbraucht.', 410, 'QUOTE_REQUEST_RETIRED');
+                    checkReplay(receipt.invoice); return NextResponse.json({ ...receipt.invoice, idempotent: true });
+                  }
+                }
                 return NextResponse.json({ error: 'Die Angebotsnummer ist bereits vergeben.' }, { status: 409 });
             }
             throw error;
         }
     } catch (error) {
         if (error instanceof UnauthorizedError) return unauthorizedResponse();
+        if (error instanceof DocumentNumberingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
         if (error instanceof RequestBodyLimitError) {
             return NextResponse.json({ error: error.message }, { status: error.status });
         }
