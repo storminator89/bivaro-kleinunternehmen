@@ -41,3 +41,17 @@ At this checkpoint hosted execution and actual screenshot inspection are
 pending. A draft PR is not merge authorization, and static/source checks do not
 establish visual acceptance. Later CI results and screenshot review belong to
 the exact published head and its linked workflow evidence.
+
+## First hosted run: assertion corrections
+
+Published head `3858f90b`: all non-browser workflows passed (4,004 unit tests,
+production build, security, PDF/A and container checks on both architectures).
+Browser run `40077763166` passed 141 cases and exposed two new-test defects:
+the broad article alert locator also matched Next's route announcer, and the
+upload assertion expected an unsafe raw response message instead of the
+existing deliberately sanitized retry message. Test-only corrections scope
+article states to main content and verify both failed upload rows, exact safe
+messages, enabled retry controls and exactly two requests. Product behavior,
+financial guards and screenshot gates are unchanged. All fourteen first-run
+images were retained with verified whole-pixel/metadata proofs; the corrected
+head still requires a complete hosted pass before final acceptance.

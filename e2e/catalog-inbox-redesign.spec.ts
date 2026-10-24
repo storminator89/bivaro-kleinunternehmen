@@ -110,11 +110,11 @@ test('article catalog preserves exact prices, complete records, keyboard search 
   await expect(page.getByRole('heading', { name: 'Noch keine Artikel oder Leistungen', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Artikel und Leistungen importieren', exact: true })).toHaveAttribute('href', '/customers/import?kind=articles');
   mode = 'error'; await navigate(page, '/customers/articles');
-  await expect(page.getByRole('alert')).toContainText('Artikel und Leistungen konnten nicht geladen werden.');
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('Artikel und Leistungen konnten nicht geladen werden. Bitte laden Sie die Seite erneut.');
   mode = 'loading';
   try {
     await navigate(page, '/customers/articles');
-    await expect(page.getByRole('status')).toContainText('Katalog wird geladen');
+    await expect(page.getByRole('main').getByRole('status').filter({ hasText: 'Katalog wird geladen' })).toHaveText('Katalog wird geladen …');
     await expect(page.getByRole('article')).toHaveCount(0);
   } finally { release(); }
   await expect(page.getByRole('article')).toHaveCount(2);
@@ -150,7 +150,17 @@ test('receipt inbox retains selected queue across disclosure and keeps busy cont
     await theme(page, 'dark'); await page.setViewportSize({ width: 1440, height: 1000 }); await capture(page, info, 'catalog-inbox-upload-busy-dark-1440.png');
   } finally { release(); }
   await expect(page.getByRole('button', { name: 'Upload ausblenden', exact: true })).toBeEnabled();
-  await expect(panel).toBeVisible(); await expect(queue).toContainText('Synthetisch abgelehnter Upload');
+  await expect(panel).toBeVisible();
+  const failedRows = queue.getByRole('listitem');
+  await expect(failedRows).toHaveCount(2);
+  for (const name of ['synthetic-first.xml', 'synthetic-second.xml']) {
+    const row = failedRows.filter({ hasText: name });
+    await expect(row.getByText('Fehlgeschlagen', { exact: true })).toBeVisible();
+    await expect(row.getByText('Die Anfrage konnte nicht abgeschlossen werden. Bitte erneut versuchen.', { exact: true })).toBeVisible();
+    await expect(row.getByRole('button', { name: /^Erneut versuchen\s*:/ })).toBeEnabled();
+  }
+  await expect(queue.getByRole('button', { name: /^Erneut versuchen\s*:/ })).toHaveCount(2);
+  expect(posts).toBe(2);
   await noWrites(user.id, unexpected);
 });
 
