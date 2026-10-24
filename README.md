@@ -73,4 +73,4 @@ docker compose up -d --build
 
 ## Lizenz
 
-Die Anwendung steht unter **[Apache License 2.0](LICENSE)**. Drittanbieter und Schriftarten behalten ihre eigenen Lizenzen; dies ist keine pauschale Lizenzfreigabe des Containers. [Drittanbieterhinweise](docs/operations/pdf-third-party-notices.md) · [Lizenzdetails](docs/legal/application-license-transition.md).
+Die Anwendung steht unter **[Apache License 2.0](LICENSE) (`Apache-2.0`)**. Drittanbieter und Schriftarten behalten ihre eigenen Lizenzen; dies ist keine pauschale Lizenzfreigabe des Containers. [Drittanbieterhinweise](docs/operations/pdf-third-party-notices.md) · [Lizenzdetails](docs/legal/application-license-transition.md).

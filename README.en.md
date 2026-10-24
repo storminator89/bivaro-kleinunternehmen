@@ -73,4 +73,4 @@ Open `http://localhost:3000/register` and create the first admin account using t
 
 ## License
 
-The application is licensed under **[Apache License 2.0](LICENSE)**. Third-party components and fonts retain their own licenses; this is not blanket license clearance for the container. [Third-party notices](docs/operations/pdf-third-party-notices.md) · [License details](docs/legal/application-license-transition.md).
+The application is licensed under **[Apache License 2.0](LICENSE) (`Apache-2.0`)**. Third-party components and fonts retain their own licenses; this is not blanket license clearance for the container. [Third-party notices](docs/operations/pdf-third-party-notices.md) · [License details](docs/legal/application-license-transition.md).
