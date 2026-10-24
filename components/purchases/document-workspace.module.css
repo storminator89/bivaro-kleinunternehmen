@@ -1,0 +1,65 @@
+/* Hallmark · v2.0.0 · shape: ledger workspace · redesign: full · theme: locked Bivaro Ledger · scope: app · signature: queue-first receipt review and source-linked expense · nav: existing app shell · footer: existing app shell */
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 · weakest: E, mobile and dark rendering require hosted verification; upload stays mounted when its disclosure closes. */
+/* Hallmark · retained: all upload, review, bookkeeping and original-file handlers; legal and safety copy verbatim. No invented metrics. */
+.workspace, .detailWorkspace { display: grid; gap: var(--space-lg); min-width: 0; }
+.panel, .uploadPanel, .expenseRecord { min-width: 0; border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper); color: var(--color-ink); }
+.panel { overflow: clip; }
+.uploadPanel { padding: var(--space-lg); }
+.listHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-md); padding: var(--space-lg); }
+.listHeading h2 { min-width: 0; overflow-wrap: anywhere; font-size: var(--text-xl); font-weight: 600; }
+.sortNote { display: inline-block; margin-left: var(--space-md); }
+.toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, .35fr); gap: var(--space-md); align-items: end; padding: var(--space-md) var(--space-lg); border-block: 1px solid var(--color-rule); background: var(--color-paper-2); }
+.toolbar label { color: var(--color-ink-2); font-size: var(--text-xs); }
+.toolbar input, .toolbar select { min-width: 0; width: 100%; min-height: 2.75rem; background: var(--color-paper); }
+.columnHeadings, .recordButton { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(7rem, .55fr); gap: var(--space-lg); padding-inline: var(--space-lg); }
+.columnHeadings { padding-block: var(--space-sm); color: var(--color-muted); font-size: var(--text-xs); }
+.columnHeadings > :last-child { text-align: right; }
+.record { border-top: 1px solid var(--color-rule); }
+.recordButton { align-items: center; width: 100%; min-height: 7rem; padding-block: var(--space-lg); text-align: left; }
+.recordButton:hover { background: var(--color-paper-2); }
+.recordButton:active { background: var(--color-paper-3); }
+.identity, .reviewState, .recordAmount { min-width: 0; }
+.identity > p:first-child { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.recordMeta { display: flex; flex-wrap: wrap; gap: var(--space-2xs) var(--space-md); margin-top: var(--space-xs); color: var(--color-muted); font-size: var(--text-xs); }
+.recordMeta > span { min-width: 0; overflow-wrap: anywhere; }
+.reviewState { font-size: var(--text-xs); overflow-wrap: anywhere; }
+.reviewState > p:first-child { width: fit-content; max-width: 100%; padding: var(--space-2xs) var(--space-xs); border-radius: var(--radius-input); background: var(--color-paper-2); color: var(--color-ink-2); }
+.recordAmount { text-align: right; font-variant-numeric: tabular-nums; }
+.recordAmount > p { font-size: var(--text-base); overflow-wrap: anywhere; }
+.empty { padding: var(--space-2xl) var(--space-lg); text-align: center; }
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-md) var(--space-lg); border-top: 1px solid var(--color-rule); }
+.expenseRecord { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'summary source' 'facts source' 'notice source'; }
+.expenseSummary { grid-area: summary; min-width: 0; padding: var(--space-xl) var(--space-xl) var(--space-lg); }
+.expenseLabel { color: var(--color-muted); font-size: var(--text-sm); font-weight: 500; }
+.expenseAmount { margin-top: var(--space-sm); font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.expenseFacts { grid-area: facts; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: var(--space-lg); padding: var(--space-lg) var(--space-xl); border-top: 1px solid var(--color-rule); font-size: var(--text-sm); }
+.expenseFacts dt { color: var(--color-muted); font-size: var(--text-xs); }
+.expenseFacts dd { margin-top: var(--space-xs); font-weight: 500; overflow-wrap: anywhere; }
+.expenseNotice { grid-area: notice; margin-inline: var(--space-xl); padding-block: var(--space-lg); border-top: 1px solid var(--color-rule); color: var(--color-muted); font-size: var(--text-xs); }
+.expenseSource { grid-area: source; display: flex; flex-direction: column; align-items: stretch; gap: var(--space-md); min-width: 0; padding: var(--space-xl); border-left: 1px solid var(--color-rule); }
+.expenseSource > h3 { font-size: var(--text-base); }
+.expenseSource > div { margin-top: auto; }
+.workspace :is(button, a), .detailWorkspace :is(button, a), .expenseRecord :is(button, a) { min-height: 2.75rem; }
+.workspace :is(button, input, select, a, summary):focus-visible, .detailWorkspace :is(button, a, summary):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; transition: none; }
+.workspace .recordButton:focus-visible { outline-offset: -4px; }
+.workspace :is(button, input, select):disabled { cursor: not-allowed; }
+@media (max-width: 767px) {
+  .toolbar { grid-template-columns: minmax(0, 1fr); }
+  .columnHeadings { display: none; }
+  .recordButton { grid-template-columns: minmax(0, 1fr) minmax(6rem, auto); gap: var(--space-md); }
+  .identity { grid-column: 1 / -1; }
+  .reviewState { align-self: start; }
+  .recordAmount { align-self: start; }
+  .expenseRecord { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'summary' 'facts' 'notice' 'source'; }
+  .expenseSource { border-left: 0; border-top: 1px solid var(--color-rule); }
+  .expenseSource > div { margin-top: 0; }
+}
+@media (max-width: 479px) {
+  .listHeading, .toolbar, .recordButton, .pagination, .uploadPanel, .expenseSummary, .expenseFacts, .expenseSource { padding: var(--space-md); }
+  .expenseNotice { margin-inline: var(--space-md); }
+  .toolbar input, .toolbar select { font-size: var(--text-base); }
+  .expenseSource a { max-width: 100%; height: auto; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace *, .detailWorkspace * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

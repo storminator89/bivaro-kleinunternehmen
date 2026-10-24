@@ -1,14 +1,15 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Camera, FileUp, Loader2, Upload, X } from 'lucide-react';
+import styles from './document-workspace.module.css';
 import { Button } from '@/components/ui/button';
 import type { IncomingDocument } from '@/lib/purchase-documents/types';
 import { formatFileSize } from './incoming-document-ui';
 import { IncomingUploadQueue, MAX_INCOMING_QUEUE_FILES, sendIncomingOriginal, type UploadRow } from './incoming-upload-queue';
 
-type UploadProps = { onUploaded: (document: IncomingDocument) => void; onOpen: (id: number) => void; onRefresh: () => void };
+type UploadProps = { onUploaded: (document: IncomingDocument) => void; onOpen: (id: number) => void; onRefresh: () => void; onBusyChange?: (busy: boolean) => void };
 const stateLabel = { queued: 'Wartend', sending: 'Wird gespeichert…', saved: 'Gespeichert', existing: 'Bereits vorhanden', failed: 'Fehlgeschlagen', unknown: 'Ausgang unklar', cancelled: 'Abgebrochen · nicht gestartet' };
 
 /** Auth identity changes unmount the queue, aborting work and dropping local file references. */
@@ -17,7 +18,7 @@ export function IncomingUpload(props: UploadProps) {
   if (status !== 'authenticated' || !session?.user?.id) return null;
   return <IncomingUploadContent key={session.user.id} {...props} />;
 }
-function IncomingUploadContent({ onUploaded, onOpen, onRefresh }: UploadProps) {
+function IncomingUploadContent({ onUploaded, onOpen, onRefresh, onBusyChange }: UploadProps) {
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const summary = useRef<HTMLParagraphElement>(null);
@@ -26,6 +27,7 @@ function IncomingUploadContent({ onUploaded, onOpen, onRefresh }: UploadProps) {
   callbacks.current = { onUploaded, onRefresh };
   const [rows, setRows] = useState<UploadRow[]>([]);
   const [busy, setBusy] = useState(false);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [queue] = useState(() => new IncomingUploadQueue(sendIncomingOriginal, () => {
@@ -67,7 +69,7 @@ function IncomingUploadContent({ onUploaded, onOpen, onRefresh }: UploadProps) {
     else await queue.start();
     requestAnimationFrame(() => focusAfterRemoval(trigger, summary.current));
   }
-  return <section aria-labelledby="incoming-upload-heading" className="rounded-xl border border-border bg-card p-4 sm:p-5">
+  return <section aria-labelledby="incoming-upload-heading" className={styles.uploadPanel}>
     <div className="flex items-start gap-3">
       <FileUp className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
       <div className="min-w-0 flex-1">
