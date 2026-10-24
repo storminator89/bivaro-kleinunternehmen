@@ -5,8 +5,8 @@ import { ReminderWorkbenchDialog } from "@/components/dashboard/reminder-workben
 import { FullPaymentDialog } from "@/components/dashboard/full-payment-dialog";
 import { notifyPaymentDashboardRefresh } from '@/lib/payment-dashboard-refresh';
 import React, { useState, useEffect, useCallback } from 'react';
-import styles from "@/components/dashboard/sales-workspace.module.css";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import styles from "@/components/dashboard/reminder-workspace.module.css";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -194,7 +194,7 @@ export default function RemindersPage() {
         </article>)}
       </div>
       <div className={styles.reminderDesktop}>
-    <Table>
+    <Table className={styles.table}>
       <TableHeader>
         <TableRow>
           <TableHead className="w-[180px]">Rechnungsnr.</TableHead>
@@ -224,9 +224,9 @@ export default function RemindersPage() {
                 onClick={() => setExpandedInvoiceId(expandedInvoiceId === invoice.id ? null : invoice.id)}
               >
                 <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="truncate max-w-[140px]">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate max-w-[140px]">
                       {invoice.invoiceNumber || invoice.fileName}
                     </span>
                   </div>
@@ -301,6 +301,7 @@ export default function RemindersPage() {
                           setExpandedInvoiceId(expandedInvoiceId === invoice.id ? null : invoice.id);
                         }}
                         title="Historie anzeigen"
+                        aria-expanded={expandedInvoiceId === invoice.id}
                         aria-label="Historie anzeigen"
                       >
                         {expandedInvoiceId === invoice.id ? (
@@ -318,7 +319,7 @@ export default function RemindersPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="bg-muted/30 p-0">
                     <div className="p-4">
-                      <div className="flex items-center gap-2 mb-3 text-sm font-medium text-muted-foreground">
+                      <div className={styles.historyTitle}>
                         <History className="h-4 w-4" />
                         Mahnungshistorie
                       </div>
@@ -326,9 +327,9 @@ export default function RemindersPage() {
                         {invoice.reminders.map((reminder) => (
                           <div
                             key={reminder.id}
-                            className="flex items-center justify-between p-3 bg-background rounded-lg border"
+                            className={styles.historyRecord}
                           >
-                            <div className="flex items-center gap-3">
+                            <div className={styles.historyRecordData}>
                               <Badge variant={REMINDER_LEVEL_VARIANTS[reminder.reminderLevel]}>
                                 {REMINDER_LEVEL_LABELS[reminder.reminderLevel]}
                               </Badge>
@@ -352,7 +353,7 @@ export default function RemindersPage() {
                               {!reminder.balanceSnapshot && <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                className="min-h-11 min-w-11 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDeleteReminder(reminder.id);
@@ -381,43 +382,30 @@ export default function RemindersPage() {
 
   return (
     <div className={styles.collections}>
-      <div className="space-y-6">
-        {/* Header */}
-        <PageHeader title="Mahnwesen" />
+      <div className={styles.workspace}>
+        <PageHeader title="Mahnwesen" description="Nur interne Erfassung · Kein automatischer E-Mail-Versand." />
 
         {stats && <dl className={styles.collectionSummary} aria-label="Forderungsübersicht"><div><dt>Ausstehender Betrag</dt><dd>{formatCurrency(stats.totalAmount)}</dd></div><div><dt>Überfällige Rechnungen</dt><dd>{stats.totalOverdue}</dd></div><div><dt>Mahngebühren</dt><dd>{formatCurrency(stats.totalFees)}</dd></div><div><dt>Offene Rechnungen</dt><dd>{invoices.length}</dd></div></dl>}
         {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm text-destructive"><p>{loadError}</p><Button variant="outline" onClick={loadData}>Erneut laden</Button></div>}
 
-        <p className="text-sm text-muted-foreground">
-          Nur interne Erfassung · Kein automatischer E-Mail-Versand.
-        </p>
-
-        {/* Filter */}
-        <Card className={styles.collectionFilter}>
-          <CardHeader className="pb-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-
-              <div className="flex min-w-0 flex-wrap items-center gap-4">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <Label htmlFor="filter-level" className="text-sm whitespace-nowrap">Mahnstufe:</Label>
-                  <Select value={filterLevel} onValueChange={setFilterLevel}>
-                    <SelectTrigger id="filter-level" className="w-[180px]">
-                      <SelectValue placeholder="Alle Stufen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Alle Stufen</SelectItem>
-                      <SelectItem value="0">Keine Mahnung</SelectItem>
-                      <SelectItem value="1">Zahlungserinnerung</SelectItem>
-                      <SelectItem value="2">1. Mahnung</SelectItem>
-                      <SelectItem value="3">2. Mahnung</SelectItem>
-                      <SelectItem value="4">Letzte Mahnung</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          {stats && Object.values(stats.byLevel).some(count => count > 0) && <CardContent className="pt-0">
+        <section className={styles.collectionFilter} aria-label="Mahnstufen filtern">
+          <div className={styles.filterControl}>
+            <Label htmlFor="filter-level">Mahnstufe:</Label>
+            <Select value={filterLevel} onValueChange={setFilterLevel}>
+              <SelectTrigger id="filter-level" className="w-[180px]">
+                <SelectValue placeholder="Alle Stufen" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle Stufen</SelectItem>
+                <SelectItem value="0">Keine Mahnung</SelectItem>
+                <SelectItem value="1">Zahlungserinnerung</SelectItem>
+                <SelectItem value="2">1. Mahnung</SelectItem>
+                <SelectItem value="3">2. Mahnung</SelectItem>
+                <SelectItem value="4">Letzte Mahnung</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {stats && Object.values(stats.byLevel).some(count => count > 0) && <div className={styles.levelSummary}>
             <div className="flex flex-wrap gap-2">
               {Object.entries(REMINDER_LEVEL_LABELS).filter(([level]) => (stats.byLevel[parseInt(level) as keyof typeof stats.byLevel] ?? 0) > 0).map(([level, label]) => (
                 <Badge
@@ -429,23 +417,21 @@ export default function RemindersPage() {
                 </Badge>
               ))}
             </div>
-          </CardContent>}
-        </Card>
+          </div>}
+        </section>
 
         {isLoading ? (
-          <div className="flex justify-center py-16">
-            <svg className="animate-spin h-10 w-10 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+          <div role="status" className={styles.loading}>
+            <span className="sr-only">Mahnwesen wird geladen …</span>
+            <div className={styles.skeletonRows} aria-hidden="true"><span /><span /><span /></div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className={styles.queue}>
             {/* Überfällige Rechnungen */}
             <Collapsible open={overdueOpen} onOpenChange={setOverdueOpen}>
-              <Card>
+              <Card className={styles.queuePanel}>
                 <CollapsibleTrigger asChild>
-                  <button type="button" className="w-full p-6 text-left cursor-pointer hover:bg-muted/50 transition-colors">
+                  <button type="button" className={styles.queueHeading}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <AlertCircle className="h-5 w-5 text-destructive" />
@@ -456,7 +442,7 @@ export default function RemindersPage() {
                   </button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <CardContent className="pt-0">
+                  <CardContent className={styles.queueContent}>
                     {renderInvoiceTable(overdueInvoices, true)}
                   </CardContent>
                 </CollapsibleContent>
@@ -466,9 +452,9 @@ export default function RemindersPage() {
             {/* Bald fällige Rechnungen */}
             {upcomingInvoices.length > 0 && (
               <Collapsible open={upcomingOpen} onOpenChange={setUpcomingOpen}>
-                <Card>
+                <Card className={styles.queuePanel}>
                   <CollapsibleTrigger asChild>
-                    <button type="button" className="w-full p-6 text-left cursor-pointer hover:bg-muted/50 transition-colors">
+                    <button type="button" className={styles.queueHeading}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Clock className="h-5 w-5 text-muted-foreground" />
@@ -479,7 +465,7 @@ export default function RemindersPage() {
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <CardContent className="pt-0">
+                    <CardContent className={styles.queueContent}>
                       {renderInvoiceTable(upcomingInvoices, false)}
                     </CardContent>
                   </CollapsibleContent>
@@ -491,9 +477,9 @@ export default function RemindersPage() {
 
         {/* Info-Card: Mahnstufen Erklärung */}
         <Collapsible open={showInfoOpen} onOpenChange={setShowInfoOpen} className="mb-6">
-          <Card>
+          <Card className={styles.help}>
             <CollapsibleTrigger asChild>
-              <button type="button" className="w-full p-6 text-left cursor-pointer hover:bg-muted/50 transition-colors py-4">
+              <button type="button" className={styles.queueHeading}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <HelpCircle className="h-5 w-5 text-primary" />

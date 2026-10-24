@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import styles from './reminder-workspace.module.css';
 
 type Preview = {
   invoiceId: number; invoiceNumber: string; balanceVersion: string; totalCents: string;
@@ -69,39 +70,41 @@ export function ReminderWorkbenchDialog({ invoice, onClose, onRecorded }: {
     finally { setBusy(false); }
   };
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
-      <DialogHeader>
+    <DialogContent className={styles.dialog}>
+      <DialogHeader className={styles.dialogHeader}>
         <DialogTitle>{invoice.nextReminderLevelLabel} vorbereiten</DialogTitle>
         <DialogDescription>Rechnung {invoice.invoiceNumber || invoice.fileName} · aktueller Restbetrag statt ursprünglicher Forderung</DialogDescription>
       </DialogHeader>
-      <Alert><FileCheck2 aria-hidden="true" className="h-4 w-4" /><AlertTitle>Sie behalten die Kontrolle</AlertTitle><AlertDescription>Es wird keine E-Mail automatisch versendet. Vorschau und Textdownload versenden keine Nachricht und buchen keine Zahlung. Speichern dokumentiert nur die interne Erfassung. Für Teilzahlungen ist der direkte E-Mail-Versand hier nicht freigeschaltet.</AlertDescription></Alert>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2"><Label htmlFor="reminder-fee">Mahngebühr (EUR, manuell)</Label><Input id="reminder-fee" type="number" step="0.01" min="0" value={fee} disabled={busy} onChange={e => { setFee(e.target.value); invalidate(); }} /><p className="text-xs text-muted-foreground">Standard 0 EUR. Keine automatische Gebührenberechnung; bitte eine eingetragene Gebühr selbst prüfen.</p></div>
-        <div className="space-y-2"><Label htmlFor="reminder-due-days">Zahlungsfrist (Tage)</Label><Input id="reminder-due-days" type="number" min="1" max="365" value={dueDays} disabled={busy} onChange={e => { setDueDays(e.target.value); invalidate(); }} /></div>
-        <div className="space-y-2 sm:col-span-2"><Label htmlFor="reminder-notes">Hinweis im Entwurf (optional)</Label><Textarea id="reminder-notes" value={notes} disabled={busy} maxLength={5000} onChange={e => { setNotes(e.target.value); invalidate(); }} /><p className="text-xs text-muted-foreground">Dieser Hinweis erscheint auch im heruntergeladenen Text, nicht nur in der internen Historie.</p></div>
+      <div className={styles.dialogBody}>
+        <Alert className={styles.notice}><FileCheck2 aria-hidden="true" className="h-4 w-4" /><AlertTitle>Sie behalten die Kontrolle</AlertTitle><AlertDescription>Es wird keine E-Mail automatisch versendet. Vorschau und Textdownload versenden keine Nachricht und buchen keine Zahlung. Speichern dokumentiert nur die interne Erfassung. Für Teilzahlungen ist der direkte E-Mail-Versand hier nicht freigeschaltet.</AlertDescription></Alert>
+        <div className={styles.draftFields}>
+          <div className="space-y-2"><Label htmlFor="reminder-fee">Mahngebühr (EUR, manuell)</Label><Input id="reminder-fee" type="number" step="0.01" min="0" value={fee} disabled={busy} onChange={e => { setFee(e.target.value); invalidate(); }} /><p className="text-xs text-muted-foreground">Standard 0 EUR. Keine automatische Gebührenberechnung; bitte eine eingetragene Gebühr selbst prüfen.</p></div>
+          <div className="space-y-2"><Label htmlFor="reminder-due-days">Zahlungsfrist (Tage)</Label><Input id="reminder-due-days" type="number" min="1" max="365" value={dueDays} disabled={busy} onChange={e => { setDueDays(e.target.value); invalidate(); }} /></div>
+          <div className="space-y-2 sm:col-span-2"><Label htmlFor="reminder-notes">Hinweis im Entwurf (optional)</Label><Textarea id="reminder-notes" value={notes} disabled={busy} maxLength={5000} onChange={e => { setNotes(e.target.value); invalidate(); }} /><p className="text-xs text-muted-foreground">Dieser Hinweis erscheint auch im heruntergeladenen Text, nicht nur in der internen Historie.</p></div>
+        </div>
+        <Button variant="outline" disabled={busy} onClick={loadPreview} className="w-full whitespace-normal"><RefreshCw aria-hidden="true" className="mr-2 h-4 w-4 shrink-0" />{busy ? 'Wird geprüft …' : 'Aktuellen Restbetrag prüfen und Entwurf laden'}</Button>
+        {error && <Alert variant="destructive" role="alert"><AlertCircle aria-hidden="true" className="h-4 w-4" /><AlertTitle>Bitte erneut prüfen</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+        {preview && <section aria-label="Geprüfter Mahnentwurf" className="min-w-0 space-y-5">
+          <dl className={styles.balance} aria-label="Geprüfter Zahlungsstand">
+            <div><dt className="text-xs text-muted-foreground">Rechnungsbetrag</dt><dd className="mt-1 font-medium">{euro(preview.totalCents)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Bereits eingegangen</dt><dd className="mt-1 font-medium">{euro(preview.paidCents)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Offener Restbetrag</dt><dd className="mt-1 text-xl font-semibold">{euro(preview.openCents)}</dd></div>
+          </dl>
+          <section aria-label="Zahlungsverlauf" className={styles.paymentEvidence}><h3 className="mb-3 flex items-center gap-2 text-sm font-medium"><History aria-hidden="true" className="h-4 w-4" />Belegte Zahlungseingänge</h3>
+            {preview.paymentHistory.length ? <ul className="space-y-3">{preview.paymentHistory.map((payment, index) => <li key={index} className="flex min-w-0 flex-wrap justify-between gap-x-4 gap-y-1 border-t pt-3 text-sm first:border-0 first:pt-0"><div className="min-w-0"><span>{new Date(payment.paidAt).toLocaleDateString('de-DE', { timeZone: 'UTC' })}</span><p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{payment.reference}</p></div><strong>{euro(payment.amountCents)}</strong></li>)}</ul> : <p className="text-sm text-muted-foreground">Keine Zahlung im Journal erfasst.</p>}
+          </section>
+          {preview.recipient && <p className="break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">Empfänger für den manuellen Versand: {preview.recipient}</p>}
+          <div className={styles.draftText}><h3 className="break-words text-sm font-semibold [overflow-wrap:anywhere]">{preview.subject}</h3><pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed [overflow-wrap:anywhere]">{preview.text}</pre></div>
+          <label className={styles.confirmation}><input type="checkbox" checked={confirmed} disabled={busy} onChange={e => setConfirmed(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-primary" /><span>Ich habe den offenen Restbetrag von <strong>{euro(preview.openCents)}</strong> und den Entwurf geprüft. Vor Download oder Erfassung wird der Zahlungsstand erneut serverseitig abgeglichen.</span></label>
+        </section>}
+        <div className={styles.dialogActions}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>Abbrechen</Button>
+          {preview?.paidCents === '0' && <Button variant="outline" disabled={busy || !confirmed} onClick={() => act('mail')}><Mail aria-hidden="true" className="mr-2 h-4 w-4" />Im E-Mail-Client öffnen</Button>}
+          <Button variant="outline" disabled={busy || !confirmed || !preview} onClick={() => act('download')}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Textentwurf herunterladen</Button>
+          <Button disabled={busy || !confirmed || !preview} onClick={() => act('record')}>Mahnung intern erfassen</Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Der Text ist eine Momentaufnahme für Ihren manuellen Versand. Nach späteren Zahlungen bitte neu prüfen. Die Originalrechnung und ihr PDF bleiben unverändert.</p>
       </div>
-      <Button variant="outline" disabled={busy} onClick={loadPreview} className="w-full whitespace-normal"><RefreshCw aria-hidden="true" className="mr-2 h-4 w-4 shrink-0" />{busy ? 'Wird geprüft …' : 'Aktuellen Restbetrag prüfen und Entwurf laden'}</Button>
-      {error && <Alert variant="destructive" role="alert"><AlertCircle aria-hidden="true" className="h-4 w-4" /><AlertTitle>Bitte erneut prüfen</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-      {preview && <section aria-label="Geprüfter Mahnentwurf" className="min-w-0 space-y-5">
-        <dl className="grid grid-cols-1 gap-3 rounded-xl border bg-muted/30 p-4 sm:grid-cols-3" aria-label="Geprüfter Zahlungsstand">
-          <div><dt className="text-xs text-muted-foreground">Rechnungsbetrag</dt><dd className="mt-1 font-medium">{euro(preview.totalCents)}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">Bereits eingegangen</dt><dd className="mt-1 font-medium">{euro(preview.paidCents)}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">Offener Restbetrag</dt><dd className="mt-1 text-xl font-semibold">{euro(preview.openCents)}</dd></div>
-        </dl>
-        <section aria-label="Zahlungsverlauf" className="rounded-xl border p-4"><h3 className="mb-3 flex items-center gap-2 text-sm font-medium"><History aria-hidden="true" className="h-4 w-4" />Belegte Zahlungseingänge</h3>
-          {preview.paymentHistory.length ? <ul className="space-y-3">{preview.paymentHistory.map((payment, index) => <li key={index} className="flex min-w-0 flex-wrap justify-between gap-x-4 gap-y-1 border-t pt-3 text-sm first:border-0 first:pt-0"><div className="min-w-0"><span>{new Date(payment.paidAt).toLocaleDateString('de-DE', { timeZone: 'UTC' })}</span><p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{payment.reference}</p></div><strong>{euro(payment.amountCents)}</strong></li>)}</ul> : <p className="text-sm text-muted-foreground">Keine Zahlung im Journal erfasst.</p>}
-        </section>
-        {preview.recipient && <p className="break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">Empfänger für den manuellen Versand: {preview.recipient}</p>}
-        <div className="min-w-0 rounded-xl border p-4"><h3 className="break-words text-sm font-semibold [overflow-wrap:anywhere]">{preview.subject}</h3><pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed [overflow-wrap:anywhere]">{preview.text}</pre></div>
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e => setConfirmed(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-primary" /><span>Ich habe den offenen Restbetrag von <strong>{euro(preview.openCents)}</strong> und den Entwurf geprüft. Vor Download oder Erfassung wird der Zahlungsstand erneut serverseitig abgeglichen.</span></label>
-      </section>}
-      <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
-        <Button variant="outline" onClick={onClose} disabled={busy}>Abbrechen</Button>
-        {preview?.paidCents === '0' && <Button variant="outline" disabled={busy || !confirmed} onClick={() => act('mail')}><Mail aria-hidden="true" className="mr-2 h-4 w-4" />Im E-Mail-Client öffnen</Button>}
-        <Button variant="outline" disabled={busy || !confirmed || !preview} onClick={() => act('download')}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Textentwurf herunterladen</Button>
-        <Button disabled={busy || !confirmed || !preview} onClick={() => act('record')}>Mahnung intern erfassen</Button>
-      </div>
-      <p className="text-xs text-muted-foreground">Der Text ist eine Momentaufnahme für Ihren manuellen Versand. Nach späteren Zahlungen bitte neu prüfen. Die Originalrechnung und ihr PDF bleiben unverändert.</p>
     </DialogContent>
   </Dialog>;
 }

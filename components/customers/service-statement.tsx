@@ -22,7 +22,7 @@ export function ServiceStatement({ customerId, notes, projects, filters, disable
   return <Dialog open={open} onOpenChange={setOpen}>
     <DialogTrigger asChild><Button type="button" variant="outline" disabled={disabled}><Download aria-hidden="true" className="h-4 w-4" />Aufstellung</Button></DialogTrigger>
     <DialogContent className={styles.statementDialog}>
-      <DialogHeader className="text-left pr-6">
+      <DialogHeader className={styles.statementHeader}>
         <DialogTitle>Leistungsaufstellung</DialogTitle>
         <DialogDescription>{STATEMENT_NOTICE}. Nur ausdrücklich ausgewählte Leistungen.</DialogDescription>
       </DialogHeader>
@@ -91,7 +91,7 @@ function StatementContent({ customerId, notes, projects, filters: initialFilters
     const { snapshot } = result;
     return <div className={styles.statementContent}>
       <h2 ref={previewRef} tabIndex={-1} className={styles.statementTitle}>Vorschau bereit</h2>
-      <p className={styles.hint}>{snapshot.customer.name} · {formatBusinessDateDisplay(snapshot.filters.from)} – {formatBusinessDateDisplay(snapshot.filters.to)}<br />
+      <p className={styles.statementScope}>{snapshot.customer.name} · {formatBusinessDateDisplay(snapshot.filters.from)} – {formatBusinessDateDisplay(snapshot.filters.to)}<br />
         {snapshot.filters.project === 'all' ? 'Alle Projekte' : snapshot.filters.project === 'none' ? 'Ohne Projekt' : `${snapshot.filters.projectName}${snapshot.filters.projectArchived ? ' · archiviert' : ''}`} · {snapshot.filters.status === 'all' ? 'Alle Leistungen' : snapshot.filters.status === 'open' ? 'Offen' : 'Rechnung zugeordnet'}<br />
         Datenstand (UTC): <time dateTime={snapshot.generatedAt}>{snapshot.generatedAt}</time></p>
       <dl className={styles.summary} aria-label="Summen der Aufstellung">
@@ -114,7 +114,7 @@ function StatementContent({ customerId, notes, projects, filters: initialFilters
   return <div className={styles.statementContent}>
     <fieldset disabled={busy} className={styles.statementFields}>
       <legend className="sr-only">Filter und explizite Auswahl</legend>
-      <div className={styles.filters}>
+      <div className={styles.statementFilters}>
         <div className={styles.field}><Label htmlFor="statement-from">Aufstellung von</Label><Input id="statement-from" type="date" value={filters.from} required onChange={event => changeFilters({ from: event.target.value })} /></div>
         <div className={styles.field}><Label htmlFor="statement-to">Aufstellung bis</Label><Input id="statement-to" type="date" value={filters.to} required aria-invalid={dateError} min={filters.from || undefined} onChange={event => changeFilters({ to: event.target.value })} /></div>
         <div className={styles.field}><Label htmlFor="statement-project">Projekt der Aufstellung</Label><select id="statement-project" className={styles.select} value={filters.project} onChange={event => changeFilters({ project: event.target.value })}><option value="all">Alle Projekte</option><option value="none">Ohne Projekt</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}{project.archivedAt ? ' · archiviert' : ''}</option>)}</select></div>
@@ -122,7 +122,7 @@ function StatementContent({ customerId, notes, projects, filters: initialFilters
       </div>
       {dateError && <p role="alert" className={styles.fieldError}>Beginn darf nicht nach Ende liegen.</p>}
       {(!filters.from || !filters.to) && <p className={styles.hint}>Bitte Beginn und Ende des Zeitraums wählen.</p>}
-      <p className={styles.hint}>{selectedNotes.length} von höchstens {MAX_STATEMENT_NOTES} Leistungen ausgewählt. Keine automatische Auswahl.</p>
+      <p className={styles.selectionCount}>{selectedNotes.length} von höchstens {MAX_STATEMENT_NOTES} Leistungen ausgewählt. Keine automatische Auswahl.</p>
       {!matching.length ? <p role="status" className={styles.hint}>Keine passenden Leistungen. Bitte Filter anpassen.</p> : <>
         <div className={styles.statementSelection}>
           {visible.map(note => <label key={note.id} className={styles.statementChoice}>
@@ -135,7 +135,7 @@ function StatementContent({ customerId, notes, projects, filters: initialFilters
       <label className={styles.statementChoice}><input type="checkbox" checked={approved} disabled={!selectedNotes.length} onChange={event => setApproved(event.target.checked)} /><span>Beschreibungen im PDF übernehmen. Interne Kundenhinweise werden nicht ausgegeben.</span></label>
     </fieldset>
     {error && <p role="alert" className={styles.fieldError}>{error} Ihre Auswahl bleibt erhalten; Sie können sicher erneut versuchen.</p>}
-    <div className={styles.projectActions}>
+    <div className={styles.statementActions}>
       <Button type="button" disabled={busy || !approved || !selectedNotes.length || !filters.from || !filters.to || dateError} onClick={() => void createPreview()}>{busy && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}{busy ? 'Vorschau wird erstellt …' : 'Vorschau erstellen'}</Button>
       <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
     </div>
