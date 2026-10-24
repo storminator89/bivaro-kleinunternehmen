@@ -1,0 +1,111 @@
+/* Hallmark · v2.0.0 · scope: app · redesign: full · theme: locked Bivaro Ledger · shape: article catalog · signature: net price and source price on one record · copy: verbatim */
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 · weakest: E, long descriptions and units require hosted narrow-screen inspection. */
+/* Existing shell owns fonts and canvas. No new tokens, decoration or motion. */
+.workspace {
+  width: 100%;
+  max-width: 80rem;
+  min-width: 0;
+  margin-inline: auto;
+  display: grid;
+  gap: var(--spacing-6);
+  color: var(--color-ink);
+}
+.workspace :is(a, button, input) { min-height: 2.75rem; }
+.workspace :is(a, button, input):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+.workspace .search { width: 100%; max-width: 32rem; background: var(--color-paper); }
+.priceNote { color: var(--bivaro-color-muted); font-size: var(--text-sm); }
+.catalog { display: grid; gap: var(--spacing-3); min-width: 0; }
+.catalog:empty { display: none; }
+.record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 18rem);
+  gap: var(--spacing-4) var(--spacing-8);
+  min-width: 0;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-card);
+  background: var(--color-paper);
+  padding: var(--spacing-6);
+  scroll-margin-top: var(--spacing-6);
+}
+.identity { min-width: 0; }
+.identity h2, .empty h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.description {
+  margin-top: var(--spacing-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--bivaro-color-muted);
+  max-width: 75ch;
+}
+.price {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+.price span {
+  display: block;
+  margin-top: var(--spacing-1);
+  color: var(--bivaro-color-muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+.source {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--color-rule);
+  padding-top: var(--spacing-3);
+  font-size: var(--text-xs);
+  color: var(--bivaro-color-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.loading, .error, .empty {
+  padding: var(--spacing-6);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-card);
+  background: var(--color-paper);
+  font-size: var(--text-sm);
+}
+.loading { color: var(--bivaro-color-muted); }
+.error { color: var(--color-danger-ink); border-color: var(--color-danger); }
+.empty { display: grid; justify-items: start; gap: var(--spacing-4); }
+.empty a { max-width: 100%; height: auto; white-space: normal; text-align: center; }
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.backLink:hover { color: var(--bivaro-color-accent); }
+@media (max-width: 639px) {
+  .workspace { gap: var(--spacing-4); }
+  .toolbar { gap: var(--spacing-2); }
+  .workspace .search { max-width: none; }
+  .record { grid-template-columns: minmax(0, 1fr); padding: var(--spacing-4); }
+  .price { text-align: left; }
+  .source { grid-column: 1; }
+  .empty { padding: var(--spacing-4); }
+}

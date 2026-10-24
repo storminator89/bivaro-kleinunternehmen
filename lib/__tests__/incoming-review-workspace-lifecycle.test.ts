@@ -40,6 +40,8 @@ vi.mock('next-auth/react', () => ({ useSession: () => ({ status: 'authenticated'
 vi.mock('@/components/purchases/incoming-document-ui', async importOriginal => ({ ...await importOriginal<typeof import('@/components/purchases/incoming-document-ui')>(), incomingJson: client.json }));
 vi.mock('@/components/purchases/incoming-document-review', () => ({ IncomingDocumentReview: () => null }));
 vi.mock('@/components/purchases/incoming-upload', () => ({ IncomingUpload: () => null }));
+import { PageHeader } from '@/components/page-header';
+import { IncomingUpload } from '@/components/purchases/incoming-upload';
 import { IncomingDocumentsWorkspace } from '@/components/purchases/incoming-documents-workspace';
 import { IncomingDocumentReview } from '@/components/purchases/incoming-document-review';
 import { IncomingRequestError } from '@/components/purchases/incoming-document-ui';
@@ -141,6 +143,35 @@ describe('workspace queue request lifecycle', () => {
     const signal = candidateReads()[0][1].signal as AbortSignal;
     unmount(); expect(signal.aborted).toBe(true);
     release(); await settleRequests();
+    expect(client.replace).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('queue-first upload disclosure', () => {
+  it('keeps the same upload component mounted while toggling visibility without navigating', () => {
+    const upload = () => nodes(tree).find(node => node.type === IncomingUpload)!;
+    const panel = () => nodes(tree).find(node => node.props.id === 'incoming-upload-panel')!;
+    const toggle = () => nodes(tree).find(node => node.type === PageHeader)!.props.actions as ReactElement<{ 'aria-expanded': boolean; 'aria-controls': string; disabled: boolean; onClick: () => void }>;
+    const initial = upload();
+    expect(initial).toBeDefined();
+    expect(panel().props.hidden).toBe(true);
+    expect(toggle().props['aria-expanded']).toBe(false);
+    expect(toggle().props['aria-controls']).toBe(panel().props.id);
+    toggle().props.onClick(); commit();
+    expect(panel().props.hidden).toBe(false);
+    expect(toggle().props['aria-expanded']).toBe(true);
+    expect(upload().type).toBe(initial.type);
+    expect(upload().key).toBe(initial.key);
+    (upload().props.onBusyChange as (busy: boolean) => void)(true); commit();
+    expect(toggle().props.disabled).toBe(true);
+    expect(panel().props.hidden).toBe(false);
+    (upload().props.onBusyChange as (busy: boolean) => void)(false); commit();
+    expect(toggle().props.disabled).toBe(false);
+    toggle().props.onClick(); commit();
+    expect(panel().props.hidden).toBe(true);
+    expect(upload().type).toBe(initial.type);
+    expect(upload().key).toBe(initial.key);
     expect(client.replace).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,7 @@ test('saved mobile photo needs explicit source/payment confirmation and safely r
     await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard/);
     await page.goto('/purchases');
+    await page.getByRole('button', { name: 'Original hinzufügen', exact: true }).click();
     await page.getByLabel('Foto, PDF- oder XML-Original auswählen', { exact: true }).setInputFiles({ name: 'synthetic-paid-photo.png', mimeType: 'image/png', buffer: photo });
     await page.getByRole('button', { name: 'Original hochladen', exact: true }).click();
     const dialog = page.getByRole('dialog');
