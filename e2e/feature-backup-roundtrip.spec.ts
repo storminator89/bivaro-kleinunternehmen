@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Prisma } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
-import { createBackupManifest, CURRENT_SCHEMA_VERSION, type BackupManifest } from '../lib/backup-manifest';
+import { createHash, randomUUID } from 'node:crypto';
+import type { BackupManifest } from '../lib/backup-manifest';
 import { createBankMappingProfileConfiguration } from '../lib/bank-mapping-profile-contract';
 import type { PortableBankMappingProfile, PortableBankMappingProfileRevision } from '../lib/bank-mapping-profile-backup';
 import { inferBankCsvMapping, parseBankCsv } from '../lib/bank-csv';
@@ -61,10 +61,31 @@ async function state(userId: string) {
   ]);
 }
 
+function canonicalize(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, canonicalize(item)]));
+  return value;
+}
+function hashJson(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex');
+}
 function reseal(backup: Backup) {
-  // Recompute the real manifest, so conflicts reach immutable target-history
-  // validation rather than merely failing a stale collection checksum.
-  backup.manifest = createBackupManifest({ sourceUserId: backup.manifest.sourceUserId, generatedAt: backup.exportedAt, data: backup.data, snapshot: backup.manifest.snapshot });
+  // Match lib/backup-manifest.ts canonicalize/coverageCount/coverageHash and
+  // createBackupManifest exactly, without importing its server-only validators
+  // into the Playwright runner. Keep the REAL export's closed capability,
+  // coverage registry, secret exclusions and file metadata; only renew hashes.
+  const manifest = backup.manifest, auditLogs = backup.data.auditLogs ?? [], counters = backup.data.invoiceNumberCounters ?? [];
+  manifest.modelCoverage = manifest.modelCoverage.map(entry => {
+    const value = backup.data[entry.key];
+    const updated = { ...entry, count: Array.isArray(value) ? value.length : value && typeof value === 'object' ? 1 : 0 };
+    delete updated.sha256;
+    if (entry.mode !== 'excluded' && value !== undefined && value !== null) updated.sha256 = hashJson(value);
+    return updated;
+  });
+  manifest.backupId = hashJson({ sourceUserId: manifest.sourceUserId, generatedAt: backup.exportedAt, auditLogs, counters, ...(manifest.snapshot ? { snapshotId: manifest.snapshot.id } : {}) });
+  manifest.auditSegment = { ...manifest.auditSegment, count: Array.isArray(auditLogs) ? auditLogs.length : 0, sha256: hashJson(auditLogs) };
+  manifest.invoiceNumberCounters = { ...manifest.invoiceNumberCounters, count: Array.isArray(counters) ? counters.length : 0, sha256: hashJson(counters) };
   return backup;
 }
 
@@ -90,7 +111,10 @@ test('real backup endpoints remap feature histories, preserve legacy high-water 
   expect(exported.headers()['content-disposition']).toContain('attachment;');
   const backup = await exported.json() as Backup;
   expect(backup.version).toBe('3.0');
-  expect(backup.manifest.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+  expect(backup.manifest.schemaVersion).toBe('20261024030000_combine_mapping_profiles_numbering');
+  // Prove the independent pure calculation matches this actual server export
+  // before using it to reach immutable-history conflicts with changed data.
+  expect(reseal(structuredClone(backup)).manifest).toStrictEqual(backup.manifest);
   expect(backup.manifest.sourceUserId).toBe(source.id);
   expect(backup.data.bankMappingProfiles).toHaveLength(1);
   expect(backup.data.bankMappingProfileRevisions).toHaveLength(1);
