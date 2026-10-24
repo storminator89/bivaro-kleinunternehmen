@@ -62,6 +62,7 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
     const [error, setError] = useState<string | null>(null);
     const previewRequestRef = useRef(0);
     const previewAbortRef = useRef<AbortController | null>(null);
+    const openerRef = useRef<HTMLElement | null>(null);
 
     // Only years with a checked official mapping can be selected. New form
     // years are added after their BMF/ELSTER source has been reviewed.
@@ -154,7 +155,23 @@ export function EURElsterExportDialog({ isOpen, onClose }: EURElsterExportDialog
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="!max-w-[1200px] !w-[95vw] max-h-[90dvh] min-h-0 min-w-0 overflow-hidden flex flex-col p-4 sm:p-6">
+            <DialogContent
+                onOpenAutoFocus={() => {
+                    const active = document.activeElement;
+                    openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+                }}
+                onCloseAutoFocus={event => {
+                    const opener = openerRef.current;
+                    openerRef.current = null;
+                    if (opener?.isConnected && opener.getClientRects().length > 0
+                        && getComputedStyle(opener).visibility !== 'hidden'
+                        && !opener.matches(':disabled, [aria-disabled="true"]')
+                        && !opener.closest('[inert], [hidden], [role="dialog"], [role="menu"]')) {
+                        event.preventDefault();
+                        opener.focus();
+                    }
+                }}
+                className="!max-w-[1200px] !w-[95vw] max-h-[90dvh] min-h-0 min-w-0 overflow-hidden flex flex-col p-4 sm:p-6">
                 {/* Header */}
                 <DialogHeader className="shrink-0 border-b pb-4 text-left">
                     <div className="flex min-w-0 items-center gap-3 pr-6">

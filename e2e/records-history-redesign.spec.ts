@@ -87,7 +87,8 @@ async function capture(page: Page, name: string, theme: 'light' | 'dark', dialog
       }
     }, position);
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' })); await settled(page);
-    const surface = await page.evaluate(fullPage => ({ width: innerWidth, height: fullPage ? Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) : innerHeight, scrollY }), !dialog);
+    const surface = await page.evaluate(fullPage => ({ width: fullPage ? document.documentElement.clientWidth : innerWidth, innerWidth, height: fullPage ? Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) : innerHeight, scrollY }), !dialog);
+    expect(surface.innerWidth).toBe(width);
     const scroll = dialog ? await dialog.evaluate(root => [root, ...root.querySelectorAll('*')].filter(node => node instanceof HTMLElement && /auto|scroll/u.test(getComputedStyle(node).overflowY)).map(node => ({ top: node.scrollTop, height: node.clientHeight, scrollHeight: node.scrollHeight }))) : [];
     if (dialog) {
       expect(scroll.length).toBeGreaterThan(0);

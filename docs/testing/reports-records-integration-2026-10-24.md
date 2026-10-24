@@ -101,3 +101,52 @@ Only reproducible completed temporary build caches were reclaimed with parent
 permission. A complete private dependency copy retained exact PDF.js source and
 adapted-worker hashes and single-link asset guards; no installation, shared
 package mutation, Prisma regeneration or integrity-check bypass was used.
+
+
+## First hosted run and scoped recovery
+
+Draft PR [#142](https://github.com/storminator89/bivaro-kleinunternehmen/pull/142)
+was explicitly authorized after the local checkpoint. Published first head
+`1d873cf9cb983c09570bb3d3d9b4a2a4666dff47` has exactly the reviewed local tree.
+[CI 40120988992](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40120988992)
+passed security, lint/types, normal build and **4,252 unit tests** (20 skipped;
+272 files passed, three skipped).
+
+[Browser run 40120989030](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40120989030)
+completed with **157/166 passed, nine failed, zero retries**. One of 152 existing
+cases failed because the redesigned EÜR markup omitted the existing
+`.report-balance` selector. Eight new cases failed at capture-width assertions:
+headed Chromium correctly excluded its actual 15px scrollbar from full-page
+PNG content (375 rather than 390 pixels; 1425 rather than 1440). These failures
+occurred before later interaction assertions in those new cases. They do not
+establish a financial-calculation failure or passing interrupted/export paths.
+
+Recovery retains every existing test/assertion, time limit, image name and
+budget. It restores the selector on the actual balance region, with scoped CSS
+specificity preventing the legacy selector from reverting the new composition.
+Full-page PNGs must now exactly match measured layout `clientWidth`, while an
+independent assertion still requires actual `innerWidth` to equal the configured
+1440/390 CSS viewport. Modal viewport PNGs still require exact viewport width.
+Nothing is cropped, masked, hidden or widened to suppress a scrollbar.
+
+The source review also found that the controlled EÜR preview had no Trigger or
+explicit opener restoration. Guarded opener capture/return was added for its
+existing Close/Escape/reopen requirement; the first hosted run had not reached
+that new focus assertion. Financial preview/export handlers and data are
+unchanged. A separate read-only reviewer found no blocking issue in the capture,
+CSS specificity or focus lifecycle corrections.
+
+All prior five screenshot artifacts were delivered. The new partition correctly
+refused incomplete 44-image evidence, so **none of the required new44 images is
+claimed accepted**. Six actual earlier-named screenshots of the redesigned
+history, statement and reminder were downloaded from the exact first head and
+visually inspected, with archive SHA-256 and file geometry/hashes recorded.
+The suspected muted-role collision was not reproduced: actual light screenshots
+contain the intended #5F7087 text pixels; no speculative token change was made.
+Those six images are not a substitute for the pending complete new44 review.
+
+Corrective whole-project lint/types and one normal production build including
+unchanged pre-/postbuild hooks passed under Node22.23.4. Local unit/fixture/app/
+browser tests remain unrun. Full hosted acceptance of the corrective tree and
+actual new44 screenshot review remain pending. PR stays draft; no merge or
+deployment is authorized.

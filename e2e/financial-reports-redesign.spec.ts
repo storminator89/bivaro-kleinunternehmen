@@ -77,8 +77,8 @@ async function geometry(page: Page, workspace: Locator) {
 async function capture(page: Page, info: TestInfo, name: string, workspace: Locator) {
   expect(info.retry).toBe(0); await geometry(page, workspace);
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  const surface = await page.evaluate(() => ({ width: innerWidth, height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight), scrollY }));
-  expect(surface.scrollY).toBe(0); expect(surface.width * surface.height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
+  const surface = await page.evaluate(() => ({ width: document.documentElement.clientWidth, innerWidth, height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight), scrollY }));
+  expect(surface.innerWidth).toBe(page.viewportSize()!.width); expect(surface.scrollY).toBe(0); expect(surface.width * surface.height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
   const png = await page.screenshot({ path: info.outputPath(name), fullPage: true, animations: 'disabled' });
   expect(png.length).toBeLessThanOrEqual(1024 * 1024);
   expect(png.readUInt32BE(16)).toBe(surface.width); expect(png.readUInt32BE(20)).toBeGreaterThanOrEqual(surface.height);

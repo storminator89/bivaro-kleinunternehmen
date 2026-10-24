@@ -8,7 +8,9 @@
 .exportActions > button { min-height: 44px; max-width: 100%; flex: 1; height: auto; white-space: normal; font-size: var(--text-sm); }
 .workspace :is(button, summary):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 .sheet, .panel { min-width: 0; border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper); overflow: clip; }
-.balance { display: grid; gap: var(--space-lg); padding: var(--space-lg); border-bottom: 1px solid var(--color-rule); }
+.workspace .balance { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); padding: var(--space-lg); border: 0; border-bottom: 1px solid var(--color-rule); border-radius: 0; background: none; overflow: visible; }
+/* Preserve the existing fiscal-test selector without inheriting its old layout. */
+.workspace .balance .totals { padding: 0; gap: var(--space-md); }
 .result { min-width: 0; }
 .result h3 { font-size: var(--text-sm); font-weight: 500; }
 .result strong { display: block; margin-block: var(--space-xs); font-size: var(--text-3xl); font-weight: 600; letter-spacing: -.035em; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -86,8 +88,8 @@
 .fiscalNote p + p { margin-top: var(--space-2xs); color: var(--bivaro-color-muted); }
 @media (min-width: 640px) {
   .exportActions > button { flex: none; }
-  .balance { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .totals { padding-left: var(--space-lg); border-left: 1px solid var(--color-rule); }
+  .workspace .balance { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .workspace .balance .totals { padding-left: var(--space-lg); border-left: 1px solid var(--color-rule); }
   .assetMetrics { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) minmax(0, 1fr); align-items: end; }
   .assetMetrics > div + div { border-left: 1px solid var(--color-rule); padding-left: var(--space-lg); }
   .rowDetails { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -96,7 +98,7 @@
 @media (min-width: 1024px) {
   .header { flex-direction: row; align-items: start; justify-content: space-between; }
   .exportActions { justify-content: end; flex-shrink: 0; }
-  .balance, .assetSummary { padding: var(--space-lg) var(--space-xl); }
+  .workspace .balance, .assetSummary { padding: var(--space-lg) var(--space-xl); }
   .result strong { font-size: var(--text-4xl); }
   .breakdowns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .breakdown + .breakdown { border-top: 0; border-left: 1px solid var(--color-rule); }

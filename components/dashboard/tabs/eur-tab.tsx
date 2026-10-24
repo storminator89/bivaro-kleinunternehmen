@@ -106,7 +106,7 @@ export function EURTab({
       />
 
       <section className={styles.sheet} aria-label="Ergebnisübersicht">
-        <div className={styles.balance}>
+        <div className={`report-balance ${styles.balance}`}>
           <div className={styles.result}>
             <h3>{profit >= 0 ? "Gewinn" : "Verlust"}</h3>
             <strong>{formatCurrency(profit)}</strong>
