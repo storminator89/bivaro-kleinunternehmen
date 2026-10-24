@@ -1,0 +1,60 @@
+{
+  "dateUtc": "2026-10-24",
+  "base": "eaddb1f",
+  "branch": "redesign/sidebar-flat-icons-20261024",
+  "checks": {
+    "diffCheck": "passed",
+    "fullTypeScript": "passed: tsc --noEmit --incremental false",
+    "eslint": "passed: npm run lint, zero warnings",
+    "normalProductionBuild": "passed: npm run build, including prebuild/postbuild",
+    "buildLog": "/tmp/bivaro-sidebar-flat-build-final.log",
+    "generatedOriginals": 15,
+    "generatedResultSha256Matches": 15,
+    "webExports": 15,
+    "webBytes": 23494,
+    "allWebAlphaRanges": [
+      0,
+      255
+    ],
+    "actualNativeSizeAssetInspection": "passed: all15 at28px navigation /40px brand; natural landscape cashbook preserved",
+    "solidInkContrast": {
+      "inactive": 10.02,
+      "hover": 8.46,
+      "active": 10.19
+    },
+    "retainedBuildLog": "docs/design/sidebar-flat-provenance/normal-build.log",
+    "independentReadOnlyReview": "passed: no blocking findings; no execution or writes by reviewer",
+    "finalRuntimeMatchesSuccessfulBuild": true,
+    "reviewFollowup": "Test-only logo decode check now derives URL from rendered mask; runtime assets/code unchanged; full type and lint repeated.",
+    "retainedBuildLogFormatting": "Trailing terminal progress whitespace normalized only; raw build log retained in /tmp."
+  },
+  "notRun": {
+    "localFunctionalTests": "prohibited by current user instruction; not run",
+    "localBrowserServer": "not run",
+    "newGitHubCI": "not triggered",
+    "authoredRegressionTests": "not executed",
+    "hostedAcceptance": "pending authorized publication"
+  },
+  "environmentRecovery": {
+    "externalDependencySymlink": "normal build initially failed Turbopack root restriction",
+    "incompletePhysicalCopy": "disk full; own incomplete copy removed immediately; no shared dependencies changed",
+    "resolved": "parent-authorized completed .next caches reclaimed; complete real private dependency copy; unchanged normal build passed",
+    "securityGuards": "unchanged; no bypass or hardlinks"
+  },
+  "boundaries": {
+    "nonSidebarBivaroIcon": "unchanged",
+    "commandPalette": "unchanged",
+    "dashboardIconFamily": "unchanged",
+    "publicBrand": "unchanged",
+    "navigationRoutesAuthLabels": "unchanged",
+    "databaseMigrations": "none",
+    "publication": "not performed",
+    "merge": "not performed"
+  },
+  "preview": {
+    "path": "/workspace/shared/bivaro-flat-icons/qa/sidebar-flat-all15-real-size.png",
+    "type": "inspection-only asset composition, not app screenshot",
+    "productionImages": "not modified by preview generation",
+    "retained": "docs/design/sidebar-flat-provenance/asset-preview.png"
+  }
+}

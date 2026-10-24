@@ -3,14 +3,14 @@
 import { ReviewLink as Link } from "@/components/purchases/review-link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { BivaroIcon, type BivaroIconName } from "@/components/brand/bivaro-icon";
+import { SidebarIcon, type SidebarNavIconName } from "@/components/brand/sidebar-icon";
 import { useState, useEffect } from "react";
 import { useReviewNavigation } from "@/components/purchases/use-review-navigation";
 
 type NavItem = {
   href: string;
   label: string;
-  icon: BivaroIconName;
+  icon: SidebarNavIconName;
   auth: "all" | "authenticated" | "unauthenticated";
 };
 
@@ -151,7 +151,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
                       }`}
                     title={item.label}
                   >
-                    <BivaroIcon name={item.icon} className="nav-artwork" size={28} />
+                    <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
                   </Link>
                 </li>
               );
@@ -174,7 +174,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
                     }`}
                   title={item.label}
                 >
-                  <BivaroIcon name={item.icon} className="nav-artwork" size={28} />
+                  <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
                 </Link>
               </li>
             );
@@ -189,7 +189,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
               className="flex min-h-11 w-full cursor-pointer items-center justify-center rounded-md p-3 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
               title="Abmelden"
             >
-              <BivaroIcon name="nav-logout" className="nav-artwork" size={28} />
+              <SidebarIcon name="nav-logout" className="nav-artwork" size={28} />
             </button>
           )}
         </div>
@@ -229,7 +229,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                           }`}
                       >
-                        <BivaroIcon name={item.icon} className="nav-artwork" size={28} />
+                        <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
                         <span className="text-sm font-medium">{item.label}</span>
                       </Link>
                     </li>
@@ -262,7 +262,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                         }`}
                     >
-                      <BivaroIcon name={item.icon} className="nav-artwork" size={28} />
+                      <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
                       <span className="text-sm font-medium">{item.label}</span>
                     </Link>
                   </li>
@@ -280,7 +280,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
             onClick={() => requestNavigation(() => { void signOut({ callbackUrl: '/' }); })}
             className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
           >
-            <BivaroIcon name="nav-logout" className="nav-artwork" size={28} />
+            <SidebarIcon name="nav-logout" className="nav-artwork" size={28} />
             <span className="text-sm font-medium">Abmelden</span>
           </button>
         )}

@@ -164,7 +164,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByRole('heading', { name: 'Jahresvergleich', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Letzte Aktivitäten', exact: true })).toBeVisible();
     // Generated artwork must load without breaking text labels or navigation.
-    const sidebarIcons = page.locator('aside [data-bivaro-icon^="nav-"]');
+    const sidebarIcons = page.locator('aside [data-bivaro-sidebar-icon^="nav-"]');
     await expect(sidebarIcons).toHaveCount(17);
     await expect(page.locator('aside').getByRole('link', { name: 'Heute erledigen', exact: true })).toHaveAttribute('href', '/dashboard/today');
     await expect(page.locator('aside').getByRole('link', { name: 'Rechnungshistorie', exact: true })).toHaveAttribute('href', '/history');
@@ -186,9 +186,66 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       expect(source).toBeTruthy();
       expect((await page.request.get(source!)).status()).toBe(200);
     }
-    await expect(page.locator('aside .brand-full [data-bivaro-icon="bivaro-sidebar-flat"]')).toBeVisible();
-    await expect.poll(async () => sidebarIcons.evaluateAll(images => images.every(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))).toBe(true);
-    expect(await page.locator('aside [data-bivaro-icon="nav-dashboard"]').evaluate(image => getComputedStyle(image).filter)).toBe('none');
+    const sidebarLogo = page.locator('aside .brand-full [data-bivaro-sidebar-icon="bivaro-sidebar"]');
+    await expect(sidebarLogo).toBeVisible();
+    const logoMask = await sidebarLogo.evaluate(icon => getComputedStyle(icon).maskImage);
+    expect(logoMask).toContain('/brand/icons/sidebar-flat/bivaro-sidebar.webp');
+    expect(await sidebarIcons.evaluateAll(icons => new Set(icons.map(icon => icon.getAttribute('data-bivaro-sidebar-icon'))).size)).toBe(14);
+    const sidebarMasks = await sidebarIcons.evaluateAll(icons => icons.map(icon => ({
+      mask: getComputedStyle(icon).maskImage,
+      ink: getComputedStyle(icon).backgroundColor,
+      labelInk: getComputedStyle(icon).color,
+      mode: getComputedStyle(icon).maskMode,
+      filter: getComputedStyle(icon).filter,
+      width: icon.getBoundingClientRect().width,
+      height: icon.getBoundingClientRect().height,
+    })));
+    for (const icon of sidebarMasks) {
+      expect(icon.mask).toContain('/brand/icons/sidebar-flat/');
+      expect(icon.ink).toBe(icon.labelInk);
+      expect(icon.mode).toBe('alpha');
+      expect(icon.filter).toBe('none');
+      expect([icon.width, icon.height]).toEqual([28, 28]);
+    }
+    const sidebarSources = [...new Set(sidebarMasks.map(icon => icon.mask.match(/url\(["']?([^"')]+)/)?.[1]))];
+    sidebarSources.push(logoMask.match(/url\(["']?([^"')]+)/)?.[1]);
+    expect(sidebarSources).toHaveLength(15);
+    for (const source of sidebarSources) {
+      expect(source).toBeTruthy();
+      const response = await page.request.get(source!);
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']).toContain('image/webp');
+      const decoded = await page.evaluate(async url => {
+        const image = new Image(); image.src = url;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Cannot inspect decoded mask alpha');
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let transparent = false, solid = false;
+        for (let index = 3; index < pixels.length; index += 4) {
+          if (pixels[index] === 0) transparent = true;
+          if (pixels[index] >= 250) solid = true;
+        }
+        return { width: image.naturalWidth, height: image.naturalHeight, transparent, solid };
+      }, source!);
+      const size = source!.endsWith('/bivaro-sidebar.webp') ? 192 : 128;
+      expect(decoded).toEqual({ width: size, height: size, transparent: true, solid: true });
+    }
+    for (const target of ['dark', 'light']) {
+      await page.getByRole('button', { name: target === 'dark' ? 'Dunkles Farbschema aktivieren' : 'Helles Farbschema aktivieren', exact: true }).click();
+      await expect(page.locator('html')).toHaveClass(target === 'dark' ? /\bdark\b/ : /\blight\b/);
+      const active = page.locator('aside [data-bivaro-sidebar-icon="nav-dashboard"]');
+      const inactive = page.locator('aside [data-bivaro-sidebar-icon="nav-cashbook"]');
+      await expect(active).toHaveCSS('background-color', 'rgb(6, 37, 31)');
+      await expect(active.locator('..')).toHaveCSS('background-color', 'rgb(121, 225, 171)');
+      await expect(inactive).toHaveCSS('background-color', 'rgb(189, 207, 202)');
+      await inactive.locator('..').hover();
+      await expect(inactive).toHaveCSS('background-color', 'rgb(198, 216, 212)');
+      await page.getByRole('heading', { name: 'Buchhaltung', level: 1 }).hover();
+    }
     for (const iconRoute of ['/favicon.ico', '/icon.png', '/apple-icon.png']) {
       const icon = await page.request.get(iconRoute);
       expect(icon.status()).toBe(200);

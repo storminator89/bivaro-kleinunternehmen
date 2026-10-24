@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
 const start = workflow.indexOf('      # New fifth partition:');
+const end = workflow.indexOf('      # Sixth independent partition:', start);
 const original = workflow.slice(0, start).trimEnd() + '\n';
-const partition = workflow.slice(start);
+const partition = workflow.slice(start, end < 0 ? undefined : end);
 const browser = readFileSync('e2e/bank-billing-redesign.spec.ts', 'utf8');
 const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\n\s*\}/g)].flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
 

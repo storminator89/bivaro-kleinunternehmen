@@ -1,0 +1,43 @@
+[
+  {
+    "name": "nav-tax",
+    "tool": "built-in image_gen.imagegen",
+    "transparent_background": true,
+    "prompt": "Use case: logo-brand.\nAsset type: one production navigation glyph for a modern financial SaaS sidebar, nav-tax.\nSubject: a very simple front-facing calculator: solid black rounded rectangular body, one large transparent horizontal screen opening at the top, and only four large transparent rounded-square key openings in a 2 by 2 grid below. Exactly one calculator, no text or numerals.\nStyle: modern flat 2D minimalist glyph, single solid black silhouette with transparent negative holes and antialiased edges. No other colors. Medium-heavy optical weight, gently rounded geometry. Designed to stay recognizable at 28px.\nComposition: square transparent canvas, centered; visual bounds approximately 72% of canvas height and width at most 60%; generous even margin; straight-on and no perspective.\nConstraints: truly transparent alpha background and truly transparent holes. Opaque pure black geometry only. No gradients, shading, bevel, shadows, 3D, textures, lighting, background tile, border frame, letters, labels, tiny details, badges, grid, or contact sheet. Produce one icon only.",
+    "source": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-16a78569-955b-4dae-9652-995b5d1bdf57.png",
+    "materialized": "/workspace/shared/bivaro-flat-icons/generated/nav-tax.png"
+  },
+  {
+    "name": "nav-settings",
+    "tool": "built-in image_gen.imagegen",
+    "transparent_background": true,
+    "prompt": "Use case: logo-brand.\nAsset type: one production navigation glyph, nav-settings.\nSubject: one simple solid black gear with exactly six broad generously spaced gently rounded teeth and one large circular transparent central hole. Keep the gear rotationally symmetric. No nested gears or internal decoration.\nStyle: modern flat 2D minimalist financial SaaS navigation glyph, single opaque pure black silhouette with genuinely transparent negative holes and antialiased edges. Medium-heavy optical weight with gently rounded geometry, clearly readable at 28px. Square transparent canvas, precisely centered, icon visual bounds about 72% of square canvas height and width, generous even margins. Truly transparent alpha background. No other colors. No gradients, shading, bevel, shadows, 3D, lighting, texture, perspective, background tile, frame, text labels, tiny details, badges, contact sheet, sprite sheet, or multiple icon variants. Produce just this one icon.",
+    "source": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-c339d849-101b-404b-88f2-ab23433afaa0.png",
+    "materialized": "/workspace/shared/bivaro-flat-icons/generated/nav-settings.png"
+  },
+  {
+    "name": "nav-users",
+    "tool": "built-in image_gen.imagegen",
+    "transparent_background": true,
+    "prompt": "Use case: logo-brand.\nAsset type: one production navigation glyph, nav-users.\nSubject: one simple person-and-shield administration symbol. One large round head above a bold rounded shoulder bust. At lower right of bust, one simple shield silhouette separated from the bust by a generous transparent gap. The shield is plain, with one large transparent interior opening, no checkmark or tiny badge. Person and shield together form one visually balanced icon. Few large geometric shapes.\nStyle: modern flat 2D minimalist financial SaaS navigation glyph, single opaque pure black silhouette with genuinely transparent negative holes and antialiased edges. Medium-heavy optical weight with gently rounded geometry, clearly readable at 28px. Square transparent canvas, precisely centered, icon visual bounds about 72% of square canvas height and width, generous even margins. Truly transparent alpha background. No other colors. No gradients, shading, bevel, shadows, 3D, lighting, texture, perspective, background tile, frame, text labels, tiny details, badges, contact sheet, sprite sheet, or multiple icon variants. Produce just this one icon.",
+    "source": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-04fd47dc-d035-4fbc-a2f6-e3ac564cb747.png",
+    "materialized": "/workspace/shared/bivaro-flat-icons/generated/nav-users.png"
+  },
+  {
+    "name": "nav-logout",
+    "tool": "built-in image_gen.imagegen",
+    "transparent_background": true,
+    "prompt": "Use case: logo-brand.\nAsset type: one production navigation glyph, nav-logout.\nSubject: an extremely simple front-facing open doorway and one bold right-pointing arrow exiting through it. Thick black three-sided doorway frame at the left and top/bottom; wide black horizontal arrow pointing right with large triangular arrowhead. A wide transparent separation keeps arrow legible through the doorway. No door handle, no interior details, no perspective; simple geometric forms.\nStyle: modern flat 2D minimalist financial SaaS navigation glyph, single opaque pure black silhouette with genuinely transparent negative holes and antialiased edges. Medium-heavy optical weight with gently rounded geometry, clearly readable at 28px. Square transparent canvas, precisely centered, icon visual bounds about 72% of square canvas height and width, generous even margins. Truly transparent alpha background. No other colors. No gradients, shading, bevel, shadows, 3D, lighting, texture, perspective, background tile, frame, text labels, tiny details, badges, contact sheet, sprite sheet, or multiple icon variants. Produce just this one icon.",
+    "source": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-de1671f8-083c-42c9-b27e-f1f6e492ddee.png",
+    "materialized": "/workspace/shared/bivaro-flat-icons/generated/nav-logout.png"
+  },
+  {
+    "name": "bivaro-sidebar",
+    "tool": "built-in image_gen.imagegen",
+    "transparent_background": true,
+    "prompt": "Use case: style-transfer.\nAsset type: one production Bivaro brand mark glyph, bivaro-sidebar.\nInput image: identity reference and edit target. Preserve the recognizable bold capital B identity and the diagonal separation running up from lower left to upper right. Completely replace the old shaded rendering with a very modern flat 2D silhouette. Produce one capital B mark only, no wordmark.\nSubject: solid opaque pure black geometric capital B with a thick upright left stem and two broad rounded right lobes; the diagonal cut is genuinely transparent negative space separating the upper and lower portions, and any interior counters are transparent. Keep the large simple recognizable B geometry. Few bold forms, no thin details.\nComposition: square transparent canvas, centered with generous even margin, visual bounds about 72% of canvas height and 62% width. Medium-heavy optical weight, gently rounded corners, readable at 28px. Front-facing orthographic flat 2D.\nConstraints: truly transparent alpha background and transparent negative holes, pure black visible shapes only with antialiased edges. No gradients, shading, bevel, shadow, 3D, colored swoosh, white fill, lighting, textures, background tile, frame, text labels, tiny details, badges, contact sheet, or multiple variants. One icon only.",
+    "source": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-d545e64a-e2fc-4279-b2db-adc5e93e4bd1.png",
+    "materialized": "/workspace/shared/bivaro-flat-icons/generated/bivaro-sidebar.png",
+    "reference": "/workspace/scratch/2ccfc8144c7a/bivaro-readme-final/public/brand/icons/bivaro-sidebar-flat.webp"
+  }
+]
