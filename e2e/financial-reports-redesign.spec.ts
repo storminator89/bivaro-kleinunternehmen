@@ -59,6 +59,15 @@ async function theme(page: Page, value: 'light' | 'dark') {
   }
   await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${value}\\b`));
 }
+// Real keyboard traversal establishes :focus-visible; programmatic focus alone
+// correctly retains pointer modality after the theme-button matrix.
+async function keyboardFocus(page: Page, control: Locator) {
+  await control.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(control).toBeFocused();
+  expect(await control.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+}
 async function geometry(page: Page, workspace: Locator) {
   await settled(page);
   const measured = await workspace.evaluate(element => ({
@@ -122,7 +131,7 @@ test('EÜR report keeps financial context, responsive modes, disclosures and int
     }
   }
   const disclosure = workspace.locator('details');
-  await disclosure.locator('summary').focus();
+  await keyboardFocus(page, disclosure.locator('summary'));
   expect(await disclosure.locator('summary').evaluate(element => ({ style: getComputedStyle(element).outlineStyle, offset: getComputedStyle(element).outlineOffset }))).toEqual({ style: 'solid', offset: '-3px' });
   await page.keyboard.press('Enter'); await expect(disclosure).toHaveAttribute('open', '');
   await expect(disclosure.getByText(`Januar ${year}`, { exact: true })).toBeVisible();
@@ -187,7 +196,7 @@ test('GWG integrated register preserves responsive values, period and read-only 
     }
   }
   const exporter = workspace.getByRole('button', { name: 'GWG exportieren', exact: true });
-  await exporter.focus(); expect(await exporter.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
+  await keyboardFocus(page, exporter); expect(await exporter.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
   const downloaded = page.waitForEvent('download'); await page.keyboard.press('Enter'); const file = await downloaded;
   expect(file.suggestedFilename()).toMatch(/^gwg-verzeichnis-/); expect(await csv(file)).toContain(`${description};${category};999,99`);
   await page.getByRole('button', { name: 'Vorheriges Jahr anzeigen', exact: true }).click();

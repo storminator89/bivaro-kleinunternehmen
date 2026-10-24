@@ -12,8 +12,11 @@ Local-only integration from accepted main `eaddb1fe5a6342e0c702104ebcbce4b7ab9b4
 Both cherry-picked without conflicts. The existing Bivaro Ledger theme, shell,
 font, shared tokens and responsive light/dark system remain locked. No APIs,
 financial helpers, parent dashboard logic, hooks, Prisma/schema/migrations,
-dependencies, security/hosting, routing or existing browser suites changed.
-No GitHub write, PR, CI trigger, merge or deployment is part of this checkpoint.
+dependencies, security/hosting or routing changed. Existing browser cases and
+assertions remain; the later bank diagnostic-only source change is described below.
+The original local checkpoint performed no GitHub write, PR, CI trigger, merge
+or deployment. Subsequent explicitly authorized PR142 publication and recoveries
+are recorded below.
 
 ## Integrated review and corrections
 
@@ -150,3 +153,54 @@ unchanged pre-/postbuild hooks passed under Node22.23.4. Local unit/fixture/app/
 browser tests remain unrun. Full hosted acceptance of the corrective tree and
 actual new44 screenshot review remain pending. PR stays draft; no merge or
 deployment is authorized.
+
+
+## Second hosted run, actual44-image review and next recovery
+
+Corrective head `dbe84752b22b6eab01c059ad2558ef2b320c999c` again passed all
+[CI checks](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40123656843),
+including **4,252 unit tests** (20 skipped). Its
+[browser run40123656687](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40123656687)
+completed **159/166 passed, seven failed**, zero retries:
+
+- Two new financial cases checked `:focus-visible` after programmatic focus
+  while the browser correctly remained in pointer modality after theme clicks.
+  Recovery uses real Shift+Tab/Tab traversal, explicitly proves focused and
+  `:focus-visible`, then retains the same exact outline style/offset assertions.
+- Four new history cases exposed a real reset bug. The reset Button had no
+  explicit type, so its clear-navigation click was followed by the form's
+  default submit of the stale search. Only `type="button"` is added; the query,
+  effect, search-submit and API logic remain unchanged. All313 original critical
+  bindings remain, with this one intentional additional type attribute.
+- One unchanged existing bank-evidence1440 case hit its90s timeout; it passed on
+  the first head. No causal bank-runtime regression was found. The post-save
+  raw `await started` could wait indefinitely if no matching request arrived.
+  Recovery does **not** refocus, retry or change bank runtime: the same global
+  native Enter and all35 original assertions remain, plus three focused,
+  enabled and bounded-request assertions. A labelled phase and finally-release
+  make any next failure diagnosable. The90s timeout is unchanged. This is not a
+  claim that the timeout's root cause has been proved.
+
+All **199** exact images were delivered within their original partitions.
+New artifact `12573411586` contains **44/44** PNGs, **4,292,752/6,291,456bytes**;
+ZIP SHA-256:
+`1db054cd36b046628150b20509ff3b2c0bf68205c141a576690752b84de9b2ab`.
+Every new PNG output hash, decoded full-pixel hash and geometry matched its
+hosted lossless proof. All44 actual images were opened and visually inspected:
+eight EÜR/GWG, sixteen ledger/statement and twenty history/reminder views.
+No blocking visual defect was observed in the captured light/dark1440/390 matrix.
+Financial long descriptions/categories and large euro figures remain readable.
+
+Nonblocking observations retained rather than silently expanded into new work:
+desktop reminder identifier/customer truncation and icon-only payment action;
+mobile nested vertical scrollbars and non-sticky modal header; subdued disabled
+controls. The service fixtures do not establish long-description/large-amount
+stress coverage. Pixels do not prove interactions, and this image review is not
+acceptance of the still-failing functional run or a published Site.
+
+The third candidate's whole-project lint/types, source-contract comparison and
+normal build including both hooks passed under Node22.23.4. A separate read-only
+review found no assertion weakening or new source race. No local functional,
+fixture, unit or browser test ran. Fresh complete hosted checks remain required;
+all166 cases, all199 image names/budgets and the draft/no-merge/no-deploy boundary
+remain in force.
