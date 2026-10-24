@@ -72,8 +72,23 @@ async function captureCard(page: Page, card: Locator, info: TestInfo, color: 'li
       ? 'Dunkles Farbschema aktivieren' : 'Helles Farbschema aktivieren', exact: true }).click();
   }
   await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${color}\\b`));
+  // Locator screenshots scroll the tall card into view, where the real sticky
+  // app header can cover it. Keep the natural page at its origin instead.
+  await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   await settled(page);
+  expect(await page.evaluate(() => ({ x: scrollX, y: scrollY }))).toEqual({ x: 0, y: 0 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const overlays = await card.evaluate(root => {
+    const cardBox = root.getBoundingClientRect();
+    return [...document.querySelectorAll('body *')].filter(element => {
+      const style = getComputedStyle(element);
+      if (!['fixed', 'sticky'].includes(style.position) || style.visibility === 'hidden') return false;
+      const box = element.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && box.left < cardBox.right && box.right > cardBox.left
+        && box.top < cardBox.bottom && box.bottom > cardBox.top;
+    }).map(element => ({ tag: element.tagName, className: element.className }));
+  });
+  expect(overlays).toEqual([]);
   const clipped = await card.evaluate(root => [...root.querySelectorAll('button,input,label,fieldset')].filter(element => {
     const box = element.getBoundingClientRect();
     if (!box.width || !box.height || getComputedStyle(element).visibility === 'hidden') return false;
@@ -84,16 +99,21 @@ async function captureCard(page: Page, card: Locator, info: TestInfo, color: 'li
   expect(clipped).toEqual([]);
   const bounds = await card.boundingBox();
   expect(bounds).not.toBeNull();
-  expect(bounds!.width * bounds!.height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
+  const clip = { x: Math.floor(bounds!.x), y: Math.floor(bounds!.y),
+    width: Math.ceil(bounds!.x + bounds!.width) - Math.floor(bounds!.x),
+    height: Math.ceil(bounds!.y + bounds!.height) - Math.floor(bounds!.y) };
+  expect(clip.width * clip.height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
   expect(info.retry).toBe(0);
   const name = `feature-numbering-${color}-${width}.png`;
-  // The entire natural card (including the open form) is captured. The long
-  // settings page is not cropped by hiding other sections or replacing content.
-  const png = await card.screenshot({ path: info.outputPath(name), animations: 'disabled' });
+  // Page fullPage+clip uses document coordinates without locator auto-scroll.
+  // Capture the entire natural card, including its open form; never hide or
+  // move the header, alter styles/fonts, or crop any of the card's content.
+  const png = await page.screenshot({ path: info.outputPath(name), fullPage: true, clip, animations: 'disabled' });
+  expect(await page.evaluate(() => ({ x: scrollX, y: scrollY }))).toEqual({ x: 0, y: 0 });
   expect(Math.abs(png.readUInt32BE(16) - bounds!.width)).toBeLessThanOrEqual(2);
   expect(Math.abs(png.readUInt32BE(20) - bounds!.height)).toBeLessThanOrEqual(2);
   expect(png.length).toBeLessThanOrEqual(1024 * 1024);
-  process.stdout.write(`Numbering card capture proof: ${JSON.stringify({ name, viewport: page.viewportSize(), fullElement: true, bounds, pngWidth: png.readUInt32BE(16), pngHeight: png.readUInt32BE(20), encodedBytes: png.length, interLoaded: true, noHorizontalOverflow: true })}\n`);
+  process.stdout.write(`Numbering card capture proof: ${JSON.stringify({ name, viewport: page.viewportSize(), fullElement: true, documentClip: clip, naturalScroll: { x: 0, y: 0 }, overlays, bounds, pngWidth: png.readUInt32BE(16), pngHeight: png.readUInt32BE(20), encodedBytes: png.length, interLoaded: true, noHorizontalOverflow: true })}\n`);
 }
 
 async function syntheticPdf(label: string) {
@@ -242,10 +262,12 @@ test('stale real quote editor cannot consume or rewrite numbers; explicit refres
   await save.click();
   const staleResponse = await staleResponsePromise;
   expect(staleResponse.status()).toBe(409);
-  expect(await staleResponse.json()).toMatchObject({ code: 'NUMBERING_STALE' });
   const dialog = await staleDialog;
   expect(dialog.message()).toContain('Fehler beim Speichern des Angebots:');
+  // The editor's native alert pauses Chromium; dismiss the expected dialog
+  // before asking Playwright to retrieve the response body over that page.
   await dialog.accept();
+  expect(await staleResponse.json()).toMatchObject({ code: 'NUMBERING_STALE' });
   const stalePayload = staleResponse.request().postDataJSON();
   await expect(save).toBeEnabled();
   await expect(number).toHaveValue(`AN-${year}-02`);
