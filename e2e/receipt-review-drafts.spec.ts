@@ -25,6 +25,7 @@ test('mobile photo intake, retry, explicit draft, reload, search return and full
     await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard/);
     await page.goto('/purchases');
+    await page.getByRole('button', { name: 'Original hinzufügen', exact: true }).click();
     const uploadRegion = page.locator('section[aria-labelledby="incoming-upload-heading"]');
     await expect(page.getByRole('button', { name: 'Foto aufnehmen', exact: true })).toBeVisible();
     const input = page.getByLabel('Foto, PDF- oder XML-Original auswählen', { exact: true });

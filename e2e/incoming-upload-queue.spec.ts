@@ -16,7 +16,9 @@ async function user() {
 async function login(page: Page, email: string) {
   await page.goto('/login'); await page.getByLabel('E-Mail').fill(email); await page.getByLabel('Passwort', { exact: true }).fill(password);
   await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click(); await expect(page).toHaveURL(/\/dashboard/);
-  await page.goto('/purchases'); await expect(picker(page)).toBeVisible();
+  await page.goto('/purchases');
+  await page.getByRole('button', { name: 'Original hinzufügen', exact: true }).click();
+  await expect(picker(page)).toBeVisible();
 }
 async function noFinancialWrites(userId: string) {
   for (const count of await Promise.all([prisma.expense.count({ where: { userId } }), prisma.income.count({ where: { userId } }), prisma.invoice.count({ where: { userId } }), prisma.cashTransaction.count({ where: { userId } })])) expect(count).toBe(0);
@@ -65,7 +67,9 @@ test('bounded mixed selection, exact duplicate, unknown committed response and d
   // Selecting a new local queue never sends it; reload drops unsent bytes, not archived originals.
   await picker(page).setInputFiles([original('local-only.xml'), original('other-local.xml')]); expect(requests).toHaveLength(5);
   expect(await page.evaluate(() => [...Object.values(localStorage), ...Object.values(sessionStorage)].some(value => value.includes('local-only.xml')))).toBe(false);
-  await page.reload(); await expect(region(page).getByRole('list', { name: 'Upload-Warteschlange' })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Original hinzufügen', exact: true }).click();
+  await expect(region(page).getByRole('list', { name: 'Upload-Warteschlange' })).toHaveCount(0);
   await expect(region(page)).toContainText('Nach Neuladen ungesendete Dateien erneut auswählen');
   expect(await prisma.purchaseDocument.count({ where: { userId: owner.id } })).toBe(3); await noFinancialWrites(owner.id);
   // Bounds are evaluated before HTTP or content parsing. All fixtures are synthetic.

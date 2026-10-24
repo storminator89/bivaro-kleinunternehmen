@@ -80,6 +80,7 @@ async function uploadPurchaseFixture(page: Page, number: string, suffix = '', op
   const currency = options.currency ?? 'EUR', typeCode = options.typeCode ?? '380', payable = options.payable ?? '119.00';
   await page.goto('/purchases');
   await expect(page.getByRole('heading', { name: 'Belegeingang', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Original hinzufügen', exact: true }).click();
   const bytes = Buffer.from(`<Invoice><ID>${number}</ID><IssueDate>2026-10-11</IssueDate><DueDate>2026-10-25</DueDate><InvoiceTypeCode>${typeCode}</InvoiceTypeCode><DocumentCurrencyCode>${currency}</DocumentCurrencyCode><AccountingSupplierParty><Party><PartyName><Name>Synthetischer Originalverkäufer</Name></PartyName><PostalAddress><StreetName>Original-Testweg 1</StreetName><CityName>Quellstadt</CityName><PostalZone>10115</PostalZone><Country><IdentificationCode>DE</IdentificationCode></Country></PostalAddress></Party></AccountingSupplierParty><AccountingCustomerParty><Party><PartyName><Name>Synthetischer eigener Betrieb</Name></PartyName></Party></AccountingCustomerParty><LegalMonetaryTotal><TaxExclusiveAmount currencyID="${currency}">100.00</TaxExclusiveAmount><TaxInclusiveAmount currencyID="${currency}">119.00</TaxInclusiveAmount><PayableAmount currencyID="${currency}">${payable}</PayableAmount></LegalMonetaryTotal>${suffix}</Invoice>`);
   await page.getByLabel('Foto, PDF- oder XML-Original auswählen', { exact: true }).setInputFiles({ name: `${number}${suffix ? '-duplicate' : ''}.xml`, mimeType: 'application/xml', buffer: bytes });
   const uploaded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/purchase-documents' && response.request().method() === 'POST');
@@ -1646,6 +1647,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/purchases');
     await expect(page.getByRole('heading', { name: 'Belegeingang', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Original hinzufügen', exact: true }).click();
     const bytes = Buffer.from('<Invoice><ID>INCOMING-E2E-42</ID><IssueDate>2026-10-20</IssueDate><DocumentCurrencyCode>EUR</DocumentCurrencyCode><AccountingSupplierParty><Party><PartyName><Name>E2E Eingangslieferant</Name></PartyName></Party></AccountingSupplierParty><AccountingCustomerParty><Party><PartyName><Name>E2E eigener Betrieb</Name></PartyName></Party></AccountingCustomerParty><LegalMonetaryTotal><TaxInclusiveAmount currencyID="EUR">119.00</TaxInclusiveAmount><PayableAmount currencyID="EUR">119.00</PayableAmount></LegalMonetaryTotal></Invoice>');
     const original = { name: 'incoming-e2e-original.xml', mimeType: 'application/xml', buffer: bytes };
     await page.getByLabel('Foto, PDF- oder XML-Original auswählen', { exact: true }).setInputFiles(original);
