@@ -18,6 +18,7 @@ import { RECORD_SEARCH_GROUPS, RECORD_SEARCH_MAX_LENGTH, RECORD_SEARCH_MAX_PAGE,
 import { startRecordSearch, type RecordSearchState } from '@/lib/record-search/client';
 import { useReviewNavigation } from '@/components/purchases/use-review-navigation';
 import { reviewSessionKey } from '@/components/purchases/incoming-review-history';
+import { useRecordListHandoff } from '@/components/record-search/record-list-search-provider';
 
 type CommandItem = {
   id: string;
@@ -151,6 +152,7 @@ function AuthenticatedCommandPalette() {
   }, [current, pendingSelection, selectionReady]);
   const router = useRouter();
   const requestNavigation = useReviewNavigation();
+  const listHandoff = useRecordListHandoff();
   const { setTheme } = useTheme();
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
@@ -183,8 +185,12 @@ function AuthenticatedCommandPalette() {
     restorePaletteFocus();
     requestNavigation(action);
   };
-  const navigate = (href: string) => closeBeforeNavigation(() => router.push(href));
-  const helpers: CommandHelpers = { navigate, logout: () => closeBeforeNavigation(() => { void signOut({ callbackUrl: "/" }); }), setTheme, close: () => changeOpen(false) };
+  const navigate = (href: string) => closeBeforeNavigation(() => { listHandoff.clear(); router.push(href); });
+  const openMatchingList = (type: RecordSearchType) => {
+    const selectedTerm = term;
+    closeBeforeNavigation(() => { if (listHandoff.begin(type, selectedTerm)) router.push(RECORD_SEARCH_GROUPS[type].href); });
+  };
+  const helpers: CommandHelpers = { navigate, logout: () => closeBeforeNavigation(() => { listHandoff.clear(); void signOut({ callbackUrl: "/" }); }), setTheme, close: () => changeOpen(false) };
   const rememberSelection = (value: string, node: HTMLDivElement | null) => {
     if (!node) { selectionTargets.current.delete(value); return; }
     selectionTargets.current.set(value, node);
@@ -241,8 +247,8 @@ function AuthenticatedCommandPalette() {
               {group.page > 0 && <Command.Item ref={node => rememberSelection(`record-page:${group.type}:back`, node)} value={`record-page:${group.type}:back`} onSelect={() => changePage(group.type, -1)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm text-foreground data-[selected=true]:bg-accent">Vorherige Treffer · {RECORD_SEARCH_GROUPS[group.type].title}</Command.Item>}
               {group.hasMore && group.page < RECORD_SEARCH_MAX_PAGE && <Command.Item value={`record-page:${group.type}:next`} onSelect={() => changePage(group.type, 1)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm text-foreground data-[selected=true]:bg-accent">Weitere Treffer · {RECORD_SEARCH_GROUPS[group.type].title}</Command.Item>}
               {group.hasMore && group.page === RECORD_SEARCH_MAX_PAGE && <p className="px-3 py-2 text-xs">Suchgrenze erreicht · Suchbegriff eingrenzen.</p>}
-              <Command.Item ref={node => rememberSelection(`record-list:${group.type}`, node)} value={`record-list:${group.type}`} onSelect={() => navigate(RECORD_SEARCH_GROUPS[group.type].href)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-xs text-muted-foreground data-[selected=true]:bg-accent">
-                Liste öffnen (ungefiltert) · {RECORD_SEARCH_GROUPS[group.type].title}
+              <Command.Item ref={node => rememberSelection(`record-list:${group.type}`, node)} value={`record-list:${group.type}`} onSelect={() => openMatchingList(group.type)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-xs text-muted-foreground data-[selected=true]:bg-accent">
+                Passende Liste öffnen · {RECORD_SEARCH_GROUPS[group.type].title}
               </Command.Item>
             </Command.Group>
           ))}

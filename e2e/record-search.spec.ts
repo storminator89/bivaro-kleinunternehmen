@@ -64,7 +64,7 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     await input.fill('SYN-SEARCH');
     await expect(dialog.locator('[cmdk-group]').filter({ hasText: 'Datensätze · Kunden' }).getByRole('option')).toHaveCount(7);
     await expect(dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true })).toBeVisible();
-    await expect(dialog.getByRole('option', { name: 'Liste öffnen (ungefiltert) · Kunden', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('option', { name: 'Passende Liste öffnen · Kunden', exact: true })).toBeVisible();
     await expect(dialog).not.toContainText('FOREIGN-PRIVATE');
     await expect(dialog.getByRole('option', { name: 'SYN-SEARCH-OUT', exact: false })).toBeVisible();
     await expect(dialog.getByRole('option', { name: 'SYN-SEARCH-IN.pdf', exact: false })).toBeVisible();

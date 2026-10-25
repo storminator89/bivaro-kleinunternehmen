@@ -3,6 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import styles from "./invoice-workspace.module.css";
+import { useRecordListSearch } from '@/components/record-search/record-list-search-provider';
+import { RecordListSearchNotice } from '@/components/record-search/record-list-search-notice';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,6 +118,7 @@ export function InvoicesTab({
   onDelete,
   isDeleting,
 }: InvoicesTabProps) {
+  const listSearch = useRecordListSearch('outbound');
   const [emailInvoice, setEmailInvoice] = React.useState<Invoice | null>(null);
   const emailReturnFocusRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -209,7 +212,7 @@ export function InvoicesTab({
                           </DropdownMenu>
   );
 
-  const hasActiveFilters = Boolean(filters.searchTerm || filters.paidStatus !== 'all' || filters.dateRange !== 'all');
+  const hasActiveFilters = Boolean(listSearch || filters.searchTerm || filters.paidStatus !== 'all' || filters.dateRange !== 'all');
 
   const renderEmptyState = () => (
     <div className={styles.emptyState}>
@@ -229,12 +232,13 @@ export function InvoicesTab({
 
   return (
     <div className={`invoice-workspace ${styles.workspace}`}>
+      <RecordListSearchNotice type="outbound" searchInputId="invoice-search" onClear={clear => { setFilters({ ...filters, searchTerm: '', paidStatus: 'all', dateRange: 'all' }); clear(); }} />
       {/* Invoices List */}
       <section className={`invoice-ledger ${styles.ledger}`} aria-label="Ihre Rechnungen">
         <div className={styles.ledgerHeader}>
           <div className={`invoice-list-title ${styles.heading}`}>
             <LedgerListHeading icon="nav-invoices" title="Ihre Rechnungen" isLoading={isLoading} isError={isError} total={total} amounts={isLoading || isError ? [] : invoices.map(invoice => invoice.totalAmount ?? 0)} />
-            {(filters.searchTerm || filters.paidStatus !== 'all' || filters.dateRange !== 'all') && (
+            {!listSearch && (filters.searchTerm || filters.paidStatus !== 'all' || filters.dateRange !== 'all') && (
               <Button variant="ghost" size="sm" onClick={() => setFilters({ ...filters, searchTerm: '', paidStatus: 'all', dateRange: 'all' })}><X className="mr-1.5 h-4 w-4" aria-hidden="true" />Filter zurücksetzen</Button>
             )}
           </div>
@@ -246,7 +250,7 @@ export function InvoicesTab({
               <div><dt><Clock3 aria-hidden="true" />Offen auf dieser Seite</dt><dd>{isLoading || isError ? '—' : openCount}</dd></div>
             </dl>
           </section>
-          <div className={`invoice-filter-bar ${styles.filterBar}`}>
+          {!listSearch && <div className={`invoice-filter-bar ${styles.filterBar}`}>
             {/* Search */}
             <div className="space-y-2">
               <Label htmlFor="invoice-search" className="text-xs text-muted-foreground">Suche</Label>
@@ -298,7 +302,7 @@ export function InvoicesTab({
                 <option value="thisYear">Aktuelles Jahr</option>
               </select>
             </div>
-          </div>
+          </div>}
         </div>
 
         {isError && <div role="alert" className={`flex flex-wrap items-center justify-between gap-3 border-b bg-critical-surface p-4 text-sm text-critical-foreground ${styles.errorState}`}><p>Rechnungen konnten nicht geladen werden.</p><Button variant="outline" onClick={() => loadInvoices(page, pageSize)}>Erneut laden</Button></div>}

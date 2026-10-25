@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { invoicePaymentAmounts } from '@/components/payments/payment-presentation';
 import { displayPaymentAmount } from '@/lib/full-payment-form';
 import { Invoice } from "@/types/dashboard";
+import { useRecordDetailFocus } from '@/hooks/use-record-detail-focus';
 
 type InvoiceDetailsModalProps = {
   isOpen: boolean;
@@ -50,12 +51,14 @@ function DetailItem({
 }
 
 export function InvoiceDetailsModal({ isOpen, onClose, invoice, onPaymentHistory }: InvoiceDetailsModalProps) {
+  const focusReturn = useRecordDetailFocus();
   if (!invoice) return null;
   const amounts = invoice.paymentLedger ? invoicePaymentAmounts(invoice.paymentLedger) : null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
+        {...focusReturn}
         showCloseButton={false}
         className="flex max-h-[min(90dvh,52rem)] flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-xl sm:max-w-3xl"
       >

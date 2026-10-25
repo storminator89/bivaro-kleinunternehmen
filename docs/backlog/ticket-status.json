@@ -2697,5 +2697,103 @@
     "mergePerformed": false,
     "deploymentPerformed": false,
     "issueClosed": false
+  },
+  "githubIssue102FilteredListContinuation20261025": {
+    "issue": 102,
+    "status": "draft_publication_authorized_acceptance_pending",
+    "base": "c805e38c519f9d907c01af13430ce3d5926ac702",
+    "runtimeCommit": "08ee6a020017a21a5bb680c075090cc04c45494e",
+    "implementedScope": "Existing palette term to existing exact matching customer/invoice/purchase lists; disposable session-scoped memory only, body-only owned POST reads, explicit filter clear and navigation/session disposal. Existing selected invoice detail DTO is disposed on actual identity changes; programmatic customer/invoice detail close reuses established live-opener checks without stealing newer focus.",
+    "unchangedContracts": [
+      "Existing paged palette",
+      "Tenant/detail checks and dirty-review guards",
+      "Invoice financial DTO/ledger and shared invalidation prefixes",
+      "Schema/backups/external providers",
+      "Historical 160 BV ticket objects and aggregate counts"
+    ],
+    "staticReview": "Independent complete runtime/dependency/private-error review and #148-owner narrow invoice-session-fallback review: no concrete P1/P2; source-only, no functional claim. #148-owner selected-invoice DTO and two-dialog live-opener focus deltas also independently reviewed without concrete P1/P2.",
+    "localChecks": {
+      "eslint": "Final full ESLint passed, zero warnings.",
+      "typescript": "Final standalone TypeScript passed after all runtime changes and owner-transition regression authoring; initial uncapped process exited137 without diagnostics.",
+      "ordinaryBuild": "Prebuild and Turbopack compile passed (39.2s); integrated TypeScript phase killed/exit137, postbuild not reached; no additional local retry or check bypass.",
+      "functionalUnitApiBrowser": "not run; prohibited"
+    },
+    "authoredCoverage": [
+      "filtered-list-contract.test.ts",
+      "filtered-list-search.test.ts",
+      "record-list-handoff.test.ts",
+      "record-list-provider-lifecycle.test.ts",
+      "command-palette-navigation-lifecycle.test.ts",
+      "record-search-filtered-lists.spec.ts",
+      "invoice-detail-session-selection.test.ts",
+      "record-detail-focus.test.ts",
+      "navigation-dashboard-controls.test.ts isolated collaborator mock only"
+    ],
+    "remaining": [
+      "Publish exact-tree draft PR",
+      "Complete exact-head hosted GitHub CI/browser/PDF acceptance and actual image inspection",
+      "Preserve both shared dashboard contracts only on later authorized #148 integration"
+    ],
+    "evidence": [
+      "docs/testing/record-search-filtered-lists.md"
+    ],
+    "githubWrites": false,
+    "newCiRuns": false,
+    "merged": false,
+    "deployed": false,
+    "issueClosed": false,
+    "authoredHostedE2ECases": 21,
+    "publicationAuthorizedAt": "2026-10-25T16:48:45Z",
+    "publicationScope": "Draft PR plus complete hosted GitHub CI/browser/PDF acceptance; no local functional execution, merge, deployment, issue closure or unrelated #148 runtime.",
+    "finalOutcomesLocation": "Draft PR body at exact verified head and workflow run links; no documentation-only rerun loop",
+    "sitesRequirementCorrection": "Prior Sites-only wording was erroneous; ForgeCommunity rule does not apply to Bivaro."
+  },
+  "githubIssue102After148IntegrationCheckpoint20261025": {
+    "observedAt": "2026-10-25T18:29:00Z",
+    "issue": 102,
+    "pullRequest": 150,
+    "status": "isolated_head_accepted_local_combined_preparation_only_waiting148_postmain_unlock",
+    "isolatedHead": "de2f2dd091f313ead482f2d82224c6c3eae7eb90",
+    "isolatedTree": "5c6ec53000b19f46553d78d98d034d953906e97d",
+    "isolatedHostedResults": {
+      "CI": 40218375376,
+      "browser": 40218375348,
+      "pdfA": 40218375308,
+      "container": 40218375397,
+      "allFourWorkflows": "completed success",
+      "unitTestsPassed": 4409,
+      "unchangedUnitSkips": 20,
+      "browserCasesPassed": 193,
+      "browserRetries": 0,
+      "actualPngProofsVerified": 244,
+      "actualPngBytes": 24133350,
+      "imagesActuallyViewed": 23
+    },
+    "merged148Main": "2979b5925b0d84cf6759879ccf2176e37693e6af",
+    "merged148Tree": "76119eb57fb11781e94794e543c3236699d53de8",
+    "combinedScope": "Local-only integration preserves all148 manual financial runtime/DTO/actions/refresh/session and review guards;102 adds only previously reviewed invoice selection/query hunks. Full accepted247 workflow is byte-identical prefix before nine new required captures.",
+    "preservedMainWorkflowBytes": 95530,
+    "preservedMainWorkflowSha256": "21cbc54b161498b5a3b18e59e91d8dcc562fc3fc350e9a40cdb87d1b9066cca9",
+    "combinedImageNames": 256,
+    "combinedOutputMiB": 42,
+    "combinedHostedVerification": "Not started; awaits explicit148 postmain unlock and exact combined source review. Isolated-head green is not combined acceptance.",
+    "mergeAuthorization": "Conditional sequential148 then150 then151, after each complete acceptance and main postchecks; no separate deployment or issue closure.",
+    "localFunctionalExecution": false,
+    "combinedPublicationPerformed": false,
+    "mergePerformed": false,
+    "deploymentPerformed": false,
+    "issueClosed": false,
+    "evidence": [
+      "docs/testing/record-search-filtered-lists.md",
+      "https://github.com/storminator89/bivaro-kleinunternehmen/pull/150"
+    ],
+    "combinedLocalStaticChecks": {
+      "nextRouteTypegen": "passed; no server or build",
+      "fullTypescript": "passed exit0, incremental false",
+      "fullEslint": "passed exit0, zero warnings",
+      "diffAndPreservation": "passed; all68 non-shared148 paths byte-identical, all18 prior status keys unchanged, full247workflow prefix byte-identical",
+      "ordinaryLocalBuild": "not rerun; full hosted build required after unlock",
+      "localFunctionalExecution": "none"
+    }
   }
 }

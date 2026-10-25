@@ -8,7 +8,8 @@ const marker = '      # Independent manual-financial-record partition:';
 const start = workflow.indexOf(marker);
 // Deliberately no trim/line-ending normalization: every accepted byte is bound.
 const accepted = workflow.slice(0, start);
-const partition = workflow.slice(start);
+const nextPartition = workflow.indexOf('\n      # Independent filtered-list search partition:', start);
+const partition = workflow.slice(start, nextPartition < 0 ? undefined : nextPartition);
 const browser = readFileSync('e2e/manual-financial-records.spec.ts', 'utf8');
 const account = readFileSync('e2e/helpers/payment-adjustments.ts', 'utf8');
 const codec = readFileSync('scripts/lossless_evidence_png.py', 'utf8');
@@ -32,7 +33,9 @@ describe('bounded manual-financial-record hosted viewport evidence', () => {
     expect(namesIn(partition).sort()).toEqual([...captures].sort());
     expect(new Set(captures).size).toBe(12);
     expect(namesIn(partition).some(name => namesIn(accepted).includes(name))).toBe(false);
-    expect(namesIn(workflow)).toHaveLength(247); expect(new Set(namesIn(workflow)).size).toBe(247);
+    expect(namesIn(accepted + partition)).toHaveLength(247); expect(new Set(namesIn(accepted + partition)).size).toBe(247);
+    expect(namesIn(workflow)).toHaveLength(256); expect(new Set(namesIn(workflow)).size).toBe(256);
+    expect(workflow).toContain('total output cap is 42 MiB');
     for (const value of ['all accepted 235 names and 37 MiB remain unchanged',
       'limit = 3 * 1024 * 1024', 'per_file_input_limit = 1 * 1024 * 1024',
       'total > 6 * 1024 * 1024', 'remaining_input = 6 * 1024 * 1024 - actual_input_bytes',

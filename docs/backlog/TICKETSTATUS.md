@@ -785,3 +785,70 @@ Der nächste veröffentlichte Head benötigt erneut alle Hosted-Gates und finale
 Bildkontrolle; keine Abnahme oder Schließung. Historische 160 Ticketobjekte,
 Statussummen und bisherige Checkpoints bleiben unverändert. Endergebnisse folgen
 im PR-Text, ohne reine Dokumentationsschleife.
+
+## Separater GitHub-#102-Listenfortsetzungscheckpoint vom 25.10.2026
+
+Runtime bis lokalem Runtime-Commit `08ee6a02` ergänzt die bereits gelieferte Palette um
+„Passende Liste öffnen“: flüchtige, sitzungsgebundene Suchtextübergabe an die
+bestehenden Kunden-/Rechnungs-/Belegeingangslisten; identischer enger
+Literal-/Typ-/Feldvertrag, lesende body-only POST-Transporte, ausdrückliches
+Löschen und disposal bei Navigation/History/Sessionwechsel. Die betroffene
+Rechnungsdetail-Auswahl wird ebenfalls identitätsgebunden entsorgt; Kunden-/
+Rechnungsdetails geben Fokus ausschließlich an noch nutzbare Quellen zurück. Keine Finanz-/
+Schema-/Backup-/Anbieteränderung. Rechnungs-Ledgerprojektion und sämtliche
+bisherigen Queryinvalidierungen bleiben erhalten. Alle 160 historischen
+BV-Ticketobjekte/Summen sowie früheren Checkpoints bleiben unverändert;
+GitHub #102 ist nicht BV-102.
+
+Unabhängiger statischer Runtime-Review ohne konkrete P1/P2; lokale ESLint- und
+TypeScriptprüfung nach Dependencyfix bestanden. Funktions-/Unit-/API-/Browser-
+verträge und echte Hosted-E2E-Abdeckung wurden nur verfasst, nicht lokal
+abgespielt. Keine neuen GitHub-Schreibaktionen, CI-Läufe, Veröffentlichung,
+Merge-/Deploymentaktion oder Ticket-Schließung. Gewöhnliche Buildkompilierung bestand; integrierte Typephase endete mit
+Exit137/Killed, Gesamtbuild bleibt offen. Finale separate Types/ESLint
+bestanden; vollständige gehostete GitHub-Funktions-/Bildabnahme steht aus.
+Die Nutzerfreigabe vom 25.10.2026, 16:48:45 UTC erlaubt nun Entwurfs-PR und
+vollständige GitHub-CI/Browser-/PDF-Prüfung, nicht Merge/Deployment oder
+Ticket-Schließung. Die frühere Sites-Formulierung war irrtümlich und wird
+nicht als Bivaro-Abnahmevoraussetzung fortgeschrieben. Der bestehende
+235-Bild-Workflow wird nur durch neun zusätzliche strikte Pflichtbilder
+ergänzt; #148-Runtime bleibt separat. Endergebnisse folgen am exakten
+Head im PR-Text, ohne erneute reine Dokumentations-Commit-Schleife.
+[Vertrag, Coverage und verbleibende Gates](../testing/record-search-filtered-lists.md).
+
+
+## 25.10.2026, 18:29 — #102: isolierter Entwurf abgenommen, gemeinsame Integration lokal vorbereitet
+
+[#150](https://github.com/storminator89/bivaro-kleinunternehmen/pull/150) auf
+`de2f2dd0` / Tree `5c6ec530` besteht vollständig: 4409 Unitfälle, 20 unveränderte
+Skips, gewöhnlicher CI-Build, Lint/Types/Security, beide PDF-A- und Container-
+Architekturen und alle 193 Browserfälle (14,3 Minuten, 0 Retries). Alle 244
+tatsächlichen PNGs in elf exakten Partitionen stimmen in Datei-, vollständigen
+Pixel- und Nicht-IDAT-Metadatenhashes sowie Run-/Head-/Archivprovenienz überein;
+24.133.350 PNG-Bytes liegen unter 39 MiB. Neun neue und vierzehn betroffene alte
+Bilder wurden tatsächlich angesehen, ohne neue blockierende sichtbare Regression.
+Der erste fehlgeschlagene Head und die eng begrenzte Test-/Evidenz-Recovery bleiben
+im PR nachvollziehbar; keine Runtime-/Guard-/Runner-/Retry-/Skip-Abschwächung.
+
+#148 wurde separat nach Main `2979b592` / Tree `76119eb5` gemergt; dessen
+Main-Nachkontrollen laufen noch. Nur lokale gemeinsame Vorbereitung ist jetzt
+erlaubt: alle manuellen Finanz-DTOs, Aktionen, Refresh-/Session-/Reviewverträge
+bleiben erhalten, die #102-Rechnungshunks bleiben eng begrenzt. Der vollständige
+95.530-Byte-Workflow mit 247 Namen / 40 MiB bleibt bytegleich vor neun neuen
+Pflichtbildern erhalten; zusammen 256 eindeutige Namen / 42 MiB. Ursprüngliche
+235-Namen- und manuelle Zwölf-Bild-Gates bleiben bedeutungsvoll gebunden.
+
+Die isolierte Abnahme ist **keine gemeinsame Abnahme**. Veröffentlichung und
+neue kombinierte Hosted-CI warten auf ausdrücklichen #148-Postmain-Unlock und
+unabhängigen gemeinsamen Quellreview. Die neue Mergefreigabe gilt bedingt und
+sequenziell #148 → #150 → #151, jeweils erst nach vollständiger Abnahme und
+Nachkontrollen; kein separates Deployment oder Ticket-Abschluss. Keine lokalen
+Funktions-/Unit-/API-/Browsertests. Historische Ticketobjekte, Summen und frühere
+Checkpoints bleiben unverändert; exakte spätere Endergebnisse folgen im PR.
+
+Gemeinsame lokale Route-Typgenerierung, vollständige eigenständige TypeScript-
+und ESLintprüfung bestehen (Exit0, keine Warnungen). Kein Server, Build oder
+Funktions-/Testlauf wurde dafür gestartet. 68 nicht geteilte #148-Pfade bleiben
+bytegleich, alle 18 bisherigen Statusschlüssel unverändert; der gesamte
+247-Bild-Workflowpräfix ist bytegleich erhalten. Kombinierte Hosted-Abnahme
+bleibt ausdrücklich ausstehend.

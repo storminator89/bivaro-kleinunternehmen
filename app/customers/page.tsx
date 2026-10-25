@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ServiceWorkbench } from '@/components/customers/service-workbench';
@@ -35,6 +35,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ClipboardList, History, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useRecordListSearch } from '@/components/record-search/record-list-search-provider';
+import { RecordListSearchNotice } from '@/components/record-search/record-list-search-notice';
+import { fetchRecordList } from '@/lib/record-search/list-handoff';
+import { useRecordDetailFocus } from '@/hooks/use-record-detail-focus';
 
 type Customer = {
   id: number;
@@ -72,6 +76,7 @@ type CustomerModalProps = {
 };
 
 const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps) => {
+  const focusReturn = useRecordDetailFocus();
   const [formData, setFormData] = useState<Omit<Customer, 'id' | 'createdAt'> & { id?: number }>(customer || {
     name: '',
     contactPerson: '',
@@ -113,7 +118,7 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer }: CustomerModalProps
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={styles.customerDialog}>
+      <DialogContent {...focusReturn} className={styles.customerDialog}>
         <DialogHeader className={styles.dialogHeader}>
           <DialogTitle className="text-xl font-semibold">{customer ? 'Kunden bearbeiten' : 'Neuer Kunde'}</DialogTitle>
           <DialogDescription className="sr-only">
@@ -271,14 +276,18 @@ export default function CustomersPage() {
 function ScopedCustomersWorkspace() {
   const { data: session, status } = useSession();
   const params = useSearchParams();
+  const listSearch = useRecordListSearch('customer');
   // A selected-ID destination always gets a fresh owned-list read, including
   // client-side navigation from the directory and Back/Forward.
-  return <CustomersWorkspace key={`${status}:${session?.user?.id}:${session?.user?.sessionVersion}:${params.get('customer')}`} />;
+  return <CustomersWorkspace key={`${status}:${session?.user?.id}:${session?.user?.sessionVersion}:${params.get('customer')}:${listSearch?.revision ?? 'regular'}`} />;
 }
 
 function CustomersWorkspace() {
   const params = useSearchParams();
   const selectedId = params.get('customer');
+  const listSearch = useRecordListSearch('customer');
+  const listQuery = listSearch?.query;
+  const request = useRef<AbortController | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -289,28 +298,39 @@ function CustomersWorkspace() {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController(); request.current = controller;
     setIsLoadingCustomers(true);
     setLoadError(null);
     try {
-      const response = await fetch('/api/customers', { cache: 'no-store' });
+      if (listQuery !== undefined) {
+        const data = await fetchRecordList<Customer[]>('customer', listQuery, {}, controller.signal);
+        if (!controller.signal.aborted) setCustomers(data);
+        return;
+      }
+      const response = await fetch('/api/customers', { cache: 'no-store', signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (response.ok) {
         const data = await response.json();
-        setCustomers(data);
+        if (!controller.signal.aborted) setCustomers(data);
       } else {
         setLoadError('Kunden konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
       }
     } catch (error) {
-      console.error('Error fetching customers:', error);
-      setLoadError('Kunden konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
+      if (!controller.signal.aborted) {
+        if (listQuery === undefined) console.error('Error fetching customers:', error);
+        setLoadError(listQuery !== undefined && error instanceof Error ? error.message : 'Kunden konnten nicht geladen werden. Bitte versuchen Sie es erneut.');
+      }
     } finally {
-      setIsLoadingCustomers(false);
+      if (!controller.signal.aborted) setIsLoadingCustomers(false);
     }
-  };
+  }, [listQuery]);
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
+    return () => request.current?.abort();
+  }, [fetchCustomers]);
 
   const handleSaveCustomer = async (customerData: Omit<Customer, 'id' | 'createdAt'> & { id?: number }) => {
     try {
@@ -412,6 +432,8 @@ function CustomersWorkspace() {
         </div>
       </div>
 
+      <RecordListSearchNotice type="customer" searchInputId="customer-search" />
+
       {selectedId !== null && <div className={styles.selectedCustomer}>
         <p>{!isLoadingCustomers && !loadError && !filteredCustomers.length ? 'Kunde nicht gefunden oder nicht verfügbar.' : 'Ausgewählter Kunde'}</p>
         <Button variant="outline" asChild><Link href="/customers">Alle Kunden anzeigen</Link></Button>
@@ -419,7 +441,7 @@ function CustomersWorkspace() {
 
       <section className={`customer-directory ${styles.directorySurface}`} aria-label="Kundenverzeichnis">
         <div className={styles.directoryToolbar}>
-          <div className={styles.searchField}>
+          {!listSearch && <div className={styles.searchField}>
             <Label htmlFor="customer-search">Kunden suchen</Label>
             <div className={styles.searchInput}>
               <Search aria-hidden="true" />
@@ -431,7 +453,7 @@ function CustomersWorkspace() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-          </div>
+          </div>}
           <p className={styles.resultCount}>
             Zeige {isLoadingCustomers || loadError ? '—' : filteredCustomers.length} von {isLoadingCustomers || loadError ? '—' : customers.length} Einträgen
           </p>
@@ -523,8 +545,8 @@ function CustomersWorkspace() {
             </div>
           </> : <div className={styles.empty}>
             <h2>Keine Kunden gefunden</h2>
-            {searchTerm && <p>Suche ändern.</p>}
-            {!searchTerm && selectedId === null && <Button type="button" onClick={openAddModal} variant="outline">Ersten Kunden anlegen</Button>}
+            {(searchTerm || listSearch) && <p>{listSearch ? 'Suchfilter löschen oder einen anderen Suchbegriff in der Palette wählen.' : 'Suche ändern.'}</p>}
+            {!searchTerm && !listSearch && selectedId === null && <Button type="button" onClick={openAddModal} variant="outline">Ersten Kunden anlegen</Button>}
           </div>}
         </>}
       </section>

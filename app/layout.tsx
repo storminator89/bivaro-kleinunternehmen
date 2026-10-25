@@ -9,6 +9,7 @@ import { AppShell } from "@/components/app-shell";
 import { Toaster } from "@/components/ui/toaster";
 import { RouteProgress } from "@/components/route-progress";
 import { IncomingReviewHistoryBoundary } from "@/components/purchases/incoming-review-history-boundary";
+import { RecordListSearchProvider } from "@/components/record-search/record-list-search-provider";
 
 export const metadata: Metadata = {
   title: "Bivaro – Rechnungen und Belege im Griff",
@@ -64,7 +65,9 @@ export default async function RootLayout({
             <Suspense fallback={null}>
               <RouteProgress />
             </Suspense>
-            <AppShell>{children}</AppShell>
+            <Suspense fallback={null}>
+              <RecordListSearchProvider><AppShell>{children}</AppShell></RecordListSearchProvider>
+            </Suspense>
             <Toaster />
           </ThemeProvider>
         </AuthProvider>

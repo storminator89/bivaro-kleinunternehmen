@@ -25,6 +25,8 @@ vi.mock('react', async importOriginal => {
   };
   return { ...actual, default: { ...actual, useState, useRef, useLayoutEffect }, useState, useRef, useLayoutEffect, useEffect: vi.fn() };
 });
+// This manual hook harness owns email focus only; list-provider lifecycle has its own suite.
+vi.mock('@/components/record-search/record-list-search-provider', () => ({ useRecordListSearch: () => null }));
 
 import { EmailPreviewDialog } from '@/components/dashboard/email-preview-dialog';
 import { InvoicesTab } from '@/components/dashboard/tabs/invoices-tab';
