@@ -710,3 +710,62 @@ veröffentlichten kombinierten Heads** sind offen. Dieser einmalige additive
 Checkpoint behauptet weder diese Abnahme noch Veröffentlichung seiner lokalen
 Integration. Endergebnisse folgen ausschließlich im PR-Text, ohne erneute reine
 Dokumentations-Commit-Schleife. [Detaillierte Evidenz und verbleibende Gates](../testing/record-search-continuation.md).
+
+
+## Separater GitHub-#47-Checkpoint vom 25.10.2026, 16:57 UTC
+
+[GitHub #47](https://github.com/storminator89/bivaro-kleinunternehmen/issues/47)
+ist nicht BV-047. Der auf akzeptiertem Main `c805e38c` vorbereitete Kandidat
+`66bd20026568a53830f8f7c13b1d21f8d7eef783` / Tree
+`ef10988daae2b5e0651e802e84522649946cba57` ist **teilweise implementiert, noch
+nicht veröffentlicht oder hosted abgenommen**. Alle 160 historischen Tickets,
+Statussummen und vorstehenden Checkpoints bleiben unverändert.
+
+Neu ist ein ausdrücklich ausgelöster Mahnentwurf als PDF-Download neben TXT.
+Der bestehende Restbetragsleser bleibt maßgeblich; Vorschauzeit und exakte
+Dokumentrevision verlangen bei geändertem Betrag/Inhalt oder abgelaufener
+Prüfung eine neue Vorschau. Keine neue Forderung, Zahlungs-/Journal-/Outbox-/
+SMTP-Schreibaktion, Schema- oder Backupänderung. Nur manuelle Gebühr; kein
+Versandnachweis, keine PDF/A-, steuerliche oder rechtliche Zertifizierung.
+Nicht darstellbare Schriftzeichen werden klar abgelehnt; TXT bleibt verfügbar.
+
+Geänderte Dateien lint- und vollständig typgeprüft; Python-AST und Diffprüfung
+bestanden. Der gewöhnliche lokale Build ist **nicht bestanden**: zunächst
+Abhängigkeits-Symlinkfehler, danach Exit 137; ein begrenzter Wiederholungsversuch
+endete in der Typprüfungsphase ohne konkrete Diagnose. Keine weitere lokale
+Buildwiederholung und keine lokalen Funktions-/Unit-/API-/Browser-/PDF-Läufe.
+Runtime und neue Abnahmequellen unabhängig ohne konkreten P1/P2 geprüft.
+Verfasste Fälle sind keine bestandenen Tests.
+
+Der vollständige akzeptierte **235-Bilder-Workflowpräfix bleibt bytegleich**.
+Eine unabhängige Pflichtpartition verlangt zwei echte PDFs, vier native
+UI-Bilder und sämtliche gerenderten Seiten (höchstens acht je PDF), mit
+14 MiB Gesamtlese- und 8 MiB Ausgabegrenze sowie eintägiger Aufbewahrung.
+Es gibt bei Autorschaft noch keine tatsächliche PDF-/Bildabnahme.
+
+Entwurfs-PR sowie vollständige gehostete CI-/Browser-/PDF-Prüfung sind
+freigegeben, nicht Merge oder Deployment. Exakte-Head-Ergebnisse, tatsächliche
+PDF-Text-/Layout-/UI-Prüfung, Zahlungsnebenwirkungsfreiheit und echte
+Frische-/Konflikt-/Tastatur-/Fokusnachweise bleiben offen. Der breitere
+Korrekturbeleg-/Teilzahlungs-SMTP-Umfang ist nicht erledigt. Endergebnisse
+folgen im späteren PR-Text ohne reine Dokumentations-Commit-Schleife.
+[Vertrag, tatsächliche Prüfgrenzen und verfasste Nachweise](../testing/issue47-reminder-pdf-download.md).
+
+
+### Tatsächlicher Abschluss GitHub #130 — 25.10.2026, 16:58 UTC
+
+Die früheren datierten #144-/#130-Entwurfsstände oben bleiben unverändert.
+Nach #144, der #147-Abfragekorrektur und der #149-Testharnesskorrektur ist
+Main `c805e38c519f9d907c01af13430ce3d5926ac702` tatsächlich nachgeprüft:
+[CI](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40206286650)
+**4359 bestanden / 20 übersprungen**,
+[Browser](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40206286702)
+**172 bestanden** und
+[Container](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40206286757)
+erfolgreich. Alle **235 PNGs / 10 ZIPs / 23.513.188 Bytes** vollständig gegen
+Datei-, Pixel- und Metadatenproofs geprüft; betroffene Supplier-/Simulations-/
+README-Bilder tatsächlich angesehen. [GitHub #130](https://github.com/storminator89/bivaro-kleinunternehmen/issues/130)
+wurde nach eigener ausdrücklicher Freigabe am **25.10.2026, 16:04:22 UTC**
+tatsächlich als completed geschlossen. **#59 bleibt offen.** Dieser Zusatz
+ändert kein historisches Ticket und behauptet keine Deployment-/Rechtsfreigabe
+oder Abnahme des getrennten, noch ungeprüften #47-Kandidaten.

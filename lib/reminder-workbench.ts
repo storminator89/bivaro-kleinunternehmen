@@ -11,7 +11,7 @@ export class ReminderWorkbenchError extends Error {
   constructor(message: string, readonly status = 400, readonly code = 'INVALID_REMINDER') { super(message); }
 }
 
-export type ReminderOptions = { reminderLevel?: unknown; fee?: unknown; dueDays?: unknown; notes?: unknown; expectedBalanceVersion?: unknown; idempotencyKey?: unknown };
+export type ReminderOptions = { reminderLevel?: unknown; fee?: unknown; dueDays?: unknown; notes?: unknown; expectedBalanceVersion?: unknown; idempotencyKey?: unknown; previewAsOf?: unknown; expectedDocumentVersion?: unknown };
 export type ReminderBalanceSnapshot = {
   version: 1;
   balanceVersion: string;
@@ -69,6 +69,27 @@ export function assertReminderBalance(snapshot: ReminderBalanceSnapshot, expecte
   }
 }
 
+/** A document is a dated snapshot, not a promise that its balance stays current. */
+function previewAsOf(value: unknown): Date {
+  if (value === undefined) return new Date();
+  const parsed = typeof value === 'string' ? new Date(value) : null;
+  const now = Date.now();
+  if (!parsed || !Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value
+    || parsed.getTime() > now || now - parsed.getTime() > 24 * 60 * 60 * 1000) {
+    throw new ReminderWorkbenchError('Der Datenstand des Entwurfs ist ungültig oder älter als 24 Stunden. Bitte eine neue Vorschau laden.', 409, 'REMINDER_PREVIEW_EXPIRED');
+  }
+  return parsed;
+}
+
+export function assertReminderDocument(preview: { documentVersion: string }, expected: unknown) {
+  if (typeof expected !== 'string' || !/^[a-f0-9]{64}$/u.test(expected)) {
+    throw new ReminderWorkbenchError('Bitte den vollständigen Mahnentwurf zuerst prüfen.', 409, 'DOCUMENT_CONFIRMATION_REQUIRED');
+  }
+  if (preview.documentVersion !== expected) {
+    throw new ReminderWorkbenchError('Der Mahnentwurf hat sich geändert. Bitte eine neue Vorschau laden und erneut bestätigen.', 409, 'REMINDER_DOCUMENT_CHANGED');
+  }
+}
+
 export function normalizeReminderOptions(options: ReminderOptions, defaultLevel = 1) {
   const reminderLevel = options.reminderLevel === undefined ? defaultLevel : Number(options.reminderLevel);
   const dueDays = options.dueDays === undefined ? 14 : Number(options.dueDays);
@@ -114,7 +135,7 @@ export function composeReminderText(invoiceNumber: string, balance: ReminderBala
   ].join('\n');
 }
 
-async function previewInTransaction(tx: Prisma.TransactionClient, userId: string, invoiceId: number, input: ReminderOptions, requireConfirmation: boolean) {
+async function previewInTransaction(tx: Prisma.TransactionClient, userId: string, invoiceId: number, input: ReminderOptions, requireConfirmation: boolean, asOf = new Date()) {
   const invoice = await ownedReminderInvoice(tx, userId, invoiceId);
   if (invoice.type !== 'INVOICE' || !['DRAFT', 'SENT'].includes(invoice.status)) throw new ReminderWorkbenchError('Mahnungen können nur für offene Rechnungen erfasst werden', 409, 'INVOICE_NOT_OPEN');
   let state: InvoicePaymentState;
@@ -124,7 +145,7 @@ async function previewInTransaction(tx: Prisma.TransactionClient, userId: string
   assertReminderBalance(balance, input.expectedBalanceVersion, requireConfirmation || input.expectedBalanceVersion !== undefined);
   const options = normalizeReminderOptions(input, Math.min((invoice.reminders[0]?.reminderLevel ?? 0) + 1, 4));
   const settings = await tx.settings.findUnique({ where: { userId }, select: { companyName: true } });
-  const dueDate = new Date(); dueDate.setUTCDate(dueDate.getUTCDate() + options.dueDays);
+  const dueDate = new Date(asOf); dueDate.setUTCDate(dueDate.getUTCDate() + options.dueDays);
   const invoiceNumber = invoice.invoiceNumber || invoice.fileName;
   return { invoice, balance, options, dueDate, subject: `${labels[options.reminderLevel]} zu Rechnung ${invoiceNumber}`,
     text: composeReminderText(invoiceNumber, balance, options, settings?.companyName || '[Ihr Firmenname]', dueDate),
@@ -134,12 +155,20 @@ async function previewInTransaction(tx: Prisma.TransactionClient, userId: string
 
 export async function previewReminder(userId: string, invoiceId: number, input: ReminderOptions = {}, requireConfirmation = false) {
   return inTransaction(async tx => {
-    const preview = await previewInTransaction(tx, userId, invoiceId, input, requireConfirmation);
-    return { invoiceId, invoiceNumber: preview.invoice.invoiceNumber || preview.invoice.fileName,
+    const asOf = previewAsOf(input.previewAsOf);
+    const preview = await previewInTransaction(tx, userId, invoiceId, input, requireConfirmation, asOf);
+    const document = { invoiceId, invoiceNumber: preview.invoice.invoiceNumber || preview.invoice.fileName,
       ...preview.balance, reminderLevel: preview.options.reminderLevel, feeCents: preview.options.feeCents,
       dueDate: preview.dueDate.toISOString(), subject: preview.subject, text: preview.text, recipient: preview.recipient,
+      previewAsOf: asOf.toISOString(),
+    };
+    // Recomputed only from owner-bound server data. A revision detects changed
+    // text/settings/options as well as payment evidence; it is not a signature.
+    const result = { ...document, documentVersion: hash(['reminder-document-v1', document]),
       automaticDelivery: false, partialEmailDeliveryAvailable: false,
     };
+    if (input.expectedDocumentVersion !== undefined) assertReminderDocument(result, input.expectedDocumentVersion);
+    return result;
   });
 }
 

@@ -38,6 +38,9 @@ on:
       - 'app/api/invoices/render/**'
       - 'public/fonts/invoice/**'
       - 'lib/__tests__/fixtures/incoming-validation/**'
+      - 'lib/reminder-pdf.ts'
+      - 'app/api/reminders/download-pdf/**'
+      - 'e2e/reminder-pdf-download.spec.ts'
       - '.github/workflows/container-runtime.yml'
   push:
     branches: [main]
@@ -77,6 +80,9 @@ on:
       - 'app/api/invoices/render/**'
       - 'public/fonts/invoice/**'
       - 'lib/__tests__/fixtures/incoming-validation/**'
+      - 'lib/reminder-pdf.ts'
+      - 'app/api/reminders/download-pdf/**'
+      - 'e2e/reminder-pdf-download.spec.ts'
       - '.github/workflows/container-runtime.yml'
 permissions:
   contents: read

@@ -14,6 +14,7 @@ type Preview = {
   invoiceId: number; invoiceNumber: string; balanceVersion: string; totalCents: string;
   paidCents: string; recipient: string | null; openCents: string; feeCents: string; subject: string; text: string;
   reminderLevel: number; paymentHistory: { amountCents: string; paidAt: string; reference: string }[];
+  previewAsOf: string; documentVersion: string;
 };
 const euro = (cents: string) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(cents) / 100);
 
@@ -29,11 +30,14 @@ export function ReminderWorkbenchDialog({ invoice, onClose, onRecorded }: {
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const key = useRef<string | null>(null);
+  // This dialog is opened programmatically rather than by DialogTrigger.
+  const returnFocus = useRef<HTMLElement | null>(typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const options = { fee, dueDays, notes: notes || null };
-  const invalidate = () => { setPreview(null); setConfirmed(false); setError(null); key.current = null; };
+  const invalidate = () => { setPreview(null); setConfirmed(false); setError(null); setStatus(null); key.current = null; };
   const loadPreview = async () => {
-    setBusy(true); setError(null); setConfirmed(false); setPreview(null); key.current = null;
+    setBusy(true); setError(null); setStatus(null); setConfirmed(false); setPreview(null); key.current = null;
     try {
       const response = await fetch('/api/reminders/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoiceId: invoice.id, ...options }) });
       const data = await response.json();
@@ -42,17 +46,18 @@ export function ReminderWorkbenchDialog({ invoice, onClose, onRecorded }: {
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Restbetrag konnte nicht geprüft werden.'); }
     finally { setBusy(false); }
   };
-  const act = async (action: 'download' | 'record' | 'mail') => {
+  const act = async (action: 'download' | 'pdf' | 'record' | 'mail') => {
     if (!preview || !confirmed || busy) return;
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setStatus(null);
     try {
-      const response = await fetch(action === 'download' ? '/api/reminders/download' : action === 'mail' ? '/api/reminders/preview' : '/api/reminders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      const response = await fetch(action === 'pdf' ? '/api/reminders/download-pdf' : action === 'download' ? '/api/reminders/download' : action === 'mail' ? '/api/reminders/preview' : '/api/reminders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         invoiceId: invoice.id, ...options, reminderLevel: preview.reminderLevel,
         expectedBalanceVersion: preview.balanceVersion, idempotencyKey: key.current,
+        ...(action !== 'record' ? { previewAsOf: preview.previewAsOf, expectedDocumentVersion: preview.documentVersion } : {}),
       }) });
       if (!response.ok) {
         const data = await response.json();
-        if (['PAYMENT_STATE_CHANGED', 'PAYMENT_REVIEW_REQUIRED', 'INVOICE_NOT_OPEN'].includes(data.code)) { setPreview(null); setConfirmed(false); key.current = null; }
+        if (response.status === 409) { setPreview(null); setConfirmed(false); key.current = null; }
         throw new Error(data.error || 'Die Aktion konnte nicht abgeschlossen werden.');
       }
       if (action === 'mail') {
@@ -60,31 +65,34 @@ export function ReminderWorkbenchDialog({ invoice, onClose, onRecorded }: {
         if (fresh.paidCents !== '0') throw new Error('Nach Zahlungseingang bitte den Restbetrags-Textentwurf verwenden.');
         // Existing zero-payment manual compose action only; the user sends in their mail client.
         window.location.href = `mailto:${encodeURIComponent(fresh.recipient || '')}?subject=${encodeURIComponent(fresh.subject)}&body=${encodeURIComponent(fresh.text)}`;
-      } else if (action === 'download') {
+      } else if (action === 'download' || action === 'pdf') {
         const url = URL.createObjectURL(await response.blob());
-        const link = document.createElement('a'); link.href = url; link.download = `mahnentwurf-${invoice.id}.txt`;
+        const link = document.createElement('a'); link.href = url; link.download = `mahnentwurf-${invoice.id}.${action === 'pdf' ? 'pdf' : 'txt'}`;
         document.body.appendChild(link); link.click(); link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setStatus(`${action === 'pdf' ? 'PDF' : 'Text'}-Download vorbereitet. Keine Nachricht versendet und keine Mahnung intern erfasst.`);
       } else { await onRecorded(); onClose(); }
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Die Aktion konnte nicht abgeschlossen werden.'); }
     finally { setBusy(false); }
   };
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <DialogContent className={styles.dialog}>
+    <DialogContent className={styles.dialog} onCloseAutoFocus={event => { if (returnFocus.current?.isConnected) { event.preventDefault(); returnFocus.current.focus(); } }}>
       <DialogHeader className={styles.dialogHeader}>
         <DialogTitle>{invoice.nextReminderLevelLabel} vorbereiten</DialogTitle>
         <DialogDescription>Rechnung {invoice.invoiceNumber || invoice.fileName} · aktueller Restbetrag statt ursprünglicher Forderung</DialogDescription>
       </DialogHeader>
       <div className={styles.dialogBody}>
-        <Alert className={styles.notice}><FileCheck2 aria-hidden="true" className="h-4 w-4" /><AlertTitle>Sie behalten die Kontrolle</AlertTitle><AlertDescription>Es wird keine E-Mail automatisch versendet. Vorschau und Textdownload versenden keine Nachricht und buchen keine Zahlung. Speichern dokumentiert nur die interne Erfassung. Für Teilzahlungen ist der direkte E-Mail-Versand hier nicht freigeschaltet.</AlertDescription></Alert>
+        <Alert className={styles.notice}><FileCheck2 aria-hidden="true" className="h-4 w-4" /><AlertTitle>Sie behalten die Kontrolle</AlertTitle><AlertDescription>Es wird keine E-Mail automatisch versendet. Vorschau, PDF- und Textdownload versenden keine Nachricht und buchen keine Zahlung. Speichern dokumentiert nur die interne Erfassung. Für Teilzahlungen ist der direkte E-Mail-Versand hier nicht freigeschaltet.</AlertDescription></Alert>
         <div className={styles.draftFields}>
           <div className="space-y-2"><Label htmlFor="reminder-fee">Mahngebühr (EUR, manuell)</Label><Input id="reminder-fee" type="number" step="0.01" min="0" value={fee} disabled={busy} onChange={e => { setFee(e.target.value); invalidate(); }} /><p className="text-xs text-muted-foreground">Standard 0 EUR. Keine automatische Gebührenberechnung; bitte eine eingetragene Gebühr selbst prüfen.</p></div>
           <div className="space-y-2"><Label htmlFor="reminder-due-days">Zahlungsfrist (Tage)</Label><Input id="reminder-due-days" type="number" min="1" max="365" value={dueDays} disabled={busy} onChange={e => { setDueDays(e.target.value); invalidate(); }} /></div>
-          <div className="space-y-2 sm:col-span-2"><Label htmlFor="reminder-notes">Hinweis im Entwurf (optional)</Label><Textarea id="reminder-notes" value={notes} disabled={busy} maxLength={5000} onChange={e => { setNotes(e.target.value); invalidate(); }} /><p className="text-xs text-muted-foreground">Dieser Hinweis erscheint auch im heruntergeladenen Text, nicht nur in der internen Historie.</p></div>
+          <div className="space-y-2 sm:col-span-2"><Label htmlFor="reminder-notes">Hinweis im Entwurf (optional)</Label><Textarea id="reminder-notes" value={notes} disabled={busy} maxLength={5000} onChange={e => { setNotes(e.target.value); invalidate(); }} /><p className="text-xs text-muted-foreground">Dieser Hinweis erscheint auch im PDF- und Textentwurf, nicht nur in der internen Historie.</p></div>
         </div>
         <Button variant="outline" disabled={busy} onClick={loadPreview} className="w-full whitespace-normal"><RefreshCw aria-hidden="true" className="mr-2 h-4 w-4 shrink-0" />{busy ? 'Wird geprüft …' : 'Aktuellen Restbetrag prüfen und Entwurf laden'}</Button>
         {error && <Alert variant="destructive" role="alert"><AlertCircle aria-hidden="true" className="h-4 w-4" /><AlertTitle>Bitte erneut prüfen</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+        {status && <p role="status" className="text-sm text-muted-foreground">{status}</p>}
         {preview && <section aria-label="Geprüfter Mahnentwurf" className="min-w-0 space-y-5">
+          <p className="text-xs text-muted-foreground">Datenstand: {new Date(preview.previewAsOf).toLocaleString('de-DE', { timeZone: 'UTC' })} UTC. Nach 24 Stunden ist eine neue Vorschau erforderlich.</p>
           <dl className={styles.balance} aria-label="Geprüfter Zahlungsstand">
             <div><dt className="text-xs text-muted-foreground">Rechnungsbetrag</dt><dd className="mt-1 font-medium">{euro(preview.totalCents)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Bereits eingegangen</dt><dd className="mt-1 font-medium">{euro(preview.paidCents)}</dd></div>
@@ -101,9 +109,10 @@ export function ReminderWorkbenchDialog({ invoice, onClose, onRecorded }: {
           <Button variant="outline" onClick={onClose} disabled={busy}>Abbrechen</Button>
           {preview?.paidCents === '0' && <Button variant="outline" disabled={busy || !confirmed} onClick={() => act('mail')}><Mail aria-hidden="true" className="mr-2 h-4 w-4" />Im E-Mail-Client öffnen</Button>}
           <Button variant="outline" disabled={busy || !confirmed || !preview} onClick={() => act('download')}><Download aria-hidden="true" className="mr-2 h-4 w-4" />Textentwurf herunterladen</Button>
+          <Button variant="outline" disabled={busy || !confirmed || !preview} onClick={() => act('pdf')}><Download aria-hidden="true" className="mr-2 h-4 w-4" />PDF-Entwurf herunterladen</Button>
           <Button disabled={busy || !confirmed || !preview} onClick={() => act('record')}>Mahnung intern erfassen</Button>
         </div>
-        <p className="text-xs text-muted-foreground">Der Text ist eine Momentaufnahme für Ihren manuellen Versand. Nach späteren Zahlungen bitte neu prüfen. Die Originalrechnung und ihr PDF bleiben unverändert.</p>
+        <p className="text-xs text-muted-foreground">PDF und Text sind Momentaufnahmen für Ihren manuellen Versand, keine neue Rechnung und kein Versandnachweis. Nach späteren Zahlungen bitte neu prüfen. Die Originalrechnung und ihr PDF bleiben unverändert.</p>
       </div>
     </DialogContent>
   </Dialog>;
