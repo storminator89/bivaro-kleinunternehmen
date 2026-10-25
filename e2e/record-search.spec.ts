@@ -95,6 +95,9 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
 
     // Continue within the palette: no URL hand-off, no unbounded appended rows.
     // The sixth result becomes the selected keyboard option on the next page.
+    // End the pointer phase first: responsive layout must not move an unrelated
+    // option under the old cursor and legitimately replace keyboard selection.
+    await page.mouse.move(0, 0);
     const continuationUrl = page.url();
     await page.keyboard.press('Home');
     for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
@@ -108,16 +111,33 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     await expect(dialog.locator('[cmdk-group]').filter({ hasText: 'Datensätze · Kunden' }).getByRole('option')).toHaveCount(4);
     await expect(page).toHaveURL(continuationUrl);
     await expect(dialog).toContainText('Treffer können sich beim Blättern ändern');
+    await page.keyboard.press('Escape'); await expect(dialog).toBeHidden();
     for (const width of [360, 390, 1440]) {
+      // Start a fresh real keyboard journey on each device. Changing the
+      // viewport under an open menu can legitimately retarget pointer hover.
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
-      await expect(input).toBeInViewport(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await expect(dialog.getByRole('option', { selected: true })).toBeInViewport();
+      await page.mouse.move(0, 0);
+      ({ dialog, input } = await openPalette(page));
+      await expect(input).toHaveValue(''); await input.fill('SYN-SEARCH');
+      await expect(dialog.getByRole('status')).toContainText('Kunden Seite 1');
+      await page.keyboard.press('Home');
+      for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
+      await expect(dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true })).toHaveAttribute('aria-selected', 'true');
+      await page.keyboard.press('Enter');
+      await expect(dialog.getByRole('status')).toContainText('Kunden Seite 2');
+      await expect(input).toBeFocused(); await expect(input).toBeInViewport(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const sixth = dialog.getByRole('option', { name: 'SYN-SEARCH Kunde 5', exact: false });
+      await expect(sixth).toHaveAttribute('aria-selected', 'true'); await expect(sixth).toBeInViewport();
+      await expect(input).toHaveAttribute('aria-activedescendant', (await sixth.getAttribute('id'))!);
       await page.screenshot({ path: testInfo.outputPath(`record-search-continuation-${width}.png`), fullPage: false });
+      await expect(sixth).toHaveAttribute('aria-selected', 'true');
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(new RegExp(`/customers\\?customer=${customers[5].id}`));
+      await expect(page.getByRole('button', { name: 'SYN-SEARCH Kunde 5 bearbeiten', exact: true }).filter({ visible: true })).toBeVisible();
+      await page.goBack(); await expect(page).toHaveURL(continuationUrl);
+      await expect(dialog).toBeHidden();
+      await expect(page.getByRole('button', { name: 'Befehlspalette öffnen', exact: true }).filter({ visible: true }).first()).toBeVisible();
     }
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(new RegExp(`/customers\\?customer=${customers[5].id}`));
-    await expect(page.getByRole('button', { name: 'SYN-SEARCH Kunde 5 bearbeiten', exact: true }).filter({ visible: true })).toBeVisible();
-    await page.goBack(); await expect(page).toHaveURL(continuationUrl);
     ({ dialog, input } = await openPalette(page)); await expect(input).toHaveValue('');
     await input.fill('SYN-SEARCH');
     await dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true }).click();
