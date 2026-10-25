@@ -2525,5 +2525,91 @@
     "issueClosed": false,
     "pullRequest145Merged": false,
     "deploymentPerformed": false
+  },
+  "issue47ReminderPdfDownloadCheckpoint": {
+    "observedAt": "2026-10-25T16:57:00Z",
+    "issue": 47,
+    "issueUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/47",
+    "ticketMapping": "Separate GitHub issue, not historical BV-047; all160 historical tickets/status sums and existing checkpoints unchanged.",
+    "status": "partial_local_candidate_pending_draft_and_exact_hosted_acceptance",
+    "acceptedMainBase": "c805e38c519f9d907c01af13430ce3d5926ac702",
+    "sourceCommit": "66bd20026568a53830f8f7c13b1d21f8d7eef783",
+    "sourceTree": "ef10988daae2b5e0651e802e84522649946cba57",
+    "publicationAtAuthorship": "Not yet published; draft/full hosted CI and browser/PDF acceptance authorized, no merge/deployment.",
+    "implementedScope": [
+      "Explicit download-only reminder PDF from the existing owner-bound remaining-balance projection, alongside TXT; preview timestamp and exact document revision require fresh review on changed balance/content or expiry.",
+      "No schema/backup/journal/invoice-original/payment/outbox/SMTP write path; manual fee only, draft and no-delivery-proof notices; unsupported font characters fail clearly with TXT alternative.",
+      "Two authored real desktop/mobile download journeys and a separate fail-closed PDF/UI evidence partition; existing235 PNG workflow prefix preserved byte-for-byte."
+    ],
+    "sourceReview": {
+      "initialRuntime": "Independently source-reviewed without concrete P1/P2; not executed.",
+      "newAcceptanceDelta": "Independently source-reviewed without concrete P1/P2; cases remain authored, not locally executed."
+    },
+    "localVerification": {
+      "changedFileEslint": "passed,zero warnings",
+      "fullTypescript": "passed",
+      "pythonAstAndDiffCheck": "passed",
+      "ordinaryBuild": "INCOMPLETE/NOT PASSED: prior dependency-symlink failure then exit137 during the TypeScript phase; one capped retry typephase failure without diagnostic; no further local build.",
+      "functionalUnitApiBrowserPdfRendering": "NOT RUN locally; cases authored only."
+    },
+    "hostedAcceptance": "NOT RUN for this exact candidate at checkpoint authorship; final results belong in eventual PR body, not a documentation-only commit loop.",
+    "evidencePartition": {
+      "existingPngNames": 235,
+      "existingWorkflowPrefixSha256": "47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d",
+      "separateReminderPdfFiles": 2,
+      "separateNativeUiPngFiles": 4,
+      "renderedPagesPerPdfMaximum": 8,
+      "aggregateInputMiB": 14,
+      "aggregateOutputMiB": 8,
+      "artifactRetentionDays": 1,
+      "actualImagesOrPdfsAccepted": false
+    },
+    "remainingAcceptance": [
+      "Exact-head complete hosted CI, ordinary build, full browser suite and both architecture PDF-A/container checks.",
+      "Actual downloaded PDF text/page layout and four UI images; complete bounded artifact delivery, no financial/outbox writes, original invoice byte identity.",
+      "Real competing payment/settlement/expiry and keyboard/cancel/reload/focus boundaries; broader corrected-document and partial-payment SMTP scope remains outside this slice."
+    ],
+    "evidence": "docs/testing/issue47-reminder-pdf-download.md",
+    "issueComplete": false,
+    "mergeAuthorized": false,
+    "deploymentAuthorized": false,
+    "unmerged54RuntimeImported": false,
+    "historicalTicketObjectsPreserved": 160,
+    "historicalStatusSummaryUnchanged": true
+  },
+  "issue130FinalAcceptanceCheckpoint": {
+    "observedAt": "2026-10-25T16:58:00Z",
+    "issue": 130,
+    "issueUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/130",
+    "status": "closed_completed_after_explicit_user_authorization",
+    "closedAt": "2026-10-25T16:04:22Z",
+    "acceptedMainCommit": "c805e38c519f9d907c01af13430ce3d5926ac702",
+    "acceptedMainTree": "f1ab76a73f1dc423f10ded6a35da3e047bc27894",
+    "scope": "Post-merge verification after #144 implementation, #147 query-intent correction and #149 test-harness correction; earlier dated checkpoint payloads remain historical and unchanged.",
+    "hostedCi": {
+      "run": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40206286650",
+      "passed": 4359,
+      "skipped": 20,
+      "conclusion": "success"
+    },
+    "hostedBrowser": {
+      "run": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40206286702",
+      "passed": 172,
+      "conclusion": "success"
+    },
+    "hostedContainer": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40206286757",
+    "visual": {
+      "verifiedPng": 235,
+      "verifiedArchives": 10,
+      "bytes": 23513188,
+      "fullBytePixelMetadataProofs": "passed",
+      "manifestSha256": "48b1a4fda977db1816e5b89e0b72551ea08133f8c85022d28d165c93ad57cc1e",
+      "affectedSupplierSimulationAndReadmeImagesActuallyViewed": true
+    },
+    "issue59StillOpen": true,
+    "noDeploymentOrLegalAcceptanceInferred": true,
+    "historicalTicketObjectsPreserved": 160,
+    "historicalStatusSummaryUnchanged": true
   }
+
 }

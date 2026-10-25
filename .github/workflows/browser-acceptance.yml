@@ -1578,3 +1578,33 @@ jobs:
         run: |
           echo '::error::The required fifteen-image README coverage partition was not delivered. Existing screenshot partitions remain unchanged.'
           exit 1
+
+      # Independent issue #47 PDF/UI evidence; accepted 235-image workflow above is unchanged.
+      - name: Stage complete bounded reminder PDF and UI evidence
+        id: stage-reminder-pdf-evidence
+        if: ${{ always() }}
+        timeout-minutes: 4
+        env:
+          BIVARO_BROWSER_RESULTS: ${{ runner.temp }}/bivaro-browser-results
+        run: |
+          export PYTHONPATH="$RUNNER_TEMP/bivaro-evidence-codec${PYTHONPATH:+:$PYTHONPATH}"
+          python3 scripts/stage-reminder-pdf-evidence.py
+
+      - name: Upload required bounded reminder PDF and UI evidence
+        id: upload-reminder-pdf-evidence
+        if: ${{ always() && steps.stage-reminder-pdf-evidence.outputs.ready == 'true' }}
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: reminder-pdf-synthetic-evidence
+          path: ${{ steps.stage-reminder-pdf-evidence.outputs.directory }}
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: false
+          compression-level: 0
+
+      - name: Require complete reminder PDF and UI evidence delivery
+        if: ${{ always() && (steps.stage-reminder-pdf-evidence.outcome != 'success' || steps.upload-reminder-pdf-evidence.outcome != 'success') }}
+        run: |
+          echo '::error::Both synthetic reminder PDFs, all rendered pages and four UI captures are required. Existing 235-image partitions remain unchanged.'
+          exit 1
