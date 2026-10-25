@@ -190,8 +190,10 @@ for (const replacement of ['owner', 'sessionVersion'] as const) {
       }
     } finally {
       oldRead?.release(); newRead?.release(); await siblingContext.close();
-      if (foreign) await prisma.user.delete({ where: { id: foreign.id } });
-      await prisma.user.delete({ where: { id: owner.id } });
+      // Real manual POSTs create append-only ManualFinancialRecordEvent rows.
+      // Do not delete their owners/children or disable FK/immutability guards.
+      // Unique synthetic owners and all asserted financial evidence remain in
+      // the verified fresh runner fixture until its standard whole-DB cleanup.
     }
   });
 }

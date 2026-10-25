@@ -49,3 +49,11 @@ Fixture login/dashboard navigations additionally wait for the complete real
 session response and its expected owner, role and sessionVersion before starting
 another navigation. This is response synchronization, not an exemption for
 authentication errors or evidence that every aborted fetch is harmless.
+
+The real synthetic POSTs append immutable manual-financial event history.
+Per-case teardown releases its held responses and closes the sibling browser
+context but does not delete financial owners/events or weaken database guards.
+All row/evidence assertions run before teardown; the unique fixture data remains
+until the standard runner disposes its independently verified temporary database.
+This matches the existing manual-financial-record browser suite. No real upload
+is sent by this boundary test; its native file selection is discarded locally.
