@@ -10,7 +10,7 @@ vi.mock('@/lib/get-user-id', () => {
 });
 import { searchOwnedRecords } from '@/lib/record-search/service';
 import { POST } from '@/app/api/record-search/route';
-import { recordSearchQuery } from '@/lib/record-search/contract';
+import { RECORD_SEARCH_MAX_PAGE, recordSearchPages, recordSearchQuery, sameRecordSearchPages } from '@/lib/record-search/contract';
 let db: ReturnType<typeof createTestDatabase>;
 let sequence = 0;
 async function tenant() {
@@ -24,13 +24,61 @@ async function receipt(userId: string, invoiceNumber: string | null, originalFil
 async function invoice(userId: string, invoiceNumber: string, type = 'INVOICE', customerId?: number) {
   return db.client.invoice.create({ data: { userId, invoiceNumber, type, fileName: 'NOT-SEARCHED-OUTBOUND.pdf', storedFileName: 'private.pdf', parsedData: { private: 'SECRET-NOTE-ONLY' }, customerId } });
 }
-function request(query: unknown, headers: Record<string, string> = {}) {
-  return new Request('http://localhost/api/record-search', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ query }) });
+function request(query: unknown, headers: Record<string, string> = {}, pages?: unknown) {
+  return new Request('http://localhost/api/record-search', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ query, pages }) });
 }
 beforeAll(async () => { db = createTestDatabase(); state.client = db.client; }, 40_000);
 afterAll(async () => { await db?.cleanup(); });
 
 describe('bounded owned record search', () => {
+  it('accepts only known, finite integer pages with a bounded SQL offset', () => {
+    expect(recordSearchPages()).toEqual({ customer: 0, outbound: 0, inbound: 0 });
+    expect(recordSearchPages({ customer: RECORD_SEARCH_MAX_PAGE })).toEqual({ customer: RECORD_SEARCH_MAX_PAGE, outbound: 0, inbound: 0 });
+    expect(sameRecordSearchPages(recordSearchPages(), recordSearchPages({ inbound: 1 }))).toBe(false);
+    for (const value of [null, [], '1', { customer: -1 }, { customer: 0.5 }, { customer: '1' }, { customer: NaN }, { customer: Infinity }, { customer: RECORD_SEARCH_MAX_PAGE + 1 }, { foreign: 0 }, JSON.parse('{"__proto__":1}')]) expect(() => recordSearchPages(value)).toThrow('INVALID_PAGES');
+  });
+  it('continues each type independently to the sixth result and returns on back without accumulating rows', async () => {
+    const owner = await tenant(), foreign = await tenant();
+    for (let i = 0; i < 12; i++) {
+      await db.client.customer.create({ data: { userId: owner, name: `SYN-PAGES ${String(i).padStart(2, '0')}` } });
+      await invoice(owner, `SYN-PAGES-${i}`); await receipt(owner, `SYN-PAGES-${i}`);
+      await db.client.customer.create({ data: { userId: foreign, name: `SYN-PAGES ${String(i).padStart(2, '0')} FOREIGN` } });
+      await invoice(foreign, `SYN-PAGES-${i}`); await receipt(foreign, `SYN-PAGES-${i}`);
+    }
+    const first = await searchOwnedRecords(owner, 'SYN-PAGES');
+    const customerPage = await searchOwnedRecords(owner, 'SYN-PAGES', recordSearchPages({ customer: 1 }));
+    expect(customerPage.groups.map(group => group.page)).toEqual([1, 0, 0]);
+    expect(customerPage.groups[0].items.map(item => item.label)).toEqual([5, 6, 7, 8, 9].map(i => `SYN-PAGES ${String(i).padStart(2, '0')}`));
+    expect(customerPage.groups.slice(1)).toEqual(first.groups.slice(1));
+    const second = await searchOwnedRecords(owner, 'SYN-PAGES', recordSearchPages({ customer: 1, outbound: 1, inbound: 1 }));
+    for (let type = 0; type < 3; type++) {
+      expect(second.groups[type].items).toHaveLength(5);
+      expect(second.groups[type].hasMore).toBe(true);
+      expect(second.groups[type].items.some(item => first.groups[type].items.some(old => old.id === item.id))).toBe(false);
+      const foreignIds = (await searchOwnedRecords(foreign, 'SYN-PAGES', recordSearchPages({ customer: 1, outbound: 1, inbound: 1 }))).groups[type].items.map(item => item.id);
+      expect(second.groups[type].items.some(item => foreignIds.includes(item.id))).toBe(false);
+    }
+    const third = await searchOwnedRecords(owner, 'SYN-PAGES', recordSearchPages({ customer: 2, outbound: 2, inbound: 2 }));
+    expect(third.groups.map(group => [group.items.length, group.hasMore])).toEqual([[2, false], [2, false], [2, false]]);
+    expect(await searchOwnedRecords(owner, 'SYN-PAGES')).toEqual(first);
+    expect((await searchOwnedRecords(owner, 'SYN-PAGES', recordSearchPages({ customer: RECORD_SEARCH_MAX_PAGE }))).groups[0]).toMatchObject({ page: RECORD_SEARCH_MAX_PAGE, items: [], hasMore: false });
+  });
+  it('rechecks ownership and current data on every page; deleted later pages stay navigable rather than implying completeness', async () => {
+    const owner = await tenant();
+    for (let i = 0; i < 6; i++) await db.client.customer.create({ data: { userId: owner, name: `SYN-CHANGING ${i}` } });
+    expect((await searchOwnedRecords(owner, 'SYN-CHANGING')).groups[0].hasMore).toBe(true);
+    await db.client.customer.deleteMany({ where: { userId: owner } });
+    const later = await searchOwnedRecords(owner, 'SYN-CHANGING', recordSearchPages({ customer: 1 }));
+    expect(later.groups[0]).toEqual({ type: 'customer', page: 1, hasMore: false, items: [] });
+    expect(JSON.stringify(later)).not.toMatch(/total|complete|count/);
+  });
+  it('keeps hasMore truthful at the finite navigation cap instead of claiming all matches', async () => {
+    const owner = await tenant();
+    await db.client.customer.createMany({ data: Array.from({ length: 101 }, (_, index) => ({ userId: owner, name: `SYN-CAP ${String(index).padStart(3, '0')}` })) });
+    const last = await searchOwnedRecords(owner, 'SYN-CAP', recordSearchPages({ customer: RECORD_SEARCH_MAX_PAGE }));
+    expect(last.groups[0]).toMatchObject({ page: 19, hasMore: true });
+    expect(last.groups[0].items.map(item => item.label)).toEqual([95, 96, 97, 98, 99].map(index => `SYN-CAP ${String(index).padStart(3, '0')}`));
+  });
   it('does not query data for empty/short values and rejects oversized/non-string terms', async () => {
     const spy = vi.spyOn(db.client, '$transaction');
     for (const term of ['', '  ', 'a', 'ab']) expect(await searchOwnedRecords('unused', term)).toEqual({ groups: [] });
@@ -100,10 +148,13 @@ describe('bounded owned record search', () => {
     const ok = await POST(request('none')); expect(ok.status).toBe(200); expect(ok.headers.get('cache-control')).toBe('private, no-store');
     expect((await POST(request('x'.repeat(101)))).status).toBe(400);
     expect((await POST(request('x'.repeat(2000)))).status).toBe(413);
+    for (const pages of [null, [], { customer: -1 }, { outbound: 20 }, { inbound: '1' }, { userId: 1 }]) expect((await POST(request('none', {}, pages))).status).toBe(400);
+    const next = await POST(request('none', {}, { customer: 1 }));
+    expect(next.status).toBe(200); expect((await next.json()).groups.map((group: { page: number }) => group.page)).toEqual([1, 0, 0]);
     expect((await POST(new Request('http://localhost/api/record-search', { method: 'POST', body: '{' }))).status).toBe(400);
     expect((await POST(request('none', { 'Sec-Fetch-Site': 'cross-site', Origin: 'https://foreign.invalid' }))).status).toBe(403);
     state.authenticated = false;
-    try { expect((await POST(request('none'))).status).toBe(401); } finally { state.authenticated = true; }
+    try { expect((await POST(request('none', {}, { customer: 1 }))).status).toBe(401); } finally { state.authenticated = true; }
   });
   it('returns safe errors without logging search terms or private database failures', async () => {
     const error = vi.spyOn(console, 'error'); const warn = vi.spyOn(console, 'warn');

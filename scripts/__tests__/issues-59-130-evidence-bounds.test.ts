@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
 const start = workflow.indexOf('      # Eighth independent partition:');
 const accepted = workflow.slice(0, start).trimEnd() + '\n';
-const partition = workflow.slice(start);
+const delivery = workflow.indexOf('      - name: Require complete supplier-task and simulation visual delivery', start);
+const nextStep = workflow.indexOf('\n      - name:', delivery + 1);
+// Scope this guard to its own partition, not subsequently appended evidence.
+const partition = workflow.slice(start, nextStep < 0 ? undefined : nextStep);
 const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\n\s*\}/g)]
   .flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
 
@@ -25,8 +28,11 @@ describe('bounded reconstructed issue59/130 hosted evidence', () => {
       'supplier-task-inbox-1440.png', 'supplier-task-inbox-390.png',
       'simulation-transparency-1440.png', 'simulation-transparency-390.png', 'simulation-transparency-error-390.png',
     ].sort());
+    expect(delivery).toBeGreaterThan(start);
+    const owned = namesIn(accepted + partition);
+    expect(owned).toHaveLength(217); expect(new Set(owned).size).toBe(217);
     const all = namesIn(workflow);
-    expect(all).toHaveLength(217); expect(new Set(all).size).toBe(217);
+    expect(new Set(all).size).toBe(all.length);
     for (const value of ['limit = 2 * 1024 * 1024', 'per_file_input_limit = 1 * 1024 * 1024',
       'total > 4 * 1024 * 1024', 'actual_input_bytes > 4 * 1024 * 1024',
       'retention-days: 1', 'if-no-files-found: error', 'raise SystemExit(1)',
