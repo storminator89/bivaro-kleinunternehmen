@@ -45,6 +45,7 @@ vi.mock('react-dom', async importOriginal => ({
 }));
 const client = vi.hoisted(() => ({
   push: vi.fn(), signOut: vi.fn(), setTheme: vi.fn(), search: vi.fn(), cancelSearch: vi.fn(),
+  beginList: vi.fn(), clearList: vi.fn(),
   href: 'https://bivaro.test/purchases?document=10', status: 'authenticated',
   session: { user: { id: 'synthetic-owner', role: 'ADMIN', sessionVersion: 1 } },
 }));
@@ -56,6 +57,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('next-auth/react', () => ({ useSession: () => ({ data: client.session, status: client.status }), signOut: client.signOut }));
 vi.mock('next-themes', () => ({ useTheme: () => ({ setTheme: client.setTheme }) }));
 vi.mock('@/lib/record-search/client', () => ({ startRecordSearch: client.search }));
+vi.mock('@/components/record-search/record-list-search-provider', () => ({ useRecordListHandoff: () => ({ begin: client.beginList, clear: client.clearList }) }));
 import { CommandPalette } from '@/components/command-palette';
 import { createReviewNavigationIntents, reviewNavigationDispatcher } from '@/components/purchases/incoming-review-history';
 
@@ -158,6 +160,7 @@ beforeEach(() => {
   client.href = 'https://bivaro.test/purchases?document=10'; client.status = 'authenticated';
   client.session = { user: { id: 'synthetic-owner', role: 'ADMIN', sessionVersion: 1 } };
   client.push.mockReset(); client.signOut.mockReset(); client.setTheme.mockReset(); client.cancelSearch.mockReset();
+  client.beginList.mockReset().mockReturnValue(true); client.clearList.mockReset();
   client.search.mockReset().mockImplementation((term: string, publish: (state: RecordSearchState) => void) => {
     publish({ query: term, pages: { customer: 0, outbound: 0, inbound: 0 }, status: 'ready', result: { groups: [
       { type: 'customer', page: 0, items: [{ type: 'customer', id: 11, label: 'Synthetic customer', href: '/customers?customer=11' }], hasMore: true },
@@ -212,6 +215,24 @@ describe('late cmdk selection-target attachment', () => {
 });
 
 describe('palette focus handoff across Radix deferred close autofocus', () => {
+  it.each(['customer', 'outbound', 'inbound'])('passes the selected term for %s only after the unchanged review intent proceeds', type => {
+    openPalette(); loadResults(); select(`record-list:${type}`);
+    expect(client.beginList).not.toHaveBeenCalled();
+    expect(requests[0]).toMatchObject({ open: false, query: '', records: 0 });
+    requests[0].choice.proceed(); requests[0].choice.proceed();
+    expect(client.beginList).toHaveBeenCalledExactlyOnceWith(type, 'Synthetic');
+  });
+  it('does not leave a pending filter when the user stays or a newer intent supersedes the choice', () => {
+    openPalette(); loadResults(); select('record-list:customer'); requests[0].choice.stay(); requests[0].choice.proceed();
+    expect(client.beginList).not.toHaveBeenCalled(); expect(client.push).not.toHaveBeenCalled();
+    openPalette(); loadResults(); select('record-list:outbound');
+    intents.prepare(() => {}).proceed(); requests[1].choice.proceed();
+    expect(client.beginList).not.toHaveBeenCalled(); expect(client.push).not.toHaveBeenCalled();
+  });
+  it('does not navigate if the session-bound handoff rejects an obsolete action', () => {
+    openPalette(); loadResults(); select('record-list:customer'); client.beginList.mockReturnValue(false);
+    requests[0].choice.proceed(); expect(client.push).not.toHaveBeenCalled();
+  });
   it.each(['before', 'after'] as const)('retains chooser heading focus when the close callback runs %s its effect', order => {
     openPalette(); query('Kun'); selectCommand('Kunden');
     expect(requests).toHaveLength(1);

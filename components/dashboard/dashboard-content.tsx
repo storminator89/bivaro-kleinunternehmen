@@ -39,6 +39,7 @@ import { useDashboardData } from "@/hooks/use-dashboard-data";
 import type { DashboardTab } from "@/hooks/use-dashboard-data";
 import { useDashboardCreateAction } from "@/hooks/use-dashboard-create-action";
 import { buildEURCSVFromFreshSummary } from "@/lib/eur-csv-export";
+import { useInvoiceDetailSelection } from '@/hooks/use-invoice-detail-selection';
 
 export function DashboardContent() {
   // URL-Parameter für Tab-Auswahl
@@ -80,7 +81,7 @@ export function DashboardContent() {
   const [editType, setEditType] = useState<'expense' | 'income'>('expense');
   const [itemToEdit, setItemToEdit] = useState<DashboardEditData | null>(null);
   const [invoiceDetailsModalOpen, setInvoiceDetailsModalOpen] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useInvoiceDetailSelection();
   const [invoiceToPay, setInvoiceToPay] = useState<Pick<Invoice, 'id' | 'invoiceNumber' | 'fileName'> | null>(null);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);

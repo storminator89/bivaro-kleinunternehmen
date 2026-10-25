@@ -2525,5 +2525,55 @@
     "issueClosed": false,
     "pullRequest145Merged": false,
     "deploymentPerformed": false
+  },
+  "githubIssue102FilteredListContinuation20261025": {
+    "issue": 102,
+    "status": "draft_publication_authorized_acceptance_pending",
+    "base": "c805e38c519f9d907c01af13430ce3d5926ac702",
+    "runtimeCommit": "08ee6a020017a21a5bb680c075090cc04c45494e",
+    "implementedScope": "Existing palette term to existing exact matching customer/invoice/purchase lists; disposable session-scoped memory only, body-only owned POST reads, explicit filter clear and navigation/session disposal. Existing selected invoice detail DTO is disposed on actual identity changes; programmatic customer/invoice detail close reuses established live-opener checks without stealing newer focus.",
+    "unchangedContracts": [
+      "Existing paged palette",
+      "Tenant/detail checks and dirty-review guards",
+      "Invoice financial DTO/ledger and shared invalidation prefixes",
+      "Schema/backups/external providers",
+      "Historical 160 BV ticket objects and aggregate counts"
+    ],
+    "staticReview": "Independent complete runtime/dependency/private-error review and #148-owner narrow invoice-session-fallback review: no concrete P1/P2; source-only, no functional claim. #148-owner selected-invoice DTO and two-dialog live-opener focus deltas also independently reviewed without concrete P1/P2.",
+    "localChecks": {
+      "eslint": "Final full ESLint passed, zero warnings.",
+      "typescript": "Final standalone TypeScript passed after all runtime changes and owner-transition regression authoring; initial uncapped process exited137 without diagnostics.",
+      "ordinaryBuild": "Prebuild and Turbopack compile passed (39.2s); integrated TypeScript phase killed/exit137, postbuild not reached; no additional local retry or check bypass.",
+      "functionalUnitApiBrowser": "not run; prohibited"
+    },
+    "authoredCoverage": [
+      "filtered-list-contract.test.ts",
+      "filtered-list-search.test.ts",
+      "record-list-handoff.test.ts",
+      "record-list-provider-lifecycle.test.ts",
+      "command-palette-navigation-lifecycle.test.ts",
+      "record-search-filtered-lists.spec.ts",
+      "invoice-detail-session-selection.test.ts",
+      "record-detail-focus.test.ts",
+      "navigation-dashboard-controls.test.ts isolated collaborator mock only"
+    ],
+    "remaining": [
+      "Publish exact-tree draft PR",
+      "Complete exact-head hosted GitHub CI/browser/PDF acceptance and actual image inspection",
+      "Preserve both shared dashboard contracts only on later authorized #148 integration"
+    ],
+    "evidence": [
+      "docs/testing/record-search-filtered-lists.md"
+    ],
+    "githubWrites": false,
+    "newCiRuns": false,
+    "merged": false,
+    "deployed": false,
+    "issueClosed": false,
+    "authoredHostedE2ECases": 21,
+    "publicationAuthorizedAt": "2026-10-25T16:48:45Z",
+    "publicationScope": "Draft PR plus complete hosted GitHub CI/browser/PDF acceptance; no local functional execution, merge, deployment, issue closure or unrelated #148 runtime.",
+    "finalOutcomesLocation": "Draft PR body at exact verified head and workflow run links; no documentation-only rerun loop",
+    "sitesRequirementCorrection": "Prior Sites-only wording was erroneous; ForgeCommunity rule does not apply to Bivaro."
   }
 }

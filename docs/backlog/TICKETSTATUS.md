@@ -710,3 +710,33 @@ veröffentlichten kombinierten Heads** sind offen. Dieser einmalige additive
 Checkpoint behauptet weder diese Abnahme noch Veröffentlichung seiner lokalen
 Integration. Endergebnisse folgen ausschließlich im PR-Text, ohne erneute reine
 Dokumentations-Commit-Schleife. [Detaillierte Evidenz und verbleibende Gates](../testing/record-search-continuation.md).
+
+## Separater GitHub-#102-Listenfortsetzungscheckpoint vom 25.10.2026
+
+Runtime bis lokalem Runtime-Commit `08ee6a02` ergänzt die bereits gelieferte Palette um
+„Passende Liste öffnen“: flüchtige, sitzungsgebundene Suchtextübergabe an die
+bestehenden Kunden-/Rechnungs-/Belegeingangslisten; identischer enger
+Literal-/Typ-/Feldvertrag, lesende body-only POST-Transporte, ausdrückliches
+Löschen und disposal bei Navigation/History/Sessionwechsel. Die betroffene
+Rechnungsdetail-Auswahl wird ebenfalls identitätsgebunden entsorgt; Kunden-/
+Rechnungsdetails geben Fokus ausschließlich an noch nutzbare Quellen zurück. Keine Finanz-/
+Schema-/Backup-/Anbieteränderung. Rechnungs-Ledgerprojektion und sämtliche
+bisherigen Queryinvalidierungen bleiben erhalten. Alle 160 historischen
+BV-Ticketobjekte/Summen sowie früheren Checkpoints bleiben unverändert;
+GitHub #102 ist nicht BV-102.
+
+Unabhängiger statischer Runtime-Review ohne konkrete P1/P2; lokale ESLint- und
+TypeScriptprüfung nach Dependencyfix bestanden. Funktions-/Unit-/API-/Browser-
+verträge und echte Hosted-E2E-Abdeckung wurden nur verfasst, nicht lokal
+abgespielt. Keine neuen GitHub-Schreibaktionen, CI-Läufe, Veröffentlichung,
+Merge-/Deploymentaktion oder Ticket-Schließung. Gewöhnliche Buildkompilierung bestand; integrierte Typephase endete mit
+Exit137/Killed, Gesamtbuild bleibt offen. Finale separate Types/ESLint
+bestanden; vollständige gehostete GitHub-Funktions-/Bildabnahme steht aus.
+Die Nutzerfreigabe vom 25.10.2026, 16:48:45 UTC erlaubt nun Entwurfs-PR und
+vollständige GitHub-CI/Browser-/PDF-Prüfung, nicht Merge/Deployment oder
+Ticket-Schließung. Die frühere Sites-Formulierung war irrtümlich und wird
+nicht als Bivaro-Abnahmevoraussetzung fortgeschrieben. Der bestehende
+235-Bild-Workflow wird nur durch neun zusätzliche strikte Pflichtbilder
+ergänzt; #148-Runtime bleibt separat. Endergebnisse folgen am exakten
+Head im PR-Text, ohne erneute reine Dokumentations-Commit-Schleife.
+[Vertrag, Coverage und verbleibende Gates](../testing/record-search-filtered-lists.md).

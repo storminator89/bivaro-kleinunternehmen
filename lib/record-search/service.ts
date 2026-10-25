@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { ownedRecordMatch } from './match';
 import { RECORD_SEARCH_LIMIT, RECORD_SEARCH_MIN_LENGTH, recordSearchPages, recordSearchQuery, type RecordSearchGroup, type RecordSearchItem, type RecordSearchPages, type RecordSearchResult, type RecordSearchType } from './contract';
 
 type Row = { id: number; label: string };
@@ -21,19 +22,17 @@ export async function searchOwnedRecords(userId: string, value: string, requeste
   const [customers, outbound, inbound] = await prisma.$transaction([
     prisma.$queryRaw<Row[]>(Prisma.sql`
       SELECT "id", substr("name", 1, ${LABEL_LIMIT}) AS "label" FROM "Customer"
-      WHERE "userId" = ${userId} AND instr(lower("name"), lower(${query})) > 0
+      WHERE ${ownedRecordMatch('customer', userId, query)}
       ORDER BY "name" ASC, "id" ASC LIMIT ${take} OFFSET ${pages.customer * RECORD_SEARCH_LIMIT}
     `),
     prisma.$queryRaw<Row[]>(Prisma.sql`
       SELECT "id", substr("invoiceNumber", 1, ${LABEL_LIMIT}) AS "label" FROM "Invoice"
-      WHERE "userId" = ${userId} AND "type" IN ('INVOICE', 'CREDIT_NOTE')
-        AND instr(lower("invoiceNumber"), lower(${query})) > 0
+      WHERE ${ownedRecordMatch('outbound', userId, query)}
       ORDER BY "uploadedAt" DESC, "id" DESC LIMIT ${take} OFFSET ${pages.outbound * RECORD_SEARCH_LIMIT}
     `),
     prisma.$queryRaw<Row[]>(Prisma.sql`
       SELECT "id", substr(coalesce(nullif("invoiceNumber", ''), "originalFileName"), 1, ${LABEL_LIMIT}) AS "label"
-      FROM "PurchaseDocument" WHERE "userId" = ${userId}
-        AND (instr(lower("invoiceNumber"), lower(${query})) > 0 OR instr(lower("originalFileName"), lower(${query})) > 0)
+      FROM "PurchaseDocument" WHERE ${ownedRecordMatch('inbound', userId, query)}
       ORDER BY "uploadedAt" DESC, "id" DESC LIMIT ${take} OFFSET ${pages.inbound * RECORD_SEARCH_LIMIT}
     `),
   ]);

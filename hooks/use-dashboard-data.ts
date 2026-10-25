@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useSession } from 'next-auth/react';
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Quote } from "@/components/dashboard/tabs/quotes-tab";
 import { toQuery } from "@/lib/dashboard-utils";
 import { connectPaymentRefreshBridge, invalidatePaymentDashboardQueries, refreshPaymentDashboardLists } from "@/lib/payment-dashboard-refresh";
 import type { Customer, Expense, FilterState, Income, Invoice, TimeRange } from "@/types/dashboard";
+import { useRecordInvoiceList } from '@/hooks/use-record-invoice-list';
+import { reviewSessionKey } from '@/components/purchases/incoming-review-history';
 
 type PaginatedResponse<T> = {
   items: T[];
@@ -93,12 +96,13 @@ export function useDashboardData({
   selectedTimeRange,
 }: UseDashboardDataParams) {
   const queryClient = useQueryClient();
+  const { data: session, status: sessionStatus } = useSession();
+  const invoiceSessionKey = reviewSessionKey(session, sessionStatus);
   useEffect(() => connectPaymentRefreshBridge(() => { void invalidatePaymentDashboardQueries(queryClient).catch(() => {}); }), [queryClient]);
   const selectedDocument = useSearchParams().get("document");
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [assetExpenses, setAssetExpenses] = useState<Expense[]>([]);
@@ -117,7 +121,7 @@ export function useDashboardData({
 
   const [invoicesPage, setInvoicesPage] = useState(1);
   const [invoicesPageSize, setInvoicesPageSize] = useState(10);
-  const [invoicesTotal, setInvoicesTotal] = useState(0);
+  const recordInvoiceList = useRecordInvoiceList(activeTab === 'invoices', invoicesPageSize);
 
   const expenseSearch = useDebouncedValue(filters.expenses.searchTerm);
   const incomeSearch = useDebouncedValue(filters.incomes.searchTerm);
@@ -172,9 +176,10 @@ export function useDashboardData({
     enabled: activeTab === "incomes",
   });
   const invoicesQuery = useQuery({
-    queryKey: ["dashboard", "invoices", "list", invoicesQueryString],
+    queryKey: ["dashboard", "invoices", "list", invoicesQueryString, invoiceSessionKey],
     queryFn: ({ signal }) => fetchJson<PaginatedResponse<Invoice>>(`/api/invoices?${invoicesQueryString}`, signal, { 'X-Bivaro-Payment-Contract': '3' }),
-    enabled: activeTab === "invoices",
+    enabled: activeTab === "invoices" && !recordInvoiceList.active && sessionStatus === 'authenticated',
+    gcTime: 0,
   });
   const quotesQuery = useQuery({
     queryKey: ["dashboard", "quotes", "list", quotesQueryString],
@@ -240,8 +245,6 @@ export function useDashboardData({
 
   useEffect(() => {
     if (!invoicesQuery.data) return;
-    setInvoices(invoicesQuery.data.items);
-    setInvoicesTotal(invoicesQuery.data.total);
     setInvoicesPage(invoicesQuery.data.page);
     setInvoicesPageSize(invoicesQuery.data.pageSize);
   }, [invoicesQuery.data]);
@@ -325,8 +328,8 @@ export function useDashboardData({
   }
 
   async function loadInvoices(page = invoicesPage, pageSize = invoicesPageSize) {
-    setInvoicesPage(page);
-    setInvoicesPageSize(pageSize);
+    if (recordInvoiceList.active) recordInvoiceList.load(page, pageSize);
+    else { setInvoicesPage(page); setInvoicesPageSize(pageSize); }
     await invalidateDashboardQueries("invoices");
   }
 
@@ -338,6 +341,10 @@ export function useDashboardData({
 
   const expensesTotalPages = Math.max(1, Math.ceil(expensesTotal / Math.max(1, expensesPageSize)));
   const incomesTotalPages = Math.max(1, Math.ceil(incomesTotal / Math.max(1, incomesPageSize)));
+  // Read only this session's current query, never a previous owner's mirrored
+  // array while the fallback GET is pending after disposable search teardown.
+  const invoices = invoicesQuery.data?.items ?? [];
+  const invoicesTotal = invoicesQuery.data?.total ?? 0;
   const invoicesTotalPages = Math.max(1, Math.ceil(invoicesTotal / Math.max(1, invoicesPageSize)));
   const quotesTotalPages = Math.max(1, Math.ceil(quotesTotal / Math.max(1, quotesPageSize)));
   const uniqueCategories = filterOptionsQuery.data?.categories ?? [];
@@ -346,7 +353,7 @@ export function useDashboardData({
   return {
     expenses,
     incomes,
-    invoices,
+    invoices: recordInvoiceList.active ? recordInvoiceList.query.data?.items ?? [] : invoices,
     customers,
     quotes,
     assetExpenses,
@@ -377,12 +384,12 @@ export function useDashboardData({
     incomesTotalPages,
     incomesIsFetching: incomesQuery.isFetching,
     incomesIsError: incomesQuery.isError,
-    invoicesPage,
-    invoicesPageSize,
-    invoicesTotal,
-    invoicesTotalPages,
-    invoicesIsFetching: invoicesQuery.isFetching,
-    invoicesIsError: invoicesQuery.isError,
+    invoicesPage: recordInvoiceList.active ? recordInvoiceList.page : invoicesPage,
+    invoicesPageSize: recordInvoiceList.active ? recordInvoiceList.pageSize : invoicesPageSize,
+    invoicesTotal: recordInvoiceList.active ? recordInvoiceList.query.data?.total ?? 0 : invoicesTotal,
+    invoicesTotalPages: recordInvoiceList.active ? Math.max(1, Math.ceil((recordInvoiceList.query.data?.total ?? 0) / recordInvoiceList.pageSize)) : invoicesTotalPages,
+    invoicesIsFetching: recordInvoiceList.active ? recordInvoiceList.query.isFetching : invoicesQuery.isFetching,
+    invoicesIsError: recordInvoiceList.active ? recordInvoiceList.query.isError : invoicesQuery.isError,
     quotesPage,
     quotesPageSize,
     quotesTotal,
@@ -395,8 +402,8 @@ export function useDashboardData({
     setExpensesPageSize,
     setIncomesPage,
     setIncomesPageSize,
-    setInvoicesPage,
-    setInvoicesPageSize,
+    setInvoicesPage: recordInvoiceList.active ? recordInvoiceList.setPage : setInvoicesPage,
+    setInvoicesPageSize: recordInvoiceList.active ? recordInvoiceList.setPageSize : setInvoicesPageSize,
     setQuotesPage,
     setQuotesPageSize,
     loadExpenses,

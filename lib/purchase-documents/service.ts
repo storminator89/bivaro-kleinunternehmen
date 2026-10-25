@@ -1,3 +1,5 @@
+import { ownedRecordMatch } from '@/lib/record-search/match';
+import { filteredListQuery } from '@/lib/record-search/list-contract';
 import { parseSupplierTaskFilters, supplierTaskDto } from './supplier-task';
 import { Prisma, type PurchaseDocument } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -121,7 +123,8 @@ export async function purchaseDocumentDetail(userId: string, id: number): Promis
   if (dto.businessDuplicates.length > 50) dto.parserWarnings.push({ code: 'DUPLICATE_LIST_LIMITED', message: 'Weitere mögliche Dubletten vorhanden; die Prüfung ist auf 51 Hinweise begrenzt.' });
   return dto;
 }
-export async function listPurchaseDocuments(userId: string, params: URLSearchParams): Promise<IncomingDocumentList> {
+export async function listPurchaseDocuments(userId: string, params: URLSearchParams, recordQuery?: string): Promise<IncomingDocumentList> {
+  const paletteQuery = recordQuery === undefined ? undefined : filteredListQuery(recordQuery);
   const pageText = params.get('page') ?? '1';
   const limitText = params.get('limit') ?? '25';
   if (!/^\d+$/.test(pageText) || !/^\d+$/.test(limitText)) throw new PurchaseDocumentError('Ungültige Seitenauswahl.');
@@ -137,10 +140,32 @@ export async function listPurchaseDocuments(userId: string, params: URLSearchPar
   const where: Prisma.PurchaseDocumentWhereInput = { ...(taskActive ? { reviewStatus: 'REVIEW', supplierTaskKind: taskFilters.kind && taskFilters.kind !== 'any' ? taskFilters.kind : { not: null }, supplierTaskConfirmationRequired: false,
     ...(taskFilters.due === 'due' ? { supplierTaskFollowUpDate: { lte: taskFilters.today } } : taskFilters.due === 'later' ? { supplierTaskFollowUpDate: { gt: taskFilters.today } } : taskFilters.due === 'undated' ? { supplierTaskFollowUpDate: null } : {}) } : {}), userId, ...(reviewStatus ? { reviewStatus } : {}), ...(search ? { OR: [{ originalFileName: { contains: search } }, { supplierName: { contains: search } }, { invoiceNumber: { contains: search } }, { reviewDraftSearch: { contains: search } }] } : {}) };
   return prisma.$transaction(async tx => {
-    const [documents, total] = await Promise.all([
-      tx.purchaseDocument.findMany({ where, select: SOURCE_METADATA_SELECT, orderBy: taskActive ? [{ supplierTaskFollowUpDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }] : [{ uploadedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit }),
-      tx.purchaseDocument.count({ where }),
-    ]);
+    const orderBy: Prisma.PurchaseDocumentOrderByWithRelationInput[] = taskActive ? [{ supplierTaskFollowUpDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }] : [{ uploadedAt: 'desc' }, { id: 'desc' }];
+    let selectionWhere = where;
+    let total: number;
+    if (paletteQuery !== undefined) {
+      const dueMatch = taskFilters.due === 'due' ? Prisma.sql`AND "supplierTaskFollowUpDate" <= ${taskFilters.today}`
+        : taskFilters.due === 'later' ? Prisma.sql`AND "supplierTaskFollowUpDate" > ${taskFilters.today}`
+        : taskFilters.due === 'undated' ? Prisma.sql`AND "supplierTaskFollowUpDate" IS NULL` : Prisma.empty;
+      const kindMatch = taskFilters.kind && taskFilters.kind !== 'any' ? Prisma.sql`AND "supplierTaskKind" = ${taskFilters.kind}` : Prisma.empty;
+      const match = Prisma.sql`${ownedRecordMatch('inbound', userId, paletteQuery)}
+        ${reviewStatus ? Prisma.sql`AND "reviewStatus" = ${reviewStatus}` : Prisma.empty}
+        ${taskActive ? Prisma.sql`AND "reviewStatus" = 'REVIEW' AND "supplierTaskKind" IS NOT NULL AND "supplierTaskConfirmationRequired" = ${false} ${kindMatch} ${dueMatch}` : Prisma.empty}`;
+      // Only this page's IDs are materialized; the SQL count does not load
+      // private source/preview data or accumulate palette pages.
+      const [candidates, counts] = await Promise.all([
+        tx.$queryRaw<{ id: number }[]>(Prisma.sql`SELECT "id" FROM "PurchaseDocument" WHERE ${match}
+          ORDER BY ${taskActive ? Prisma.sql`"supplierTaskFollowUpDate" ASC NULLS LAST, "id" ASC` : Prisma.sql`"uploadedAt" DESC, "id" DESC`}
+          LIMIT ${limit} OFFSET ${(page - 1) * limit}`),
+        tx.$queryRaw<{ total: bigint | number }[]>(Prisma.sql`SELECT count(*) AS "total" FROM "PurchaseDocument" WHERE ${match}`),
+      ]);
+      total = Number(counts[0].total);
+      selectionWhere = { AND: [where, { id: { in: candidates.map(row => row.id) } }] };
+    } else {
+      total = await tx.purchaseDocument.count({ where });
+    }
+    const documents = await tx.purchaseDocument.findMany({ where: selectionWhere, select: SOURCE_METADATA_SELECT, orderBy,
+      ...(paletteQuery === undefined ? { skip: (page - 1) * limit } : {}), take: limit });
     const projections = documents.length ? await tx.$queryRaw<ProjectedSourcePreview[]>(Prisma.sql`
       SELECT "id",
         CASE WHEN json_type("parsedData", '$.grossAmount') = 'text'

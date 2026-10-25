@@ -77,7 +77,7 @@ test('dirty receipt palette preflights customer/static/create/list/logout, saves
     await selectPalette(page, query, label); await expect(page).toHaveURL(sourceUrl);
     await chooser(page).getByRole('button', { name: 'Hier bleiben', exact: true }).click(); await expect(await note(page)).toHaveValue(savedNote);
   }
-  await selectPalette(page, customer.name, 'Liste öffnen (ungefiltert) · Kunden');
+  await selectPalette(page, customer.name, 'Passende Liste öffnen · Kunden');
   await chooser(page).getByRole('button', { name: 'Hier bleiben', exact: true }).click();
   expect(signouts).toEqual([]);
   expect(await prisma.purchaseDocument.findUniqueOrThrow({ where: { id: source.id } })).toEqual(sourceBefore);

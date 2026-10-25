@@ -18,6 +18,9 @@ import { bindReviewGuardIntents, createReviewNavigationIntents, createReviewTrav
 import { nextReviewDocument, reviewQueueSnapshot, type IncomingNavigationGuard } from './incoming-review-queue';
 import { createIncomingListQueryIntents } from './incoming-list-query-intents';
 import { documentIdFromQuery, errorMessage, extractionLabel, formatSourceAmount, formatSourceDate, incomingJson, INCOMING_PAGE_SIZE, reviewLabel, type IncomingFilter } from './incoming-document-ui';
+import { useRecordListSearch } from '@/components/record-search/record-list-search-provider';
+import { RecordListSearchNotice } from '@/components/record-search/record-list-search-notice';
+import { fetchRecordList, RecordListReadError } from '@/lib/record-search/list-handoff';
 
 export function IncomingDocumentRow({ document, onOpen }: { document: IncomingDocument; onOpen: (id: number, trigger: HTMLButtonElement) => void }) {
   return <li className={styles.record}>
@@ -46,6 +49,8 @@ function IncomingDocumentsWorkspaceContent() {
   const { replace } = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const listSearch = useRecordListSearch('inbound');
+  const listQuery = listSearch?.query;
   const selectedId = documentIdFromQuery(params.get('document'));
   const queryString = params.toString();
   const [activeId, setActiveId] = useState(selectedId);
@@ -67,7 +72,7 @@ function IncomingDocumentsWorkspaceContent() {
   const filter: IncomingFilter = reviewParam === 'BOOKED' ? 'BOOKED' : reviewParam === 'DISMISSED' ? 'DISMISSED' : reviewParam === 'ALL' ? 'ALL' : 'REVIEW';
   const pageParam = params.get('page');
   const page = pageParam && /^\d+$/.test(pageParam) && Number(pageParam) > 0 && Number(pageParam) <= 100_000 ? Number(pageParam) : 1;
-  const search = (params.get('search') ?? '').slice(0, 200);
+  const search = listSearch ? '' : (params.get('search') ?? '').slice(0, 200);
   const taskKindParam = params.get('taskKind');
   const taskKind = taskKindParam && ['any', 'PAYMENT_CHECK', 'DIRECT_DEBIT_WAIT', 'CLARIFY'].includes(taskKindParam) ? taskKindParam : 'all';
   const taskDueParam = params.get('taskDue');
@@ -105,12 +110,15 @@ function IncomingDocumentsWorkspaceContent() {
     if (taskKind !== 'all') query.set('taskKind', taskKind);
     if (taskDue !== 'any') query.set('taskDue', taskDue);
     setLoading(true); setLoadError(null);
-    incomingJson<IncomingDocumentList>(`/api/purchase-documents?${query}`, { signal: controller.signal })
+    const read = listQuery !== undefined
+      ? fetchRecordList<IncomingDocumentList>('inbound', listQuery, { page, limit: INCOMING_PAGE_SIZE, reviewStatus: filter, taskKind, taskDue }, controller.signal)
+      : incomingJson<IncomingDocumentList>(`/api/purchase-documents?${query}`, { signal: controller.signal });
+    read
       .then(result => { if (!controller.signal.aborted) { setData(result); setSavedChange(false); } })
-      .catch(error => { if (!controller.signal.aborted) setLoadError(errorMessage(error)); })
+      .catch(error => { if (!controller.signal.aborted) setLoadError(error instanceof RecordListReadError ? error.message : errorMessage(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [page, filter, search, taskKind, taskDue, refresh]);
+  }, [page, filter, search, taskKind, taskDue, refresh, listSearch?.revision, listQuery]);
 
   useEffect(() => {
     // Router snapshots can lag behind the actual destination. No route effect
@@ -213,13 +221,14 @@ function IncomingDocumentsWorkspaceContent() {
     <div id="incoming-upload-panel" hidden={!uploadOpen}>
       <IncomingUpload onUploaded={uploaded} onOpen={openDocument} onRefresh={refreshList} onBusyChange={setUploadBusy} />
     </div>
+    <RecordListSearchNotice type="inbound" searchInputId="incoming-search" onClear={clear => requestNavigation(() => { clear(); commitQuery({ page: null, search: null }); }, true)} />
     <section className={styles.panel} aria-labelledby="incoming-list-heading" aria-busy={loading}>
       <div className={styles.listHeading}>
         <div><h2 ref={listHeading} tabIndex={-1} id="incoming-list-heading" className="font-semibold outline-none focus-visible:outline-2 focus-visible:outline-ring">{tasksFiltered ? 'Vorgemerkte Lieferantenaufgaben' : filter === 'REVIEW' ? 'Offene Prüfung' : filter === 'BOOKED' ? 'Als Ausgabe erfasste Belege' : filter === 'DISMISSED' ? 'Verworfene Belege' : 'Alle Eingangsbelege'}</h2><p className="mt-1 text-xs text-muted-foreground">{loading ? 'Belege werden geladen…' : loadError ? 'Belege konnten nicht geladen werden' : `${data?.total ?? 0} Belege${search ? ' zur Suche' : ''}`} <span className={styles.sortNote}>{tasksFiltered ? 'Wiedervorlagetag zuerst · ohne Datum zuletzt' : 'Neueste zuerst'}</span></p></div>
         <Button variant="outline" size="icon" disabled={loading} onClick={refreshList} aria-label="Belegeingang aktualisieren"><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /></Button>
       </div>
       <form className={styles.toolbar} role="search" aria-label="Eingangsbelege durchsuchen" onSubmit={event => { event.preventDefault(); updateQuery({ search: searchDraft.trim() || null, page: null, document: null }); }}>
-        <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="incoming-search">Lieferant, Rechnungsnummer oder Dateiname</Label><div className="flex gap-2"><Input id="incoming-search" type="search" value={searchDraft} onChange={event => setSearchDraft(event.target.value)} maxLength={200} placeholder="Belege durchsuchen" /><Button variant="outline" type="submit" aria-label="Belege suchen"><Search className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Suchen</span></Button></div></div>
+        {!listSearch && <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="incoming-search">Lieferant, Rechnungsnummer oder Dateiname</Label><div className="flex gap-2"><Input id="incoming-search" type="search" value={searchDraft} onChange={event => setSearchDraft(event.target.value)} maxLength={200} placeholder="Belege durchsuchen" /><Button variant="outline" type="submit" aria-label="Belege suchen"><Search className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Suchen</span></Button></div></div>}
         <div className="space-y-2"><Label htmlFor="incoming-filter">Prüfstatus</Label><select id="incoming-filter" value={filter} onChange={event => updateQuery({ reviewStatus: event.target.value === 'REVIEW' ? null : event.target.value, taskKind: null, taskDue: null, page: null, document: null })} className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:w-48"><option value="REVIEW">Zu prüfen</option><option value="BOOKED">Als Ausgabe erfasst</option><option value="DISMISSED">Verworfen</option><option value="ALL">Alle Belege</option></select></div>
       </form>
       <div className={taskStyles.filters} aria-label="Lieferantenaufgaben filtern">
@@ -228,7 +237,7 @@ function IncomingDocumentsWorkspaceContent() {
         <p className={taskStyles.filterHelp}>{tasksFiltered ? `Nur ausdrücklich bestätigte Aufgaben an offenen REVIEW-Belegen. Heute/fällig umfasst überfällige Tage. Server-Kalendertag Europe/Berlin: ${data?.supplierTaskToday ? formatSourceDate(data.supplierTaskToday) : 'wird geladen'}.` : 'Interne Vormerkungen, keine Zahlungszustände. Aufgabenfilter zeigen nur bestätigte offene Aufgaben; keine automatische Aufgabe aus einem ungezahlten Beleg.'}</p>
       </div>
       {loading ? <p role="status" className="flex items-center justify-center gap-2 px-4 py-12 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Belege werden geladen…</p> : loadError ? <div role="alert" className="space-y-3 p-5"><p className="text-sm text-critical-foreground">{savedChange ? `Die Änderung wurde gespeichert, aber die Belegliste konnte nicht aktualisiert werden. Keine erneute Buchung starten. ${loadError}` : loadError}</p><Button variant="outline" onClick={refreshList}>Erneut versuchen</Button></div> : data?.documents.length ? <><div className={styles.columnHeadings} aria-hidden="true"><span>Beleg / Lieferant</span><span>Prüfstatus</span><span>Betrag</span></div><ul aria-label="Eingangsbelege">{data.documents.map(document => <IncomingDocumentRow key={document.id} document={document} onOpen={openDocument} />)}</ul></> : <div className={styles.empty}>
-        <Inbox className="mx-auto mb-3 size-7 text-muted-foreground" aria-hidden="true" /><h3 className="font-medium">{tasksFiltered ? 'Keine passenden aktiven Aufgaben' : search ? 'Keine passenden Belege' : filter === 'DISMISSED' ? 'Keine verworfenen Belege' : filter === 'ALL' ? 'Noch keine Eingangsbelege' : filter === 'BOOKED' ? 'Keine als Ausgabe erfassten Belege' : 'Keine Belege zur Prüfung'}</h3>{(search || tasksFiltered) && <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Suche, Aufgabenfilter oder Prüfstatus ändern. Aufgaben ohne Datum bleiben separat.</p>}
+        <Inbox className="mx-auto mb-3 size-7 text-muted-foreground" aria-hidden="true" /><h3 className="font-medium">{tasksFiltered ? 'Keine passenden aktiven Aufgaben' : search || listSearch ? 'Keine passenden Belege' : filter === 'DISMISSED' ? 'Keine verworfenen Belege' : filter === 'ALL' ? 'Noch keine Eingangsbelege' : filter === 'BOOKED' ? 'Keine als Ausgabe erfassten Belege' : 'Keine Belege zur Prüfung'}</h3>{(search || tasksFiltered || listSearch) && <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Suche, Aufgabenfilter oder Prüfstatus ändern. Aufgaben ohne Datum bleiben separat.</p>}
         {tasksFiltered && <Button variant="link" className="mt-2" onClick={() => updateQuery({ taskKind: null, taskDue: null, page: null })}>Aufgabenfilter zurücksetzen</Button>}
         {search && <Button variant="link" className="mt-2" onClick={() => updateQuery({ search: null, page: null })}>Suche zurücksetzen</Button>}
       </div>}

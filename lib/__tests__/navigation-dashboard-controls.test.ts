@@ -21,6 +21,7 @@ vi.mock('@/hooks/use-dashboard-data', () => ({ useDashboardData: () => ({
   summaryIsFetching: state.summaryFetching, summaryIsError: state.summaryFailed, reloadSummary: state.reloadSummary,
 }) }));
 vi.mock('@/hooks/use-dashboard-create-action', () => ({ useDashboardCreateAction: state.createAction }));
+vi.mock('@/hooks/use-invoice-detail-selection', () => ({ useInvoiceDetailSelection: () => [null, vi.fn()] }));
 vi.mock('@/components/dashboard/dashboard-client', () => ({ DashboardClient: () => null }));
 vi.mock('@/components/dashboard/create-invoice-modal', () => ({ CreateInvoiceModal: () => null }));
 vi.mock('@/components/dashboard/modals', () => ({
