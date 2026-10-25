@@ -77,7 +77,11 @@ describe('database-grouped dashboard filter options #156', () => {
     expect(data.categories).not.toContain('Sonstiges');
     expect(statements).toHaveLength(2);
     for (const table of ['Expense', 'Customer']) {
-      const query = statements.find(statement => statement.includes(`"${table}"`));
+      // Prisma may quote SQLite identifiers with backticks or double quotes.
+      const tableSource = new RegExp('\\bFROM\\s+(?:(?:"[^"]+"|`[^`]+`)\\.)?(?:"' + table + '"|`' + table + '`)(?:\\s|$)', 'i');
+      const queries = statements.filter(statement => tableSource.test(statement));
+      expect(queries, statements.join('\n')).toHaveLength(1);
+      const query = queries[0];
       expect(query, table).toMatch(/\bGROUP BY\b/i);
       expect(query, table).toMatch(/\bORDER BY\b/i);
       expect(query, table).not.toMatch(/SELECT\s+\*/i);
