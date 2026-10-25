@@ -4,11 +4,47 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { FullPaymentFields } from '@/components/dashboard/full-payment-dialog';
 import { PaymentHistory } from '@/components/payments/payment-history';
-import { displayPaymentAmount, paymentAttempt, paymentFailure, paymentIdentityStorageKey, paymentInputCents, paymentPendingStorageKey, readConfirmedPayment, readPaymentPreflight, recoverConfirmedPayment, validatePaymentFields } from '@/lib/full-payment-form';
+import { displayPaymentAmount, paymentAttempt, paymentFailure, paymentIdentityStorageKey, paymentInputCents, paymentPendingStorageKey, readConfirmedPayment, readOriginAssignments, readPaymentPreflight, readRootCapabilities, recoverConfirmedPayment, validatePaymentFields } from '@/lib/full-payment-form';
+import type { EffectivePayment, RootCapabilities } from '@/lib/payment-journal/allocation-contract';
 
 const summary = (paidCents = '0') => ({ totalCents: '12000', paidCents, openCents: (BigInt(12000) - BigInt(paidCents)).toString(), paid: paidCents === '12000', paymentState: paidCents === '12000' ? 'PAID' : paidCents === '0' ? 'OPEN' : 'PARTIAL' });
 const event = (id = 1, amountCents = '4000', key = 'first') => ({ id, invoiceId: 7, amountCents, currency: 'EUR' as const, paidAt: '2026-10-19T00:00:00.000Z', dateCertainty: 'ACTUAL', source: 'MANUAL', reference: 'Statement', idempotencyKey: key });
 const preflight = (paidCents = '0', events = paidCents === '0' ? [] : [event(1, paidCents)]) => ({ currency: 'EUR', canRecordPayment: paidCents !== '12000', events, event: events.length === 1 ? events[0] : null, legacyAdoptionRequired: false, reviewRequired: false, summary: summary(paidCents) });
+
+describe('indexed payment-root reference matching', () => {
+  const root = (id: number, amountCents: string): EffectivePayment => ({ originalPaymentId: id, originInvoiceId: 7, allocatedInvoiceId: 7,
+    amountCents, validReceivedCents: amountCents, refundedCents: '0', retainedCents: amountCents,
+    paidAt: '2026-10-19T00:00:00.000Z', dateCertainty: 'ACTUAL', source: 'MANUAL', bindingStableKey: null,
+    allocationRevision: null, allocationChangeStableKey: null, provenance: 'MANUAL' });
+  const capability = (id: number, correctableCents: string): RootCapabilities => ({ originalPaymentId: id, correctableCents, refundableCents: '0',
+    canCorrect: true, canRefund: false, canReallocate: false, correctionReviewReason: null, refundReviewReason: 'Not cancelled', reallocationReviewReason: 'Not bank-linked' });
+  const review = 'Der Rechnungsbetrag oder die Zahlungsdaten sind nicht eindeutig.';
+
+  it('matches nonaligned multiple IDs while retaining source order and object references', () => {
+    const roots = [root(91, '4000'), root(37, '8000'), root(58, '12000')];
+    const capabilities = [capability(37, '7000'), capability(58, '11000'), capability(91, '3000')];
+    const checked = readRootCapabilities(capabilities, roots);
+    expect(checked).toEqual(capabilities);
+    checked.forEach((item, index) => expect(item).toBe(capabilities[index]));
+    const events = [event(58, '12000'), event(91, '4000'), event(37, '8000')];
+    const assignments = readOriginAssignments(roots, events);
+    expect(assignments).toEqual(roots);
+    assignments.forEach((item, index) => expect(item).toBe(roots[index]));
+    for (const mismatch of [{ id: 99 }, { invoiceId: 8 }, { amountCents: '1' }, { paidAt: null }, { source: 'LEGACY_IMPORT' }, { dateCertainty: 'UNKNOWN' }]) {
+      expect(() => readOriginAssignments(roots, [{ ...events[0], ...mismatch }, ...events.slice(1)])).toThrow(review);
+    }
+    expect(() => readRootCapabilities([capabilities[0], capabilities[0], capabilities[2]], roots)).toThrow(review);
+    expect(() => readRootCapabilities([capability(99, '1'), ...capabilities.slice(1)], roots)).toThrow(review);
+  });
+
+  it('preserves strict-equality and first-match failures for separately supplied typed roots', () => {
+    const first = root(91, '4000');
+    // The old find observes the first row, then the duplicate capability guard;
+    // a last-wins Map would instead parse the later row's invalid retained value.
+    expect(() => readRootCapabilities([capability(91, '3000'), capability(91, '3000')], [first, { ...first, retainedCents: 'invalid' }])).toThrow(review);
+    expect(() => readRootCapabilities([capability(Number.NaN, '1')], [root(Number.NaN, '4000')])).toThrow(review);
+  });
+});
 
 describe('partial-payment form safety', () => {
   it('uses exact checked server remainder and keeps settlement separate from the allocation', () => {
