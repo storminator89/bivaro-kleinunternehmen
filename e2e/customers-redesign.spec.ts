@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Request, type Route, type TestInfo } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
@@ -153,6 +153,11 @@ function csv(kind: Kind) {
 
 async function importScreens(page: Page, info: TestInfo, kind: Kind, value: Theme, width: number) {
   const label = kind === 'customers' ? 'customer' : 'article';
+  const isPreviewPost = (request: Request) => {
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/data-import') return false;
+    const payload = request.postDataJSON() as { action?: unknown; kind?: unknown } | null;
+    return payload?.action === 'preview' && payload.kind === kind;
+  };
   await page.goto(`/customers/import${kind === 'articles' ? '?kind=articles' : ''}`);
   await expect(page.getByRole('heading', { name: 'Datei auswählen', exact: true })).toBeVisible();
   await expect(page.getByLabel('Datenart', { exact: true })).toHaveValue(kind);
@@ -165,16 +170,33 @@ async function importScreens(page: Page, info: TestInfo, kind: Kind, value: Them
   if (kind === 'customers' && value === 'light' && width === 375) await capture(page, info, 'csv-redesign-customer-mapping-light-375.png');
   if (kind === 'articles' && value === 'dark' && width === 1440) await capture(page, info, 'csv-redesign-article-mapping-dark-1440.png');
   if (kind === 'customers' && value === 'light' && width === 1440) {
-    await page.route('**/api/data-import', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Synthetische Vorschau ist vorübergehend nicht erreichbar.' }) }), { times: 1 });
-    await page.getByRole('button', { name: 'Vorschau prüfen', exact: true }).click();
-    await expect(page.getByRole('list', { name: 'Importschritte', exact: true }).locator('..').getByRole('alert')).toContainText('Synthetische Vorschau ist vorübergehend nicht erreichbar.');
+    const failPreview = (route: Route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Synthetische Vorschau ist vorübergehend nicht erreichbar.' }) });
+    await page.route('**/api/data-import', failPreview, { times: 1 });
+    try {
+      const [failedPreview] = await Promise.all([
+        page.waitForResponse(response => isPreviewPost(response.request()), { timeout: 5000 }),
+        page.getByRole('button', { name: 'Vorschau prüfen', exact: true }).click(),
+      ]);
+      expect(failedPreview.status()).toBe(503);
+      expect(await failedPreview.finished()).toBeNull();
+      await expect(page.getByRole('list', { name: 'Importschritte', exact: true }).locator('..').getByRole('alert')).toContainText('Synthetische Vorschau ist vorübergehend nicht erreichbar.');
+      await expect(page.getByRole('button', { name: 'Vorschau prüfen', exact: true })).toBeEnabled();
+      await expect(page.locator('fieldset')).toBeEnabled();
+      await expect(page.getByLabel('Datenart', { exact: true })).toBeEnabled();
+      await expect(page.getByLabel('CSV-Datei auswählen', { exact: true })).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'Vorschau wird geprüft …', exact: true })).toHaveCount(0);
+    } finally {
+      // Settle and remove the first interception before observing the retry.
+      await page.unroute('**/api/data-import', failPreview);
+    }
   }
   if (kind === 'customers' && value === 'light' && width === 1440) {
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     let held = false;
     let continued: Promise<void> | undefined;
-    const holdPreview = async (route: import('@playwright/test').Route) => {
+    const holdPreview = async (route: Route) => {
+      if (!isPreviewPost(route.request())) { await route.fallback(); return; }
       held = true;
       continued = gate.then(() => route.continue());
       await continued;
@@ -183,7 +205,13 @@ async function importScreens(page: Page, info: TestInfo, kind: Kind, value: Them
     // A one-shot route can be consumed before a later request reaches the guard.
     await page.route('**/api/data-import', holdPreview);
     try {
-      await page.getByRole('button', { name: 'Vorschau prüfen', exact: true }).click();
+      // Observe the genuine mouse-triggered preview POST, not a stale error or
+      // an unrelated recovery GET; retain the independent held-handler proof.
+      const [retriedPreview] = await Promise.all([
+        page.waitForRequest(isPreviewPost, { timeout: 5000 }),
+        page.getByRole('button', { name: 'Vorschau prüfen', exact: true }).click(),
+      ]);
+      expect(retriedPreview.postDataJSON()).toMatchObject({ action: 'preview', kind });
       await expect.poll(() => held).toBe(true);
       await expect(page.getByRole('button', { name: 'Vorschau wird geprüft …', exact: true })).toBeDisabled();
       const locked = await page.locator('fieldset').evaluate(fieldset => {
