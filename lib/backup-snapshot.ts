@@ -1,3 +1,4 @@
+import { validateSupplierTaskBackupFields } from '@/lib/purchase-documents/supplier-task-backup';
 import { quoteCreateReceiptsFromBackup } from '@/lib/quote-create-receipt-backup';
 import { validateQuoteCreateBackup } from '@/lib/quote-create-backup';
 import { bankMappingProfilesFromBackup } from '@/lib/bank-mapping-profile-backup';
@@ -183,6 +184,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
     validateQuoteCreateBackup({ invoices, quoteCreateReceipts }, true);
     const quoteReceipts = quoteCreateReceiptsFromBackup({ invoices, quoteCreateReceipts }, true);
     const allocations = portableBankAllocations(bankPaymentBindings, paymentAllocationChanges, bankImportRows, paymentJournalEvents);
+    for (const document of purchaseDocuments) validateSupplierTaskBackupFields(document as unknown as Record<string, unknown>, `purchaseDocuments[${document.id}]`, true);
     const includedOriginalHashes = new Set(purchaseDocuments.map(document => document.originalSha256));
     return {
       user: { id: user?.id, email: user?.email, name: user?.name },

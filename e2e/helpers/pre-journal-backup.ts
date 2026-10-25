@@ -34,6 +34,12 @@ function canonical(value: unknown): unknown {
 }
 function hash(value: unknown) { return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex'); }
 function historicalManifest(data: Record<string, unknown>, sourceUserId: string): BackupManifest {
+  // Genuine historical fixtures have no task capability. Only empty future
+  // defaults may be stripped; never discard a real task to relabel an export.
+  if (Array.isArray(data.purchaseDocuments)) for (const document of data.purchaseDocuments) {
+    if (document.supplierTaskKind != null || document.supplierTaskFollowUpDate != null || (document.supplierTaskConfirmationRequired !== false && document.supplierTaskConfirmationRequired !== undefined)) throw new Error('Pre-journal fixture cannot contain supplier task evidence.');
+    delete document.supplierTaskKind; delete document.supplierTaskFollowUpDate; delete document.supplierTaskConfirmationRequired;
+  }
   const generatedAt = '2025-03-18T00:00:00.000Z', auditLogs = data.auditLogs ?? [], counters = data.invoiceNumberCounters ?? [];
   return {
     format: 'bivaro-backup', version: '3.0', schemaVersion: '20261020223000_add_suppliers_and_purchase_booking',

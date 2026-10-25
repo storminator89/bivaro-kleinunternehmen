@@ -1,3 +1,4 @@
+import { parseSupplierTaskFilters, supplierTaskDto } from './supplier-task';
 import { Prisma, type PurchaseDocument } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { inTransaction } from '@/lib/db-transaction';
@@ -18,6 +19,7 @@ const SOURCE_METADATA_SELECT = {
   id: true, userId: true, originalFileName: true, originalSha256: true, originalByteCount: true,
   mediaType: true, uploadedAt: true, supplierName: true, invoiceNumber: true, invoiceDate: true,
   currency: true, parseStatus: true, parseErrorCode: true, parserVersion: true, reviewStatus: true,
+  supplierTaskKind: true, supplierTaskFollowUpDate: true, supplierTaskConfirmationRequired: true,
   revision: true, expenseId: true, approvedAt: true, approvalRequestId: true, approvalFingerprint: true,
   reviewedSourceSnapshot: true, aiDraftProvenance: true, reviewDraft: true, reviewDraftSavedAt: true, dismissedAt: true, dismissalReason: true, supplierId: true, selectedSupplierSnapshot: true,
 } satisfies Prisma.PurchaseDocumentSelect;
@@ -80,7 +82,7 @@ function sourceDto(document: SourceMetadata, preview: SourcePreviewSummary | nul
   return {
     id: document.id, direction: 'INCOMING', reviewState: document.reviewStatus as PurchaseReviewStatus,
     reviewStatus: document.reviewStatus as PurchaseReviewStatus, parseStatus: document.parseStatus as PurchaseParseStatus,
-    validationStatus: 'NOT_VALIDATED', revision: document.revision,
+    validationStatus: 'NOT_VALIDATED', revision: document.revision, supplierTask: supplierTaskDto(document),
     reviewedSourceSnapshot: document.reviewedSourceSnapshot as ManualPhotoSnapshot | null,
     aiDraftProvenance: document.aiDraftProvenance as IncomingDocument['aiDraftProvenance'],
     reviewDraft: document.reviewDraft as PurchaseReviewDraft | null, reviewDraftSavedAt: document.reviewDraftSavedAt?.toISOString() ?? null,
@@ -129,10 +131,14 @@ export async function listPurchaseDocuments(userId: string, params: URLSearchPar
   if (reviewStatus && !PURCHASE_REVIEW_STATUSES.includes(reviewStatus as PurchaseReviewStatus)) throw new PurchaseDocumentError('Ungültiger Prüfstatus.');
   const search = params.get('search')?.trim() ?? '';
   if (search.length > 200) throw new PurchaseDocumentError('Suchtext ist zu lang.');
-  const where: Prisma.PurchaseDocumentWhereInput = { userId, ...(reviewStatus ? { reviewStatus } : {}), ...(search ? { OR: [{ originalFileName: { contains: search } }, { supplierName: { contains: search } }, { invoiceNumber: { contains: search } }, { reviewDraftSearch: { contains: search } }] } : {}) };
+  const taskFilters = parseSupplierTaskFilters(params);
+  const taskActive = taskFilters.kind !== null || taskFilters.due !== 'any';
+  if (taskActive && reviewStatus && reviewStatus !== 'REVIEW') throw new PurchaseDocumentError('Aktive Vormerkungen gehören ausschließlich zu offenen Belegen.');
+  const where: Prisma.PurchaseDocumentWhereInput = { ...(taskActive ? { reviewStatus: 'REVIEW', supplierTaskKind: taskFilters.kind && taskFilters.kind !== 'any' ? taskFilters.kind : { not: null }, supplierTaskConfirmationRequired: false,
+    ...(taskFilters.due === 'due' ? { supplierTaskFollowUpDate: { lte: taskFilters.today } } : taskFilters.due === 'later' ? { supplierTaskFollowUpDate: { gt: taskFilters.today } } : taskFilters.due === 'undated' ? { supplierTaskFollowUpDate: null } : {}) } : {}), userId, ...(reviewStatus ? { reviewStatus } : {}), ...(search ? { OR: [{ originalFileName: { contains: search } }, { supplierName: { contains: search } }, { invoiceNumber: { contains: search } }, { reviewDraftSearch: { contains: search } }] } : {}) };
   return prisma.$transaction(async tx => {
     const [documents, total] = await Promise.all([
-      tx.purchaseDocument.findMany({ where, select: SOURCE_METADATA_SELECT, orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit }),
+      tx.purchaseDocument.findMany({ where, select: SOURCE_METADATA_SELECT, orderBy: taskActive ? [{ supplierTaskFollowUpDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }] : [{ uploadedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit }),
       tx.purchaseDocument.count({ where }),
     ]);
     const projections = documents.length ? await tx.$queryRaw<ProjectedSourcePreview[]>(Prisma.sql`
@@ -145,7 +151,7 @@ export async function listPurchaseDocuments(userId: string, params: URLSearchPar
     `) : [];
     const previews = new Map(projections.map(row => [Number(row.id), row]));
     // List summaries deliberately omit preview and party candidates; the detail endpoint supplies those cards and line items.
-    return { documents: documents.map(document => sourceDto(document, document.parseStatus === 'PARSED' ? projectedPreview(previews.get(document.id)) : null)), total, page, limit };
+    return { documents: documents.map(document => sourceDto(document, document.parseStatus === 'PARSED' ? projectedPreview(previews.get(document.id)) : null)), total, page, limit, supplierTaskToday: taskFilters.today };
   });
 }
 async function findReplay(userId: string, requestId: string, sha256: string): Promise<PurchaseDocument | null> {
@@ -238,10 +244,10 @@ export async function changePurchaseReview(userId: string, id: number, revision:
     if (action === 'dismiss' && document.reviewStatus === 'DISMISSED') return;
     if (document.revision !== revision) throw new PurchaseDocumentError('Beleg wurde inzwischen geändert. Bitte neu laden.', 409, 'REVISION_CONFLICT');
     if (action === 'reopen' && document.reviewStatus !== 'DISMISSED') throw new PurchaseDocumentError('Nur verworfene Eingangsbelege können wieder geöffnet werden.', 409, 'STATE_CONFLICT');
-    const changed = await tx.purchaseDocument.updateMany({ where: { userId, id, revision, reviewStatus: action === 'dismiss' ? 'REVIEW' : 'DISMISSED', expenseId: null }, data: { ...(action === 'dismiss' && document.aiExtraction !== null ? { aiExtraction: closedSourceAiExtractionState(document.aiExtraction,document.originalSha256,'AI_SOURCE_DISMISSED') as unknown as Prisma.InputJsonValue } : {}), reviewStatus: action === 'dismiss' ? 'DISMISSED' : 'REVIEW', dismissedAt: action === 'dismiss' ? new Date() : null, dismissalReason: action === 'dismiss' ? reason : null, revision: { increment: 1 } } });
+    const changed = await tx.purchaseDocument.updateMany({ where: { userId, id, revision, reviewStatus: action === 'dismiss' ? 'REVIEW' : 'DISMISSED', expenseId: null }, data: { ...(action === 'reopen' && document.supplierTaskKind !== null ? { supplierTaskConfirmationRequired: true } : {}), ...(action === 'dismiss' && document.aiExtraction !== null ? { aiExtraction: closedSourceAiExtractionState(document.aiExtraction,document.originalSha256,'AI_SOURCE_DISMISSED') as unknown as Prisma.InputJsonValue } : {}), reviewStatus: action === 'dismiss' ? 'DISMISSED' : 'REVIEW', dismissedAt: action === 'dismiss' ? new Date() : null, dismissalReason: action === 'dismiss' ? reason : null, revision: { increment: 1 } } });
     if (changed.count !== 1) throw new PurchaseDocumentError('Beleg wurde inzwischen geändert. Bitte neu laden.', 409, 'REVISION_CONFLICT');
     await createFinancialAuditLog({ userId, action: 'REVIEW', entityType: 'PurchaseDocument', entityId: id,
-      oldValues: { reviewStatus: document.reviewStatus, revision }, newValues: { reviewStatus: action === 'dismiss' ? 'DISMISSED' : 'REVIEW', revision: revision + 1, ...(action === 'dismiss' ? { dismissalReason: reason } : {}) },
+      oldValues: { reviewStatus: document.reviewStatus, revision }, newValues: { reviewStatus: action === 'dismiss' ? 'DISMISSED' : 'REVIEW', ...(action === 'reopen' && document.supplierTaskKind !== null ? { supplierTaskConfirmationRequired: true } : {}), revision: revision + 1, ...(action === 'dismiss' ? { dismissalReason: reason } : {}) },
       metadata: { actorId: userId, tenantId: userId, operation: `purchase-document.${action}`, originalReference: document.originalSha256, reason: action === 'dismiss' ? reason! : 'explicit source review reopened; no posting' } }, tx);
   });
   return purchaseDocumentDetail(userId, id);

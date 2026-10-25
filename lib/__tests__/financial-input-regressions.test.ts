@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { isValidElement, Suspense, type ReactElement, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent } from '@/components/ui/tooltip';
@@ -13,7 +13,12 @@ import { buildTaxSummary } from '@/lib/tax-summary';
 
 // A shallow hook harness exercises actual component event handlers/render gates
 // without a browser, a live server, network, or a repository database.
-const hooks = vi.hoisted(() => ({ index: 0, states: [] as unknown[] }));
+const hooks = vi.hoisted(() => ({ index: 0, states: [] as unknown[], simulationSearch: 'year=2026&timeRange=thisYear' }));
+vi.mock('next/navigation', () => ({
+  // The real inner component reads the selected year/view from Next's URL API.
+  // A fixed supported URL is independent of the test machine's current year.
+  useSearchParams: () => new URLSearchParams(hooks.simulationSearch),
+}));
 vi.mock('@/components/public-accounting/accounting-workspaces.module.css', () => ({ default: {} }));
 vi.mock('react', async importOriginal => {
   const actual = await importOriginal<typeof import('react')>();
@@ -75,6 +80,7 @@ async function submit(root: ReactNode): Promise<void> {
 beforeEach(() => {
   hooks.states = [];
   hooks.index = 0;
+  hooks.simulationSearch = 'year=2026&timeRange=thisYear';
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
@@ -195,12 +201,21 @@ describe('issue #29: numeric assumption validation', () => {
   });
 
   function simulation() {
-    return render(() => SteuerSimulationPage());
+    return render(() => {
+      // Preserve the real Next-required Suspense boundary, then explicitly
+      // render its actual child. Calling only the route wrapper never invokes
+      // the inner component's hooks, controls, validation or calculation gates.
+      const page = SteuerSimulationPage();
+      expect(page.type).toBe(Suspense);
+      const content = page.props.children as Node;
+      expect(isValidElement(content)).toBe(true);
+      expect(typeof content.type).toBe('function');
+      return (content.type as (props: Node['props']) => ReactNode)(content.props);
+    });
   }
   function readySimulation() {
     hooks.states[0] = buildTaxSummary({ year: 2026, timeRange: 'thisYear', incomes: [{ amount: 50000, date: new Date('2026-10-20'), taxRelevant: true }], expenses: [] });
     hooks.states[1] = false;
-    hooks.states[4] = 2026;
     return simulation();
   }
   function numericInput(root: ReactNode, id: string): Node {
@@ -223,9 +238,26 @@ describe('issue #29: numeric assumption validation', () => {
     hooks.states[0] = state === 'failed' ? null : buildTaxSummary({ year: 2026, timeRange: state === 'partial-year' ? 'last3Months' : 'thisYear', incomes: [], expenses: [] });
     hooks.states[1] = state === 'loading';
     hooks.states[2] = state === 'failed' ? 'Daten nicht verfügbar' : null;
+    hooks.simulationSearch = `year=2026&timeRange=${state === 'partial-year' ? 'last3Months' : 'thisYear'}`;
     const panel = nodes(simulation()).find(node => node.props['aria-labelledby'] === 'recommendations-heading')!;
-    expect(text(panel)).toContain('vollständiges Steuerjahr');
-    expect(nodes(panel).filter(node => node.type === 'li')).toHaveLength(0);
+    const checks = nodes(panel).filter(node => node.type === 'li');
+    if (state === 'partial-year') {
+      // A confirmed period can disclose neutral source checks, but must not
+      // invent an annual basis, extrapolate tax, or offer optimization advice.
+      expect(checks).toHaveLength(2);
+      expect(text(checks[0])).toContain('Datenumfang abgleichen');
+      expect(text(checks[0])).toContain('0 Einnahmen- und 0 Ausgabenpositionen');
+      expect(text(checks[1])).toContain('Keine Jahresbasis');
+      expect(text(checks[1])).toContain('nicht auf ein Jahr hochgerechnet');
+      expect(text(checks[1])).toContain('keine Modellsteuern berechnet');
+    } else {
+      expect(text(panel)).toContain('bestätigte serverseitige Datenbasis');
+      expect(checks).toHaveLength(0);
+    }
+    expect(text(panel)).not.toMatch(/Zukunftsinvestitionen vorziehen|Zusätzliche Abzugsmöglichkeiten|Verluste strategisch nutzen|Hohe Grenzsteuerbelastung|Keine weiteren Hinweise/);
+    expect(calculateIncomeTax).not.toHaveBeenCalled();
+    expect(calculateChurchTax).not.toHaveBeenCalled();
+    expect(calculateTradeTaxDetails).not.toHaveBeenCalled();
   });
 
   it('keeps a genuinely loaded zero distinct from unavailable fiscal data', () => {
@@ -236,13 +268,36 @@ describe('issue #29: numeric assumption validation', () => {
   });
 
   it.each([
+    'year=2025&timeRange=thisYear',
+    'year=2026&timeRange=all',
+    'year=2024&timeRange=thisYear',
+  ])('does not calculate from a mismatched or unsupported URL selection (%s)', selection => {
+    readySimulation();
+    hooks.simulationSearch = selection;
+    vi.clearAllMocks();
+    const tree = simulation();
+    const source = nodes(tree).find(node => node.props['aria-labelledby'] === 'overview-heading')!;
+    expect(text(source)).toContain('Nicht verfügbar / fachlich zu prüfen');
+    expect(text(source)).toContain('Keine bestätigte steuerliche Datenbasis');
+    expect(text(source)).not.toContain('50.000,00');
+    expect(text(tree)).toContain('nicht berechnet');
+    expect(calculateIncomeTax).not.toHaveBeenCalled();
+    expect(calculateChurchTax).not.toHaveBeenCalled();
+    expect(calculateTradeTaxDetails).not.toHaveBeenCalled();
+  });
+
+  it.each([
     ['churchTaxRate', '101'], ['healthInsurance', '-4000'], ['pensionInsurance', '-1'],
     ['careInsurance', '-1'], ['otherDeductions', '-1'], ['tradeTaxHebesatz', '1001'],
     ['grossSalary', '-1'], ['employeeExpenses', '-1'], ['healthInsurance', ''],
-  ])('suppresses all calculations and recommendations for %s=%j, then recovers', (id, value) => {
+  ])('suppresses all tax calculations and optimization advice for %s=%j, then recovers', (id, value) => {
     let tree = readySimulation();
-    hooks.states[12] = true; // Church tax enabled.
-    hooks.states[14] = 'side-business';
+    // Exercise actual activation handlers rather than indexing assumption
+    // hooks whose positions changed when year/view moved into the URL.
+    (field(tree, 'includeChurchTax').props.onChange as (event: unknown) => void)({ target: { checked: true } });
+    const sideBusiness = nodes(tree).find(node => node.type === Button && text(node).trim() === 'Nebenberuflich')!;
+    expect(sideBusiness).toBeDefined();
+    (sideBusiness.props.onClick as () => void)();
     tree = simulation();
     change(tree, id, value);
     vi.clearAllMocks();

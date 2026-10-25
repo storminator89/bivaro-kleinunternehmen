@@ -582,3 +582,88 @@ Architektur-Vorprüfung
 - „Discovery“ darf erst nach Architekturentscheidung, Besitzer, vertikaler Implementierung und AC-Evidenz in einen Umsetzungsstatus wechseln.
 - Kein Ticket erhält wegen eines grünen Teiltests den Status „Erledigt“, solange Scope, offene ACs oder Freigaben verbleiben.
 - BV-007 bleibt Teilumsetzung, solange Retention/Legal Hold und Ownernachfolge fehlen. Steuer- und EÜR-Tickets bleiben Teilumsetzung, solange unabhängige fachliche Beispiele, Formular-/Jahresabnahme und konkrete Betriebsfreigabe fehlen.
+
+
+## GitHub #59/#130: neuer Wiederaufbau vom 25.10.2026, 05:53 UTC
+
+Diese GitHub-Issues sind nicht die historischen BV-059/BV-130. Alle 160
+historischen Ticketobjekte und Summen bleiben unverändert. Der unveröffentlichte
+Quellstand `8978c824` ist nach Executorwechsel nicht verfügbar und wurde nicht
+als ursprünglicher Code wiederhergestellt. Historische lokale Prüfergebnisse
+werden für den Ersatz nicht übernommen.
+
+Neuer Basisstand: `e268d1c8d64dd7f7bceb4b651ba55eb3ebdb7931` nach #142/#143.
+Wiederaufbau mit getrennten Sol-6.1-xhigh-Lanes läuft; noch keine abgeschlossene
+Implementierung oder Hosted-/Browserabnahme. Lokale Funktionstests werden nicht
+ausgeführt. Die sieben akzeptierten Screenshotpartitionen / 209 Namen / 28 MiB
+bleiben unverändert; acht zusätzliche synthetische Nachweise erhalten eine
+eigene begrenzte Partition. [Prüf- und Recoverygrenzen](../testing/issues-59-130-reconstruction-2026-10-25.md).
+
+Draft-Veröffentlichung und vollständige Hosted-Prüfung sind freigegeben, Merge,
+Issue-Schließung und Deployment nicht. Dieser datierte Checkpoint behauptet
+weder Veröffentlichung noch bestandene Prüfungen.
+
+### Integrierter Ersatzstand #59/#130 vom 25.10.2026, 06:10 UTC
+
+Frischer Quellstand `94707ed6d6b4f16f0a4b471983e40e8100dbe319`, Tree
+`4f4f9d608f9852583b12f0a5eeb14d4734fa2f43`: Transparenz der bestehenden
+Simulation ohne Formeländerung sowie interne Lieferanten-Vormerkungen mit
+Tenant-/CAS-/Audit- und Backup-Vertrag integriert. Historische BV-Tickets und
+Summen unverändert; GitHub #59/#130 bleiben offen.
+
+Vollständiger Lint, Typprüfung, statische Prisma-Schemavalidierung und normaler
+Produktionsbuild einschließlich Vor-/Nachbuild sind auf diesem Ersatzstand
+bestanden (Node 24.22.1; neun bestehende Tracingwarnungen). Zwei echte P2-Befunde
+aus unabhängigem Quellreview vor Draft-Veröffentlichung korrigiert: präzise
+Vollseiten-Bildmaße und Erhalt neuerer Eingaben bei verspäteter Antwort. Enges
+Nachreview ohne verbleibenden konkreten P1/P2 im geprüften Scope. Keine lokalen
+Funktionstests; Unit-/API-/Backup-/Komponenten-/Browserfälle nur verfasst.
+Vollständige Hosted-Prüfung und echte Bildkontrolle des veröffentlichten Heads
+sind weiterhin erforderlich. [Konkrete Evidenz und Grenzen](../testing/issues-59-130-reconstruction-2026-10-25.md).
+
+### Erster Hosted-Lauf #144 und Recovery vom 25.10.2026, 07:34 UTC
+
+[Draft #144](https://github.com/storminator89/bivaro-kleinunternehmen/pull/144)
+auf `cd3606c4` ist veröffentlicht, aber noch **nicht insgesamt abgenommen**.
+CI: 4.316 bestanden / 16 fehlgeschlagen / 20 übersprungen (zwei veraltete
+#59-Testharness-/Quellvertragdateien), Lint/Typen/Security bestanden; Build
+übersprungen. Die 40 neuen Lieferanten-Unit/API/Backup-Fälle bestanden.
+Browser: 169 bestanden / zwei fehlgeschlagen, alle drei Lieferanten-Journeys
+bestanden. Zwei #59-Testverträge werden eng korrigiert: eindeutige sichtbare
+Disclosure-Auswahl und getrennte exakte Auth-Diagnose statt Geschäftsänderung.
+Vier zuvor nur verfasste Komponentenfälle werden jetzt tatsächlich sammelbar;
+kein alter Nichtlauf wird als bestanden gezählt. PDF-A und Container x64/ARM
+bestanden.
+
+217 tatsächliche PNGs / acht ZIPs wurden vollständig gegen Pixel-/Metadaten-/
+Dateihashes geprüft (21.076.497 Bytes innerhalb 30 MiB); die acht neuen Bilder
+und vier Inbox-Bilder wurden wirklich angesehen. Ein transienter Fortschritts-
+streifen/Scrollversatz im neuen Inbox-Nachweis wird im Capture-Helfer korrigiert,
+nicht durch App-CSS-Manipulation. Reale Wiederholungsabnahme des neuen Heads
+steht noch aus. [Exakte Läufe, Grenzen und Recovery](../testing/issues-59-130-reconstruction-2026-10-25.md).
+
+
+### Technische Draft-Abnahme #144 vom 25.10.2026, 08:08 UTC
+
+Der neue Ersatz ist auf unveränderlichem Remotehead
+`a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94` / Tree
+`2ef67f729bed4c3db150194d7716f73adc5f4b98` technisch vollständig hosted geprüft:
+alle neun Checks grün; CI **4.339 bestanden / 20 bestehende Skips** einschließlich
+vier wirklich ausgeführter Komponentenfälle, headed Chromium **171 bestanden**,
+PDF-A und Container jeweils x64/ARM erfolgreich. Kein historischer Nichtlauf
+wird als bestanden umetikettiert; der fehlgeschlagene Erstlauf bleibt oben
+sichtbar. Keine lokalen Funktionstests ausgeführt.
+
+217 PNGs / acht ZIPs vollständig gegen Datei-/Pixel-/Metadatenhashes geprüft:
+21.071.679 Bytes innerhalb 30 MiB, davon acht neue Bilder 643.496 Bytes innerhalb
+2 MiB. Alle acht neuen Originalbilder und vier aktuelle Inbox-Bilder in beiden
+Themes/Desktop/Mobile tatsächlich angesehen; kein verbleibender konkreter
+Bildbefund im fokussierten Scope. Bestehende 209 Namen/Partitionen/Budgets und
+Redesigns bleiben unverändert. [Exakte Läufe und Grenzen](../testing/issues-59-130-reconstruction-2026-10-25.md#final-immutable-runtime-acceptance-25-october-2026-0808-utc).
+
+Dieser **einmalige reine Dokumentationscheckpoint** ändert keinen Runtime-,
+Test-, Schema- oder Workflowcode. Seine automatische exakte Head-Prüfung ist bei
+Autorschaft noch ausstehend; das Endergebnis folgt ausschließlich im PR-Text,
+nicht in einer weiteren Beleg-Commit-Schleife. Draft #144 bleibt ungemergt,
+GitHub #59/#130 bleiben offen; alle 160 historischen BV-Tickets/Summen bleiben
+unverändert. Keine Deployment-/Fach-/Produktivfreigabe durch technische Abnahme.

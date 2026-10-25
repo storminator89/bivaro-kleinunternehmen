@@ -129,9 +129,19 @@ test('revenue indicators preserve unknown/zero, included external share, correct
     if (width === 390 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`revenue-indicators-amounts-${width}.png`), fullPage: false });
   }
   await page.goto('/steuer-simulation');
-  await page.getByText('Datenbasis und Grenzen', { exact: true }).click();
-  await expect(page.getByText('Nur In-App-Buchungen;', { exact: false })).toBeVisible();
-  await expect(page.getByText('Kleinunternehmerstatus ungeprüft.', { exact: false })).toBeVisible();
+  const simulationSource = page.getByRole('region', { name: 'Gewinn laut EÜR', exact: true });
+  const sourceDetails = simulationSource.locator('details');
+  await expect(sourceDetails).toHaveCount(1);
+  const sourceSummary = sourceDetails.locator('summary');
+  await expect(sourceSummary).toHaveText('Datenbasis und Grenzen');
+  await expect(sourceDetails).not.toHaveAttribute('open', '');
+  await sourceSummary.click();
+  await expect(sourceDetails).toHaveAttribute('open', '');
+  // Inspect this opened source disclosure, not the independently repeated
+  // result-local limitations or the more detailed source paragraph.
+  const sourceScope = sourceDetails.getByText('Nur In-App-Buchungen; externe Beträge fehlen. Jahreskontext wird nicht addiert. Kleinunternehmerstatus ungeprüft.', { exact: true });
+  await expect(sourceScope).toBeVisible();
+  await expect(sourceScope).toContainText('Kleinunternehmerstatus ungeprüft.');
   expect(await financialSnapshot()).toEqual(before);
   expect(await prisma.annualBusinessContextRevision.count({ where: { userId: user.id } })).toBe(2);
 });

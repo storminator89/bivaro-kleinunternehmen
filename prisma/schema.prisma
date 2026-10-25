@@ -503,6 +503,10 @@ model PurchaseDocument {
   reviewDraftSearch   String?
   reviewDraft         Json?
   reviewDraftSavedAt  DateTime?
+  // Explicit internal supplier task only; never a payment or posting state.
+  supplierTaskKind String?
+  supplierTaskFollowUpDate String? // genuine calendar day YYYY-MM-DD, not a timestamp
+  supplierTaskConfirmationRequired Boolean @default(false)
   reviewStatus        String    @default("REVIEW") // REVIEW, BOOKED, DISMISSED
   revision            Int       @default(0)
   expenseId           Int?      @unique
@@ -517,6 +521,7 @@ model PurchaseDocument {
   @@unique([userId, originalSha256])
   @@unique([userId, uploadRequestId])
   @@index([userId, reviewStatus, uploadedAt])
+  @@index([userId, reviewStatus, supplierTaskConfirmationRequired, supplierTaskKind, supplierTaskFollowUpDate, id])
   @@index([userId, supplierName, invoiceNumber])
 }
 

@@ -124,7 +124,9 @@ describe('saved-payment dashboard refresh', () => {
       expect(tax).toContain(`addEventListener('${event}'`); expect(tax).toContain(`removeEventListener('${event}'`);
     }
     expect(tax).toContain('const disconnect = connectPaymentRefreshBridge()');
-    expect(tax).toContain('setSummary(null)'); expect(tax).toContain('const sourceAvailable = !loading && !error && summary !== null');
+    expect(tax).toContain('setSummary(null)');
+    expect(tax).toContain('const sourceAvailable = !loading && !error && !selectionError && simulationSummaryMatches(summary, { year: taxYear, timeRange: selectedTimeRange })');
+    expect(tax).toContain('if (!simulationSummaryMatches(result as TaxSummary, { year: taxYear, timeRange: selectedTimeRange }))');
     const dashboard = readFileSync('components/dashboard/dashboard-content.tsx', 'utf8');
     expect(dashboard).toContain('summaryIsLoading || summaryIsFetching || isExportingEUR');
     expect(dashboard).toContain('summaryIsError || eurExportError || !summary');

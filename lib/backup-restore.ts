@@ -1,3 +1,4 @@
+import { backupSchemaSupportsSupplierTasks } from '@/lib/backup-manifest';
 import { quoteCreateReceiptsFromBackup, preflightQuoteCreateReceipts, restoreQuoteCreateReceipts } from '@/lib/quote-create-receipt-backup';
 import { MAX_INVOICE_UPLOAD_BYTES } from '@/lib/resource-limits';
 import { validateQuoteCreateBackup, validateQuoteCreateRestoreTargets, validateQuoteOriginalManifest } from '@/lib/quote-create-backup';
@@ -1353,10 +1354,11 @@ function purchaseOriginalIdentity(record: JsonRecord): string {
 
 function purchaseSourceFingerprint(record: JsonRecord, supplierMap?: Map<number, number>): string {
   const dateFields = ['uploadedAt', 'invoiceDate', 'approvedAt', 'dismissedAt', 'reviewDraftSavedAt'];
-  const fields = ['originalFileName', 'originalSha256', 'originalByteCount', 'mediaType', 'uploadRequestId', 'parsedData', 'parseStatus', 'parserVersion', 'parseErrorCode', 'supplierName', 'invoiceNumber', 'currency', 'totalAmount', 'reviewStatus', 'revision', 'approvalRequestId', 'approvalFingerprint', 'dismissalReason', 'reviewDraft', 'aiDraftProvenance', 'aiApprovedSnapshot'];
+  const fields = ['originalFileName', 'originalSha256', 'originalByteCount', 'mediaType', 'uploadRequestId', 'parsedData', 'parseStatus', 'parserVersion', 'parseErrorCode', 'supplierName', 'invoiceNumber', 'currency', 'totalAmount', 'reviewStatus', 'revision', 'approvalRequestId', 'approvalFingerprint', 'dismissalReason', 'reviewDraft', 'supplierTaskKind', 'supplierTaskFollowUpDate', 'aiDraftProvenance', 'aiApprovedSnapshot'];
   return hashJson({
     ...Object.fromEntries(fields.map((field) => [field, record[field] ?? null])),
     ...Object.fromEntries(dateFields.map((field) => [field, sourceDate(record[field], field)?.toISOString() ?? null])),
+    supplierTaskConfirmationRequired: record.supplierTaskConfirmationRequired ?? false,
     aiExtraction: restoredAiExtractionState(record.aiExtraction, String(record.originalSha256)),
     linked: record.expenseId !== null && record.expenseId !== undefined,
     supplierId: supplierMap ? relationMapValue(supplierMap, record.supplierId, 'purchaseDocument.supplierId') : record.supplierId ?? null,
@@ -1668,6 +1670,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       }
 
       if (overwrite) await validateProjectTimeOverwrite(tx, userId, manifest?.schemaVersion);
+      if (overwrite && !backupSchemaSupportsSupplierTasks(manifest?.schemaVersion) && await tx.purchaseDocument.count({ where: { userId, supplierTaskKind: { not: null } } }) > 0) throw new BackupValidationError('Dieses ältere Backup enthält keine Lieferanten-Vormerkungen. Überschreiben würde bestätigte Aufgaben oder ihre Historie löschen; bitte zusammenführen oder getrennt wiederherstellen.');
       if (overwrite && await tx.reminder.count({ where: { userId, balanceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Überschreiben würde bestätigte Mahn-Restbeträge löschen. Bitte Zusammenführen oder ein leeres Ziel verwenden.');
       if (overwrite && await tx.serviceBillingPlan.count({ where: { userId } }) > 0) throw new BackupValidationError('Wiederkehrende Servicepläne und bestätigte Periodenidentitäten dürfen nicht überschrieben werden. Bitte Zusammenführen oder ein leeres Wiederherstellungsziel verwenden.');
       if (overwrite && await tx.purchaseDocument.count({ where: { userId, reviewedSourceSnapshot: { not: Prisma.DbNull } } }) > 0) throw new BackupValidationError('Unveränderliche manuelle Foto-Freigaben dürfen nicht überschrieben werden; in ein leeres Ziel wiederherstellen oder konfliktfrei zusammenführen.');
@@ -2387,6 +2390,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           reviewDraft: document.reviewDraft == null ? Prisma.DbNull : asJson(document.reviewDraft, 'purchaseDocument.reviewDraft'),
           reviewDraftSearch: document.reviewDraft == null ? null : [parsePurchaseReviewDraft(document.reviewDraft).supplierName, parsePurchaseReviewDraft(document.reviewDraft).invoiceNumber].filter(Boolean).join(' · '),
           reviewDraftSavedAt: sourceDate(document.reviewDraftSavedAt, 'purchaseDocument.reviewDraftSavedAt'),
+          supplierTaskKind: (document.supplierTaskKind ?? null) as string | null,
+          supplierTaskFollowUpDate: (document.supplierTaskFollowUpDate ?? null) as string | null,
+          supplierTaskConfirmationRequired: (document.supplierTaskConfirmationRequired ?? false) as boolean,
           reviewStatus: document.reviewStatus as string,
           revision: document.revision as number,
           expenseId: relationMapValue(expenseMap, document.expenseId, 'purchaseDocument.expenseId'),
