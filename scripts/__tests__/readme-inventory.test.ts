@@ -12,7 +12,8 @@ const documentation = [
   'docs/operations/account-access.md',
   'docs/operations/getting-started.de.md', 'docs/operations/getting-started.en.md',
   'docs/features/bank-payment-allocation.md', 'docs/readme-source-map-2026-10-22.md',
-  'docs/screenshots/README-870d73be.md',
+  'docs/screenshots/README-870d73be.md', 'docs/screenshots/README-ea65fc2f.md',
+  'docs/screenshots/coverage.md',
 ];
 function anchors(markdown: string) {
   const occurrences = new Map<string, number>();
@@ -26,7 +27,7 @@ function anchors(markdown: string) {
 }
 
 
-// Accepted PR #138 evidence; constants are independent of the current manifest.
+// Preserved PR #138 originals; constants are independent of both manifests.
 const acceptedImages = [
   {
     "file": "customer-redesign-directory-light-1440.png",
@@ -83,9 +84,12 @@ const acceptedImages = [
     "artifactId": 12554624852
   }
 ];
-const currentSource = 'ea65fc2f59ef43f17d9abdc6a086982fd01522f3';
-const currentTree = '4cb608ac6901e893581997378c35c6f21c931428';
-const acceptedMerge = '1e6d9fe110c9206401da27b530f44f30e14be2dc';
+const previousSource = 'ea65fc2f59ef43f17d9abdc6a086982fd01522f3';
+const currentSource = '0ed113074e1c97defaa84345e2e050cf7eb281ff';
+const previousTree = '4cb608ac6901e893581997378c35c6f21c931428';
+const currentTree = '6df04d075d64c1566187333e5536fa0bdd497d4d';
+const previousAcceptedMerge = '1e6d9fe110c9206401da27b530f44f30e14be2dc';
+const currentManifestSha256 = '2678c5b9ba2cbe24f6bec057c72151793cc99ba8b3ecfeba6967f33ec77d7893';
 const readmes = ['README.md', 'README.en.md'];
 const guides = ['docs/operations/getting-started.de.md', 'docs/operations/getting-started.en.md'];
 
@@ -110,11 +114,11 @@ describe('compact bilingual README, linked operational guidance and dated screen
     readmes.forEach((file, index) => expect(read(file)).toContain(`](${guides[index]})`));
   });
 
-  it('binds exactly six current unchanged PNGs and recorded pixel identities to the accepted source', () => {
-    const provenance = JSON.parse(read('docs/screenshots/provenance.json'));
-    expect(provenance.sourceCommit).toBe(currentSource);
-    expect(provenance.sourceTree).toBe(currentTree);
-    expect(provenance.acceptedMergeCommit).toBe(acceptedMerge);
+  it('preserves the six previous gallery originals and their independent pixel identities', () => {
+    const provenance = JSON.parse(read('docs/screenshots/provenance-ea65fc2f.json'));
+    expect(provenance.sourceCommit).toBe(previousSource);
+    expect(provenance.sourceTree).toBe(previousTree);
+    expect(provenance.acceptedMergeCommit).toBe(previousAcceptedMerge);
     expect(provenance.workflowRunId).toBe(40079455853);
     expect(provenance.captureDate).toBe('2026-10-24');
     expect(provenance.reviewDate).toBe('2026-10-24');
@@ -140,11 +144,66 @@ describe('compact bilingual README, linked operational guidance and dated screen
     }
     expect(bytes).toBe(provenance.totalPngBytes);
     for (const file of readmes) {
-      const images = [...read(file).matchAll(/<img\b[^>]*src="([^"]+)"[^>]*alt="([^"]+)"[^>]*>/gu)];
-      expect(images.map(image => image[1])).toEqual(acceptedImages.map(image => `docs/screenshots/${image.file}`));
-      expect(images.every(image => image[2].trim().length > 0)).toBe(true);
-      for (const image of acceptedImages) expect(read(file)).toContain(`href="docs/screenshots/${image.file}"`);
+      for (const image of acceptedImages) expect(read(file)).not.toContain(`src="docs/screenshots/${image.file}"`);
     }
+  });
+
+  it('pins every current native image, reviewed provenance and complete bilingual gallery without fabricating missing areas', () => {
+    const raw = read('docs/screenshots/provenance.json');
+    expect(createHash('sha256').update(raw).digest('hex')).toBe(currentManifestSha256);
+    const provenance = JSON.parse(raw);
+    expect(provenance.appSourceCommit).toBe(currentSource);
+    expect(provenance.captured).toBe('2026-10-25');
+    expect(provenance.images).toHaveLength(49);
+    expect(provenance.availableImages).toBe(49);
+    expect(provenance.missingImages).toBe(0);
+    expect(provenance.gaps).toEqual([]);
+    const paths = provenance.images.map((image: { path: string }) => image.path);
+    expect(new Set(paths).size).toBe(49);
+    let bytes = 0;
+    for (const image of provenance.images) {
+      expect(image.path).toBe(`docs/screenshots/2026-10-25/${image.filename}`);
+      expect(image.filename).toMatch(/^[a-z0-9-]+\.png$/u);
+      expect(image.reviewDate).toBe('2026-10-25');
+      expect(image.visualReview.length).toBeGreaterThan(20);
+      expect(image.status).toMatch(/^individually-reviewed/u);
+      expect(image.outputSha256).toBe(image.reviewedSha256);
+      for (const value of [image.outputSha256, image.fullPixelSha256, image.nonIdatSha256, image.sourceInputPngSha256]) expect(value).toMatch(/^[a-f0-9]{64}$/u);
+      expect(image.artifactDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
+      expect(image.artifactId).toBeGreaterThan(0);
+      expect(image.sourceCommit).toMatch(/^[a-f0-9]{40}$/u);
+      expect(image.checkoutCommit).toMatch(/^[a-f0-9]{40}$/u);
+      expect(image.checkoutTree).toMatch(/^[a-f0-9]{40}$/u);
+      const original = readFileSync(path.join(root, image.path));
+      expect(createHash('sha256').update(original).digest('hex')).toBe(image.outputSha256);
+      expect(original.length).toBe(image.outputBytes);
+      expect(original.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+      expect(original.readUInt32BE(16)).toBe(image.width);
+      expect(original.readUInt32BE(20)).toBe(image.height);
+      // The independent manifest digest pins hosted full-pixel/metadata proofs;
+      // no local browser, image recreation or new PNG decoder is introduced here.
+      const source = provenance.sourceEvidence.find((value: { runId: number }) => value.runId === image.runId);
+      expect(source.sourceCommit).toBe(image.sourceCommit);
+      expect(source.checkoutCommit).toBe(image.checkoutCommit);
+      expect(source.checkoutTree).toBe(image.checkoutTree);
+      bytes += original.length;
+    }
+    expect(bytes).toBe(provenance.totalPngBytes);
+    const galleries = readmes.map(file => [...read(file).matchAll(/<img\b[^>]*src="([^"]+)"[^>]*alt="([^"]+)"[^>]*>/gu)]);
+    expect(galleries[0].map(image => image[1])).toEqual(galleries[1].map(image => image[1]));
+    readmes.forEach((file, index) => {
+      const text = read(file), images = galleries[index];
+      expect(images).toHaveLength(49);
+      expect(new Set(images.map(image => image[1])).size).toBe(49);
+      expect(images.map(image => image[1]).sort()).toEqual([...paths].sort());
+      expect(images.every(image => image[2].trim().length > 0)).toBe(true);
+      expect(text.match(/<details>/gu)).toHaveLength(7);
+      expect(text).not.toMatch(/<details[^>]+open/gu);
+      expect(text.split('<details>')[0].match(/<img\b/gu)).toHaveLength(4);
+      for (const image of provenance.images) expect(text).toContain(`href="${image.path}"`);
+    });
+    expect(read('docs/screenshots/coverage.md')).toContain('Route-area coverage: 33/33');
+    expect(read('docs/screenshots/coverage.md')).toContain('Selected views: 49/49');
   });
 
   it('preserves all seven historical originals without relabelling them as current captures', () => {
@@ -171,7 +230,7 @@ describe('compact bilingual README, linked operational guidance and dated screen
   });
 
   it('keeps both languages current while retaining distinct PDF, Java, stream and license boundaries in linked guides', () => {
-    for (const term of [currentSource, currentTree, acceptedMerge]) expect(read('docs/readme-source-map.md')).toContain(term);
+    for (const term of [currentSource, currentTree]) expect(read('docs/readme-source-map.md')).toContain(term);
     readmes.forEach((file, index) => {
       const text = read(file), guide = read(guides[index]);
       for (const term of ['6 MiB', '1–4', 'PDF/A-3b', '`Apache-2.0`', 'docs/operations/pdf-third-party-notices.md', 'docs/legal/application-license-transition.md']) expect(text, `${file}: ${term}`).toContain(term);
