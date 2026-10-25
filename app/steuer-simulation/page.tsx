@@ -1,9 +1,11 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
-import { useEffect, useMemo, useState, useCallback, useRef, type ComponentProps } from "react";
+import { Suspense, useEffect, useMemo, useState, useCallback, useRef, type ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
 import styles from "@/components/public-accounting/accounting-workspaces.module.css";
+import { SimulationResultDisclosure } from "@/components/public-accounting/simulation-result-disclosure";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -16,12 +18,10 @@ import {
   Loader2,
   RefreshCw,
   ShieldCheck,
-  ThumbsUp,
   Briefcase,
   ChevronDown,
   ArrowUpRight,
 } from "lucide-react";
-type TimeRange = "all" | "last3Months" | "last6Months" | "thisYear" | "lastYear";
 
 import {
   calculateIncomeTax,
@@ -31,6 +31,7 @@ import {
   calculateChurchTax,
   getTaxRulePack,
 } from "@/lib/tax-calculator";
+import { readSimulationView, simulationPeriodLabel, simulationSummaryMatches, simulationDataChecks, SIMULATION_SOURCE_SCOPE, type SimulationView, type SimulationDataCheck } from "@/lib/simulation-disclosure";
 import type { TaxSummary } from "@/lib/tax-summary";
 import { connectPaymentRefreshBridge, PAYMENT_DASHBOARD_REFRESH_EVENT } from '@/lib/payment-dashboard-refresh';
 import { simulationInputErrors, simulationNumberError, simulationNumberRules, type SimulationNumberField } from "./validation";
@@ -50,12 +51,6 @@ type ParameterLabelProps = {
   htmlFor: string;
   label: string;
   tooltip: string;
-};
-
-type Recommendation = {
-  tone: "info" | "warning" | "positive";
-  title: string;
-  description: string;
 };
 
 function ParameterLabel({ htmlFor, label, tooltip }: ParameterLabelProps) {
@@ -107,12 +102,12 @@ function SimulationNumberInput({ id, value, disabled, ...props }: SimulationNumb
   );
 }
 
-export default function SteuerSimulationPage() {
+function SteuerSimulationContent() {
+  const searchParams = useSearchParams();
+  const { year: taxYear, timeRange: selectedTimeRange, error: selectionError } = readSimulationView(searchParams, new Date().getFullYear());
   const [summary, setSummary] = useState<TaxSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>("thisYear");
-  const [taxYear, setTaxYear] = useState<number>(new Date().getFullYear());
   const requestVersion = useRef(0);
 
   const [healthInsurance, setHealthInsurance] = useState<number>(defaultSettings.healthInsurance);
@@ -159,8 +154,26 @@ export default function SteuerSimulationPage() {
     }
   }, [grossSalary, employmentType, autoCalcSocial, numberOfChildren, taxYear]);
 
+  const changeView = (next: Partial<SimulationView>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("year", String(next.year ?? taxYear));
+    params.set("timeRange", next.timeRange ?? selectedTimeRange);
+    // Invalidate pending responses before the Router observes the new URL.
+    requestVersion.current += 1;
+    setSummary(null);
+    setError(null);
+    setLoading(true);
+    window.history.pushState(null, "", `?${params.toString()}`);
+  };
+
   const fetchData = useCallback(async () => {
     const version = ++requestVersion.current;
+    if (selectionError) {
+      setSummary(null);
+      setLoading(false);
+      setError(selectionError);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -169,6 +182,9 @@ export default function SteuerSimulationPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Daten konnten nicht geladen werden.");
       if (version !== requestVersion.current) return;
+      if (!simulationSummaryMatches(result as TaxSummary, { year: taxYear, timeRange: selectedTimeRange })) {
+        throw new Error("Die Serverdaten stimmen nicht mit dem gewählten Steuerjahr und Zeitraum überein. Bitte laden Sie die Finanzdaten erneut.");
+      }
       setSummary(result as TaxSummary);
     } catch (err) {
       if (version !== requestVersion.current) return;
@@ -178,7 +194,7 @@ export default function SteuerSimulationPage() {
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [selectedTimeRange, taxYear]);
+  }, [selectedTimeRange, taxYear, selectionError]);
 
   useEffect(() => {
     fetchData();
@@ -195,12 +211,6 @@ export default function SteuerSimulationPage() {
 
   const totalIncome = summary?.totalIncome ?? 0;
   const totalExpenses = summary?.totalExpenses ?? 0;
-  const expenseCoverage = totalIncome > 0 ? totalExpenses / totalIncome : 0;
-  const partialDeductionShortfall = summary?.partialDeductionShortfall ?? 0;
-  const nonTaxRelevantExpenseCount = summary?.nonTaxRelevantExpenseCount ?? 0;
-  const nonTaxRelevantExpenseAmount = summary?.nonTaxRelevantExpenseAmount ?? 0;
-  const nonTaxRelevantIncomeCount = summary?.nonTaxRelevantIncomeCount ?? 0;
-  const nonTaxRelevantIncomeAmount = summary?.nonTaxRelevantIncomeAmount ?? 0;
   const profit = summary?.profit ?? 0;
   const profitFloor = Math.max(0, profit);
 
@@ -209,7 +219,7 @@ export default function SteuerSimulationPage() {
     tradeTaxHebesatz, churchTaxRate, grossSalary, employeeExpenses,
   }, { sideBusiness: employmentType === "side-business", includeChurchTax });
   const simulationInputsValid = inputErrors.length === 0;
-  const sourceAvailable = !loading && !error && summary !== null;
+  const sourceAvailable = !loading && !error && !selectionError && simulationSummaryMatches(summary, { year: taxYear, timeRange: selectedTimeRange });
   const taxDataSupported = Boolean(sourceAvailable && summary?.annualBasis && profit >= 0);
   const taxCalculationSupported = taxDataSupported && simulationInputsValid;
 
@@ -298,150 +308,21 @@ export default function SteuerSimulationPage() {
   const formatSimulationValue = useCallback((value: number) =>
     taxCalculationSupported ? formatCurrency(value) : "nicht berechnet", [formatCurrency, taxCalculationSupported]);
 
-  const recommendationToneStyles: Record<Recommendation["tone"], string> = {
+  const recommendationToneStyles: Record<SimulationDataCheck["tone"], string> = {
     info: "border-primary/30 bg-primary/5",
     warning: "border-amber-300/60 bg-amber-100/40 dark:bg-amber-500/10",
-    positive: "border-emerald-300/60 bg-emerald-100/30 dark:bg-emerald-500/10",
   };
-
-  const recommendationIconMap: Record<Recommendation["tone"], LucideIcon> = {
+  const recommendationIconMap: Record<SimulationDataCheck["tone"], LucideIcon> = {
     info: Lightbulb,
     warning: AlertTriangle,
-    positive: ThumbsUp,
   };
-
-  const recommendationIconColor: Record<Recommendation["tone"], string> = {
+  const recommendationIconColor: Record<SimulationDataCheck["tone"], string> = {
     info: "text-primary",
     warning: "text-amber-600 dark:text-amber-400",
-    positive: "text-emerald-600 dark:text-emerald-400",
   };
-
-  const recommendations = useMemo<Recommendation[]>(() => {
-    const recs: Recommendation[] = [];
-    if (!sourceAvailable || !summary?.annualBasis || !simulationInputsValid) return recs;
-
-    if (profit < 0) {
-      recs.push({
-        tone: "warning",
-        title: "Verluste strategisch nutzen",
-        description: `Sie verzeichnen aktuell einen Verlust von ${formatCurrency(Math.abs(profit))}. Prüfen Sie Verlustvor- bzw. -rücktrag und passen Sie Vorauszahlungen an.`,
-      });
-
-      if (nonTaxRelevantExpenseCount > 0) {
-        recs.push({
-          tone: "info",
-          title: "Nicht berücksichtigte Ausgaben analysieren",
-          description: `${nonTaxRelevantExpenseCount} Ausgaben (${formatCurrency(nonTaxRelevantExpenseAmount)}) sind als nicht steuerrelevant markiert. Überprüfen Sie, ob sich Belege doch steuerlich ansetzen lassen.`,
-        });
-      }
-
-      return recs;
-    }
-
-
-
-    if (taxableIncome > 12348 * 1.1) {
-      recs.push({
-        tone: "info",
-        title: "Zusätzliche Abzugsmöglichkeiten prüfen",
-        description: `Das zu versteuernde Einkommen liegt bei ${formatCurrency(taxableIncome)}. Investitionsabzugsbetrag, Sonderabschreibungen oder Vorsorgeaufwendungen können die Steuerlast weiter verkleinern.`,
-      });
-    }
-
-    if (totalDeductions < 5000 && profit > 20000) {
-      recs.push({
-        tone: "info",
-        title: "Vorsorgeaufwendungen prüfen",
-        description: "Ihre angesetzten Vorsorgeaufwendungen erscheinen niedrig. Prüfen Sie, ob Kranken-, Pflege- und Rentenversicherungsbeiträge vollständig erfasst sind.",
-      });
-    }
-
-    if (totalIncome > 0 && expenseCoverage < 0.35) {
-      recs.push({
-        tone: "positive",
-        title: "Zukunftsinvestitionen vorziehen",
-        description: `Nur ${(expenseCoverage * 100).toFixed(0)} % der Einnahmen sind aktuell als abzugsfähige Ausgaben verbucht. Moderne Betriebsinvestitionen oder Wartungsausgaben könnten den Gewinn steuerlich abfedern.`,
-      });
-    }
-
-    if (partialDeductionShortfall > 250) {
-      recs.push({
-        tone: "warning",
-        title: "Teilabzugsfähige Ausgaben optimieren",
-        description: `Bei Ausgaben bleiben ${formatCurrency(partialDeductionShortfall)} ungenutzt, weil nur ein Teil steuerlich ansetzbar ist. Prüfen Sie alternative Gestaltung (z. B. separates Arbeitszimmer, betriebliches Fahrzeug).`,
-      });
-    }
-
-    if (nonTaxRelevantExpenseCount > 0) {
-      recs.push({
-        tone: "info",
-        title: "Nicht steuerrelevante Kosten bewerten",
-        description: `${nonTaxRelevantExpenseCount} Ausgaben (${formatCurrency(nonTaxRelevantExpenseAmount)}) werden steuerlich nicht berücksichtigt. Stellen Sie sicher, dass die Zuordnung korrekt ist oder dokumentieren Sie private Anteile sauber.`,
-      });
-    }
-
-    if (nonTaxRelevantIncomeCount > 0 && nonTaxRelevantIncomeAmount > 0) {
-      recs.push({
-        tone: "warning",
-        title: "Steuerfreie Einnahmen plausibilisieren",
-        description: `${nonTaxRelevantIncomeCount} Einnahmen in Höhe von ${formatCurrency(nonTaxRelevantIncomeAmount)} sind als steuerfrei klassifiziert. Prüfen Sie, ob alle Voraussetzungen (z. B. echte Privatverkäufe) erfüllt sind.`,
-      });
-    }
-
-    if (businessType === "gewerblich" && tradeTaxHebesatz < 200 && profit > 24500) {
-      recs.push({
-        tone: "warning",
-        title: "Gewerbesteuer-Hebesatz prüfen",
-        description: `Der eingestellte Hebesatz von ${tradeTaxHebesatz}% erscheint niedrig. Der Mindesthebesatz liegt in der Regel bei 200%. Prüfen Sie den Hebesatz Ihrer Gemeinde.`,
-      });
-    }
-
-    if (profit > 0 && effectiveTaxRate > 45) {
-      recs.push({
-        tone: "info",
-        title: "Hohe Grenzsteuerbelastung",
-        description: `Die effektive Belastung von ${effectiveTaxRate.toFixed(1)} % resultiert aus der Progression. Da Ihr Hauptgehalt den Grundfreibetrag bereits ausschöpft, unterliegt der Gewerbegewinn direkt dem Spitzensteuersatz (zzgl. evtl. Soli/Kirchensteuer).`,
-      });
-    }
-
-    if (employmentType === "side-business" && taxableIncome > 66760) {
-      recs.push({
-        tone: "warning",
-        title: "Progressionseffekt beachten",
-        description: `Durch Ihr Gehalt und den Gewinn rutschen Sie in einen höheren Steuersatz. Jeder zusätzliche Euro Gewinn wird mit dem Grenzsteuersatz (ca. 42%) belastet.`,
-      });
-    }
-
-    if (recs.length === 0) {
-      recs.push({
-        tone: "info",
-        title: "Keine weiteren Hinweise",
-        description: "Annahmen und steuerliche Zuordnung mit Ihrer Steuerberatung prüfen.",
-      });
-    }
-
-    return recs;
-  }, [
-    simulationInputsValid,
-    sourceAvailable,
-    summary?.annualBasis,
-    effectiveTaxRate,
-    expenseCoverage,
-    formatCurrency,
-    nonTaxRelevantExpenseAmount,
-    nonTaxRelevantExpenseCount,
-    nonTaxRelevantIncomeAmount,
-    nonTaxRelevantIncomeCount,
-    partialDeductionShortfall,
-    profit,
-    taxableIncome,
-    totalDeductions,
-    totalIncome,
-    tradeTaxHebesatz,
-    businessType,
-
-    employmentType,
-  ]);
+  const recommendations = useMemo(() => sourceAvailable && summary
+    ? simulationDataChecks(summary, formatCurrency) : [], [sourceAvailable, summary, formatCurrency]);
+  const periodLabel = simulationPeriodLabel({ year: taxYear, timeRange: selectedTimeRange });
 
   const resetDefaults = () => {
     setHealthInsurance(defaultSettings.healthInsurance);
@@ -472,9 +353,10 @@ export default function SteuerSimulationPage() {
               <select
                 id="taxYear"
                 value={taxYear}
-                onChange={(event) => setTaxYear(Number(event.target.value))}
+                onChange={(event) => changeView({ year: Number(event.target.value) })}
                 className="block h-11 w-full rounded-[var(--radius-input)] border border-input bg-background px-3 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
               >
+                {!getTaxRulePack(taxYear) && <option value={taxYear}>{Number.isFinite(taxYear) ? taxYear : "Ungültiges Jahr"} · nicht unterstützt</option>}
                 <option value={2026}>2026</option>
                 <option value={2025}>2025</option>
               </select>
@@ -486,9 +368,10 @@ export default function SteuerSimulationPage() {
               <select
                 id="timeRange"
                 value={selectedTimeRange}
-                onChange={(event) => setSelectedTimeRange(event.target.value as TimeRange)}
+                onChange={(event) => changeView({ timeRange: event.target.value as SimulationView["timeRange"] })}
                 className="block h-11 w-full rounded-[var(--radius-input)] border border-input bg-background px-3 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
               >
+                {selectedTimeRange === "lastYear" && <option value="lastYear">Gewähltes Steuerjahr · Jahresansicht</option>}
                 <option value="thisYear">Gewähltes Steuerjahr</option>
                 <option value="last3Months">Letzte 3 Monate</option>
                 <option value="last6Months">Letzte 6 Monate</option>
@@ -507,9 +390,10 @@ export default function SteuerSimulationPage() {
             </Button>
           </div>
 </>} />
-        {error && (
+        {(error || selectionError) && (
           <div role="alert" className="rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
+            {error || selectionError}
+            <p>Keine bestätigte Datenbasis; keine Modellsteuern berechnet.</p>
           </div>
         )}
         {!taxDataSupported && summary && (
@@ -519,21 +403,22 @@ export default function SteuerSimulationPage() {
         )}
 
         <section className="tax-source-context" aria-labelledby="overview-heading">
-          <div className="tax-source-profit"><span className="tax-source-label">Datenbasis · In-App-EÜR · {taxYear}</span><h2 id="overview-heading">Gewinn laut EÜR</h2><strong>{loading ? '—' : sourceAvailable ? formatCurrency(profit) : 'Nicht verfügbar / fachlich zu prüfen'}</strong><p>{sourceAvailable ? 'Vor Steuern · steuerrelevante Buchungen' : 'Keine bestätigte steuerliche Datenbasis'}</p></div>
+          <div className="tax-source-profit"><span className="tax-source-label">Datenbasis · In-App-EÜR · Regeljahr {taxYear}</span><h2 id="overview-heading">Gewinn laut EÜR</h2><strong>{loading ? '—' : sourceAvailable ? formatCurrency(profit) : 'Nicht verfügbar / fachlich zu prüfen'}</strong><p>{sourceAvailable ? `Vor Steuern · steuerrelevante Buchungen · ${periodLabel}` : 'Keine bestätigte steuerliche Datenbasis'}</p></div>
           <dl><div><dt>Betriebseinnahmen</dt><dd>{loading ? '—' : sourceAvailable ? formatCurrency(totalIncome) : 'Nicht verfügbar'}</dd></div><div><dt>Betriebsausgaben</dt><dd>{loading ? '—' : sourceAvailable ? formatCurrency(totalExpenses) : 'Nicht verfügbar'}</dd></div><div><dt>Buchungen</dt><dd>{loading ? '—' : sourceAvailable ? summary.sourceCount : 'Nicht verfügbar'}</dd></div></dl>
           <details className="tax-source-period"><summary className="w-fit cursor-pointer py-2">Datenbasis und Grenzen</summary>
           <p>Nur In-App-Buchungen; externe Beträge fehlen. Jahreskontext wird nicht addiert. Kleinunternehmerstatus ungeprüft.</p>
+          <p>{SIMULATION_SOURCE_SCOPE}</p>
           {!loading && summary && <p className="tax-source-period">Geladene Daten für Regeljahr {summary.year} · Stand {new Date(summary.dataAsOf).toLocaleString("de-DE")} · Regelpaket {summary.ruleVersion}. </p>}
-          <p className="tax-source-period">Zeitraum: {selectedTimeRange === "thisYear" ? `Steuerjahr ${taxYear}` : selectedTimeRange === "lastYear" ? `Steuerjahr ${taxYear - 1}` : selectedTimeRange === "last3Months" ? "Letzte 3 Monate" : selectedTimeRange === "last6Months" ? "Letzte 6 Monate" : "Gesamter Zeitraum"}</p>
+          <p className="tax-source-period">Zeitraum: {summary?.annualBasis ? `Steuerjahr ${taxYear}` : periodLabel}</p>
           {summary?.warnings.map(warning => <p key={warning}>{warning}</p>)}
           </details>
         </section>
-        <div className="tax-mobile-result"><span>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}<strong>{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</strong></span><a href="#simulation-result">Zum Ergebnis<ArrowUpRight aria-hidden="true" /></a></div>
+        <div className="tax-mobile-result"><span>Modellrest aus Betriebsgewinn<strong>{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</strong></span><a href="#simulation-result">Zum Ergebnis<ArrowUpRight aria-hidden="true" /></a></div>
         <div className="tax-workspace">
         <section aria-labelledby="parameters-heading" className="tax-parameters rounded-[var(--radius-card)] border border-border bg-card">
           <div className="flex flex-col gap-4 border-b border-border p-6 sm:flex-row sm:items-start sm:justify-between sm:p-8">
             <div className="space-y-2">
-              <h2 id="parameters-heading" className="text-2xl font-semibold tracking-tight">Annahmen</h2>
+              <h2 id="parameters-heading" tabIndex={-1} className="scroll-mt-40 text-2xl font-semibold tracking-tight">Annahmen</h2>
             </div>
             <Button variant="ghost" onClick={resetDefaults} className="self-start text-muted-foreground">
               Standardwerte
@@ -541,7 +426,7 @@ export default function SteuerSimulationPage() {
           </div>
             {!simulationInputsValid && (
               <div role="alert" className="m-6 rounded-[var(--radius-input)] border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                Bitte korrigieren Sie die markierten Eingaben. Bis dahin werden keine Simulationsergebnisse oder Empfehlungen berechnet.
+                Bitte korrigieren Sie die markierten Eingaben. Bis dahin werden keine Simulationsergebnisse berechnet.
               </div>
             )}
             <div className="tax-parameter-body space-y-8 p-6 sm:p-8">
@@ -644,7 +529,7 @@ export default function SteuerSimulationPage() {
                         <button type="button" aria-label="Sozialversicherungs-Näherung - Hilfe" className="inline-flex min-h-11 min-w-11 items-center justify-center text-muted-foreground"><CircleHelp className="h-4 w-4" aria-hidden="true" /></button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
-                        Näherung mit den Beitragsbemessungsgrenzen des Steuerjahres und vereinfachten Arbeitnehmeranteilen. Zusatzbeiträge, Sachsenregel und persönliche Besonderheiten bitte prüfen; die Felder bleiben überschreibbar.
+                        Näherung mit den Beitragsbemessungsgrenzen des Steuerjahres und vereinfachten Arbeitnehmeranteilen. Zusatzbeiträge, Sachsenregel und persönliche Besonderheiten werden nicht geprüft. Zum manuellen Bearbeiten die Näherung ausschalten.
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -816,11 +701,20 @@ export default function SteuerSimulationPage() {
             <span className="tax-result-kicker"><span aria-hidden="true" />Live-Simulation · {taxYear}</span>
             <h2 id="result-heading">Ergebnis</h2>
             <p className="tax-result-amount" aria-live="polite">{loading ? '—' : formatSimulationValue(netProfitAfterTax)}</p>
-            <p>Netto {employmentType === "side-business" ? "aus Gewerbe" : "nach Steuern"}</p>
+            <p>Modellrest aus Betriebsgewinn · nach Modellsteuern</p>
           </div>
           <div className={styles.taxActiveAssumptions} aria-label="Aktive Simulationsannahmen"><span>{businessType === "gewerblich" ? "Gewerbebetrieb" : "Freiberufliche Tätigkeit"}</span><span>{employmentType === "side-business" ? "Nebenberuflich" : "Hauptberuflich"}</span><span>Abzüge {simulationInputsValid ? formatCurrency(totalDeductions) : "nicht berechnet"}</span></div>
           <div className="space-y-6 p-6 sm:p-8">
-            <dl className="tax-result-metrics"><div><dt>Steuerlast {employmentType === 'side-business' ? 'auf Gewerbe' : 'gesamt'}</dt><dd>{loading ? '—' : formatSimulationValue(marginalTax)}</dd></div><div><dt>Effektive Belastung</dt><dd>{loading ? '—' : taxCalculationSupported && profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : 'nicht berechnet'}</dd></div></dl>
+            <SimulationResultDisclosure
+              view={{ year: taxYear, timeRange: selectedTimeRange }}
+              summary={sourceAvailable ? summary : null}
+              taxableIncome={taxableIncome}
+              calculationSupported={taxCalculationSupported}
+              assumptions={{ healthInsurance, pensionInsurance, careInsurance, otherDeductions, businessType,
+                employmentType, grossSalary, employeeExpenses, autoCalcSocial, numberOfChildren,
+                tradeTaxHebesatz, includeSolidarity, includeChurchTax, churchTaxRate }}
+            />
+            <dl className="tax-result-metrics"><div><dt>{employmentType === 'side-business' ? 'Modell-Mehrsteuer durch Betrieb' : 'Modellsteuern'}</dt><dd>{loading ? '—' : formatSimulationValue(marginalTax)}</dd></div><div><dt>Modellbelastung / Betriebsgewinn</dt><dd>{loading ? '—' : taxCalculationSupported && profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : 'nicht berechnet'}</dd></div></dl>
             <details className="tax-calculation"><summary>Berechnungsweg anzeigen<ChevronDown aria-hidden="true" /></summary><div className="tax-calculation-body">
             <div className="grid gap-6">
               <div>
@@ -830,8 +724,8 @@ export default function SteuerSimulationPage() {
                 </div>
                 <dl className="divide-y divide-border">
                   <div className="flex items-center justify-between gap-4 py-3">
-                  <span className="text-sm text-muted-foreground">Einkünfte aus Gewerbe</span>
-                  <span className="text-sm font-medium tabular-nums">{formatCurrency(profit)}</span>
+                  <span className="text-sm text-muted-foreground">Betriebsgewinn laut In-App-EÜR</span>
+                  <span className="text-sm font-medium tabular-nums">{sourceAvailable ? formatCurrency(profit) : "nicht verfügbar"}</span>
                   </div>
                 {employmentType === "side-business" && (
                   <div className="flex items-center justify-between gap-4 py-3">
@@ -844,42 +738,42 @@ export default function SteuerSimulationPage() {
                   <span className="text-sm font-medium tabular-nums">- {formatSimulationValue(deductionsApplied)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-4 py-3">
-                  <span className="text-sm text-muted-foreground">Zu versteuerndes Einkommen</span>
+                  <span className="text-sm text-muted-foreground">Vereinfachter Modelleingang für den Tarif</span>
                   <span className="text-sm font-semibold tabular-nums">{formatSimulationValue(taxableIncome)}</span>
                 </div>
                 </dl>
               </div>
               <div>
                 <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
-                  <h3 className="font-semibold">Steuerlast</h3>
+                  <h3 className="font-semibold">Modellsteuern</h3>
                   <span className="text-xs text-muted-foreground">Effektiv</span>
                 </div>
                 <dl className="divide-y divide-border">
                 <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">
-                    {employmentType === "side-business" ? "Steuer auf Gewerbe" : "Gesamte Steuerlast"}
+                    {employmentType === "side-business" ? "Modell-Mehrsteuer durch Betrieb" : "Summe der Modellsteuern"}
                   </span>
                   <span className="text-sm font-semibold tabular-nums">{formatSimulationValue(marginalTax)}</span>
                 </div>
                 {employmentType === "side-business" && (
                   <div className="flex items-center justify-between gap-4 py-3 text-sm">
-                    <span className="text-muted-foreground">Gesamtsteuer inkl. Job</span>
+                    <span className="text-muted-foreground">Modellsteuern inkl. Gehaltsannahme</span>
                     <span className="font-medium tabular-nums">{formatSimulationValue(totalTax)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">
-                    {employmentType === "side-business" ? "Belastung Gewerbe" : "Effektiver Steuersatz"}
+                    Modellbelastung / Betriebsgewinn
                   </span>
                   <span className="text-sm font-medium tabular-nums">
                     {taxCalculationSupported && profit > 0 ? `${effectiveTaxRate.toFixed(1)} %` : "nicht berechnet"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 py-3">
-                  <span className="text-sm text-muted-foreground">{employmentType === "side-business" ? "Netto vom Gewerbe" : "Netto nach Steuern"}</span>
+                  <span className="text-sm text-muted-foreground">Modellrest aus Betriebsgewinn</span>
                   <span className="text-sm font-semibold tabular-nums">{formatSimulationValue(netProfitAfterTax)}</span>
                 </div>
-                {employmentType === "side-business" && <div className="flex items-center justify-between gap-4 border-t border-border py-3"><span className="text-sm font-medium">Gesamtes Netto</span><span className="text-sm font-bold tabular-nums text-primary">{formatSimulationValue(totalNetIncome)}</span></div>}
+                {employmentType === "side-business" && <div className="flex items-center justify-between gap-4 border-t border-border py-3"><span className="text-sm font-medium">Rest inkl. Gehaltsannahme im Modell</span><span className="text-sm font-bold tabular-nums text-primary">{formatSimulationValue(totalNetIncome)}</span></div>}
                 </dl>
               </div>
             </div>
@@ -898,7 +792,7 @@ export default function SteuerSimulationPage() {
               </div>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Schätzung · keine Steuerberatung.
+              Begrenzte Modellschätzung · keine Steuerberatung oder vollständige persönliche Steuerlast.
             </p>
           </div>
         </section>
@@ -908,7 +802,7 @@ export default function SteuerSimulationPage() {
             <h2 id="recommendations-heading" className="inline text-base font-semibold">Prüfhinweise</h2>
           </summary>
           <div className="p-6 sm:p-8">
-            {!sourceAvailable || !summary?.annualBasis ? <p className="text-sm text-muted-foreground">Hinweise benötigen geladene Daten für ein vollständiges Steuerjahr.</p> : !simulationInputsValid && <p className="text-sm text-muted-foreground">Eingaben korrigieren, um Hinweise zu erhalten.</p>}
+            {!sourceAvailable && <p className="text-sm text-muted-foreground">Prüfhinweise benötigen eine bestätigte serverseitige Datenbasis.</p>}
             <ul className="divide-y divide-border">
               {recommendations.map((rec, index) => {
                 const Icon = recommendationIconMap[rec.tone];
@@ -934,4 +828,9 @@ export default function SteuerSimulationPage() {
       </div>
     </TooltipProvider>
   );
+}
+
+// URL state is read inside Suspense as required by Next.js prerendering.
+export default function SteuerSimulationPage() {
+  return <Suspense fallback={<p role="status">Steuerjahr und Datenansicht werden geladen …</p>}><SteuerSimulationContent /></Suspense>;
 }
