@@ -1,0 +1,69 @@
+{
+  "generated_on_utc": "2026-10-24",
+  "call_count": 5,
+  "one_call_per_asset": true,
+  "originals_preserved": true,
+  "assets": [
+    {
+      "name": "nav-dashboard",
+      "original": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-340f08a2-fb42-4397-b5f1-507c427a4360.png",
+      "saved": "/workspace/shared/bivaro-flat-icons/generated/nav-dashboard.png",
+      "tool": "image_gen__imagegen",
+      "mode": "built-in",
+      "model": "Not exposed in returned result; no model claimed",
+      "transparent_background": true,
+      "prompt": "Use case: logo-brand.\nAsset type: production bitmap navigation icon, nav-dashboard, for Bivaro financial SaaS sidebar.\nPrimary request: exactly ONE minimal dashboard icon: four calm solid rounded-square dashboard tiles arranged in a balanced 2-by-2 grid, with generous even transparent gutters. No other icon or element.\nStyle/medium: contemporary state-of-the-art flat 2D minimal financial-SaaS navigation glyph, simple geometric silhouette, gently rounded corners. This belongs to a coordinated set also containing receipt/check, document/pen, bell, and two-people icons.\nComposition/framing: square canvas, centered, outer visual bounds approximately 72% of canvas width and height, balanced optical weight, recognizable when displayed at 28px.\nColor palette: pure solid opaque black silhouette ONLY with genuinely transparent background and transparent negative spaces. This PNG will be used as an alpha mask and rendered currentColor in dark and light modes. Antialiased edges are fine.\nConstraints: one icon only, filled bold geometric forms rather than thin strokes; consistent moderate corner rounding; no background tile/frame/container.\nAvoid: any 3D, old-fashioned 3D, perspective, gradients, shading, highlights, bevel, shadows, textures, white-filled areas, colored pixels, text, letters, tiny detail, decorative badge, checkerboard baked into image, collage, sprite sheet, contact sheet.",
+      "qa": "Actual original viewed with view_image; alpha/read-only pixel inspection; separate light-background and magnified 28px QA derivatives; no production editing, no integration or functional tests."
+    },
+    {
+      "name": "nav-invoices",
+      "original": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-2a878606-de3f-401d-b06e-8a5ca4ffddac.png",
+      "saved": "/workspace/shared/bivaro-flat-icons/generated/nav-invoices.png",
+      "tool": "image_gen__imagegen",
+      "mode": "built-in",
+      "model": "Not exposed in returned result; no model claimed",
+      "transparent_background": true,
+      "prompt": "Use case: logo-brand.\nAsset type: production bitmap navigation icon, nav-invoices, for Bivaro financial SaaS sidebar.\nPrimary request: exactly ONE minimal invoice icon: a single upright receipt/document with a simple large check mark cut out as transparent negative space in its lower half, and only two short, thick horizontal transparent cutout lines near its top. Straight receipt sides, gently rounded top corners, simple restrained receipt bottom edge. No badge.\nStyle/medium: contemporary state-of-the-art flat 2D minimal financial-SaaS navigation glyph, simple filled geometric silhouette, gently rounded corners. Coordinated family with dashboard four tiles, document/pen, bell, and two-people icons.\nComposition/framing: square canvas, centered, main outer visual bounds about 72% of canvas height and 60% width, balanced optical weight, recognizable at 28px.\nColor palette: pure solid opaque black silhouette ONLY, truly transparent background, and genuinely transparent negative spaces/holes. Use fully opaque alpha=255 in solid interior and alpha=0 outside, smooth antialiasing only at edges. This PNG will become a currentColor alpha mask for dark/light modes.\nConstraints: one icon only; few large bold filled geometric forms rather than thin strokes; no background tile/frame/container; keep all background entirely alpha=0 with no stray pixels.\nAvoid: 3D, perspective, gradients, shading, highlights, bevel, shadows, textures, white-filled cutouts, colors, text, letters, numbers, tiny details, decorative badge, baked checkerboard, collage, sprite sheet, contact sheet.",
+      "qa": "Actual original viewed with view_image; alpha/read-only pixel inspection; separate light-background and magnified 28px QA derivatives; no production editing, no integration or functional tests."
+    },
+    {
+      "name": "nav-quotes",
+      "original": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-48d0e90a-da62-4e6f-b9b7-204d92fff7f5.png",
+      "saved": "/workspace/shared/bivaro-flat-icons/generated/nav-quotes.png",
+      "tool": "image_gen__imagegen",
+      "mode": "built-in",
+      "model": "Not exposed in returned result; no model claimed",
+      "transparent_background": true,
+      "prompt": "Use case: logo-brand.\nAsset type: production bitmap navigation icon, nav-quotes, for Bivaro financial SaaS sidebar.\nPrimary request: exactly ONE minimal quotation/proposal icon: a single upright document with gently rounded corners, two short thick horizontal transparent cutout lines near top, and a simple thick diagonal pen crossing the lower-right edge, separated from the document by a generous transparent gap. Simple pen silhouette with one pointed nib, no tiny detail. No badge.\nStyle/medium: contemporary state-of-the-art flat 2D minimal financial-SaaS navigation glyph, simple bold filled geometric silhouette, gently rounded corners. Coordinated family with four dashboard tiles, receipt/check, bell, and two-people icons.\nComposition/framing: square canvas, centered, outer visual bounds approximately 72% of canvas width and height, balanced optical weight, recognizable at 28px.\nColor palette: pure solid opaque black silhouette ONLY, genuinely transparent background and transparent negative spaces/holes. Solid interiors opaque alpha=255; outside fully alpha=0. Antialiasing only along edges. This image becomes a currentColor alpha mask for dark and light modes.\nConstraints: one icon only, few large bold filled geometric forms rather than thin strokes, consistent moderate corner rounding, no background tile/frame/container. Background empty without stray pixels.\nAvoid: any 3D, perspective, gradients, shading, highlights, bevel, shadows, textures, white-filled cutouts, colored pixels, text, letters, numbers, tiny details, decorative badge, baked checkerboard, collage, sprite sheet, contact sheet.",
+      "qa": "Actual original viewed with view_image; alpha/read-only pixel inspection; separate light-background and magnified 28px QA derivatives; no production editing, no integration or functional tests."
+    },
+    {
+      "name": "nav-reminders",
+      "original": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-95dbd999-097a-496b-b733-a43376c8503c.png",
+      "saved": "/workspace/shared/bivaro-flat-icons/generated/nav-reminders.png",
+      "tool": "image_gen__imagegen",
+      "mode": "built-in",
+      "model": "Not exposed in returned result; no model claimed",
+      "transparent_background": true,
+      "prompt": "Use case: logo-brand.\nAsset type: production bitmap navigation icon, nav-reminders, for Bivaro financial SaaS sidebar.\nPrimary request: exactly ONE minimal bell icon: a solid symmetrical bell dome tapering gently to small top handle, wide subtly flared bottom lip, and one simple separate semicircular clapper centered underneath with a clean transparent gap. No notification dot, no ringing lines, no badge.\nStyle/medium: contemporary state-of-the-art flat 2D minimal financial-SaaS navigation glyph, simple bold filled geometric silhouette, gently rounded transitions. Coordinated family with four dashboard tiles, receipt/check, document/pen, and two-people icons.\nComposition/framing: square canvas, centered, outer visual bounds about 72% of canvas width and height, balanced optical weight, recognizable at 28px.\nColor palette: pure solid opaque black silhouette ONLY, genuinely transparent background and negative spaces. Solid interiors opaque alpha=255; outside alpha=0, smooth antialiasing only at edges. PNG becomes currentColor alpha mask for both dark/light modes.\nConstraints: exactly one icon; few large bold filled geometric forms; no thin outline; consistent moderate corner rounding; no background tile/frame/container. Background entirely empty with no stray pixels.\nAvoid: any 3D, perspective, gradients, shading, highlights, bevel, shadows, textures, white-filled areas, colored pixels, text, letters, tiny detail, decorative badge, baked checkerboard, collage, sprite sheet, contact sheet.",
+      "qa": "Actual original viewed with view_image; alpha/read-only pixel inspection; separate light-background and magnified 28px QA derivatives; no production editing, no integration or functional tests."
+    },
+    {
+      "name": "nav-customers",
+      "original": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-c358c899-502a-42b8-86c8-96b6f28140ac.png",
+      "saved": "/workspace/shared/bivaro-flat-icons/generated/nav-customers.png",
+      "tool": "image_gen__imagegen",
+      "mode": "built-in",
+      "model": "Not exposed in returned result; no model claimed",
+      "transparent_background": true,
+      "prompt": "Use case: logo-brand.\nAsset type: production bitmap navigation icon, nav-customers, for Bivaro financial SaaS sidebar.\nPrimary request: exactly ONE minimal two-people/customers icon: TWO simplified human head-and-shoulder silhouettes side by side with subtle overlap, a slightly larger front person and smaller rear person. Round solid heads, broad simple shoulder/chest forms, large clean transparent separations between heads and shoulders and between the two figures. No faces or clothing.\nStyle/medium: contemporary state-of-the-art flat 2D minimal financial-SaaS navigation glyph, simple bold filled geometric silhouette, gently rounded forms. Coordinated family with four dashboard tiles, receipt/check, document/pen, and bell icons.\nComposition/framing: square canvas, centered, outer visual bounds about 72% of canvas width and approximately 65% height, balanced optical weight, recognizable at 28px.\nColor palette: pure solid opaque black silhouette ONLY, genuinely transparent background and negative spaces/holes. Solid interiors opaque alpha=255; outside fully alpha=0, smooth antialiasing only on edges. This PNG becomes a currentColor alpha mask for dark/light modes.\nConstraints: one two-person icon only, few large bold filled geometric forms rather than thin outline, consistent moderate roundness; no background tile/frame/container; background completely empty with no stray pixels.\nAvoid: 3D, perspective, gradients, shading, highlights, bevel, shadows, textures, white-filled areas, colored pixels, text, letters, numbers, tiny details, decorative badge, more than two people, baked checkerboard, collage, sprite sheet, contact sheet.",
+      "qa": "Actual original viewed with view_image; alpha/read-only pixel inspection; separate light-background and magnified 28px QA derivatives; no production editing, no integration or functional tests."
+    }
+  ],
+  "known_caveats": [
+    "Built-in output produces mostly alpha254/253 interiors rather than exact255.",
+    "Sparse faint stray pixels in some originals; no cleanup applied.",
+    "RGB values are predominantly black but not mathematically pure0 everywhere; ignored for CSS alpha-mask use.",
+    "All five are visually flat, minimal, legible at28px as image-only QA."
+  ]
+}

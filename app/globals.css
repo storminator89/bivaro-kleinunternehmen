@@ -855,9 +855,10 @@
 .bivaro-icon { flex-shrink: 0; object-fit: contain; user-select: none; }
 .app-sidebar img.bivaro-icon { filter: none; }
 .bivaro-brand { display: inline-flex; align-items: center; gap: .625rem; vertical-align: middle; white-space: nowrap; }
-.bivaro-brand > .bivaro-icon { width: 2.5rem; height: 2.5rem; }
+.bivaro-brand > .bivaro-icon, .bivaro-brand > .sidebar-icon { width: 2.5rem; height: 2.5rem; }
 .bivaro-wordmark { color: var(--foreground); font-size: 1.125rem; font-weight: 750; letter-spacing: .025em; line-height: 1; }
 .app-sidebar .bivaro-wordmark { color: #F4FFF8; }
+.app-sidebar .bivaro-brand > .sidebar-icon { color: #F4FFF8; }
 .bivaro-brand.brand-compact { display: none; }
 aside.w-20 .bivaro-brand.brand-full { display: none; }
 aside.w-20 .bivaro-brand.brand-compact { display: inline-flex; width: 2.5rem; }
@@ -872,7 +873,7 @@ aside.w-20 .bivaro-brand.brand-compact { display: inline-flex; width: 2.5rem; }
 .invoice-import summary > span:first-child:has(.bivaro-icon) { background: transparent; }
 @media (max-width: 374px) {
   header .bivaro-brand { gap: .375rem; }
-  header .bivaro-brand > .bivaro-icon { width: 2rem; height: 2rem; }
+  header .bivaro-brand > .bivaro-icon, header .bivaro-brand > .sidebar-icon { width: 2rem; height: 2rem; }
   header .bivaro-wordmark { font-size: .9375rem; }
 }
 
@@ -899,4 +900,22 @@ aside.w-20 .bivaro-brand.brand-compact { display: inline-flex; width: 2.5rem; }
 .entry-symbol:has(.dashboard-icon), .summary-symbol:has(.dashboard-icon), .activity-direction:has(.dashboard-icon), .invoice-import summary > span:first-child:has(.dashboard-icon) { background: transparent; }
 .invoice-file-symbol:has(.dashboard-icon) { border-color: transparent; background: transparent; }
 .ledger-empty > .dashboard-icon { display: block; margin: 0 auto 1rem; }
-.app-sidebar img[data-bivaro-icon="bivaro-sidebar-flat"] { filter: brightness(0) invert(.96); }
+/* Sidebar-only generated masks follow the label ink in every theme and state. */
+.sidebar-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+  vertical-align: middle;
+  background: currentColor;
+  -webkit-mask-image: var(--sidebar-icon-image);
+  mask-image: var(--sidebar-icon-image);
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}

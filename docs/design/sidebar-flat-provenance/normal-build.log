@@ -1,0 +1,474 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> buchhaltung@0.1.0 prebuild
+> node scripts/ai-pdf/prepare-worker.mjs
+
+
+> buchhaltung@0.1.0 build
+> next build
+
+▲ Next.js 16.4.1 (Turbopack)
+✓ Running next.config.ts took 26ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 11.0s
+  Running TypeScript ...
+  Finished TypeScript in 26.0s ...
+  Collecting page data using 8 workers ...
+  Generating static pages using 8 workers (0/119) ...
+  Generating static pages using 8 workers (29/119)
+  Generating static pages using 8 workers (59/119)
+  Generating static pages using 8 workers (89/119)
+✓ Generating static pages using 8 workers (119/119) in 541ms
+Turbopack build encountered 9 warnings:
+./lib/purchase-documents/validation-runtime.ts:100:18
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m 98 |[0m ...g | [36mnull[0m = [36mnull[0m;
+  [90m 99 |[0m ...
+[33m[1m>[0m [90m100 |[0m ...resolve(options.assetsRoot ?? process.env.[33mBIVARO_EINVOICE_ASSETS[0m ?? [32m'/opt/bivaro/einvo...[0m
+  [90m    |[0m    [33m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m101 |[0m ...ValidationAssets(root); }
+  [90m102 |[0m .....report, reasonCode: [32m'VALIDATOR_RULES_UNAVAILABLE'[0m }; }
+  [90m103 |[0m ...mkdtemp(path.join(tmpdir(), [32m'bivaro-invoice-check-'[0m));
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: path.resolve(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/purchase-documents/validation-runtime.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+  #2 [App Route]:
+    ./lib/purchase-documents/validation-runtime.ts
+    ./lib/purchase-documents/validation-service.ts
+    ./app/api/purchase-documents/[id]/validation/route.ts
+
+
+./lib/server/foreign-pdf-validator-confinement.ts:21:39
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m19 |[0m ...[36mconst[0m allow = (access: string, file: string) => rules.push([32m'--landlock-rule'[0m, [32m`path-ben...[0m
+  [90m20 |[0m ...[36mfor[0m ([36mconst[0m root [36mof[0m [[32m'/usr/lib'[0m, [32m'/lib'[0m, javaHome, distribution, directory])
+[33m[1m>[0m [90m21 |[0m ...  allow([32m'read-file,read-dir'[0m, [36mawait[0m realpath(root));
+  [90m   |[0m                                        [33m[1m^^^^^^^^^^^^^^[0m
+  [90m22 |[0m ...[90m// OpenJDK Security.initialize() requires conf/security/java.security:[0m
+  [90m23 |[0m ...[90m// https://github.com/openjdk/jdk21u/blob/master/src/java.base/share/classes/java/secur...[0m
+  [90m24 |[0m ...[90m// Debian 21 keeps conf as a real directory with individual /etc symlinks.[0m
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: fs.realpath(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/server/foreign-pdf-validator-confinement.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+  #2 [App Route]:
+    ./lib/server/foreign-pdf-validator-confinement.ts
+    ./lib/server/pdfa-validator.ts
+    ./lib/server/pdfa3-converter.ts
+    ./app/api/pdfa3/route.ts
+
+
+./lib/server/foreign-pdf-validator-confinement.ts:35:30
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m33 |[0m   allow([32m'read-file'[0m, security);
+  [90m34 |[0m   [36mfor[0m ([36mconst[0m file [36mof[0m [[32m'/etc/ld.so.cache'[0m, [32m'/dev/urandom'[0m, [32m'/dev/null'[0m])
+[33m[1m>[0m [90m35 |[0m     allow([32m'read-file'[0m, [36mawait[0m realpath(file));
+  [90m   |[0m                              [33m[1m^^^^^^^^^^^^^^[0m
+  [90m36 |[0m   allow([32m'read-file,execute'[0m, java);
+  [90m37 |[0m   allow([32m'read-file,execute'[0m, [36mawait[0m realpath(process.arch === [32m'x64'[0m ? [32m'/lib64/ld-linux-x86-...[0m
+  [90m38 |[0m   [36mconst[0m javaArgs = [
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: fs.realpath(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/server/foreign-pdf-validator-confinement.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+  #2 [App Route]:
+    ./lib/server/foreign-pdf-validator-confinement.ts
+    ./lib/server/pdfa-validator.ts
+    ./lib/server/pdfa3-converter.ts
+    ./app/api/pdfa3/route.ts
+
+
+./lib/server/foreign-pdf-verifier-adapter.ts:34:187
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m32 |[0m ...
+  [90m33 |[0m ...[32m/org'[0m),[[32m'bivaro'[0m]],[path.join(root,[32m'classes/org/bivaro'[0m),[[32m'pdfa'[0m]],[path.join(root,[32m'cla...[0m
+[33m[1m>[0m [90m34 |[0m ...mode&[35m0o022[0m)===[35m0[0m);requireValue(([36mawait[0m readdir(dir)).sort().join([32m','[0m)===[...names].sort()...
+  [90m   |[0m                                         [33m[1m^^^^^^^^^^^^[0m
+  [90m35 |[0m ...
+  [90m36 |[0m ...
+  [90m37 |[0m ...[33m56[0m);
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: fs.readdir(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/server/foreign-pdf-verifier-adapter.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+  #2 [App Route]:
+    ./lib/server/foreign-pdf-verifier-adapter.ts
+    ./lib/server/foreign-pdf-verifier-config.ts
+    ./lib/server/pdfa-validator.ts
+    ./lib/server/pdfa3-converter.ts
+    ./app/api/pdfa3/route.ts
+
+
+./lib/server/foreign-pdf-verifier-adapter.ts:34:24
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m32 |[0m   requireValue(path.isAbsolute(distribution));[36mconst[0m root=path.join(distribution,[32m'foreign-r...[0m
+  [90m33 |[0m   [36mfor[0m([36mconst[0m [dir,names][36mof[0m [[root,[[32m'ForeignVerifierMain.java'[0m,[32m'classes'[0m,[32m'manifest.json'[0m]],[...
+[33m[1m>[0m [90m34 |[0m     requireValue([36mawait[0m realpath(dir)===dir);[36mconst[0m info=[36mawait[0m lstat(dir);requireValue(info....
+  [90m   |[0m                        [33m[1m^^^^^^^^^^^^^[0m
+  [90m35 |[0m   }
+  [90m36 |[0m   [36mconst[0m evidence=requireForeignVerifierAdapterEvidence([33mJSON[0m.parse(([36mawait[0m bytes(path.join(r...
+  [90m37 |[0m   [36mconst[0m source=[36mawait[0m bytes(path.join(root,[33mADAPTER_SOURCE[0m),[35m8192[0m);requireValue(source.length...
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: fs.realpath(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/server/foreign-pdf-verifier-adapter.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+  #2 [App Route]:
+    ./lib/server/foreign-pdf-verifier-adapter.ts
+    ./lib/server/foreign-pdf-verifier-config.ts
+    ./lib/server/pdfa-validator.ts
+    ./lib/server/pdfa3-converter.ts
+    ./app/api/pdfa3/route.ts
+
+
+./lib/server/pdfa-validator.ts:158:19
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m156 |[0m   [36mreturn[0m [36mnew[0m [33mPromise[0m((resolve, reject) => {
+  [90m157 |[0m     [36mconst[0m spec = veraPdfSpawnSpecification(binary, args, directory, confined);
+[33m[1m>[0m [90m158 |[0m     [36mconst[0m child = spawn(spec.binary, spec.args, spec.options);
+  [90m    |[0m                   [33m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m159 |[0m     [36mconst[0m prefix = args[[35m0[0m] === [32m'--version'[0m ? [32m'version'[0m : [32m'validation'[0m;
+  [90m160 |[0m     [36mlet[0m launchFailed = [36mfalse[0m;
+  [90m161 |[0m     [36mlet[0m processOutcome: [33mProcessOutcome[0m = [32m'unknown'[0m;
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: child_process.spawn(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/server/pdfa-validator.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+  #2 [App Route]:
+    ./lib/server/pdfa-validator.ts
+    ./lib/server/pdfa3-converter.ts
+    ./app/api/pdfa3/route.ts
+
+
+./lib/server/pdfa-validator.ts:276:29
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m274 |[0m ...[33malidationError[0m();
+  [90m275 |[0m ...[32mdirectory'[0m;
+[33m[1m>[0m [90m276 |[0m ...dtemp(path.join(tmpdir(), options.temporaryPrefix ?? [32m'bivaro-own-invoice-pdfa-'[0m));
+  [90m    |[0m          [33m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m277 |[0m ...[32mconstruction'[0m;
+  [90m278 |[0m ...ed)
+  [90m279 |[0m ...eignVerifierConfig(binary, workDir);
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: path.join(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/server/pdfa-validator.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+  #2 [App Route]:
+    ./lib/server/pdfa-validator.ts
+    ./lib/server/pdfa3-converter.ts
+    ./app/api/pdfa3/route.ts
+
+
+./lib/server/pdfa3-converter.ts:65:30
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m63 |[0m     allow([32m'read-file,read-dir'[0m, [36mawait[0m realpath(name));
+  [90m64 |[0m   [36mfor[0m ([36mconst[0m file [36mof[0m [[32m'/etc/ld.so.cache'[0m, [32m'/dev/urandom'[0m, [32m'/dev/null'[0m, input, xml])
+[33m[1m>[0m [90m65 |[0m     allow([32m'read-file'[0m, [36mawait[0m realpath(file));
+  [90m   |[0m                              [33m[1m^^^^^^^^^^^^^^[0m
+  [90m66 |[0m   allow([32m'read-file,execute'[0m, node);
+  [90m67 |[0m   allow([32m'read-file,execute'[0m, [36mawait[0m realpath(process.arch === [32m'x64'[0m ? [32m'/lib64/ld-linux-x86-...[0m
+  [90m68 |[0m   allow([32m'read-file,write-file'[0m, output);
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: fs.realpath(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/server/pdfa3-converter.ts
+    ./app/api/pdfa3/route.ts
+
+  #2 [App Route]:
+    ./lib/server/pdfa3-converter.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+
+./lib/upload-path.ts:103:27
+Warning: Dynamic filesystem access causes tracing of the whole project
+  [90m101 |[0m     [36mthrow[0m [36mnew[0m [33mError[0m([32m'Ungültige Legacy-Dateireferenz'[0m);
+  [90m102 |[0m   }
+[33m[1m>[0m [90m103 |[0m   [36mreturn[0m assertWithinRoot(path.join(directory, storedName), directory);
+  [90m    |[0m                           [33m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m104 |[0m }
+  [90m105 |[0m
+  [90m106 |[0m [90m/** Resolve a safe upload path in the tenant folder, if the file exists. */[0m
+
+Static analysis determined that this filesystem access causes the whole project to be traced and included in the output.
+This is usually unintentional and leads to all source files (including the public folder) to be deployed as part of the server code.
+This can slow down deployments or lead to failures when size limits are exceeded.
+To resolve this, you can
+- make sure the path is statically scoped to some subfolder, for example path.join(process.cwd(), 'data', bar), or
+- only use them in development, or
+- opt out by adding an ignore comment to the highlighted call: path.join(/*turbopackIgnore: true*/ ...), or
+- remove them.
+
+Import traces:
+  #1 [App Route]:
+    ./lib/upload-path.ts
+    ./app/api/invoices/route.ts
+
+  #2 [App Route]:
+    ./lib/upload-path.ts
+    ./lib/upload-path.ts
+    ./app/api/settings/upload-logo/route.ts
+
+
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /api/accountant-export
+├ ƒ /api/api-keys
+├ ƒ /api/app-settings
+├ ƒ /api/audit-logs
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/auth/register
+├ ƒ /api/auth/registration-status
+├ ƒ /api/backup
+├ ƒ /api/backup/full
+├ ƒ /api/backup/full/preview
+├ ƒ /api/backup/full/restore
+├ ƒ /api/backup/preview
+├ ƒ /api/backup/restore
+├ ƒ /api/bank-allocations/[id]/changes
+├ ƒ /api/bank-allocations/[id]/preflight
+├ ƒ /api/bank-imports
+├ ƒ /api/bank-imports/[id]
+├ ƒ /api/bank-imports/rows/[id]/allocation
+├ ƒ /api/bank-imports/rows/[id]/allocation/preflight
+├ ƒ /api/bank-mapping-profiles
+├ ƒ /api/billing-notes
+├ ƒ /api/billing-notes/statement
+├ ƒ /api/cashbook
+├ ƒ /api/cashbook/daily-balance
+├ ƒ /api/cashbook/export
+├ ƒ /api/cashbook/transactions
+├ ƒ /api/change-history
+├ ƒ /api/cors-settings
+├ ƒ /api/customers
+├ ƒ /api/customers/[id]/price-history
+├ ƒ /api/customers/[id]/timeline
+├ ƒ /api/daily-actions
+├ ƒ /api/dashboard/assets
+├ ƒ /api/dashboard/filter-options
+├ ƒ /api/dashboard/kpis
+├ ƒ /api/dashboard/summary
+├ ƒ /api/data-import
+├ ƒ /api/documentation
+├ ƒ /api/email/outbox
+├ ƒ /api/email/outbox/[id]/retry
+├ ƒ /api/email/preview
+├ ƒ /api/email/send
+├ ƒ /api/eur-export
+├ ƒ /api/expenses
+├ ƒ /api/expenses/[id]
+├ ƒ /api/expenses/download
+├ ƒ /api/expenses/export
+├ ƒ /api/files/logo
+├ ƒ /api/handoff-acknowledgement
+├ ƒ /api/handoff-readiness
+├ ƒ /api/health
+├ ƒ /api/incomes
+├ ƒ /api/incomes/export
+├ ƒ /api/invoice-templates
+├ ƒ /api/invoice-templates/[id]
+├ ƒ /api/invoices
+├ ƒ /api/invoices/[id]/payments
+├ ƒ /api/invoices/[id]/payments/adjustments
+├ ƒ /api/invoices/cancel
+├ ƒ /api/invoices/check-number
+├ ƒ /api/invoices/download
+├ ƒ /api/invoices/next-number
+├ ƒ /api/invoices/render
+├ ƒ /api/invoices/upload
+├ ƒ /api/invoices/viewer
+├ ƒ /api/openapi
+├ ƒ /api/pdfa3
+├ ƒ /api/purchase-documents
+├ ƒ /api/purchase-documents/[id]
+├ ƒ /api/purchase-documents/[id]/ai-extraction
+├ ƒ /api/purchase-documents/[id]/ai-extraction/apply
+├ ƒ /api/purchase-documents/[id]/ai-extraction/cancel
+├ ƒ /api/purchase-documents/[id]/approve-expense
+├ ƒ /api/purchase-documents/[id]/dismiss
+├ ƒ /api/purchase-documents/[id]/original
+├ ƒ /api/purchase-documents/[id]/reopen
+├ ƒ /api/purchase-documents/[id]/retry-parse
+├ ƒ /api/purchase-documents/[id]/review-draft
+├ ƒ /api/purchase-documents/[id]/supplier
+├ ƒ /api/purchase-documents/[id]/validation
+├ ƒ /api/quotes
+├ ƒ /api/quotes/[id]/convert
+├ ƒ /api/quotes/[id]/workflow
+├ ƒ /api/quotes/download
+├ ƒ /api/quotes/next-number
+├ ƒ /api/record-search
+├ ƒ /api/recurring-expenses
+├ ƒ /api/recurring-expenses/execute
+├ ƒ /api/reminders
+├ ƒ /api/reminders/download
+├ ƒ /api/reminders/preview
+├ ƒ /api/service-articles
+├ ƒ /api/service-billing
+├ ƒ /api/service-billing/drafts/[id]
+├ ƒ /api/service-billing/period
+├ ƒ /api/service-projects
+├ ƒ /api/settings
+├ ƒ /api/settings/ai-provider
+├ ƒ /api/settings/ai-provider/test
+├ ƒ /api/settings/annual-context
+├ ƒ /api/settings/document-numbering
+├ ƒ /api/settings/smtp
+├ ƒ /api/settings/upload-logo
+├ ƒ /api/suppliers
+├ ƒ /api/suppliers/[id]
+├ ƒ /api/tax-summary
+├ ƒ /api/users
+├ ƒ /api/users/[id]
+├ ƒ /api/v1/cashbook
+├ ƒ /api/v1/customers
+├ ƒ /api/v1/docs
+├ ƒ /api/v1/documentation
+├ ƒ /api/v1/expenses
+├ ƒ /api/v1/incomes
+├ ƒ /api/v1/invoices
+├ ƒ /api/v1/invoices/upload
+├ ƒ /api/v1/recurring-expenses
+├ ƒ /api/v1/reminders
+├ ƒ /api/v1/settings
+├ ○ /apple-icon.png
+├ ƒ /bank-csv
+├ ƒ /cashbook
+├ ƒ /customers
+├ ƒ /customers/articles
+├ ƒ /customers/import
+├ ƒ /dashboard
+├ ƒ /dashboard/invoices/new
+├ ƒ /dashboard/quotes/new
+├ ƒ /dashboard/reminders
+├ ƒ /dashboard/today
+├ ƒ /expenses/[id]
+├ ƒ /handoff
+├ ƒ /help
+├ ƒ /help/access
+├ ƒ /history
+├ ○ /icon.png
+├ ƒ /login
+├ ƒ /purchases
+├ ƒ /register
+├ ƒ /service-billing
+├ ƒ /settings
+├ ƒ /settings/api-keys
+├ ƒ /settings/api-keys/docs
+├ ƒ /settings/audit-logs
+├ ƒ /settings/documentation
+├ ƒ /steuer-simulation
+└ ƒ /users
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+> buchhaltung@0.1.0 postbuild
+> node scripts/third-party-notices/build-notices.mjs
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

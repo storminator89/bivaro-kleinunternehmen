@@ -1,0 +1,329 @@
+{
+  "count": 15,
+  "webBytes": 23494,
+  "operation": "Full-canvas uniform resize and lossless WebP conversion; no crop, alpha threshold, recoloring or flattening.",
+  "sidebarPaletteSharedByLightAndDark": true,
+  "solidInkContrast": [
+    {
+      "state": "inactive",
+      "ink": "#BDCFCA",
+      "surface": "#06251F",
+      "ratio": 10.02
+    },
+    {
+      "state": "hover",
+      "ink": "#C6D8D4",
+      "surface": "#123A31",
+      "ratio": 8.46
+    },
+    {
+      "state": "active",
+      "ink": "#06251F",
+      "surface": "#79E1AB",
+      "ratio": 10.19
+    }
+  ],
+  "functionalTestsExecuted": false,
+  "assets": [
+    {
+      "name": "nav-dashboard",
+      "original": "assets/brand/sidebar-flat/nav-dashboard.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "3e4c8737225d6431e38b31bdfde294070d9f5f8d95e74967073cf2634c419870",
+      "web": "public/brand/icons/sidebar-flat/nav-dashboard.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "8fa3e503ad5d2753c5f66710e3effd593aa18b8fd255683314608fdd21a0de34",
+      "webBytes": 1240,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-invoices",
+      "original": "assets/brand/sidebar-flat/nav-invoices.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "6acf1e62a02c9b4fe319b8242b1e724453e82a3262735d425af7a5b977e01c42",
+      "web": "public/brand/icons/sidebar-flat/nav-invoices.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "6660ad47dcb63aa53f856d4bdd21c6d916625dd36ce7cd5e29ac708ba70bc7ad",
+      "webBytes": 1562,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-quotes",
+      "original": "assets/brand/sidebar-flat/nav-quotes.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "67634aabe441abab2fb7a1db1fe54681da1cd4d51812372c407b66a3bfe44bd0",
+      "web": "public/brand/icons/sidebar-flat/nav-quotes.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "29820b113a822029993ee558c3a5df96da0b95aa229ca552ca6f34958d26fc36",
+      "webBytes": 1370,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-reminders",
+      "original": "assets/brand/sidebar-flat/nav-reminders.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "0b282103d1dd3d12822708a9d7a3782eef5188a903b703d6a8138c271e70eb99",
+      "web": "public/brand/icons/sidebar-flat/nav-reminders.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "5762e785ad996e68af07bcf4a3bdc688588730547a9dc9dc6be8521f5e3c3773",
+      "webBytes": 1226,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-customers",
+      "original": "assets/brand/sidebar-flat/nav-customers.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "d856aa04ad68c215494fcd0b3394003ddbed6181b22afdfb017aeafd3c2915ef",
+      "web": "public/brand/icons/sidebar-flat/nav-customers.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "58d2fa9657af60870c08f7f1c14e14cc8a5deb7c56ee3f8cbbfd81b041e44d77",
+      "webBytes": 1624,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-incomes",
+      "original": "assets/brand/sidebar-flat/nav-incomes.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "60c857b7acf69c551be403497ab2ac67d21de0c0f598245b71d38ad55fad197e",
+      "web": "public/brand/icons/sidebar-flat/nav-incomes.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "50af4005863c860aebb444f9390d944dac202040e4dd7a8d421df8b9dcc6a67d",
+      "webBytes": 1462,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-expenses",
+      "original": "assets/brand/sidebar-flat/nav-expenses.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "17d0b3f78cd153dacf130be1cf36d4c23da3c2e72a25a89d251857c22e0e4bf9",
+      "web": "public/brand/icons/sidebar-flat/nav-expenses.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "e571d86c11fb04093f09320a5853a75df6ababbaf77eca02050a40a41319b60d",
+      "webBytes": 1206,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-cashbook",
+      "original": "assets/brand/sidebar-flat/nav-cashbook.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "2e256ae26732821183bbb440cc24e5b289fc1842e1c32d2b55a825a7b4cd8e9d",
+      "web": "public/brand/icons/sidebar-flat/nav-cashbook.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "7809d3f0039130874ab90a9c8bd483458dc6fb71b15bd3ede5295d79265a112f",
+      "webBytes": 1616,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-eur",
+      "original": "assets/brand/sidebar-flat/nav-eur.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "cf12201c11ddb9133fac0fe70ae0f318cb10f3cbca127057b779723b708bb423",
+      "web": "public/brand/icons/sidebar-flat/nav-eur.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "5359bd11a3671c19fa302248ede7ff11edf80f768195f1843ec60506a5ba48f0",
+      "webBytes": 1970,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-assets",
+      "original": "assets/brand/sidebar-flat/nav-assets.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "d71abf00c5b0a69e275c42c92fb7a5a1cae8aae8a204dcb2c153fe3f46545642",
+      "web": "public/brand/icons/sidebar-flat/nav-assets.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "c043c9aeed8edf92f1fe1afcf499bda254feb8e930bd1c3eca88d0c76b0272e9",
+      "webBytes": 970,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-tax",
+      "original": "assets/brand/sidebar-flat/nav-tax.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "ae37fa4adb81684adbd3ed7b30ebd17b111864387eb9b5b1c6bf184661d30b77",
+      "web": "public/brand/icons/sidebar-flat/nav-tax.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "3c93e6ff10a580b5a56b0274ce1372c36ea474fbb51514b133357076c2cc9c4e",
+      "webBytes": 1384,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-settings",
+      "original": "assets/brand/sidebar-flat/nav-settings.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "b226dd44226210bb3e43f724ac08008ee3c180431bdb596669149a61ef34aea4",
+      "web": "public/brand/icons/sidebar-flat/nav-settings.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "523e6140d537a4a7b21b79c52a3b3a6a4c4e36ec51ea8287a59fc7f23c2eb730",
+      "webBytes": 1920,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-users",
+      "original": "assets/brand/sidebar-flat/nav-users.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "06832b66662fddcd41c189b2dbedeec32bb2680bd2dd1d34d9767454da241a9f",
+      "web": "public/brand/icons/sidebar-flat/nav-users.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "848ff08cdfaeb1b263a9644c346c6f348319d499612c6103773666e6b6fd00f0",
+      "webBytes": 1982,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "nav-logout",
+      "original": "assets/brand/sidebar-flat/nav-logout.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "30e95c3f1c03257caddfd3cd1b8031eb9822ea6f6cb7e36064e129105c3105d1",
+      "web": "public/brand/icons/sidebar-flat/nav-logout.webp",
+      "webDimensions": [
+        128,
+        128
+      ],
+      "webSha256": "f492eb0cf2360e859f83d034485f74188f1c013b422d5ffde04ab4a385de2547",
+      "webBytes": 1046,
+      "alphaRange": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "bivaro-sidebar",
+      "original": "assets/brand/sidebar-flat/bivaro-sidebar.png",
+      "originalDimensions": [
+        1254,
+        1254
+      ],
+      "originalSha256": "1b5cd54fcc1fa3c1ba00ce4d7aa5a5a9fed660bd0e8a48b8d95a50e90001504b",
+      "web": "public/brand/icons/sidebar-flat/bivaro-sidebar.webp",
+      "webDimensions": [
+        192,
+        192
+      ],
+      "webSha256": "9d056f92579cef609a062102d40a76fdeb5cb9988dbb9c1665772d65d5d1eff3",
+      "webBytes": 2916,
+      "alphaRange": [
+        0,
+        255
+      ]
+    }
+  ]
+}

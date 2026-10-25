@@ -1,0 +1,197 @@
+[
+  {
+    "name": "nav-incomes",
+    "path": "/workspace/shared/bivaro-flat-icons/generated/nav-incomes.png",
+    "mode": "RGBA",
+    "size": [
+      1254,
+      1254
+    ],
+    "alpha_extrema": [
+      0,
+      255
+    ],
+    "raw_alpha_bbox": [
+      230,
+      315,
+      1022,
+      1005
+    ],
+    "alpha32_bbox": [
+      234,
+      318,
+      1020,
+      961
+    ],
+    "visual_bounds_percent": [
+      62.7,
+      51.3
+    ],
+    "sha256": "60c857b7acf69c551be403497ab2ac67d21de0c0f598245b71d38ad55fad197e",
+    "prompt_path": "/workspace/shared/bivaro-flat-icons/generated/nav-incomes.prompt.txt",
+    "imagegen_original_path": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-f2b00fde-20ca-49fe-8a01-cd962ffa368c.png",
+    "original_sha256": "60c857b7acf69c551be403497ab2ac67d21de0c0f598245b71d38ad55fad197e",
+    "generation_mode": "built-in image_gen",
+    "generation_parameters": {
+      "transparent_background": true,
+      "input_references": null
+    },
+    "original_retained_verified": true
+  },
+  {
+    "name": "nav-expenses",
+    "path": "/workspace/shared/bivaro-flat-icons/generated/nav-expenses.png",
+    "mode": "RGBA",
+    "size": [
+      1254,
+      1254
+    ],
+    "alpha_extrema": [
+      0,
+      255
+    ],
+    "raw_alpha_bbox": [
+      178,
+      53,
+      1028,
+      1037
+    ],
+    "alpha32_bbox": [
+      228,
+      256,
+      1026,
+      1000
+    ],
+    "visual_bounds_percent": [
+      63.6,
+      59.3
+    ],
+    "sha256": "17d0b3f78cd153dacf130be1cf36d4c23da3c2e72a25a89d251857c22e0e4bf9",
+    "prompt_path": "/workspace/shared/bivaro-flat-icons/generated/nav-expenses.prompt.txt",
+    "imagegen_original_path": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-8c26f630-5f6a-40cd-b819-e1da58538285.png",
+    "original_sha256": "17d0b3f78cd153dacf130be1cf36d4c23da3c2e72a25a89d251857c22e0e4bf9",
+    "generation_mode": "built-in image_gen",
+    "generation_parameters": {
+      "transparent_background": true,
+      "input_references": null
+    },
+    "original_retained_verified": true
+  },
+  {
+    "name": "nav-cashbook",
+    "path": "/workspace/shared/bivaro-flat-icons/generated/nav-cashbook.png",
+    "mode": "RGBA",
+    "size": [
+      1254,
+      1254
+    ],
+    "alpha_extrema": [
+      0,
+      255
+    ],
+    "raw_alpha_bbox": [
+      121,
+      168,
+      1114,
+      1212
+    ],
+    "alpha32_bbox": [
+      208,
+      354,
+      1046,
+      932
+    ],
+    "visual_bounds_percent": [
+      66.8,
+      46.1
+    ],
+    "sha256": "2e256ae26732821183bbb440cc24e5b289fc1842e1c32d2b55a825a7b4cd8e9d",
+    "prompt_path": "/workspace/shared/bivaro-flat-icons/generated/nav-cashbook.prompt.txt",
+    "imagegen_original_path": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-ec08de0c-3596-44a5-8d32-6ddab67abd4c.png",
+    "original_sha256": "2e256ae26732821183bbb440cc24e5b289fc1842e1c32d2b55a825a7b4cd8e9d",
+    "generation_mode": "built-in image_gen",
+    "generation_parameters": {
+      "transparent_background": true,
+      "input_references": null
+    },
+    "original_retained_verified": true
+  },
+  {
+    "name": "nav-eur",
+    "path": "/workspace/shared/bivaro-flat-icons/generated/nav-eur.png",
+    "mode": "RGBA",
+    "size": [
+      1254,
+      1254
+    ],
+    "alpha_extrema": [
+      0,
+      255
+    ],
+    "raw_alpha_bbox": [
+      71,
+      252,
+      1234,
+      1101
+    ],
+    "alpha32_bbox": [
+      162,
+      254,
+      1093,
+      1000
+    ],
+    "visual_bounds_percent": [
+      74.2,
+      59.5
+    ],
+    "sha256": "cf12201c11ddb9133fac0fe70ae0f318cb10f3cbca127057b779723b708bb423",
+    "prompt_path": "/workspace/shared/bivaro-flat-icons/generated/nav-eur.prompt.txt",
+    "imagegen_original_path": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-2ca43bc3-157f-4047-bfe8-b524b65635d8.png",
+    "original_sha256": "cf12201c11ddb9133fac0fe70ae0f318cb10f3cbca127057b779723b708bb423",
+    "generation_mode": "built-in image_gen",
+    "generation_parameters": {
+      "transparent_background": true,
+      "input_references": null
+    },
+    "original_retained_verified": true
+  },
+  {
+    "name": "nav-assets",
+    "path": "/workspace/shared/bivaro-flat-icons/generated/nav-assets.png",
+    "mode": "RGBA",
+    "size": [
+      1254,
+      1254
+    ],
+    "alpha_extrema": [
+      0,
+      255
+    ],
+    "raw_alpha_bbox": [
+      0,
+      101,
+      1180,
+      1212
+    ],
+    "alpha32_bbox": [
+      193,
+      313,
+      1061,
+      941
+    ],
+    "visual_bounds_percent": [
+      69.2,
+      50.1
+    ],
+    "sha256": "d71abf00c5b0a69e275c42c92fb7a5a1cae8aae8a204dcb2c153fe3f46545642",
+    "prompt_path": "/workspace/shared/bivaro-flat-icons/generated/nav-assets.prompt.txt",
+    "imagegen_original_path": "/workspace/scratch/2ccfc8144c7a/generated_images/exec-b70ed7ed-058b-4408-84ea-7e99992c49b8.png",
+    "original_sha256": "d71abf00c5b0a69e275c42c92fb7a5a1cae8aae8a204dcb2c153fe3f46545642",
+    "generation_mode": "built-in image_gen",
+    "generation_parameters": {
+      "transparent_background": true,
+      "input_references": null
+    },
+    "original_retained_verified": true
+  }
+]
