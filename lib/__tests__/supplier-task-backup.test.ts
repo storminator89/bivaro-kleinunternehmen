@@ -1,3 +1,4 @@
+import { stripEmptyManualFinancialRecordsForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
@@ -125,7 +126,7 @@ describe('supplier task backup routes and no-effect restore', () => {
     const source = 'supplier-task-old-source', target = 'supplier-task-old-target'; await user(source); await user(target); const oldInput = await original(source, 'old-empty');
     const archive = await exportZip(source);
     for (const row of archive.backup.data.purchaseDocuments) { expect(row.supplierTaskKind).toBeNull(); delete row.supplierTaskKind; delete row.supplierTaskFollowUpDate; delete row.supplierTaskConfirmationRequired; }
-    rehash(archive.backup, MAPPING_NUMBERING_SCHEMA_VERSION); expect(() => preview.createBackupPreview(archive.backup)).not.toThrow();
+    rehash(archive.backup, MAPPING_NUMBERING_SCHEMA_VERSION); stripEmptyManualFinancialRecordsForLegacy(archive.backup); expect(() => preview.createBackupPreview(archive.backup)).not.toThrow();
     archive.zip.file('backup.json', JSON.stringify(archive.backup)); const oldBytes = await archive.zip.generateAsync({ type: 'uint8array' });
     expect((await importZip(target, oldBytes)).status).toBe(200);
     const restored = await database.client.purchaseDocument.findFirstOrThrow({ where: { userId: target } });

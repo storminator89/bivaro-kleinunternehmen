@@ -16,6 +16,9 @@ type FeatureData = Record<string, unknown> & {
   bankMappingProfileRevisions: PortableBankMappingProfileRevision[];
   documentNumberingPolicies: NumberingPolicyBackup[];
   quoteCreateReceipts: QuoteCreateReceiptBackup[];
+  manualFinancialRecordEvents: unknown[];
+  incomes: Record<string, unknown>[];
+  expenses: Record<string, unknown>[];
 };
 type Backup = { version: string; exportedAt: string; manifest: BackupManifest; data: FeatureData };
 
@@ -58,6 +61,7 @@ async function state(userId: string) {
     prisma.expense.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
     prisma.income.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
     prisma.auditLog.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
+    prisma.manualFinancialRecordEvent.findMany({ where: { userId }, orderBy: [{ recordId: 'asc' }, { sequence: 'asc' }] }),
   ]);
 }
 
@@ -75,6 +79,8 @@ function reseal(backup: Backup) {
   // createBackupManifest exactly, without importing its server-only validators
   // into the Playwright runner. Keep the REAL export's closed capability,
   // coverage registry, secret exclusions and file metadata; only renew hashes.
+  // Never insert missing sections/row metadata or promote a historical identity:
+  // malformed current/history payloads below must reach the REAL strict server.
   const manifest = backup.manifest, auditLogs = backup.data.auditLogs ?? [], counters = backup.data.invoiceNumberCounters ?? [];
   manifest.modelCoverage = manifest.modelCoverage.map(entry => {
     const value = backup.data[entry.key];
@@ -111,10 +117,14 @@ test('real backup endpoints remap feature histories, preserve legacy high-water 
   expect(exported.headers()['content-disposition']).toContain('attachment;');
   const backup = await exported.json() as Backup;
   expect(backup.version).toBe('3.0');
-  expect(backup.manifest.schemaVersion).toBe('20261024040000_add_supplier_tasks');
+  expect(backup.manifest.schemaVersion).toBe('20261025090000_add_manual_financial_record_lifecycle');
   // Prove the independent pure calculation matches this actual server export
   // before using it to reach immutable-history conflicts with changed data.
   expect(reseal(structuredClone(backup)).manifest).toStrictEqual(backup.manifest);
+  expect(backup.data.manualFinancialRecordEvents).toEqual([]);
+  expect(backup.data.incomes).toEqual([]); expect(backup.data.expenses).toEqual([]);
+  expect(backup.manifest.modelCoverage.find(entry => entry.key === 'manualFinancialRecordEvents')).toMatchObject({ model: 'ManualFinancialRecordEvent', mode: 'included', count: 0, sha256: hashJson([]) });
+  for (const key of ['incomes', 'expenses'] as const) expect(backup.manifest.modelCoverage.find(entry => entry.key === key)).toMatchObject({ mode: 'included', count: 0, sha256: hashJson(backup.data[key]) });
   expect(backup.manifest.sourceUserId).toBe(source.id);
   expect(backup.data.bankMappingProfiles).toHaveLength(1);
   expect(backup.data.bankMappingProfileRevisions).toHaveLength(1);
@@ -185,8 +195,25 @@ test('real backup endpoints remap feature histories, preserve legacy high-water 
       expect(await state(target.id), `${label} must leave every observed target row unchanged`).toEqual(before);
       expect(await state(source.id), `${label} must never mutate the source owner`).toEqual(sourceBefore);
     }
+    // Resealing recalculates integrity hashes; it must never repair a missing
+    // current capability section/row identity or grant it to the old supplier schema.
+    const missingHistory = structuredClone(backup); delete (missingHistory.data as Record<string, unknown>).manualFinancialRecordEvents;
+    const missingMetadata = structuredClone(backup);
+    missingMetadata.data.incomes.push({ id: 991, description: 'SYNTHETIC missing lifecycle identity', amount: 1, date: at.toISOString(), taxRelevant: true, customerId: null, invoiceId: null });
+    const historicalIdentity = structuredClone(backup); historicalIdentity.manifest.schemaVersion = '20261024040000_add_supplier_tasks';
+    for (const [label, changed, message] of [
+      ['missing manual history', missingHistory, /Vollständiger Verlauf fehlt/u],
+      ['missing manual row identity', missingMetadata, /Lifecycle-Metadaten/u],
+      ['future manual section under historical supplier identity', historicalIdentity, /Ältere Schemaidentitäten/u],
+    ] as const) {
+      const before = await state(target.id), rejected = await restore(targetPage, { ...reseal(changed), confirmOverwrite: true });
+      expect(rejected.status(), `${label}: ${await rejected.text()}`).toBe(400);
+      expect((await rejected.json()).error).toMatch(message);
+      expect(await state(target.id), `${label} must not mutate target finance or history`).toEqual(before);
+      expect(await state(source.id), `${label} must not mutate source finance or history`).toEqual(sourceBefore);
+    }
     for (const userId of [source.id, target.id]) {
-      for (const count of await Promise.all([prisma.invoice.count({ where: { userId } }), prisma.income.count({ where: { userId } }), prisma.expense.count({ where: { userId } }), prisma.paymentJournalEvent.count({ where: { userId } }), prisma.emailOutbox.count({ where: { userId } }), prisma.bankImportBatch.count({ where: { userId } })])) expect(count).toBe(0);
+      for (const count of await Promise.all([prisma.invoice.count({ where: { userId } }), prisma.income.count({ where: { userId } }), prisma.expense.count({ where: { userId } }), prisma.paymentJournalEvent.count({ where: { userId } }), prisma.emailOutbox.count({ where: { userId } }), prisma.bankImportBatch.count({ where: { userId } }), prisma.manualFinancialRecordEvent.count({ where: { userId } })])) expect(count).toBe(0);
     }
   } finally { await targetContext.close(); }
 });

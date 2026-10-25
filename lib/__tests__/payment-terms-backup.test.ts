@@ -231,7 +231,7 @@ describe('closed additive payment-term backup contract', () => {
     const source = await snapshot();
     const row = invoice(source.data);
     Object.assign(row, { totalAmount: 100, status: 'PAID', issuanceState: 'ISSUED', paidAt: fixed.toISOString() });
-    source.data.incomes = [{ id: 991, invoiceId: row.id, customerId: row.customerId, description: 'Synthetic payment', amount: 100, date: fixed.toISOString(), taxRelevant: true }];
+    source.data.incomes = [{ id: 991, manualRecordId: '54000000-0000-4000-8000-000000000991', manualRecordState: 'LEGACY_UNREVIEWED', manualRecordOrigin: 'PAYMENT_JOURNAL', manualRecordRevision: 0, invoiceId: row.id, customerId: row.customerId, description: 'Synthetic payment', amount: 100, date: fixed.toISOString(), taxRelevant: true }];
     source.data.paymentJournalEvents = [{ bankPaymentBindingStableKey: null, id: 992, invoiceId: row.id, incomeId: 991, amountCents: '10000', currency: 'EUR', paidAt: fixed.toISOString(),
       dateCertainty: 'ACTUAL', source: 'MANUAL', reference: 'Synthetic payment', idempotencyKey: 'synthetic-payment-term-allocation', createdAt: fixed.toISOString() }];
     const backup = pack(source.data), target = await owner('journal');
@@ -242,6 +242,9 @@ describe('closed additive payment-term backup contract', () => {
     expect(repeat.paymentJournalEvents).toEqual({ imported: 0, skipped: 1 });
     expect(repeat.incomes).toEqual({ imported: 0, skipped: 1 });
     expect(await database.client.paymentJournalEvent.count({ where: { userId: target } })).toBe(1);
+    const restoredIncome = await database.client.income.findFirstOrThrow({ where: { userId: target } });
+    expect(restoredIncome).toMatchObject({ manualRecordState: 'LEGACY_UNREVIEWED', manualRecordOrigin: 'PAYMENT_JOURNAL', amount: 100 });
+    expect(restoredIncome.manualRecordId).not.toBe('54000000-0000-4000-8000-000000000991');
   });
 
   it.each([false, true])('keeps target-owned sent outbox attempts and technical report history during overwrite=%j', async overwrite => {

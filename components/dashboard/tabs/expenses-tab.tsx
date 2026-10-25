@@ -2,6 +2,7 @@
 
 import styles from './cashflow-workspace.module.css';
 
+import type { ManualRecordOpener } from '@/components/manual-financial-records/manual-record-status';
 import { ExpenseRowActions } from '@/components/dashboard/expense-row-actions';
 import { LedgerSortControl, SortableLedgerHead } from '@/components/dashboard/ledger-sort-control';
 import { DashboardIcon } from "@/components/brand/dashboard-icon";
@@ -73,6 +74,7 @@ type ExpensesTabProps = {
   onExportReceipts: () => void;
 
   // Actions
+  onManualRecord?: ManualRecordOpener;
   onEdit: (expense: Expense) => void;
   onDuplicate: (expense: Expense) => void;
   onDelete: (id: number) => void;
@@ -107,6 +109,7 @@ export function ExpensesTab({
   isExportingReceipts,
   exportError,
   onExportReceipts,
+  onManualRecord,
   onEdit,
   onDuplicate,
   onDelete,
@@ -501,7 +504,7 @@ export function ExpensesTab({
                   <p className={`${styles.recordAmount} text-critical`}>{formatCurrency(expense.amount)}</p>
                 </div>
                 <p className="text-xs text-muted-foreground">{expense.taxRelevant ? 'Steuerrelevant' : 'Nicht steuerrelevant'}</p>
-                <div className={styles.recordActions}><ExpenseRowActions expense={expense} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} /></div>
+                <div className={styles.recordActions}><ExpenseRowActions expense={expense} onManualRecord={onManualRecord} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} /></div>
               </article>
             )) : (
               <p className="p-6 text-center text-sm text-muted-foreground">Noch keine Ausgaben.</p>
@@ -548,7 +551,7 @@ export function ExpensesTab({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <ExpenseRowActions expense={expense} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} compact />
+                        <ExpenseRowActions expense={expense} onManualRecord={onManualRecord} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onViewReceipt={onViewReceipt} isDeleting={isDeleting} compact />
                       </TableCell>
                     </TableRow>
                   ))

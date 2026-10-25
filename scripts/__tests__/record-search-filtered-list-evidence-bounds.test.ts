@@ -15,25 +15,30 @@ const types = ['customer', 'outbound', 'inbound'];
 const widths = [1440, 360, 390];
 
 describe('bounded filtered-list record-search hosted visual evidence', () => {
-  it('preserves every byte of the accepted 235-image/37 MiB workflow and its full-suite gates', () => {
+  it('preserves every byte of the accepted 247-image/40 MiB workflow and all prior full-suite gates', () => {
     expect(start).toBeGreaterThan(0);
-    expect(accepted).toHaveLength(86487);
-    expect(createHash('sha256').update(accepted).digest('hex')).toBe('47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d');
-    expect(namesIn(accepted)).toHaveLength(235);
-    expect(new Set(namesIn(accepted)).size).toBe(235);
+    expect(accepted).toHaveLength(95530);
+    expect(createHash('sha256').update(accepted).digest('hex')).toBe('21cbc54b161498b5a3b18e59e91d8dcc562fc3fc350e9a40cdb87d1b9066cca9');
+    expect(namesIn(accepted)).toHaveLength(247);
+    expect(new Set(namesIn(accepted)).size).toBe(247);
+    const original235 = accepted.slice(0, 86487);
+    expect(createHash('sha256').update(original235).digest('hex')).toBe('47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d');
+    expect(namesIn(original235)).toHaveLength(235);
     for (const value of ['total output cap is 37 MiB', 'permissions:\n  contents: read',
       'timeout-minutes: 45', 'npm run test:e2e --', '--headed', '--retries=0',
-      '--workers=1', '--forbid-only', '--global-timeout=1200000']) expect(accepted).toContain(value);
+      '--workers=1', '--forbid-only', '--global-timeout=1200000',
+      'all accepted 235 names and 37 MiB remain unchanged',
+      'Require complete manual financial record visual delivery']) expect(accepted).toContain(value);
   });
 
   it('adds only nine disjoint required names with independent 1/4/2 MiB bounds and fail-closed delivery', () => {
     expect(delivery).toBeGreaterThan(start);
     expect(namesIn(partition).sort()).toEqual(types.flatMap(type => widths.map(width => `record-search-filtered-${type}-${width}.png`)).sort());
     const owned = namesIn(accepted + partition);
-    expect(owned).toHaveLength(244); expect(new Set(owned).size).toBe(244);
+    expect(owned).toHaveLength(256); expect(new Set(owned).size).toBe(256);
     const all = namesIn(workflow);
     expect(new Set(all).size).toBe(all.length);
-    for (const value of ['total output cap is 39 MiB', 'limit = 2 * 1024 * 1024',
+    for (const value of ['total output cap is 42 MiB', 'limit = 2 * 1024 * 1024',
       'per_file_input_limit = 1 * 1024 * 1024', 'total > 4 * 1024 * 1024',
       'remaining_input = 4 * 1024 * 1024 - actual_input_bytes', 'actual_input_bytes > 4 * 1024 * 1024',
       'all nine exact images are required', 'timeout-minutes: 6', 'timeout-minutes: 2',

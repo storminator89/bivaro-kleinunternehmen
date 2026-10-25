@@ -139,7 +139,7 @@ export async function recordFullPaymentInTransaction(tx: Prisma.TransactionClien
     throw new PaymentJournalError('Der Zahlungsbetrag übersteigt den offenen Restbetrag.', 409, 'PAYMENT_EXCEEDS_OPEN', summary);
   }
   if (!operation) await tx.paymentOperation.create({ data: { userId, idempotencyKey, kind: 'PAYMENT_RECEIVED' } });
-  const income = await tx.income.create({ data: { userId, invoiceId, amount: Number(formatMoneyEUR(BigInt(amountCents))), date: paidAt,
+  const income = await tx.income.create({ data: { userId, invoiceId, manualRecordOrigin: 'PAYMENT_JOURNAL', amount: Number(formatMoneyEUR(BigInt(amountCents))), date: paidAt,
     customerId: invoice.customerId, description: `Rechnung ${invoice.invoiceNumber ?? invoiceId}`, taxRelevant: true } });
   const event = await tx.paymentJournalEvent.create({ data: { userId, invoiceId, incomeId: income.id, amountCents, currency: 'EUR', paidAt,
     dateCertainty: 'ACTUAL', source: input.source, reference, idempotencyKey } });

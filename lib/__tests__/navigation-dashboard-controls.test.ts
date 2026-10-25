@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { SessionContext, useSession } from 'next-auth/react';
 
 const state = vi.hoisted(() => ({ timeRange: 'thisYear', setTimeRange: vi.fn(), tab: 'eur', createAction: vi.fn(), summary: null as Record<string, unknown> | null, summaryFetching: false, summaryFailed: false, reloadSummary: vi.fn() }));
 vi.mock('react', async importOriginal => {
@@ -47,6 +49,27 @@ function findElements(node: ReactNode, predicate: (element: Element) => boolean)
   ];
 }
 
+/** Inspect the same unexpanded JSX tree, but inside a real renderer/dispatcher
+ * and actual auth context. Keep useSession and review navigation hooks real;
+ * the existing controlled period/query fixtures remain unchanged. No child
+ * browser effects, authentication fetch or financial success is fabricated.
+ */
+function dashboardTree(): ReactNode {
+  let captured: ReactNode = null;
+  const session = { user: { id: 'synthetic-dashboard-controls', role: 'USER' as const, sessionVersion: 1 }, expires: '2099-01-01T00:00:00.000Z' };
+  function CaptureDashboardTree() {
+    const observed = useSession();
+    expect(observed.status).toBe('authenticated');
+    expect(observed.data?.user.id).toBe(session.user.id);
+    captured = DashboardContent();
+    return null;
+  }
+  renderToStaticMarkup(createElement(SessionContext.Provider, {
+    value: { data: session, status: 'authenticated', update: vi.fn() },
+  }, createElement(CaptureDashboardTree)));
+  return captured;
+}
+
 beforeEach(() => {
   state.tab = 'eur'; state.timeRange = 'thisYear';
   state.setTimeRange.mockReset(); state.createAction.mockReset();
@@ -56,7 +79,7 @@ beforeEach(() => {
 describe('fresh guarded EÜR client export and cached-value suppression', () => {
   const fresh = { timeRange: 'thisYear', totalIncome: 120, totalExpense: 20, profit: 100, expenseCategories: [{ category: 'Fresh category', amount: 20 }], monthlyData: [], depreciationDetails: [] };
   function exportHandler() {
-    const report = findElements(DashboardContent(), element => typeof element.props.onExport === 'function' && 'totalIncome' in element.props)[0];
+    const report = findElements(dashboardTree(), element => typeof element.props.onExport === 'function' && 'totalIncome' in element.props)[0];
     expect(report).toBeDefined();
     return report.props.onExport as () => Promise<void>;
   }
@@ -89,7 +112,7 @@ describe('fresh guarded EÜR client export and cached-value suppression', () => 
   });
   it.each(['fetching', 'failed'])('does not render cached fiscal totals or export actions while summary is %s', mode => {
     state.summary = fresh; state.summaryFetching = mode === 'fetching'; state.summaryFailed = mode === 'failed';
-    const reports = findElements(DashboardContent(), element => typeof element.props.onExport === 'function' && 'totalIncome' in element.props);
+    const reports = findElements(dashboardTree(), element => typeof element.props.onExport === 'function' && 'totalIncome' in element.props);
     expect(reports).toHaveLength(0);
   });
 });
@@ -99,7 +122,7 @@ describe('report period arrows (#26)', () => {
     state.tab = tab;
     for (const period of ['last3Months', 'last6Months', 'all', 'lastYear', 'thisYear']) {
       state.timeRange = period;
-      const tree = DashboardContent();
+      const tree = dashboardTree();
       const previous = findElements(tree, element => element.props['aria-label'] === 'Vorheriges Jahr anzeigen')[0];
       const next = findElements(tree, element => element.props['aria-label'] === 'Nächstes Jahr anzeigen')[0];
       expect(previous.props.disabled, `${period}: previous`).toBe(period !== 'thisYear');
@@ -108,18 +131,18 @@ describe('report period arrows (#26)', () => {
   });
 
   it('preserves previous-year and current-year transitions', () => {
-    const previous = findElements(DashboardContent(), element => element.props['aria-label'] === 'Vorheriges Jahr anzeigen')[0];
+    const previous = findElements(dashboardTree(), element => element.props['aria-label'] === 'Vorheriges Jahr anzeigen')[0];
     (previous.props.onClick as () => void)();
     expect(state.setTimeRange).toHaveBeenCalledWith('lastYear');
     state.timeRange = 'lastYear';
-    const next = findElements(DashboardContent(), element => element.props['aria-label'] === 'Nächstes Jahr anzeigen')[0];
+    const next = findElements(dashboardTree(), element => element.props['aria-label'] === 'Nächstes Jahr anzeigen')[0];
     (next.props.onClick as () => void)();
     expect(state.setTimeRange).toHaveBeenCalledWith('thisYear');
   });
 
   it('wires normalized income deep links to the entry-action hook', () => {
     state.tab = 'income';
-    DashboardContent();
+    dashboardTree();
     expect(state.createAction).toHaveBeenCalledWith(expect.objectContaining({ requestedTab: 'incomes', activeTab: 'incomes' }));
   });
 });

@@ -138,3 +138,26 @@ ungeschwächten Regressionsgates belegen. Endergebnisse werden im Entwurfs-PR
 mit exaktem Head/Tree und Runlinks dokumentiert, ohne neue reine
 Dokumentations-Commit-Schleife. Bis dahin bleibt GitHub #102 offen.
 Kein Merge, Deployment oder Ticket-Abschluss durch dieses Paket.
+
+
+## Gemeinsame Vorbereitung nach #148, 25.10.2026 18:29 UTC
+
+Der isolierte PR-Head `de2f2dd0` / Tree `5c6ec530` ist vollständig hosted grün:
+4409 Unitfälle, 20 unveränderte Skips, alle 193 Browserfälle (0 Retries),
+gewöhnlicher Build und sämtliche Lint/Types/Security/PDF-A-/Containergates.
+244 tatsächliche Bilddateien sind vollständig in Byte-/Pixel-/Metadatenhashes,
+exaktem Partitionssatz, Provenienz und Budgets verifiziert; 23 relevante Bilder
+wurden tatsächlich angesehen. Das ist keine Vorwegnahme einer kombinierten Abnahme.
+
+Lokale Integration basiert auf dem separat gemergten #148-Main `2979b592` /
+Tree `76119eb5`, dessen Main-Nachkontrollen noch laufen. Vollständiger
+247-Bild-/40-MiB-Workflow bleibt als 95.530-Byte-Präfix identisch (SHA256
+`21cbc54b161498b5a3b18e59e91d8dcc562fc3fc350e9a40cdb87d1b9066cca9`);
+neun zusätzliche Pflichtbilder ergeben 256 Namen / 42 MiB. Auch der ursprüngliche
+235-Bild-Präfix und sämtliche manuellen Zwölf-Bild-Guards bleiben gebunden.
+#148-Runtime, Finanz-DTOs, manuelle Dialogaktionen, Invalidierungen und
+Review-/Sessionverträge werden nicht durch den älteren #102-Stand ersetzt.
+Vor Veröffentlichung sind ausdrücklicher Postmain-Unlock, gemeinsame Quellprüfung
+und danach vollständige neue Hosted-CI/Browser-/Bildabnahme erforderlich.
+Merge ist nur bedingt sequenziell nach #148 und vor #151 freigegeben; kein
+separates Deployment oder Ticket-Abschluss, keine lokale Funktionsausführung.

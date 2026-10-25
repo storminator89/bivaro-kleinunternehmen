@@ -1,3 +1,4 @@
+import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
 import { hasPaymentAdjustments, PAYMENT_ADJUSTMENT_REVIEW_RESPONSE } from '@/lib/payment-journal/consumer-guard';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
@@ -79,7 +80,7 @@ function parseTaxRelevant(value: unknown): boolean {
 }
 
 function mutationErrorResponse(error: unknown) {
-  if (!(error instanceof IncomeMutationError)) return null;
+  if (!((error instanceof IncomeMutationError || error instanceof ManualFinancialRecordError))) return null;
   if (!error.field) return apiError(error.message, error.status, error.code);
   return NextResponse.json({
     error: {

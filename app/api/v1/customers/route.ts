@@ -210,9 +210,23 @@ async function deleteHandler(request: NextRequest) {
       return apiError('Customer not found', 404, 'NOT_FOUND');
     }
 
-    await prisma.customer.delete({
-      where: { id: parseInt(id) },
-    });
+    const finalizedResponse = () => apiError('Kunden mit festgeschriebenem manuellem Finanznachweis müssen erhalten bleiben.', 409, 'FINALIZED_RECORD');
+    const finalizedReference = () => prisma.income.findFirst({ where: { customerId: existing.id, manualRecordState: 'FINALIZED' }, select: { id: true } });
+    if (await finalizedReference()) return finalizedResponse();
+    try {
+      await prisma.customer.delete({
+        where: { id: existing.id, userId },
+      });
+    } catch (error) {
+      // The SQL retention trigger is authoritative if finalization wins after
+      // the read guard. Preserve a clear conflict response rather than 500.
+      const retentionConflict = error instanceof Error && error.message.includes('Customer must be retained for finalized manual financial evidence');
+      const foreignKeyConflict = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003';
+      // SQLite may expose the trigger failure only as a foreign-key error.
+      // Recheck the immutable reference; unrelated FK errors keep their path.
+      if ((retentionConflict || foreignKeyConflict) && await finalizedReference()) return finalizedResponse();
+      throw error;
+    }
     await auditDelete(userId, 'Customer', existing);
 
     const response = apiSuccess({ deleted: true, id: parseInt(id) });

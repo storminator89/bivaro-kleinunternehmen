@@ -1,8 +1,10 @@
+import type { ManualFinancialRecordState } from '@/lib/manual-financial-record-contract';
 import type { PaymentLedger, PaymentSummary } from '@/lib/full-payment-form';
 import type { LedgerSortBy, LedgerSortOrder } from '@/lib/ledger-sort';
 // Typdefinitionen für das Dashboard
 
 export type Expense = {
+  manualRecordState?: ManualFinancialRecordState;
   id: number;
   description: string;
   amount: number;
@@ -20,6 +22,7 @@ export type Expense = {
 };
 
 export type Income = {
+  manualRecordState?: ManualFinancialRecordState;
   id: number;
   description: string;
   amount: number;

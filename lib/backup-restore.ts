@@ -1,3 +1,5 @@
+import { readManualRecordOriginal } from '@/lib/manual-financial-record-service';
+import { manualRecordEventsFromBackup, validateManualRecordOriginalManifest, preflightManualRecordRestore, restoredManualRecordMetadata, restoreManualRecordEvents } from '@/lib/manual-financial-record-backup';
 import { backupSchemaSupportsSupplierTasks } from '@/lib/backup-manifest';
 import { quoteCreateReceiptsFromBackup, preflightQuoteCreateReceipts, restoreQuoteCreateReceipts } from '@/lib/quote-create-receipt-backup';
 import { MAX_INVOICE_UPLOAD_BYTES } from '@/lib/resource-limits';
@@ -931,6 +933,10 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
     warnings.push(manifestWarning(LEGACY_BACKUP_VERSION)!);
   }
 
+  try {
+    manualRecordEventsFromBackup(data, manifest?.schemaVersion);
+    if (root.type === 'full' && manifest) validateManualRecordOriginalManifest(data, manifest.fileManifest, true);
+  } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Manueller Finanzverlauf ungültig'); }
   try { bankImportsFromBackup(data, backupSchemaSupportsBankImportEvidence(manifest?.schemaVersion), backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion)); }
   catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Bankimport-Evidenz ist ungültig'); }
   try {
@@ -1438,6 +1444,7 @@ async function planCustomerMerge(client: Pick<Prisma.TransactionClient, 'custome
 export async function restoreBackupData(options: RestoreOptions): Promise<RestoreResult> {
   const { userId, overwrite, resolveFile } = options;
   const { data, manifest, warnings: validationWarnings } = validateBackupForRestore(options.backup);
+  const manualEvents = manualRecordEventsFromBackup(data, manifest?.schemaVersion);
   const result = resultTemplate(overwrite);
   result.warnings.push(...validationWarnings);
   const documents = asArray(data, 'purchaseDocuments');
@@ -1563,6 +1570,14 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       }
     } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Angebotsanfrage-Historie kollidiert'); }
 
+    let manualPlan: Awaited<ReturnType<typeof preflightManualRecordRestore>>;
+    try { manualPlan = await preflightManualRecordRestore(prisma, userId, data, manifest?.schemaVersion, overwrite, Boolean(resolveFile)); }
+    catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Manueller Zielverlauf kollidiert'); }
+    for (const [sourceName, original] of manualPlan.originals) {
+      fileMap.set(`receipt:${sourceName}`, original.storedName);
+      fileProofs.set(`receipt:${sourceName}`, { sha256: original.sha256, bytes: original.bytes });
+    }
+
     // Reject known immutable-target conflicts before resolving or staging any
     // files. Repeat these checks inside the write transaction to cover races.
     if (overwrite) await validateProjectTimeOverwrite(prisma, userId, manifest?.schemaVersion);
@@ -1625,7 +1640,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     }
     for (const expense of expenses) {
       const sourceName = validateStoredName(expense.storedReceiptFileName, 'expense.storedReceiptFileName');
-      if (sourceName) await stageFile('receipt', sourceName, asOptionalString(expense.receiptFileName, 'expense.receiptFileName', 255) ?? sourceName);
+      const bound = manualEvents.find(event => event.recordId === expense.manualRecordId && event.sequence === 1)?.snapshot.original;
+      if (sourceName) await stageFile('receipt', sourceName, asOptionalString(expense.receiptFileName, 'expense.receiptFileName', 255) ?? sourceName, bound?.status === 'ARCHIVED' ? { sha256: bound.sha256!, bytes: bound.byteCount! } : undefined);
     }
     const sourceLogo = settings ? logoFileName(settings.logoUrl) : null;
     if (settings?.logoUrl && typeof settings.logoUrl === 'string' && !sourceLogo) {
@@ -1634,6 +1650,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (sourceLogo) await stageFile('logo', sourceLogo, sourceLogo);
 
     await prisma.$transaction(async (tx) => {
+      try {
+        const authoritative = await preflightManualRecordRestore(tx, userId, data, manifest?.schemaVersion, overwrite, Boolean(resolveFile));
+        if (JSON.stringify([...authoritative.income]) !== JSON.stringify([...manualPlan.income]) || JSON.stringify([...authoritative.expense]) !== JSON.stringify([...manualPlan.expense]) || JSON.stringify([...authoritative.originals]) !== JSON.stringify([...manualPlan.originals])) throw new Error('Manueller Zielverlauf hat sich während der Wiederherstellung verändert.');
+        manualPlan = authoritative;
+      } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Manueller Zielverlauf kollidiert'); }
       let previousQuoteReceipts: Awaited<ReturnType<typeof preflightQuoteCreateReceipts>>;
       try {
         previousQuoteReceipts = await preflightQuoteCreateReceipts(tx, userId, quoteReceipts);
@@ -2332,8 +2353,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
       for (const expense of expenses) {
         const sourceId = asOptionalInt(expense.id, 'expense.id')!;
+        const manualReplay = manualPlan.expense.get(sourceId);
+        if (manualReplay !== undefined) { expenseMap.set(sourceId, manualReplay); result.expenses.skipped += 1; continue; }
         if (skippedSourceExpenses.has(sourceId)) { result.expenses.skipped += 1; continue; }
         const created = await tx.expense.create({ data: {
+          ...restoredManualRecordMetadata(expense, 'expense', data, manifest?.schemaVersion),
           description: asRequiredString(expense.description, 'expense.description', 255),
           amount: asOptionalFinite(expense.amount, 'expense.amount') ?? 0,
           date: asDate(expense.date, 'expense.date', RESTORE_DEFAULT_DATE)!,
@@ -2413,6 +2437,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
 
       for (const income of incomes) {
         const sourceId = asOptionalInt(income.id, 'income.id')!;
+        const manualReplay = manualPlan.income.get(sourceId);
+        if (manualReplay !== undefined) { incomeMap.set(sourceId, manualReplay); result.incomes.skipped += 1; continue; }
         const description = asRequiredString(income.description, 'income.description', 255);
         const amount = asOptionalFinite(income.amount, 'income.amount') ?? 0;
         const date = asDate(income.date, 'income.date', RESTORE_DEFAULT_DATE)!;
@@ -2447,6 +2473,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
           continue;
         }
         const created = await tx.income.create({ data: {
+          ...restoredManualRecordMetadata(income, 'income', data, manifest?.schemaVersion),
           description,
           amount,
           date,
@@ -2458,6 +2485,9 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         incomeMap.set(sourceId, created.id);
         result.incomes.imported += 1;
       }
+
+      try { await restoreManualRecordEvents(tx, userId, manualEvents, incomeMap, expenseMap, data); }
+      catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Manueller Verlauf konnte nicht atomar wiederhergestellt werden'); }
 
       for (const operation of paymentOperations) {
         const existing = existingOperations.find(row => row.idempotencyKey === operation.idempotencyKey);
@@ -2907,11 +2937,26 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
         result.auditLogs.imported += 1;
       }
 
+      for (const expense of expenses.filter(row => row.manualRecordState === 'FINALIZED')) {
+        const bound = manualEvents.find(event => event.recordId === expense.manualRecordId && event.sequence === 1)?.snapshot.original;
+        if (bound?.status === 'ARCHIVED') {
+          const targetName = fileMap.get(`receipt:${expense.storedReceiptFileName}`);
+          if (!targetName) throw new BackupValidationError('Gebundene manuelle Originaldatei fehlt im Ziel.');
+          await readManualRecordOriginal(userId, targetName, bound);
+        }
+      }
+
       // Authoritative union validation belongs after every financial import,
       // especially CashTransaction links that may target existing adjusted roots.
       const completeGraph = { user: { id: userId }, invoices: await tx.invoice.findMany({ where: { userId } }), incomes: await tx.income.findMany({ where: { userId } }),
           paymentJournalEvents: await tx.paymentJournalEvent.findMany({ where: { userId } }), paymentAdjustments: await tx.paymentAdjustment.findMany({ where: { userId } }),
           paymentOperations: await tx.paymentOperation.findMany({ where: { userId } }), auditLogs: await tx.auditLog.findMany({ where: { userId } }), cashTransactions: await tx.cashTransaction.findMany({ where: { userId } }) };
+      const targetManualEvents = await tx.manualFinancialRecordEvent.findMany({ where: { userId }, orderBy: [{ recordId: 'asc' }, { sequence: 'asc' }], take: 10001 });
+      try { manualRecordEventsFromBackup(JSON.parse(JSON.stringify({ ...completeGraph,
+        expenses: await tx.expense.findMany({ where: { userId } }), purchaseDocuments: await tx.purchaseDocument.findMany({ where: { userId } }),
+        manualFinancialRecordEvents: targetManualEvents.map(({ userId: _owner, ...event }) => { void _owner; return event; }),
+      })), CURRENT_SCHEMA_VERSION); }
+      catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Vereinigter manueller Finanzverlauf ungültig'); }
       const targetBindings = await tx.bankPaymentBinding.findMany({ where: { userId } });
       const targetChanges = await tx.paymentAllocationChange.findMany({ where: { userId } });
       const targetBankRows = await tx.bankImportRow.findMany({ where: { userId } });
@@ -2952,7 +2997,7 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
             : 'Legacy-Backup 2.0 wiederhergestellt; Vollständigkeit und historische High-Water-Marks sind nicht nachgewiesen.',
         },
       }, tx);
-    }, { maxWait: 15_000, timeout: 120_000 });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15_000, timeout: 120_000 });
 
     for (const storedName of stagedFiles) {
       if (!usedFiles.has(storedName)) {

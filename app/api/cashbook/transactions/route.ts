@@ -1,3 +1,4 @@
+import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
 import { protectMutation } from '@/lib/request-security';
 /**
  * API Route: /api/cashbook/transactions
@@ -116,6 +117,7 @@ async function mutate(request: NextRequest, method: 'POST' | 'PUT' | 'DELETE') {
       : await updateCashTransaction(userId, Number(body.id), body);
     return NextResponse.json(result, { status: method === 'POST' ? 201 : 200 });
   } catch (error) {
+    if (error instanceof ManualFinancialRecordError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof CashbookError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Cash transaction failed:', error);
     return NextResponse.json({ error: 'Buchung konnte nicht gespeichert werden' }, { status: 400 });

@@ -2526,6 +2526,178 @@
     "pullRequest145Merged": false,
     "deploymentPerformed": false
   },
+  "issue54aPreparationCheckpoint": {
+    "observedAt": "2026-10-25T09:25:00Z",
+    "issue": 54,
+    "slice": "54a ordinary single manual EUR income/expense",
+    "status": "prepared_unpublished_partial",
+    "acceptedBase": "db3098b8dd5318e426cd2e1e93a54b810cd1b4e9",
+    "sourceCheckpoint": "9e34256af1e54a2b5d19001d624450e162604962",
+    "sourceTree": "1b7689d387ab93d377bed88ba52ccdbc88a73276",
+    "scope": [
+      "Explicit finalization does not change existing totals or payment dates.",
+      "Reasoned amount-only correction preserves original/hash-linked history and exactly one effective projection.",
+      "Shared web/v1 guards, CAS/replay and mandatory audit; customer/cash/source barriers.",
+      "Strict additive backup identity/original binding; exact UUID replay; identity-less historical finance merge into finalized targets rejected.",
+      "Fresh-read guarded dialog, generation-safe edits, unknown-response read recovery and explicit local intent abandonment."
+    ],
+    "staticChecks": {
+      "fullEslint": "PASS",
+      "fullTypescript": "PASS",
+      "prismaValidateNoDatabase": "PASS",
+      "privatePrismaGenerateNoDatabase": "PASS",
+      "baseRangeDiffCheck": "PASS",
+      "ordinaryBuild": "INCOMPLETE: two exit137 kills; retry compiled successfully then killed during Next TypeScript. No postbuild success claimed."
+    },
+    "authoredTestsOnly": [
+      "lib/__tests__/manual-financial-record-evidence.test.ts",
+      "lib/__tests__/manual-financial-record-lifecycle.test.ts",
+      "lib/__tests__/manual-financial-record-migration.test.ts",
+      "components/manual-financial-records/__tests__/manual-record-client.test.ts",
+      "components/manual-financial-records/__tests__/manual-record-actions.test.tsx",
+      "e2e/manual-financial-records.spec.ts"
+    ],
+    "separateIssue59Source": {
+      "integrationCommit": "cfce2f6",
+      "originalCommit": "c67b7b7b35fd707f32b4fe36e69427d80c7432e8",
+      "path": "e2e/revenue-indicators.spec.ts",
+      "browserExecuted": false,
+      "issueClosed": false
+    },
+    "remainingAcceptance": [
+      "Specific draft publication and complete hosted verification authorization.",
+      "Integrate then-accepted main without losing145/146 code/docs/visual/gallery changes.",
+      "Add independent strict12-name54visual partition preserving every accepted prefix/gate.",
+      "Complete hosted build/unit/API/migration/browser verification and actual final-head images; all authored tests remain unexecuted locally.",
+      "Full issue54 corrections beyond ordinary single manual amount-only scope remain open."
+    ],
+    "evidence": "docs/testing/manual-financial-records-54a.md",
+    "historicalTicketObjectCount": 160,
+    "historicalStatusSummary": {
+      "complete": 3,
+      "partial": 21,
+      "in_progress": 0,
+      "architecture_discovery": 4,
+      "proposed_unimplemented": 132
+    },
+    "githubPublicationPerformed": false,
+    "ciStarted": false,
+    "migrationApplied": false,
+    "deploymentPerformed": false,
+    "issueClosed": false
+  },
+  "issue54aDraftPublicationCheckpoint": {
+    "observedAt": "2026-10-25T11:56:00Z",
+    "status": "authorized_draft_prepublication",
+    "issue": 54,
+    "relatedIssue": 59,
+    "acceptedMain": "0ed113074e1c97defaa84345e2e050cf7eb281ff",
+    "acceptedMainTree": "6df04d075d64c1566187333e5536fa0bdd497d4d",
+    "authorization": "User grant2026-10-25T11:43:11Z: draft54a+59 and full hosted CI/browser; no merge/deployment/closure.",
+    "preservation": "Accepted145 source/docs and all220 visual names/31MiB retained; historical160 tickets/statusSummary/144+102 checkpoints unchanged.",
+    "visualPartition": {
+      "additionalNames": 12,
+      "totalNames": 232,
+      "perInputMiB": 1,
+      "aggregateInputMiB": 6,
+      "additionalOutputMiB": 3,
+      "totalOutputMiB": 34,
+      "acceptedPrefixSha256": "7977e7caf672538ac542976446a417d3aa191e3a8d1338c1c61ecab634df7091",
+      "localFunctionalExecution": false
+    },
+    "restoreCompatibility": "Manual identity ownership/replay stays ordinary-manual scoped; excluded source-controlled restores retain their existing tenant-remap contract, no manual history adoption and fresh technical UUID on recreation; finalized manual foreign identity remains fail closed.",
+    "excludedUnmergedWork": [
+      "PR146 README/gallery",
+      "PR147 incoming-list query filter fix"
+    ],
+    "localBuild": "Earlier two normal build attempts exited137; second compiled then killed during Next TypeScript; no complete build/postbuild pass claimed and no new local retry.",
+    "hostedVerification": "Authorized and planned on exact published head. Actual results and image inspection belong in draft PR body; no passing functional result inferred from source.",
+    "evidence": "docs/testing/manual-financial-records-54a.md",
+    "githubPublicationPerformedAtCheckpoint": false,
+    "mergePerformed": false,
+    "migrationAppliedLocally": false,
+    "deploymentPerformed": false,
+    "issueClosed": false
+  },
+  "issue54aFirstHostedRecoveryCheckpoint": {
+    "observedAt": "2026-10-25T13:57:00Z",
+    "status": "draft_first_hosted_failed_recovery_prepared_not_accepted",
+    "issue": 54,
+    "relatedIssue": 59,
+    "pullRequest": 148,
+    "url": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/148",
+    "publishedHead": "104697bc178e6bc7f05ddb0a05b1915982e3b3c0",
+    "publishedTree": "6fb8772dff16358a2c899099e154a9865069246a",
+    "firstHosted": {
+      "ciRun": 40196048963,
+      "unit": {
+        "passed": 4424,
+        "failed": 15,
+        "skipped": 20
+      },
+      "lintTypesSecurity": "PASS",
+      "containerBothArchitectures": "PASS",
+      "pdfaBothArchitectures": "PASS",
+      "dedicatedCiBuild": "SKIPPED after unit failure",
+      "browserRun": 40196049004,
+      "browser": {
+        "passed": 181,
+        "failed": 10
+      },
+      "browserRunnerOrdinaryProductionBuild": "PASS including prebuild, Next TypeScript, static pages and postbuild",
+      "imageDelivery": {
+        "required": 232,
+        "individuallyVerified": 222,
+        "missingCashflow": 8,
+        "missingEurWorkingPaper": 2,
+        "completeVerifier": "FAIL: incomplete exact evidence delivery",
+        "newManualNativeImagesActuallyViewed": 12
+      }
+    },
+    "reviewedOwnRecoverySource": "1b55d4175ce4e8b133c3f3bad6a2c8bb45ffeb75",
+    "acceptedMain": "f183d23857e47b711cad87f71ada9d8e61b8d8b0",
+    "preservation": {
+      "accepted146ChangedPaths": 63,
+      "nonWorkflowExactBlobs": 62,
+      "completeWorkflowPrefixBytes": 86487,
+      "completeWorkflowPrefixSha256": "47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d",
+      "acceptedImageNames": 235,
+      "ownAdditionalNames": 12,
+      "totalUniqueNames": 247,
+      "totalOutputMiB": 40,
+      "ownPerInputAggregateInputOutputMiB": [
+        1,
+        6,
+        3
+      ]
+    },
+    "independentSourceReview": "No concrete P1/P2 on each immutable recovery delta; not a functional pass.",
+    "explicitUnmergedDependency": {
+      "pullRequest": 149,
+      "source": "60f3ac88c1b6f955c2f6450ac0d67b15cc743425",
+      "solePath": "e2e/supplier-tasks.spec.ts",
+      "acceptedMainContainsIt": false,
+      "terminalOwnerGreenConfirmationRequiredBeforePush": true,
+      "ownFullHostedRunRequired": true
+    },
+    "recoveryScope": [
+      "Narrow web/v1 finalized-customer SQL-race conflict mapping; unrelated FK behavior retained.",
+      "Real React context and exact historical migration/backup test fixtures; prior negative assertions retained.",
+      "Bounded lifecycle actions, stable correction labels, same-record live opener and overlay focus.",
+      "Restore pre54 generic-create sign/precision contracts without rounding; strict lifecycle eligibility unchanged.",
+      "Current backup schema/reseal contract and server negatives; no repair of missing metadata."
+    ],
+    "remainingAcceptance": [
+      "Publish coherent recovery after verified dependency handling.",
+      "Full exact-head hosted CI/browser and all final images.",
+      "Broader issue54 scope remains outside ordinary single-manual amount-only slice."
+    ],
+    "noLocalFunctionalExecution": true,
+    "noFurtherLocalBuildRetry": true,
+    "mergePerformed": false,
+    "deploymentPerformed": false,
+    "issueClosed": false
+  },
   "githubIssue102FilteredListContinuation20261025": {
     "issue": 102,
     "status": "draft_publication_authorized_acceptance_pending",
@@ -2575,5 +2747,53 @@
     "publicationScope": "Draft PR plus complete hosted GitHub CI/browser/PDF acceptance; no local functional execution, merge, deployment, issue closure or unrelated #148 runtime.",
     "finalOutcomesLocation": "Draft PR body at exact verified head and workflow run links; no documentation-only rerun loop",
     "sitesRequirementCorrection": "Prior Sites-only wording was erroneous; ForgeCommunity rule does not apply to Bivaro."
+  },
+  "githubIssue102After148IntegrationCheckpoint20261025": {
+    "observedAt": "2026-10-25T18:29:00Z",
+    "issue": 102,
+    "pullRequest": 150,
+    "status": "isolated_head_accepted_local_combined_preparation_only_waiting148_postmain_unlock",
+    "isolatedHead": "de2f2dd091f313ead482f2d82224c6c3eae7eb90",
+    "isolatedTree": "5c6ec53000b19f46553d78d98d034d953906e97d",
+    "isolatedHostedResults": {
+      "CI": 40218375376,
+      "browser": 40218375348,
+      "pdfA": 40218375308,
+      "container": 40218375397,
+      "allFourWorkflows": "completed success",
+      "unitTestsPassed": 4409,
+      "unchangedUnitSkips": 20,
+      "browserCasesPassed": 193,
+      "browserRetries": 0,
+      "actualPngProofsVerified": 244,
+      "actualPngBytes": 24133350,
+      "imagesActuallyViewed": 23
+    },
+    "merged148Main": "2979b5925b0d84cf6759879ccf2176e37693e6af",
+    "merged148Tree": "76119eb57fb11781e94794e543c3236699d53de8",
+    "combinedScope": "Local-only integration preserves all148 manual financial runtime/DTO/actions/refresh/session and review guards;102 adds only previously reviewed invoice selection/query hunks. Full accepted247 workflow is byte-identical prefix before nine new required captures.",
+    "preservedMainWorkflowBytes": 95530,
+    "preservedMainWorkflowSha256": "21cbc54b161498b5a3b18e59e91d8dcc562fc3fc350e9a40cdb87d1b9066cca9",
+    "combinedImageNames": 256,
+    "combinedOutputMiB": 42,
+    "combinedHostedVerification": "Not started; awaits explicit148 postmain unlock and exact combined source review. Isolated-head green is not combined acceptance.",
+    "mergeAuthorization": "Conditional sequential148 then150 then151, after each complete acceptance and main postchecks; no separate deployment or issue closure.",
+    "localFunctionalExecution": false,
+    "combinedPublicationPerformed": false,
+    "mergePerformed": false,
+    "deploymentPerformed": false,
+    "issueClosed": false,
+    "evidence": [
+      "docs/testing/record-search-filtered-lists.md",
+      "https://github.com/storminator89/bivaro-kleinunternehmen/pull/150"
+    ],
+    "combinedLocalStaticChecks": {
+      "nextRouteTypegen": "passed; no server or build",
+      "fullTypescript": "passed exit0, incremental false",
+      "fullEslint": "passed exit0, zero warnings",
+      "diffAndPreservation": "passed; all68 non-shared148 paths byte-identical, all18 prior status keys unchanged, full247workflow prefix byte-identical",
+      "ordinaryLocalBuild": "not rerun; full hosted build required after unlock",
+      "localFunctionalExecution": "none"
+    }
   }
 }

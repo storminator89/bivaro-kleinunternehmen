@@ -236,7 +236,8 @@ describe('partial-payment backup identity and grouped invariants', () => {
     await user('partial-collapsed-invoices');
     const source = fixture([80], [dateA]);
     source.data.invoices.push({ ...source.data.invoices[0], id: 11 });
-    source.data.incomes.push({ ...source.data.incomes[0], id: 21, invoiceId: 11 });
+    // A second source payment is a distinct row, not a clone of its portable UUID.
+    source.data.incomes.push(Object.assign({}, source.data.incomes[0], { id: 21, invoiceId: 11, manualRecordId: '54000000-0000-4000-8000-000000000021' }));
     source.data.paymentJournalEvents.push({ ...source.data.paymentJournalEvents[0], id: 31, invoiceId: 11, incomeId: 21, idempotencyKey: 'different-document-payment' });
     expect(() => restore.validateBackupForRestore(envelope(source.data))).not.toThrow();
     await expect(apply('partial-collapsed-invoices', envelope(source.data))).rejects.toThrow(/Mehrere Quellrechnungen/u);

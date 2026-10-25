@@ -11,7 +11,7 @@ describe('real-browser historical restore fixtures keep their exact original cap
     const backup = preJournalBackup('3.0', invoiceNumber, withIncome);
     const expected = createBackupManifest({ sourceUserId: backup.data.user.id, generatedAt: backup.exportedAt, data: backup.data });
     expected.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
-    expected.modelCoverage = expected.modelCoverage.filter(entry => !['BankMappingProfile', 'BankMappingProfileRevision', 'DocumentNumberingPolicy', 'QuoteCreateReceipt', 'BankPaymentBinding', 'PaymentAllocationChange', 'BankImportBatch', 'BankImportRow', 'EmailOutbox', 'EmailOutboxAttempt', 'PurchaseValidationReport', 'PaymentJournalEvent', 'PaymentAdjustment', 'PaymentOperation', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod', 'ServiceProject'].includes(entry.model));
+    expected.modelCoverage = expected.modelCoverage.filter(entry => !['ManualFinancialRecordEvent', 'BankMappingProfile', 'BankMappingProfileRevision', 'DocumentNumberingPolicy', 'QuoteCreateReceipt', 'BankPaymentBinding', 'PaymentAllocationChange', 'BankImportBatch', 'BankImportRow', 'EmailOutbox', 'EmailOutboxAttempt', 'PurchaseValidationReport', 'PaymentJournalEvent', 'PaymentAdjustment', 'PaymentOperation', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod', 'ServiceProject'].includes(entry.model));
     expect(backup.manifest).toEqual(expected);
     expect(() => createBackupPreview(backup)).not.toThrow();
   });

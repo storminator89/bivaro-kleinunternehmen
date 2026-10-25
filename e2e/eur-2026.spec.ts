@@ -37,7 +37,10 @@ async function seedBothYears(page: Page) {
         description: `Synthetic ${year} ${category} ${index}`, category, amount: amounts[index], date: `${year}-01-01`,
         taxRelevant: true, taxDeductiblePercentage: 100, depreciationYears: index === 3 ? 1 : null,
       } });
-      expect(response.status()).toBe(200);
+      expect(response.status(), await response.text()).toBe(200);
+      // Keep the established signed corrections and AfA inputs intact; #54
+      // eligibility must not narrow capture or rewrite the fiscal test values.
+      expect(await response.json()).toMatchObject({ amount: amounts[index], depreciationYears: index === 3 ? 1 : null });
     }
   }
 }
