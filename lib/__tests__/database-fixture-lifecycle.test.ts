@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import type { Prisma } from '@prisma/client';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -50,6 +51,8 @@ describe('isolated test database fixture lifecycle', () => {
       log: [{ emit: 'event', level: 'query' }],
     });
     expect(database).toMatchObject({ client: state.client, url: `file:${databasePath}` });
+    expectTypeOf<Parameters<typeof database.client.$on>[0]>().toEqualTypeOf<'query'>();
+    expectTypeOf<Parameters<typeof database.client.$on>[1]>().toEqualTypeOf<(event: Prisma.QueryEvent) => void>();
     expect(state.rmSync).not.toHaveBeenCalled();
     await database.cleanup();
     expect(state.client.$disconnect).toHaveBeenCalledExactlyOnceWith();
