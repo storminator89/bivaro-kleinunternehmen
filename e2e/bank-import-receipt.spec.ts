@@ -90,11 +90,18 @@ for (const width of [1440, 360, 390]) test(`bank evidence: bounded save/recovery
   await expect(opener).toBeFocused();
   // If the user moves elsewhere while a receipt loads, its late response must
   // not take focus back. Synchronize on the actual request, never a timed sleep.
-  let release!: () => void, requested!: () => void;
-  const held = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { requested = resolve; });
-  await page.route(`**/api/bank-imports/${savedBatch.stableKey}?page=0`, async route => { requested(); await held; await route.continue(); }, { times: 1 });
-  await page.keyboard.press('Enter'); await started;
-  const fileChooser = page.getByLabel('Bank-CSV auswählen', { exact: true }); await fileChooser.focus(); release();
+  let release!: () => void, requested = false;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**/api/bank-imports/${savedBatch.stableKey}?page=0`, async route => { requested = true; await held; await route.continue(); }, { times: 1 });
+  const fileChooser = page.getByLabel('Bank-CSV auswählen', { exact: true });
+  try {
+    await test.step('Observe the receipt request after keyboard activation of the focused opener', async () => {
+      await expect(opener).toBeFocused(); await expect(opener).toBeEnabled();
+      await page.keyboard.press('Enter');
+      await expect.poll(() => requested, { message: 'The focused receipt opener must issue its actual page=0 GET.' }).toBe(true);
+    });
+    await fileChooser.focus();
+  } finally { release(); }
   await expect(page.getByRole('heading', { name: 'Importquittung', exact: true })).toBeVisible(); await expect(fileChooser).toBeFocused();
   await page.getByRole('button', { name: 'Zurück zum Importverlauf', exact: true }).click(); await expect(opener).toBeFocused();
   await preview(page, csv); await page.getByLabel(/Ich habe Kontoalias, Spalten, Vorzeichen und Kontrollsummen geprüft/u).check();

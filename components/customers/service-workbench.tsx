@@ -359,7 +359,7 @@ function CustomerServices({ customerId, onPendingChange }: { customerId: number;
       {mutationError && <div role="alert" className={styles.error}>{mutationError} <span>Ihre Eingaben bleiben erhalten; bitte erneut versuchen.</span><Button type="button" variant="ghost" disabled={Boolean(busy) || isLoading} onClick={() => void loadData()}>Bestand aktualisieren</Button></div>}
       <div className={styles.layout}>
         <section className={styles.capture} aria-labelledby="service-capture-title">
-          <div className={styles.sectionHeading}><span>01 / Erfassen</span><h2 id="service-capture-title">Neue Leistung</h2></div>
+          <div className={styles.sectionHeading}><h2 id="service-capture-title">Neue Leistung</h2></div>
           <form onSubmit={handleAdd} className={styles.form}>
             <div className={styles.field}>
               <Label htmlFor="billing-note-description">Beschreibung</Label>
@@ -447,7 +447,7 @@ function CustomerServices({ customerId, onPendingChange }: { customerId: number;
         </section>
 
         <section className={styles.history} aria-labelledby="service-history-title" aria-busy={isLoading}>
-          <div className={styles.historyHeading}><div className={styles.sectionHeading}><span>02 / Prüfen</span><h2 id="service-history-title">Leistungsverlauf</h2></div><div className={styles.projectActions}><ServiceStatement customerId={customerId} notes={notes} projects={projects} filters={filters} disabled={actionsDisabled || pendingCapture} /><Button type="button" variant="ghost" disabled={Boolean(busy) || isLoading} onClick={() => void loadData()}>Aktualisieren</Button></div></div>
+          <div className={styles.historyHeading}><div className={styles.sectionHeading}><h2 id="service-history-title">Leistungsverlauf</h2></div><div className={styles.projectActions}><ServiceStatement customerId={customerId} notes={notes} projects={projects} filters={filters} disabled={actionsDisabled || pendingCapture} /><Button type="button" variant="ghost" disabled={Boolean(busy) || isLoading} onClick={() => void loadData()}>Aktualisieren</Button></div></div>
           <div className={styles.filters}>
             <div className={styles.field}>
               <Label htmlFor="service-filter-project">Projekt filtern</Label>
@@ -467,7 +467,7 @@ function CustomerServices({ customerId, onPendingChange }: { customerId: number;
           </div>
           {hasFilters && <Button type="button" variant="ghost" className={styles.resetFilters} onClick={() => setFilters(EMPTY_FILTERS)}>Filter zurücksetzen</Button>}
           {dateFilterError && <p role="alert" className={styles.fieldError}>Das Enddatum darf nicht vor dem Startdatum liegen.</p>}
-          {isLoading ? <div role="status" className={styles.empty}><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /><p>Leistungen werden geladen …</p></div>
+          {isLoading ? <div role="status" className={styles.loading}><p>Leistungen werden geladen …</p><div className={styles.skeletonRows} aria-hidden="true"><span /><span /><span /></div></div>
             : loadError ? <div role="alert" className={styles.empty}><p className="text-destructive">{loadError}</p><Button type="button" variant="outline" onClick={() => void loadData()}>Erneut laden</Button></div>
               : !dateFilterError && <>
                 <dl className={styles.summary} aria-label="Summen der gefilterten Leistungen">
@@ -483,14 +483,11 @@ function CustomerServices({ customerId, onPendingChange }: { customerId: number;
                       const project = (note.projectId ? projectsById.get(note.projectId) : null) ?? note.project;
                       const invoiceId = note.invoiceId || note.invoice?.id;
                       return <article className={styles.note} key={note.id}>
-                        <div className={styles.noteHeading}>
+                        <time className={styles.noteDate} dateTime={note.serviceDate.slice(0, 10)}>{new Date(`${note.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString('de-DE')}</time>
+                        <div className={styles.noteBody}>
                           <h3>{note.description}</h3>
-                          {!invoiceId && <Button type="button" variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => void handleDelete(note)} disabled={Boolean(busy) || pendingCapture} aria-label={`Leistungsnotiz ${note.description} löschen`}>
-                            {busy === `delete-${note.id}` ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
-                          </Button>}
-                        </div>
-                        <p className={styles.noteMeta}><time dateTime={note.serviceDate.slice(0, 10)}>{new Date(`${note.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString('de-DE')}</time><span>{project ? `${project.name}${project.archivedAt ? ' · archiviert' : ''}` : 'Ohne Projekt'}</span></p>
-                        <div className={styles.noteFoot}>
+                          <p className={styles.noteMeta}><span>{project ? `${project.name}${project.archivedAt ? ' · archiviert' : ''}` : 'Ohne Projekt'}</span></p>
+                          <div className={styles.noteFoot}>
                           <p className={styles.noteAmount}>{note.durationMinutes != null
                             ? <><Clock3 className="h-4 w-4" aria-hidden="true" /><strong>{formatManualDuration(note.durationMinutes)}</strong><span>→ {quantityFormatter.format(note.quantity)} {note.unit}</span></>
                             : <><strong>{quantityFormatter.format(note.quantity)} {note.unit}</strong><span>· Dauer nicht erfasst</span></>}
@@ -499,12 +496,16 @@ function CustomerServices({ customerId, onPendingChange }: { customerId: number;
                             <span className={styles.badge}><Check className="h-3.5 w-3.5" aria-hidden="true" />Rechnung zugeordnet</span>
                             <a href={`/api/invoices/download?id=${invoiceId}`} className={styles.invoiceLink}><Download className="h-3.5 w-3.5" aria-hidden="true" />{note.invoice?.invoiceNumber ? `Rechnung ${note.invoice.invoiceNumber}` : 'Rechnung öffnen'}</a>
                           </div> : <span className={styles.openStatus}>Offen</span>}
+                          </div>
                         </div>
+                        <div className={styles.noteAction}>{!invoiceId && <Button type="button" variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => void handleDelete(note)} disabled={Boolean(busy) || pendingCapture} aria-label={`Leistungsnotiz ${note.description} löschen`}>
+                            {busy === `delete-${note.id}` ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
+                          </Button>}</div>
                       </article>;
                     })}
                   </div>}
               </>}
-          <div className={styles.nextStep}><span>03 / Abrechnen</span><Link href="/dashboard/invoices/new">Im Rechnungseditor auswählen →</Link><p>Kunden dort auswählen; Preise und Steuern prüfen.</p></div>
+          <div className={styles.nextStep}><Link href="/dashboard/invoices/new">Im Rechnungseditor auswählen →</Link><p>Kunden dort auswählen; Preise und Steuern prüfen.</p></div>
         </section>
       </div>
     </>

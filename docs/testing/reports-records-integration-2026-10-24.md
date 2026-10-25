@@ -1,0 +1,206 @@
+# Hallmark reports and records: integrated candidate
+
+## Scope and identity
+
+Local-only integration from accepted main `eaddb1fe5a6342e0c702104ebcbce4b7ab9b4eda`
+(tree `7abb4c505558da2eb94e9e3b658a30f5b75ed310`). Exact source packages:
+
+- `a53d0c4be4be750a6233c44ed4a2309311c55e34`: EÜR/GWG report composition.
+- `f508b0bdd5f406b5b01d4e6d7368f20b872dd857`: service notes/statements,
+  reminder queue/preparation, document/payment history composition.
+
+Both cherry-picked without conflicts. The existing Bivaro Ledger theme, shell,
+font, shared tokens and responsive light/dark system remain locked. No APIs,
+financial helpers, parent dashboard logic, hooks, Prisma/schema/migrations,
+dependencies, security/hosting or routing changed. Existing browser cases and
+assertions remain; the later bank diagnostic-only source change is described below.
+The original local checkpoint performed no GitHub write, PR, CI trigger, merge
+or deployment. Subsequent explicitly authorized PR142 publication and recoveries
+are recorded below.
+
+## Integrated review and corrections
+
+Independent source review checked the new acceptance source against the real
+existing harness and application rather than executing test discovery:
+
+- Reused the fresh-fixture-only synthetic-login IP-budget helper for all 12 new
+  records/history identities, without changing production rate limiting.
+- Scoped the EÜR dialog footer's Close locator to avoid the existing X-button
+  duplicate accessible name. Pending export gates release in `finally`.
+- Added exact named output paths, settled font/layout checks, encoded/decoded
+  size bounds, actual PNG geometry and capture SHA-256 logs.
+- Added post-fixture API mutation interception and before/after business-state
+  comparisons. Only read requests and the existing read-only reminder preview
+  POST remain allowed during the records journeys; no extra email, payment,
+  reminder, invoice or billing-note mutation is permitted.
+- Captured internally scrollable dialogs at explicit top/bottom positions.
+  Mobile requires actual positive root scrolling; title and bottom action/link
+  must be fully in the viewport and unobscured. A full-page PNG is not claimed
+  to expose hidden modal content. The regular history/queue views use full-page
+  captures; dialog captures are real viewport images.
+- Prevented inferred fixed-table invoice-cell overlap near the reminder's
+  content-width breakpoint using only flex minimum-width/shrink classes.
+
+Static TypeScript-AST comparison retained all **313/313 critical attributes**
+and unchanged non-presentation TypeScript across the five records runtime files.
+Both reports retain every prior literal JSX text, id and handler, and their
+non-presentation TypeScript remains unchanged, including GWG filtering, period
+labels and reduction. EÜR result/private-flow
+formulas and data sources remain unchanged. New monthly disclosure only repeats
+the supplied monthly data. All four changed scoped CSS modules parsed.
+
+## Hosted obligations and screenshot contract
+
+The accepted main evidence (**4,248 unit tests, 152 functional browser cases,
+155 screenshots**) is historical baseline evidence, not acceptance of this
+candidate. Added source, **not executed locally**:
+
+- **14 browser cases:** two financial report cases and three records/history
+  journeys in each of four real 1440/390px light/dark configurations.
+- **Four static unit cases** for the appended evidence contract.
+- Expected hosted union: **4,252 unit cases / 166 functional browser cases**,
+  subject to confirmation by a separately authorized hosted run.
+- **44 new exact PNG names**, disjoint from all 155 accepted images:
+  eight `financial-reports-{eur,gwg}-{light,dark}-{1440,390}.png`;
+  twelve `records-history-{history-evidence,history-empty,reminder-queue}`
+  light/dark desktop/mobile views; 24 top/bottom modal views for
+  `reminder-confirmation`, `service-ledger`, `statement-selection`.
+- Exact union: **199 images**, partitions **95 + 8 + 14 + 8 + 30 + 44**.
+
+The entire accepted browser workflow prefix remains byte-identical (SHA-256
+`59b555efe0c3ce2119372adcb0f845a619d3ba969439792b4beb288b236b5efe`).
+The sixth optional partition has **6 MiB aggregate encoded output**, **12 MiB
+aggregate input**, **1 MiB per-file input**, a six-minute staging limit and
+one-day retention. Previous 20 MiB output budgets remain unchanged; combined
+maximum is 26 MiB. Exact completeness, unique basenames, regular-file/no-symlink,
+no-follow, path/inode/size checks and bounded two-process lossless full-pixel,
+color-metadata and input/output hash proofs remain mandatory. The authoritative
+45-minute job, 25-minute suite step, 20-minute global test limit, one worker,
+zero retries, no-only and trace-off settings are unchanged.
+
+The existing bank/billing static test's reader now ends at the sixth partition;
+none of its existing assertions or 30-image budgets were removed or relaxed.
+YAML and all six embedded Python scripts were parsed, not executed. No staging
+fixture/codec test or browser test ran locally, and no screenshots are claimed.
+
+## Checks and remaining evidence
+
+- Passed: whole-project ESLint (`--max-warnings 0`) under Node 22.23.4.
+- Passed: whole-project TypeScript (`--noEmit --incremental false`) under Node
+  22.23.4; final source recheck passed, followed by the normal build type check.
+- Passed: source-contract comparisons, four CSS parses, workflow prefix/exact
+  disjoint image union, YAML/embedded-Python syntax and `git diff --check`.
+- Passed: **one normal final `npm run build`**, including unchanged PDF.js
+  prebuild and third-party-notices postbuild, under Node 22.23.4. No hook,
+  provenance guard or dependency check was skipped.
+- Unit, fixture, app/browser execution and result polling: **not run locally**.
+  The prior local-test auto-review denial remains in force and was not retried.
+- Hosted checks, actual screenshots, lossless-artifact delivery, pixel review,
+  financial real-flow regression and interrupted/repeated journeys: pending
+  separately authorized publication and execution. The new source is not a
+  claim that these gates passed.
+
+Only reproducible completed temporary build caches were reclaimed with parent
+permission. A complete private dependency copy retained exact PDF.js source and
+adapted-worker hashes and single-link asset guards; no installation, shared
+package mutation, Prisma regeneration or integrity-check bypass was used.
+
+
+## First hosted run and scoped recovery
+
+Draft PR [#142](https://github.com/storminator89/bivaro-kleinunternehmen/pull/142)
+was explicitly authorized after the local checkpoint. Published first head
+`1d873cf9cb983c09570bb3d3d9b4a2a4666dff47` has exactly the reviewed local tree.
+[CI 40120988992](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40120988992)
+passed security, lint/types, normal build and **4,252 unit tests** (20 skipped;
+272 files passed, three skipped).
+
+[Browser run 40120989030](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40120989030)
+completed with **157/166 passed, nine failed, zero retries**. One of 152 existing
+cases failed because the redesigned EÜR markup omitted the existing
+`.report-balance` selector. Eight new cases failed at capture-width assertions:
+headed Chromium correctly excluded its actual 15px scrollbar from full-page
+PNG content (375 rather than 390 pixels; 1425 rather than 1440). These failures
+occurred before later interaction assertions in those new cases. They do not
+establish a financial-calculation failure or passing interrupted/export paths.
+
+Recovery retains every existing test/assertion, time limit, image name and
+budget. It restores the selector on the actual balance region, with scoped CSS
+specificity preventing the legacy selector from reverting the new composition.
+Full-page PNGs must now exactly match measured layout `clientWidth`, while an
+independent assertion still requires actual `innerWidth` to equal the configured
+1440/390 CSS viewport. Modal viewport PNGs still require exact viewport width.
+Nothing is cropped, masked, hidden or widened to suppress a scrollbar.
+
+The source review also found that the controlled EÜR preview had no Trigger or
+explicit opener restoration. Guarded opener capture/return was added for its
+existing Close/Escape/reopen requirement; the first hosted run had not reached
+that new focus assertion. Financial preview/export handlers and data are
+unchanged. A separate read-only reviewer found no blocking issue in the capture,
+CSS specificity or focus lifecycle corrections.
+
+All prior five screenshot artifacts were delivered. The new partition correctly
+refused incomplete 44-image evidence, so **none of the required new44 images is
+claimed accepted**. Six actual earlier-named screenshots of the redesigned
+history, statement and reminder were downloaded from the exact first head and
+visually inspected, with archive SHA-256 and file geometry/hashes recorded.
+The suspected muted-role collision was not reproduced: actual light screenshots
+contain the intended #5F7087 text pixels; no speculative token change was made.
+Those six images are not a substitute for the pending complete new44 review.
+
+Corrective whole-project lint/types and one normal production build including
+unchanged pre-/postbuild hooks passed under Node22.23.4. Local unit/fixture/app/
+browser tests remain unrun. Full hosted acceptance of the corrective tree and
+actual new44 screenshot review remain pending. PR stays draft; no merge or
+deployment is authorized.
+
+
+## Second hosted run, actual44-image review and next recovery
+
+Corrective head `dbe84752b22b6eab01c059ad2558ef2b320c999c` again passed all
+[CI checks](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40123656843),
+including **4,252 unit tests** (20 skipped). Its
+[browser run40123656687](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40123656687)
+completed **159/166 passed, seven failed**, zero retries:
+
+- Two new financial cases checked `:focus-visible` after programmatic focus
+  while the browser correctly remained in pointer modality after theme clicks.
+  Recovery uses real Shift+Tab/Tab traversal, explicitly proves focused and
+  `:focus-visible`, then retains the same exact outline style/offset assertions.
+- Four new history cases exposed a real reset bug. The reset Button had no
+  explicit type, so its clear-navigation click was followed by the form's
+  default submit of the stale search. Only `type="button"` is added; the query,
+  effect, search-submit and API logic remain unchanged. All313 original critical
+  bindings remain, with this one intentional additional type attribute.
+- One unchanged existing bank-evidence1440 case hit its90s timeout; it passed on
+  the first head. No causal bank-runtime regression was found. The post-save
+  raw `await started` could wait indefinitely if no matching request arrived.
+  Recovery does **not** refocus, retry or change bank runtime: the same global
+  native Enter and all35 original assertions remain, plus three focused,
+  enabled and bounded-request assertions. A labelled phase and finally-release
+  make any next failure diagnosable. The90s timeout is unchanged. This is not a
+  claim that the timeout's root cause has been proved.
+
+All **199** exact images were delivered within their original partitions.
+New artifact `12573411586` contains **44/44** PNGs, **4,292,752/6,291,456bytes**;
+ZIP SHA-256:
+`1db054cd36b046628150b20509ff3b2c0bf68205c141a576690752b84de9b2ab`.
+Every new PNG output hash, decoded full-pixel hash and geometry matched its
+hosted lossless proof. All44 actual images were opened and visually inspected:
+eight EÜR/GWG, sixteen ledger/statement and twenty history/reminder views.
+No blocking visual defect was observed in the captured light/dark1440/390 matrix.
+Financial long descriptions/categories and large euro figures remain readable.
+
+Nonblocking observations retained rather than silently expanded into new work:
+desktop reminder identifier/customer truncation and icon-only payment action;
+mobile nested vertical scrollbars and non-sticky modal header; subdued disabled
+controls. The service fixtures do not establish long-description/large-amount
+stress coverage. Pixels do not prove interactions, and this image review is not
+acceptance of the still-failing functional run or a published Site.
+
+The third candidate's whole-project lint/types, source-contract comparison and
+normal build including both hooks passed under Node22.23.4. A separate read-only
+review found no assertion weakening or new source race. No local functional,
+fixture, unit or browser test ran. Fresh complete hosted checks remain required;
+all166 cases, all199 image names/budgets and the draft/no-merge/no-deploy boundary
+remain in force.
