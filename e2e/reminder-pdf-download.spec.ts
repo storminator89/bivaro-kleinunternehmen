@@ -153,7 +153,8 @@ for (const width of [1440, 390]) test(`real reminder PDF download, stale confirm
     const afterPayment = await snapshot(userId);
     const stale = page.waitForResponse(result => new URL(result.url()).pathname === '/api/reminders/download-pdf' && result.request().method() === 'POST');
     await pdfButton.click(); expect((await stale).status()).toBe(409);
-    await expect(dialog.getByRole('alert')).toContainText('Zahlungsstand hat sich geändert');
+    const staleAlert = dialog.getByRole('alert').filter({ hasText: 'Zahlungsstand hat sich geändert' });
+    await expect(staleAlert).toHaveCount(1); await expect(staleAlert).toBeVisible();
     await expect(dialog.getByRole('region', { name: 'Geprüfter Mahnentwurf', exact: true })).toHaveCount(0); await expect(pdfButton).toBeDisabled();
     expect(await snapshot(userId)).toEqual(afterPayment);
     await dialog.getByRole('button', { name: 'Aktuellen Restbetrag prüfen und Entwurf laden', exact: true }).click();
@@ -171,6 +172,10 @@ for (const width of [1440, 390]) test(`real reminder PDF download, stale confirm
     await dialog.getByRole('button', { name: 'Abbrechen', exact: true }).click(); await page.reload();
     await expect(page.getByRole(width < 1280 ? 'article' : 'row').filter({ hasText: invoiceNumber })).toHaveCount(0);
     expect(settled.reminders).toEqual([]); expect(settled.outbox).toEqual([]);
-    await writeFile(path.join(evidence, 'manifest.json'), JSON.stringify({ version: 1, status: 'passed', width, pages: parsed.pdf.getPageCount(), pdfSha256: sha256(downloadedBytes), responseSha256: witness.sha256, responseBytes: witness.bytes, originalSha256: sha256(originalBytes), originalAfterSha256: sha256(await unchanged.body()), previewAsOf: preview.previewAsOf, documentVersion: preview.documentVersion, balance: { totalCents: '12000', paidCents: '4000', openCents: '8000' }, downloadsChangedFinancialState: false, emailRequests, correctionAwareReminders: false, note: 'Synthetic fixture only; actual download bytes match a passive clone of the exact native HTTP response. No original-PDF/PDF-A or delivery claim. Rendered-page visual review remains separate.' }, null, 2));
+    const finalOriginal = await page.request.get(`/api/invoices/download?id=${invoice.id}&download=true`);
+    expect(finalOriginal.status()).toBe(200);
+    const finalOriginalSha256 = sha256(await finalOriginal.body());
+    expect(finalOriginalSha256).toBe(sha256(originalBytes));
+    await writeFile(path.join(evidence, 'manifest.json'), JSON.stringify({ version: 1, status: 'passed', width, pages: parsed.pdf.getPageCount(), pdfSha256: sha256(downloadedBytes), responseSha256: witness.sha256, responseBytes: witness.bytes, originalSha256: sha256(originalBytes), originalAfterSha256: finalOriginalSha256, previewAsOf: preview.previewAsOf, documentVersion: preview.documentVersion, balance: { totalCents: '12000', paidCents: '4000', openCents: '8000' }, downloadsChangedFinancialState: false, emailRequests, correctionAwareReminders: false, note: 'Synthetic fixture only; actual download bytes match a passive clone of the exact native HTTP response. No original-PDF/PDF-A or delivery claim. Rendered-page visual review remains separate.' }, null, 2));
   } finally { await prisma.$disconnect(); }
 });
