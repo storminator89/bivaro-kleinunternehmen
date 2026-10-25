@@ -26,8 +26,12 @@ with no old action, cancellation/reopen with a newer price, late retired read,
 503 without old actions, retry and preserved document-owned zero tax. The test
 updates only its fixture catalogue to model independent price changes; held
 responses are checked against that row and price before delivery. They use
-the standard fresh fixture, real UI authentication and block non-auth mutation
+the standard fresh fixture, real UI authentication and block every mutation
 HTTP calls; no saved document/plan/booking is asserted from draft price changes.
+After login, auth diagnostics are blocked and counted as unexpected writes too;
+they are not exempted. Every fresh document's actual session response is read
+and checked for the expected owner, role and sessionVersion before the fixture
+initiates another navigation.
 
 Eleven bounded pure/model/SSR regressions passed in 299 ms with installed
 Vitest, one worker, no cache and a 512 MiB V8 heap limit. No local browser,

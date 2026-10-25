@@ -10,6 +10,19 @@ import { serviceArticleNameKey } from '../lib/service-articles';
 // real fixture catalogue reads, no persisted documents/plans/financial mutations.
 const name = 'SYNTHETIC catalogue freshness';
 const prices = (cents: string) => ({ unitPriceCents: cents, sourcePriceCents: cents });
+type Owner = { id: string; role: string; sessionVersion: number };
+async function documentSession(page: Page, destination: string, navigate: () => Promise<unknown>, owner?: Owner) {
+  const session = page.waitForResponse(response => response.request().method() === 'GET'
+    && new URL(response.url()).pathname === '/api/auth/session'
+    && new URL(page.url()).pathname === destination);
+  await navigate();
+  const response = await session;
+  expect(response.status()).toBe(200); expect(await response.finished()).toBeNull();
+  const body = await response.json();
+  expect(body.user ? { id: body.user.id, role: body.user.role, sessionVersion: body.user.sessionVersion } : undefined).toEqual(owner);
+  // The next fixture navigation must not cancel this document's auth fetch.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
 
 async function signIn(page: Page) {
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
@@ -17,9 +30,10 @@ async function signIn(page: Page) {
   const password = 'SyntheticCatalogFresh168!';
   const user = await prisma.user.create({ data: { email: `catalog-fresh-${randomUUID()}@example.test`,
     name: 'Synthetic catalogue freshness', password: await hashPassword(password), role: 'USER' } });
-  await page.goto('/login'); await page.getByLabel('E-Mail').fill(user.email);
+  await documentSession(page, '/login', () => page.goto('/login')); await page.getByLabel('E-Mail').fill(user.email);
   await page.getByLabel('Passwort', { exact: true }).fill(password);
-  await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click();
+  await documentSession(page, '/dashboard', () => page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click(),
+    { id: user.id, role: user.role, sessionVersion: user.sessionVersion });
   await expect(page).toHaveURL(/\/dashboard/);
   return user;
 }
@@ -39,7 +53,7 @@ for (const editor of ['invoice', 'quote', 'service-plan'] as const) {
       const article = await prisma.serviceArticle.create({ data: { userId: user.id, name, nameKey: serviceArticleNameKey(name),
         description: 'SYNTHETIC fresh service line', unit: 'Stunde', ...prices('10000'), sourcePriceBasis: 'NET', taxRate: '19' } });
       await page.route('**/api/**', async route => {
-        if (['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) || new URL(route.request().url()).pathname.startsWith('/api/auth/')) return route.continue();
+        if (['GET', 'HEAD', 'OPTIONS'].includes(route.request().method())) return route.continue();
         unexpectedWrites.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
         await route.abort('blockedbyclient');
       });
@@ -60,13 +74,15 @@ for (const editor of ['invoice', 'quote', 'service-plan'] as const) {
         } else await route.fulfill({ response });
       });
       let surface: Locator;
+      const owner = { id: user.id, role: user.role, sessionVersion: user.sessionVersion };
       if (editor === 'service-plan') {
-        await page.goto('/service-billing');
+        await documentSession(page, '/service-billing', () => page.goto('/service-billing'), owner);
         await page.getByRole('button', { name: 'Ersten Serviceplan anlegen', exact: true }).click();
         surface = page.getByRole('dialog', { name: 'Neuer Serviceplan', exact: true });
         await surface.getByLabel('Umsatzsteuer', { exact: true }).selectOption('small-business');
       } else {
-        await page.goto(editor === 'invoice' ? '/dashboard/invoices/new' : '/dashboard/quotes/new');
+        const destination = editor === 'invoice' ? '/dashboard/invoices/new' : '/dashboard/quotes/new';
+        await documentSession(page, destination, () => page.goto(destination), owner);
         surface = page.getByRole('main');
       }
       const price = (index: number) => surface.locator(editor === 'invoice' ? `#invoice-item-price-${index}`
