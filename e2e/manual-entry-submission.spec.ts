@@ -2,12 +2,16 @@ import { expect, test, type Locator, type Page, type Route } from '@playwright/t
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
-import { deleteTenantFile } from '../lib/upload-path';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
 import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 
 // Acceptance source for authorized hosted execution only. Real authenticated
 // writes use the standard fresh fixture, never repository/production databases.
+// Keep synthetic financial rows/history for the runner's whole-fixture disposal.
+// Uploaded originals belong to the standalone server's cwd, not this worker;
+// retain them for hosted-runner disposal too, never unlink a guessed local root.
+// Per-test user/record deletion would violate retention/FK contracts and could
+// replace an earlier body failure with a misleading destructive-cleanup failure.
 type Kind = 'income' | 'expense';
 const plural = (kind: Kind) => kind === 'income' ? 'incomes' : 'expenses';
 const noun = (kind: Kind) => kind === 'income' ? 'Einnahmen' : 'Ausgaben';
@@ -26,11 +30,6 @@ async function account(page: Page) {
   await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   return user;
-}
-async function cleanup(userId: string) {
-  const files = await prisma.expense.findMany({ where: { userId }, select: { storedReceiptFileName: true } });
-  for (const file of files) if (file.storedReceiptFileName) await deleteTenantFile(userId, file.storedReceiptFileName);
-  await prisma.user.delete({ where: { id: userId } });
 }
 async function count(kind: Kind, userId: string, description: string) {
   const where = { userId, description };
@@ -179,7 +178,7 @@ for (const kind of ['income', 'expense'] as const) {
       await form.locator('button[type="submit"]').click();
       await expect(description).toHaveValue('');
       expect(await count(kind, user.id, `${prefix}-intentional-new`)).toBe(1);
-    } finally { held?.release(); await cleanup(user.id); }
+    } finally { held?.release(); }
   });
 
   test(`duplicate/edit ${kind}: one real POST and unknown accepted PUT cannot be replayed by old editor`, async ({ page }) => {
@@ -231,6 +230,6 @@ for (const kind of ['income', 'expense'] as const) {
         : await prisma.expense.findUniqueOrThrow({ where: { id: duplicate.id } });
       expect(row.amount).toBe(15.67); expect(row.manualRecordRevision).toBe(1); expect(row.manualRecordState).toBe('RECORDED');
       expect(await count(kind, user.id, sourceDescription)).toBe(1);
-    } finally { held?.release(); await cleanup(user.id); }
+    } finally { held?.release(); }
   });
 }
