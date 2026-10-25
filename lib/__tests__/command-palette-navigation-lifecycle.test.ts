@@ -184,6 +184,33 @@ beforeEach(() => {
 });
 afterEach(() => { unmount(); unregister(); intents.invalidate(); hooks.flushCommit = null; vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+describe('late cmdk selection-target attachment', () => {
+  it('retries selection when the real option ref arrives after the parent ready effect, then consumes it once', () => {
+    vi.stubGlobal('PointerEvent', Event);
+    openPalette(); loadResults();
+    const option = find(node => node.props.value === 'record:customer:11');
+    const attach = option.props.ref as (node: HTMLDivElement | null) => void;
+    const order: string[] = [];
+    const target = { isConnected: true, dispatchEvent: vi.fn((_event: Event) => { order.push('target'); return true; }), scrollIntoView: vi.fn() };
+    const neutral = { isConnected: true, dispatchEvent: vi.fn((_event: Event) => { order.push('neutral'); return true; }) };
+    // cmdk's own filter commit may attach the option after the parent has
+    // already observed ready results with an empty target-ref map.
+    const list = find(node => node.props.value === 'record-list:customer');
+    (list.props.ref as (node: HTMLDivElement | null) => void)(neutral as unknown as HTMLDivElement);
+    attach(target as unknown as HTMLDivElement); commit();
+    // Force a distinct value transition even if cmdk auto-selected the target;
+    // neither pointer interaction invokes onSelect or unfiltered navigation.
+    expect(order).toEqual(['neutral', 'target']);
+    expect(neutral.dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(target.dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(target.dispatchEvent.mock.calls[0][0]).toMatchObject({ type: 'pointermove', bubbles: true });
+    expect(target.scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: 'nearest' });
+    commit();
+    expect(target.dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(client.push).not.toHaveBeenCalled(); expect(requests).toHaveLength(0);
+  });
+});
+
 describe('palette focus handoff across Radix deferred close autofocus', () => {
   it.each(['before', 'after'] as const)('retains chooser heading focus when the close callback runs %s its effect', order => {
     openPalette(); query('Kun'); selectCommand('Kunden');

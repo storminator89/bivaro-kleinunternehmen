@@ -86,6 +86,7 @@ function AuthenticatedCommandPalette() {
   const [pages, setPages] = React.useState<RecordSearchPages>(recordSearchPages);
   const [selectedValue, setSelectedValue] = React.useState('');
   const [pendingSelection, setPendingSelection] = React.useState<string | null>(null);
+  const [selectionReady, setSelectionReady] = React.useState(0);
   const [retry, setRetry] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const selectionTargets = React.useRef(new Map<string, HTMLDivElement>());
@@ -136,14 +137,18 @@ function AuthenticatedCommandPalette() {
   React.useLayoutEffect(() => {
     if (current?.status !== 'ready' || !pendingSelection) return;
     const target = selectionTargets.current.get(pendingSelection);
-    if (!target) return;
+    const neutral = selectionTargets.current.get(`record-list:${pendingSelection.split(':')[1]}`);
+    if (!target?.isConnected || !neutral?.isConnected) return;
     // cmdk 1.1's controlled value alone does not synchronize its active
     // descendant. Use its public pointer interaction on the real option, then
     // scroll explicitly (pointer selection intentionally skips cmdk scrolling).
+    // A target already auto-selected by cmdk otherwise makes its setter a no-op.
+    // A distinct real option forces synchronization, without invoking its action.
+    neutral.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }));
     target.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }));
     target.scrollIntoView({ block: 'nearest' });
     setPendingSelection(null);
-  }, [current, pendingSelection]);
+  }, [current, pendingSelection, selectionReady]);
   const router = useRouter();
   const requestNavigation = useReviewNavigation();
   const { setTheme } = useTheme();
@@ -180,6 +185,13 @@ function AuthenticatedCommandPalette() {
   };
   const navigate = (href: string) => closeBeforeNavigation(() => router.push(href));
   const helpers: CommandHelpers = { navigate, logout: () => closeBeforeNavigation(() => { void signOut({ callbackUrl: "/" }); }), setTheme, close: () => changeOpen(false) };
+  const rememberSelection = (value: string, node: HTMLDivElement | null) => {
+    if (!node) { selectionTargets.current.delete(value); return; }
+    selectionTargets.current.set(value, node);
+    // cmdk may attach an option only after its own filtering commit, after
+    // the parent's ready effect already ran. Retry when that real target exists.
+    if (pendingSelection && (pendingSelection === value || value === `record-list:${pendingSelection.split(':')[1]}`)) setSelectionReady(previous => previous + 1);
+  };
   const changePage = (type: RecordSearchType, direction: -1 | 1) => {
     const group = current?.status === 'ready' ? current.result?.groups.find(group => group.type === type) : undefined;
     const page = pages[type] + direction;
@@ -223,13 +235,13 @@ function AuthenticatedCommandPalette() {
           {current?.status === 'ready' && current.result?.groups.filter(group => group.items.length > 0 || group.page > 0).map(group => (
             <Command.Group key={group.type} heading={`Datensätze · ${RECORD_SEARCH_GROUPS[group.type].title} · Seite ${group.page + 1}`} className="px-1 py-1 text-xs font-semibold text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider">
               {!group.items.length && <p className="px-3 py-2 text-xs">Auf dieser Seite keine Treffer mehr.</p>}
-              {group.items.map(item => <Command.Item key={`${item.type}:${item.id}`} ref={node => { const value = `record:${item.type}:${item.id}`; if (node) selectionTargets.current.set(value, node); else selectionTargets.current.delete(value); }} value={`record:${item.type}:${item.id}`} onSelect={() => navigate(item.href)} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground">
+              {group.items.map(item => <Command.Item key={`${item.type}:${item.id}`} ref={node => rememberSelection(`record:${item.type}:${item.id}`, node)} value={`record:${item.type}:${item.id}`} onSelect={() => navigate(item.href)} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground">
                 <BivaroIcon name={RECORD_SEARCH_GROUPS[group.type].icon} size={26} /><span className="min-w-0 flex-1 truncate" title={item.label}>{item.label}</span><span aria-hidden="true" className="text-muted-foreground">↗</span>
               </Command.Item>)}
-              {group.page > 0 && <Command.Item ref={node => { const value = `record-page:${group.type}:back`; if (node) selectionTargets.current.set(value, node); else selectionTargets.current.delete(value); }} value={`record-page:${group.type}:back`} onSelect={() => changePage(group.type, -1)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm text-foreground data-[selected=true]:bg-accent">Vorherige Treffer · {RECORD_SEARCH_GROUPS[group.type].title}</Command.Item>}
+              {group.page > 0 && <Command.Item ref={node => rememberSelection(`record-page:${group.type}:back`, node)} value={`record-page:${group.type}:back`} onSelect={() => changePage(group.type, -1)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm text-foreground data-[selected=true]:bg-accent">Vorherige Treffer · {RECORD_SEARCH_GROUPS[group.type].title}</Command.Item>}
               {group.hasMore && group.page < RECORD_SEARCH_MAX_PAGE && <Command.Item value={`record-page:${group.type}:next`} onSelect={() => changePage(group.type, 1)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm text-foreground data-[selected=true]:bg-accent">Weitere Treffer · {RECORD_SEARCH_GROUPS[group.type].title}</Command.Item>}
               {group.hasMore && group.page === RECORD_SEARCH_MAX_PAGE && <p className="px-3 py-2 text-xs">Suchgrenze erreicht · Suchbegriff eingrenzen.</p>}
-              <Command.Item value={`record-list:${group.type}`} onSelect={() => navigate(RECORD_SEARCH_GROUPS[group.type].href)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-xs text-muted-foreground data-[selected=true]:bg-accent">
+              <Command.Item ref={node => rememberSelection(`record-list:${group.type}`, node)} value={`record-list:${group.type}`} onSelect={() => navigate(RECORD_SEARCH_GROUPS[group.type].href)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-xs text-muted-foreground data-[selected=true]:bg-accent">
                 Liste öffnen (ungefiltert) · {RECORD_SEARCH_GROUPS[group.type].title}
               </Command.Item>
             </Command.Group>

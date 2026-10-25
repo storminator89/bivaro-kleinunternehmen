@@ -77,14 +77,14 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     expect((await page.request.get(`/api/invoices/download?id=${foreignInvoice.id}&download=true`)).status()).toBe(404);
     await dialog.getByRole('option', { name: 'Weitere Treffer · Ausgangsbelege', exact: true }).click();
     await expect(dialog.getByRole('status')).toContainText('Ausgangsbelege Seite 2');
-    const outboundSelection = dialog.getByRole('option', { selected: true });
-    await expect(outboundSelection).toHaveCount(1); await expect(outboundSelection).toBeInViewport();
+    const outboundSelection = dialog.getByRole('option', { name: 'SYN-SEARCH-EXTRA-OUT-1', exact: false });
+    await expect(outboundSelection).toHaveAttribute('aria-selected', 'true'); await expect(outboundSelection).toBeInViewport();
     await expect(input).toHaveAttribute('aria-activedescendant', (await outboundSelection.getAttribute('id'))!);
     await expect(dialog.getByRole('status')).toContainText('Kunden Seite 1');
     await dialog.getByRole('option', { name: 'Weitere Treffer · Eingangsbelege', exact: true }).click();
     await expect(dialog.getByRole('status')).toContainText('Eingangsbelege Seite 2');
-    const inboundSelection = dialog.getByRole('option', { selected: true });
-    await expect(inboundSelection).toHaveCount(1); await expect(inboundSelection).toBeInViewport();
+    const inboundSelection = dialog.getByRole('option', { name: 'SYN-SEARCH-EXTRA-IN-1.pdf', exact: false });
+    await expect(inboundSelection).toHaveAttribute('aria-selected', 'true'); await expect(inboundSelection).toBeInViewport();
     await expect(input).toHaveAttribute('aria-activedescendant', (await inboundSelection.getAttribute('id'))!);
     await expect(dialog.getByRole('status')).toContainText('Ausgangsbelege Seite 2');
     await dialog.getByRole('option', { name: 'Vorherige Treffer · Ausgangsbelege', exact: true }).click();
