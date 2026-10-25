@@ -18,7 +18,6 @@ import {
   apiSuccess,
   apiError,
   handleCors,
-  corsHeaders,
 } from '@/lib/api-auth';
 
 export async function OPTIONS(request: NextRequest) {
@@ -74,11 +73,6 @@ export async function GET(request: NextRequest) {
       hasMore: skip + customers.length < total,
     });
 
-    // Add CORS headers
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-
     return response;
   }, { requiredScopes: ['read'] });
 }
@@ -121,10 +115,6 @@ async function postHandler(request: NextRequest) {
 
     const response = apiSuccess(customer);
     response.headers.set('Location', `/api/v1/customers/${customer.id}`);
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-
     return new Response(response.body, {
       status: 201,
       headers: response.headers,
@@ -184,9 +174,6 @@ async function putHandler(request: NextRequest) {
     await auditUpdate(userId, 'Customer', existing.id, existing, customer);
 
     const response = apiSuccess(customer);
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
     return response;
   }, { requiredScopes: ['write'] });
 }
@@ -230,9 +217,6 @@ async function deleteHandler(request: NextRequest) {
     await auditDelete(userId, 'Customer', existing);
 
     const response = apiSuccess({ deleted: true, id: parseInt(id) });
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
     return response;
   }, { requiredScopes: ['delete'] });
 }

@@ -25,7 +25,6 @@ import {
   apiSuccess,
   apiError,
   handleCors,
-  corsHeaders,
 } from '@/lib/api-auth';
 
 function parsePositiveId(value: unknown, label: string): number {
@@ -163,10 +162,6 @@ export async function GET(request: NextRequest) {
       hasMore: skip + incomes.length < total,
     });
 
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-
     return response;
   }, { requiredScopes: ['read'] });
 }
@@ -201,7 +196,6 @@ async function postHandler(request: NextRequest) {
 
       const response = apiSuccess(income);
       response.headers.set('Location', `/api/v1/incomes/${income.id}`);
-      Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));
       return new Response(response.body, { status: 201, headers: response.headers });
     } catch (error) {
       const response = mutationErrorResponse(error);
@@ -248,7 +242,6 @@ async function putHandler(request: NextRequest) {
       });
 
       const response = apiSuccess(income);
-      Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));
       return response;
     } catch (error) {
       const response = mutationErrorResponse(error);
@@ -273,7 +266,6 @@ async function deleteHandler(request: NextRequest) {
       await deleteManualIncome(userId, parsedId);
 
       const response = apiSuccess({ deleted: true, id: parsedId });
-      Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));
       return response;
     } catch (error) {
       const response = mutationErrorResponse(error);

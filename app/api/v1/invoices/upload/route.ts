@@ -13,7 +13,6 @@ import {
   apiSuccess,
   apiError,
   handleCors,
-  corsHeaders,
 } from '@/lib/api-auth';
 import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
 import { getNextDocumentNumber } from '@/lib/invoice-numbers';
@@ -290,10 +289,6 @@ async function postHandler(request: NextRequest) {
     });
 
     response.headers.set('Location', `/api/v1/invoices?id=${invoice.id}`);
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-
     return new Response(response.body, {
       status: 201,
       headers: response.headers,

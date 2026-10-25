@@ -7,9 +7,10 @@ const state = vi.hoisted(() => ({ client: null as unknown }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
 import { generateApiKey, handleCors, withApiAuth } from '@/lib/api-auth';
 import { hashRateLimitKey } from '@/lib/rate-limit';
-import { POST, PUT, DELETE } from '@/app/api/v1/customers/route';
+import { GET as getCustomers, OPTIONS as customerOptions, POST, PUT, DELETE } from '@/app/api/v1/customers/route';
 import { POST as createIncome, PUT as updateIncome, DELETE as deleteIncome } from '@/app/api/v1/incomes/route';
 import { POST as createExpense, PUT as updateExpense, DELETE as deleteExpense } from '@/app/api/v1/expenses/route';
+import { POST as rejectSettingsCreate, PUT as rejectSettingsUpdate, DELETE as rejectSettingsDelete } from '@/app/api/v1/settings/route';
 
 let database: ReturnType<typeof createTestDatabase>;
 let key: string;
@@ -26,6 +27,17 @@ function request(path: string, method: string, body?: object, origin = 'https://
   return new NextRequest(`http://localhost${path}`, { method,
     headers: { origin, authorization: `Bearer ${key}`, 'content-type': 'application/json' },
     ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+function expectCorsHeaders(response: Response, origin?: string) {
+  const cors = Object.fromEntries([...response.headers].filter(([name]) => name === 'vary' || name.startsWith('access-control-')));
+  expect(cors).toEqual({
+    vary: 'Origin',
+    'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'access-control-allow-headers': 'Content-Type, Authorization, X-API-Key',
+    'access-control-max-age': '300',
+    ...(origin ? { 'access-control-allow-origin': origin } : {}),
   });
 }
 
@@ -113,18 +125,63 @@ describe('external API boundaries', () => {
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get('access-control-allow-origin')).toBe('https://approved.example');
     expect(preflight.headers.has('access-control-allow-credentials')).toBe(false);
+    expectCorsHeaders(preflight, 'https://approved.example');
     const handler = vi.fn(async () => new Response('changed'));
     const rejected = await withApiAuth(request('/api/v1/customers', 'POST', {}, 'https://unapproved.example'), handler, { requiredScopes: ['write'] });
     expect(rejected.status).toBe(403); expect(handler).not.toHaveBeenCalled();
+    expect(rejected.headers.has('access-control-allow-origin')).toBe(false);
     const allowed = await withApiAuth(request('/api/v1/customers', 'GET'), handler, { requiredScopes: ['read'] });
     expect(allowed.headers.get('access-control-allow-origin')).toBe('https://approved.example');
     expect(allowed.headers.get('vary')).toContain('Origin');
+    expectCorsHeaders(allowed, 'https://approved.example');
+  });
+
+  it('keeps centralized CORS headers on successful reads and handler validation errors', async () => {
+    const success = await getCustomers(request('/api/v1/customers', 'GET'));
+    expect(success.status).toBe(200);
+    expectCorsHeaders(success, 'https://approved.example');
+    const validation = await POST(request('/api/v1/customers', 'POST', {}));
+    expect(validation.status).toBe(400);
+    expectCorsHeaders(validation, 'https://approved.example');
+    expect(validation.headers.get('content-type')).toContain('application/json');
+    expect(validation.headers.get('x-ratelimit-limit')).toBe('100');
+  });
+
+  it('retains non-CORS headers without Origin and decorates caught handler errors', async () => {
+    const noOrigin = new NextRequest('http://localhost/api/v1/customers', { headers: { authorization: `Bearer ${key}` } });
+    const success = await withApiAuth(noOrigin, async () => new Response('ok', { headers: { Location: '/preserved', 'X-Custom': 'keep' } }));
+    expectCorsHeaders(success);
+    expect(success.headers.get('location')).toBe('/preserved');
+    expect(success.headers.get('x-custom')).toBe('keep');
+    expect(await success.text()).toBe('ok');
+
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const failed = await withApiAuth(request('/api/v1/customers', 'GET'), async () => { throw new Error('synthetic handler failure'); });
+      expect(failed.status).toBe(500);
+      expectCorsHeaders(failed, 'https://approved.example');
+      expect((await failed.json()).error.code).toBe('INTERNAL_ERROR');
+    } finally { log.mockRestore(); }
+  });
+
+  it('preserves CORS on standalone settings rejections and route OPTIONS without authentication', async () => {
+    for (const [method, handler] of [['POST', rejectSettingsCreate], ['PUT', rejectSettingsUpdate], ['DELETE', rejectSettingsDelete]] as const) {
+      const response = await handler(new NextRequest('http://localhost/api/v1/settings', { method }));
+      expect(response.status).toBe(405);
+      expect(response.headers.get('allow')).toBe('GET, OPTIONS');
+      expectCorsHeaders(response);
+    }
+    const preflight = await customerOptions(new NextRequest('http://localhost/api/v1/customers', { method: 'OPTIONS' }));
+    expect(preflight.status).toBe(204);
+    expectCorsHeaders(preflight);
   });
 
   it('records CREATE, UPDATE and DELETE audit entries for API customer mutations', async () => {
     const created = await POST(request('/api/v1/customers', 'POST', { name: 'Audit fixture' }));
     expect(created.status).toBe(201);
     const { data: customer } = await created.json();
+    expect(created.headers.get('location')).toBe(`/api/v1/customers/${customer.id}`);
+    expectCorsHeaders(created, 'https://approved.example');
     expect((await PUT(request(`/api/v1/customers?id=${customer.id}`, 'PUT', { name: 'Renamed fixture' }))).status).toBe(200);
     expect((await DELETE(request(`/api/v1/customers?id=${customer.id}`, 'DELETE'))).status).toBe(200);
     const audit = await database.client.auditLog.findMany({ where: { userId: 'api-fixture', entityId: String(customer.id), entityType: 'Customer' }, orderBy: { id: 'asc' } });

@@ -18,7 +18,6 @@ import {
   apiSuccess,
   apiError,
   handleCors,
-  corsHeaders,
 } from '@/lib/api-auth';
 
 export async function OPTIONS(request: NextRequest) {
@@ -96,10 +95,6 @@ export async function GET(request: NextRequest) {
       hasMore: skip + invoices.length < total,
     });
 
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-
     return response;
   }, { requiredScopes: ['read'] });
 }
@@ -158,9 +153,6 @@ async function putHandler(request: NextRequest) {
     }
 
     const response = apiSuccess(invoice);
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
     return response;
   }, { requiredScopes: ['write'] });
 }
@@ -182,9 +174,6 @@ async function deleteHandler(request: NextRequest) {
       throw error;
     }
     const response = apiSuccess(result);
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
     return response;
   }, { requiredScopes: ['delete'] });
 }
