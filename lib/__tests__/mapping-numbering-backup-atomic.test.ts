@@ -94,6 +94,7 @@ describe('shared backup integration without a database', () => {
     const source = fixture().data;
     const revision = { ...source.bankMappingProfileRevisions[0], configuration: { ...source.bankMappingProfileRevisions[0].configuration, rawRows: ['private synthetic transaction'] } };
     const tx = new Proxy({}, { get: (_target, model: string) => ({
+      count: async () => 0,
       findUnique: async () => model === 'user' ? source.user : null,
       findMany: async () => model === 'bankMappingProfile' ? source.bankMappingProfiles : model === 'bankMappingProfileRevision' ? [revision] : [],
     }) });
@@ -103,6 +104,7 @@ describe('shared backup integration without a database', () => {
   it('reads all three feature collections in the same tenant snapshot with explicit field allowlists', async () => {
     const queries = new Map<string, Record<string, unknown>>();
     const tx = new Proxy({}, { get: (_target, model: string) => ({
+      count: async () => 0,
       findUnique: async () => model === 'user' ? { id: 'snapshot-owner', email: 'synthetic@example.test', name: 'Synthetic' } : null,
       findMany: async (query: Record<string, unknown>) => { queries.set(model, query); return []; },
     }) });

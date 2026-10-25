@@ -41,7 +41,8 @@ function fixture(kind: 'move' | 'refund' | 'correction' = 'move', amount = 40): 
     semanticFingerprint: financialHash(bindingBasis), basisSnapshot: bindingBasis, contractVersion: 1, createdAt: recorded };
   const changeBasis = allocationChangeBasisSnapshot(binding, root, a, b, null, { expectedAllocationRevision: 0, expectedSourceLedgerVersion: token, expectedTargetLedgerVersion: token, actionDate: '2026-10-21', reason: 'Falsche Rechnung korrigiert' });
   const change = { stableKey: changeKey, bindingStableKey: bindingKey, revision: 1, previousChangeStableKey: null, fromInvoiceId: 10, toInvoiceId: 11, amountCents: String(amount * 100), currency: 'EUR', actionDate: '2026-10-21T00:00:00.000Z', reason: 'Falsche Rechnung korrigiert', idempotencyKey: 'move-once', semanticFingerprint: financialHash(changeBasis), basisSnapshot: changeBasis, contractVersion: 1, recordedAt: recorded };
-  const data: Row = { user: { id: source }, customers: [{ id: 5, name: 'Synthetic allocation customer', createdAt: date }], invoices: [a,b], incomes: [{ id: 20, invoiceId: 10, customerId: 5, description: 'Ein echter Originaleingang', amount, date, taxRelevant: true }],
+  const data: Row = { user: { id: source }, customers: [{ id: 5, name: 'Synthetic allocation customer', createdAt: date }], invoices: [a,b], incomes: [{ id: 20, manualRecordId: '54000000-0000-4000-8000-000000000020', manualRecordState: 'LEGACY_UNREVIEWED', manualRecordOrigin: 'PAYMENT_JOURNAL', manualRecordRevision: 0, invoiceId: 10, customerId: 5, description: 'Ein echter Originaleingang', amount, date, taxRelevant: true }],
+    manualFinancialRecordEvents: [],
     paymentJournalEvents: [root], paymentAdjustments: [], paymentOperations: [{ id: 40, idempotencyKey: 'root-once', kind: 'PAYMENT_RECEIVED', createdAt: recorded }, { id: 41, idempotencyKey: 'move-once', kind: 'PAYMENT_ALLOCATION_CHANGED', createdAt: recorded }],
     bankImportBatches: [batch], bankImportRows: [bankRow], bankPaymentBindings: [binding], paymentAllocationChanges: [change],
     bankMappingProfiles: [], bankMappingProfileRevisions: [], documentNumberingPolicies: [], quoteCreateReceipts: [],
@@ -186,6 +187,11 @@ describe('allocation restore, not command execution', () => {
     expect(snapshot.bankImportBatches).toEqual(original.data.bankImportBatches); expect(snapshot.bankImportRows).toEqual(original.data.bankImportRows);
     await restore.restoreBackupData({ userId: third, backup: pack(snapshot, target), overwrite: true, resolveFile });
     expect(await db.client.income.count({ where: { userId: third } })).toBe(1);
+    const sourceIncome = await db.client.income.findFirstOrThrow({ where: { userId: target } });
+    const copiedIncome = await db.client.income.findFirstOrThrow({ where: { userId: third } });
+    expect(copiedIncome.manualRecordId).not.toBe(sourceIncome.manualRecordId);
+    expect(copiedIncome.manualRecordOrigin).toBe('PAYMENT_JOURNAL');
+    expect(await db.client.manualFinancialRecordEvent.count({ where: { userId: { in: [target, third] } } })).toBe(0);
     expect(await db.client.paymentJournalEvent.count({ where: { userId: third } })).toBe(1);
     expect(await db.client.expense.count({ where: { userId: third } })).toBe(0);
     expect(await db.client.cashTransaction.count({ where: { userId: third } })).toBe(0);

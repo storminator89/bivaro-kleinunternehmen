@@ -83,6 +83,7 @@ model User {
   serviceBillingPeriods ServiceBillingPeriod[]
   documentNumberingPolicies DocumentNumberingPolicy[]
   quoteCreateReceipts QuoteCreateReceipt[]
+  manualFinancialRecordEvents ManualFinancialRecordEvent[]
 }
 
 // Shared, bounded rate-limit state for authentication and other API surfaces.
@@ -99,6 +100,13 @@ model RateLimitBucket {
 }
 
 model Expense {
+  // Technical lifecycle only: every existing row remains financially effective.
+  manualRecordId       String?  @unique @default(uuid())
+  manualRecordState    String   @default("LEGACY_UNREVIEWED")
+  manualRecordOrigin   String   @default("LEGACY_UNKNOWN")
+  manualRecordRevision Int      @default(0)
+  manualRecordEvents   ManualFinancialRecordEvent[]
+
   id                    Int      @id @default(autoincrement())
   description           String
   amount                Float
@@ -123,6 +131,13 @@ model Expense {
 }
 
 model Income {
+  // Technical lifecycle only: every existing row remains financially effective.
+  manualRecordId       String?  @unique @default(uuid())
+  manualRecordState    String   @default("LEGACY_UNREVIEWED")
+  manualRecordOrigin   String   @default("LEGACY_UNKNOWN")
+  manualRecordRevision Int      @default(0)
+  manualRecordEvents   ManualFinancialRecordEvent[]
+
   id          Int      @id @default(autoincrement())
   description String
   amount      Float
@@ -980,4 +995,31 @@ model BankMappingProfileRevision {
 
   @@id([userId, profileId, revision])
   @@unique([userId, profileId, mutationId])
+}
+
+// Append-only evidence, not additional financial postings. Numeric links are
+// local; recordId, event id and snapshot hashes are portable backup identities.
+model ManualFinancialRecordEvent {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  recordId       String
+  kind           String
+  incomeId       Int?
+  income         Income?  @relation(fields: [incomeId], references: [id], onDelete: Restrict)
+  expenseId      Int?
+  expense        Expense? @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  sequence       Int
+  operation      String
+  mutationId     String
+  semanticHash   String
+  previousHash   String?
+  snapshot       Json
+  hash           String
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, mutationId])
+  @@unique([recordId, sequence])
+  @@index([userId, recordId])
 }

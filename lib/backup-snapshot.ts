@@ -1,3 +1,6 @@
+import { MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, manualRecordEventsFromBackup } from '@/lib/manual-financial-record-backup';
+import { MAX_MANUAL_RECORD_BACKUP_EVENTS, type ManualRecordSnapshot } from '@/lib/manual-financial-record-evidence';
+import { readManualRecordOriginal } from '@/lib/manual-financial-record-service';
 import { validateSupplierTaskBackupFields } from '@/lib/purchase-documents/supplier-task-backup';
 import { quoteCreateReceiptsFromBackup } from '@/lib/quote-create-receipt-backup';
 import { validateQuoteCreateBackup } from '@/lib/quote-create-backup';
@@ -88,10 +91,12 @@ export async function readStableBackupFile(filePath: string, maxBytes?: number):
 export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot> {
   const startedAt = new Date().toISOString();
   const raw = await prisma.$transaction(async (tx) => {
+    if (await tx.manualFinancialRecordEvent.count({ where: { userId } }) > MAX_MANUAL_RECORD_BACKUP_EVENTS) throw new BackupFileSizeError('Manueller Finanzverlauf überschreitet das Backup-Limit von 10.000 Nachweisen.');
     const [
       user,
       expenses,
       incomes,
+      manualFinancialRecordEvents,
       paymentJournalEvents,
       paymentAdjustments,
       paymentOperations,
@@ -131,6 +136,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       }),
       tx.expense.findMany({ where: { userId } }),
       tx.income.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
+      tx.manualFinancialRecordEvent.findMany({ where: { userId }, orderBy: [{ recordId: 'asc' }, { sequence: 'asc' }], take: MAX_MANUAL_RECORD_BACKUP_EVENTS + 1 }),
       tx.paymentJournalEvent.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.paymentAdjustment.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       tx.paymentOperation.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
@@ -186,8 +192,9 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
     const allocations = portableBankAllocations(bankPaymentBindings, paymentAllocationChanges, bankImportRows, paymentJournalEvents);
     for (const document of purchaseDocuments) validateSupplierTaskBackupFields(document as unknown as Record<string, unknown>, `purchaseDocuments[${document.id}]`, true);
     const includedOriginalHashes = new Set(purchaseDocuments.map(document => document.originalSha256));
-    return {
+    const data = {
       user: { id: user?.id, email: user?.email, name: user?.name },
+      manualFinancialRecordEvents: manualFinancialRecordEvents.map(({ userId: _owner, ...event }) => { void _owner; return event; }),
       expenses: expenses.map((item) => ({ ...item, userId: undefined })),
       incomes: incomes.map((item) => ({ ...item, userId: undefined })),
       paymentAdjustments: paymentAdjustments.map(({ allocationBindingId, allocationChangeId, allocationRevision, allocationBasisSnapshot, ...item }) => ({ ...item, userId: undefined,
@@ -227,7 +234,18 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       auditLogs: auditLogs.map((item) => redactAuditLog({ ...item })),
       invoiceNumberCounters: invoiceNumberCounters.map((item) => ({ type: item.type, year: item.year, value: item.value })),
     } satisfies Record<string, unknown>;
+    // Validate complete portable chains before exporting any corrupt evidence.
+    manualRecordEventsFromBackup(JSON.parse(JSON.stringify(data)), MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION);
+    return data;
   }, { maxWait: 15_000, timeout: 120_000 });
+  // JSON exports still verify archived-original hashes; they do not embed bytes.
+  for (const expense of raw.expenses.filter(row => row.manualRecordState === 'FINALIZED')) {
+    const root = raw.manualFinancialRecordEvents.find(event => event.recordId === expense.manualRecordId && event.sequence === 1)?.snapshot as unknown as ManualRecordSnapshot | undefined;
+    if (root?.original.status === 'ARCHIVED') {
+      if (!expense.storedReceiptFileName) throw new BackupFileConsistencyError('Festgeschriebenes Original fehlt.');
+      await readManualRecordOriginal(userId, expense.storedReceiptFileName, root.original);
+    }
+  }
   const endedAt = new Date().toISOString();
   const id = hashJson({ sourceUserId: userId, startedAt, endedAt, data: raw });
   return {

@@ -1,6 +1,7 @@
-import { assertExpenseNotSourceLinked, SourceLinkedExpenseError } from '@/lib/source-linked-expense';
+import { createManualExpense, updateManualExpense, deleteManualExpense, ExpenseMutationError } from '@/lib/expense-service';
+import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
+import { SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
-import { createFinancialAuditLog } from '@/lib/audit-log';
 /**
  * API v1 - Expenses Endpoint
  * 
@@ -13,7 +14,6 @@ import { createFinancialAuditLog } from '@/lib/audit-log';
 import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { inTransaction } from '@/lib/db-transaction';
 import {
   withApiAuth,
   apiSuccess,
@@ -21,12 +21,6 @@ import {
   handleCors,
   corsHeaders,
 } from '@/lib/api-auth';
-
-class ExpenseMutationError extends Error {
-  constructor(public readonly status: number, public readonly code: string, message: string) {
-    super(message);
-  }
-}
 
 function parsePositiveId(value: unknown, label: string): number {
   const text = String(value ?? '');
@@ -97,6 +91,7 @@ function parseCategory(value: unknown, required = false): string | null {
 }
 
 function mutationErrorResponse(error: unknown) {
+  if (error instanceof ManualFinancialRecordError) return apiError(error.message, error.status, error.code);
   if (error instanceof SourceLinkedExpenseError) return apiError(error.message, error.status, error.code);
   return error instanceof ExpenseMutationError ? apiError(error.message, error.status, error.code) : null;
 }
@@ -150,6 +145,7 @@ export async function GET(request: NextRequest) {
         take: pageSize,
         select: {
           id: true,
+          manualRecordState: true,
           description: true,
           amount: true,
           date: true,
@@ -207,36 +203,8 @@ async function postHandler(request: NextRequest) {
       const parsedTaxRelevant = taxRelevant === undefined ? true : parseTaxRelevant(taxRelevant);
       const parsedDeductible = parsePercentage(taxDeductiblePercentage, 100);
       const parsedDepreciation = parseDepreciationYears(depreciationYears);
-      const expense = await inTransaction(async tx => {
-        const created = await tx.expense.create({
-          data: {
-            description: description.trim(),
-            amount: parsedAmount,
-            date: parsedDate,
-            category: parsedCategory,
-            taxRelevant: parsedTaxRelevant,
-            taxDeductiblePercentage: parsedDeductible,
-            depreciationYears: parsedDepreciation,
-            userId,
-          },
-        });
-        await createFinancialAuditLog({
-          userId,
-          action: 'CREATE',
-          entityType: 'Expense',
-          entityId: created.id,
-          entityName: created.description,
-          newValues: created,
-          metadata: {
-            actorId: userId,
-            tenantId: userId,
-            operation: 'expense.create',
-            originalReference: `expense:${created.id}`,
-            reason: 'Expense created through API v1',
-          },
-        }, tx);
-        return created;
-      });
+      const expense = await createManualExpense(userId, { description: description.trim(), amount: parsedAmount, date: parsedDate, category: parsedCategory,
+        taxRelevant: parsedTaxRelevant, taxDeductiblePercentage: parsedDeductible, depreciationYears: parsedDepreciation });
 
       const response = apiSuccess(expense);
       response.headers.set('Location', `/api/v1/expenses/${expense.id}`);
@@ -288,43 +256,12 @@ async function putHandler(request: NextRequest) {
       const parsedDeductible = parsePercentage(taxDeductiblePercentage, 100);
       const parsedDepreciation = depreciationYears === undefined ? undefined : parseDepreciationYears(depreciationYears);
 
-      const result = await inTransaction(async tx => {
-        const existing = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
-        if (!existing) throw new ExpenseMutationError(404, 'NOT_FOUND', 'Expense not found');
-        await assertExpenseNotSourceLinked(tx, existing.id);
-        if (existing.cashTransaction) {
-          throw new ExpenseMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
-        }
-        const expense = await tx.expense.update({
-          where: { id: parsedId, AND: [{ userId }, { cashTransaction: { is: null } }] },
-          data: {
-            ...(description !== undefined && { description: description.trim() }),
-            ...(parsedAmount !== undefined && { amount: parsedAmount }),
-            ...(parsedDate !== undefined && { date: parsedDate }),
-            ...(parsedCategory !== undefined && { category: parsedCategory }),
-            ...(parsedTaxRelevant !== undefined && { taxRelevant: parsedTaxRelevant }),
-            ...(taxDeductiblePercentage !== undefined && { taxDeductiblePercentage: parsedDeductible }),
-            ...(depreciationYears !== undefined && { depreciationYears: parsedDepreciation }),
-          },
-        });
-        await createFinancialAuditLog({
-          userId,
-          action: 'UPDATE',
-          entityType: 'Expense',
-          entityId: expense.id,
-          entityName: expense.description,
-          oldValues: existing,
-          newValues: expense,
-          metadata: {
-            actorId: userId,
-            tenantId: userId,
-            operation: 'expense.update',
-            originalReference: `expense:${expense.id}`,
-            reason: 'Expense updated through API v1',
-          },
-        }, tx);
-        return { existing, expense };
-      });
+      const result = { expense: await updateManualExpense(userId, parsedId, {
+        ...(description !== undefined && { description: description.trim() }), ...(parsedAmount !== undefined && { amount: parsedAmount }),
+        ...(parsedDate !== undefined && { date: parsedDate }), ...(parsedCategory !== undefined && { category: parsedCategory }),
+        ...(parsedTaxRelevant !== undefined && { taxRelevant: parsedTaxRelevant }), ...(taxDeductiblePercentage !== undefined && { taxDeductiblePercentage: parsedDeductible }),
+        ...(depreciationYears !== undefined && { depreciationYears: parsedDepreciation }),
+      }) };
 
       const response = apiSuccess(result.expense);
       Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));
@@ -349,31 +286,7 @@ async function deleteHandler(request: NextRequest) {
 
     try {
       const parsedId = parsePositiveId(id, 'expense ID');
-      await inTransaction(async tx => {
-        const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
-        if (!current) throw new ExpenseMutationError(404, 'NOT_FOUND', 'Expense not found');
-        await assertExpenseNotSourceLinked(tx, current.id);
-        if (current.cashTransaction) {
-          throw new ExpenseMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
-        }
-        await tx.expense.delete({ where: { id: parsedId, AND: [{ userId }, { cashTransaction: { is: null } }] } });
-        await createFinancialAuditLog({
-          userId,
-          action: 'DELETE',
-          entityType: 'Expense',
-          entityId: current.id,
-          entityName: current.description,
-          oldValues: current,
-          metadata: {
-            actorId: userId,
-            tenantId: userId,
-            operation: 'expense.delete',
-            originalReference: `expense:${current.id}`,
-            reason: 'Expense deleted through API v1',
-          },
-        }, tx);
-        return current;
-      });
+      await deleteManualExpense(userId, parsedId);
 
       const response = apiSuccess({ deleted: true, id: parsedId });
       Object.entries(corsHeaders()).forEach(([key, value]) => response.headers.set(key, value));

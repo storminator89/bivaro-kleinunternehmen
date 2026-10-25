@@ -1,3 +1,4 @@
+import { assertManualRecordNotFinalized } from '@/lib/manual-financial-record-evidence';
 import { assertExpenseNotSourceLinked, SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { Prisma } from '@prisma/client';
 import { inTransaction } from '@/lib/db-transaction';
@@ -102,8 +103,9 @@ export async function createCashTransaction(userId: string, body: Record<string,
   const entry = await inTransaction(async tx => {
     if (!await tx.cashBook.findFirst({ where: { id: cashBookId, userId, isActive: true } })) throw new CashbookError('Kassenbuch nicht gefunden oder inaktiv', 404);
     if (incomeId) {
-      const income = await tx.income.findFirst({ where: { id: incomeId, userId }, select: { amount: true, date: true, paymentJournalEvent: { select: { id: true } }, cashTransaction: { select: { id: true } } } });
+      const income = await tx.income.findFirst({ where: { id: incomeId, userId }, select: { manualRecordState: true, amount: true, date: true, paymentJournalEvent: { select: { id: true } }, cashTransaction: { select: { id: true } } } });
       if (!income) throw new CashbookError('Einnahme nicht gefunden', 404);
+      assertManualRecordNotFinalized(income);
       if (income.paymentJournalEvent) {
         const rootId = income.paymentJournalEvent.id;
         const [binding, adjustment] = await Promise.all([
@@ -118,8 +120,9 @@ export async function createCashTransaction(userId: string, body: Record<string,
       }
     }
     if (expenseId) {
-      const expense = await tx.expense.findFirst({ where: { id: expenseId, userId }, select: { amount: true, date: true, cashTransaction: { select: { id: true } } } });
+      const expense = await tx.expense.findFirst({ where: { id: expenseId, userId }, select: { manualRecordState: true, amount: true, date: true, cashTransaction: { select: { id: true } } } });
       if (!expense) throw new CashbookError('Ausgabe nicht gefunden', 404);
+      assertManualRecordNotFinalized(expense);
       try { await assertExpenseNotSourceLinked(tx, expenseId); } catch (error) { if (error instanceof SourceLinkedExpenseError) throw new CashbookError(error.message, 409); throw error; }
       if (expense.cashTransaction) throw new CashbookError('Ausgabe ist bereits mit dem Kassenbuch verknüpft', 409);
       if (cents(expense.amount) !== cents(amount) || !sameBusinessDate(expense.date, date)) {
@@ -131,6 +134,9 @@ export async function createCashTransaction(userId: string, body: Record<string,
       category: textValue(body.category), receiptNumber: textValue(body.receiptNumber), notes: textValue(body.notes),
       taxRelevant: body.taxRelevant === undefined ? true : body.taxRelevant as boolean,
     } });
+    // Sticky lineage survives later cash unlinking. Never relabel journal/source origins.
+    if (incomeId) await tx.income.updateMany({ where: { id: incomeId, userId, manualRecordState: { not: 'FINALIZED' }, manualRecordOrigin: { in: ['MANUAL', 'LEGACY_UNKNOWN'] } }, data: { manualRecordOrigin: 'CASHBOOK', manualRecordRevision: { increment: 1 } } });
+    if (expenseId) await tx.expense.updateMany({ where: { id: expenseId, userId, manualRecordState: { not: 'FINALIZED' }, manualRecordOrigin: { in: ['MANUAL', 'LEGACY_UNKNOWN'] } }, data: { manualRecordOrigin: 'CASHBOOK', manualRecordRevision: { increment: 1 } } });
     await recalculateCashBalances(tx, cashBookId, userId, date);
     const persisted = await tx.cashTransaction.findUniqueOrThrow({ where: { id: created.id } });
     await createFinancialAuditLog({

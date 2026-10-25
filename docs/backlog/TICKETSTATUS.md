@@ -710,3 +710,78 @@ veröffentlichten kombinierten Heads** sind offen. Dieser einmalige additive
 Checkpoint behauptet weder diese Abnahme noch Veröffentlichung seiner lokalen
 Integration. Endergebnisse folgen ausschließlich im PR-Text, ohne erneute reine
 Dokumentations-Commit-Schleife. [Detaillierte Evidenz und verbleibende Gates](../testing/record-search-continuation.md).
+
+
+## 25.10.2026 — #54a lokal vorbereitet, nicht veröffentlicht oder abgenommen
+
+Basis ist akzeptiertes Main `db3098b8` nach #144/#130. Der getrennte, begrenzte
+#54a-Stand ergänzt bewusstes Festschreiben einzelner manueller EUR-Einnahmen/
+Ausgaben sowie begründete reine Betragskorrekturen mit unverändertem Original,
+Verlauf und genau einem wirksamen Finanzbetrag. Bestehende Altbestände bleiben
+ungeprüft; Festschreiben ändert weder Summen noch Zahlungsdatum. Web/v1-,
+CAS-/Audit-, Quellen-/Kassen-/Kundenschutz und strikte portable Backup-Nachweise
+sind als Quelltext vorbereitet, nicht funktional bestätigt. Identitätslose alte
+Finanzbackups werden beim Zusammenführen in festgeschriebene Ziele abgelehnt.
+
+Vollständiges Lint, separate Typprüfung, Prisma-Validierung/Client-Generierung
+ohne Datenbank sowie Basis-Diffprüfung bestanden. **Der normale Build ist nicht
+abgeschlossen**: zwei Abbrüche mit Exit 137; der zweite kompilierte erfolgreich
+und wurde danach während Nexts Typprüfung beendet. Keine umgangenen Guards,
+keine lokal ausgeführten Tests/Fixtures/Migrationen, keine neuen CI-Läufe und
+keine Veröffentlichung oder Bereitstellung. Die separat erhaltene #59-Browser-
+Quelle ist ebenfalls nur authored/not run; beide Issues bleiben offen.
+
+Vor Freigabe: dann akzeptiertes Main inklusive #145/#146 vollständig übernehmen,
+bestehende Workflow-/Galerieänderungen erhalten, unabhängige strikte 12-Bild-
+Partition für #54 hinzufügen und vollständige hosted Build-/Test-/Browser- und
+tatsächliche Bildprüfung des exakten Heads durchführen. Historische 160 Tickets,
+Statussummen und #144-Provenienz bleiben unverändert.
+[Umfang, tatsächliche Checks und offene Gates](../testing/manual-financial-records-54a.md).
+
+
+## 25.10.2026, 11:43 — #54a/#59: Entwurfsveröffentlichung und hosted Abnahme freigegeben
+
+Die konkrete Freigabe umfasst den Entwurfs-PR für #54a mit separatem #59-
+Browsernachweis sowie vollständige GitHub-CI und Browserprüfung, **ohne Merge,
+Deployment oder Issue-Abschluss**. Akzeptiertes Main `0ed1130` (#145) wird
+vollständig erhalten. Die noch ungemergten PRs #146 (README/Galerie) und #147
+(Eingangslisten-Filterkorrektur) sind nicht stillschweigend enthalten.
+
+Eine unabhängige 12-Bild-Partition ergänzt die bytegleich erhaltenen 220 Namen/
+31 MiB auf 232 Namen/34 MiB. Pro Eingabe gilt 1 MiB, zusammen 6 MiB Eingabe und
+3 MiB zusätzliche verlustfreie Ausgabe; alle alten Gates bleiben erhalten.
+Quellenabhängige Wiederherstellungen behalten ihren bestehenden Mandanten-
+Remap-Vertrag; #54 übernimmt daraus keine manuelle Festschreibungshistorie.
+
+Die früheren beiden lokalen Buildabbrüche bleiben als unvollständiger Build
+ausgewiesen. Keine lokalen Funktionstests oder Migrationen werden nachgeholt.
+Tatsächliche hosted Ergebnisse, korrigierte Fehler und Bildprüfung werden beim
+exakten veröffentlichten Head im PR-Text festgehalten, nicht vorweggenommen.
+
+## 25.10.2026, 13:57 — #54a/#59: erster Hosted-Versuch fehlgeschlagen, Recovery vorbereitet
+
+Entwurfs-PR [#148](https://github.com/storminator89/bivaro-kleinunternehmen/pull/148),
+Head `104697bc`, Tree `6fb8772d`: Unit **4424 bestanden / 15 fehlgeschlagen /
+20 übersprungen**; Browser **181 bestanden / 10 fehlgeschlagen**. Lint/Typen,
+Security, beide Container-Smokes und beide PDF/A-Jobs bestanden. Der abhängige
+CI-Build wurde übersprungen; der normale Produktionsbuild im Browserrunner
+einschließlich Vor-/Nachbuild und Next-Typprüfung bestand. Lokale Buildabbrüche
+bleiben unvollständig; keine lokalen Funktionstests wurden nachgeholt.
+
+Der unveränderte Vollständigkeits-Verifier lehnt die erste Bildlieferung ab:
+222/232 individuell verlustfrei verifiziert, acht Cashflow- und zwei EÜR-Bilder
+fehlen. Alle zwölf neuen nativen Dialogbilder wurden tatsächlich angesehen;
+das ersetzt weder fehlende Bilder noch fehlgeschlagene Funktionen.
+
+Begrenzte echte UI-/Create-Vertragsregressionen sowie Test-Harness-/Fixturefehler
+sind privat korrigiert und unabhängig quellgeprüft, nicht funktional bestätigt.
+Akzeptiertes #146-Main `f183d238` bleibt vollständig erhalten: 235 bestehende
+plus zwölf eigene Bilder, 247 eindeutige Namen / 40 MiB Ausgabebudget. Die einzeln
+quellgeprüfte #149-Testkorrektur `60f3ac88` wird ausdrücklich als ungemergte
+Abhängigkeit übernommen, nicht als Bestandteil dieses Main ausgegeben. Ihre
+terminale Bestätigung bleibt vor dem nächsten Push erforderlich.
+
+Der nächste veröffentlichte Head benötigt erneut alle Hosted-Gates und finale
+Bildkontrolle; keine Abnahme oder Schließung. Historische 160 Ticketobjekte,
+Statussummen und bisherige Checkpoints bleiben unverändert. Endergebnisse folgen
+im PR-Text, ohne reine Dokumentationsschleife.

@@ -1,3 +1,4 @@
+import { supportsManualFinancialRecords } from '@/lib/manual-financial-record-backup';
 import {
   CURRENT_BACKUP_VERSION,
   backupSchemaSupportsPaymentJournal,
@@ -35,6 +36,7 @@ export type BackupPreview = {
     billingNotes: number;
     expenses: number;
     incomes: number;
+    manualFinancialRecordEvents: number;
     paymentJournalEvents: number;
     paymentAdjustments: number;
     paymentOperations: number;
@@ -107,6 +109,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     billingNotes: countArray(data, 'billingNotes'),
     expenses: countArray(data, 'expenses'),
     incomes: countArray(data, 'incomes'),
+    manualFinancialRecordEvents: countArray(data, 'manualFinancialRecordEvents'),
     paymentJournalEvents: countArray(data, 'paymentJournalEvents'),
     paymentAdjustments: countArray(data, 'paymentAdjustments'),
     paymentOperations: countArray(data, 'paymentOperations'),
@@ -127,6 +130,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   };
 
   const warnings: string[] = [];
+  if (counts.manualFinancialRecordEvents > 0) warnings.push('Manuelle Festschreibungen und reine Betragskorrekturen sind unveränderliche Nachweise, keine zusätzlichen Geldbewegungen. Gleiche UUIDs werden nur bei exakt gleichem vollständigem Verlauf und wirksamer Projektion wiederverwendet; ältere, neuere oder abweichende Zielketten brechen ab. JSON enthält keine Originaldateien; neue archivierte Originalbindungen benötigen ZIP.');
   let manifest: BackupPreview['manifest'];
   if (candidate.version === CURRENT_BACKUP_VERSION) {
     manifest = validateBackupManifest(candidate.manifest, data);
@@ -135,6 +139,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   } else {
     warnings.push(`Backup-Version ${candidate.version} kann inkompatibel sein.`);
   }
+  if (!supportsManualFinancialRecords(manifest?.schemaVersion) && (counts.incomes > 0 || counts.expenses > 0)) warnings.push('Ältere Finanzeinträge besitzen keine portablen Festschreibungsidentitäten. Zusammenführen in ein Ziel mit festgeschriebenen manuellen Einträgen wird vor allen Änderungen abgelehnt, um doppelte Geldbeträge zu vermeiden. Dafür ein separates leeres Ziel zur Prüfung verwenden.');
   if (!backupSchemaSupportsSupplierTasks(manifest?.schemaVersion)) warnings.push('Dieses ältere Backup enthält keine Lieferanten-Vormerkungen; es erfindet oder reaktiviert keine Aufgaben.');
   if (Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(document => document && typeof document === 'object' && (document as Record<string, unknown>).supplierTaskKind != null)) warnings.push('Lieferanten-Vormerkungen bleiben interne Aufgaben: nicht bezahlt oder bankgeprüft. Wiederherstellung löst keine Zahlung, Buchung oder Benachrichtigung aus.');
   if (!backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion)) warnings.push('Dieses ältere Backup enthält keine Zuordnungsprofile. Bestehende Zielprofile und ihre Löschbelege bleiben unverändert.');

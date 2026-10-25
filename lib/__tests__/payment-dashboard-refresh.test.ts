@@ -54,7 +54,7 @@ describe('saved-payment dashboard refresh', () => {
       expect(dashboard).toContain('return () => controller.abort()');
     } finally { vi.unstubAllGlobals(); client.clear(); }
   });
-  it.each(['invoices', 'incomes', 'summary'])('propagates an active %s refetch failure and retries reads only', async resource => {
+  it.each(['invoices', 'incomes', 'expenses', 'summary'])('propagates an active %s refetch failure and retries reads only', async resource => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
     const queryKey = ['dashboard', resource];
     const fetchList = vi.fn().mockRejectedValueOnce(new Error('Refresh unavailable')).mockResolvedValueOnce({ items: ['saved-payment'] });
@@ -71,15 +71,15 @@ describe('saved-payment dashboard refresh', () => {
     } finally { unsubscribe(); client.clear(); }
   });
 
-  it('invalidates inactive invoice/Income lists without an eager fetch and keeps unrelated expenses untouched', async () => {
+  it('invalidates inactive invoice/income/expense lists without an eager fetch for manual lifecycle refresh', async () => {
     const client = new QueryClient();
-    const resources = ['invoices', 'incomes', 'summary', 'assets', 'year-comparison', 'filter-options', 'reminders'];
+    const resources = ['invoices', 'incomes', 'expenses', 'summary', 'assets', 'year-comparison', 'filter-options', 'reminders'];
     resources.forEach(resource => client.setQueryData(['dashboard', resource], { previous: true }));
     client.setQueryData(['dashboard', 'expenses'], { previous: true });
     try {
       await refreshPaymentDashboardLists(client);
       resources.forEach(resource => expect(client.getQueryState(['dashboard', resource])?.isInvalidated).toBe(true));
-      expect(client.getQueryState(['dashboard', 'expenses'])?.isInvalidated).toBe(false);
+      expect(client.getQueryState(['dashboard', 'expenses'])?.isInvalidated).toBe(true);
     } finally { client.clear(); }
   });
 

@@ -5,6 +5,9 @@ import { DailyActionsPanel } from "@/components/daily-actions/daily-actions-work
 import { PageHeader } from "@/components/page-header";
 import { GettingStarted } from "@/components/onboarding/getting-started";
 import { toast } from 'sonner';
+import { useSession } from "next-auth/react";
+import { reviewSessionKey } from "@/components/purchases/incoming-review-history";
+import { useReviewNavigation } from "@/components/purchases/use-review-navigation";
 import React, { useEffect, useState } from 'react';
 import { Plus, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -24,6 +27,10 @@ import {
   CreditNoteModal
 } from "@/components/dashboard/modals";
 import { RecurringExpensesModal } from "@/components/dashboard/modals/recurring-expenses-modal";
+import { protectedManualRecordState } from "@/components/manual-financial-records/manual-record-client";
+import { ManualRecordDialog } from "@/components/manual-financial-records/manual-record-dialog";
+import type { ManualRecordOpener } from "@/components/manual-financial-records/manual-record-status";
+import type { ManualFinancialRecordState, ManualFinancialRecordDto } from "@/lib/manual-financial-record-contract";
 import { FullPaymentDialog } from "@/components/dashboard/full-payment-dialog";
 import {
   Expense,
@@ -41,6 +48,9 @@ import { useDashboardCreateAction } from "@/hooks/use-dashboard-create-action";
 import { buildEURCSVFromFreshSummary } from "@/lib/eur-csv-export";
 
 export function DashboardContent() {
+  const { data: dashboardSession, status: dashboardSessionStatus } = useSession();
+  const dashboardSessionKey = reviewSessionKey(dashboardSession, dashboardSessionStatus);
+  const requestReviewNavigation = useReviewNavigation();
   // URL-Parameter für Tab-Auswahl
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -75,6 +85,14 @@ export function DashboardContent() {
     }
   }, [tabParam, activeTab]);
 
+  const [manualSelection, setManualSelection] = useState<{ kind: 'income' | 'expense'; id: number; opener: HTMLButtonElement; sessionKey: string } | null>(null);
+  const [manualCache, setManualCache] = useState<{ sessionKey: string; states: Record<string, ManualFinancialRecordState> }>({ sessionKey: dashboardSessionKey, states: {} });
+  const manualOverrides = manualCache.sessionKey === dashboardSessionKey ? manualCache.states : {};
+  const openManualRecord: ManualRecordOpener = (kind, id, opener) => setManualSelection({ kind, id, opener, sessionKey: dashboardSessionKey });
+  const observeManualRecord = (record: ManualFinancialRecordDto) => {
+    if (manualSelection?.sessionKey !== dashboardSessionKey || record.state !== 'FINALIZED') return;
+    setManualCache(current => ({ sessionKey: dashboardSessionKey, states: { ...(current.sessionKey === dashboardSessionKey ? current.states : {}), [`${record.kind}:${record.id}`]: record.state } }));
+  };
   // Modal States
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editType, setEditType] = useState<'expense' | 'income'>('expense');
@@ -147,8 +165,10 @@ export function DashboardContent() {
 
   // Tab-Änderung
   const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    router.push(`/dashboard?tab=${value}`, { scroll: false });
+    requestReviewNavigation(() => {
+      setActiveTab(value);
+      router.push(`/dashboard?tab=${value}`, { scroll: false });
+    });
   };
 
   // Form States
@@ -273,8 +293,10 @@ export function DashboardContent() {
   ]);
 
   // Daten werden serverseitig gefiltert, hier nur Alias für Anzeige
-  const filteredExpenses = expenses;
-  const filteredIncomes = incomes;
+  // Keep the immutable finalized protection if a later list read fails. No
+  // amount is cached here: stale overrides must never mask cross-tab corrections.
+  const filteredExpenses = expenses.map(item => ({ ...item, manualRecordState: protectedManualRecordState(item.manualRecordState, manualOverrides[`expense:${item.id}`]) }));
+  const filteredIncomes = incomes.map(item => ({ ...item, manualRecordState: protectedManualRecordState(item.manualRecordState, manualOverrides[`income:${item.id}`]) }));
 
   // Rechnungen sortieren
   const sortedInvoices = [...invoices].sort((a, b) => {
@@ -490,6 +512,7 @@ export function DashboardContent() {
 
   // Bearbeitungs- und Löschfunktionen
   const openEditModal = (item: Expense | Income, type: 'expense' | 'income', isDuplicate: boolean = false) => {
+    if (item.manualRecordState === 'FINALIZED' || manualOverrides[`${type}:${item.id}`] === 'FINALIZED') return;
     const editData: DashboardEditData = {
       ...item,
       amount: item.amount.toString()
@@ -570,6 +593,8 @@ export function DashboardContent() {
   };
 
   const handleDelete = (id: number, type: 'expense' | 'income') => {
+    const row = (type === 'expense' ? filteredExpenses : filteredIncomes).find(item => item.id === id);
+    if (row?.manualRecordState === 'FINALIZED') return;
     setItemToDelete({ id, type });
     setDeleteModalOpen(true);
   };
@@ -933,6 +958,7 @@ export function DashboardContent() {
               isExportingReceipts={isExportingReceipts}
               exportError={exportError}
               onExportReceipts={handleExportReceipts}
+              onManualRecord={openManualRecord}
               onEdit={(expense) => openEditModal(expense, 'expense')}
               onDuplicate={(expense) => handleDuplicate(expense, 'expense')}
               onDelete={(id) => handleDelete(id, 'expense')}
@@ -968,6 +994,7 @@ export function DashboardContent() {
               isExportingDocuments={isExportingIncomeDocuments}
               exportError={incomeExportError}
               onExportDocuments={handleExportIncomeDocuments}
+              onManualRecord={openManualRecord}
               onEdit={(income) => openEditModal(income, 'income')}
               onDuplicate={(income) => handleDuplicate(income, 'income')}
               onDelete={(id) => handleDelete(id, 'income')}
@@ -1154,6 +1181,7 @@ export function DashboardContent() {
         />
 
         {/* Wiederkehrende Ausgaben Modal */}
+        {manualSelection && manualSelection.sessionKey === dashboardSessionKey && <ManualRecordDialog key={`${manualSelection.kind}:${manualSelection.id}`} selection={manualSelection} onClose={() => setManualSelection(null)} onRecord={observeManualRecord} onRefresh={refreshPaymentLists} />}
         <RecurringExpensesModal
           isOpen={recurringExpensesModalOpen}
           onClose={() => setRecurringExpensesModalOpen(false)}

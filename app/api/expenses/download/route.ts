@@ -1,3 +1,4 @@
+import { finalizedManualRecordOriginal, readManualRecordOriginalBytes, ManualFinancialRecordError } from '@/lib/manual-financial-record-service';
 import { readPurchaseOriginal } from '@/lib/purchase-documents/original';
 import { PurchaseDocumentError } from '@/lib/purchase-documents/errors';
 import { NextRequest, NextResponse } from 'next/server';
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     // Ausgabe mit dem angegebenen ID abrufen
     const expense = await prisma.expense.findUnique({
       where: { id: Number(id), userId },
-      include: { purchaseDocument: { select: { userId: true, storedFileName: true, originalSha256: true, originalByteCount: true, mediaType: true, reviewStatus: true } } },
+      include: { manualRecordEvents: { where: { sequence: 1 }, select: { snapshot: true } }, purchaseDocument: { select: { userId: true, storedFileName: true, originalSha256: true, originalByteCount: true, mediaType: true, reviewStatus: true } } },
     });
 
     if (!expense) {
@@ -40,6 +41,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const manualOriginal = finalizedManualRecordOriginal(expense, expense.manualRecordEvents);
+    if (manualOriginal?.status === 'ARCHIVED' && !expense.storedReceiptFileName) throw new ManualFinancialRecordError(409, 'MANUAL_RECORD_ORIGINAL_UNAVAILABLE', 'Das festgeschriebene Original fehlt.');
     if (!expense.storedReceiptFileName) {
       return NextResponse.json(
         { error: 'Kein Beleg für diese Ausgabe vorhanden' },
@@ -54,6 +57,7 @@ export async function GET(request: NextRequest) {
     // guarded legacy fallback that checks all DB references for ownership.
     const filePath = await findOwnedUploadedFile(userId, expense.storedReceiptFileName);
 
+    if (!filePath && manualOriginal?.status === 'ARCHIVED') throw new ManualFinancialRecordError(409, 'MANUAL_RECORD_ORIGINAL_UNAVAILABLE', 'Das festgeschriebene Original fehlt.');
     if (!filePath && !source) {
       return NextResponse.json(
         { error: 'Datei nicht gefunden' },
@@ -62,7 +66,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Datei einlesen
-    const fileBuffer = source ? await readPurchaseOriginal(source) : await readFile(filePath!);
+    const fileBuffer = manualOriginal?.status === 'ARCHIVED' ? (await readManualRecordOriginalBytes(userId, expense.storedReceiptFileName, manualOriginal)).bytes : source ? await readPurchaseOriginal(source) : await readFile(filePath!);
 
     // Content-Type bestimmen basierend auf der Dateierweiterung
     const fileExtension = path.extname(expense.storedReceiptFileName).toLowerCase();
@@ -105,6 +109,7 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
+    if (error instanceof ManualFinancialRecordError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof PurchaseDocumentError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();

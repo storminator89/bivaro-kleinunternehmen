@@ -1,3 +1,4 @@
+import { validateManualRecordOriginalManifest } from '@/lib/manual-financial-record-backup';
 import { validateQuoteOriginalManifest } from '@/lib/quote-create-backup';
 import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
 import { NextResponse } from 'next/server';
@@ -153,6 +154,7 @@ export async function GET() {
     }
 
     validateQuoteOriginalManifest(data, fileManifest, true);
+    validateManualRecordOriginalManifest(data, fileManifest, true);
     const backup = {
       version: CURRENT_BACKUP_VERSION,
       type: 'full',

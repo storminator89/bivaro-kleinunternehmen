@@ -33,6 +33,7 @@ export async function executeRecurringExpenses(userId: string, id?: number, at =
         if (existing) await assertExpenseNotSourceLinked(tx, existing.id);
         if (!existing) {
           const created = await tx.expense.create({ data: {
+            manualRecordOrigin: 'RECURRING',
             ...key, userId, description: recurring.description, amount: recurring.amount,
             date: current, category: recurring.category, taxRelevant: recurring.taxRelevant,
             taxDeductiblePercentage: recurring.taxDeductiblePercentage,
