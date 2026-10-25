@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
 const start = workflow.indexOf('      # Independent record-search partition:');
 const accepted = workflow.slice(0, start).trimEnd() + '\n';
-const partition = workflow.slice(start);
+const end = workflow.indexOf('      # Independent manual-financial-record partition:', start);
+const partition = workflow.slice(start, end < 0 ? undefined : end);
 const browser = readFileSync('e2e/record-search.spec.ts', 'utf8');
 const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\n\s*\}/g)]
   .flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
@@ -19,7 +20,7 @@ describe('bounded record-search continuation hosted visual evidence', () => {
   });
   it('adds exactly three disjoint required captures with independent 1/2/1 MiB bounds and fail-closed delivery', () => {
     expect(namesIn(partition).sort()).toEqual([360, 390, 1440].map(width => `record-search-continuation-${width}.png`).sort());
-    expect(namesIn(workflow)).toHaveLength(220); expect(new Set(namesIn(workflow)).size).toBe(220);
+    expect(namesIn(accepted + partition)).toHaveLength(220); expect(new Set(namesIn(accepted + partition)).size).toBe(220);
     expect(namesIn(partition).some(name => namesIn(accepted).includes(name))).toBe(false);
     for (const value of ['limit = 1 * 1024 * 1024', 'per_file_input_limit = 1 * 1024 * 1024',
       'total > 2 * 1024 * 1024', 'actual_input_bytes > 2 * 1024 * 1024',

@@ -1,3 +1,4 @@
+import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
 import { protectMutation } from '@/lib/request-security';
 /**
  * API v1 - Cash Book Endpoint
@@ -122,6 +123,7 @@ async function mutate(request: NextRequest, method: 'POST' | 'PUT' | 'DELETE') {
       const response = apiSuccess(entry);
       return new Response(response.body, { status: method === 'POST' ? 201 : 200, headers: response.headers });
     } catch (error) {
+      if (error instanceof ManualFinancialRecordError) return apiError(error.message, error.status, error.code);
       if (error instanceof CashbookError) return apiError(error.message, error.status);
       throw error;
     }

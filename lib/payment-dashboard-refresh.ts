@@ -52,7 +52,7 @@ export async function refreshPaymentDashboardLists(queryClient: QueryClient): Pr
   await invalidatePaymentDashboardQueries(queryClient);
 }
 export async function invalidatePaymentDashboardQueries(queryClient: QueryClient): Promise<void> {
-  await Promise.all(['invoices', 'incomes', 'summary', 'assets', 'year-comparison', 'filter-options', 'reminders'].map(resource =>
+  await Promise.all(['invoices', 'incomes', 'expenses', 'summary', 'assets', 'year-comparison', 'filter-options', 'reminders'].map(resource =>
     queryClient.invalidateQueries({ queryKey: ['dashboard', resource] }, { throwOnError: true }),
   ));
 }

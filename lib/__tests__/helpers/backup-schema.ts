@@ -1,4 +1,25 @@
+import { supportsManualFinancialRecords } from '@/lib/manual-financial-record-backup';
+import { MANUAL_RECORD_UUID } from '@/lib/manual-financial-record-evidence';
 import { backupSchemaSupportsSupplierTasks, backupSchemaSupportsBankMappingProfiles, backupSchemaSupportsDocumentNumberingPolicies, backupSchemaSupportsBankPaymentAllocations, backupSchemaSupportsBankImportEvidence, backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
+/** Only empty, unreviewed generated metadata may be removed for a genuine
+ * historical fixture. Real history, finalized/recorded states and malformed
+ * partial evidence must remain visible and fail the old runtime contract. */
+export function stripEmptyManualFinancialRecordsForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string; sha256?: string }[] } }) {
+  if (supportsManualFinancialRecords(backup.manifest.schemaVersion)) return;
+  const events = backup.data.manualFinancialRecordEvents;
+  if (Object.hasOwn(backup.data, 'manualFinancialRecordEvents') && (!Array.isArray(events) || events.length !== 0)) return;
+  if (Array.isArray(events) && events.length === 0) delete backup.data.manualFinancialRecordEvents;
+  backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => entry.model !== 'ManualFinancialRecordEvent');
+  for (const [key, model] of [['incomes', 'Income'], ['expenses', 'Expense']]) {
+    const collection = backup.data[key]; if (!Array.isArray(collection)) continue;
+    for (const row of collection) {
+      if (!row || typeof row !== 'object' || row.manualRecordState !== 'LEGACY_UNREVIEWED' || row.manualRecordRevision !== 0 || !MANUAL_RECORD_UUID.test(String(row.manualRecordId)) || !['LEGACY_UNKNOWN', 'INVOICE', 'PAYMENT_JOURNAL', 'CASHBOOK', 'PURCHASE_DOCUMENT', 'RECURRING'].includes(row.manualRecordOrigin)) continue;
+      for (const field of ['manualRecordId', 'manualRecordState', 'manualRecordOrigin', 'manualRecordRevision']) delete row[field];
+    }
+    const coverage = backup.manifest.modelCoverage.find(entry => entry.model === model); if (coverage) coverage.sha256 = hashJson(collection);
+  }
+}
+
 /** Construct a genuine pre-CSV fixture, rather than relabelling a future schema. */
 export function stripCsvCatalogForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
   stripEmptyPaymentAdjustmentsForLegacy(backup);
@@ -52,6 +73,8 @@ export function stripEmptyPaymentAdjustmentsForLegacy(backup: { data: Record<str
 }
 export function legacyPaymentData<T extends Record<string, unknown>>(data: T): T {
   const copy = { ...data };
+  for (const key of ['incomes', 'expenses']) if (Array.isArray(copy[key])) Object.assign(copy, { [key]: (copy[key] as Record<string, unknown>[]).map(row => ({ ...row })) });
+  stripEmptyManualFinancialRecordsForLegacy({ data: copy, manifest: { modelCoverage: [] } });
   for (const key of ['bankMappingProfiles', 'bankMappingProfileRevisions', 'documentNumberingPolicies', 'quoteCreateReceipts', 'bankPaymentBindings', 'paymentAllocationChanges', 'bankImportBatches', 'bankImportRows', 'purchaseValidationReports', 'paymentAdjustments', 'paymentOperations']) if (Array.isArray(copy[key]) && (copy[key] as unknown[]).length === 0) delete copy[key];
   if (Array.isArray(copy.purchaseDocuments)) Object.assign(copy, { purchaseDocuments: copy.purchaseDocuments.map(document => { const row = { ...document }; if (row.supplierTaskKind == null && row.supplierTaskFollowUpDate == null && (row.supplierTaskConfirmationRequired === false || row.supplierTaskConfirmationRequired === undefined)) { delete row.supplierTaskKind; delete row.supplierTaskFollowUpDate; delete row.supplierTaskConfirmationRequired; } return row; }) });
   if (Array.isArray(copy.paymentJournalEvents)) Object.assign(copy, { paymentJournalEvents: copy.paymentJournalEvents.map(root => { const row = { ...root }; if (row.bankPaymentBindingStableKey === null) delete row.bankPaymentBindingStableKey; return row; }) });
@@ -114,6 +137,7 @@ export function stripEmptyBankImportsForLegacy(backup: { data: Record<string, un
 
 /** Strip only provably empty newer task fields; real task evidence never masquerades as historical. */
 export function stripEmptySupplierTasksForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string; sha256?: string }[] } }) {
+  stripEmptyManualFinancialRecordsForLegacy(backup);
   if (backupSchemaSupportsSupplierTasks(backup.manifest.schemaVersion) || !Array.isArray(backup.data.purchaseDocuments)) return;
   for (const document of backup.data.purchaseDocuments) {
     if (document.supplierTaskKind == null && document.supplierTaskFollowUpDate == null && (document.supplierTaskConfirmationRequired === false || document.supplierTaskConfirmationRequired === undefined)) {

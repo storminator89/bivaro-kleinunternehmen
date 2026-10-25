@@ -4,6 +4,8 @@ import styles from './cashflow-workspace.module.css';
 
 import { LedgerSortControl, SortableLedgerHead } from '@/components/dashboard/ledger-sort-control';
 import React from 'react';
+import { IncomeRowActions } from '@/components/manual-financial-records/income-row-actions';
+import type { ManualRecordOpener } from '@/components/manual-financial-records/manual-record-status';
 import Link from 'next/link';
 import { QueryFeedback } from '@/components/dashboard/query-feedback';
 import { DashboardIcon } from "@/components/brand/dashboard-icon";
@@ -20,12 +22,6 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Income, Customer, FilterState } from "@/types/dashboard";
 import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
@@ -82,6 +78,7 @@ type IncomesTabProps = {
   onExportDocuments: () => void;
 
   // Actions
+  onManualRecord?: ManualRecordOpener;
   onEdit: (income: Income) => void;
   onDuplicate: (income: Income) => void;
   onDelete: (id: number) => void;
@@ -113,6 +110,7 @@ export function IncomesTab({
   isExportingDocuments,
   exportError,
   onExportDocuments,
+  onManualRecord,
   onEdit,
   onDuplicate,
   onDelete,
@@ -405,9 +403,7 @@ export function IncomesTab({
                 </div>
                 <IncomeInvoiceAttribution income={income} /><p className="text-xs text-muted-foreground">{income.taxRelevant ? 'Steuerrelevant' : 'Nicht steuerrelevant'}</p>
                 <div className={styles.recordActions}>
-                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => onEdit(income)}>Bearbeiten</Button>
-                  <Button variant="outline" size="sm" className="min-h-11" onClick={() => onDuplicate(income)}>Duplizieren</Button>
-                  <Button variant="ghost" size="sm" className="min-h-11 text-destructive" disabled={isDeleting} onClick={() => onDelete(income.id)}>Löschen</Button>
+                  <IncomeRowActions income={income} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} isDeleting={isDeleting} onManualRecord={onManualRecord} />
                 </div>
               </article>
             )) : (
@@ -470,63 +466,7 @@ export function IncomesTab({
                       </TableCell>
                       <TableCell className="text-right font-medium text-positive">{formatCurrency(income.amount)}</TableCell>
                       <TableCell className="text-right">
-                        <TooltipProvider>
-                          <div className="flex justify-end space-x-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  aria-label={`${income.description} duplizieren`}
-                                  onClick={() => onDuplicate(income)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h6a2 2 0 002-2v-8a2 2 0 00-2-2h-6a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Duplizieren</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  aria-label={`${income.description} bearbeiten`}
-                                  onClick={() => onEdit(income)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Bearbeiten</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  aria-label={`${income.description} löschen`}
-                                  className="border-critical/30 text-critical hover:bg-critical-surface"
-                                  onClick={() => onDelete(income.id)}
-                                  disabled={isDeleting}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Löschen</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TooltipProvider>
+                        <IncomeRowActions income={income} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} isDeleting={isDeleting} onManualRecord={onManualRecord} compact />
                       </TableCell>
                     </TableRow>
                   ))

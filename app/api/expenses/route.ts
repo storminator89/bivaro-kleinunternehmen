@@ -1,12 +1,12 @@
-import { assertExpenseNotSourceLinked, SourceLinkedExpenseError } from '@/lib/source-linked-expense';
+import { createManualExpense, updateManualExpense, deleteManualExpense, ExpenseMutationError } from '@/lib/expense-service';
+import { ManualFinancialRecordError, manualRecordAmount } from '@/lib/manual-financial-record-evidence';
+import { SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { protectMutation } from '@/lib/request-security';
 import { parseLedgerSort, LedgerSortError } from '@/lib/ledger-sort';
 import { NextResponse, NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
-import { createFinancialAuditLog } from '@/lib/audit-log';
-import { inTransaction } from '@/lib/db-transaction';
 import { deleteTenantFile, writeTenantFile } from '@/lib/upload-path';
 import {
   isFiniteNumber,
@@ -46,6 +46,7 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
       }
 
+      manualRecordAmount(amount);
       const parsedAmount = Number(amount);
       if (!isFiniteNumber(parsedAmount)) {
         return NextResponse.json({ error: 'Ungültiger Betrag' }, { status: 400 });
@@ -102,38 +103,8 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
       }
       try {
-        const expense = await inTransaction(async tx => {
-          const created = await tx.expense.create({
-            data: {
-              description,
-              amount: parsedAmount,
-              date: parsedDate,
-              category: category || null,
-              taxRelevant,
-              taxDeductiblePercentage: parsedDeductible,
-              receiptFileName,
-              storedReceiptFileName,
-              depreciationYears: parsedDepreciation,
-              userId,
-            },
-          });
-          await createFinancialAuditLog({
-            userId,
-            action: 'CREATE',
-            entityType: 'Expense',
-            entityId: created.id,
-            entityName: created.description,
-            newValues: created,
-            metadata: {
-              actorId: userId,
-              tenantId: userId,
-              operation: 'expense.create',
-              originalReference: `expense:${created.id}`,
-              reason: 'Expense created',
-            },
-          }, tx);
-          return created;
-        });
+        const expense = await createManualExpense(userId, { description, amount: parsedAmount, date: parsedDate, category: category || null, taxRelevant,
+          taxDeductiblePercentage: parsedDeductible, receiptFileName, storedReceiptFileName, depreciationYears: parsedDepreciation });
 
         return NextResponse.json(expense);
       } catch (error) {
@@ -158,6 +129,7 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
       }
 
+      manualRecordAmount(amount);
       const parsedAmount = Number(amount);
       const parsedDeductible = taxDeductiblePercentage === undefined || taxDeductiblePercentage === null
         ? 100
@@ -192,40 +164,13 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
       }
 
-      const expense = await inTransaction(async tx => {
-        const created = await tx.expense.create({
-          data: {
-            description: descriptionText,
-            amount: parsedAmount,
-            date: parsedDate,
-            category: categoryText,
-            taxRelevant: parsedTaxRelevant,
-            taxDeductiblePercentage: parsedDeductible,
-            depreciationYears: parsedDepreciation,
-            userId,
-          },
-        });
-        await createFinancialAuditLog({
-          userId,
-          action: 'CREATE',
-          entityType: 'Expense',
-          entityId: created.id,
-          entityName: created.description,
-          newValues: created,
-          metadata: {
-            actorId: userId,
-            tenantId: userId,
-            operation: 'expense.create',
-            originalReference: `expense:${created.id}`,
-            reason: 'Expense created',
-          },
-        }, tx);
-        return created;
-      });
+      const expense = await createManualExpense(userId, { description: descriptionText, amount: parsedAmount, date: parsedDate, category: categoryText,
+        taxRelevant: parsedTaxRelevant, taxDeductiblePercentage: parsedDeductible, depreciationYears: parsedDepreciation });
 
       return NextResponse.json(expense);
     }
   } catch (error: unknown) {
+    if (error instanceof ManualFinancialRecordError || error instanceof ExpenseMutationError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
@@ -384,44 +329,11 @@ async function putHandler(request: Request) {
       return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
     }
 
-    const result = await inTransaction(async (tx) => {
-      const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
-      if (!current) throw new Error('Ausgabe nicht gefunden');
-      await assertExpenseNotSourceLinked(tx, current.id);
-      if (current.cashTransaction) throw new Error('Mit dem Kassenbuch verknüpfte Ausgaben müssen dort geändert werden');
-      const updated = await tx.expense.update({
-        where: { id: parsedId, userId },
-        data: {
-          description: descriptionText,
-          amount: parsedAmount,
-          date: parsedDate,
-          category: categoryText,
-          taxRelevant: parsedTaxRelevant,
-          taxDeductiblePercentage: parsedDeductible,
-          receiptUrl: receiptUrlText,
-          depreciationYears: parsedDepreciation,
-        },
-      });
-      await createFinancialAuditLog({
-        userId,
-        action: 'UPDATE',
-        entityType: 'Expense',
-        entityId: updated.id,
-        entityName: updated.description,
-        oldValues: current,
-        newValues: updated,
-        metadata: {
-          actorId: userId,
-          tenantId: userId,
-          operation: 'expense.update',
-          originalReference: `expense:${updated.id}`,
-          reason: 'Expense updated',
-        },
-      }, tx);
-      return updated;
-    });
+    const result = await updateManualExpense(userId, parsedId, { description: descriptionText, amount: parsedAmount, date: parsedDate,
+      category: categoryText, taxRelevant: parsedTaxRelevant, taxDeductiblePercentage: parsedDeductible, receiptUrl: receiptUrlText, depreciationYears: parsedDepreciation });
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ManualFinancialRecordError || error instanceof ExpenseMutationError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
@@ -456,31 +368,11 @@ async function deleteHandler(request: Request) {
       return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 });
     }
 
-    await inTransaction(async (tx) => {
-      const current = await tx.expense.findFirst({ where: { id: parsedId, userId }, include: { cashTransaction: true } });
-      if (!current) throw new Error('Ausgabe nicht gefunden');
-      await assertExpenseNotSourceLinked(tx, current.id);
-      if (current.cashTransaction) throw new Error('Mit dem Kassenbuch verknüpfte Ausgaben müssen dort gelöscht werden');
-      await tx.expense.delete({ where: { id: parsedId, userId } });
-      await createFinancialAuditLog({
-        userId,
-        action: 'DELETE',
-        entityType: 'Expense',
-        entityId: current.id,
-        entityName: current.description,
-        oldValues: current,
-        metadata: {
-          actorId: userId,
-          tenantId: userId,
-          operation: 'expense.delete',
-          originalReference: `expense:${current.id}`,
-          reason: 'Expense deleted',
-        },
-      }, tx);
-    });
+    await deleteManualExpense(userId, parsedId);
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
+    if (error instanceof ManualFinancialRecordError || error instanceof ExpenseMutationError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();

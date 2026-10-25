@@ -1,3 +1,4 @@
+import { assertManualRecordNotFinalized, manualRecordAmount } from '@/lib/manual-financial-record-evidence';
 import { Prisma } from '@prisma/client';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { inTransaction } from '@/lib/db-transaction';
@@ -61,10 +62,11 @@ function financialMetadata(userId: string, operation: string, incomeId: number) 
 }
 
 export async function createManualIncome(userId: string, input: ManualIncomeCreate): Promise<IncomeRecord> {
+  manualRecordAmount(input.amount);
   return inTransaction(async tx => {
     await assertCustomerOwner(tx, userId, input.customerId);
     const income = await tx.income.create({
-      data: { ...input, userId },
+      data: { description: input.description, amount: input.amount, date: input.date, customerId: input.customerId, taxRelevant: input.taxRelevant, userId, manualRecordState: 'RECORDED', manualRecordOrigin: 'MANUAL' },
       include: { customer: { select: { id: true, name: true } } },
     });
     await createFinancialAuditLog({
@@ -84,10 +86,11 @@ export async function updateManualIncome(userId: string, id: number, input: Manu
   return inTransaction(async tx => {
     const existing = await tx.income.findFirst({
       where: { id, userId },
-      include: { invoice: true, cashTransaction: true },
+      include: { invoice: true, cashTransaction: true, paymentJournalEvent: true },
     });
     if (!existing) throw new IncomeMutationError(404, 'NOT_FOUND', 'Income not found');
-    if (existing.invoice || existing.cashTransaction) {
+    assertManualRecordNotFinalized(existing);
+    if (existing.invoice || existing.cashTransaction || existing.paymentJournalEvent) {
       throw new IncomeMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
     }
     await assertCustomerOwner(tx, userId, input.customerId === undefined ? existing.customerId : input.customerId);
@@ -95,8 +98,9 @@ export async function updateManualIncome(userId: string, id: number, input: Manu
     const income = await tx.income.update({
       // Ownership and linked-booking guards above run in this same transaction;
       // the primary key is sufficient for the mutation after those checks.
-      where: { id },
+      where: { id, userId, manualRecordRevision: existing.manualRecordRevision, manualRecordState: { not: 'FINALIZED' } },
       data: {
+        manualRecordRevision: { increment: 1 },
         ...(input.description !== undefined && { description: input.description }),
         ...(input.amount !== undefined && { amount: input.amount }),
         ...(input.date !== undefined && { date: input.date }),
@@ -123,13 +127,14 @@ export async function deleteManualIncome(userId: string, id: number): Promise<vo
   await inTransaction(async tx => {
     const existing = await tx.income.findFirst({
       where: { id, userId },
-      include: { invoice: true, cashTransaction: true },
+      include: { invoice: true, cashTransaction: true, paymentJournalEvent: true },
     });
     if (!existing) throw new IncomeMutationError(404, 'NOT_FOUND', 'Income not found');
-    if (existing.invoice || existing.cashTransaction) {
+    assertManualRecordNotFinalized(existing);
+    if (existing.invoice || existing.cashTransaction || existing.paymentJournalEvent) {
       throw new IncomeMutationError(409, 'LINKED_BOOKING', 'Linked bookings must be changed through their invoice or cashbook');
     }
-    await tx.income.delete({ where: { id } });
+    await tx.income.delete({ where: { id, userId, manualRecordState: { not: 'FINALIZED' } } });
     await createFinancialAuditLog({
       userId,
       action: 'DELETE',

@@ -210,9 +210,18 @@ async function deleteHandler(request: NextRequest) {
       return apiError('Customer not found', 404, 'NOT_FOUND');
     }
 
-    await prisma.customer.delete({
-      where: { id: parseInt(id) },
-    });
+    const finalizedResponse = () => apiError('Kunden mit festgeschriebenem manuellem Finanznachweis müssen erhalten bleiben.', 409, 'FINALIZED_RECORD');
+    if (await prisma.income.findFirst({ where: { customerId: existing.id, manualRecordState: 'FINALIZED' }, select: { id: true } })) return finalizedResponse();
+    try {
+      await prisma.customer.delete({
+        where: { id: existing.id, userId },
+      });
+    } catch (error) {
+      // The SQL retention trigger is authoritative if finalization wins after
+      // the read guard. Preserve a clear conflict response rather than 500.
+      if (error instanceof Error && error.message.includes('Customer must be retained for finalized manual financial evidence')) return finalizedResponse();
+      throw error;
+    }
     await auditDelete(userId, 'Customer', existing);
 
     const response = apiSuccess({ deleted: true, id: parseInt(id) });

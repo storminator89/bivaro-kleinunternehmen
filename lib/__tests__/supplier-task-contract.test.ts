@@ -48,11 +48,12 @@ describe('supplier task calendar and explicit contract', () => {
 describe('exact additive supplier task backup capability', () => {
   const empty = { supplierTaskKind: null, supplierTaskFollowUpDate: null, supplierTaskConfirmationRequired: false };
   it('only adds the named exact identity, never promotes existing or arbitrary future identities', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(SUPPLIER_TASKS_SCHEMA_VERSION);
+    expect(CURRENT_SCHEMA_VERSION).toBe('20261025090000_add_manual_financial_record_lifecycle');
+    expect(backupSchemaSupportsSupplierTasks(SUPPLIER_TASKS_SCHEMA_VERSION)).toBe(true);
     expect(backupSchemaSupportsSupplierTasks(CURRENT_SCHEMA_VERSION)).toBe(true);
     expect(backupSchemaSupportsSupplierTasks(MAPPING_NUMBERING_SCHEMA_VERSION)).toBe(false);
     expect(BACKUP_FEATURE_CAPABILITIES[MAPPING_NUMBERING_SCHEMA_VERSION]).toMatchObject({ bankMappingProfiles: true, documentNumberingPolicies: true });
-    for (const key of [...Object.keys(BACKUP_FEATURE_CAPABILITIES).filter(key => key !== CURRENT_SCHEMA_VERSION), '99999999999999_add_supplier_tasks', undefined]) expect(backupSchemaSupportsSupplierTasks(key)).toBe(false);
+    for (const key of [...Object.keys(BACKUP_FEATURE_CAPABILITIES).filter(key => ![CURRENT_SCHEMA_VERSION, SUPPLIER_TASKS_SCHEMA_VERSION].includes(key)), '99999999999999_add_supplier_tasks', undefined]) expect(backupSchemaSupportsSupplierTasks(key)).toBe(false);
   });
   it('requires complete current columns and rejects any future columns on historical capabilities, even null', () => {
     expect(() => validateSupplierTaskBackupFields(empty, 'document', true)).not.toThrow();

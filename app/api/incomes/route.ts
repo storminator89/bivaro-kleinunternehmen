@@ -1,3 +1,4 @@
+import { ManualFinancialRecordError, manualRecordAmount } from '@/lib/manual-financial-record-evidence';
 import { loadInvoicePaymentStates } from '@/lib/payment-journal/allocation-ledger';
 import { PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, assertPositiveOnlySnapshot, PaymentAdjustmentConsumerError } from '@/lib/payment-journal/consumer-guard';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
@@ -15,7 +16,7 @@ import {
 } from '@/lib/income-service';
 
 function mutationErrorResponse(error: unknown) {
-  if (error instanceof IncomeMutationError) {
+  if ((error instanceof IncomeMutationError || error instanceof ManualFinancialRecordError)) {
     return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
   }
   return null;
@@ -38,6 +39,7 @@ function parseIncomeAmount(value: unknown, required: boolean): number | undefine
   if (typeof value === 'string' && value.trim().length === 0) {
     throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültiger Betrag');
   }
+  if (required) manualRecordAmount(value);
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount < 0) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültiger Betrag');
   return amount;
