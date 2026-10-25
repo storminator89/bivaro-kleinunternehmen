@@ -10,15 +10,16 @@ export async function GET() {
   try {
     const userId = await requireUserId();
     const [categories, customers] = await Promise.all([
-      prisma.expense.findMany({
+      // Group in SQLite so repeated values never materialize one row per
+      // expense/customer in the application. Keep the existing DB ordering.
+      prisma.expense.groupBy({
+        by: ["category"],
         where: { userId },
-        select: { category: true },
-        distinct: ["category"],
         orderBy: { category: "asc" },
       }),
-      prisma.customer.findMany({
+      prisma.customer.groupBy({
+        by: ["name"],
         where: { userId },
-        select: { name: true },
         orderBy: { name: "asc" },
       }),
     ]);
@@ -30,7 +31,7 @@ export async function GET() {
         // endpoint cannot match.
         .map((item) => item.category)
         .filter((value): value is string => Boolean(value)),
-      customers: Array.from(new Set(customers.map((item) => item.name))),
+      customers: customers.map((item) => item.name),
     });
   } catch (error) {
     if (error instanceof UnauthorizedError) return unauthorizedResponse();
