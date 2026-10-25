@@ -1,0 +1,205 @@
+name: Manual navigation diagnostic only
+
+# Temporary exact-branch diagnostic. Never merge this workflow into PR #148.
+# A PASS here is not full functional or 247-image acceptance.
+on:
+  push:
+    branches: [diag/issue-54a-native-reload]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-navigation:
+    name: Focused real native-reload diagnostic (not full acceptance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Install Chromium and system dependencies
+        shell: bash
+        run: |
+          # Bound transport stalls for these commands only; keep the runner's sources and trust settings.
+          apt_config="$(mktemp "${RUNNER_TEMP:?RUNNER_TEMP is required}/bivaro-apt-XXXXXX.conf")"
+          trap 'rm -f -- "$apt_config"' EXIT
+          cat > "$apt_config" <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          APT
+          # APT_CONFIG is read before system fragments. Preserve stricter runner bounds.
+          actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
+          printf '%s\n' "$actual_settings"
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
+            echo '::error::Unexpected per-command APT transport settings.'
+            exit 1
+          fi
+          node_bin="$(command -v node)"
+          playwright_cli="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}/node_modules/playwright/cli.js"
+          test -x "$node_bin"
+          test -f "$playwright_cli"
+          # Playwright's own sudo escalation drops environment variables. Run only its
+          # exact installed dependency installer as root; browser downloads stay non-root.
+          sudo env APT_CONFIG="$apt_config" "$node_bin" "$playwright_cli" install-deps chromium
+          "$node_bin" "$playwright_cli" install chromium
+
+      # PDF/A verification needs Java; real PDF preview needs headed Chromium/Xvfb.
+      - name: Install and verify PDF and virtual display dependencies
+        shell: bash
+        run: |
+          apt_config="$(mktemp "${RUNNER_TEMP:?RUNNER_TEMP is required}/bivaro-apt-XXXXXX.conf")"
+          trap 'rm -f -- "$apt_config"' EXIT
+          cat > "$apt_config" <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          APT
+          actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
+          printf '%s\n' "$actual_settings"
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
+            echo '::error::Unexpected per-command APT transport settings.'
+            exit 1
+          fi
+          sudo env APT_CONFIG="$apt_config" apt-get update
+          sudo env APT_CONFIG="$apt_config" apt-get install -y --no-install-recommends xvfb xauth default-jre-headless util-linux poppler-utils
+          command -v Xvfb
+          command -v xvfb-run
+          command -v xauth
+          xauth -V
+          sh scripts/assert-no-ghostscript.sh
+
+      - name: Install hash-pinned official offline invoice validator
+        run: node scripts/einvoice-validation/install-runtime.mjs "${{ runner.temp }}/bivaro-einvoice"
+
+      - name: Install hash-pinned official own-invoice PDF-A verifier
+        run: node scripts/own-invoice-pdfa/install-runtime.mjs "${{ runner.temp }}/bivaro-verapdf"
+
+      # The existing config retains chromium-bootstrap as the dependency.
+      # Its tests run against the same fresh runner-owned fixture; do not use --no-deps.
+      - name: Run exact manual navigation case with existing bootstrap dependency
+        id: run-native-navigation
+        timeout-minutes: 15
+        env:
+          BIVARO_EINVOICE_ASSETS: ${{ runner.temp }}/bivaro-einvoice
+          BIVARO_VERAPDF_BIN: ${{ runner.temp }}/bivaro-verapdf/verapdf
+          BIVARO_RUN_OWN_INVOICE_PDFA_BROWSER: '1'
+          BIVARO_OWN_INVOICE_BROWSER_EVIDENCE_DIR: ${{ runner.temp }}/bivaro-native-reload-diagnostic/own-invoice-browser
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ runner.temp }}/bivaro-native-reload-diagnostic/report.json
+        run: >-
+          xvfb-run --auto-servernum npm run test:e2e --
+          e2e/manual-financial-records.spec.ts
+          --project=chromium
+          --grep='(^| )bounded manual financial lifecycle #54a dirty cancel, overlay, native Back/Forward and reload preserve explicit choice and actual opener focus$'
+          --headed
+          --workers=1
+          --retries=0
+          --forbid-only
+          --global-timeout=600000
+          --reporter=github,json
+          --trace=off
+          --output="${{ runner.temp }}/bivaro-native-reload-diagnostic/results"
+
+      - name: Require the exact target and bootstrap to have actually passed once
+        if: ${{ always() }}
+        timeout-minutes: 2
+        env:
+          DIAGNOSTIC_RUN_OUTCOME: ${{ steps.run-native-navigation.outcome }}
+          DIAGNOSTIC_REPORT: ${{ runner.temp }}/bivaro-native-reload-diagnostic/report.json
+        shell: bash
+        run: |
+          node - <<'JS'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const check = (condition, message) => { if (!condition) throw new Error(message); };
+          check(process.env.DIAGNOSTIC_RUN_OUTCOME === 'success', 'Focused runner did not finish successfully; this is not a diagnostic PASS.');
+          const limit = 2 * 1024 * 1024;
+          const fd = fs.openSync(process.env.DIAGNOSTIC_REPORT, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+          let bytes;
+          try {
+            const before = fs.fstatSync(fd);
+            check(before.isFile() && before.size > 0 && before.size <= limit, 'Missing, unsafe or oversized diagnostic JSON report.');
+            const buffer = Buffer.alloc(limit + 1);
+            let length = 0;
+            while (length < buffer.length) {
+              const count = fs.readSync(fd, buffer, length, buffer.length - length, null);
+              if (!count) break;
+              length += count;
+            }
+            const after = fs.fstatSync(fd);
+            check(length === before.size && length <= limit && after.size === before.size && after.dev === before.dev && after.ino === before.ino, 'Diagnostic report changed or exceeded its bounded read.');
+            bytes = buffer.subarray(0, length);
+          } finally { fs.closeSync(fd); }
+          const report = JSON.parse(bytes.toString('utf8'));
+          check(Array.isArray(report.errors) && report.errors.length === 0, 'Diagnostic report contains global errors.');
+          check(report.config?.workers === 1 && report.config?.forbidOnly === true && report.config?.globalTimeout === 600000, 'Focused execution limits differ from the reviewed plan.');
+          const records = [];
+          function visit(suite, parents = []) {
+            const path = [...parents, suite.title];
+            for (const spec of suite.specs ?? []) {
+              for (const test of spec.tests ?? []) records.push({ spec, test, path });
+            }
+            for (const child of suite.suites ?? []) visit(child, path);
+          }
+          check(Array.isArray(report.suites), 'Diagnostic report has no real test suites.');
+          for (const suite of report.suites) visit(suite);
+          const targetTitle = 'dirty cancel, overlay, native Back/Forward and reload preserve explicit choice and actual opener focus';
+          const targetFiles = new Set(['manual-financial-records.spec.ts', 'e2e/manual-financial-records.spec.ts']);
+          const bootstrapFiles = new Set(['auth-dashboard-invoice.spec.ts', 'e2e/auth-dashboard-invoice.spec.ts']);
+          const targets = records.filter(({ spec, test, path }) => targetFiles.has(spec.file) && spec.title === targetTitle && test.projectName === 'chromium' && path.includes('bounded manual financial lifecycle #54a'));
+          check(targets.length === 1, 'The exact manual navigation target did not execute exactly once; bootstrap alone is not proof.');
+          const bootstrap = records.filter(({ spec, test }) => bootstrapFiles.has(spec.file) && test.projectName === 'chromium-bootstrap');
+          check(bootstrap.length > 0 && records.length === bootstrap.length + 1, 'Existing bootstrap dependency is missing or unrelated cases were selected.');
+          for (const { spec, test } of records) {
+            check(spec.ok === true && test.expectedStatus === 'passed' && test.status === 'expected', 'A selected test was skipped, failed or flaky.');
+            check(Array.isArray(test.results) && test.results.length === 1, 'A selected test was not executed once without retries.');
+            const result = test.results[0];
+            check(result.status === 'passed' && result.retry === 0 && Number.isFinite(result.duration) && result.duration > 0 && !result.error && Array.isArray(result.errors) && result.errors.length === 0, 'A selected test lacks one real passing result.');
+          }
+          for (const projectName of ['chromium', 'chromium-bootstrap']) {
+            const project = report.config.projects?.find(project => project.name === projectName);
+            check(project?.retries === 0, 'Configured project retries were not disabled.');
+          }
+          check(report.stats?.expected === records.length && report.stats?.unexpected === 0 && report.stats?.flaky === 0 && report.stats?.skipped === 0, 'Diagnostic aggregate outcomes are incomplete or non-passing.');
+          const result = targets[0].test.results[0];
+          check(Array.isArray(result.stdout), 'Target stdout checkpoints are missing.');
+          const stdout = result.stdout.map(entry => typeof entry.text === 'string' ? entry.text : typeof entry.buffer === 'string' ? Buffer.from(entry.buffer, 'base64').toString('utf8') : '').join('');
+          const checkpoints = ['requested', 'observed beforeunload', 'dismissed', 'identity and both draft fields retained'];
+          let previous = -1;
+          for (const checkpoint of checkpoints) {
+            const position = stdout.indexOf(`Manual native-reload checkpoint: ${checkpoint}\n`, previous + 1);
+            check(position > previous, `Missing or out-of-order real native-reload checkpoint: ${checkpoint}`);
+            previous = position;
+          }
+          check(stdout.indexOf('Manual financial same-document traversal proof:', previous) > previous, 'The target did not finish its later Back/Forward and financial-history proof.');
+          process.stdout.write(`Focused manual navigation diagnostic only: ${JSON.stringify({ sourceSha: process.env.GITHUB_SHA, targetFile: targets[0].spec.file, targetTitle, project: targets[0].test.projectName, status: result.status, retry: result.retry, durationMs: result.duration, bootstrapPassed: bootstrap.length, reportBytes: bytes.length, reportSha256: crypto.createHash('sha256').update(bytes).digest('hex'), checkpoints, fullAcceptance: false })}\n`);
+          JS
