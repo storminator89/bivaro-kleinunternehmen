@@ -893,7 +893,172 @@ jobs:
         if: ${{ always() && (steps.stage-bank-billing-visuals.outcome == 'failure' || steps.upload-bank-billing-visuals.outcome == 'failure') }}
         run: echo '::warning::Optional bank/billing visual evidence unavailable. Inspect bounded staging/upload evidence; hosted visual acceptance remains pending.'
 
-      # Sixth independent partition: max 22 MiB total output; all prior 155 names and 20 MiB remain unchanged.
+      # New sixth partition: max 26 MiB total output; prior 20 MiB and all 155 image proofs stay unchanged.
+      - name: Stage bounded report and records screenshots separately
+        id: stage-reports-records-visuals
+        if: ${{ always() }}
+        continue-on-error: true
+        timeout-minutes: 6
+        shell: bash
+        run: |
+          export PYTHONPATH="$RUNNER_TEMP/bivaro-evidence-codec${PYTHONPATH:+:$PYTHONPATH}"
+          python3 - <<'PY'
+          import json
+          from concurrent.futures import ProcessPoolExecutor
+          from multiprocessing import get_context
+          import os
+          from pathlib import Path
+          import stat
+          import sys
+          import tempfile
+          sys.path.insert(0, 'scripts')
+          from lossless_evidence_png import recompress_png_strong as recompress_png
+
+          allowed = {
+              'financial-reports-eur-light-1440.png',
+              'financial-reports-eur-light-390.png',
+              'financial-reports-eur-dark-1440.png',
+              'financial-reports-eur-dark-390.png',
+              'financial-reports-gwg-light-1440.png',
+              'financial-reports-gwg-light-390.png',
+              'financial-reports-gwg-dark-1440.png',
+              'financial-reports-gwg-dark-390.png',
+              'records-history-history-evidence-light-1440.png',
+              'records-history-history-evidence-light-390.png',
+              'records-history-history-evidence-dark-1440.png',
+              'records-history-history-evidence-dark-390.png',
+              'records-history-history-empty-light-1440.png',
+              'records-history-history-empty-light-390.png',
+              'records-history-history-empty-dark-1440.png',
+              'records-history-history-empty-dark-390.png',
+              'records-history-reminder-queue-light-1440.png',
+              'records-history-reminder-queue-light-390.png',
+              'records-history-reminder-queue-dark-1440.png',
+              'records-history-reminder-queue-dark-390.png',
+              'records-history-reminder-confirmation-top-light-1440.png',
+              'records-history-reminder-confirmation-top-light-390.png',
+              'records-history-reminder-confirmation-top-dark-1440.png',
+              'records-history-reminder-confirmation-top-dark-390.png',
+              'records-history-reminder-confirmation-bottom-light-1440.png',
+              'records-history-reminder-confirmation-bottom-light-390.png',
+              'records-history-reminder-confirmation-bottom-dark-1440.png',
+              'records-history-reminder-confirmation-bottom-dark-390.png',
+              'records-history-service-ledger-top-light-1440.png',
+              'records-history-service-ledger-top-light-390.png',
+              'records-history-service-ledger-top-dark-1440.png',
+              'records-history-service-ledger-top-dark-390.png',
+              'records-history-service-ledger-bottom-light-1440.png',
+              'records-history-service-ledger-bottom-light-390.png',
+              'records-history-service-ledger-bottom-dark-1440.png',
+              'records-history-service-ledger-bottom-dark-390.png',
+              'records-history-statement-selection-top-light-1440.png',
+              'records-history-statement-selection-top-light-390.png',
+              'records-history-statement-selection-top-dark-1440.png',
+              'records-history-statement-selection-top-dark-390.png',
+              'records-history-statement-selection-bottom-light-1440.png',
+              'records-history-statement-selection-bottom-light-390.png',
+              'records-history-statement-selection-bottom-dark-1440.png',
+              'records-history-statement-selection-bottom-dark-390.png',
+          }
+          # Exact complete partition; existing 155-image proofs and budgets stay unchanged.
+          limit = 6 * 1024 * 1024
+          per_file_input_limit = 1 * 1024 * 1024
+          root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
+
+          def skip(reason):
+              print(f'::warning::Optional synthetic screenshots skipped: {reason}.')
+              raise SystemExit(0)
+
+          if root.is_symlink() or not root.is_dir():
+              skip('results directory unavailable or unsafe')
+          root = root.resolve()
+          matches = []
+          for directory, subdirs, files in os.walk(root, followlinks=False):
+              subdirs[:] = [name for name in subdirs if not (Path(directory) / name).is_symlink()]
+              for name in files:
+                  if name not in allowed:
+                      continue
+                  source = Path(directory) / name
+                  info = source.lstat()
+                  if not stat.S_ISREG(info.st_mode) or not source.resolve().is_relative_to(root):
+                      skip('an allowlisted path is not a safe regular file')
+                  matches.append((source, info))
+          if not matches:
+              skip('no allowlisted images were produced')
+          if len(matches) > len(allowed) or len({source.name for source, _ in matches}) != len(matches):
+              skip('file count exceeds the exact allowlist or basenames are duplicated')
+          if {source.name for source, _ in matches} != allowed:
+              skip('reports-records-workspace proof is incomplete; all 44 exact images are required')
+          total = sum(info.st_size for _, info in matches)
+          print(f'Synthetic screenshot source bytes: {len(matches)}/{len(allowed)} files, {total} bytes.')
+          for source, info in sorted(matches, key=lambda match: match[0].name):
+              print(f'Allowlisted synthetic PNG: {source.name} ({info.st_size} bytes).')
+          if total > 12 * 1024 * 1024:
+              skip('encoded evidence input exceeds its bounded read budget')
+
+          inputs = []
+          actual_input_bytes = 0
+          for source, expected in sorted(matches, key=lambda match: match[0].name):
+              fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+              with os.fdopen(fd, 'rb') as handle:
+                  current = os.fstat(handle.fileno())
+                  if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (expected.st_dev, expected.st_ino):
+                      skip('an image changed during staging')
+                  if current.st_size != expected.st_size:
+                      skip('an image size changed during staging')
+                  remaining_input = 12 * 1024 * 1024 - actual_input_bytes
+                  data = handle.read(min(per_file_input_limit, remaining_input) + 1)
+              if len(data) > per_file_input_limit:
+                  skip('an input PNG exceeds the per-file read budget')
+              actual_input_bytes += len(data)
+              if actual_input_bytes > 12 * 1024 * 1024:
+                  skip('actual reports-records-workspace input exceeds 12 MiB')
+              inputs.append((source.name, data))
+          def recompress_checked(data):
+              return recompress_png(data)
+          images = {}
+          # At most two bounded decodes/compressors; deterministic output order.
+          # Do not relax pixel/metadata proofs, aggregate budgets or stage timeout.
+          with ProcessPoolExecutor(max_workers=2, mp_context=get_context('fork')) as pool:
+              try:
+                  results = pool.map(recompress_checked, (data for _, data in inputs), chunksize=1)
+                  for (name, _), (data, proof) in zip(inputs, results, strict=True):
+                      print(f'Lossless PNG proof: {name} {json.dumps(proof, sort_keys=True)}')
+                      images[name] = data
+                      if sum(map(len, images.values())) > limit:
+                          skip('reports-records-workspace output exceeds 6 MiB')
+                      if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+                          skip('an allowlisted file is not a PNG')
+              except Exception:
+                  skip('lossless PNG structure, color metadata or full-pixel verification failed')
+          print(f'Synthetic screenshot budget after lossless verification: {len(images)}/{len(allowed)} files, {sum(map(len, images.values()))}/{limit} bytes.')
+          staging = Path(tempfile.mkdtemp(prefix='bivaro-reports-records-workspace-visuals-', dir=os.environ['RUNNER_TEMP']))
+          for name, data in images.items():
+              (staging / name).write_bytes(data)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'directory={staging}\nready=true\n')
+          print(f'Staged {len(images)} synthetic PNG files ({sum(map(len, images.values()))} bytes).')
+          PY
+
+      - name: Upload optional bounded reports-records-workspace visual evidence
+        id: upload-reports-records-visuals
+        if: ${{ always() && steps.stage-reports-records-visuals.outputs.ready == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-records-workspace-synthetic-visuals
+          path: ${{ steps.stage-reports-records-visuals.outputs.directory }}
+          retention-days: 1
+          if-no-files-found: warn
+          include-hidden-files: false
+          compression-level: 0
+
+      - name: Warn if report and records evidence could not be delivered
+        if: ${{ always() && (steps.stage-reports-records-visuals.outcome == 'failure' || steps.upload-reports-records-visuals.outcome == 'failure') }}
+        run: echo '::warning::Optional report/records visual evidence unavailable. Inspect bounded staging/upload evidence; hosted visual acceptance remains pending.'
+
+      # Seventh independent partition: max 28 MiB total output; all prior 199 names and 26 MiB remain unchanged.
       - name: Stage ten required sidebar icon screenshots separately
         id: stage-sidebar-flat-visuals
         if: ${{ always() }}

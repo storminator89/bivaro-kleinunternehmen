@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
-const start = workflow.indexOf('      # Sixth independent partition:');
+const start = workflow.indexOf('      # Seventh independent partition:');
 const original = workflow.slice(0, start).trimEnd() + '\n';
 const partition = workflow.slice(start);
 const browser = readFileSync('e2e/sidebar-flat-icons.spec.ts', 'utf8');
@@ -11,14 +11,15 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
   .flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
 
 describe('required bounded hosted flat-sidebar evidence', () => {
-  it('retains the exact accepted workflow prefix and all 155 existing screenshot names and budgets', () => {
+  it('retains the exact accepted workflow prefix and all 199 existing screenshot names and budgets', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(original).digest('hex')).toBe('59b555efe0c3ce2119372adcb0f845a619d3ba969439792b4beb288b236b5efe');
+    expect(createHash('sha256').update(original).digest('hex')).toBe('a60892ca4e8950a834273ac50984a0ac21469bcfaf24b07a69517330be6804f7');
     const names = namesIn(original);
-    expect(names).toHaveLength(155); expect(new Set(names).size).toBe(155);
+    expect(names).toHaveLength(199); expect(new Set(names).size).toBe(199);
     for (const value of ['timeout-minutes: 45', 'contents: read', '--retries=0',
       'limit = 10 * 1024 * 1024', 'limit = 2 * 1024 * 1024', 'limit = 4 * 1024 * 1024',
-      'max 20 MiB total output', 'all 125 image proofs stay unchanged']) expect(original).toContain(value);
+      'max 20 MiB total output', 'all 125 image proofs stay unchanged',
+      'limit = 6 * 1024 * 1024', 'max 26 MiB total output', 'all 155 image proofs stay unchanged']) expect(original).toContain(value);
   });
 
   it('requires ten unique light/dark element screenshots within independent 1/4/2 MiB limits', () => {
@@ -35,6 +36,9 @@ describe('required bounded hosted flat-sidebar evidence', () => {
       'Require complete sidebar visual delivery', 'raise SystemExit(1)']) expect(partition).toContain(value);
     expect(partition).not.toContain('continue-on-error: true');
     expect(partition).not.toContain('raise SystemExit(0)');
+    const allNames = namesIn(workflow);
+    expect(allNames).toHaveLength(209); expect(new Set(allNames).size).toBe(209);
+    expect(names.filter(name => namesIn(original).includes(name))).toEqual([]);
   });
 
   it('retains complete regular-path, bounded-read and lossless metadata/full-pixel proof guards', () => {

@@ -1,0 +1,26 @@
+{
+  "scanned": "2026-10-24",
+  "baseCommit": "eaddb1fe5a6342e0c702104ebcbce4b7ab9b4eda",
+  "scope": "app",
+  "mode": "redesign",
+  "depth": "full",
+  "theme": "Bivaro Ledger (locked design.md and BIVARO Design System 2.0)",
+  "findings": {
+    "framework": "Next.js 16.4.1 App Router with React 19",
+    "fonts": "Inter product UI; existing root tokens and typography retained",
+    "palette": "Existing paper, ink, evergreen/emerald action and semantic tokens; dark mode stays centrally defined",
+    "spacing": "Existing named 4-point scale, 16px surfaces and 10px controls",
+    "motion": "Existing functional primitives; no report reveal or chart animation",
+    "before": "Source inspection only. Local app/browser/fixture tests were not run; no before screenshot or automated rendered gate result is claimed."
+  },
+  "routesReviewed": [
+    { "route": "/cashbook", "file": "app/cashbook/page.tsx", "decision": "Existing balance/journal/day-close composition retained outside this bounded package" },
+    { "route": "/steuer-simulation", "file": "app/steuer-simulation/page.tsx", "decision": "Existing assumptions and live-result workbench retained outside this bounded package" },
+    { "route": "/handoff", "file": "components/handoff/handoff-workspace.tsx", "decision": "Existing two-stage review, fingerprint, acknowledgement and scope limits retained outside this bounded package" },
+    { "route": "/dashboard?tab=eur", "file": "components/dashboard/tabs/eur-tab.tsx", "decision": "Selected: statement before supporting analysis, preserve all result and tax context" },
+    { "route": "/dashboard?tab=gwg", "file": "components/dashboard/tabs/gwg-tab.tsx", "decision": "Selected: integrated acquisition register with scoped summary and responsive rows" }
+  ],
+  "preserve": ["Financial values, formulas and formatting", "Date/tenant/API and export boundaries", "Every original id and click callback", "Fiscal/legal caveats verbatim", "Existing app shell and shared primitives"],
+  "introduce": ["One statement surface rather than disconnected summary/breakdown cards", "One integrated GWG register rather than repeated icon/surface blocks", "Same-data monthly disclosure and keyboard-capable chart presentation"],
+  "absent": ["Invented financial figures", "New photos or decoration", "New routes, dependencies or backend behavior"]
+}

@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-24",
+  "scope": "app",
+  "mode": "redesign",
+  "depth": "full",
+  "theme": "Bivaro Ledger (locked)",
+  "shape": "financial statement and integrated acquisition register",
+  "signature": "the financial result reconciled with its visible income and expense breakdown before the supporting chart",
+  "chrome": "existing application shell, navigation and report period control retained",
+  "motion": "functional primitives only; chart animation disabled; reduced-motion scoped fallback",
+  "imagery": "existing 32px inline dashboard icons only; no new assets",
+  "copyChanges": [],
+  "addedAccessibleCopy": [
+    "Monatswerte anzeigen",
+    "Existing monthly labels and values repeated in a labelled disclosure"
+  ],
+  "dropped": [],
+  "checks": {
+    "typescript": "tsc --noEmit --incremental false passed under Node 22.23.4",
+    "eslint": "Changed TypeScript/TSX files passed with --max-warnings 0",
+    "cssParser": "Scoped module parsed with existing PostCSS (90 top-level nodes)",
+    "sourceContracts": "All 6 original ids and 3 onClick callbacks retained. GWG filter/reduction and period-label function, EUR local state/private-balance expressions unchanged.",
+    "fullBuild": "Combined integration normal npm run build passed under Node 22.23.4 with unchanged prebuild/postbuild; no hooks or integrity checks bypassed.",
+    "unitAndFixtureTests": "Not run: local test execution is blocked; no rerun attempted",
+    "browserAcceptance": "2 new hosted-only acceptance tests authored but not run; 8 full-page light/dark 1440/390 captures and 320-1440 geometry checks pending",
+    "automatedHallmarkLint": "Unavailable: installed Hallmark reference contains no scripts/sloplint.mjs; rendered validation also remains blocked",
+    "finishReview": "Read-only source review performed, not a rendered Hallmark finish review",
+    "sourceCopy": "TypeScript-AST comparison found no missing prior JSX text in either report."
+  },
+  "removedDecoration": [
+    "Oversized EÜR result icon",
+    "Repeated GWG summary and empty-state icons"
+  ]
+}

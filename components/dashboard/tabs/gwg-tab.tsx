@@ -12,11 +12,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/dashboard-utils";
 import { Expense, TimeRange } from "@/types/dashboard";
+import styles from "./report-workspace.module.css";
 
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 · visual verification pending */
 
 type GWGTabProps = {
   expensesAll: Expense[];
@@ -50,74 +52,59 @@ export function GWGTab({ expensesAll, selectedTimeRange, onExport }: GWGTabProps
   const totalAmount = gwgExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   return (
-    <div className="report-workspace min-w-0 space-y-6">
-      <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className={`report-workspace ${styles.workspace}`} data-testid="gwg-report-workspace">
+      <header className={styles.header}>
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-            <DashboardIcon name="nav-assets" size={32} />
-            <span className="[overflow-wrap:anywhere]">Anschaffungen</span>
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          <h2>Anschaffungen</h2>
+          <p>
             Steuerrelevante Wirtschaftsgüter über 250 € bis einschließlich 1.000 € netto.
           </p>
         </div>
-        <Button onClick={onExport} className="min-h-11 w-full whitespace-nowrap sm:w-auto">
+        <div className={styles.exportActions}><Button type="button" onClick={onExport}>
           <Download aria-hidden="true" className="mr-2 h-4 w-4" />
           GWG exportieren
-        </Button>
+        </Button></div>
       </header>
 
-      <section aria-labelledby="gwg-summary" className="overflow-clip rounded-xl border bg-card">
-        <div className="border-b bg-muted/30 px-4 py-3 sm:px-6">
-          <h3 id="gwg-summary" className="flex items-center gap-3 font-semibold"><DashboardIcon name="nav-assets" size={36} />Anschaffungen im Überblick</h3>
+      <section aria-labelledby="gwg-summary" className={styles.sheet}>
+        <div className={styles.assetSummary}>
+          <h3 id="gwg-summary">Anschaffungen im Überblick</h3>
+          <dl className={styles.assetMetrics}>
+            <div><dt>Zeitraum</dt><dd>{getPeriodLabel(selectedTimeRange)}</dd></div>
+            <div><dt>Einträge</dt><dd>{gwgExpenses.length}</dd></div>
+            <div><dt>Nettosumme</dt><dd>{formatCurrency(totalAmount)}</dd></div>
+          </dl>
         </div>
-        <dl className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          <div className="px-4 py-4 sm:px-6">
-            <dt className="text-sm text-muted-foreground">Zeitraum</dt>
-            <dd className="mt-1 font-medium">{getPeriodLabel(selectedTimeRange)}</dd>
-          </div>
-          <div className="px-4 py-4 sm:px-6">
-            <dt className="text-sm text-muted-foreground">Einträge</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">{gwgExpenses.length}</dd>
-          </div>
-          <div className="px-4 py-4 sm:px-6">
-            <dt className="text-sm text-muted-foreground">Nettosumme</dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums">{formatCurrency(totalAmount)}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section aria-labelledby="gwg-list-heading" className="overflow-clip rounded-xl border bg-card">
-        <div className="border-b px-4 py-4 sm:px-6">
-          <h3 id="gwg-list-heading" className="flex items-center gap-3 font-semibold"><DashboardIcon name="nav-cashbook" size={32} />Erfasste Wirtschaftsgüter</h3>
+        <div className={styles.sectionHeading}>
+          <h3 id="gwg-list-heading"><DashboardIcon name="nav-cashbook" size={32} />Erfasste Wirtschaftsgüter</h3>
         </div>
 
         {gwgExpenses.length > 0 ? (
           <>
-            <div className="divide-y lg:hidden">
+            <div className={styles.mobileList}>
               {gwgExpenses.map((expense) => (
-                <article key={expense.id} className="min-w-0 px-4 py-4 sm:px-6">
-                  <div className="flex min-w-0 items-start justify-between gap-4">
+                <article key={expense.id} className={styles.mobileRow}>
+                  <div>
                     <div className="min-w-0">
                       <h4 className="font-medium [overflow-wrap:anywhere]">{expense.description}</h4>
-                      <p className="mt-1 text-sm text-muted-foreground">{new Date(expense.date).toLocaleDateString("de-DE")}</p>
+                      <p>{new Date(expense.date).toLocaleDateString("de-DE")}</p>
                     </div>
-                    <p className="shrink-0 font-semibold tabular-nums">{formatCurrency(expense.amount)}</p>
+                    <strong className={styles.mobileValue}>{formatCurrency(expense.amount)}</strong>
                   </div>
-                  <dl className="mt-4 text-sm">
-                    <div className="flex items-start justify-between gap-4">
+                  <dl className={styles.rowDetails}>
+                    <div>
                       <dt className="text-muted-foreground">Kategorie</dt>
-                      <dd className="min-w-0 text-right [overflow-wrap:anywhere]">{expense.category || "Ohne Kategorie"}</dd>
+                      <dd className="min-w-0 [overflow-wrap:anywhere]">{expense.category || "Ohne Kategorie"}</dd>
                     </div>
                   </dl>
                 </article>
               ))}
             </div>
 
-            <div className="hidden lg:block">
-              <Table>
+            <div className={styles.desktopTable}>
+              <Table className={`${styles.table} ${styles.assetTable}`}>
                 <TableHeader>
-                  <TableRow className="bg-muted/50">
+                  <TableRow>
                     <TableHead>Datum</TableHead>
                     <TableHead>Beschreibung</TableHead>
                     <TableHead>Kategorie</TableHead>
@@ -133,24 +120,21 @@ export function GWGTab({ expensesAll, selectedTimeRange, onExport }: GWGTabProps
                       <TableCell className="text-right font-medium tabular-nums">{formatCurrency(expense.amount)}</TableCell>
                     </TableRow>
                   ))}
-                  <TableRow className="bg-muted/50 font-semibold">
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
                     <TableCell colSpan={3}>Summe</TableCell>
                     <TableCell className="text-right tabular-nums">{formatCurrency(totalAmount)}</TableCell>
                   </TableRow>
-                </TableBody>
+                </TableFooter>
               </Table>
             </div>
           </>
         ) : (
-          <div className="flex flex-col items-start gap-3 px-4 py-8 sm:px-6">
-            <DashboardIcon name="nav-assets" size={40} />
-            <div>
-              <p className="font-medium">Keine GWG-Anschaffungen gefunden</p>
-            </div>
-          </div>
+          <p className={styles.empty}>Keine GWG-Anschaffungen gefunden</p>
         )}
 
-        <div className="flex items-start gap-2 border-t bg-muted/20 px-4 py-4 text-xs text-muted-foreground sm:px-6">
+        <div className={styles.note}>
           <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
           <p>Automatisch aus passenden Ausgaben · § 6 Abs. 2 EStG.</p>
         </div>
