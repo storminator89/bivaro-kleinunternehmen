@@ -9,6 +9,32 @@ import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
 import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+type ResponseWitness = { sha256: string; bytes: number; error?: string };
+type ObservedWindow = Window & { __reminderPdfWitnesses?: Promise<ResponseWitness>[] };
+
+async function observeNativePdfResponses(page: Page) {
+  await page.addInitScript(() => {
+    const observed = window as ObservedWindow;
+    const witnesses: Promise<ResponseWitness>[] = [];
+    observed.__reminderPdfWitnesses = witnesses;
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (...args: Parameters<typeof fetch>) => {
+      const response = await nativeFetch(...args);
+      const url = new URL(response.url, window.location.href);
+      if (url.origin === window.location.origin && url.pathname === '/api/reminders/download-pdf' && response.ok) {
+        // Observe a clone of this exact real response. Never fulfill a route,
+        // change the original response, or delay its return to the application.
+        const witness = (async (): Promise<ResponseWitness> => {
+          const bytes = await response.clone().arrayBuffer();
+          const digest = await crypto.subtle.digest('SHA-256', bytes);
+          return { bytes: bytes.byteLength, sha256: [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('') };
+        })().catch(error => ({ bytes: 0, sha256: '', error: String(error) }));
+        witnesses.push(witness);
+      }
+      return response;
+    };
+  });
+}
 async function account(page: Page) {
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
   await isolateSyntheticLoginIpBudget();
@@ -54,6 +80,7 @@ async function drawnText(bytes: Uint8Array) {
 for (const width of [1440, 390]) test(`real reminder PDF download, stale confirmation and settlement at ${width}px`, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width, height: 1000 });
+  await observeNativePdfResponses(page);
   const userId = await account(page);
   const emailRequests: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/email/')) emailRequests.push(request.url()); });
@@ -104,7 +131,14 @@ for (const width of [1440, 390]) test(`real reminder PDF download, stale confirm
     expect(response.status()).toBe(200); expect(download.suggestedFilename()).toBe(`mahnentwurf-${invoice.id}.pdf`);
     const downloadedPath = await download.path(); expect(downloadedPath).not.toBeNull();
     const downloadedBytes = await readFile(downloadedPath!), parsed = await drawnText(downloadedBytes);
-    expect(sha256(downloadedBytes)).toBe(sha256(await response.body()));
+    // Playwright's protocol Response.body() may be empty for this browser blob
+    // flow. Compare against a passive clone of the same native fetch instead.
+    const witnesses = await page.evaluate(async () => Promise.all((window as ObservedWindow).__reminderPdfWitnesses ?? []));
+    expect(witnesses).toHaveLength(1);
+    const witness = witnesses[0];
+    expect(witness.error).toBeUndefined(); expect(witness.bytes).toBeGreaterThan(0);
+    expect(witness.bytes).toBe(downloadedBytes.byteLength);
+    expect(sha256(downloadedBytes)).toBe(witness.sha256);
     for (const value of ['Rechnungsbetrag: 120,00 €', 'Bereits eingegangen: 40,00 €', 'Offener Restbetrag: 80,00 €', 'Zahlbetrag: 80,00 €', preview.previewAsOf, preview.documentVersion, 'keine neue Rechnung, kein Versandnachweis']) expect(parsed.text).toContain(value);
     if (width === 390) expect(parsed.pdf.getPageCount()).toBeGreaterThan(1);
     expect(parsed.pdf.getPageCount()).toBeLessThanOrEqual(8);
@@ -137,6 +171,6 @@ for (const width of [1440, 390]) test(`real reminder PDF download, stale confirm
     await dialog.getByRole('button', { name: 'Abbrechen', exact: true }).click(); await page.reload();
     await expect(page.getByRole(width < 1280 ? 'article' : 'row').filter({ hasText: invoiceNumber })).toHaveCount(0);
     expect(settled.reminders).toEqual([]); expect(settled.outbox).toEqual([]);
-    await writeFile(path.join(evidence, 'manifest.json'), JSON.stringify({ version: 1, status: 'passed', width, pages: parsed.pdf.getPageCount(), pdfSha256: sha256(downloadedBytes), originalSha256: sha256(originalBytes), originalAfterSha256: sha256(await unchanged.body()), previewAsOf: preview.previewAsOf, documentVersion: preview.documentVersion, balance: { totalCents: '12000', paidCents: '4000', openCents: '8000' }, downloadsChangedFinancialState: false, emailRequests, correctionAwareReminders: false, note: 'Synthetic fixture only; actual download bytes, no original-PDF/PDF-A or delivery claim. Rendered-page visual review remains separate.' }, null, 2));
+    await writeFile(path.join(evidence, 'manifest.json'), JSON.stringify({ version: 1, status: 'passed', width, pages: parsed.pdf.getPageCount(), pdfSha256: sha256(downloadedBytes), responseSha256: witness.sha256, responseBytes: witness.bytes, originalSha256: sha256(originalBytes), originalAfterSha256: sha256(await unchanged.body()), previewAsOf: preview.previewAsOf, documentVersion: preview.documentVersion, balance: { totalCents: '12000', paidCents: '4000', openCents: '8000' }, downloadsChangedFinancialState: false, emailRequests, correctionAwareReminders: false, note: 'Synthetic fixture only; actual download bytes match a passive clone of the exact native HTTP response. No original-PDF/PDF-A or delivery claim. Rendered-page visual review remains separate.' }, null, 2));
   } finally { await prisma.$disconnect(); }
 });

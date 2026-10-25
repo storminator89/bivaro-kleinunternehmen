@@ -77,6 +77,8 @@ def main():
             require(proof.get("downloadsChangedFinancialState") is False and proof.get("emailRequests") == [], "Unexpected financial/send effect")
             require(proof.get("originalSha256") == proof.get("originalAfterSha256"), "Original invoice bytes changed")
             require(files["reminder.pdf"].startswith(b"%PDF-") and hashlib.sha256(files["reminder.pdf"]).hexdigest() == proof.get("pdfSha256"), "Downloaded PDF hash mismatch")
+            require(type(proof.get("responseBytes")) is int and 0 < proof["responseBytes"] == len(files["reminder.pdf"]) <= MAX_PDF_BYTES, "Real HTTP response byte count mismatch")
+            require(proof.get("responseSha256") == proof["pdfSha256"], "Real HTTP response/download hash mismatch")
             target = staging / str(width)
             target.mkdir()
             for name in ("manifest.json", "reminder.pdf"):
