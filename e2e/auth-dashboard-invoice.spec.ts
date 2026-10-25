@@ -306,12 +306,11 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       for (const width of [1440, 320, 375, 414, 768]) {
         await page.setViewportSize({ width, height: 1000 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name} overflows at ${width}`).toBe(true);
-        if ((width === 1440 || width === 375) && name !== 'cashbook') await page.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`), fullPage: true });
+        if (width === 1440 && ['invoice-editor', 'quote-editor', 'users', 'api-keys', 'api-docs', 'audit', 'procedures'].includes(name)) await page.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`), fullPage: true });
       }
     }
     await page.getByRole('button', { name: 'Dunkles Farbschema aktivieren', exact: true }).click();
     await page.goto('/dashboard');
-    await page.screenshot({ path: testInfo.outputPath('overview-dark.png'), fullPage: true });
     await page.getByRole('button', { name: 'Helles Farbschema aktivieren', exact: true }).click();
     await page.setViewportSize({ width: 375, height: 900 });
     await page.getByRole('button', { name: 'Menü öffnen', exact: true }).click();
