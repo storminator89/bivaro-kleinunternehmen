@@ -1,6 +1,7 @@
 import {
   CURRENT_BACKUP_VERSION,
   backupSchemaSupportsPaymentJournal,
+  backupSchemaSupportsSupplierTasks,
   backupSchemaSupportsBankMappingProfiles,
   backupSchemaSupportsDocumentNumberingPolicies,
   LEGACY_BACKUP_VERSION,
@@ -134,6 +135,8 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   } else {
     warnings.push(`Backup-Version ${candidate.version} kann inkompatibel sein.`);
   }
+  if (!backupSchemaSupportsSupplierTasks(manifest?.schemaVersion)) warnings.push('Dieses ältere Backup enthält keine Lieferanten-Vormerkungen; es erfindet oder reaktiviert keine Aufgaben.');
+  if (Array.isArray(data.purchaseDocuments) && data.purchaseDocuments.some(document => document && typeof document === 'object' && (document as Record<string, unknown>).supplierTaskKind != null)) warnings.push('Lieferanten-Vormerkungen bleiben interne Aufgaben: nicht bezahlt oder bankgeprüft. Wiederherstellung löst keine Zahlung, Buchung oder Benachrichtigung aus.');
   if (!backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion)) warnings.push('Dieses ältere Backup enthält keine Zuordnungsprofile. Bestehende Zielprofile und ihre Löschbelege bleiben unverändert.');
   if (!backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion)) warnings.push('Dieses ältere Backup enthält keine Nummernformat-Historie. Bestehende Zielrevisionen und höhere Nummernzähler bleiben erhalten.');
   if (manifest && !backupSchemaSupportsPaymentJournal(manifest.schemaVersion)) {

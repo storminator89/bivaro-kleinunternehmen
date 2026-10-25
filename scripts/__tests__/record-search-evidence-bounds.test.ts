@@ -11,15 +11,15 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
   .flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
 
 describe('bounded record-search continuation hosted visual evidence', () => {
-  it('preserves the entire accepted 209-image/28 MiB workflow and its authentication/budget gates', () => {
+  it('preserves the entire accepted 217-image/30 MiB workflow and its authentication/budget gates', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(accepted).digest('hex')).toBe('860eeef2fbaa3ef7efefa7e301e5be964923ff320fc74260410ee3af2988b0f6');
-    expect(namesIn(accepted)).toHaveLength(209); expect(new Set(namesIn(accepted)).size).toBe(209);
-    for (const value of ['max 28 MiB total output', 'timeout-minutes: 45', 'contents: read', '--retries=0', '--workers=1', '--forbid-only']) expect(accepted).toContain(value);
+    expect(createHash('sha256').update(accepted).digest('hex')).toBe('d73cf8910e667ba4a047b4b88115f31437bbaf6ca2e57955e7170cefe03c1625');
+    expect(namesIn(accepted)).toHaveLength(217); expect(new Set(namesIn(accepted)).size).toBe(217);
+    for (const value of ['max 30 MiB total output', 'timeout-minutes: 45', 'contents: read', '--retries=0', '--workers=1', '--forbid-only']) expect(accepted).toContain(value);
   });
   it('adds exactly three disjoint required captures with independent 1/2/1 MiB bounds and fail-closed delivery', () => {
     expect(namesIn(partition).sort()).toEqual([360, 390, 1440].map(width => `record-search-continuation-${width}.png`).sort());
-    expect(namesIn(workflow)).toHaveLength(212); expect(new Set(namesIn(workflow)).size).toBe(212);
+    expect(namesIn(workflow)).toHaveLength(220); expect(new Set(namesIn(workflow)).size).toBe(220);
     expect(namesIn(partition).some(name => namesIn(accepted).includes(name))).toBe(false);
     for (const value of ['limit = 1 * 1024 * 1024', 'per_file_input_limit = 1 * 1024 * 1024',
       'total > 2 * 1024 * 1024', 'actual_input_bytes > 2 * 1024 * 1024',

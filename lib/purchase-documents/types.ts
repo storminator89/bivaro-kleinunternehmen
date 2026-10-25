@@ -2,6 +2,9 @@ import type { ManualPhotoConfirmation, ManualPhotoSnapshot } from './manual-phot
 import type { SupplierDto } from '@/lib/suppliers';
 import type { ParsedEInvoiceParty } from '@/lib/e-invoice-parser';
 
+export type SupplierTaskKind = 'PAYMENT_CHECK' | 'DIRECT_DEBIT_WAIT' | 'CLARIFY';
+export type SupplierTask = { kind: SupplierTaskKind; followUpDate: string | null; confirmationRequired: boolean };
+
 export const PURCHASE_PARSE_STATUSES = ['PENDING', 'PARSED', 'FAILED'] as const;
 export const PURCHASE_REVIEW_STATUSES = ['REVIEW', 'BOOKED', 'DISMISSED'] as const;
 export type PurchaseMediaType = 'application/pdf' | 'application/xml' | 'image/jpeg' | 'image/png';
@@ -64,6 +67,7 @@ export type IncomingDocument = {
   aiApprovedSnapshot?: import('./ai-provenance').AiApprovedSnapshot | null;
   reviewDraft?: PurchaseReviewDraft | null;
   reviewDraftSavedAt?: string | null;
+  supplierTask?: SupplierTask | null;
   originalRef: {
     id: number;
     fileName: string;
@@ -92,7 +96,7 @@ export type IncomingDocument = {
   dismissalReason: string | null;
   approvalSupported: boolean;
 };
-export type IncomingDocumentList = { documents: IncomingDocument[]; total: number; page: number; limit: number };
+export type IncomingDocumentList = { documents: IncomingDocument[]; total: number; page: number; limit: number; supplierTaskToday?: string };
 export type IncomingDocumentResponse = { document: IncomingDocument; replayed?: boolean };
 
 /** Every field is deliberate user input; expenseDate is the actual payment date. */

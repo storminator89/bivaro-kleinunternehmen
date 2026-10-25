@@ -111,7 +111,7 @@ test('real backup endpoints remap feature histories, preserve legacy high-water 
   expect(exported.headers()['content-disposition']).toContain('attachment;');
   const backup = await exported.json() as Backup;
   expect(backup.version).toBe('3.0');
-  expect(backup.manifest.schemaVersion).toBe('20261024030000_combine_mapping_profiles_numbering');
+  expect(backup.manifest.schemaVersion).toBe('20261024040000_add_supplier_tasks');
   // Prove the independent pure calculation matches this actual server export
   // before using it to reach immutable-history conflicts with changed data.
   expect(reseal(structuredClone(backup)).manifest).toStrictEqual(backup.manifest);

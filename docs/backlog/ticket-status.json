@@ -2303,5 +2303,227 @@
       },
       "nextPublishedRecoveryCandidate": "pending_documentation_checkpoint_and_exact_tree_publication"
     }
+  },
+  "issue59130ReconstructionCheckpoint": {
+    "updatedAt": "2026-10-25T08:08:00Z",
+    "githubIssues": [
+      59,
+      130
+    ],
+    "historicalBvTicketsUnchanged": true,
+    "baseCommit": "e268d1c8d64dd7f7bceb4b651ba55eb3ebdb7931",
+    "baseTree": "a16d9fbcd178886811d737c134a95a457fe6d67f",
+    "unavailableOriginalCommit": "8978c8248cc81dd5b12b7d83b4703533b3fca3df",
+    "originalRecovered": false,
+    "historicalVerificationReused": false,
+    "status": "runtime_hosted_verified_draft_no_merge",
+    "replacementRuntimeAccepted": true,
+    "localFunctionalTestsExecuted": false,
+    "requiredStaticChecks": {
+      "fullLintExit": 0,
+      "fullTypecheckExit": 0,
+      "prismaValidateExit": 0,
+      "ordinaryBuildPrePostExit": 0,
+      "nodeVersion": "24.22.1",
+      "nodeHeapMiB": 1536,
+      "existingTracingWarnings": 9,
+      "buildLogSha256": "7a471ac7e1f4db9b43269905dd399ef93b8724e3c5f6cd2b99ea932d0cb7c37d"
+    },
+    "hostedCi": {
+      "firstRun": 40170786288,
+      "passed": 4316,
+      "failed": 16,
+      "skipped": 20,
+      "lintTypes": "passed",
+      "security": "passed",
+      "build": "skipped",
+      "supplierTestsPassed": 40,
+      "componentCasesInitiallyCollected": false,
+      "recovery": {
+        "run": 40173387033,
+        "head": "a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94",
+        "passed": 4339,
+        "failed": 0,
+        "skipped": 20,
+        "passedFiles": 280,
+        "skippedFiles": 3,
+        "componentCasesActuallyPassed": 4,
+        "lintTypes": "passed",
+        "security": "passed",
+        "aggregateBuild": "passed"
+      }
+    },
+    "browserAcceptance": {
+      "firstRun": 40170786318,
+      "passed": 169,
+      "failed": 2,
+      "supplierScenariosPassed": 3,
+      "recovery": {
+        "run": 40173387111,
+        "head": "a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94",
+        "passed": 171,
+        "failed": 0,
+        "skipped": 0,
+        "conclusion": "success"
+      }
+    },
+    "acceptedVisualPartitions": 7,
+    "acceptedVisualNames": 209,
+    "acceptedVisualOutputMiB": 28,
+    "newRequiredVisualNames": 8,
+    "newIndependentVisualOutputMiB": 2,
+    "plannedCombinedVisualOutputMiB": 30,
+    "evidence": "docs/testing/issues-59-130-reconstruction-2026-10-25.md",
+    "publication": {
+      "pr": 144,
+      "url": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/144",
+      "draft": true,
+      "firstRemoteHead": "cd3606c41231e1bafc2a6f019871c06fb41ee63f"
+    },
+    "mergeAuthorized": false,
+    "issueClosureAuthorized": false,
+    "deploymentAuthorized": false,
+    "historicalTicketObjectsPreserved": 160,
+    "historicalStatusSummaryUnchanged": true,
+    "sourceCommit": "94707ed6d6b4f16f0a4b471983e40e8100dbe319",
+    "sourceTree": "4f4f9d608f9852583b12f0a5eeb14d4734fa2f43",
+    "independentSourceReview": {
+      "remainingConcreteP1P2": 0,
+      "fixedP2": [
+        "Exact fullpage/viewport evidence dimensions",
+        "Explicit edit generation retained when delayed save props arrive"
+      ]
+    },
+    "authoredCoverage": {
+      "newSupplierUnitApiBackupFiles": 3,
+      "newSimulationUnitComponentFiles": 2,
+      "newBrowserScenarios": 4,
+      "functionalExecutedLocally": false
+    },
+    "firstVisualEvidence": {
+      "images": 217,
+      "zipArtifacts": 8,
+      "allProofsMatched": true,
+      "allZipDigestsMatched": true,
+      "pngBytes": 21076497,
+      "outputBudgetMiB": 30,
+      "newOriginalImagesInspected": 8,
+      "inboxOriginalImagesInspected": 4,
+      "finalRecoveryImages": "verified_in_recoveryVisualEvidence"
+    },
+    "hostedNativeChecks": {
+      "pdfaRun": 40170786280,
+      "containerRun": 40170786366,
+      "x64AndArm64": "passed",
+      "recovery": {
+        "pdfaRun": 40173387046,
+        "containerRun": 40173387045,
+        "x64AndArm64": "passed"
+      }
+    },
+    "acceptedRuntimeHead": "a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94",
+    "acceptedRuntimeTree": "2ef67f729bed4c3db150194d7716f73adc5f4b98",
+    "recoveryVisualEvidence": {
+      "run": 40173387111,
+      "images": 217,
+      "zipArtifacts": 8,
+      "allProofsMatched": true,
+      "allZipDigestsMatched": true,
+      "pngBytes": 21071679,
+      "outputBudgetMiB": 30,
+      "newPngBytes": 643496,
+      "newOutputBudgetMiB": 2,
+      "newOriginalImagesInspected": 8,
+      "inboxOriginalImagesInspected": 4,
+      "all217ManuallyReviewed": false,
+      "verificationManifestSha256": "d18e3d6ebf4394a8421876f308542b19b8269d3f890ab5a311f41abf9e5a3cac",
+      "browserLogSha256": "554fed9a5ef0808964ea3f3bace38a085b9f0a6d4dbd61d5fc1d4724593d95db"
+    },
+    "documentationOnlyFollowup": {
+      "count": 1,
+      "runtimeTestsSchemaWorkflowUnchanged": true,
+      "exactHeadChecks": "pending_at_authorship",
+      "finalResultLocation": "PR #144 body; no further commit solely to log unchanged checks"
+    }
+  },
+  "issue102SearchContinuationCheckpoint": {
+    "observedAt": "2026-10-25T08:55:00Z",
+    "issue": 102,
+    "issueUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/102",
+    "ticketMapping": "Separate GitHub issue; not historical BV-102. All160 historical ticket objects/status sums unchanged.",
+    "status": "implemented_candidate_pending_exact_combined_hosted_acceptance",
+    "draftPullRequest": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/145",
+    "publishedStandaloneHead": "8e802e098663f569a8f988a220fbe391d6af0cd0",
+    "publishedStandaloneTree": "85e7a767881cf069aa3f92a4f4fc296c2105f5f8",
+    "acceptedMainBase": "db3098b8dd5318e426cd2e1e93a54b810cd1b4e9",
+    "acceptedMainTree": "5f4b1c54aa2f60a1cb05aa0b497aead1e8c595b6",
+    "combinedSourceAtAuthorship": "Local normal branch integration of the two immutable commits above; checkpoint commit not yet published at authorship.",
+    "implementedScope": [
+      "Existing palette only: independent matching-result next/back per type,5visible/page,20bounded pages/type; no accumulated result history or total/completeness claim under concurrent writes.",
+      "POST-only query/page state, existing auth/CSRF/tenant ownership and rechecked detail routes retained; no search URL/history/log/analytics/new browser persistence.",
+      "Immediate cancellation/generation guards, announced loading/error, exact-page retry, empty-page back, connected-target ARIA synchronization and real sixth-result keyboard journeys."
+    ],
+    "financialSchemaAndExternalProviderChanges": "No financial/schema/external-provider changes relative to accepted main; search read service extends bounded paging. Accepted supplier/simulation/schema/backup code retained byte-for-byte.",
+    "localVerification": {
+      "fullRepositoryTypeScript": "passed",
+      "fullRepositoryESLint": "passed,zero warnings",
+      "ordinaryProductionPreBuildPostBuild": "passed",
+      "prismaClientGeneration": "passed on independent owned dependencies",
+      "workflowYamlAndInlinePython": "static parse passed; no execution",
+      "localFunctionalUnitApiBrowserTests": "not run; prohibited"
+    },
+    "focusedHostedDiagnostic": {
+      "status": "passed,not full acceptance",
+      "run": "https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40177250252",
+      "head": "abf4513b7d43919d974e36676fed1b471f3580ab",
+      "testsPassed": 43,
+      "scope": "Real bootstrap and both palette specs; exact sixth-ID keyboard Enter/Back at360/390/1440."
+    },
+    "priorHostedOutcomes": [
+      "Initial standalone CI4282passed/20existing skips and PDF-A x64/arm64 passed; browser165passed/2failed, selection readiness plus old dependent list label corrected.",
+      "Next standalone CI4283passed/20existing skips and PDF-A x64/arm64 passed; browser166passed/1failed after live viewport selection drift. Actual3new PNGs delivered/inspected; no failed run is relabeled successful.",
+      "Pointer-park-only diagnostic42passed/1failed; stronger independent per-device journeys subsequently passed43 in focused run."
+    ],
+    "currentStandaloneRunsAtAuthorship": {
+      "status": "in progress; no full acceptance claimed",
+      "ci": 40177794851,
+      "browser": 40177794756,
+      "pdfa": 40177794763
+    },
+    "combinedEvidenceContract": {
+      "acceptedMainNames": 217,
+      "acceptedMainOutputMiB": 30,
+      "acceptedMainWorkflowSha256": "d73cf8910e667ba4a047b4b88115f31437bbaf6ca2e57955e7170cefe03c1625",
+      "addedNames": [
+        "record-search-continuation-360.png",
+        "record-search-continuation-390.png",
+        "record-search-continuation-1440.png"
+      ],
+      "totalUniqueNames": 220,
+      "totalOutputMiB": 31,
+      "newPartitionFileInputOutputMiB": [
+        1,
+        2,
+        1
+      ],
+      "preservation": "Accepted217 workflow prefix bytes and all prior gates unchanged; eight-name and three-name partitions independently scoped, safe reads and full lossless pixel/metadata proofs retained."
+    },
+    "remainingAcceptance": [
+      "Fresh full CI/browser of the published exact combined head and all220 actual PNG/hash/lossless deliveries.",
+      "Actual final-head search desktop/mobile image inspection and any scoped recoverable failure correction.",
+      "Issue102 remains open; this checkpoint is not merge, deployment, production or domain approval."
+    ],
+    "finalOutcomesLocation": "PR145 body after exact-head verification; no further documentation-only commit loop.",
+    "historicalTicketObjectCount": 160,
+    "historicalStatusSummary": {
+      "complete": 3,
+      "partial": 21,
+      "in_progress": 0,
+      "architecture_discovery": 4,
+      "proposed_unimplemented": 132
+    },
+    "issueClosed": false,
+    "pullRequest145Merged": false,
+    "deploymentPerformed": false
   }
 }
