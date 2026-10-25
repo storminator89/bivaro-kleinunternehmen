@@ -101,9 +101,20 @@ test('simulation discloses real annual basis, assumptions and limits through his
     ]);
     const before = await snapshot();
     const writes: string[] = [];
+    const authDiagnostics: string[] = [];
     await page.route('**/api/**', async route => {
-      if (['GET', 'HEAD', 'OPTIONS'].includes(route.request().method())) return route.continue();
-      writes.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
+      const method = route.request().method();
+      const url = new URL(route.request().url());
+      if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return route.continue();
+      // Only this exact observed POST endpoint is an authentication log, not
+      // an income, expense, payment or profile operation. Do not exempt the
+      // auth namespace, other methods, query variants or other origins.
+      if (method === 'POST' && url.pathname === '/api/auth/_log' && url.search === ''
+        && url.origin === new URL(page.url()).origin) {
+        authDiagnostics.push(`${method} ${url.pathname}`);
+        return route.continue();
+      }
+      writes.push(`${method} ${url.pathname}`);
       await route.abort('blockedbyclient');
     });
     const initialRead = summaryResponse(page, 2026);
@@ -237,6 +248,10 @@ test('simulation discloses real annual basis, assumptions and limits through his
     expect(stableBasis(await retryRead)).toEqual(stableBasis(initial));
     await expect(alert).toHaveCount(0);
     await expect(disclosure).toContainText('Modelleingang nach Annahmen: 47.000,00');
+    await info.attach('simulation-auth-diagnostics', {
+      body: JSON.stringify({ scope: 'Only exact same-origin POST /api/auth/_log without query parameters', requests: authDiagnostics }),
+      contentType: 'application/json',
+    });
     expect(writes).toEqual([]);
     expect(await snapshot()).toEqual(before);
   } finally {

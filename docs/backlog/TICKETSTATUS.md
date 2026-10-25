@@ -620,3 +620,24 @@ Nachreview ohne verbleibenden konkreten P1/P2 im geprüften Scope. Keine lokalen
 Funktionstests; Unit-/API-/Backup-/Komponenten-/Browserfälle nur verfasst.
 Vollständige Hosted-Prüfung und echte Bildkontrolle des veröffentlichten Heads
 sind weiterhin erforderlich. [Konkrete Evidenz und Grenzen](../testing/issues-59-130-reconstruction-2026-10-25.md).
+
+### Erster Hosted-Lauf #144 und Recovery vom 25.10.2026, 07:34 UTC
+
+[Draft #144](https://github.com/storminator89/bivaro-kleinunternehmen/pull/144)
+auf `cd3606c4` ist veröffentlicht, aber noch **nicht insgesamt abgenommen**.
+CI: 4.316 bestanden / 16 fehlgeschlagen / 20 übersprungen (zwei veraltete
+#59-Testharness-/Quellvertragdateien), Lint/Typen/Security bestanden; Build
+übersprungen. Die 40 neuen Lieferanten-Unit/API/Backup-Fälle bestanden.
+Browser: 169 bestanden / zwei fehlgeschlagen, alle drei Lieferanten-Journeys
+bestanden. Zwei #59-Testverträge werden eng korrigiert: eindeutige sichtbare
+Disclosure-Auswahl und getrennte exakte Auth-Diagnose statt Geschäftsänderung.
+Vier zuvor nur verfasste Komponentenfälle werden jetzt tatsächlich sammelbar;
+kein alter Nichtlauf wird als bestanden gezählt. PDF-A und Container x64/ARM
+bestanden.
+
+217 tatsächliche PNGs / acht ZIPs wurden vollständig gegen Pixel-/Metadaten-/
+Dateihashes geprüft (21.076.497 Bytes innerhalb 30 MiB); die acht neuen Bilder
+und vier Inbox-Bilder wurden wirklich angesehen. Ein transienter Fortschritts-
+streifen/Scrollversatz im neuen Inbox-Nachweis wird im Capture-Helfer korrigiert,
+nicht durch App-CSS-Manipulation. Reale Wiederholungsabnahme des neuen Heads
+steht noch aus. [Exakte Läufe, Grenzen und Recovery](../testing/issues-59-130-reconstruction-2026-10-25.md).

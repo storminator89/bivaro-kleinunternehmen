@@ -2305,7 +2305,7 @@
     }
   },
   "issue59130ReconstructionCheckpoint": {
-    "updatedAt": "2026-10-25T06:10:00Z",
+    "updatedAt": "2026-10-25T07:34:00Z",
     "githubIssues": [
       59,
       130
@@ -2316,7 +2316,7 @@
     "unavailableOriginalCommit": "8978c8248cc81dd5b12b7d83b4703533b3fca3df",
     "originalRecovered": false,
     "historicalVerificationReused": false,
-    "status": "source_integrated_pending_hosted_acceptance",
+    "status": "hosted_recovery_pending",
     "replacementRuntimeAccepted": false,
     "localFunctionalTestsExecuted": false,
     "requiredStaticChecks": {
@@ -2329,8 +2329,24 @@
       "existingTracingWarnings": 9,
       "buildLogSha256": "7a471ac7e1f4db9b43269905dd399ef93b8724e3c5f6cd2b99ea932d0cb7c37d"
     },
-    "hostedCi": "pending_exact_draft_head",
-    "browserAcceptance": "pending_exact_draft_head",
+    "hostedCi": {
+      "firstRun": 40170786288,
+      "passed": 4316,
+      "failed": 16,
+      "skipped": 20,
+      "lintTypes": "passed",
+      "security": "passed",
+      "build": "skipped",
+      "supplierTestsPassed": 40,
+      "componentCasesInitiallyCollected": false
+    },
+    "browserAcceptance": {
+      "firstRun": 40170786318,
+      "passed": 169,
+      "failed": 2,
+      "supplierScenariosPassed": 3,
+      "recovery": "pending_exact_new_head"
+    },
     "acceptedVisualPartitions": 7,
     "acceptedVisualNames": 209,
     "acceptedVisualOutputMiB": 28,
@@ -2338,7 +2354,12 @@
     "newIndependentVisualOutputMiB": 2,
     "plannedCombinedVisualOutputMiB": 30,
     "evidence": "docs/testing/issues-59-130-reconstruction-2026-10-25.md",
-    "publication": "authorized_branch_checkpoints_draft_opening_pending",
+    "publication": {
+      "pr": 144,
+      "url": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/144",
+      "draft": true,
+      "firstRemoteHead": "cd3606c41231e1bafc2a6f019871c06fb41ee63f"
+    },
     "mergeAuthorized": false,
     "issueClosureAuthorized": false,
     "deploymentAuthorized": false,
@@ -2358,6 +2379,22 @@
       "newSimulationUnitComponentFiles": 2,
       "newBrowserScenarios": 4,
       "functionalExecutedLocally": false
+    },
+    "firstVisualEvidence": {
+      "images": 217,
+      "zipArtifacts": 8,
+      "allProofsMatched": true,
+      "allZipDigestsMatched": true,
+      "pngBytes": 21076497,
+      "outputBudgetMiB": 30,
+      "newOriginalImagesInspected": 8,
+      "inboxOriginalImagesInspected": 4,
+      "finalRecoveryImages": "pending"
+    },
+    "hostedNativeChecks": {
+      "pdfaRun": 40170786280,
+      "containerRun": 40170786366,
+      "x64AndArm64": "passed"
     }
   }
 }

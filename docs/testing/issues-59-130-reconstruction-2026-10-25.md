@@ -97,3 +97,41 @@ inference from timestamps and no invented task data in old backups.
 No merge, issue closure, deployment, paid service, security setting or hosting
 change is authorized by this checkpoint. Both issues remain open until their
 separate completion criteria and further requested approval are satisfied.
+
+## First hosted attempt and scoped recovery: 07:34 UTC
+
+[Draft PR #144](https://github.com/storminator89/bivaro-kleinunternehmen/pull/144)
+was opened after fresh specific replacement-package approval. First exact remote
+head: `cd3606c41231e1bafc2a6f019871c06fb41ee63f`, tree
+`e4d33b6d226f3cf9653670ae9f0958dd00214aec`. It is **not accepted overall**.
+
+- [CI 40170786288](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40170786288): lint/types and security passed; full unit run **4,316 passed / 16 failed / 20 skipped**, two failing existing test files; aggregate build skipped. All **40** new supplier contract/API/backup tests and 13 simulation helper tests passed. Four authored component cases were not collected because the prior `.test.tsx` filename did not match the existing include; this was a coverage gap, not a pass.
+- [Headed Chromium 40170786318](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40170786318): **169 passed / 2 failed**. All three supplier journeys passed. Revenue disclaimer lookup was ambiguous after legitimate additional disclosures; the simulation journey reached the final no-write assertion, which had also counted two exact authentication-log diagnostic POSTs. Neither failure establishes a product runtime defect, nor does a partial pass establish acceptance.
+- [Own-invoice PDF-A 40170786280](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40170786280) and [container compatibility 40170786366](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40170786366): both x64 and arm64 passed.
+
+Test-only recovery faithfully unwraps the actual Suspense child with supported
+URL state, preserves all invalid-input/zero/unavailable/no-tax-call assertions,
+and tests the stronger matched-year/view gate. Component assertions are retained
+using `createElement` in a collected `.test.ts` file. Browser assertions scope
+the intended opened source disclosure; only exact same-origin POST
+`/api/auth/_log` without query is separately classified as diagnostic. All other
+non-read API requests remain blocked/recorded, and complete financial/profile
+snapshot equality is unchanged. No global filters, skips, retries, timeouts or
+security settings were relaxed.
+
+All **217 original PNGs / eight ZIP artifacts** were delivered in this failed
+functional attempt. Every encoded-byte, full-pixel and non-IDAT metadata proof
+was independently matched after download; all ZIP digests matched metadata.
+Actual lossless PNG output: **21,076,497 bytes / 30 MiB**. The eight new originals
+and four light/dark desktop/mobile Inbox originals were visually inspected.
+The modal images show real scrolled viewports, not artificially expanded dialogs.
+The first new full-page mobile Inbox capture retained a scroll offset and a
+transient route-progress stripe; the capture helper now waits for the real bar
+to settle and scrolls the real document to its top, without hiding CSS or changing
+the application. This evidence-source correction needs a fresh hosted capture.
+
+The recovery changes tests/documentation only; production runtime, schema,
+calculation formulas, all accepted screenshot names and all budgets remain
+unchanged. Local lint/types are allowed and rechecked; no local functional test
+is executed. Full hosted recovery and final original-image verification remain
+pending for the next published head. Both issues remain open; no merge or deploy.

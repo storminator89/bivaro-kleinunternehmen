@@ -53,7 +53,19 @@ async function originalUnchanged(page: Page, document: IncomingDocument, bytes: 
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(document.originalRef.sha256);
 }
 async function screenshot(page: Page, info: TestInfo, name: string, surface = panel(page)) {
-  await surface.scrollIntoViewIfNeeded();
+  const fullPage = await surface.evaluate(root => root.closest('[role="dialog"]') === null);
+  if (fullPage) {
+    // A full document capture must start at its actual top. Otherwise Chromium
+    // paints the fixed header at a retained scroll offset in the full-page PNG.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  } else await surface.scrollIntoViewIfNeeded();
+  // Wait for the real route-progress component to settle; never hide it or
+  // change CSS merely for a screenshot. First hosted originals exposed a
+  // transient progress stripe over the otherwise confirmed Inbox filter view.
+  const routeProgress = page.locator('div[aria-hidden="true"][class*="pointer-events-none"][class*="fixed"][class*="h-0.5"]');
+  await expect(routeProgress).toHaveCount(1);
+  await expect(routeProgress).toHaveCSS('opacity', '0');
   await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   const overflow = await surface.evaluate(root => [...root.querySelectorAll('button,input,select')].filter(element => {
@@ -64,7 +76,6 @@ async function screenshot(page: Page, info: TestInfo, name: string, surface = pa
   // configured viewport proof separate from the actual rendered capture area.
   // Modal content is captured at the current viewport, not by expanding its
   // scroll container into an artificial full-page layout.
-  const fullPage = await surface.evaluate(root => root.closest('[role="dialog"]') === null);
   const measured = await page.evaluate(fullPage => ({ innerWidth, innerHeight,
     width: fullPage ? document.documentElement.clientWidth : innerWidth,
     height: fullPage ? Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) : innerHeight,
