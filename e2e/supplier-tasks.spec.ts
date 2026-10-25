@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
-import type { IncomingDocument, IncomingDocumentResponse } from '../lib/purchase-documents/types';
+import type { IncomingDocument, IncomingDocumentList, IncomingDocumentResponse } from '../lib/purchase-documents/types';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
 import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 
@@ -51,6 +51,42 @@ async function originalUnchanged(page: Page, document: IncomingDocument, bytes: 
   const response = await page.request.get(`/api/purchase-documents/${document.id}/original`);
   expect(response.status()).toBe(200); expect(await response.body()).toEqual(bytes);
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(document.originalRef.sha256);
+}
+async function delayInboxNavigation(page: Page, matches: (query: URLSearchParams) => boolean) {
+  let release!: () => void, entered!: () => void, settled!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const finished = new Promise<void>(resolve => { settled = resolve; });
+  await page.route(url => url.pathname === '/purchases' && matches(url.searchParams), async route => {
+    // Delay the actual app-router navigation, not the list API or an invented
+    // success. Fetch the real RSC response before allowing newer UI intent.
+    expect(route.request().headers()['rsc']).toBe('1');
+    const response = await route.fetch();
+    expect(response.status()).toBe(200); expect(response.headers()['content-type']).toContain('text/x-component');
+    entered(); await gate;
+    try { await route.fulfill({ response }); }
+    catch (error) { if (!route.request().failure()) throw error; } // Next may have genuinely aborted the superseded request.
+    finally { settled(); }
+  }, { times: 1 });
+  return { started, release, finished };
+}
+async function expectInbox(page: Page, query: string, kind: string, due: string, search: string, ids: number[]) {
+  await expect(page).toHaveURL(`${new URL(page.url()).origin}/purchases${query ? `?${query}` : ''}`);
+  await expect(page.getByLabel('Aufgabenart filtern', { exact: true })).toHaveValue(kind);
+  await expect(page.getByLabel('Wiedervorlage filtern', { exact: true })).toHaveValue(due);
+  await expect(page.getByLabel('Lieferant, Rechnungsnummer oder Dateiname', { exact: true })).toHaveValue(search);
+  const serverQuery = new URLSearchParams(query); serverQuery.delete('inboxProbe'); serverQuery.delete('document');
+  serverQuery.set('reviewStatus', 'REVIEW'); serverQuery.set('page', '1'); serverQuery.set('limit', '25');
+  const response = await page.request.get(`/api/purchase-documents?${serverQuery}`); expect(response.status()).toBe(200);
+  const result = await response.json() as IncomingDocumentList;
+  expect(result.total).toBe(ids.length); expect(result.limit).toBe(25);
+  const serverIds = result.documents.map(document => document.id);
+  expect([...serverIds].sort((a, b) => a - b)).toEqual([...ids].sort((a, b) => a - b));
+  await expect.poll(() => page.locator('[data-incoming-document-id]').evaluateAll(rows => rows.map(row => Number(row.getAttribute('data-incoming-document-id'))))).toEqual(serverIds);
+}
+async function inboxSettled(page: Page) {
+  await expect(page.locator('div[aria-hidden="true"][class*="pointer-events-none"][class*="fixed"][class*="h-0.5"]')).toHaveCSS('opacity', '0');
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 }
 async function screenshot(page: Page, info: TestInfo, name: string, surface = panel(page)) {
   const fullPage = await surface.evaluate(root => root.closest('[role="dialog"]') === null);
@@ -142,11 +178,15 @@ test('supplier task keyboard/mobile save, explicit source date, dirty cancel, fi
   await page.getByLabel('Aufgabenart filtern', { exact: true }).selectOption('any');
   await page.getByLabel('Wiedervorlage filtern', { exact: true }).selectOption('due');
   await expect(page.locator(`[data-incoming-document-id="${past.document.id}"]`)).toBeVisible();
+  await expect(page.getByLabel('Aufgabenart filtern', { exact: true })).toHaveValue('any');
   await expect(page.locator(`[data-incoming-document-id="${future.document.id}"]`)).toHaveCount(0); await expect(page.locator(`[data-incoming-document-id="${undated.document.id}"]`)).toHaveCount(0);
   await page.getByLabel('Wiedervorlage filtern', { exact: true }).selectOption('later');
   await expect(page.locator(`[data-incoming-document-id="${future.document.id}"]`)).toBeVisible();
+  await expect(page.getByLabel('Aufgabenart filtern', { exact: true })).toHaveValue('any');
   await page.getByLabel('Wiedervorlage filtern', { exact: true }).selectOption('undated');
   const undatedRow = page.locator(`[data-incoming-document-id="${undated.document.id}"]`); await expect(undatedRow).toBeVisible();
+  await expect(page.getByLabel('Aufgabenart filtern', { exact: true })).toHaveValue('any');
+  expect(new URL(page.url()).searchParams.get('taskKind')).toBe('any');
   await page.setViewportSize({ width: 1440, height: 1000 }); await screenshot(page, info, 'supplier-task-inbox-1440.png', page.getByRole('main'));
   await page.setViewportSize({ width: 390, height: 844 }); await screenshot(page, info, 'supplier-task-inbox-390.png', page.getByRole('main'));
   await undatedRow.click(); await expect(panel(page).getByLabel('Wiedervorlagetag (optional)', { exact: true })).toHaveValue('');
@@ -164,6 +204,98 @@ test('supplier task keyboard/mobile save, explicit source date, dirty cancel, fi
   await panel(page).getByLabel('Aufgabenart', { exact: true }).selectOption(''); await panel(page).getByRole('button', { name: 'Vormerkung entfernen', exact: true }).click();
   await expect(panel(page)).toContainText('Vormerkung gespeichert · keine Zahlungs- oder Buchungswirkung'); expect((await detail(page, source.document.id)).supplierTask).toBeNull();
   await originalUnchanged(page, source.document, source.bytes); expect(await finances(user.id)).toEqual(before);
+});
+
+test('rapid specific task filters compose real delayed navigations without broadening or rewriting traversal history', async ({ page }) => {
+  test.setTimeout(150_000);
+  const user = await account(page), before = await finances(user.id), probe = randomUUID();
+  const due = await upload(page, `${probe}-DUE`), otherDue = await upload(page, `${probe}-OTHER-DUE`);
+  const payment = await upload(page, `${probe}-PAYMENT`), later = await upload(page, `${probe}-LATER`);
+  const undated = await upload(page, `${probe}-UNDATED`), unmarked = await upload(page, `${probe}-UNMARKED`);
+  await setTask(page, due.document, 'CLARIFY', '2000-01-01'); await setTask(page, otherDue.document, 'CLARIFY', '2000-01-01');
+  await setTask(page, payment.document, 'PAYMENT_CHECK', '2000-01-01'); await setTask(page, later.document, 'CLARIFY', '9999-12-31');
+  await setTask(page, undated.document, 'CLARIFY', null);
+  const base = `inboxProbe=${probe}`, kind = `${base}&taskKind=CLARIFY`, dueQuery = `${base}&taskKind=PAYMENT_CHECK&taskDue=due`;
+  const allIds = [due, otherDue, payment, later, undated, unmarked].map(source => source.document.id);
+  await page.goto(`/purchases?${base}&page=2`);
+  const kindSelect = page.getByLabel('Aufgabenart filtern', { exact: true }), dueSelect = page.getByLabel('Wiedervorlage filtern', { exact: true });
+  const search = page.getByLabel('Lieferant, Rechnungsnummer oder Dateiname', { exact: true });
+  const firstKind = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'PAYMENT_CHECK' && !query.has('taskDue') && !query.has('search'));
+  await kindSelect.selectOption('PAYMENT_CHECK'); await firstKind.started;
+  try {
+    // The first real app response is waiting. The second intent must retain
+    // SPECIFIC kind membership, not silently broaden to every due task.
+    await dueSelect.selectOption('due');
+    await expectInbox(page, dueQuery, 'PAYMENT_CHECK', 'due', '', [payment.document.id]);
+  } finally { firstKind.release(); }
+  await firstKind.finished; await inboxSettled(page);
+  await expectInbox(page, dueQuery, 'PAYMENT_CHECK', 'due', '', [payment.document.id]);
+
+  await kindSelect.selectOption('all'); await expect(kindSelect).toHaveValue('all');
+  await dueSelect.selectOption('any'); await expectInbox(page, base, 'all', 'any', '', allIds);
+  const tripleKind = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'CLARIFY' && !query.has('taskDue') && !query.has('search'));
+  const tripleDue = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'CLARIFY' && query.get('taskDue') === 'later' && !query.has('search'));
+  const term = `SYN-TASK-${probe}-LATER`, composed = `${kind}&taskDue=later&search=${term}`;
+  try {
+    await kindSelect.selectOption('CLARIFY'); await tripleKind.started;
+    await dueSelect.selectOption('later'); await tripleDue.started;
+    await search.fill(term); await page.getByRole('button', { name: 'Belege suchen', exact: true }).click();
+    await expectInbox(page, composed, 'CLARIFY', 'later', term, [later.document.id]);
+    // Release older actual responses out of order AFTER the newest URL/data
+    // committed. Neither an old URL nor old controls may win retroactively.
+    tripleDue.release(); await tripleDue.finished; await inboxSettled(page);
+    await expectInbox(page, composed, 'CLARIFY', 'later', term, [later.document.id]);
+    tripleKind.release(); await tripleKind.finished; await inboxSettled(page);
+    await expectInbox(page, composed, 'CLARIFY', 'later', term, [later.document.id]);
+  } finally { tripleKind.release(); tripleDue.release(); }
+
+  const row = page.locator(`[data-incoming-document-id="${later.document.id}"]`);
+  await row.click(); const reviewUrl = `${new URL(page.url()).origin}/purchases?${composed}&document=${later.document.id}`;
+  await expect(page).toHaveURL(reviewUrl); await expect(panel(page)).toBeVisible();
+  await panel(page).getByLabel('Wiedervorlagetag (optional)', { exact: true }).fill('9999-12-30');
+  await review(page).getByRole('button', { name: 'Zur Liste', exact: true }).click();
+  const chooser = review(page).getByRole('alertdialog', { name: 'Ungespeicherte Vormerkung', exact: true });
+  await chooser.getByRole('button', { name: 'Hier bleiben', exact: true }).click();
+  await expect(page).toHaveURL(reviewUrl); // Cancelled close must not enter the query ledger.
+  await panel(page).getByRole('button', { name: 'Vormerkung abbrechen', exact: true }).click();
+  const [download] = await Promise.all([page.waitForEvent('download'), review(page).getByRole('button', { name: 'Original herunterladen', exact: true }).click()]);
+  expect(await download.failure()).toBeNull(); expect(await readFile((await download.path())!)).toEqual(later.bytes);
+  await page.keyboard.press('Escape'); await expect(review(page)).toHaveCount(0); await expect(row).toBeFocused();
+  await expectInbox(page, composed, 'CLARIFY', 'later', term, [later.document.id]);
+  await page.goBack(); await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goForward(); await expectInbox(page, composed, 'CLARIFY', 'later', term, [later.document.id]);
+  await page.reload(); await expectInbox(page, composed, 'CLARIFY', 'later', term, [later.document.id]);
+
+  // Explicit reset deletes only the requested keys, including a search reset.
+  const missing = `NO-MATCH-${probe}`;
+  await search.fill(missing); await page.getByRole('button', { name: 'Belege suchen', exact: true }).click();
+  await expectInbox(page, `${kind}&taskDue=later&search=${missing}`, 'CLARIFY', 'later', missing, []);
+  await page.getByRole('button', { name: 'Aufgabenfilter zurücksetzen', exact: true }).click();
+  await expectInbox(page, `${base}&search=${missing}`, 'all', 'any', missing, []);
+  await page.getByRole('button', { name: 'Suche zurücksetzen', exact: true }).click();
+  await expectInbox(page, base, 'all', 'any', '', allIds);
+
+  const unrelated = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'DIRECT_DEBIT_WAIT');
+  try {
+    await kindSelect.selectOption('DIRECT_DEBIT_WAIT'); await unrelated.started;
+    await page.locator('a[href="/dashboard"]').filter({ visible: true }).first().click(); await expect(page).toHaveURL(/\/dashboard$/);
+  } finally { unrelated.release(); }
+  await unrelated.finished; await inboxSettled(page); await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goBack(); await expectInbox(page, base, 'all', 'any', '', allIds);
+  await page.goForward(); await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goBack(); await expectInbox(page, base, 'all', 'any', '', allIds);
+
+  // A Back traversal while another query response waits also owns its exact
+  // existing entry; an old response must not replace it or its Forward entry.
+  const traversal = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'any');
+  try {
+    await kindSelect.selectOption('any'); await traversal.started;
+    await page.goBack(); await expect(page).toHaveURL(/\/dashboard$/);
+  } finally { traversal.release(); }
+  await traversal.finished; await inboxSettled(page); await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goForward(); await expectInbox(page, base, 'all', 'any', '', allIds);
+  await originalUnchanged(page, later.document, later.bytes); expect((await detail(page, unmarked.document.id)).supplierTask).toBeNull();
+  expect(await finances(user.id)).toEqual(before);
 });
 
 test('two real tabs produce 409, unknown committed response is read before retry, and delayed save preserves newer keyboard edits', async ({ page, context }, info) => {
