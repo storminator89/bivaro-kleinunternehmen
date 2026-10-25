@@ -10,11 +10,18 @@ import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 const term = 'SYNTHETISCH-Büro';
 const categories = [`${term}artikel`, `${term}miete`];
 
-async function activeOption(page: Page, input: Locator, label: string) {
+async function controlledListbox(page: Page, input: Locator) {
   const listId = await input.getAttribute('aria-controls');
   expect(listId).toBeTruthy();
-  const list = page.getByRole('listbox', { name: 'Vorschläge', exact: true });
+  const list = page.locator(`[id=${JSON.stringify(listId)}]`);
+  await expect(list).toHaveAttribute('role', 'listbox');
+  await expect(list).toHaveAccessibleName('Vorschläge');
   await expect(list).toHaveAttribute('id', listId!);
+  return list;
+}
+
+async function activeOption(page: Page, input: Locator, label: string) {
+  const list = await controlledListbox(page, input);
   const option = list.getByRole('option', { name: label, exact: true });
   await expect(option).toHaveAttribute('aria-selected', 'true');
   await expect(input).toHaveAttribute('aria-activedescendant', (await option.getAttribute('id'))!);
@@ -26,7 +33,7 @@ async function choices(page: Page, input: Locator) {
   await expect(input).toHaveAttribute('aria-autocomplete', 'list');
   await input.fill(term);
   await expect(input).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByRole('option')).toHaveCount(3);
+  await expect((await controlledListbox(page, input)).getByRole('option')).toHaveCount(3);
   await input.press('ArrowDown');
   await activeOption(page, input, categories[0]);
   await input.press('ArrowDown');
@@ -99,8 +106,9 @@ test('category combobox exposes actual keyboard and pointer choices in entry/edi
       expect(await response.finished()).toBeNull();
     };
     await refreshCategories();
-    await expect(page.getByRole('option', { name: `${term}anpassung`, exact: true })).toBeVisible();
-    await expect(page.getByRole('option')).toHaveCount(4);
+    const updatedList = await controlledListbox(page, input);
+    await expect(updatedList.getByRole('option', { name: `${term}anpassung`, exact: true })).toBeVisible();
+    await expect(updatedList.getByRole('option')).toHaveCount(4);
     await expect(input).not.toHaveAttribute('aria-activedescendant');
     await input.press('Enter');
     await expect(input).toHaveValue(term);
@@ -123,7 +131,7 @@ test('category combobox exposes actual keyboard and pointer choices in entry/edi
     await expect(input).toHaveAttribute('aria-expanded', 'false');
     await expect(input).not.toBeFocused();
     await input.fill(term);
-    await page.getByRole('option', { name: categories[0], exact: true }).click();
+    await (await controlledListbox(page, input)).getByRole('option', { name: categories[0], exact: true }).click();
     await expect(input).toHaveValue(categories[0]);
     await expect(input).toBeFocused();
     await expect(input).toHaveAttribute('aria-expanded', 'false');
