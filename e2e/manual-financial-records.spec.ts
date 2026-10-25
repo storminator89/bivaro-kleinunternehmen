@@ -333,33 +333,112 @@ test.describe('bounded manual financial lifecycle #54a', () => {
   });
 
   test('dirty cancel, overlay, native Back/Forward and reload preserve explicit choice and actual opener focus', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await isolatedAccount(page); const row = await createManual(page, 'income', `Synthetic navigation ${randomUUID()}`);
     await directFinalize(page, await fresh(page, 'income', row.id));
-    await page.goto('/dashboard?tab=expenses'); await page.goto('/dashboard?tab=incomes');
+    // This case exercises the app's popstate guard, not full-document unload.
+    // page.goto would create cross-document entries handled by beforeunload;
+    // real visible ReviewLink/Next links must establish the same-document pair.
+    async function readHistory() {
+      return page.evaluate(() => {
+        type Entry = Pick<NavigationHistoryEntry, 'key' | 'id' | 'index' | 'url' | 'sameDocument'>;
+        const navigation = (window as Window & { navigation?: { currentEntry?: Entry; entries: () => Entry[] } }).navigation;
+        if (!navigation?.currentEntry) throw new Error('Chromium Navigation API entry proof is required for this traversal case.');
+        const describe = (entry: Entry) => ({ key: entry.key, id: entry.id, index: entry.index, sameDocument: entry.sameDocument,
+          path: entry.url ? new URL(entry.url).pathname + new URL(entry.url).search : null });
+        return { timeOrigin: performance.timeOrigin, path: location.pathname + location.search,
+          current: describe(navigation.currentEntry), entries: navigation.entries().map(describe) };
+      });
+    }
+    const documentStart = await readHistory();
+    async function openLedger(tab: 'expenses' | 'incomes') {
+      const href = `/dashboard?tab=${tab}`;
+      const link = page.getByRole('navigation', { name: 'Hauptnavigation', exact: true }).locator(`a[href="${href}"]`).filter({ visible: true });
+      await expect(link).toBeVisible(); await link.click();
+      await expect(page).toHaveURL(new URL(href, page.url()).href);
+      await expect(link).toHaveAttribute('aria-current', 'page');
+      await expect(page.locator(tab === 'incomes' ? '#income-search' : '#expense-search')).toBeVisible();
+      const history = await readHistory();
+      expect(history.timeOrigin).toBe(documentStart.timeOrigin);
+      expect(history.path).toBe(href); expect(history.current.path).toBe(href);
+      expect(history.current.sameDocument).toBe(true); expect(history.current.id).not.toBe('');
+      expect(history.entries.find(entry => entry.key === history.current.key)).toEqual(history.current);
+      return history;
+    }
+    const expensesEntry = await openLedger('expenses');
+    const incomesEntry = await openLedger('incomes');
+    expect(incomesEntry.current.index).toBe(expensesEntry.current.index + 1);
+    expect(incomesEntry.current.key).not.toBe(expensesEntry.current.key);
+    expect(incomesEntry.current.id).not.toBe(expensesEntry.current.id);
+    expect(incomesEntry.entries.find(entry => entry.key === expensesEntry.current.key)).toEqual(expensesEntry.current);
+    // Real owner-scoped read membership plus the actual visible opener below;
+    // a URL alone is not evidence that the intended ledger row was rendered.
+    const membership = await page.request.get('/api/incomes?page=1&pageSize=20'); expect(membership.status()).toBe(200);
+    expect((await membership.json() as { items: { id: number }[] }).items.some(item => item.id === row.id)).toBe(true);
+    const slot = ({ id: _id, ...entry }: typeof incomesEntry.current) => entry;
+    async function expectHistory(current: typeof incomesEntry.current, entries = incomesEntry.entries, preserveIds = false) {
+      const history = await readHistory();
+      expect(history.timeOrigin).toBe(documentStart.timeOrigin); expect(history.path).toBe(current.path);
+      // Next may update internal classic-history state on authorized clean
+      // navigation. Slot key/index/URL must nevertheless remain exact. During
+      // guarded cancellation Next never sees popstate: even IDs must not change.
+      expect(slot(history.current)).toEqual(slot(current));
+      expect(history.entries.map(slot)).toEqual(entries.map(slot));
+      if (preserveIds) { expect(history.current).toEqual(current); expect(history.entries).toEqual(entries); }
+    }
     const { dialog, opener } = await openRecord(page, 'income', row.description, false);
+    await expectHistory(incomesEntry.current, incomesEntry.entries, true);
     await dialog.getByLabel('Neuer wirksamer Betrag (EUR)', { exact: true }).fill('81.00');
     await dialog.getByLabel('Nachvollziehbarer Korrekturgrund', { exact: true }).fill('Noch nicht gespeichert');
     await page.mouse.click(2, 2); await expect(dialog.getByRole('alertdialog')).toBeFocused();
     await dialog.getByRole('button', { name: 'Hier bleiben', exact: true }).click();
+    await expectHistory(incomesEntry.current, incomesEntry.entries, true);
     await page.goBack(); await expect(dialog.getByRole('alertdialog')).toBeVisible();
+    await expectHistory(incomesEntry.current, incomesEntry.entries, true); // exact source entry restored before choosing
     await dialog.getByRole('button', { name: 'Hier bleiben', exact: true }).click(); await expect(page).toHaveURL(/tab=incomes/);
+    await expectHistory(incomesEntry.current, incomesEntry.entries, true);
     await expect(dialog.getByLabel('Neuer wirksamer Betrag (EUR)', { exact: true })).toHaveValue('81.00');
-    page.once('dialog', prompt => prompt.dismiss()); await page.reload().catch(() => {});
+    const reloadDialog = page.waitForEvent('dialog');
+    const reloadAttempt = page.reload().catch((failure: unknown) => {
+      // Installed Chromium delegates beforeunload dismissal to frameAbortedNavigation
+      // with this exact text; channelOwner adds the API prefix and connection
+      // may append its standard Call log block. Acceptance still requires the
+      // actual beforeunload prompt to be observed and dismissed below.
+      const nativeCancellation = /^page\.reload: (?:navigation cancelled by beforeunload dialog|net::ERR_ABORTED)(?:\nCall log:\n[\s\S]*\n)?$/u;
+      if (!(failure instanceof Error) || !nativeCancellation.test(failure.message)) throw failure;
+      return null;
+    });
+    const reloadPrompt = await reloadDialog;
+    expect(reloadPrompt.type()).toBe('beforeunload'); await reloadPrompt.dismiss();
+    expect(await reloadAttempt).toBeNull();
     await expect(dialog).toBeVisible(); await expect(dialog.getByLabel('Neuer wirksamer Betrag (EUR)', { exact: true })).toHaveValue('81.00');
+    await expect(dialog.getByLabel('Nachvollziehbarer Korrekturgrund', { exact: true })).toHaveValue('Noch nicht gespeichert');
+    await expectHistory(incomesEntry.current, incomesEntry.entries, true); // native cancellation retained document, slots and IDs
     await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
     await dialog.getByRole('button', { name: 'Trotzdem verlassen', exact: true }).click(); await expect(opener).toBeFocused();
-    await page.goBack(); await expect(page).toHaveURL(/tab=expenses/); await page.goForward(); await expect(page).toHaveURL(/tab=incomes/);
-    // Establish a real forward destination, then enter the dirty dialog at the
-    // middle entry. Neither cancellation nor confirmation may rewrite entries.
-    await page.goto('/dashboard?tab=expenses'); await page.goBack(); await expect(page).toHaveURL(/tab=incomes/);
+    await page.goBack(); await expect(page).toHaveURL(/tab=expenses/); await expectHistory(expensesEntry.current);
+    await page.goForward(); await expect(page).toHaveURL(/tab=incomes/); await expectHistory(incomesEntry.current);
+    // Establish a real forward destination via the same app link, then return
+    // to the middle entry. No pushState, fake event or compensating URL rewrite.
+    const forwardEntry = await openLedger('expenses');
+    expect(forwardEntry.current.index).toBe(incomesEntry.current.index + 1);
+    expect(forwardEntry.entries.map(slot)).toEqual([...incomesEntry.entries, forwardEntry.current].map(slot));
+    await page.goBack(); await expect(page).toHaveURL(/tab=incomes/); await expectHistory(incomesEntry.current, forwardEntry.entries);
     const forward = await openRecord(page, 'income', row.description, false);
+    const middleEntry = await readHistory();
+    await expectHistory(incomesEntry.current, forwardEntry.entries);
     await forward.dialog.getByLabel('Neuer wirksamer Betrag (EUR)', { exact: true }).fill('82.00');
     await page.goForward(); await expect(forward.dialog.getByRole('alertdialog')).toBeVisible();
+    await expectHistory(middleEntry.current, middleEntry.entries, true);
     await forward.dialog.getByRole('button', { name: 'Hier bleiben', exact: true }).click(); await expect(page).toHaveURL(/tab=incomes/);
+    await expectHistory(middleEntry.current, middleEntry.entries, true);
     await expect(forward.dialog.getByLabel('Neuer wirksamer Betrag (EUR)', { exact: true })).toHaveValue('82.00');
     await page.goForward(); await expect(forward.dialog.getByRole('alertdialog')).toBeVisible();
+    await expectHistory(middleEntry.current, middleEntry.entries, true);
     await forward.dialog.getByRole('button', { name: 'Trotzdem verlassen', exact: true }).click(); await expect(page).toHaveURL(/tab=expenses/);
-    await page.goBack(); await expect(page).toHaveURL(/tab=incomes/);
+    await expectHistory(forwardEntry.current, forwardEntry.entries);
+    await page.goBack(); await expect(page).toHaveURL(/tab=incomes/); await expectHistory(incomesEntry.current, forwardEntry.entries);
     expect((await fresh(page, 'income', row.id)).history).toHaveLength(1);
+    process.stdout.write(`Manual financial same-document traversal proof: ${JSON.stringify({ documentTimeOrigin: documentStart.timeOrigin, expenses: expensesEntry.current, incomes: incomesEntry.current, forward: forwardEntry.current, entriesPreserved: forwardEntry.entries })}\n`);
   });
 });
