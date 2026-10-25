@@ -104,7 +104,7 @@ Self-hosted · Quotes through receipt review · Light and dark mode
     <td width="50%" valign="top"><strong>Supplier tasks</strong><br><a href="docs/screenshots/2026-10-25/supplier-tasks-1440.png"><img src="docs/screenshots/2026-10-25/supplier-tasks-1440.png" alt="Saved synthetic supplier follow-up, explicitly without payment, posting or notification" width="400"></a></td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><strong>Cash book · entry</strong><br><a href="docs/screenshots/2026-10-25/cashbook-1440.png"><img src="docs/screenshots/2026-10-25/cashbook-1440.png" alt="Cash book entry page with no cash book yet and an action to create one" width="400"></a></td>
+    <td width="50%" valign="top"><strong>Cash book</strong><br><a href="docs/screenshots/2026-10-25/cashbook-1440.png"><img src="docs/screenshots/2026-10-25/cashbook-1440.png" alt="Cash book workspace with synthetic E2E Nullbestand book, zero balance, ledger and tabs" width="400"></a></td>
   </tr>
 </table>
 
@@ -181,7 +181,7 @@ Self-hosted · Quotes through receipt review · Light and dark mode
     <td width="50%" valign="top"><strong>Login</strong><br><a href="docs/screenshots/2026-10-25/login-public.png"><img src="docs/screenshots/2026-10-25/login-public.png" alt="Empty public login form with a password field and access-help link" width="400"></a></td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><strong>Registration · closed</strong><br><a href="docs/screenshots/2026-10-25/register-public.png"><img src="docs/screenshots/2026-10-25/register-public.png" alt="Registration page in its actual closed state with a referral to the administrator" width="400"></a></td>
+    <td width="50%" valign="top"><strong>Initial admin setup</strong><br><a href="docs/screenshots/2026-10-25/register-public.png"><img src="docs/screenshots/2026-10-25/register-public.png" alt="Unfilled initial administrator setup form with bootstrap requirement; no credentials entered and not open public signup" width="400"></a></td>
   </tr>
 </table>
 

@@ -104,7 +104,7 @@ Selbst gehostet · Angebote bis Belegprüfung · Heller und dunkler Modus
     <td width="50%" valign="top"><strong>Lieferantenaufgaben</strong><br><a href="docs/screenshots/2026-10-25/supplier-tasks-1440.png"><img src="docs/screenshots/2026-10-25/supplier-tasks-1440.png" alt="Gespeicherte synthetische Lieferantenvormerkung ohne Zahlung, Buchung oder Benachrichtigung" width="400"></a></td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><strong>Kassenbuch · Einstieg</strong><br><a href="docs/screenshots/2026-10-25/cashbook-1440.png"><img src="docs/screenshots/2026-10-25/cashbook-1440.png" alt="Kassenbuch-Einstiegsseite ohne angelegte Kasse mit Aktion zum Erstellen" width="400"></a></td>
+    <td width="50%" valign="top"><strong>Kassenbuch</strong><br><a href="docs/screenshots/2026-10-25/cashbook-1440.png"><img src="docs/screenshots/2026-10-25/cashbook-1440.png" alt="Kassenbuch-Arbeitsbereich mit synthetischer Kasse E2E Nullbestand, Nullsaldo, Buchungsübersicht und Reitern" width="400"></a></td>
   </tr>
 </table>
 
@@ -181,7 +181,7 @@ Selbst gehostet · Angebote bis Belegprüfung · Heller und dunkler Modus
     <td width="50%" valign="top"><strong>Anmelden</strong><br><a href="docs/screenshots/2026-10-25/login-public.png"><img src="docs/screenshots/2026-10-25/login-public.png" alt="Leere öffentliche Anmeldemaske mit Passwortfeld und Link zur Zugangshilfe" width="400"></a></td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><strong>Registrierung · geschlossen</strong><br><a href="docs/screenshots/2026-10-25/register-public.png"><img src="docs/screenshots/2026-10-25/register-public.png" alt="Registrierungsseite im tatsächlich geschlossenen Zustand mit Verweis auf den Administrator" width="400"></a></td>
+    <td width="50%" valign="top"><strong>Erstes Admin-Setup</strong><br><a href="docs/screenshots/2026-10-25/register-public.png"><img src="docs/screenshots/2026-10-25/register-public.png" alt="Leeres Formular für das erste Admin-Setup mit Bootstrap-Anforderung; keine Zugangsdaten eingegeben und keine öffentliche Registrierung" width="400"></a></td>
   </tr>
 </table>
 

@@ -89,7 +89,7 @@ const currentSource = '0ed113074e1c97defaa84345e2e050cf7eb281ff';
 const previousTree = '4cb608ac6901e893581997378c35c6f21c931428';
 const currentTree = '6df04d075d64c1566187333e5536fa0bdd497d4d';
 const previousAcceptedMerge = '1e6d9fe110c9206401da27b530f44f30e14be2dc';
-const currentManifestSha256 = '684923951841afe64cb515ad9bf6d0e1dbd9fdf1bacc628784d79d97078adf68';
+const currentManifestSha256 = '2678c5b9ba2cbe24f6bec057c72151793cc99ba8b3ecfeba6967f33ec77d7893';
 const readmes = ['README.md', 'README.en.md'];
 const guides = ['docs/operations/getting-started.de.md', 'docs/operations/getting-started.en.md'];
 

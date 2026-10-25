@@ -62,6 +62,6 @@ This inventory maps actual UI areas, not every state, modal scroll position or a
 | Rechnungsdetails · Mobil / Invoice details · mobile | [invoice-details-375.png](2026-10-25/invoice-details-375.png) |
 | Datensuche / Record search | [record-search-continuation-1440.png](2026-10-25/record-search-continuation-1440.png) |
 
-Cashbook is currently pictured at its empty entry state; registration is pictured closed, not as open public signup. These originals are truthful but do not show the cashbook transaction workspace or initial admin setup form. The source-only capture-point improvements remain pending their own fresh hosted originals.
+Cashbook shows its ledger workspace and tabs with an existing synthetic zero-balance book; it does not imply any cash transactions. Registration shows the blank first-admin bootstrap setup before credentials or token entry, not open public signup. API-key management is intentionally shown without creating credentials.
 
 Supplier tasks live inside receipt review; projects, manual time and statements live inside the customer workspace. There is no separate supplier-directory or project route implied by this inventory.
