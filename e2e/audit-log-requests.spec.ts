@@ -56,44 +56,90 @@ async function actionRequest(page: Page, action: () => Promise<unknown>) {
   return new URL((await requested).url()).searchParams;
 }
 
-/** Delay an unchanged real backend response. Canceled browser deliveries may fail. */
-async function holdNext(page: Page) {
-  let release!: () => void, started!: () => void, failed!: (reason: unknown) => void, finished!: () => void;
-  const gate = new Promise<void>(resolve => { release = resolve; });
-  const held = new Promise<void>((resolve, reject) => { started = resolve; failed = reject; });
-  const done = new Promise<void>(resolve => { finished = resolve; });
-  let deliveryError: unknown = null;
-  let request: Request | undefined;
-  await page.route(auditURL, async route => {
-    request = route.request();
-    try {
-      const response = await route.fetch();
-      expect(response.status()).toBe(200);
-      // Fully read before releasing the gate, so neither server execution nor
-      // a fabricated success result can explain which response wins.
-      await response.body();
-      started();
-      await gate;
-      try { await route.fulfill({ response }); } catch (caught) { deliveryError = caught; }
-    } catch (caught) {
-      failed(caught);
-      throw caught;
-    } finally { finished(); }
-  }, { times: 1 });
-  return { held, release, done, delivery: () => ({ request, deliveryError }) };
+interface HeldAuditRequest {
+  held: Promise<void>;
+  done: Promise<void>;
+  release: () => void;
+  delivery: () => { request?: Request; deliveryError: unknown };
 }
 
-async function deliver(page: Page, held: Awaited<ReturnType<typeof holdNext>>) {
+/**
+ * Keep interception installed while multiple responses are held. Playwright
+ * removes a `times: 1` handler before its callback finishes; finishing an older
+ * callback can then disable interception while a newer callback is still held.
+ * One stable dispatcher avoids releasing that newer request behind the gate.
+ */
+async function auditRequestGates(page: Page) {
+  type Gate = {
+    expected: Record<string, string>;
+    failure: boolean;
+    started: () => void;
+    failed: (reason: unknown) => void;
+    finished: () => void;
+    wait: Promise<void>;
+    record: { request?: Request; deliveryError: unknown };
+  };
+  const queue: Gate[] = [];
+  const requests: Record<string, string>[] = [];
+  await page.route(auditURL, async route => {
+    const actual = Object.fromEntries(new URL(route.request().url()).searchParams);
+    requests.push(actual);
+    const gate = queue.shift();
+    if (!gate) return route.continue();
+    gate.record.request = route.request();
+    try {
+      expect(actual).toEqual(gate.expected);
+      const response = gate.failure ? null : await route.fetch();
+      if (response) {
+        expect(response.status()).toBe(200);
+        // Read the actual backend body before the gate; never fabricate success.
+        await response.body();
+      }
+      gate.started();
+      await gate.wait;
+      try {
+        if (response) await route.fulfill({ response });
+        else await route.fulfill({ status: 503, json: { error: 'Synthetic stale interruption' } });
+      } catch (caught) { gate.record.deliveryError = caught; }
+    } catch (caught) {
+      gate.failed(caught);
+      throw caught;
+    } finally { gate.finished(); }
+  });
+  return {
+    requests,
+    hold(expected: Record<string, string>, failure = false): HeldAuditRequest {
+      let release!: () => void, started!: () => void, failed!: (reason: unknown) => void, finished!: () => void;
+      const wait = new Promise<void>(resolve => { release = resolve; });
+      const held = new Promise<void>((resolve, reject) => { started = resolve; failed = reject; });
+      const done = new Promise<void>(resolve => { finished = resolve; });
+      const record: { request?: Request; deliveryError: unknown } = { deliveryError: null };
+      queue.push({ expected, failure, started, failed, finished, wait, record });
+      return { held, release, done, delivery: () => record };
+    },
+  };
+}
+
+async function deliver(page: Page, held: HeldAuditRequest, expectedStatus = 200) {
   const request = held.delivery().request;
   expect(request).toBeDefined();
   const delivered = page.waitForResponse(response => response.request() === request);
   held.release();
   const response = await delivered;
-  expect(response.status()).toBe(200);
+  expect(response.status()).toBe(expectedStatus);
   expect(await response.finished()).toBeNull();
   await held.done;
   expect(held.delivery().deliveryError).toBeNull();
   await settled(page);
+}
+
+async function auditResponse(page: Page, expected: Record<string, string>, action: () => Promise<unknown>) {
+  const delivered = page.waitForResponse(response => isAudit(response.request()));
+  await action();
+  const response = await delivered;
+  expect(Object.fromEntries(new URL(response.url()).searchParams)).toEqual(expected);
+  expect(response.status()).toBe(200);
+  expect(await response.finished()).toBeNull();
 }
 
 test('audit drafts apply once from later pages; paging and reset use the intended snapshot and keyboard submit', async ({ page }) => {
@@ -158,22 +204,42 @@ test('late real responses cannot clear newer loading, replace newer rows, or und
   const { marker } = await fixture(page);
   await openAudit(page); await expect(rows(page)).toHaveCount(25);
   await choose(page, 'Bereich', 'Kunde');
-  await page.getByRole('button', { name: 'Suchen', exact: true }).click();
+  await auditResponse(page, { page: '1', limit: '25', entityType: 'Customer' },
+    () => page.getByRole('button', { name: 'Suchen', exact: true }).click());
+  await expect(rows(page).filter({ hasText: `${marker}-CUSTOMER-` })).toHaveCount(25);
   await expect(page.getByText('Seite 1 von 2', { exact: true })).toBeVisible();
-  const older = await holdNext(page);
+  const gates = await auditRequestGates(page);
+  const older = gates.hold({ page: '2', limit: '25', entityType: 'Customer' });
   await page.getByRole('button', { name: 'Weiter', exact: true }).click(); await older.held;
   await choose(page, 'Bereich', 'Rechnung');
-  const newer = await holdNext(page);
+  const newer = gates.hold({ page: '1', limit: '25', entityType: 'Invoice' });
   await page.getByRole('button', { name: 'Suchen', exact: true }).click(); await newer.held;
   try {
+    expect(gates.requests).toEqual([
+      { page: '2', limit: '25', entityType: 'Customer' },
+      { page: '1', limit: '25', entityType: 'Invoice' },
+    ]);
+    await expect(loading(page)).toBeVisible();
     await deliver(page, older);
     await expect(loading(page)).toBeVisible(); await expect(rows(page)).toHaveCount(0);
     await expect(error(page)).toHaveCount(0);
     await deliver(page, newer);
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).filter({ hasText: `${marker}-INVOICE-` })).toHaveCount(2);
+  } catch (caught) {
+    const diagnostic = {
+      requestCount: gates.requests.length,
+      requests: gates.requests.slice(0, 16),
+      busy: await page.locator('[data-slot="card-content"][aria-busy]')
+        .evaluateAll(elements => elements.map(element => element.getAttribute('aria-busy'))),
+      statuses: (await page.getByRole('status').allTextContents()).slice(0, 8).map(text => text.slice(0, 300)),
+      rowCount: await rows(page).count(),
+      sampleRows: (await rows(page).allTextContents()).slice(0, 3).map(text => text.slice(0, 500)),
+    };
+    process.stdout.write(`Audit race diagnostic: ${JSON.stringify(diagnostic)}\n`);
+    throw caught;
   } finally { older.release(); newer.release(); await Promise.all([older.done, newer.done]); }
-  const late = await holdNext(page);
+  const late = gates.hold({ page: '1', limit: '25', entityType: 'Invoice' });
   await page.getByRole('button', { name: 'Suchen', exact: true }).click(); await late.held;
   try {
     const reset = await actionRequest(page, () => page.getByRole('button', { name: 'Filter zurücksetzen', exact: true }).click());
@@ -185,23 +251,15 @@ test('late real responses cannot clear newer loading, replace newer rows, or und
     await expect(page.getByText('Seite 1 von 2', { exact: true })).toBeVisible();
   } finally { late.release(); await late.done; }
   // A stale failure must not replace the newer successful reset either.
-  let failRelease!: () => void, failStarted!: () => void;
-  const failGate = new Promise<void>(resolve => { failRelease = resolve; });
-  const failHeld = new Promise<void>(resolve => { failStarted = resolve; });
-  await page.route(auditURL, async route => {
-    failStarted(); await failGate;
-    await route.fulfill({ status: 503, json: { error: 'Synthetic stale interruption' } });
-  }, { times: 1 });
-  await page.getByRole('button', { name: 'Suchen', exact: true }).click(); await failHeld;
+  const staleFailure = gates.hold({ page: '1', limit: '25' }, true);
+  await page.getByRole('button', { name: 'Suchen', exact: true }).click(); await staleFailure.held;
   try {
-    await actionRequest(page, () => page.getByRole('button', { name: 'Filter zurücksetzen', exact: true }).click());
+    await auditResponse(page, { page: '1', limit: '25' },
+      () => page.getByRole('button', { name: 'Filter zurücksetzen', exact: true }).click());
     await expect(rows(page)).toHaveCount(25);
-    const deliveredFailure = page.waitForResponse(response => isAudit(response.request()) && response.status() === 503);
-    failRelease();
-    expect(await (await deliveredFailure).finished()).toBeNull();
-    await settled(page);
+    await deliver(page, staleFailure, 503);
     await expect(error(page)).toHaveCount(0); await expect(rows(page)).toHaveCount(25);
-  } finally { failRelease(); }
+  } finally { staleFailure.release(); await staleFailure.done; }
 });
 
 test('mobile HTTP/network errors are visible, hide stale rows, and retry the applied later page rather than a changed draft', async ({ page }) => {
@@ -241,7 +299,8 @@ test('navigating away aborts pending audit requests and a fresh visit cannot rec
   page.on('pageerror', caught => errors.push(caught.message));
   await openAudit(page); await expect(rows(page)).toHaveCount(25);
   await choose(page, 'Bereich', 'Kunde');
-  const held = await holdNext(page);
+  const gates = await auditRequestGates(page);
+  const held = gates.hold({ page: '1', limit: '25', entityType: 'Customer' });
   await page.getByRole('button', { name: 'Suchen', exact: true }).click(); await held.held;
   try {
     const aborted = page.waitForEvent('requestfailed', isAudit);
