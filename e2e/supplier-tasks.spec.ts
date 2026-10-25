@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Page, type Request, type Route, type TestInfo } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { hashPassword } from '../lib/password';
@@ -52,24 +52,73 @@ async function originalUnchanged(page: Page, document: IncomingDocument, bytes: 
   expect(response.status()).toBe(200); expect(await response.body()).toEqual(bytes);
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(document.originalRef.sha256);
 }
-async function delayInboxNavigation(page: Page, matches: (query: URLSearchParams) => boolean) {
-  let release!: () => void, entered!: () => void, settled!: () => void;
-  const gate = new Promise<void>(resolve => { release = resolve; });
-  const started = new Promise<void>(resolve => { entered = resolve; });
-  const finished = new Promise<void>(resolve => { settled = resolve; });
-  await page.route(url => url.pathname === '/purchases' && matches(url.searchParams), async route => {
-    // Delay the actual app-router navigation, not the list API or an invented
-    // success. Fetch the real RSC response before allowing newer UI intent.
-    expect(route.request().headers()['rsc']).toBe('1');
-    const response = await route.fetch();
-    expect(response.status()).toBe(200); expect(response.headers()['content-type']).toContain('text/x-component');
-    entered(); await gate;
-    try { await route.fulfill({ response }); }
-    catch (error) { if (!route.request().failure()) throw error; } // Next may have genuinely aborted the superseded request.
-    finally { settled(); }
-  }, { times: 1 });
-  return { started, release, finished };
-}
+type InboxNavigationDelay = { started: Promise<void>; release: () => void; finished: Promise<void> };
+type InboxNavigationOutcome = { error: unknown } | null;
+const inboxNavigationTest = test.extend<{
+  delayInboxNavigation: (matches: (query: URLSearchParams) => boolean) => Promise<InboxNavigationDelay>;
+}>({
+  delayInboxNavigation: async ({ page }, provide) => {
+    const delays: ReturnType<typeof registerDelay>[] = [];
+    function registerDelay(matches: (query: URLSearchParams) => boolean) {
+      let release!: () => void, entered!: () => void, settled!: (outcome: InboxNavigationOutcome) => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      const started = new Promise<void>(resolve => { entered = resolve; });
+      // Store errors as results until the test/fixture awaits them. A failed
+      // route callback also throws; no background harness failure is ignored.
+      const outcome = new Promise<InboxNavigationOutcome>(resolve => { settled = resolve; });
+      return { matches, claimed: false, gate, started, release, entered, settled, outcome,
+        get finished() { return outcome.then(result => { if (result) throw result.error; }); },
+      };
+    }
+    const matcher = (url: URL) => url.pathname === '/purchases';
+    const handler = async (route: Route) => {
+      const request = route.request(), query = new URL(request.url()).searchParams;
+      const delay = delays.find(candidate => !candidate.claimed && candidate.matches(query));
+      if (!delay) { await route.fallback(); return; }
+      delay.claimed = true;
+      let requestSettled!: (failure: ReturnType<Request['failure']>) => void;
+      const terminal = new Promise<ReturnType<Request['failure']>>(resolve => { requestSettled = resolve; });
+      const finished = (ended: Request) => { if (ended === request) requestSettled(null); };
+      const failed = (ended: Request) => {
+        if (ended === request) requestSettled(ended.failure() ?? { errorText: 'Missing request failure reason' });
+      };
+      page.on('requestfinished', finished); page.on('requestfailed', failed);
+      if (request.failure()) failed(request); // The exact request may already have emitted its failure.
+      try {
+        // Fetch the actual RSC response before allowing newer UI intent. Never
+        // synthesize success, abort the request, or replace the real headers.
+        expect(request.headers()['rsc']).toBe('1');
+        const response = await route.fetch();
+        expect(response.status()).toBe(200); expect(response.headers()['content-type']).toContain('text/x-component');
+        delay.entered(); await delay.gate;
+        // Fulfill failures ALWAYS fail, including "already handled". Only an
+        // observed terminal event for this exact Request can prove cancellation.
+        await route.fulfill({ response });
+        const failure = await terminal;
+        if (failure) expect(failure.errorText).toBe('net::ERR_ABORTED');
+        delay.settled(null);
+      } catch (error) { delay.settled({ error }); throw error; }
+      finally { page.off('requestfinished', finished); page.off('requestfailed', failed); }
+    };
+    let installation: ReturnType<Page['route']> | undefined;
+    try {
+      await provide(async matches => {
+        // Playwright 1.59.1 removes times:1 handlers before awaiting them. When
+        // the last registration disappears, finishing one handler can remove
+        // the server interceptor and auto-continue other still-delayed routes.
+        // Keep ONE non-expiring interceptor until every claimed gate settles.
+        installation ??= page.route(matcher, handler);
+        await installation;
+        const delay = registerDelay(matches); delays.push(delay); return delay;
+      });
+    } finally {
+      for (const delay of delays) delay.release();
+      const outcomes = await Promise.all(delays.filter(delay => delay.claimed).map(delay => delay.outcome));
+      if (installation) { await installation; await page.unroute(matcher, handler); }
+      for (const outcome of outcomes) if (outcome) throw outcome.error;
+    }
+  },
+});
 async function expectInbox(page: Page, query: string, kind: string, due: string, search: string, ids: number[]) {
   await expect(page).toHaveURL(`${new URL(page.url()).origin}/purchases${query ? `?${query}` : ''}`);
   await expect(page.getByLabel('Aufgabenart filtern', { exact: true })).toHaveValue(kind);
@@ -206,7 +255,7 @@ test('supplier task keyboard/mobile save, explicit source date, dirty cancel, fi
   await originalUnchanged(page, source.document, source.bytes); expect(await finances(user.id)).toEqual(before);
 });
 
-test('rapid specific task filters compose real delayed navigations without broadening or rewriting traversal history', async ({ page }) => {
+inboxNavigationTest('rapid specific task filters compose real delayed navigations without broadening or rewriting traversal history', async ({ page, delayInboxNavigation }) => {
   test.setTimeout(150_000);
   const user = await account(page), before = await finances(user.id), probe = randomUUID();
   const due = await upload(page, `${probe}-DUE`), otherDue = await upload(page, `${probe}-OTHER-DUE`);
@@ -220,7 +269,7 @@ test('rapid specific task filters compose real delayed navigations without broad
   await page.goto(`/purchases?${base}&page=2`);
   const kindSelect = page.getByLabel('Aufgabenart filtern', { exact: true }), dueSelect = page.getByLabel('Wiedervorlage filtern', { exact: true });
   const search = page.getByLabel('Lieferant, Rechnungsnummer oder Dateiname', { exact: true });
-  const firstKind = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'PAYMENT_CHECK' && !query.has('taskDue') && !query.has('search'));
+  const firstKind = await delayInboxNavigation(query => query.get('inboxProbe') === probe && query.get('taskKind') === 'PAYMENT_CHECK' && !query.has('taskDue') && !query.has('search'));
   await kindSelect.selectOption('PAYMENT_CHECK'); await firstKind.started;
   try {
     // The first real app response is waiting. The second intent must retain
@@ -233,8 +282,8 @@ test('rapid specific task filters compose real delayed navigations without broad
 
   await kindSelect.selectOption('all'); await expect(kindSelect).toHaveValue('all');
   await dueSelect.selectOption('any'); await expectInbox(page, base, 'all', 'any', '', allIds);
-  const tripleKind = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'CLARIFY' && !query.has('taskDue') && !query.has('search'));
-  const tripleDue = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'CLARIFY' && query.get('taskDue') === 'later' && !query.has('search'));
+  const tripleKind = await delayInboxNavigation(query => query.get('inboxProbe') === probe && query.get('taskKind') === 'CLARIFY' && !query.has('taskDue') && !query.has('search'));
+  const tripleDue = await delayInboxNavigation(query => query.get('inboxProbe') === probe && query.get('taskKind') === 'CLARIFY' && query.get('taskDue') === 'later' && !query.has('search'));
   const term = `SYN-TASK-${probe}-LATER`, composed = `${kind}&taskDue=later&search=${term}`;
   try {
     await kindSelect.selectOption('CLARIFY'); await tripleKind.started;
@@ -275,7 +324,7 @@ test('rapid specific task filters compose real delayed navigations without broad
   await page.getByRole('button', { name: 'Suche zurücksetzen', exact: true }).click();
   await expectInbox(page, base, 'all', 'any', '', allIds);
 
-  const unrelated = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'DIRECT_DEBIT_WAIT');
+  const unrelated = await delayInboxNavigation(query => query.get('inboxProbe') === probe && query.get('taskKind') === 'DIRECT_DEBIT_WAIT');
   try {
     await kindSelect.selectOption('DIRECT_DEBIT_WAIT'); await unrelated.started;
     await page.locator('a[href="/dashboard"]').filter({ visible: true }).first().click(); await expect(page).toHaveURL(/\/dashboard$/);
@@ -287,7 +336,7 @@ test('rapid specific task filters compose real delayed navigations without broad
 
   // A Back traversal while another query response waits also owns its exact
   // existing entry; an old response must not replace it or its Forward entry.
-  const traversal = await delayInboxNavigation(page, query => query.get('inboxProbe') === probe && query.get('taskKind') === 'any');
+  const traversal = await delayInboxNavigation(query => query.get('inboxProbe') === probe && query.get('taskKind') === 'any');
   try {
     await kindSelect.selectOption('any'); await traversal.started;
     await page.goBack(); await expect(page).toHaveURL(/\/dashboard$/);
