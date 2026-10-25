@@ -44,3 +44,8 @@ they assert both the real owner and sessionVersion returned to the original
 document. No local browser/server/API execution occurred. Exact-commit hosted
 collection/CI/browser evidence and combined #169/#180 verification remain
 required.
+
+Fixture login/dashboard navigations additionally wait for the complete real
+session response and its expected owner, role and sessionVersion before starting
+another navigation. This is response synchronization, not an exemption for
+authentication errors or evidence that every aborted fetch is harmless.

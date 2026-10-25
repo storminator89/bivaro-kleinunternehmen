@@ -8,12 +8,27 @@ import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 // Authoring only until the authorized hosted runner executes this source.
 // Real UI authentication and server-issued cookies; no SessionContext injection,
 // original-document reload or manufactured session JSON can hide the boundary.
-async function signIn(page: Page, email: string, password: string) {
+type Owner = { id: string; role: string; sessionVersion: number };
+async function documentSession(page: Page, destination: string, navigate: () => Promise<unknown>, owner?: Owner) {
+  const session = page.waitForResponse(response => response.request().method() === 'GET'
+    && new URL(response.url()).pathname === '/api/auth/session'
+    && new URL(page.url()).pathname === destination.split('?')[0]);
+  await navigate();
+  const response = await session;
+  expect(response.status()).toBe(200); expect(await response.finished()).toBeNull();
+  const body = await response.json();
+  expect(body.user ? { id: body.user.id, role: body.user.role, sessionVersion: body.user.sessionVersion } : undefined).toEqual(owner);
+  // Do not manufacture an auth-fetch abort by navigating the fresh document
+  // again before SessionProvider has consumed its exact response.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+async function signIn(page: Page, owner: Owner & { email: string }, password: string) {
   await isolateSyntheticLoginIpBudget();
-  await page.goto('/login');
-  await page.getByLabel('E-Mail').fill(email);
+  await documentSession(page, '/login', () => page.goto('/login'));
+  await page.getByLabel('E-Mail').fill(owner.email);
   await page.getByLabel('Passwort', { exact: true }).fill(password);
-  await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click();
+  await documentSession(page, '/dashboard', () => page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click(),
+    { id: owner.id, role: owner.role, sessionVersion: owner.sessionVersion });
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByRole('button', { name: 'Befehlspalette öffnen', exact: true }).filter({ visible: true }).first()).toBeVisible();
 }
@@ -62,7 +77,7 @@ for (const replacement of ['owner', 'sessionVersion'] as const) {
     let oldRead: ReturnType<typeof holdRead> | undefined, newRead: ReturnType<typeof holdRead> | undefined;
     const siblingContext = await browser.newContext({ baseURL: info.project.use.baseURL });
     try {
-      await signIn(page, owner.email, password);
+      await signIn(page, owner, password);
       const original = await page.request.post(`/api/${resource}`, { data: { description: previousLabel, amount: 12.34, date: '2026-10-01', taxRelevant: true } });
       expect(original.status()).toBe(200);
       const originalFinancialWrites: string[] = [];
@@ -71,7 +86,8 @@ for (const replacement of ['owner', 'sessionVersion'] as const) {
           originalFinancialWrites.push(`${request.method()} ${new URL(request.url()).pathname}`);
         }
       });
-      await page.goto(`/dashboard?tab=${resource}&new=1`);
+      await documentSession(page, `/dashboard?tab=${resource}&new=1`, () => page.goto(`/dashboard?tab=${resource}&new=1`),
+        { id: owner.id, role: owner.role, sessionVersion: owner.sessionVersion });
       const entry = page.locator(`#${kind}-entry`);
       await expect(entry).toBeVisible();
       await expect(page).not.toHaveURL(/(?:\?|&)new=1(?:&|$)/);
@@ -118,7 +134,7 @@ for (const replacement of ['owner', 'sessionVersion'] as const) {
       const cancelled = page.waitForEvent('requestfailed', { predicate: request => request === oldRequest });
       const sibling = await siblingContext.newPage();
       const nextOwner = foreign ?? await prisma.user.update({ where: { id: owner.id }, data: { sessionVersion: { increment: 1 } } });
-      await signIn(sibling, nextOwner.email, password);
+      await signIn(sibling, nextOwner, password);
       const issued = await (await sibling.request.get('/api/auth/session')).json() as { user: { id: string; sessionVersion: number } };
       expect(issued.user.id).toBe(nextOwner.id); expect(issued.user.sessionVersion).toBe(nextOwner.sessionVersion);
       const nextRecord = await sibling.request.post(`/api/${resource}`, { data: { description: nextLabel, amount: 56.78, date: '2026-10-02', taxRelevant: true } });
