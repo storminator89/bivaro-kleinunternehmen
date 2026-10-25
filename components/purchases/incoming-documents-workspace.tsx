@@ -16,6 +16,7 @@ import { IncomingDocumentReview } from './incoming-document-review';
 import { SUPPLIER_TASK_LABELS } from './supplier-task-panel';
 import { bindReviewGuardIntents, createReviewNavigationIntents, createReviewTraversalGuard, reviewNavigationDispatcher, reviewPopDispatcher, reviewSessionKey } from './incoming-review-history';
 import { nextReviewDocument, reviewQueueSnapshot, type IncomingNavigationGuard } from './incoming-review-queue';
+import { createIncomingListQueryIntents } from './incoming-list-query-intents';
 import { documentIdFromQuery, errorMessage, extractionLabel, formatSourceAmount, formatSourceDate, incomingJson, INCOMING_PAGE_SIZE, reviewLabel, type IncomingFilter } from './incoming-document-ui';
 
 export function IncomingDocumentRow({ document, onOpen }: { document: IncomingDocument; onOpen: (id: number, trigger: HTMLButtonElement) => void }) {
@@ -51,6 +52,7 @@ function IncomingDocumentsWorkspaceContent() {
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
   const acceptedQuery = useRef(queryString);
+  const listQueryIntents = useRef(createIncomingListQueryIntents());
   const navigationGuard = useRef<IncomingNavigationGuard | null>(null);
   const navigationIntents = useRef(createReviewNavigationIntents(() => window.location.href, () => alive.current && currentSession.current === sessionKey));
   const historyGuard = useRef<ReturnType<typeof createReviewTraversalGuard> | null>(null);
@@ -84,9 +86,13 @@ function IncomingDocumentsWorkspaceContent() {
   const returnDocumentId = useRef<number | null>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const refreshList = () => setRefresh(value => value + 1);
-  const requestNavigation = useCallback((action: () => void) => {
+  const requestNavigation = useCallback((action: () => void, queryIntent = false) => {
     const sourceId = activeIdRef.current;
-    const intent = navigationIntents.current.prepare(() => { if (activeIdRef.current === sourceId) action(); });
+    const intent = navigationIntents.current.prepare(() => {
+      if (activeIdRef.current !== sourceId) return;
+      if (!queryIntent) listQueryIntents.current.invalidate();
+      action();
+    });
     if (activeIdRef.current !== null && navigationGuard.current) navigationGuard.current.request(intent.proceed, intent.stay);
     else intent.proceed();
   }, []);
@@ -109,12 +115,12 @@ function IncomingDocumentsWorkspaceContent() {
   useEffect(() => {
     // Router snapshots can lag behind the actual destination. No route effect
     // compensates by replacing history: explicit actions are guarded BEFORE navigation.
-    if (queryString !== new URLSearchParams(window.location.search).toString() || queryString === acceptedQuery.current) return;
+    if (!listQueryIntents.current.observe(pathname, queryString, window.location.href) || queryString === acceptedQuery.current) return;
     acceptedQuery.current = queryString;
     navigationIntents.current.invalidate();
     queueRequest.current?.abort(); queueMoving.current = false; setQueueBusy(false); setQueueMessage(null);
     setActiveId(selectedId);
-  }, [queryString, selectedId]);
+  }, [pathname, queryString, selectedId]);
   useLayoutEffect(() => {
     // Traversals cannot be cancelled. Restore/replay their exact index instead
     // of replacing entries (which would silently destroy Back/Forward history).
@@ -129,6 +135,7 @@ function IncomingDocumentsWorkspaceContent() {
       onReplay: () => {},
     });
     const onPop = (event: PopStateEvent) => {
+      listQueryIntents.current.invalidate();
       intents.invalidate();
       navigationGuard.current?.cancelPending?.();
       queueRequest.current?.abort(); queueMoving.current = false; setQueueBusy(false);
@@ -139,7 +146,8 @@ function IncomingDocumentsWorkspaceContent() {
     // listener can otherwise be removed by synchronous router teardown before
     // its callback runs, losing the dirty review before a choice is possible.
     const unregisterPop = reviewPopDispatcher.register(onPop);
-    return () => { alive.current = false; unregisterNavigation(); unregisterPop(); intents.invalidate(); historyGuard.current = null; };
+    const queryIntents = listQueryIntents.current;
+    return () => { alive.current = false; unregisterNavigation(); unregisterPop(); intents.invalidate(); queryIntents.invalidate(); historyGuard.current = null; };
   }, [requestNavigation]);
   useLayoutEffect(() => { historyGuard.current?.syncIndex(); }, [activeId, queryString]);
   useEffect(() => () => queueRequest.current?.abort(), []);
@@ -154,7 +162,7 @@ function IncomingDocumentsWorkspaceContent() {
     // A second click can precede the disabled-state commit. It is not a new
     // intent: preparing it would invalidate the request already in flight.
     if (queueMoving.current) return;
-    requestNavigation(() => { void moveInQueue(direction); });
+    requestNavigation(() => { void moveInQueue(direction); }, true);
   }
   async function moveInQueue(direction: -1 | 1) {
     if (queueMoving.current || activeIdRef.current === null) return;
@@ -175,15 +183,17 @@ function IncomingDocumentsWorkspaceContent() {
     finally { if (!controller.signal.aborted) { queueMoving.current = false; setQueueBusy(false); } }
   }
 
-  function updateQuery(values: Record<string, string | null>) { requestNavigation(() => commitQuery(values)); }
+  function updateQuery(values: Record<string, string | null>) { requestNavigation(() => commitQuery(values), true); }
   function prepareNextAfterSave() {
     const sourceId = activeIdRef.current;
     return navigationIntents.current.prepare(() => { if (sourceId !== null && activeIdRef.current === sourceId) void moveInQueue(1); }).proceed;
   }
   function commitQuery(values: Record<string, string | null>) {
-    const next = new URLSearchParams(window.location.search);
-    for (const [key, value] of Object.entries(values)) { if (value === null) next.delete(key); else next.set(key, value); }
-    replace(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false });
+    if (!alive.current || currentSession.current !== sessionKey) return;
+    // Compose synchronously: router.replace does not commit before the next
+    // select/search/page event. UI and server reads still use accepted params.
+    const destination = listQueryIntents.current.compose(window.location.href, pathname, values);
+    if (destination !== null) replace(destination, { scroll: false });
   }
   function openDocument(id: number, trigger?: HTMLElement) {
     if (trigger) { returnTarget.current = trigger; returnDocumentId.current = id; listScroll.current = window.scrollY; setQueue(data ? reviewQueueSnapshot(data) : []); setQueueMessage(null); }
