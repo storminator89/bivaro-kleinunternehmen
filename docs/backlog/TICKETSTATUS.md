@@ -602,3 +602,21 @@ eigene begrenzte Partition. [Prüf- und Recoverygrenzen](../testing/issues-59-13
 Draft-Veröffentlichung und vollständige Hosted-Prüfung sind freigegeben, Merge,
 Issue-Schließung und Deployment nicht. Dieser datierte Checkpoint behauptet
 weder Veröffentlichung noch bestandene Prüfungen.
+
+### Integrierter Ersatzstand #59/#130 vom 25.10.2026, 06:10 UTC
+
+Frischer Quellstand `94707ed6d6b4f16f0a4b471983e40e8100dbe319`, Tree
+`4f4f9d608f9852583b12f0a5eeb14d4734fa2f43`: Transparenz der bestehenden
+Simulation ohne Formeländerung sowie interne Lieferanten-Vormerkungen mit
+Tenant-/CAS-/Audit- und Backup-Vertrag integriert. Historische BV-Tickets und
+Summen unverändert; GitHub #59/#130 bleiben offen.
+
+Vollständiger Lint, Typprüfung, statische Prisma-Schemavalidierung und normaler
+Produktionsbuild einschließlich Vor-/Nachbuild sind auf diesem Ersatzstand
+bestanden (Node 24.22.1; neun bestehende Tracingwarnungen). Zwei echte P2-Befunde
+aus unabhängigem Quellreview vor Draft-Veröffentlichung korrigiert: präzise
+Vollseiten-Bildmaße und Erhalt neuerer Eingaben bei verspäteter Antwort. Enges
+Nachreview ohne verbleibenden konkreten P1/P2 im geprüften Scope. Keine lokalen
+Funktionstests; Unit-/API-/Backup-/Komponenten-/Browserfälle nur verfasst.
+Vollständige Hosted-Prüfung und echte Bildkontrolle des veröffentlichten Heads
+sind weiterhin erforderlich. [Konkrete Evidenz und Grenzen](../testing/issues-59-130-reconstruction-2026-10-25.md).

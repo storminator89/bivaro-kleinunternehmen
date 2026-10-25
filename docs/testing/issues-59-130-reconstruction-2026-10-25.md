@@ -20,15 +20,44 @@ and [#130](https://github.com/storminator89/bivaro-kleinunternehmen/issues/130).
 only remaining transparency is rebuilt. #130 is an internal task on an existing
 incoming document, not a payment, ledger entry, new Inbox or tax decision.
 
-## Checkpoint: reconstruction in progress
+## Integrated source checkpoint: 06:10 UTC
 
-No replacement runtime package is accepted at this checkpoint. Dependency
-installation completed with locked packages and lifecycle scripts disabled;
-Prisma client generation is a static prerequisite, not a database migration.
-Local functional, unit, fixture, API and browser execution is prohibited and has
-not been performed. Necessary types/lint/schema/build checks remain to be run
-against the integrated candidate. Complete hosted CI and browser acceptance will
-be linked for the exact published draft head; no historical pass substitutes.
+Fresh integrated source: `94707ed6d6b4f16f0a4b471983e40e8100dbe319`, tree `4f4f9d608f9852583b12f0a5eeb14d4734fa2f43`. This is not the unavailable
+original. #59 changes presentation/URL view state only; the existing arithmetic
+and social-helper blocks independently match base bytes. #130 adds explicit
+internal task state, tenant/CAS/atomic REVIEW audit, existing-Inbox filters,
+reconfirmation after reopening, and exact additive backup capability
+`20261024040000_add_supplier_tasks`. The historical mapping/numbering identity
+remains an independent unchanged capability.
+
+Independent read-only review found and source-corrected two P2 issues before
+opening a draft: a full-page screenshot width assertion ignored the established
+headed-browser scrollbar contract; a prop-adoption effect could overwrite a newer
+keyboard edit that returned to the previous confirmed value while an older save
+completed. The corrected source checks actual viewport/client dimensions and
+uses explicit clean/edit generations. The precise delayed-response regression
+is authored in the browser suite. Narrow rereview found no remaining concrete
+P1/P2 in the checked backend, backup, UI-retry and workflow scope. This is static
+review, not a runtime pass.
+
+Actual allowed local checks on this source all exited 0: full zero-warning
+ESLint, complete `tsc --noEmit --incremental false`, Prisma schema validation,
+and ordinary production build including its unchanged prebuild/postbuild guards.
+Runtime: Node 24.22.1 with a 1536 MiB Node heap bound. Nine dynamic-filesystem
+tracing warnings remain in existing unchanged validation paths. The inert build
+DB URL was explicit and its file was not created; no migration, application
+server or database experiment was run.
+
+Local build log: `bivaro-59-130-final-build.log`, SHA-256 `7a471ac7e1f4db9b43269905dd399ef93b8724e3c5f6cd2b99ea932d0cb7c37d`.
+This local log is not hosted or browser acceptance evidence. Locked dependencies
+were installed with lifecycle scripts disabled; Prisma generation was a static
+prerequisite, not a migration. No local functional/unit/fixture/API/browser test
+was executed. Three new supplier unit/API/backup files, two simulation
+unit/component files and four browser scenarios are authored, not passed.
+
+The draft's complete hosted CI/browser gates and actual original-image review
+remain pending. Both issue tickets remain open; source completeness does not
+replace these required acceptance stages.
 
 ## Bounded hosted visual evidence
 

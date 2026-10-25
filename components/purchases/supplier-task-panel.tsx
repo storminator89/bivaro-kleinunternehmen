@@ -32,8 +32,10 @@ export function SupplierTaskPanel({ document, onSaved, onDirtyChange, onBusyChan
   const alive = useRef(true);
   const request = useRef<AbortController | null>(null);
   const editGeneration = useRef(0);
+  // Only an accepted exact generation or explicit cancellation marks local
+  // intent clean. Equality with an old server value is not evidence of this.
+  const cleanGeneration = useRef(0);
   const serverDocument = useRef(document);
-  const previousTask = useRef(document.supplierTask);
   serverDocument.current = document;
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -45,10 +47,10 @@ export function SupplierTaskPanel({ document, onSaved, onDirtyChange, onBusyChan
   useImperativeHandle(saveRef, () => ({ save }));
   useEffect(() => { alive.current = true; return () => { alive.current = false; request.current?.abort(); }; }, []);
   useEffect(() => {
-    const previous = previousTask.current; previousTask.current = document.supplierTask;
     // A review-level reload may deliver its fresh document after remounting the
-    // panel. Follow new confirmed values only when no local edit is being kept.
-    if (busyRef.current || pending.current || !sameTask(asInput(currentDraft.current), previous)) return;
+    // panel. Never infer clean intent from value equality: a newer keyboard edit
+    // may deliberately return to the previous confirmed kind/date while saving.
+    if (busyRef.current || pending.current || editGeneration.current !== cleanGeneration.current) return;
     const next = asDraft(document.supplierTask); currentDraft.current = next; setDraft(next);
   }, [document.supplierTask]);
   useLayoutEffect(() => { onDirtyChange(dirty || !!pending.current); return () => onDirtyChange(false); }, [dirty, onDirtyChange, busy]);
@@ -75,6 +77,7 @@ export function SupplierTaskPanel({ document, onSaved, onDirtyChange, onBusyChan
     // An older successful response may confirm the older write, not replace a
     // newer keyboard edit made while that response was delayed.
     if (editGeneration.current === snapshot) {
+      cleanGeneration.current = snapshot;
       const next = asDraft(updated.supplierTask); currentDraft.current = next; setDraft(next);
       onDirtyChange(false);
     }
@@ -140,7 +143,7 @@ export function SupplierTaskPanel({ document, onSaved, onDirtyChange, onBusyChan
   }
   function cancel() {
     if (busyRef.current || pending.current) return;
-    editGeneration.current++;
+    editGeneration.current++; cleanGeneration.current = editGeneration.current;
     const next = asDraft(serverDocument.current.supplierTask); currentDraft.current = next; setDraft(next);
     setError(conflict ? 'Eigene Änderungen verworfen. Nach dem Konflikt bitte den aktuellen Serverstand laden.' : null); setSaved(false); onDirtyChange(false); heading.current?.focus({ preventScroll: true });
   }

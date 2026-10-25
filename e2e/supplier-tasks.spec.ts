@@ -60,8 +60,22 @@ async function screenshot(page: Page, info: TestInfo, name: string, surface = pa
     const box = element.getBoundingClientRect(); return box.width > 0 && (box.left < -1 || box.right > document.documentElement.clientWidth + 1);
   }).map(element => element.textContent));
   expect(overflow).toEqual([]);
-  const path = info.outputPath(name), png = await page.screenshot({ path, fullPage: true, animations: 'disabled' });
-  expect(png.readUInt32BE(16)).toBe(page.viewportSize()!.width);
+  // Headed Chromium excludes the root scrollbar from a full-page PNG. Keep
+  // configured viewport proof separate from the actual rendered capture area.
+  // Modal content is captured at the current viewport, not by expanding its
+  // scroll container into an artificial full-page layout.
+  const fullPage = await surface.evaluate(root => root.closest('[role="dialog"]') === null);
+  const measured = await page.evaluate(fullPage => ({ innerWidth, innerHeight,
+    width: fullPage ? document.documentElement.clientWidth : innerWidth,
+    height: fullPage ? Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) : innerHeight,
+  }), fullPage);
+  expect(measured.innerWidth).toBe(page.viewportSize()!.width);
+  expect(measured.innerHeight).toBe(page.viewportSize()!.height);
+  expect(measured.width * measured.height * 4).toBeLessThanOrEqual(16 * 1024 * 1024);
+  const path = info.outputPath(name), png = await page.screenshot({ path, fullPage, animations: 'disabled' });
+  expect(png.readUInt32BE(16)).toBe(measured.width);
+  expect(png.readUInt32BE(20)).toBe(measured.height);
+  expect(png.length).toBeLessThanOrEqual(1024 * 1024);
   await info.attach(name, { path, contentType: 'image/png' });
   // Human image inspection must be recorded separately; producing PNG bytes is
   // not itself visual acceptance or proof that this authored test passed.
@@ -182,6 +196,23 @@ test('two real tabs produce 409, unknown committed response is read before retry
     await expect(panel(page)).toContainText('Vormerkung gespeichert · keine Zahlungs- oder Buchungswirkung');
     expect(events).toEqual([`GET /api/purchase-documents/${source.document.id}`]); expect((await detail(page, source.document.id)).revision).toBe(committed.revision);
     page.off('request', observe); await page.unroute(`**/api/purchase-documents/${source.document.id}/supplier-task`);
+
+    // Regression: returning to the OLD confirmed kind/date is still a newer
+    // explicit edit. A delayed older success must not treat that equality as
+    // permission to replace local intent when its new props arrive.
+    expect((await detail(page, source.document.id)).supplierTask).toEqual({ kind: 'CLARIFY', followUpDate: null, confirmationRequired: false });
+    let releaseOldValue!: () => void, enteredOldValue!: () => void;
+    const oldValueGate = new Promise<void>(resolve => { releaseOldValue = resolve; }), oldValueStarted = new Promise<void>(resolve => { enteredOldValue = resolve; });
+    await page.route(`**/api/purchase-documents/${source.document.id}/supplier-task`, async route => { const response = await route.fetch(); expect(response.status()).toBe(200); enteredOldValue(); await oldValueGate; await route.fulfill({ response }); }, { times: 1 });
+    await panel(page).getByLabel('Aufgabenart', { exact: true }).selectOption('PAYMENT_CHECK'); await panel(page).getByRole('button', { name: 'Vormerkung speichern', exact: true }).click(); await oldValueStarted;
+    try { await panel(page).getByLabel('Aufgabenart', { exact: true }).selectOption('CLARIFY'); await expect(panel(page).getByLabel('Wiedervorlagetag (optional)', { exact: true })).toHaveValue(''); } finally { releaseOldValue(); }
+    await expect(panel(page).getByRole('button', { name: 'Vormerkung speichern', exact: true })).toBeEnabled();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(panel(page).getByLabel('Aufgabenart', { exact: true })).toHaveValue('CLARIFY'); await expect(panel(page).getByLabel('Wiedervorlagetag (optional)', { exact: true })).toHaveValue('');
+    await expect(panel(page)).toContainText('Ungespeicherte Vormerkung');
+    expect((await detail(page, source.document.id)).supplierTask).toEqual({ kind: 'PAYMENT_CHECK', followUpDate: null, confirmationRequired: false });
+    await panel(page).getByRole('button', { name: 'Vormerkung speichern', exact: true }).click(); await expect(panel(page)).toContainText('Vormerkung gespeichert · keine Zahlungs- oder Buchungswirkung');
+    expect((await detail(page, source.document.id)).supplierTask).toEqual({ kind: 'CLARIFY', followUpDate: null, confirmationRequired: false });
 
     let release!: () => void, entered!: () => void; const gate = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { entered = resolve; });
     await page.route(`**/api/purchase-documents/${source.document.id}/supplier-task`, async route => { const response = await route.fetch(); expect(response.status()).toBe(200); entered(); await gate; await route.fulfill({ response }); }, { times: 1 });
