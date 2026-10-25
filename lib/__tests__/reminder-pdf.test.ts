@@ -58,13 +58,15 @@ describe('download-only reminder PDF snapshot rendering (authored acceptance)', 
     input.paymentHistory = Array.from({ length: 50 }, (_, index) => ({ ...input.paymentHistory[0], reference: `Nachweis-${index}-${'AVATARText'.repeat(30)}` }));
     const { pdf, lines } = await drawnLines(await generateReminderPdf(input));
     expect(pdf.getPageCount()).toBeGreaterThan(2);
-    const text = lines.map(line => line.text).join('');
+    // Page footers are separate drawing operations, not part of a paragraph
+    // continued on the next page. Keep their exact per-page assertion below.
+    const text = lines.filter(line => line.y !== 34).map(line => line.text).join('');
     expect(text).toContain(input.subject);
     for (const paragraph of input.text.split('\n').filter(Boolean)) expect(text).toContain(paragraph);
     for (const payment of input.paymentHistory) expect(text).toContain(payment.reference);
     for (const line of lines) {
       expect(line.x).toBe(44); expect(line.width).toBeLessThanOrEqual(505 + 1e-8);
-      expect(line.y).toBeGreaterThanOrEqual(34); expect(line.y).toBeLessThanOrEqual(790);
+      expect(line.y).toBeGreaterThanOrEqual(line.y === 34 ? 34 : 75); expect(line.y).toBeLessThanOrEqual(790);
     }
     for (let page = 1; page <= pdf.getPageCount(); page++) expect(lines.filter(line => line.page === page).map(line => line.text)).toContain(`Mahnungsentwurf | Kein Versandnachweis | ${page} / ${pdf.getPageCount()}`);
   });
