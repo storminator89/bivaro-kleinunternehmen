@@ -21,6 +21,7 @@ const frozenDeclarations: Record<string, string> = {
 };
 const declarations: Record<string, string> = {};
 const bindings: string[] = [];
+const filteredListNoticeBindings: string[] = [];
 const contractAttribute = /^(id|name|type|href|accept|disabled|value|on[A-Z]\w*|data-\w[\w-]*|aria-sort|aria-busy|aria-describedby|availableStatuses|paymentReturnId|paymentState|returnFocusRef|documentType|documentId)$/;
 function inspect(node: ts.Node) {
   if ((ts.isFunctionDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isVariableDeclaration(node)) && node.name) {
@@ -32,7 +33,15 @@ function inspect(node: ts.Node) {
     const decorativeIconName = node.name.getText(tree) === 'name'
       && (ts.isJsxOpeningElement(element) || ts.isJsxSelfClosingElement(element))
       && element.tagName.getText(tree) === 'DashboardIcon';
-    if (!decorativeIconName) bindings.push(node.getText(tree).replace(/\s+/g, ' '));
+    // Inventory only these two reviewed additions separately; every other
+    // callback/field still participates in the unchanged 87-binding baseline.
+    const filteredListNoticeBinding = ts.isJsxSelfClosingElement(element)
+      && element.tagName.getText(tree) === 'RecordListSearchNotice'
+      && ['type', 'onClear'].includes(node.name.getText(tree));
+    if (!decorativeIconName) {
+      const binding = node.getText(tree).replace(/\s+/g, ' ');
+      (filteredListNoticeBinding ? filteredListNoticeBindings : bindings).push(binding);
+    }
   }
   ts.forEachChild(node, inspect);
 }
@@ -46,6 +55,13 @@ describe('invoice workspace presentation boundaries', () => {
   it('preserves every baseline callback, field, option, route, guard and focus-return binding', () => {
     expect(bindings).toHaveLength(87);
     expect(fingerprint(bindings.sort().join('\n'))).toBe('5f0f370561baedeb0d402a70d568f654968d75d1bdb5cd53020a1a8f8557d349');
+  });
+
+  it('pins the two additive filtered-list notice bindings without changing the baseline fingerprint', () => {
+    expect(filteredListNoticeBindings).toEqual([
+      'type="outbound"',
+      "onClear={clear => { setFilters({ ...filters, searchTerm: '', paidStatus: 'all', dateRange: 'all' }); clear(); }}",
+    ]);
   });
 
   it('leads with the ledger and places utility tasks in one secondary lane', () => {

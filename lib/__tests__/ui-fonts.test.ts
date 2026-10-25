@@ -10,6 +10,7 @@ vi.mock("next/headers", () => ({ headers: requestHeaders }));
 vi.mock("@/components/theme-provider", () => ({ ThemeProvider: ({ children }: { children: unknown }) => children }));
 vi.mock("@/components/auth/auth-provider", () => ({ default: ({ children }: { children: unknown }) => children }));
 vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: unknown }) => children }));
+vi.mock("@/components/record-search/record-list-search-provider", () => ({ RecordListSearchProvider: ({ children }: { children: unknown }) => children }));
 vi.mock("@/components/ui/toaster", () => ({ Toaster: () => null }));
 vi.mock("@/components/route-progress", () => ({ RouteProgress: () => null }));
 vi.mock("@/components/purchases/incoming-review-history-boundary", () => ({ IncomingReviewHistoryBoundary: () => null }));

@@ -25,8 +25,14 @@ async function signIn(page: Page, email: string, password: string) {
   await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click(); await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByRole('button', { name: 'Befehlspalette öffnen', exact: true }).filter({ visible: true }).first()).toBeVisible();
 }
-async function openPalette(page: Page) {
-  await expect(page.getByRole('button', { name: 'Befehlspalette öffnen', exact: true }).filter({ visible: true }).first()).toBeVisible();
+async function openPalette(page: Page, owner: 'authenticated-shell' | 'dirty-incoming-review' = 'authenticated-shell') {
+  if (owner === 'dirty-incoming-review') {
+    // The real modal owns readiness; its background header is intentionally
+    // absent from the accessibility tree. Use the established global shortcut.
+    await expect(review(page)).toBeVisible();
+    const liveNote = review(page).getByLabel('Prüfnotiz', { exact: true });
+    await expect(liveNote).toBeVisible(); await expect(liveNote).toBeEditable();
+  } else await expect(page.getByRole('button', { name: 'Befehlspalette öffnen', exact: true }).filter({ visible: true }).first()).toBeVisible();
   await page.mouse.move(0, 0); await page.keyboard.press('Control+k');
   const dialog = page.getByRole('dialog', { name: 'Befehlspalette', exact: true });
   await expect(dialog).toBeVisible(); const input = dialog.getByRole('combobox'); await expect(input).toBeFocused();
@@ -56,6 +62,12 @@ async function clearFilteredListCaptureHeader(page: Page, group: Group, query: s
   await filterNotice.evaluate(element => element.scrollIntoView({ block: 'start' }));
   const headerBounds = await topbar.boundingBox(); expect(headerBounds).not.toBeNull();
   await page.evaluate(clearance => window.scrollBy({ top: -clearance, behavior: 'instant' }), headerBounds!.height + 8);
+  const clearButton = filterNotice.getByRole('button', { name: 'Suchfilter löschen', exact: true });
+  await expect(clearButton).toBeVisible(); await expect(clearButton).toBeEnabled();
+  // Perform the real hit-target/stability checks without clicking or changing
+  // the filter. Do not capture an in-flight or occluded clear control.
+  await clearButton.click({ trial: true });
+  await expect(clearButton).toBeInViewport({ ratio: 1 });
   const queryLabel = filterNotice.getByText(`Suchtreffer für „${query}“`, { exact: true });
   await expect(queryLabel).toBeInViewport({ ratio: 1 });
   const queryBounds = await queryLabel.boundingBox(), visibleHeaderBounds = await topbar.boundingBox();
@@ -255,7 +267,15 @@ for (const group of GROUPS) {
   test(`${group.title} list errors retry the same private POST and keep 401/stale data fail-closed`, async ({ page }) => {
     test.setTimeout(90_000); const data = await fixture(page, 7); const before = await snapshot(data.owner.id); const probe = await privacyProbe(page);
     await page.route(`**/api/${group.path}/search`, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"PRIVATE-EXCEPTION-DO-NOT-RENDER"}' }), { times: 1 });
-    await beginList(page, group, data.query); const alert = page.getByRole('alert').filter({ visible: true }).last(); await expect(alert).toBeVisible(); await expect(alert).not.toContainText('PRIVATE-EXCEPTION');
+    await beginList(page, group, data.query);
+    const workspace = group.type === 'customer' ? page.getByRole('region', { name: 'Kundenverzeichnis', exact: true })
+      : group.type === 'outbound' ? page.getByRole('region', { name: 'Ihre Rechnungen', exact: true })
+        : page.locator('section[aria-labelledby="incoming-list-heading"]');
+    await expect(workspace).toHaveCount(1); await expect(workspace).toBeVisible();
+    const alert = workspace.getByRole('alert').filter({ visible: true });
+    await expect(alert).toHaveCount(1); await expect(alert).toBeVisible();
+    await expect(alert.getByText(group.type === 'outbound' ? 'Rechnungen konnten nicht geladen werden.' : 'Suchtreffer konnten nicht geladen werden. Bitte erneut versuchen.', { exact: true })).toBeVisible();
+    await expect(alert).not.toContainText('PRIVATE-EXCEPTION');
     expect(probe.searches).toHaveLength(1); const first = probe.searches[0].data;
     await alert.getByRole('button', { name: group.retry, exact: true }).click();
     if (group.type === 'customer') await expect(page.getByRole('button', { name: `${data.customers[0].name} bearbeiten`, exact: true }).filter({ visible: true })).toBeVisible();
@@ -264,7 +284,7 @@ for (const group of GROUPS) {
     expect(probe.searches.at(-1)!.data).toEqual(first);
     await page.route(`**/api/${group.path}/search`, route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"PRIVATE-EXPIRED"}' }), { times: 1 });
     const expired = page.waitForResponse(response => new URL(response.url()).pathname === `/api/${group.path}/search` && response.status() === 401);
-    await beginList(page, group, data.query); await expired; await expect(alert).toBeVisible(); await expect(alert).not.toContainText('PRIVATE-EXPIRED');
+    await beginList(page, group, data.query); await expired; await expect(alert).toHaveCount(1); await expect(alert).toBeVisible(); await expect(alert).not.toContainText('PRIVATE-EXPIRED');
     if (group.type === 'customer') { await expect(alert).toContainText('Sitzung abgelaufen'); await expect(page.getByRole('button', { name: `${data.customers[0].name} bearbeiten`, exact: true }).filter({ visible: true })).toHaveCount(0); }
     else if (group.type === 'outbound') { await expect(alert).toContainText('Rechnungen konnten nicht geladen werden'); await expect(page.locator('[data-invoice-return]').filter({ visible: true })).toHaveCount(0); }
     else { await expect(alert).toContainText('Sitzung abgelaufen'); await expect(page.getByRole('list', { name: 'Eingangsbelege', exact: true })).toHaveCount(0); }
@@ -344,13 +364,13 @@ test('dirty incoming Stay prevents all matching-list handoffs before any filtere
   if ((await details.getAttribute('open')) === null) await details.locator(':scope > summary').click();
   const note = review(page).getByLabel('Prüfnotiz', { exact: true }); const draft = 'Keep this unsaved draft; a refused handoff must not begin.'; await note.fill(draft); const sourceUrl = page.url();
   for (const group of GROUPS) {
-    const { dialog, input } = await openPalette(page); await input.fill(data.query);
+    const { dialog, input } = await openPalette(page, 'dirty-incoming-review'); await input.fill(data.query);
     await chooseWithKeyboard(page, input, dialog.getByRole('option', { name: `Passende Liste öffnen · ${group.title}`, exact: true }));
     await expect(dialog).toBeHidden(); await expect(chooser(page)).toBeVisible(); await expect(chooser(page).getByRole('heading')).toBeFocused();
     await expect(page).toHaveURL(sourceUrl); expect(probe.searches).toHaveLength(0); await expect(page.getByRole('region', { name: /^Suchfilter ·/ })).toHaveCount(0);
     await chooser(page).getByRole('button', { name: 'Hier bleiben', exact: true }).click(); await expect(note).toHaveValue(draft); await expect(page).toHaveURL(sourceUrl); expect(probe.searches).toHaveLength(0);
   }
-  const { dialog, input } = await openPalette(page); await input.fill(data.query); await chooseWithKeyboard(page, input, dialog.getByRole('option', { name: 'Passende Liste öffnen · Kunden', exact: true }));
+  const { dialog, input } = await openPalette(page, 'dirty-incoming-review'); await input.fill(data.query); await chooseWithKeyboard(page, input, dialog.getByRole('option', { name: 'Passende Liste öffnen · Kunden', exact: true }));
   await expect(chooser(page)).toBeVisible(); await chooser(page).getByRole('button', { name: 'Änderungen verwerfen', exact: true }).click();
   await expect(notice(page, GROUPS[0])).toBeFocused(); await expect(page).toHaveURL(/\/customers$/); await expect(page.getByRole('button', { name: `${data.customers[0].name} bearbeiten`, exact: true }).filter({ visible: true })).toBeVisible(); expect(probe.searches).toHaveLength(1);
   await assertPrivateTransport(page, data.query, probe); expect(await snapshot(data.owner.id)).toEqual(before);

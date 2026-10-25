@@ -37,6 +37,8 @@ vi.mock('react', async importOriginal => ({
 const client = vi.hoisted(() => ({ json: vi.fn(), replace: vi.fn(), params: new URLSearchParams('document=3') }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: client.replace }), usePathname: () => '/purchases', useSearchParams: () => client.params }));
 vi.mock('next-auth/react', () => ({ useSession: () => ({ status: 'authenticated', data: { user: { id: 'synthetic-user', role: 'USER', sessionVersion: 1 } } }) }));
+// Keep this manual queue harness on the ordinary list; provider lifecycle is tested independently.
+vi.mock('@/components/record-search/record-list-search-provider', () => ({ useRecordListSearch: () => null }));
 vi.mock('@/components/purchases/incoming-document-ui', async importOriginal => ({ ...await importOriginal<typeof import('@/components/purchases/incoming-document-ui')>(), incomingJson: client.json }));
 vi.mock('@/components/purchases/incoming-document-review', () => ({ IncomingDocumentReview: () => null }));
 vi.mock('@/components/purchases/incoming-upload', () => ({ IncomingUpload: () => null }));
