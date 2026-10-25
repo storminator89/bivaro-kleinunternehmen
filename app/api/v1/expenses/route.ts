@@ -1,5 +1,5 @@
 import { createManualExpense, updateManualExpense, deleteManualExpense, ExpenseMutationError } from '@/lib/expense-service';
-import { ManualFinancialRecordError, manualRecordAmount } from '@/lib/manual-financial-record-evidence';
+import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
 import { SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
@@ -47,7 +47,6 @@ function parseAmount(value: unknown, required = false): number | undefined {
     throw new ExpenseMutationError(400, 'VALIDATION_ERROR', 'Valid amount is required');
   }
   if (typeof value !== 'number' && typeof value !== 'string') throw new ExpenseMutationError(400, 'VALIDATION_ERROR', 'Invalid amount');
-  if (required) manualRecordAmount(value);
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount < 0) throw new ExpenseMutationError(400, 'VALIDATION_ERROR', 'Invalid amount');
   return amount;

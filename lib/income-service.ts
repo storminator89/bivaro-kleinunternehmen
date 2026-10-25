@@ -1,4 +1,4 @@
-import { assertManualRecordNotFinalized, manualRecordAmount } from '@/lib/manual-financial-record-evidence';
+import { assertManualRecordNotFinalized } from '@/lib/manual-financial-record-evidence';
 import { Prisma } from '@prisma/client';
 import { createFinancialAuditLog } from '@/lib/audit-log';
 import { inTransaction } from '@/lib/db-transaction';
@@ -62,7 +62,8 @@ function financialMetadata(userId: string, operation: string, incomeId: number) 
 }
 
 export async function createManualIncome(userId: string, input: ManualIncomeCreate): Promise<IncomeRecord> {
-  manualRecordAmount(input.amount);
+  // Retain generic capture precision; finalization alone requires strict cents.
+  if (!Number.isFinite(input.amount)) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Ungültiger Betrag');
   return inTransaction(async tx => {
     await assertCustomerOwner(tx, userId, input.customerId);
     const income = await tx.income.create({

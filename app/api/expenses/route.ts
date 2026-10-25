@@ -1,5 +1,5 @@
 import { createManualExpense, updateManualExpense, deleteManualExpense, ExpenseMutationError } from '@/lib/expense-service';
-import { ManualFinancialRecordError, manualRecordAmount } from '@/lib/manual-financial-record-evidence';
+import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
 import { SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { protectMutation } from '@/lib/request-security';
 import { parseLedgerSort, LedgerSortError } from '@/lib/ledger-sort';
@@ -46,7 +46,6 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
       }
 
-      manualRecordAmount(amount);
       const parsedAmount = Number(amount);
       if (!isFiniteNumber(parsedAmount)) {
         return NextResponse.json({ error: 'Ungültiger Betrag' }, { status: 400 });
@@ -129,7 +128,6 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Fehlende Pflichtfelder' }, { status: 400 });
       }
 
-      manualRecordAmount(amount);
       const parsedAmount = Number(amount);
       const parsedDeductible = taxDeductiblePercentage === undefined || taxDeductiblePercentage === null
         ? 100

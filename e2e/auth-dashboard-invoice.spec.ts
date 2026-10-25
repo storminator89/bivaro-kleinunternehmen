@@ -28,6 +28,20 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/dashboard/);
 }
 
+/** Native screenshot preparation only: use normal scrolling and wait for the
+ * real fonts/progress component, never hide UI or change business data. */
+async function settleScreenshotAtTop(page: Page) {
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  const progress = page.locator('div[aria-hidden="true"][class*="pointer-events-none"][class*="fixed"][class*="h-0.5"]');
+  await expect(progress).toHaveCount(1);
+  await expect(progress).toHaveCSS('opacity', '0');
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  });
+}
+
 /** Wait for the actual debounced query and its rendered result, not a row
  * left over from the unfiltered list that may unmount during menu selection. */
 async function searchPartialInvoiceAndWait(page: Page, invoiceNumber: string) {
@@ -138,6 +152,11 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     } });
     expect(deniedBootstrap.status()).toBe(403);
     await page.goto('/register');
+    await expect(page.getByRole('button', { name: 'Admin-Konto erstellen', exact: true })).toBeVisible();
+    // Capture initial setup before any name, credential or bootstrap token is entered.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await settleScreenshotAtTop(page);
+    await page.screenshot({ path: testInfo.outputPath('register-public.png'), fullPage: true });
 
     await page.getByLabel('Name').fill(testUser.name);
     await page.getByLabel('E-Mail').fill(testUser.email);
@@ -287,7 +306,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       for (const width of [1440, 320, 375, 414, 768]) {
         await page.setViewportSize({ width, height: 1000 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name} overflows at ${width}`).toBe(true);
-        if (width === 1440 || width === 375) await page.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`), fullPage: true });
+        if ((width === 1440 || width === 375) && name !== 'cashbook') await page.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`), fullPage: true });
       }
     }
     await page.getByRole('button', { name: 'Dunkles Farbschema aktivieren', exact: true }).click();
@@ -311,7 +330,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
         await publicPage.setViewportSize({ width, height: 1000 });
         expect(await publicPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       }
-      await publicPage.screenshot({ path: testInfo.outputPath(route.slice(1) + '-public.png'), fullPage: true });
+      // The registration original is captured before input in the existing first-admin case.
+      if (route === '/login') await publicPage.screenshot({ path: testInfo.outputPath(route.slice(1) + '-public.png'), fullPage: true });
     }
     await anonymous.close();
   });
@@ -1208,7 +1228,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     }
   });
 
-  test('shows the cash overdraft error and retains the zero balance', async ({ page }) => {
+  test('shows the cash overdraft error and retains the zero balance', async ({ page }, testInfo) => {
     await page.goto('/login');
     await page.getByLabel('E-Mail').fill(testUser.email);
     await page.getByLabel('Passwort', { exact: true }).fill(testUser.password);
@@ -1217,7 +1237,12 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const created = await page.request.post('/api/cashbook', { data: { name: 'E2E Nullbestand', initialBalance: 0 } });
     expect(created.status()).toBe(201);
     const cashBook = await created.json();
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto('/cashbook');
+    await expect(page.getByRole('button', { name: 'Buchung', exact: true })).toBeVisible();
+    // Use the cashbook this real test already creates; no extra booking or setup write.
+    await settleScreenshotAtTop(page);
+    await page.screenshot({ path: testInfo.outputPath('cashbook-1440.png'), fullPage: true });
     await page.getByRole('button', { name: 'Buchung', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Neue Kassenbuchung' });
     await dialog.getByRole('button', { name: 'Ausgabe', exact: true }).click();
@@ -1302,6 +1327,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     for (const width of [1440, 320, 375, 414, 768]) {
       await page.setViewportSize({ width, height: 1000 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await settleScreenshotAtTop(page);
       await page.screenshot({ path: testInfo.outputPath('tax-studio-' + width + '.png'), fullPage: true });
     }
     await page.getByRole('button', { name: 'Standardwerte', exact: true }).click();

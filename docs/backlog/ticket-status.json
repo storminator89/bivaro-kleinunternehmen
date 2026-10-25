@@ -2618,5 +2618,84 @@
     "migrationAppliedLocally": false,
     "deploymentPerformed": false,
     "issueClosed": false
+  },
+  "issue54aFirstHostedRecoveryCheckpoint": {
+    "observedAt": "2026-10-25T13:57:00Z",
+    "status": "draft_first_hosted_failed_recovery_prepared_not_accepted",
+    "issue": 54,
+    "relatedIssue": 59,
+    "pullRequest": 148,
+    "url": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/148",
+    "publishedHead": "104697bc178e6bc7f05ddb0a05b1915982e3b3c0",
+    "publishedTree": "6fb8772dff16358a2c899099e154a9865069246a",
+    "firstHosted": {
+      "ciRun": 40196048963,
+      "unit": {
+        "passed": 4424,
+        "failed": 15,
+        "skipped": 20
+      },
+      "lintTypesSecurity": "PASS",
+      "containerBothArchitectures": "PASS",
+      "pdfaBothArchitectures": "PASS",
+      "dedicatedCiBuild": "SKIPPED after unit failure",
+      "browserRun": 40196049004,
+      "browser": {
+        "passed": 181,
+        "failed": 10
+      },
+      "browserRunnerOrdinaryProductionBuild": "PASS including prebuild, Next TypeScript, static pages and postbuild",
+      "imageDelivery": {
+        "required": 232,
+        "individuallyVerified": 222,
+        "missingCashflow": 8,
+        "missingEurWorkingPaper": 2,
+        "completeVerifier": "FAIL: incomplete exact evidence delivery",
+        "newManualNativeImagesActuallyViewed": 12
+      }
+    },
+    "reviewedOwnRecoverySource": "1b55d4175ce4e8b133c3f3bad6a2c8bb45ffeb75",
+    "acceptedMain": "f183d23857e47b711cad87f71ada9d8e61b8d8b0",
+    "preservation": {
+      "accepted146ChangedPaths": 63,
+      "nonWorkflowExactBlobs": 62,
+      "completeWorkflowPrefixBytes": 86487,
+      "completeWorkflowPrefixSha256": "47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d",
+      "acceptedImageNames": 235,
+      "ownAdditionalNames": 12,
+      "totalUniqueNames": 247,
+      "totalOutputMiB": 40,
+      "ownPerInputAggregateInputOutputMiB": [
+        1,
+        6,
+        3
+      ]
+    },
+    "independentSourceReview": "No concrete P1/P2 on each immutable recovery delta; not a functional pass.",
+    "explicitUnmergedDependency": {
+      "pullRequest": 149,
+      "source": "60f3ac88c1b6f955c2f6450ac0d67b15cc743425",
+      "solePath": "e2e/supplier-tasks.spec.ts",
+      "acceptedMainContainsIt": false,
+      "terminalOwnerGreenConfirmationRequiredBeforePush": true,
+      "ownFullHostedRunRequired": true
+    },
+    "recoveryScope": [
+      "Narrow web/v1 finalized-customer SQL-race conflict mapping; unrelated FK behavior retained.",
+      "Real React context and exact historical migration/backup test fixtures; prior negative assertions retained.",
+      "Bounded lifecycle actions, stable correction labels, same-record live opener and overlay focus.",
+      "Restore pre54 generic-create sign/precision contracts without rounding; strict lifecycle eligibility unchanged.",
+      "Current backup schema/reseal contract and server negatives; no repair of missing metadata."
+    ],
+    "remainingAcceptance": [
+      "Publish coherent recovery after verified dependency handling.",
+      "Full exact-head hosted CI/browser and all final images.",
+      "Broader issue54 scope remains outside ordinary single-manual amount-only slice."
+    ],
+    "noLocalFunctionalExecution": true,
+    "noFurtherLocalBuildRetry": true,
+    "mergePerformed": false,
+    "deploymentPerformed": false,
+    "issueClosed": false
   }
 }

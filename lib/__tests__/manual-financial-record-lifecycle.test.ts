@@ -95,7 +95,10 @@ describe('manual record financial lifecycle, API bypasses and audit atomicity', 
     const period = accountant.parseAccountantExportPeriod(new URLSearchParams('year=2026'));
     await expect(accountant.createAccountantExport(state.owner, period, preview.manifest.sourceFingerprint)).rejects.toMatchObject({ status: 409 });
     const result = await accountant.createAccountantExport(state.owner, period), zip = await JSZip.loadAsync(result.bytes), records = JSON.parse(await zip.file('records.json')!.async('string'));
-    expect(records.incomes.map((row: { amount: number }) => row.amount)).toEqual([80]); expect(records.expenses.map((row: { amount: number }) => row.amount)).toEqual([80]);
+    // Handoff decimal text is deliberate; control cents still prove one
+    // effective 80 EUR row rather than adding original/correction snapshots.
+    expect(records.incomes.map((row: { amount: string }) => row.amount)).toEqual(['80']); expect(records.expenses.map((row: { amount: string }) => row.amount)).toEqual(['80']);
+    expect(records.incomes.map((row: { amountCents: string }) => row.amountCents)).toEqual(['8000']); expect(records.expenses.map((row: { amountCents: string }) => row.amountCents)).toEqual(['8000']);
     expect(records.manualFinancialRecordEvents).toHaveLength(4); expect(records.manualFinancialRecordEvents.every((row: { contextOnly: boolean; cashEffectCents: string }) => row.contextOnly && row.cashEffectCents === '0')).toBe(true);
     expect((await read('income', income.id)).history.map(event => event.amount)).toEqual(['100', '80']);
     expect(await db.client.cashTransaction.count({ where: { userId: state.owner } })).toBe(0);
@@ -117,13 +120,24 @@ describe('manual record financial lifecycle, API bypasses and audit atomicity', 
     }
     // Simulate a stale precheck, not a fake transaction: the actual migrated
     // SQLite trigger must retain the reference and the API maps its failure.
-    const stalePrecheck = vi.spyOn(db.client.income, 'findFirst').mockResolvedValueOnce(null);
-    try {
-      const response = await apiCustomer.DELETE(request(`/api/v1/customers?id=${customer.id}`, 'DELETE'));
-      expect(response.status).toBe(409); expect((await response.json()).error.code).toBe('FINALIZED_RECORD');
-    } finally { stalePrecheck.mockRestore(); }
+    for (const [route, url] of [[webCustomer, '/api/customers'], [apiCustomer, '/api/v1/customers']] as const) {
+      const stalePrecheck = vi.spyOn(db.client.income, 'findFirst').mockResolvedValueOnce(null);
+      try {
+        const response = await route.DELETE(request(`${url}?id=${customer.id}`, 'DELETE')), body = await response.json();
+        expect(response.status).toBe(409); expect(body.code ?? body.error?.code).toBe('FINALIZED_RECORD');
+        expect(stalePrecheck).toHaveBeenCalledTimes(2); // Real post-failure finalized reference recheck.
+      } finally { stalePrecheck.mockRestore(); }
+    }
     expect(await db.client.customer.findUnique({ where: { id: customer.id } })).not.toBeNull();
     expect((await db.client.income.findUniqueOrThrow({ where: { id: income.id } })).customerId).toBe(customer.id);
+  });
+  it('does not relabel unrelated customer FK retention as finalized manual evidence', async () => {
+    await owner(); const customer = await db.client.customer.create({ data: { userId: state.owner, name: 'Retained project reference, no finalized income' } });
+    await db.client.serviceProject.create({ data: { userId: state.owner, customerId: customer.id, name: 'Existing project history' } });
+    await expect(apiCustomer.DELETE(request(`/api/v1/customers?id=${customer.id}`, 'DELETE'))).rejects.toMatchObject({ code: 'P2003' });
+    const webResponse = await webCustomer.DELETE(request(`/api/customers?id=${customer.id}`, 'DELETE')), body = await webResponse.json();
+    expect(webResponse.status).toBe(409); expect(body.code).not.toBe('FINALIZED_RECORD');
+    expect(await db.client.customer.findUnique({ where: { id: customer.id } })).not.toBeNull();
   });
   it('replays identical mutation semantics before stale CAS, rejects key reuse, and recovers an unknown response from GET history', async () => {
     await owner(); const income = await createIncome(), input = command(await read('income', income.id));
@@ -165,6 +179,47 @@ describe('manual record financial lifecycle, API bypasses and audit atomicity', 
     expect((await read('income', fraction.id)).canFinalize).toBe(false); expect((await db.client.income.findUniqueOrThrow({ where: { id: fraction.id } })).amount).toBe(100.001);
     const afa = await db.client.expense.create({ data: { userId: state.owner, description: 'Existing AfA source', amount: 100, date: at, depreciationYears: 3 } });
     expect((await read('expense', afa.id)).canFinalize).toBe(false); await expenseService.updateManualExpense(state.owner, afa.id, { description: 'Still editable through appropriate old path' });
+  });
+  it.each([
+    { kind: 'expense', transport: 'web', amount: -20, status: 200, canFinalize: false },
+    { kind: 'expense', transport: 'web', amount: 100.125, status: 200, canFinalize: false },
+    { kind: 'expense', transport: 'web', amount: 100.125, depreciationYears: 1, status: 200, canFinalize: false },
+    { kind: 'expense', transport: 'v1', amount: 100.125, status: 201, canFinalize: false },
+    { kind: 'expense', transport: 'v1', amount: -20, status: 400, canFinalize: false },
+    { kind: 'income', transport: 'web', amount: 100.125, status: 200, canFinalize: false },
+    { kind: 'income', transport: 'v1', amount: 100.125, status: 201, canFinalize: false },
+    { kind: 'income', transport: 'web', amount: -20, status: 400, canFinalize: false },
+    { kind: 'income', transport: 'v1', amount: -20, status: 400, canFinalize: false },
+    { kind: 'expense', transport: 'web', amount: 80, status: 200, canFinalize: true },
+    { kind: 'income', transport: 'v1', amount: 80, status: 201, canFinalize: true },
+    { kind: 'expense', transport: 'web', amount: 'Infinity', status: 400, canFinalize: false },
+    { kind: 'expense', transport: 'v1', amount: 'Infinity', status: 400, canFinalize: false },
+    { kind: 'income', transport: 'web', amount: 'Infinity', status: 400, canFinalize: false },
+    { kind: 'income', transport: 'v1', amount: 'Infinity', status: 400, canFinalize: false },
+  ] as const)('preserves pre-54 generic $transport $kind capture $amount separately from lifecycle eligibility', async entry => {
+    await owner();
+    const route = entry.kind === 'income' ? entry.transport === 'web' ? webIncome : apiIncome : entry.transport === 'web' ? webExpense : apiExpense;
+    const url = `/api/${entry.transport === 'v1' ? 'v1/' : ''}${entry.kind === 'income' ? 'incomes' : 'expenses'}`;
+    const response = await route.POST(request(url, 'POST', { description: 'Existing generic financial capture contract', amount: entry.amount, date: '2026-10-01', taxRelevant: true,
+      ...('depreciationYears' in entry ? { depreciationYears: entry.depreciationYears } : {}) }));
+    expect(response.status).toBe(entry.status);
+    if (entry.status === 400) {
+      expect(await db.client.income.count({ where: { userId: state.owner } })).toBe(0);
+      expect(await db.client.expense.count({ where: { userId: state.owner } })).toBe(0);
+      return;
+    }
+    const body = await response.json(), created = entry.transport === 'v1' ? body.data : body;
+    const kind = entry.kind as ManualFinancialRecordKind;
+    const row = kind === 'income' ? await db.client.income.findUniqueOrThrow({ where: { id: created.id } }) : await db.client.expense.findUniqueOrThrow({ where: { id: created.id } });
+    expect(row.amount).toBe(entry.amount); // Never round scalar precision to make capture eligible.
+    const record = await read(kind, created.id);
+    expect(record).toMatchObject({ state: 'RECORDED', canFinalize: entry.canFinalize, canCorrectAmount: false, history: [] });
+    const backup = await makeBackup();
+    expect(backup.data[kind === 'income' ? 'incomes' : 'expenses'][0]).toMatchObject({ amount: entry.amount, manualRecordState: 'RECORDED', manualRecordOrigin: 'MANUAL' });
+    expect(backup.data.manualFinancialRecordEvents).toEqual([]);
+    expect(() => restore.validateBackupForRestore(backup)).not.toThrow();
+    if (!entry.canFinalize) await expect(lifecycle.mutateManualFinancialRecord(state.owner, command(record))).rejects.toMatchObject({ code: 'MANUAL_RECORD_UNSUPPORTED' });
+    expect(await db.client.manualFinancialRecordEvent.count({ where: { userId: state.owner } })).toBe(0);
   });
   it('uses source relations over false MANUAL metadata and retains recurring origin after FK removal', async () => {
     await owner(); const expense = await createExpense();

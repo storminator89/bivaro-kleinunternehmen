@@ -16,25 +16,38 @@ it('additive journal migration preserves complete legacy finance rows and never 
   try {
     mkdirSync(prismaDirectory); writeFileSync(url.slice('file:'.length), '');
     cpSync(path.join(sourcePrisma, 'schema.prisma'), path.join(prismaDirectory, 'schema.prisma'));
+    // This proof targets the original journal addition, not an impossible
+    // mixture of future migrations with their prerequisite journal omitted.
+    // The separate manual-financial-record-migration suite covers the full
+    // real chain through #54, including preservation of all earlier triggers.
     cpSync(path.join(sourcePrisma, 'migrations'), path.join(prismaDirectory, 'migrations'), {
-      recursive: true, filter: source => !source.includes(path.join('migrations', '20261021150000_add_payment_adjustments')) && !source.includes(path.join('migrations', '20261023010000_add_bank_payment_allocations')) && !source.includes(path.join('migrations', migration)) && !source.includes(path.join('migrations', '20261021043000_add_partial_payments')),
+      recursive: true, filter: source => {
+        const name = path.relative(path.join(sourcePrisma, 'migrations'), source).split(path.sep)[0];
+        return name === '' || name === 'migration_lock.toml' || name < migration;
+      },
     });
     const deploy = () => execFileSync(process.execPath, [path.resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy', '--schema', path.join(prismaDirectory, 'schema.prisma')], {
       cwd: directory, env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe', timeout: 60_000,
     });
     deploy();
-    await client.user.create({ data: { id: 'legacy-journal', email: 'legacy-journal@test.invalid', password: 'unused' } });
-    const unknown = await client.invoice.create({ data: { userId: 'legacy-journal', fileName: 'old.pdf', storedFileName: 'old.pdf', totalAmount: 987.65,
-      invoiceNumber: '2025-1', status: 'PAID', issuanceState: 'ISSUED', paidAt: null, parsedData: { rawXML: '<untouched/>' } } });
-    const dated = await client.invoice.create({ data: { userId: 'legacy-journal', fileName: 'dated.pdf', storedFileName: 'dated.pdf', totalAmount: 12.34,
-      invoiceNumber: '2025-2', status: 'PAID', issuanceState: 'ISSUED', paidAt: new Date('2025-10-01T12:00:00Z'), parsedData: {} } });
-    const income = await client.income.create({ data: { userId: 'legacy-journal', invoiceId: dated.id, amount: 12.34, date: dated.paidAt!, description: 'Preserve old financial booking' } });
+    // Current Prisma creation defaults/selects include later UUID/lifecycle
+    // columns. Use the actual historical scalar contract instead, capturing
+    // complete raw rows so no original financial field is normalized away.
+    await client.$executeRawUnsafe('INSERT INTO "User" ("id","email","password") VALUES (?,?,?)', 'legacy-journal', 'legacy-journal@test.invalid', 'unused');
+    const paidAt = new Date('2025-10-01T12:00:00Z').getTime();
+    await client.$executeRawUnsafe('INSERT INTO "Invoice" ("id","userId","fileName","storedFileName","totalAmount","invoiceNumber","status","issuanceState","paidAt","parsedData") VALUES (?,?,?,?,?,?,?,?,?,?)', 501, 'legacy-journal', 'old.pdf', 'old.pdf', 987.65, '2025-1', 'PAID', 'ISSUED', null, JSON.stringify({ rawXML: '<untouched/>' }));
+    await client.$executeRawUnsafe('INSERT INTO "Invoice" ("id","userId","fileName","storedFileName","totalAmount","invoiceNumber","status","issuanceState","paidAt","parsedData") VALUES (?,?,?,?,?,?,?,?,?,?)', 502, 'legacy-journal', 'dated.pdf', 'dated.pdf', 12.34, '2025-2', 'PAID', 'ISSUED', paidAt, '{}');
+    await client.$executeRawUnsafe('INSERT INTO "Income" ("userId","invoiceId","amount","date","description") VALUES (?,?,?,?,?)', 'legacy-journal', 502, 12.34, paidAt, 'Preserve old financial booking');
+    const invoices = await client.$queryRawUnsafe<Record<string, unknown>[]>('SELECT * FROM "Invoice" ORDER BY "id"');
+    const incomes = await client.$queryRawUnsafe<Record<string, unknown>[]>('SELECT * FROM "Income" ORDER BY "id"');
+    const scalarImage = await client.$queryRawUnsafe('SELECT "id",quote("amount") AS amount,quote("date") AS date FROM "Income" ORDER BY "id"');
+    expect(incomes).toHaveLength(1); expect(invoices).toHaveLength(2); expect(incomes[0]).not.toHaveProperty('manualRecordId');
     await client.$disconnect();
     cpSync(path.join(sourcePrisma, 'migrations', migration), path.join(prismaDirectory, 'migrations', migration), { recursive: true });
     deploy(); deploy();
-    expect(await client.invoice.findUniqueOrThrow({ where: { id: unknown.id } })).toEqual(unknown);
-    expect(await client.invoice.findUniqueOrThrow({ where: { id: dated.id } })).toEqual(dated);
-    expect(await client.income.findUniqueOrThrow({ where: { id: income.id } })).toEqual(income);
+    expect(await client.$queryRawUnsafe('SELECT * FROM "Invoice" ORDER BY "id"')).toEqual(invoices);
+    expect(await client.$queryRawUnsafe('SELECT * FROM "Income" ORDER BY "id"')).toEqual(incomes);
+    expect(await client.$queryRawUnsafe('SELECT "id",quote("amount") AS amount,quote("date") AS date FROM "Income" ORDER BY "id"')).toEqual(scalarImage);
     expect(await client.paymentJournalEvent.count()).toBe(0);
   } finally { await client.$disconnect(); rmSync(directory, { recursive: true, force: true }); }
 }, 120_000);

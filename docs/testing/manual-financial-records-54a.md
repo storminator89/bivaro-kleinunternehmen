@@ -96,3 +96,35 @@ tenant remapping without adopting manual history; strict finalized-manual foreig
 identity rejection remains. No local functional execution or further normal build
 retry is performed. Actual full hosted outcomes and image inspection will be
 recorded in the draft PR body; the earlier preparation/build limits remain true.
+
+## First hosted attempt and recovery checkpoint, 2026-10-25 13:57 UTC
+
+Published draft148 head104697bc/tree6fb8772d ran full hosted verification. Unit
+job121176982151: 4424 passed,15 failed,20 skipped. Browser40196049004: 181 passed,
+10 failed. Lint/types/security, both container and both PDF/A jobs passed. The
+dedicated CI build was skipped after unit failure; the ordinary production build
+inside the browser runner passed prebuild, Next TypeScript,120 static pages and
+postbuild before the tests. No completed local build is retrospectively claimed.
+
+The unchanged complete-delivery verifier fails this first attempt:222/232 images
+match archive, full-pixel and metadata proofs; eight cashflow and two EÜR
+working-paper images are missing. All12 new native manual-dialog images were
+actually viewed in both themes at360/390/1440. This is incomplete evidence, not
+a functional or final-head visual acceptance.
+
+Immutable recovery deltas were independently reviewed without concrete P1/P2:
+customer SQL-race mapping and precise old test contracts; bounded action cells,
+stable textarea labels and semantic/native-overlay focus; restored pre54 generic
+create sign/precision semantics and strict current backup resealing/negatives.
+Original EÜR amounts/totals and existing browser assertions remain unchanged.
+Accepted146 mainf183d238 is integrated with its entire86487-byte workflow prefix
+SHA25647300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d,
+all63 accepted paths,235 prior names plus12 own names:247 names/40MiB.
+The independently reviewed149 test-only fix60f3ac88 is an explicit unmerged
+dependency, not accepted-main source. Its owner's terminal green confirmation
+is required before the next remote update; this package needs its own full run.
+
+Local lint/types/syntax/source review is not hosted functional proof. No local
+tests/discovery/fixture DB/migration/server/browser or further build retry were
+performed. Final published recovery needs complete hosted gates and actual
+final images; final outcomes belong in the PR body rather than a docs-only loop.

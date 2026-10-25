@@ -1,6 +1,7 @@
 import { parsePaymentTermDays, PaymentTermError } from '@/lib/payment-terms';
 import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditCreate, auditUpdate, auditDelete } from '@/lib/audit-log';
@@ -9,6 +10,7 @@ import { BillingNoteInputError, parseNoteVisibility } from '@/lib/billing-notes'
 
 const MAX_CUSTOMER_FIELD_LENGTH = 2_000;
 const MAX_CUSTOMER_NAME_LENGTH = 500;
+const finalizedCustomerResponse = () => NextResponse.json({ error: 'Kunden mit festgeschriebenem manuellem Finanznachweis müssen erhalten bleiben.', code: 'FINALIZED_RECORD' }, { status: 409 });
 const allocationHistoryResponse = () => NextResponse.json({ error: 'Dieser Kunde muss für unveränderliche Bank- und Rechnungszuordnungsnachweise erhalten bleiben. Der Name kann weiterhin geändert werden.', code: 'CUSTOMER_ALLOCATION_HISTORY_REQUIRED' }, { status: 409 });
 
 function parseJsonObject(body: Uint8Array): Record<string, unknown> {
@@ -159,6 +161,7 @@ async function putHandler(request: Request) {
 }
 
 async function deleteHandler(request: Request) {
+  let attemptedCustomerId: number | null = null;
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
@@ -177,9 +180,8 @@ async function deleteHandler(request: Request) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    if (await prisma.income.findFirst({ where: { customerId: customer.id, manualRecordState: 'FINALIZED' }, select: { id: true } })) {
-      return NextResponse.json({ error: 'Kunden mit festgeschriebenem manuellem Finanznachweis müssen erhalten bleiben.', code: 'FINALIZED_RECORD' }, { status: 409 });
-    }
+    attemptedCustomerId = customer.id;
+    if (await prisma.income.findFirst({ where: { customerId: customer.id, manualRecordState: 'FINALIZED' }, select: { id: true } })) return finalizedCustomerResponse();
 
     // Frozen bank/allocation context requires the original non-null customer.
     // Renaming remains supported; deletion must not detach immutable evidence.
@@ -214,7 +216,10 @@ async function deleteHandler(request: Request) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
-    if (error instanceof Error && error.message.includes('Customer must be retained for finalized manual financial evidence')) return NextResponse.json({ error: 'Kunden mit festgeschriebenem manuellem Finanznachweis müssen erhalten bleiben.', code: 'FINALIZED_RECORD' }, { status: 409 });
+    const retentionConflict = error instanceof Error && error.message.includes('Customer must be retained for finalized manual financial evidence');
+    const foreignKeyConflict = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003';
+    if ((retentionConflict || foreignKeyConflict) && attemptedCustomerId !== null
+      && await prisma.income.findFirst({ where: { customerId: attemptedCustomerId, manualRecordState: 'FINALIZED' }, select: { id: true } })) return finalizedCustomerResponse();
     // SQL remains authoritative if allocation evidence wins a race after the read guard.
     if (error instanceof Error && error.message.includes('Customer must be retained for immutable bank allocation evidence')) return allocationHistoryResponse();
     if ((error as { code?: string }).code === 'P2003') {

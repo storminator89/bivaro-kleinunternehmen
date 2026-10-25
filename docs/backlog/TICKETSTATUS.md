@@ -757,3 +757,31 @@ Die früheren beiden lokalen Buildabbrüche bleiben als unvollständiger Build
 ausgewiesen. Keine lokalen Funktionstests oder Migrationen werden nachgeholt.
 Tatsächliche hosted Ergebnisse, korrigierte Fehler und Bildprüfung werden beim
 exakten veröffentlichten Head im PR-Text festgehalten, nicht vorweggenommen.
+
+## 25.10.2026, 13:57 — #54a/#59: erster Hosted-Versuch fehlgeschlagen, Recovery vorbereitet
+
+Entwurfs-PR [#148](https://github.com/storminator89/bivaro-kleinunternehmen/pull/148),
+Head `104697bc`, Tree `6fb8772d`: Unit **4424 bestanden / 15 fehlgeschlagen /
+20 übersprungen**; Browser **181 bestanden / 10 fehlgeschlagen**. Lint/Typen,
+Security, beide Container-Smokes und beide PDF/A-Jobs bestanden. Der abhängige
+CI-Build wurde übersprungen; der normale Produktionsbuild im Browserrunner
+einschließlich Vor-/Nachbuild und Next-Typprüfung bestand. Lokale Buildabbrüche
+bleiben unvollständig; keine lokalen Funktionstests wurden nachgeholt.
+
+Der unveränderte Vollständigkeits-Verifier lehnt die erste Bildlieferung ab:
+222/232 individuell verlustfrei verifiziert, acht Cashflow- und zwei EÜR-Bilder
+fehlen. Alle zwölf neuen nativen Dialogbilder wurden tatsächlich angesehen;
+das ersetzt weder fehlende Bilder noch fehlgeschlagene Funktionen.
+
+Begrenzte echte UI-/Create-Vertragsregressionen sowie Test-Harness-/Fixturefehler
+sind privat korrigiert und unabhängig quellgeprüft, nicht funktional bestätigt.
+Akzeptiertes #146-Main `f183d238` bleibt vollständig erhalten: 235 bestehende
+plus zwölf eigene Bilder, 247 eindeutige Namen / 40 MiB Ausgabebudget. Die einzeln
+quellgeprüfte #149-Testkorrektur `60f3ac88` wird ausdrücklich als ungemergte
+Abhängigkeit übernommen, nicht als Bestandteil dieses Main ausgegeben. Ihre
+terminale Bestätigung bleibt vor dem nächsten Push erforderlich.
+
+Der nächste veröffentlichte Head benötigt erneut alle Hosted-Gates und finale
+Bildkontrolle; keine Abnahme oder Schließung. Historische 160 Ticketobjekte,
+Statussummen und bisherige Checkpoints bleiben unverändert. Endergebnisse folgen
+im PR-Text, ohne reine Dokumentationsschleife.

@@ -19,20 +19,21 @@ const captures = ['income', 'expense'].flatMap(kind => [360, 390, 1440].flatMap(
 ));
 
 describe('bounded manual-financial-record hosted viewport evidence', () => {
-  it('preserves the complete accepted 220-name/31 MiB workflow byte for byte', () => {
+  it('preserves the complete accepted 235-name/37 MiB workflow byte for byte', () => {
     expect(start).toBeGreaterThan(0); expect(workflow.indexOf(marker, start + marker.length)).toBe(-1);
-    expect(createHash('sha256').update(accepted).digest('hex')).toBe('7977e7caf672538ac542976446a417d3aa191e3a8d1338c1c61ecab634df7091');
-    expect(namesIn(accepted)).toHaveLength(220); expect(new Set(namesIn(accepted)).size).toBe(220);
+    expect(createHash('sha256').update(accepted).digest('hex')).toBe('47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d');
+    expect(namesIn(accepted)).toHaveLength(235); expect(new Set(namesIn(accepted)).size).toBe(235);
     for (const value of ['timeout-minutes: 45', 'contents: read', 'persist-credentials: false', '--retries=0', '--workers=1', '--forbid-only',
       'max 30 MiB total output', '# Independent record-search partition: at most 1 MiB extra output;',
-      'Require complete record-search continuation visual delivery']) expect(accepted).toContain(value);
+      'Require complete record-search continuation visual delivery', '# README gallery coverage partition:',
+      'Require complete README coverage visual delivery']) expect(accepted).toContain(value);
   });
   it('appends exactly twelve disjoint required names with independent 1/6/3 MiB budgets', () => {
     expect(namesIn(partition).sort()).toEqual([...captures].sort());
     expect(new Set(captures).size).toBe(12);
     expect(namesIn(partition).some(name => namesIn(accepted).includes(name))).toBe(false);
-    expect(namesIn(workflow)).toHaveLength(232); expect(new Set(namesIn(workflow)).size).toBe(232);
-    for (const value of ['all accepted 220 names and 31 MiB remain unchanged',
+    expect(namesIn(workflow)).toHaveLength(247); expect(new Set(namesIn(workflow)).size).toBe(247);
+    for (const value of ['all accepted 235 names and 37 MiB remain unchanged',
       'limit = 3 * 1024 * 1024', 'per_file_input_limit = 1 * 1024 * 1024',
       'total > 6 * 1024 * 1024', 'remaining_input = 6 * 1024 * 1024 - actual_input_bytes',
       'actual_input_bytes > 6 * 1024 * 1024', 'sum(map(len, images.values())) > limit',

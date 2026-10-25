@@ -19,7 +19,10 @@
 .history { display: grid; gap: .75rem; padding: 0; list-style: none; }
 .history li { padding: .875rem; border: 1px solid var(--color-rule, var(--border)); border-radius: var(--radius-card, .5rem); font-size: .875rem; line-height: 1.6; }
 .hash { font-size: .75rem; word-break: break-all; }
-.rowStatus { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; min-width: 0; white-space: normal; }
+.rowActions { display: flex; flex-wrap: wrap; gap: .5rem; min-width: 0; width: 100%; max-width: 100%; text-align: left; white-space: normal; }
+.rowActions > button { flex: 0 1 auto; min-width: 0; max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }
+.rowStatus { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: .5rem; min-width: 0; width: 100%; max-width: 100%; white-space: normal; }
+.rowStatus > button { flex: 1 1 100%; min-width: 0; width: 100%; max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }
 .status { display: inline-block; font-size: .75rem; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 @media (min-width: 640px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .actions > button { flex: 0 1 auto; } }
 @media (max-width: 420px) { .dialog { padding: 1rem; } .actions > button { width: 100%; } }

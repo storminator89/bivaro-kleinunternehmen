@@ -1,4 +1,4 @@
-import { ManualFinancialRecordError, manualRecordAmount } from '@/lib/manual-financial-record-evidence';
+import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
 import { hasPaymentAdjustments, PAYMENT_ADJUSTMENT_REVIEW_RESPONSE } from '@/lib/payment-journal/consumer-guard';
 import { protectMutation, MAX_API_JSON_BODY_BYTES } from '@/lib/request-security';
 /**
@@ -53,7 +53,6 @@ function parseAmount(value: unknown, required = false): number | undefined {
   }
   if (typeof value !== 'number' && typeof value !== 'string') throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid amount');
   if (typeof value === 'string' && value.trim().length === 0) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid amount');
-  if (required) manualRecordAmount(value);
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount < 0) throw new IncomeMutationError(400, 'VALIDATION_ERROR', 'Invalid amount');
   return amount;

@@ -126,3 +126,21 @@ validation/client generation and ordinary build are separate permitted checks.
 Writing test source does not establish a passing result or visual acceptance.
 No GitHub publication, new CI, production migration or deployment is authorized
 for this preparation. Technical checks imply no tax/legal certification.
+
+## Hosted-recovery clarification, 2026-10-25
+
+The strict nonnegative, exact-cent amount contract above belongs to lifecycle
+eligibility/finalization/correction, not a new restriction on generic capture.
+Existing web expense creation keeps its finite signed-value contract; income
+and v1 expense routes retain their existing finite nonnegative validation.
+Previously accepted sub-cent values are neither rounded nor rejected merely by
+adding lifecycle metadata. Such negative/sub-cent or AfA records remain outside
+this slice's finalization support, with no invented history or cash effect.
+
+Correction labels have stable label/for/id associations independent of typed
+textarea content. Return focus may resolve a replaced live opener only for the
+same kind/id and observed session, never another record or an arbitrary control.
+Actual final-head hosted keyboard/focus and financial checks remain required.
+The initial preparation authorization statement is historical: draft publication
+and full hosted verification were subsequently granted; merge/deployment/issue
+closure remain unauthorized.

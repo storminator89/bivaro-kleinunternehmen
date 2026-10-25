@@ -1441,7 +1441,144 @@ jobs:
         run: |
           echo '::error::The required three-image record-search continuation partition was not delivered. Existing screenshot partitions remain unchanged.'
           exit 1
-      # Independent manual-financial-record partition: at most 3 MiB extra output; all accepted 220 names and 31 MiB remain unchanged.
+
+      # README gallery coverage partition: 15 existing captures, not new browser cases.
+      # All accepted 220 exact names / 31 MiB remain unchanged; total output cap is 37 MiB.
+      - name: Stage fifteen required README coverage screenshots separately
+        id: stage-readme-coverage-visuals
+        if: ${{ always() }}
+        timeout-minutes: 6
+        shell: bash
+        run: |
+          export PYTHONPATH="$RUNNER_TEMP/bivaro-evidence-codec${PYTHONPATH:+:$PYTHONPATH}"
+          python3 - <<'PY'
+          import json
+          from concurrent.futures import ProcessPoolExecutor
+          from multiprocessing import get_context
+          import os
+          from pathlib import Path
+          import stat
+          import sys
+          import tempfile
+          sys.path.insert(0, 'scripts')
+          from lossless_evidence_png import recompress_png_strong as recompress_png
+
+          allowed = {
+              'invoice-editor-1440.png',
+              'quote-editor-1440.png',
+              'invoice-details-375.png',
+              'cashbook-1440.png',
+              'users-1440.png',
+              'api-keys-1440.png',
+              'api-docs-1440.png',
+              'audit-1440.png',
+              'procedures-1440.png',
+              'home-pilot-390.png',
+              'help-pilot-390.png',
+              'access-help-1440.png',
+              'login-public.png',
+              'register-public.png',
+              'tax-studio-1440.png',
+          }
+          # Required exact fifteen-image partition; every prior name, guard and budget stays unchanged.
+          limit = 6 * 1024 * 1024
+          per_file_input_limit = 5 * 1024 * 1024
+          root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
+
+          def skip(reason):
+              print(f'::error::Required README coverage screenshots unavailable: {reason}.')
+              raise SystemExit(1)
+
+          if root.is_symlink() or not root.is_dir():
+              skip('results directory unavailable or unsafe')
+          root = root.resolve()
+          matches = []
+          for directory, subdirs, files in os.walk(root, followlinks=False):
+              subdirs[:] = [name for name in subdirs if not (Path(directory) / name).is_symlink()]
+              for name in files:
+                  if name not in allowed:
+                      continue
+                  source = Path(directory) / name
+                  info = source.lstat()
+                  if not stat.S_ISREG(info.st_mode) or not source.resolve().is_relative_to(root):
+                      skip('an allowlisted path is not a safe regular file')
+                  matches.append((source, info))
+          if not matches:
+              skip('no allowlisted images were produced')
+          if len(matches) > len(allowed) or len({source.name for source, _ in matches}) != len(matches):
+              skip('file count exceeds the exact allowlist or basenames are duplicated')
+          if {source.name for source, _ in matches} != allowed:
+              skip('readme-coverage proof is incomplete; all fifteen exact images are required')
+          total = sum(info.st_size for _, info in matches)
+          print(f'Synthetic screenshot source bytes: {len(matches)}/{len(allowed)} files, {total} bytes.')
+          for source, info in sorted(matches, key=lambda match: match[0].name):
+              print(f'Allowlisted synthetic PNG: {source.name} ({info.st_size} bytes).')
+          if total > 12 * 1024 * 1024:
+              skip('encoded evidence input exceeds its bounded read budget')
+
+          inputs = []
+          actual_input_bytes = 0
+          for source, expected in sorted(matches, key=lambda match: match[0].name):
+              fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+              with os.fdopen(fd, 'rb') as handle:
+                  current = os.fstat(handle.fileno())
+                  if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (expected.st_dev, expected.st_ino):
+                      skip('an image changed during staging')
+                  if current.st_size != expected.st_size:
+                      skip('an image size changed during staging')
+                  remaining_input = 12 * 1024 * 1024 - actual_input_bytes
+                  data = handle.read(min(per_file_input_limit, remaining_input) + 1)
+              if len(data) > per_file_input_limit:
+                  skip('an input PNG exceeds the per-file read budget')
+              actual_input_bytes += len(data)
+              if actual_input_bytes > 12 * 1024 * 1024:
+                  skip('actual readme-coverage input exceeds 12 MiB')
+              inputs.append((source.name, data))
+          def recompress_checked(data):
+              return recompress_png(data)
+          images = {}
+          # At most two bounded decodes/compressors; deterministic output order.
+          # Do not relax pixel/metadata proofs, aggregate budgets or stage timeout.
+          with ProcessPoolExecutor(max_workers=2, mp_context=get_context('fork')) as pool:
+              try:
+                  results = pool.map(recompress_checked, (data for _, data in inputs), chunksize=1)
+                  for (name, _), (data, proof) in zip(inputs, results, strict=True):
+                      print(f'Lossless PNG proof: {name} {json.dumps(proof, sort_keys=True)}')
+                      images[name] = data
+                      if sum(map(len, images.values())) > limit:
+                          skip('readme-coverage output exceeds 6 MiB')
+                      if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+                          skip('an allowlisted file is not a PNG')
+              except Exception:
+                  skip('lossless PNG structure, color metadata or full-pixel verification failed')
+          print(f'Synthetic screenshot budget after lossless verification: {len(images)}/{len(allowed)} files, {sum(map(len, images.values()))}/{limit} bytes.')
+          staging = Path(tempfile.mkdtemp(prefix='bivaro-readme-coverage-visuals-', dir=os.environ['RUNNER_TEMP']))
+          for name, data in images.items():
+              (staging / name).write_bytes(data)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'directory={staging}\nready=true\n')
+          print(f'Staged {len(images)} synthetic PNG files ({sum(map(len, images.values()))} bytes).')
+          PY
+
+      - name: Upload required bounded README coverage visual evidence
+        id: upload-readme-coverage-visuals
+        if: ${{ always() && steps.stage-readme-coverage-visuals.outputs.ready == 'true' }}
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: readme-coverage-synthetic-visuals
+          path: ${{ steps.stage-readme-coverage-visuals.outputs.directory }}
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: false
+          compression-level: 0
+
+      - name: Require complete README coverage visual delivery
+        if: ${{ always() && (steps.stage-readme-coverage-visuals.outcome != 'success' || steps.upload-readme-coverage-visuals.outcome != 'success') }}
+        run: |
+          echo '::error::The required fifteen-image README coverage partition was not delivered. Existing screenshot partitions remain unchanged.'
+          exit 1
+      # Independent manual-financial-record partition: at most 3 MiB extra output; all accepted 235 names and 37 MiB remain unchanged.
       - name: Stage twelve required manual-financial-record screenshots separately
         id: stage-manual-financial-record-visuals
         if: ${{ always() }}

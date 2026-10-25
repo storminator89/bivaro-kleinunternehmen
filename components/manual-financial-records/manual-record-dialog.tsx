@@ -9,6 +9,8 @@ import type { ManualFinancialRecordDto, ManualFinancialRecordKind, ManualFinanci
 import { createReviewTraversalGuard, reviewNavigationDispatcher, reviewPopDispatcher, reviewSessionKey } from '@/components/purchases/incoming-review-history';
 import type { IncomingNavigationGuard } from '@/components/purchases/incoming-review-queue';
 import { correctionAmount, createDraftClock, forgetCommand, hasConfirmedMutation, isUnchangedCorrection, loadManualRecord, ManualRecordRequestError, pendingIdentity, readPendingIdentity, recordStorageKey, rememberCommand, rememberedCommand, saveManualRecord, type PendingIdentity } from './manual-record-client';
+import { ManualRecordCorrectionFields } from './manual-record-correction-fields';
+import { manualRecordReturnTarget, preventManualRecordOutsideFocus } from './manual-record-focus';
 import { manualRecordStateLabel } from './manual-record-status';
 import styles from './manual-record.module.css';
 
@@ -138,7 +140,7 @@ export function ManualRecordDialog({ selection, onClose, onRecord, onRefresh }: 
   }, [readDetails, storageKey]);
   useEffect(() => { if (error || loadError) errorRef.current?.focus(); }, [error, loadError]);
   useEffect(() => { if (saved) savedRef.current?.focus(); }, [saved]);
-  useEffect(() => { if (exitIntent) exitRef.current?.focus(); }, [exitIntent]);
+  useLayoutEffect(() => { if (exitIntent) exitRef.current?.focus(); }, [exitIntent]);
   useEffect(() => { if (preview) previewRef.current?.focus(); }, [preview]);
 
   function edit(update: () => void) {
@@ -212,7 +214,7 @@ export function ManualRecordDialog({ selection, onClose, onRecord, onRefresh }: 
   const canAct = record && (record.state === 'FINALIZED' ? record.canCorrectAmount : record.canFinalize);
   const originalAmount = record?.history.find(entry => entry.operation === 'FINALIZE')?.amount ?? null;
   return <Dialog open onOpenChange={open => { if (!open) close(); }}>
-    <DialogContent className={styles.dialog} showCloseButton={false} onEscapeKeyDown={event => { event.preventDefault(); if (exitIntent) { exitIntent.stay(); setExitIntent(null); } else close(); }} onInteractOutside={event => { event.preventDefault(); if (!exitIntent) close(); }} onCloseAutoFocus={event => { event.preventDefault(); if (selection.opener.isConnected) selection.opener.focus(); }}>
+    <DialogContent className={styles.dialog} showCloseButton={false} onEscapeKeyDown={event => { event.preventDefault(); if (exitIntent) { exitIntent.stay(); setExitIntent(null); } else close(); }} onPointerDownOutside={event => { preventManualRecordOutsideFocus(event); if (!exitIntent) close(); }} onFocusOutside={event => event.preventDefault()} onCloseAutoFocus={event => { event.preventDefault(); if (currentSession.current === sourceSession.current) manualRecordReturnTarget(selection.kind, selection.id, selection.opener)?.focus(); }}>
       <DialogHeader>
         <DialogTitle>{selection.kind === 'income' ? 'Einnahme' : 'Ausgabe'}: Status, Original und Verlauf</DialogTitle>
         <DialogDescription>Einzelner manueller EUR-Datensatz. Bestehende Beträge sind bereits in den Auswertungen berücksichtigt.</DialogDescription>
@@ -246,7 +248,7 @@ export function ManualRecordDialog({ selection, onClose, onRecord, onRefresh }: 
             <p className="text-xs text-muted-foreground">Eine externe Belegadresse allein bestätigt keine archivierten Originalbytes.</p>
           </section>
           {canAct && !uncertain && <form className={styles.stack} onSubmit={event => { event.preventDefault(); prepare(); }} aria-label={record.state === 'FINALIZED' ? 'Betrag korrigieren' : 'Festschreibung vorbereiten'}>
-            {record.state === 'FINALIZED' ? <><h3 className="font-semibold">Nur den Betrag korrigieren</h3><p className={styles.notice}>Der neue Betrag ersetzt genau einen wirksamen Betrag. 100 → 80 EUR ergibt 80 EUR, nicht 180 EUR. Dies erfasst keine spätere Rückzahlung oder Auszahlung. Zahlungsdatum, Kunde, Steuerangaben, Kategorie, AfA und Datei bleiben unverändert.</p><label htmlFor="manual-record-amount">Neuer wirksamer Betrag (EUR)<input id="manual-record-amount" inputMode="decimal" autoComplete="off" value={amount} maxLength={18} onChange={event => edit(() => setAmount(event.target.value))} /></label><label htmlFor="manual-record-reason">Nachvollziehbarer Korrekturgrund<textarea id="manual-record-reason" rows={3} maxLength={1000} value={reason} onChange={event => edit(() => setReason(event.target.value))} /></label></> : <><h3 className="font-semibold">Bewusst festschreiben</h3><p className={styles.notice}>Dieser Datensatz ist bereits in den Summen enthalten. Die Festschreibung verändert den Betrag und das Zahlungsdatum nicht und löst keine zweite Buchung aus. Danach sind allgemeines Bearbeiten, Löschen und Duplizieren hier gesperrt.</p>{record.requiresLegacyDeclaration && <label className={styles.check}><input type="checkbox" checked={legacy} onChange={event => edit(() => setLegacy(event.target.checked))} />Ich bestätige: Dies ist ein einzelner manueller Altbestand in EUR, kein Rechnungs-/Journal-, Kassen-, Serien- oder AfA-Vorgang. Eine frühere Prüfung wird damit nicht behauptet.</label>}</>}
+            {record.state === 'FINALIZED' ? <><h3 className="font-semibold">Nur den Betrag korrigieren</h3><p className={styles.notice}>Der neue Betrag ersetzt genau einen wirksamen Betrag. 100 → 80 EUR ergibt 80 EUR, nicht 180 EUR. Dies erfasst keine spätere Rückzahlung oder Auszahlung. Zahlungsdatum, Kunde, Steuerangaben, Kategorie, AfA und Datei bleiben unverändert.</p><ManualRecordCorrectionFields amount={amount} reason={reason} onAmountChange={next => edit(() => setAmount(next))} onReasonChange={next => edit(() => setReason(next))} /></> : <><h3 className="font-semibold">Bewusst festschreiben</h3><p className={styles.notice}>Dieser Datensatz ist bereits in den Summen enthalten. Die Festschreibung verändert den Betrag und das Zahlungsdatum nicht und löst keine zweite Buchung aus. Danach sind allgemeines Bearbeiten, Löschen und Duplizieren hier gesperrt.</p>{record.requiresLegacyDeclaration && <label className={styles.check}><input type="checkbox" checked={legacy} onChange={event => edit(() => setLegacy(event.target.checked))} />Ich bestätige: Dies ist ein einzelner manueller Altbestand in EUR, kein Rechnungs-/Journal-, Kassen-, Serien- oder AfA-Vorgang. Eine frühere Prüfung wird damit nicht behauptet.</label>}</>}
             <div className={styles.actions}><Button type="submit" variant="outline" disabled={loading || posting}>{record.state === 'FINALIZED' ? 'Betragskorrektur prüfen' : 'Festschreibung prüfen'}</Button></div>
           </form>}
           {preview && !uncertain && <section ref={previewRef} tabIndex={-1} aria-label="Verbindliche Änderungsvorschau" className={`${styles.warning} ${styles.stack}`}>
