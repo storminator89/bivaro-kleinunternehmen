@@ -667,3 +667,46 @@ Autorschaft noch ausstehend; das Endergebnis folgt ausschließlich im PR-Text,
 nicht in einer weiteren Beleg-Commit-Schleife. Draft #144 bleibt ungemergt,
 GitHub #59/#130 bleiben offen; alle 160 historischen BV-Tickets/Summen bleiben
 unverändert. Keine Deployment-/Fach-/Produktivfreigabe durch technische Abnahme.
+
+
+## Separater GitHub-#102-Checkpoint vom 25.10.2026, 08:55 UTC
+
+[Entwurf #145](https://github.com/storminator89/bivaro-kleinunternehmen/pull/145)
+ist ein implementierter, **noch nicht vollständig kombiniert abgenommener**
+Kandidat zur vorhandenen Palettensuche; GitHub #102 ist nicht BV-102. Alle 160
+historischen Ticketobjekte, die Summen und der vorstehende #144-Checkpoint
+bleiben unverändert. Keine Ticket-Schließung oder Merge-/Deploymentfreigabe.
+
+Veröffentlichter eigenständiger Head `8e802e098663f569a8f988a220fbe391d6af0cd0`
+(Tree `85e7a767881cf069aa3f92a4f4fc296c2105f5f8`) enthält begrenztes typweises
+Vor-/Zurückblättern innerhalb der vorhandenen Palette: fünf sichtbare Treffer
+je Seite, höchstens 20 Seiten je Typ, keine anwachsende Trefferhistorie oder
+Gesamt-/Vollständigkeitsbehauptung bei parallelen Änderungen. POST-/Tenant-/
+Auth-/Detailzielgrenzen bleiben; kein Suchtext in URL, History, Logs, Analytics
+oder neuer Browser-Dauerablage. Finanz-/Schema-/Supplier-/Simulations-/Backup-Logik unverändert; keine neuen
+externen Dienste.
+
+Fokussierte echte Hosted-Diagnose `40177250252` auf `abf4513b` bestand mit
+**43 Tests**, einschließlich Bootstrap, aller Belegeingangs-Vorprüfungsfälle
+und echter sechster Tastaturauswahl/Enter-ID/Zurück bei 360/390/1440 px. Das
+ist **keine vollständige Abnahme**. Frühere fehlgeschlagene Browserläufe bleiben
+als solche dokumentiert; die folgende vollständige Standalone-Prüfung
+(CI `40177794851`, Browser `40177794756`, PDF-A `40177794763`) ist bei Autorschaft
+noch aktiv. Lokale Typ-/Lint-/gewöhnliche Vor-/Build-/Nachbuildprüfung bestanden;
+keine lokalen Funktions-, Unit-, API- oder Browsertests ausgeführt.
+
+Der bereits akzeptierte Main `db3098b8dd5318e426cd2e1e93a54b810cd1b4e9`
+(Tree `5f4b1c54aa2f60a1cb05aa0b497aead1e8c595b6`) wird lokal ohne Änderungen an
+seiner Supplier-/Simulation-/Schema-/Backup-Implementierung integriert.
+Sein kompletter **217-Bild-/30-MiB-Workflowpräfix** bleibt bytegleich; die drei
+Suchbilder ergänzen eine unabhängige strikte 1/2/1-MiB-Partition (Datei/Eingabe/
+Ausgabe), zusammen **220 eindeutige Namen / 31 MiB**. Alle bisherigen
+Auth-/Browserassertions, begrenzten Reads, Verlustfreiheits-/Pixel-/Metadaten-
+Nachweise und fail-closed Pflichtlieferungen bleiben. Beide Zusatzpartitionen
+werden unabhängig geprüft, keine wird zugunsten der anderen entfernt.
+
+Vollständige CI-/Browserprüfung und tatsächliche Bildkontrolle des **frischen
+veröffentlichten kombinierten Heads** sind offen. Dieser einmalige additive
+Checkpoint behauptet weder diese Abnahme noch Veröffentlichung seiner lokalen
+Integration. Endergebnisse folgen ausschließlich im PR-Text, ohne erneute reine
+Dokumentations-Commit-Schleife. [Detaillierte Evidenz und verbleibende Gates](../testing/record-search-continuation.md).

@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
 const start = workflow.indexOf('      # Eighth independent partition:');
 const accepted = workflow.slice(0, start).trimEnd() + '\n';
-const partition = workflow.slice(start);
+const end = workflow.indexOf('      # Independent record-search partition:', start);
+const partition = workflow.slice(start, end < 0 ? undefined : end);
 const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\n\s*\}/g)]
   .flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
 
@@ -25,7 +26,7 @@ describe('bounded reconstructed issue59/130 hosted evidence', () => {
       'supplier-task-inbox-1440.png', 'supplier-task-inbox-390.png',
       'simulation-transparency-1440.png', 'simulation-transparency-390.png', 'simulation-transparency-error-390.png',
     ].sort());
-    const all = namesIn(workflow);
+    const all = namesIn(accepted + partition);
     expect(all).toHaveLength(217); expect(new Set(all).size).toBe(217);
     for (const value of ['limit = 2 * 1024 * 1024', 'per_file_input_limit = 1 * 1024 * 1024',
       'total > 4 * 1024 * 1024', 'actual_input_bytes > 4 * 1024 * 1024',

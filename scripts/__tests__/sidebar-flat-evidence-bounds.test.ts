@@ -2,12 +2,14 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
+const fullWorkflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
+// Independently appended feature partitions do not redefine accepted legacy proofs.
+const appended = ['      # Eighth independent partition:', '      # Independent record-search partition:']
+  .map(marker => fullWorkflow.indexOf(marker)).filter(index => index >= 0);
+const workflow = fullWorkflow.slice(0, appended.length ? Math.min(...appended) : undefined);
 const start = workflow.indexOf('      # Seventh independent partition:');
 const original = workflow.slice(0, start).trimEnd() + '\n';
-const eighth = workflow.indexOf('      # Eighth independent partition:');
-const acceptedWorkflow = workflow.slice(0, eighth < 0 ? undefined : eighth).trimEnd() + '\n';
-const partition = workflow.slice(start, eighth < 0 ? undefined : eighth);
+const partition = workflow.slice(start);
 const browser = readFileSync('e2e/sidebar-flat-icons.spec.ts', 'utf8');
 const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\n\s*\}/g)]
   .flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
@@ -38,7 +40,7 @@ describe('required bounded hosted flat-sidebar evidence', () => {
       'Require complete sidebar visual delivery', 'raise SystemExit(1)']) expect(partition).toContain(value);
     expect(partition).not.toContain('continue-on-error: true');
     expect(partition).not.toContain('raise SystemExit(0)');
-    const allNames = namesIn(acceptedWorkflow);
+    const allNames = namesIn(workflow);
     expect(allNames).toHaveLength(209); expect(new Set(allNames).size).toBe(209);
     expect(names.filter(name => namesIn(original).includes(name))).toEqual([]);
   });
