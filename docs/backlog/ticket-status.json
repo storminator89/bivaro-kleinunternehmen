@@ -2305,7 +2305,7 @@
     }
   },
   "issue59130ReconstructionCheckpoint": {
-    "updatedAt": "2026-10-25T07:34:00Z",
+    "updatedAt": "2026-10-25T08:08:00Z",
     "githubIssues": [
       59,
       130
@@ -2316,8 +2316,8 @@
     "unavailableOriginalCommit": "8978c8248cc81dd5b12b7d83b4703533b3fca3df",
     "originalRecovered": false,
     "historicalVerificationReused": false,
-    "status": "hosted_recovery_pending",
-    "replacementRuntimeAccepted": false,
+    "status": "runtime_hosted_verified_draft_no_merge",
+    "replacementRuntimeAccepted": true,
     "localFunctionalTestsExecuted": false,
     "requiredStaticChecks": {
       "fullLintExit": 0,
@@ -2338,14 +2338,34 @@
       "security": "passed",
       "build": "skipped",
       "supplierTestsPassed": 40,
-      "componentCasesInitiallyCollected": false
+      "componentCasesInitiallyCollected": false,
+      "recovery": {
+        "run": 40173387033,
+        "head": "a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94",
+        "passed": 4339,
+        "failed": 0,
+        "skipped": 20,
+        "passedFiles": 280,
+        "skippedFiles": 3,
+        "componentCasesActuallyPassed": 4,
+        "lintTypes": "passed",
+        "security": "passed",
+        "aggregateBuild": "passed"
+      }
     },
     "browserAcceptance": {
       "firstRun": 40170786318,
       "passed": 169,
       "failed": 2,
       "supplierScenariosPassed": 3,
-      "recovery": "pending_exact_new_head"
+      "recovery": {
+        "run": 40173387111,
+        "head": "a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94",
+        "passed": 171,
+        "failed": 0,
+        "skipped": 0,
+        "conclusion": "success"
+      }
     },
     "acceptedVisualPartitions": 7,
     "acceptedVisualNames": 209,
@@ -2389,12 +2409,41 @@
       "outputBudgetMiB": 30,
       "newOriginalImagesInspected": 8,
       "inboxOriginalImagesInspected": 4,
-      "finalRecoveryImages": "pending"
+      "finalRecoveryImages": "verified_in_recoveryVisualEvidence"
     },
     "hostedNativeChecks": {
       "pdfaRun": 40170786280,
       "containerRun": 40170786366,
-      "x64AndArm64": "passed"
+      "x64AndArm64": "passed",
+      "recovery": {
+        "pdfaRun": 40173387046,
+        "containerRun": 40173387045,
+        "x64AndArm64": "passed"
+      }
+    },
+    "acceptedRuntimeHead": "a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94",
+    "acceptedRuntimeTree": "2ef67f729bed4c3db150194d7716f73adc5f4b98",
+    "recoveryVisualEvidence": {
+      "run": 40173387111,
+      "images": 217,
+      "zipArtifacts": 8,
+      "allProofsMatched": true,
+      "allZipDigestsMatched": true,
+      "pngBytes": 21071679,
+      "outputBudgetMiB": 30,
+      "newPngBytes": 643496,
+      "newOutputBudgetMiB": 2,
+      "newOriginalImagesInspected": 8,
+      "inboxOriginalImagesInspected": 4,
+      "all217ManuallyReviewed": false,
+      "verificationManifestSha256": "d18e3d6ebf4394a8421876f308542b19b8269d3f890ab5a311f41abf9e5a3cac",
+      "browserLogSha256": "554fed9a5ef0808964ea3f3bace38a085b9f0a6d4dbd61d5fc1d4724593d95db"
+    },
+    "documentationOnlyFollowup": {
+      "count": 1,
+      "runtimeTestsSchemaWorkflowUnchanged": true,
+      "exactHeadChecks": "pending_at_authorship",
+      "finalResultLocation": "PR #144 body; no further commit solely to log unchanged checks"
     }
   }
 }

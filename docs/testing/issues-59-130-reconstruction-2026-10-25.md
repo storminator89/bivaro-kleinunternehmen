@@ -135,3 +135,61 @@ calculation formulas, all accepted screenshot names and all budgets remain
 unchanged. Local lint/types are allowed and rechecked; no local functional test
 is executed. Full hosted recovery and final original-image verification remain
 pending for the next published head. Both issues remain open; no merge or deploy.
+
+
+## Final immutable-runtime acceptance: 25 October 2026, 08:08 UTC
+
+The reconstructed package is technically verified as a **draft**, at exact
+remote head `a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94`, tree
+`2ef67f729bed4c3db150194d7716f73adc5f4b98` (native source checkpoint
+`7263a059476e4f5d988ef30cfa391bc27404ab73`). This is new replacement code,
+not recovered original `8978c824`, and does not inherit its historical passes.
+All nine exact-head check runs completed successfully:
+
+- [CI 40173387033](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40173387033): full lint/types, security, ordinary aggregate production build and **4,339 passed / 20 existing skipped** unit cases. There were 280 passed / three skipped test files. All four previously uncollected simulation disclosure component cases were actually collected and passed. Supplier contract, tenant/CAS/audit rollback, backup capability and Berlin-boundary cases are included, not substituted by local execution.
+- [Headed Chromium 40173387111](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40173387111): **171 passed**, no failed or skipped scenarios. This includes the real supplier flows, delayed-response newer-edit retention, abort/read-before-retry, stale scope, no-business-write equality, responsive simulation disclosures and all existing regression journeys.
+- [Own-invoice PDF-A 40173387046](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40173387046): x64 and arm64 passed.
+- [Container compatibility 40173387045](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40173387045): x64 and arm64 passed.
+
+All **217 original PNGs / eight ZIP artifacts** from that browser head were
+downloaded, safely decoded and independently matched to hosted encoded-byte,
+full-pixel and non-IDAT/color-metadata proofs. All eight ZIP SHA-256 digests match
+GitHub metadata. Actual lossless output: **21,071,679 bytes / 30 MiB**; the eight
+new images use **643,496 bytes / 2 MiB**. Every original 209 name, seven partition
+and individual budget remains unchanged. The accepted workflow prefix is still
+byte-identical to the hash above.
+
+All eight new originals were actually visually inspected, plus four current
+Inbox light/dark desktop/mobile originals. Result-local simulation source,
+year and limits are readable; unavailable input does not fabricate a successful
+zero. Supplier task/date/adoption/saved/conflict states are readable at real
+scroll positions; modal captures remain ordinary viewports. The new full-page
+mobile Inbox now starts at the true document top with no transient progress
+stripe. Natural scrolling remains necessary for long content; browser assertions
+check reachability above the sticky navigation instead of expanding the UI.
+This is focused visual QA, not a claim that every baseline image was manually
+reviewed or that tax/legal/production certification was obtained.
+
+Local retained evidence fingerprints (not permanent hosted file links):
+`verified-evidence.json` SHA-256
+`d18e3d6ebf4394a8421876f308542b19b8269d3f890ab5a311f41abf9e5a3cac`;
+complete `browser.log` SHA-256
+`554fed9a5ef0808964ea3f3bace38a085b9f0a6d4dbd61d5fc1d4724593d95db`.
+Workflow artifacts have the existing one-day retention; the run links and this
+immutable acceptance record identify their source after expiry.
+
+### Single documentation-only follow-up boundary
+
+This checkpoint changes only this evidence document and the paired backlog
+status files. Production code, schema, tests, workflow and all accepted artwork
+are unchanged from the verified head above. Its automatic full hosted checks
+are **pending at authorship**; the final exact documentation-head outcome will
+be recorded in the PR body after that cycle, without creating another commit
+solely to log it. A docs-only head is not falsely represented as already run.
+
+[Draft #144](https://github.com/storminator89/bivaro-kleinunternehmen/pull/144)
+remains open and unmerged. GitHub #59/#130 remain open; all 160 historical BV
+ticket objects and their summary are unchanged. No local functional test,
+production migration, deployment, issue closure or merge was performed. Further
+merge/closure approval and any separate business/production acceptance remain
+outside this technical draft verification.

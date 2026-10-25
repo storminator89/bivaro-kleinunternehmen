@@ -641,3 +641,29 @@ und vier Inbox-Bilder wurden wirklich angesehen. Ein transienter Fortschritts-
 streifen/Scrollversatz im neuen Inbox-Nachweis wird im Capture-Helfer korrigiert,
 nicht durch App-CSS-Manipulation. Reale Wiederholungsabnahme des neuen Heads
 steht noch aus. [Exakte Läufe, Grenzen und Recovery](../testing/issues-59-130-reconstruction-2026-10-25.md).
+
+
+### Technische Draft-Abnahme #144 vom 25.10.2026, 08:08 UTC
+
+Der neue Ersatz ist auf unveränderlichem Remotehead
+`a7e3540ac8793d2ed27ab94b8f3d933b8db8ee94` / Tree
+`2ef67f729bed4c3db150194d7716f73adc5f4b98` technisch vollständig hosted geprüft:
+alle neun Checks grün; CI **4.339 bestanden / 20 bestehende Skips** einschließlich
+vier wirklich ausgeführter Komponentenfälle, headed Chromium **171 bestanden**,
+PDF-A und Container jeweils x64/ARM erfolgreich. Kein historischer Nichtlauf
+wird als bestanden umetikettiert; der fehlgeschlagene Erstlauf bleibt oben
+sichtbar. Keine lokalen Funktionstests ausgeführt.
+
+217 PNGs / acht ZIPs vollständig gegen Datei-/Pixel-/Metadatenhashes geprüft:
+21.071.679 Bytes innerhalb 30 MiB, davon acht neue Bilder 643.496 Bytes innerhalb
+2 MiB. Alle acht neuen Originalbilder und vier aktuelle Inbox-Bilder in beiden
+Themes/Desktop/Mobile tatsächlich angesehen; kein verbleibender konkreter
+Bildbefund im fokussierten Scope. Bestehende 209 Namen/Partitionen/Budgets und
+Redesigns bleiben unverändert. [Exakte Läufe und Grenzen](../testing/issues-59-130-reconstruction-2026-10-25.md#final-immutable-runtime-acceptance-25-october-2026-0808-utc).
+
+Dieser **einmalige reine Dokumentationscheckpoint** ändert keinen Runtime-,
+Test-, Schema- oder Workflowcode. Seine automatische exakte Head-Prüfung ist bei
+Autorschaft noch ausstehend; das Endergebnis folgt ausschließlich im PR-Text,
+nicht in einer weiteren Beleg-Commit-Schleife. Draft #144 bleibt ungemergt,
+GitHub #59/#130 bleiben offen; alle 160 historischen BV-Tickets/Summen bleiben
+unverändert. Keine Deployment-/Fach-/Produktivfreigabe durch technische Abnahme.
