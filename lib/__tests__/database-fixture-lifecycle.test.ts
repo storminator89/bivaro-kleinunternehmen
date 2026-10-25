@@ -84,7 +84,7 @@ describe('isolated test database fixture lifecycle', () => {
 
   it.each(['write', 'migration', 'client'] as const)('removes its fixture on %s setup failure without replacing the primary error', stage => {
     const error = new Error(`synthetic ${stage} failure`);
-    const fail = () => { throw error; };
+    const fail = function () { throw error; };
     if (stage === 'write') state.writeFileSync.mockImplementationOnce(fail);
     else if (stage === 'migration') state.execFileSync.mockImplementationOnce(fail);
     else state.PrismaClient.mockImplementationOnce(fail);
