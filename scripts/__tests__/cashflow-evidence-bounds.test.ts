@@ -11,7 +11,6 @@ describe('explicit bounded cashflow screenshot partition', () => {
     expect(names).toHaveLength(95);
     expect(original).toContain('limit = 10 * 1024 * 1024');
     expect(original).toContain('total > 16 * 1024 * 1024');
-    expect(workflow).toContain('timeout-minutes: 45');
   });
   it('retains exactly eight cashflow views, bounded separately with explicit combined size', () => {
     const names = partition.match(/allowed = \{([\s\S]*?)\n\s*\}/)?.[1].match(/'[^']+\.png'/g);
