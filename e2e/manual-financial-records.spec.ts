@@ -399,21 +399,24 @@ test.describe('bounded manual financial lifecycle #54a', () => {
     await expectHistory(incomesEntry.current, incomesEntry.entries, true);
     await expect(dialog.getByLabel('Neuer wirksamer Betrag (EUR)', { exact: true })).toHaveValue('81.00');
     const reloadDialog = page.waitForEvent('dialog');
-    const reloadAttempt = page.reload().catch((failure: unknown) => {
-      // Installed Chromium delegates beforeunload dismissal to frameAbortedNavigation
-      // with this exact text; channelOwner adds the API prefix and connection
-      // may append its standard Call log block. Acceptance still requires the
-      // actual beforeunload prompt to be observed and dismissed below.
-      const nativeCancellation = /^page\.reload: (?:navigation cancelled by beforeunload dialog|net::ERR_ABORTED)(?:\nCall log:\n[\s\S]*\n)?$/u;
-      if (!(failure instanceof Error) || !nativeCancellation.test(failure.message)) throw failure;
-      return null;
+    process.stdout.write('Manual native-reload checkpoint: requested\n');
+    // Invoke the browser's real reload, not Playwright's wait-for-new-document
+    // helper: this test intentionally dismisses beforeunload, so no load event
+    // should occur. Start evaluation without awaiting the native modal first.
+    const reloadAttempt = page.evaluate(() => {
+      window.location.reload();
+      return 'native-reload-evaluation-complete';
     });
     const reloadPrompt = await reloadDialog;
-    expect(reloadPrompt.type()).toBe('beforeunload'); await reloadPrompt.dismiss();
-    expect(await reloadAttempt).toBeNull();
+    expect(reloadPrompt.type()).toBe('beforeunload');
+    process.stdout.write('Manual native-reload checkpoint: observed beforeunload\n');
+    await reloadPrompt.dismiss();
+    process.stdout.write('Manual native-reload checkpoint: dismissed\n');
+    expect(await reloadAttempt).toBe('native-reload-evaluation-complete');
     await expect(dialog).toBeVisible(); await expect(dialog.getByLabel('Neuer wirksamer Betrag (EUR)', { exact: true })).toHaveValue('81.00');
     await expect(dialog.getByLabel('Nachvollziehbarer Korrekturgrund', { exact: true })).toHaveValue('Noch nicht gespeichert');
     await expectHistory(incomesEntry.current, incomesEntry.entries, true); // native cancellation retained document, slots and IDs
+    process.stdout.write('Manual native-reload checkpoint: identity and both draft fields retained\n');
     await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
     await dialog.getByRole('button', { name: 'Trotzdem verlassen', exact: true }).click(); await expect(opener).toBeFocused();
     await page.goBack(); await expect(page).toHaveURL(/tab=expenses/); await expectHistory(expensesEntry.current);
