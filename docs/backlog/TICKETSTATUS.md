@@ -582,3 +582,23 @@ Architektur-Vorprüfung
 - „Discovery“ darf erst nach Architekturentscheidung, Besitzer, vertikaler Implementierung und AC-Evidenz in einen Umsetzungsstatus wechseln.
 - Kein Ticket erhält wegen eines grünen Teiltests den Status „Erledigt“, solange Scope, offene ACs oder Freigaben verbleiben.
 - BV-007 bleibt Teilumsetzung, solange Retention/Legal Hold und Ownernachfolge fehlen. Steuer- und EÜR-Tickets bleiben Teilumsetzung, solange unabhängige fachliche Beispiele, Formular-/Jahresabnahme und konkrete Betriebsfreigabe fehlen.
+
+
+## GitHub #59/#130: neuer Wiederaufbau vom 25.10.2026, 05:53 UTC
+
+Diese GitHub-Issues sind nicht die historischen BV-059/BV-130. Alle 160
+historischen Ticketobjekte und Summen bleiben unverändert. Der unveröffentlichte
+Quellstand `8978c824` ist nach Executorwechsel nicht verfügbar und wurde nicht
+als ursprünglicher Code wiederhergestellt. Historische lokale Prüfergebnisse
+werden für den Ersatz nicht übernommen.
+
+Neuer Basisstand: `e268d1c8d64dd7f7bceb4b651ba55eb3ebdb7931` nach #142/#143.
+Wiederaufbau mit getrennten Sol-6.1-xhigh-Lanes läuft; noch keine abgeschlossene
+Implementierung oder Hosted-/Browserabnahme. Lokale Funktionstests werden nicht
+ausgeführt. Die sieben akzeptierten Screenshotpartitionen / 209 Namen / 28 MiB
+bleiben unverändert; sechs zusätzliche synthetische Nachweise erhalten eine
+eigene begrenzte Partition. [Prüf- und Recoverygrenzen](../testing/issues-59-130-reconstruction-2026-10-25.md).
+
+Draft-Veröffentlichung und vollständige Hosted-Prüfung sind freigegeben, Merge,
+Issue-Schließung und Deployment nicht. Dieser datierte Checkpoint behauptet
+weder Veröffentlichung noch bestandene Prüfungen.

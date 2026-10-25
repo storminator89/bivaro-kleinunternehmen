@@ -2303,5 +2303,37 @@
       },
       "nextPublishedRecoveryCandidate": "pending_documentation_checkpoint_and_exact_tree_publication"
     }
+  },
+  "issue59130ReconstructionCheckpoint": {
+    "updatedAt": "2026-10-25T05:53:00Z",
+    "githubIssues": [
+      59,
+      130
+    ],
+    "historicalBvTicketsUnchanged": true,
+    "baseCommit": "e268d1c8d64dd7f7bceb4b651ba55eb3ebdb7931",
+    "baseTree": "a16d9fbcd178886811d737c134a95a457fe6d67f",
+    "unavailableOriginalCommit": "8978c8248cc81dd5b12b7d83b4703533b3fca3df",
+    "originalRecovered": false,
+    "historicalVerificationReused": false,
+    "status": "reconstruction_in_progress",
+    "replacementRuntimeAccepted": false,
+    "localFunctionalTestsExecuted": false,
+    "requiredStaticChecks": "pending_integrated_candidate",
+    "hostedCi": "pending_exact_draft_head",
+    "browserAcceptance": "pending_exact_draft_head",
+    "acceptedVisualPartitions": 7,
+    "acceptedVisualNames": 209,
+    "acceptedVisualOutputMiB": 28,
+    "newRequiredVisualNames": 6,
+    "newIndependentVisualOutputMiB": 2,
+    "plannedCombinedVisualOutputMiB": 30,
+    "evidence": "docs/testing/issues-59-130-reconstruction-2026-10-25.md",
+    "publication": "authorized_draft_pending",
+    "mergeAuthorized": false,
+    "issueClosureAuthorized": false,
+    "deploymentAuthorized": false,
+    "historicalTicketObjectsPreserved": 160,
+    "historicalStatusSummaryUnchanged": true
   }
 }

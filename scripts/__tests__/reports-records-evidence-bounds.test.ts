@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 // Source-only checks for the next separately authorized hosted unit run.
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
+const eighth = workflow.indexOf('      # Eighth independent partition:');
+const acceptedWorkflow = workflow.slice(0, eighth < 0 ? undefined : eighth).trimEnd() + '\n';
 const start = workflow.indexOf('      # New sixth partition:');
 const original = workflow.slice(0, start).trimEnd() + '\n';
 const end = workflow.indexOf('      # Seventh independent partition:', start);
@@ -25,7 +27,7 @@ describe('bounded reports and records hosted visual acceptance', () => {
     for (const surface of ['history-evidence', 'history-empty', 'reminder-queue']) for (const theme of ['light', 'dark']) for (const width of [1440, 390]) expect(names).toContain(`records-history-${surface}-${theme}-${width}.png`);
     for (const surface of ['reminder-confirmation', 'service-ledger', 'statement-selection']) for (const position of ['top', 'bottom']) for (const theme of ['light', 'dark']) for (const width of [1440, 390]) expect(names).toContain(`records-history-${surface}-${position}-${theme}-${width}.png`);
     expect(names.filter(name => namesIn(original).includes(name))).toEqual([]);
-    expect(namesIn(workflow)).toHaveLength(209);
+    expect(namesIn(acceptedWorkflow)).toHaveLength(209);
   });
   it('retains complete bounded safe reads, all lossless pixel/hash checks and one-day retention', () => {
     for (const value of ['limit = 6 * 1024 * 1024', 'per_file_input_limit = 1 * 1024 * 1024', 'total > 12 * 1024 * 1024', 'actual_input_bytes > 12 * 1024 * 1024', 'timeout-minutes: 6', 'timeout-minutes: 2', 'retention-days: 1', 'reports-records-workspace-synthetic-visuals', '{source.name for source, _ in matches} != allowed', 'len({source.name for source, _ in matches}) != len(matches)', 'os.O_NOFOLLOW | os.O_NONBLOCK', 'stat.S_ISREG', 'source.resolve().is_relative_to(root)', 'current.st_size != expected.st_size', 'handle.read(min(per_file_input_limit, remaining_input) + 1)', 'recompress_png_strong as recompress_png', 'zip(inputs, results, strict=True)', "ProcessPoolExecutor(max_workers=2, mp_context=get_context('fork'))", 'color metadata or full-pixel verification failed']) expect(partition).toContain(value);

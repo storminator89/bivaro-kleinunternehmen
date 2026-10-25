@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
 const start = workflow.indexOf('      # Seventh independent partition:');
 const original = workflow.slice(0, start).trimEnd() + '\n';
-const partition = workflow.slice(start);
+const eighth = workflow.indexOf('      # Eighth independent partition:');
+const acceptedWorkflow = workflow.slice(0, eighth < 0 ? undefined : eighth).trimEnd() + '\n';
+const partition = workflow.slice(start, eighth < 0 ? undefined : eighth);
 const browser = readFileSync('e2e/sidebar-flat-icons.spec.ts', 'utf8');
 const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\n\s*\}/g)]
   .flatMap(match => [...match[1].matchAll(/'([^']+\.png)'/g)].map(name => name[1]));
@@ -36,7 +38,7 @@ describe('required bounded hosted flat-sidebar evidence', () => {
       'Require complete sidebar visual delivery', 'raise SystemExit(1)']) expect(partition).toContain(value);
     expect(partition).not.toContain('continue-on-error: true');
     expect(partition).not.toContain('raise SystemExit(0)');
-    const allNames = namesIn(workflow);
+    const allNames = namesIn(acceptedWorkflow);
     expect(allNames).toHaveLength(209); expect(new Set(allNames).size).toBe(209);
     expect(names.filter(name => namesIn(original).includes(name))).toEqual([]);
   });
