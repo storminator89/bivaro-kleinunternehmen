@@ -16,6 +16,7 @@ import { IncomingTechnicalValidation } from './incoming-technical-validation';
 import { IncomingReviewDraft, IncomingSavedDraft, type IncomingDraftHandle } from './incoming-review-draft';
 import type { IncomingNavigationGuard, IncomingReviewSequence } from './incoming-review-queue';
 import { SupplierContactPanel } from './supplier-contact-panel';
+import { SupplierTaskPanel, type SupplierTaskHandle } from './supplier-task-panel';
 import { PurchaseExpenseApproval } from './purchase-expense-approval';
 import { approvalBlockedReason, hasApprovalIdentity } from './purchase-expense-ui';
 import { errorMessage, extractionLabel, formatFileSize, formatSourceAmount, formatSourceDate, incomingJson, incomingResponseError, isReviewMutationBlocked, reviewLabel, type ReviewAction } from './incoming-document-ui';
@@ -88,14 +89,22 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
   const [view, setView] = useState<'source' | 'supplier' | 'approval'>('source');
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [draftDirty, setDraftDirty] = useState(false);
-  const navigationState = useRef({ dirty: false, busy: false, draftBusy: false });
-  const updateDraftDirty = useCallback((dirty: boolean) => { navigationState.current.dirty = dirty; setDraftDirty(dirty); }, []);
+  const [taskDirty, setTaskDirty] = useState(false);
+  const [taskBusy, setTaskBusy] = useState(false);
+  const taskDirtyRef = useRef(false);
+  const draftDirtyRef = useRef(false);
+  const navigationState = useRef({ dirty: false, busy: false, draftBusy: false, taskBusy: false });
+  const updateDraftDirty = useCallback((dirty: boolean) => { draftDirtyRef.current = dirty; navigationState.current.dirty = dirty || taskDirtyRef.current; setDraftDirty(dirty); }, []);
+  const updateTaskDirty = useCallback((dirty: boolean) => { taskDirtyRef.current = dirty; navigationState.current.dirty = dirty || draftDirtyRef.current; setTaskDirty(dirty); }, []);
+  const updateTaskBusy = useCallback((busy: boolean) => { navigationState.current.taskBusy = busy; setTaskBusy(busy); }, []);
   const updateDraftBusy = useCallback((busy: boolean) => { navigationState.current.draftBusy = busy; setDraftBusy(busy); }, []);
   const [historyGuardSupported, setHistoryGuardSupported] = useState<boolean | null>(null);
   useEffect(() => { setHistoryGuardSupported(typeof (window as Window & { navigation?: { currentEntry?: { index?: number } } }).navigation?.currentEntry?.index === 'number'); }, []);
   const [draftBusy, setDraftBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [draftGeneration, setDraftGeneration] = useState(0);
+  const [taskGeneration, setTaskGeneration] = useState(0);
+  const taskHandle = useRef<SupplierTaskHandle>(null);
   const draftHandle = useRef<IncomingDraftHandle>(null);
   const [pendingNavigation, setPendingNavigation] = useState<{ proceed: () => void; stay: () => void } | null>(null);
   const navigationHeading = useRef<HTMLHeadingElement>(null);
@@ -129,7 +138,7 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
     return () => controller.abort();
   }, [id, refresh, tenantId]);
   async function mutate(action: ReviewAction) {
-    if (!document || isReviewMutationBlocked({ busy: busyRef.current || aiBusy, draftDirty, draftBusy, hasPending })) return;
+    if (!document || isReviewMutationBlocked({ busy: busyRef.current || aiBusy || taskBusy, draftDirty: draftDirty || taskDirty, draftBusy, hasPending })) return;
     busyRef.current = true; setBusy(action); setActionError(null);
     try {
       const result = await incomingJson<IncomingDocumentResponse>(`/api/purchase-documents/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: document.revision, ...(action === 'dismiss' ? { reason: reason.trim() } : {}) }) });
@@ -163,10 +172,10 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
     requestAnimationFrame(() => title.current?.focus());
   }
   const sequenceEnabled = !!sequence && historyGuardSupported === true;
-  const navigationBusy = dismissOpen || approvalBusy || draftBusy || !!busy || aiBusy || !!sequence?.busy || savingNavigation;
+  const navigationBusy = dismissOpen || approvalBusy || draftBusy || taskBusy || !!busy || aiBusy || !!sequence?.busy || savingNavigation;
   navigationState.current.busy = navigationBusy;
   useLayoutEffect(() => {
-    const isBusy = () => navigationState.current.busy || navigationState.current.draftBusy || busyRef.current || savingNext.current;
+    const isBusy = () => navigationState.current.busy || navigationState.current.draftBusy || navigationState.current.taskBusy || busyRef.current || savingNext.current;
     registerNavigationGuard?.({
       get blocked() { return navigationState.current.dirty; },
       cancelPending: () => setPendingNavigation(null),
@@ -185,10 +194,11 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
     requestAnimationFrame(() => (navigationTrigger.current?.isConnected ? navigationTrigger.current : title.current)?.focus({ preventScroll: true }));
   }
   async function saveAndContinue(proceed: () => void) {
-    if (savingNext.current || navigationBusy || !draftHandle.current) return;
+    if (savingNext.current || navigationBusy || (taskDirtyRef.current ? !taskHandle.current : !draftHandle.current)) return;
     savingNext.current = true; setSavingNavigation(true);
     try {
-      if (await draftHandle.current.save()) {
+      const saved = taskDirtyRef.current ? await taskHandle.current!.save() : await draftHandle.current!.save();
+      if (saved) {
         if (!alive.current) return;
         setPendingNavigation(null); proceed();
       }
@@ -199,7 +209,12 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
     void saveAndContinue(sequence.prepareNextAfterSave());
   }
   const sequenceLocked = !!sequence?.busy || savingNavigation || !!pendingNavigation;
-  const mutationBlocked = isReviewMutationBlocked({ busy: !!busy || aiBusy || sequenceLocked, draftDirty, draftBusy, hasPending });
+  const mutationBlocked = isReviewMutationBlocked({ busy: !!busy || aiBusy || taskBusy || sequenceLocked, draftDirty: draftDirty || taskDirty, draftBusy, hasPending });
+  function reloadDocument() {
+    if ((draftDirty || taskDirty) && !window.confirm('Ungespeicherten Prüfentwurf / Vormerkung verwerfen und Beleg neu laden?')) return;
+    updateDraftDirty(false); updateTaskDirty(false);
+    setDraftGeneration(value => value + 1); setTaskGeneration(value => value + 1); setRefresh(value => value + 1);
+  }
   return <Dialog open onOpenChange={open => { if (!open && !navigationBusy) { if (pendingNavigation) stayHere(); else onClose(); } }}>
     <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] gap-0 overflow-y-auto p-5 sm:max-w-2xl sm:p-6" showCloseButton={!navigationBusy} onEscapeKeyDown={event => { if (navigationBusy) event.preventDefault(); }} onInteractOutside={event => { if (navigationBusy) event.preventDefault(); }} onOpenAutoFocus={event => { event.preventDefault(); title.current?.focus({ preventScroll: true }); }} onCloseAutoFocus={event => { event.preventDefault(); returnFocus(); }}>
       <DialogHeader className="mb-5 min-w-0 pr-9 text-left">
@@ -207,11 +222,11 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
         <DialogDescription className="break-all">{document?.originalRef.fileName ?? `Beleg #${id}`}</DialogDescription>
       </DialogHeader>
       {pendingNavigation && <section role="alertdialog" aria-labelledby="review-navigation-heading" aria-describedby="review-navigation-help" className="mb-5 rounded-lg border border-caution p-4">
-        <h3 ref={navigationHeading} id="review-navigation-heading" tabIndex={-1} className="font-semibold outline-none">Ungespeicherter Prüfentwurf</h3>
-        <p id="review-navigation-help" className="mt-2 text-sm text-muted-foreground">Vor dem Wechsel speichern, verwerfen oder hier bleiben. Es wird nichts gebucht.</p>
+        <h3 ref={navigationHeading} id="review-navigation-heading" tabIndex={-1} className="font-semibold outline-none">{taskDirty ? 'Ungespeicherte Vormerkung' : 'Ungespeicherter Prüfentwurf'}</h3>
+        <p id="review-navigation-help" className="mt-2 text-sm text-muted-foreground">{taskDirty ? 'Vor dem Wechsel speichern, lokale Eingaben verwerfen oder hier bleiben. Eine bereits gesendete Vormerkung mit unklarem Ausgang wird dadurch nicht rückgängig gemacht; vor Wiederholung zuerst den Serverstand abgleichen. Es wird nichts gebucht.' : 'Vor dem Wechsel speichern, verwerfen oder hier bleiben. Es wird nichts gebucht.'}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button disabled={navigationBusy} onClick={() => void saveAndContinue(pendingNavigation.proceed)}>Speichern & weiter</Button>
-          <Button variant="outline" disabled={navigationBusy} onClick={() => { const proceed = pendingNavigation.proceed; updateDraftDirty(false); setDraftGeneration(value => value + 1); setPendingNavigation(null); proceed(); }}>Änderungen verwerfen</Button>
+          <Button variant="outline" disabled={navigationBusy} onClick={() => { const proceed = pendingNavigation.proceed; updateDraftDirty(false); updateTaskDirty(false); setDraftGeneration(value => value + 1); setTaskGeneration(value => value + 1); setPendingNavigation(null); proceed(); }}>Änderungen verwerfen</Button>
           <Button variant="ghost" disabled={navigationBusy} onClick={stayHere}>Hier bleiben</Button>
         </div>
       </section>}
@@ -222,8 +237,9 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
           {document.originalRef.mediaType.startsWith('image/') && <IncomingPhotoPreview document={document} />}
           {document.reviewedSourceSnapshot && <section aria-label="Bestätigte manuelle Foto-Originalprüfung" className="mb-5 rounded-lg border border-primary/40 p-4 text-sm"><h3 className="font-semibold">Bestätigte manuelle Foto-Originalprüfung · keine automatische Buchung</h3><p className="mt-2">{document.reviewedSourceSnapshot.supplierName} · Rechnung {document.reviewedSourceSnapshot.invoiceNumber} vom {formatSourceDate(document.reviewedSourceSnapshot.invoiceDate)}</p><p className="mt-2">{formatSourceAmount(document.reviewedSourceSnapshot.grossAmount, 'EUR')} · tatsächliches Zahlungsdatum {formatSourceDate(document.reviewedSourceSnapshot.paymentDate)}</p><p className="mt-2 break-words">Käufer: {document.reviewedSourceSnapshot.buyerName}. Betrieblicher Zweck: {document.reviewedSourceSnapshot.businessPurpose}.</p><p className="mt-2 text-xs text-muted-foreground">Unveränderlicher bestätigter Quellen-Snapshot. Keine Bank-, Identitäts- oder steuerliche Konformitätsprüfung. Die verknüpfte Ausgabe ist die einzige Buchung.</p></section>}
           {document.reviewState !== 'REVIEW' && document.reviewDraft && <IncomingSavedDraft document={document} />}
-          <IncomingAiExtraction document={document} locked={sequenceLocked || draftDirty || draftBusy || !!busy || approvalBusy || dismissOpen || hasPending} onBusyChange={setAiBusy} onDocument={updated => { setDocument(updated); setDraftGeneration(value => value + 1); onChanged(); }} onRefresh={() => { if (!draftDirty && !draftBusy) { setDraftGeneration(value => value + 1); setRefresh(value => value + 1); } }} />
-          {document.reviewState === 'REVIEW' && <details open={document.originalRef.mediaType.startsWith('image/') || Boolean(document.reviewDraftSavedAt)} className="mb-4"><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">Prüfentwurf</summary><IncomingReviewDraft saveRef={draftHandle} secondary={sequenceEnabled} key={draftGeneration} document={document} locked={!!sequence?.busy || dismissOpen || !!busy || aiBusy || approvalBusy || hasPending} onSaved={saved => { setDocument(saved); updateDraftDirty(false); onChanged(); }} onDirtyChange={updateDraftDirty} onBusyChange={updateDraftBusy} /></details>}
+          <IncomingAiExtraction document={document} locked={sequenceLocked || draftDirty || draftBusy || taskDirty || taskBusy || !!busy || approvalBusy || dismissOpen || hasPending} onBusyChange={setAiBusy} onDocument={updated => { setDocument(updated); setDraftGeneration(value => value + 1); onChanged(); }} onRefresh={() => { if (!draftDirty && !draftBusy && !taskDirty && !taskBusy) { setDraftGeneration(value => value + 1); setRefresh(value => value + 1); } }} />
+          {document.reviewState === 'REVIEW' && <details open={document.originalRef.mediaType.startsWith('image/') || Boolean(document.reviewDraftSavedAt)} className="mb-4"><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">Prüfentwurf</summary><IncomingReviewDraft saveRef={draftHandle} secondary={sequenceEnabled} key={draftGeneration} document={document} locked={!!sequence?.busy || dismissOpen || !!busy || aiBusy || approvalBusy || taskDirty || taskBusy || hasPending} onSaved={saved => { setDocument(saved); updateDraftDirty(false); onChanged(); }} onDirtyChange={updateDraftDirty} onBusyChange={updateDraftBusy} /></details>}
+          <SupplierTaskPanel key={taskGeneration} saveRef={taskHandle} document={document} locked={!!sequence?.busy || draftDirty || draftBusy || !!busy || aiBusy || approvalBusy || dismissOpen || hasPending} onSaved={saved => { setDocument(current => !current || saved.revision >= current.revision ? saved : current); onChanged(); }} onDirtyChange={updateTaskDirty} onBusyChange={updateTaskBusy} />
           <SourcePreview document={document} onOpen={target => { if (!navigationBusy) onOpen(target); }} />
           <IncomingTechnicalValidation document={document} locked={dismissOpen || mutationBlocked || approvalBusy} onBusyChange={value => { busyRef.current = value; setBusy(value ? 'validation' : null); }} />
           <section aria-label="Gewählter Lieferantenkontakt" className="border-t border-border py-4 text-sm"><h3 className="font-semibold">Lieferantenkontakt</h3>{document.selectedSupplierSnapshot ? <><p className="mt-2 break-words font-medium">{document.selectedSupplierSnapshot.name}</p><p className="mt-1 break-words text-muted-foreground">{[document.selectedSupplierSnapshot.address, document.selectedSupplierSnapshot.postalCode, document.selectedSupplierSnapshot.city, document.selectedSupplierSnapshot.country].filter(Boolean).join(' · ')}</p><p className="mt-2 text-xs text-muted-foreground">Für diesen Beleg gespeichert; Identität und Empfänger ungeprüft.</p></> : <p className="mt-2 text-muted-foreground">Noch nicht zugeordnet.</p>}{document.reviewState === 'REVIEW' && <Button ref={contactTrigger} variant="outline" className="mt-3" disabled={dismissOpen || mutationBlocked} onClick={() => setView('supplier')}>{document.supplierId ? 'Kontakt wechseln / verwalten' : 'Kontakt auswählen / anlegen'}</Button>}</section>
@@ -232,17 +248,17 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
         {view === 'supplier' && <SupplierContactPanel document={document} onSelected={selected => { setDocument(selected); onChanged(); returnToSource('supplier'); }} onBack={() => returnToSource('supplier')} />}
         {view === 'approval' && <PurchaseExpenseApproval document={document} onApproved={didApprove} onBack={() => returnToSource('approval')} onReload={() => { setView('source'); setRefresh(value => value + 1); requestAnimationFrame(() => title.current?.focus()); }} onOpenDuplicate={onOpen} onBusyChange={setApprovalBusy} onPendingChange={setHasPending} />}
         <section aria-label="Originaldatei" className="border-y border-border py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h3 className="text-sm font-semibold">Unverändertes Original</h3><p className="mt-1 text-xs text-muted-foreground">{document.originalRef.mediaType === 'image/jpeg' ? 'JPG' : document.originalRef.mediaType === 'image/png' ? 'PNG' : document.originalRef.mediaType === 'application/pdf' ? 'PDF' : 'XML'} · {formatFileSize(document.originalRef.bytes)} · Eingang {formatSourceDate(document.originalRef.uploadedAt)}</p></div><Button variant="outline" disabled={sequenceLocked || !!busy || draftBusy || approvalBusy} onClick={downloadOriginal}>{busy === 'download' ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}Original herunterladen</Button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h3 className="text-sm font-semibold">Unverändertes Original</h3><p className="mt-1 text-xs text-muted-foreground">{document.originalRef.mediaType === 'image/jpeg' ? 'JPG' : document.originalRef.mediaType === 'image/png' ? 'PNG' : document.originalRef.mediaType === 'application/pdf' ? 'PDF' : 'XML'} · {formatFileSize(document.originalRef.bytes)} · Eingang {formatSourceDate(document.originalRef.uploadedAt)}</p></div><Button variant="outline" disabled={sequenceLocked || !!busy || draftBusy || taskBusy || approvalBusy} onClick={downloadOriginal}>{busy === 'download' ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}Original herunterladen</Button></div>
           <details className="mt-3 text-xs text-muted-foreground"><summary className="min-h-11 cursor-pointer py-3 focus-visible:outline-2 focus-visible:outline-ring">Datei-Prüfsumme (SHA-256)</summary><p className="break-all font-mono">{document.originalRef.sha256}</p></details>
         </section>
-        {actionError && <div ref={reviewError} tabIndex={-1} role="alert" className="mt-4 space-y-2 rounded-md bg-critical-surface p-3 text-sm text-critical-foreground"><p>{actionError}</p><Button variant="outline" disabled={!!busy || draftBusy} onClick={() => { if (!draftDirty || window.confirm('Ungespeicherten Prüfentwurf verwerfen und Beleg neu laden?')) setRefresh(value => value + 1); }}>Beleg neu laden</Button></div>}
+        {actionError && <div ref={reviewError} tabIndex={-1} role="alert" className="mt-4 space-y-2 rounded-md bg-critical-surface p-3 text-sm text-critical-foreground"><p>{actionError}</p><Button variant="outline" disabled={!!busy || draftBusy || taskBusy} onClick={reloadDocument}>Beleg neu laden</Button></div>}
         {view === 'source' && <><div className="flex flex-wrap gap-2 pt-4">
           {document.reviewState === 'REVIEW' && <>
-            {!document.originalRef.mediaType.startsWith('image/') && document.parseStatus !== 'PARSED' && <Button variant="outline" disabled={sequenceLocked || !!busy || aiBusy || draftBusy || draftDirty || hasPending} onClick={() => mutate('retry-parse')}><RotateCcw className={`size-4 ${busy === 'retry-parse' ? 'animate-spin' : ''}`} aria-hidden="true" />Auslesen wiederholen</Button>}
-            {!dismissOpen && <Button variant="ghost" disabled={sequenceLocked || !!busy || aiBusy || draftBusy || draftDirty || hasPending} onClick={() => setDismissOpen(true)}><ArchiveX className="size-4" aria-hidden="true" />Beleg verwerfen</Button>}
+            {!document.originalRef.mediaType.startsWith('image/') && document.parseStatus !== 'PARSED' && <Button variant="outline" disabled={sequenceLocked || !!busy || aiBusy || draftBusy || taskBusy || draftDirty || taskDirty || hasPending} onClick={() => mutate('retry-parse')}><RotateCcw className={`size-4 ${busy === 'retry-parse' ? 'animate-spin' : ''}`} aria-hidden="true" />Auslesen wiederholen</Button>}
+            {!dismissOpen && <Button variant="ghost" disabled={sequenceLocked || !!busy || aiBusy || draftBusy || taskBusy || draftDirty || taskDirty || hasPending} onClick={() => setDismissOpen(true)}><ArchiveX className="size-4" aria-hidden="true" />Beleg verwerfen</Button>}
           </>}
-          {document.reviewState === 'DISMISSED' && <Button variant="outline" disabled={sequenceLocked || !!busy || aiBusy || draftBusy || draftDirty || hasPending} onClick={() => mutate('reopen')}><RotateCcw className={`size-4 ${busy === 'reopen' ? 'animate-spin' : ''}`} aria-hidden="true" />Wieder öffnen</Button>}
-          <Button variant="ghost" disabled={sequenceLocked || !!busy || aiBusy || draftBusy} onClick={() => { if (!draftDirty || window.confirm('Ungespeicherten Prüfentwurf verwerfen und Beleg neu laden?')) setRefresh(value => value + 1); }}>Neu laden</Button>
+          {document.reviewState === 'DISMISSED' && <Button variant="outline" disabled={sequenceLocked || !!busy || aiBusy || draftBusy || taskBusy || draftDirty || taskDirty || hasPending} onClick={() => mutate('reopen')}><RotateCcw className={`size-4 ${busy === 'reopen' ? 'animate-spin' : ''}`} aria-hidden="true" />Wieder öffnen</Button>}
+          <Button variant="ghost" disabled={sequenceLocked || !!busy || aiBusy || draftBusy || taskBusy} onClick={reloadDocument}>Neu laden</Button>
         </div>
         {document.dismissalReason && <p className="mt-3 break-words text-sm text-muted-foreground">Verwerfungsgrund: {document.dismissalReason}</p>}
         {dismissOpen && document.reviewState === 'REVIEW' && <form className="mt-4 space-y-3 border-t border-border pt-4" onSubmit={event => { event.preventDefault(); if (!mutationBlocked && reason.trim()) mutate('dismiss'); }}>
@@ -259,7 +275,7 @@ export function IncomingDocumentReview({ id, onClose, onChanged, onOpen, returnF
           <div className="mb-2 flex flex-wrap gap-2">
             <Button variant="outline" disabled={navigationBusy || !!pendingNavigation || !sequence.canPrevious} onClick={() => sequence.move(-1)}><ChevronLeft className="size-4" aria-hidden="true" />Vorheriger</Button>
             <Button variant="outline" disabled={navigationBusy || !!pendingNavigation} onClick={() => sequence.move(1)}>Nächster<ChevronRight className="size-4" aria-hidden="true" /></Button>
-            {document?.reviewState === 'REVIEW' && !loading && !loadError && <Button disabled={navigationBusy || !!pendingNavigation || dismissOpen || hasPending} onClick={saveSequenceNext}>{savingNavigation ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}Entwurf speichern & nächster</Button>}
+            {document?.reviewState === 'REVIEW' && !loading && !loadError && <Button disabled={navigationBusy || !!pendingNavigation || dismissOpen || taskDirty || hasPending} onClick={saveSequenceNext}>{savingNavigation ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}Entwurf speichern & nächster</Button>}
           </div></>}
         <Button variant="ghost" disabled={navigationBusy || !!pendingNavigation} onClick={onClose}>Zur Liste</Button>
       </footer>}

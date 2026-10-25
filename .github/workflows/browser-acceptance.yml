@@ -1190,7 +1190,7 @@ jobs:
           exit 1
 
       # Eighth independent partition: max 30 MiB total output; all prior 209 names and 28 MiB remain unchanged.
-      - name: Stage six required supplier-task and simulation screenshots separately
+      - name: Stage eight required supplier-task and simulation screenshots separately
         id: stage-issues-59-130-visuals
         if: ${{ always() }}
         timeout-minutes: 6
@@ -1213,11 +1213,13 @@ jobs:
               'supplier-tasks-1440.png',
               'supplier-tasks-390.png',
               'supplier-tasks-conflict-390.png',
+              'supplier-task-inbox-1440.png',
+              'supplier-task-inbox-390.png',
               'simulation-transparency-1440.png',
               'simulation-transparency-390.png',
               'simulation-transparency-error-390.png',
           }
-          # Required exact six-image partition; every existing name, guard and budget stays unchanged.
+          # Required exact eight-image partition; every existing name, guard and budget stays unchanged.
           limit = 2 * 1024 * 1024
           per_file_input_limit = 1 * 1024 * 1024
           root = Path(os.environ['RUNNER_TEMP']) / 'bivaro-browser-results'
@@ -1245,7 +1247,7 @@ jobs:
           if len(matches) > len(allowed) or len({source.name for source, _ in matches}) != len(matches):
               skip('file count exceeds the exact allowlist or basenames are duplicated')
           if {source.name for source, _ in matches} != allowed:
-              skip('issues-59-130 proof is incomplete; all six exact images are required')
+              skip('issues-59-130 proof is incomplete; all eight exact images are required')
           total = sum(info.st_size for _, info in matches)
           print(f'Synthetic screenshot source bytes: {len(matches)}/{len(allowed)} files, {total} bytes.')
           for source, info in sorted(matches, key=lambda match: match[0].name):
@@ -1313,5 +1315,5 @@ jobs:
       - name: Require complete supplier-task and simulation visual delivery
         if: ${{ always() && (steps.stage-issues-59-130-visuals.outcome != 'success' || steps.upload-issues-59-130-visuals.outcome != 'success') }}
         run: |
-          echo '::error::The required six-image supplier-task and simulation partition was not delivered. Existing screenshot partitions remain unchanged.'
+          echo '::error::The required eight-image supplier-task and simulation partition was not delivered. Existing screenshot partitions remain unchanged.'
           exit 1

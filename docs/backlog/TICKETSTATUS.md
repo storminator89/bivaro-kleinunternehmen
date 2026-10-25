@@ -596,7 +596,7 @@ Neuer Basisstand: `e268d1c8d64dd7f7bceb4b651ba55eb3ebdb7931` nach #142/#143.
 Wiederaufbau mit getrennten Sol-6.1-xhigh-Lanes läuft; noch keine abgeschlossene
 Implementierung oder Hosted-/Browserabnahme. Lokale Funktionstests werden nicht
 ausgeführt. Die sieben akzeptierten Screenshotpartitionen / 209 Namen / 28 MiB
-bleiben unverändert; sechs zusätzliche synthetische Nachweise erhalten eine
+bleiben unverändert; acht zusätzliche synthetische Nachweise erhalten eine
 eigene begrenzte Partition. [Prüf- und Recoverygrenzen](../testing/issues-59-130-reconstruction-2026-10-25.md).
 
 Draft-Veröffentlichung und vollständige Hosted-Prüfung sind freigegeben, Merge,

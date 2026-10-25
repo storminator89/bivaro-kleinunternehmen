@@ -1,4 +1,4 @@
-import { backupSchemaSupportsBankMappingProfiles, backupSchemaSupportsDocumentNumberingPolicies, backupSchemaSupportsBankPaymentAllocations, backupSchemaSupportsBankImportEvidence, backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
+import { backupSchemaSupportsSupplierTasks, backupSchemaSupportsBankMappingProfiles, backupSchemaSupportsDocumentNumberingPolicies, backupSchemaSupportsBankPaymentAllocations, backupSchemaSupportsBankImportEvidence, backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
 /** Construct a genuine pre-CSV fixture, rather than relabelling a future schema. */
 export function stripCsvCatalogForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
   stripEmptyPaymentAdjustmentsForLegacy(backup);
@@ -53,6 +53,7 @@ export function stripEmptyPaymentAdjustmentsForLegacy(backup: { data: Record<str
 export function legacyPaymentData<T extends Record<string, unknown>>(data: T): T {
   const copy = { ...data };
   for (const key of ['bankMappingProfiles', 'bankMappingProfileRevisions', 'documentNumberingPolicies', 'quoteCreateReceipts', 'bankPaymentBindings', 'paymentAllocationChanges', 'bankImportBatches', 'bankImportRows', 'purchaseValidationReports', 'paymentAdjustments', 'paymentOperations']) if (Array.isArray(copy[key]) && (copy[key] as unknown[]).length === 0) delete copy[key];
+  if (Array.isArray(copy.purchaseDocuments)) Object.assign(copy, { purchaseDocuments: copy.purchaseDocuments.map(document => { const row = { ...document }; if (row.supplierTaskKind == null && row.supplierTaskFollowUpDate == null && (row.supplierTaskConfirmationRequired === false || row.supplierTaskConfirmationRequired === undefined)) { delete row.supplierTaskKind; delete row.supplierTaskFollowUpDate; delete row.supplierTaskConfirmationRequired; } return row; }) });
   if (Array.isArray(copy.paymentJournalEvents)) Object.assign(copy, { paymentJournalEvents: copy.paymentJournalEvents.map(root => { const row = { ...root }; if (row.bankPaymentBindingStableKey === null) delete row.bankPaymentBindingStableKey; return row; }) });
   if (Array.isArray(copy.serviceProjects) && copy.serviceProjects.length === 0) delete copy.serviceProjects;
   if (Array.isArray(copy.billingNotes)) Object.assign(copy, { billingNotes: copy.billingNotes.map(note => {
@@ -65,6 +66,7 @@ export function legacyPaymentData<T extends Record<string, unknown>>(data: T): T
 
 /** Nullable future fields are explicit in current fixtures but absent in old ones. */
 export function stripEmptyProjectServiceTimesForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string; sha256?: string }[] } }) {
+  stripEmptySupplierTasksForLegacy(backup);
   if (backupSchemaSupportsProjectServiceTimes(backup.manifest.schemaVersion)) return;
   if (backup.data.serviceProjects === undefined || (Array.isArray(backup.data.serviceProjects) && backup.data.serviceProjects.length === 0)) {
     delete backup.data.serviceProjects;
@@ -79,6 +81,7 @@ export function stripEmptyProjectServiceTimesForLegacy(backup: { data: Record<st
 
 /** Bank evidence is a new exact capability, not inferred from a later date. */
 export function stripEmptyBankImportsForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string }[] } }) {
+  stripEmptySupplierTasksForLegacy(backup);
   for (const [key, model, supported] of [
     ['bankMappingProfiles', 'BankMappingProfile', backupSchemaSupportsBankMappingProfiles(backup.manifest.schemaVersion)],
     ['bankMappingProfileRevisions', 'BankMappingProfileRevision', backupSchemaSupportsBankMappingProfiles(backup.manifest.schemaVersion)],
@@ -107,4 +110,16 @@ export function stripEmptyBankImportsForLegacy(backup: { data: Record<string, un
       backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => entry.model !== model);
     }
   }
+}
+
+/** Strip only provably empty newer task fields; real task evidence never masquerades as historical. */
+export function stripEmptySupplierTasksForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string; sha256?: string }[] } }) {
+  if (backupSchemaSupportsSupplierTasks(backup.manifest.schemaVersion) || !Array.isArray(backup.data.purchaseDocuments)) return;
+  for (const document of backup.data.purchaseDocuments) {
+    if (document.supplierTaskKind == null && document.supplierTaskFollowUpDate == null && (document.supplierTaskConfirmationRequired === false || document.supplierTaskConfirmationRequired === undefined)) {
+      delete document.supplierTaskKind; delete document.supplierTaskFollowUpDate; delete document.supplierTaskConfirmationRequired;
+    }
+  }
+  const coverage = backup.manifest.modelCoverage.find(entry => entry.model === 'PurchaseDocument');
+  if (coverage) coverage.sha256 = hashJson(backup.data.purchaseDocuments);
 }

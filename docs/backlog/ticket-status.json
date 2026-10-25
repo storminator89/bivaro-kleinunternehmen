@@ -2325,7 +2325,7 @@
     "acceptedVisualPartitions": 7,
     "acceptedVisualNames": 209,
     "acceptedVisualOutputMiB": 28,
-    "newRequiredVisualNames": 6,
+    "newRequiredVisualNames": 8,
     "newIndependentVisualOutputMiB": 2,
     "plannedCombinedVisualOutputMiB": 30,
     "evidence": "docs/testing/issues-59-130-reconstruction-2026-10-25.md",

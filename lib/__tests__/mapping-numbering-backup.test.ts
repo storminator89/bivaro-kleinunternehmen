@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { Prisma } from '@prisma/client';
-import { BACKUP_FEATURE_CAPABILITIES, BANK_MAPPING_PROFILES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, backupSchemaSupportsBankMappingProfiles, backupSchemaSupportsDocumentNumberingPolicies, createBackupManifest, validateBackupManifest } from '@/lib/backup-manifest';
+import { BACKUP_FEATURE_CAPABILITIES, BANK_MAPPING_PROFILES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, MAPPING_NUMBERING_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, backupSchemaSupportsBankMappingProfiles, backupSchemaSupportsDocumentNumberingPolicies, createBackupManifest, validateBackupManifest } from '@/lib/backup-manifest';
 import { bankMappingProfilesFromBackup, planBankMappingProfileRestore, restoreBankMappingProfiles } from '@/lib/bank-mapping-profile-backup';
 import { BANK_IMPORT_MAPPING_VERSION, BANK_IMPORT_PARSER_VERSION, type BankImportReceipt } from '@/lib/bank-import-contract';
 import { inferBankCsvMapping, parseBankCsv } from '@/lib/bank-csv';
@@ -47,17 +47,18 @@ function bankFixture(profiles = profileFixture()) {
 
 describe('closed standalone and combined backup identities', () => {
   it('preserves the historical identity and never infers capability from timestamps', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe('20261024030000_combine_mapping_profiles_numbering');
+    expect(MAPPING_NUMBERING_SCHEMA_VERSION).toBe('20261024030000_combine_mapping_profiles_numbering');
+    expect(CURRENT_SCHEMA_VERSION).toBe('20261024040000_add_supplier_tasks');
     expect(BANK_MAPPING_PROFILES_SCHEMA_VERSION).toBe('20261024010000_add_bank_mapping_profiles');
     expect(DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION).toBe('20261024020000_add_document_numbering_policy');
     expect(BACKUP_FEATURE_CAPABILITIES[BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION]).not.toHaveProperty('bankMappingProfiles');
     expect(BACKUP_FEATURE_CAPABILITIES[BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION]).not.toHaveProperty('documentNumberingPolicies');
-    for (const [schema, mapping, numbering] of [[BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, false, false], [BANK_MAPPING_PROFILES_SCHEMA_VERSION, true, false], [DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, false, true], [CURRENT_SCHEMA_VERSION, true, true], ['20991231000000_unknown', false, false]] as const) {
+    for (const [schema, mapping, numbering] of [[BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, false, false], [BANK_MAPPING_PROFILES_SCHEMA_VERSION, true, false], [DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, false, true], [MAPPING_NUMBERING_SCHEMA_VERSION, true, true], [CURRENT_SCHEMA_VERSION, true, true], ['20991231000000_unknown', false, false]] as const) {
       expect(backupSchemaSupportsBankMappingProfiles(schema)).toBe(mapping);
       expect(backupSchemaSupportsDocumentNumberingPolicies(schema)).toBe(numbering);
     }
   });
-  it.each([BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, BANK_MAPPING_PROFILES_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION])('accepts exactly the sections belonging to %s', schema => {
+  it.each([BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, BANK_MAPPING_PROFILES_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, MAPPING_NUMBERING_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION])('accepts exactly the sections belonging to %s', schema => {
     const backup = manifestFixture(); backup.manifest.schemaVersion = schema;
     stripEmptyBankImportsForLegacy(backup);
     expect(validateBackupManifest(backup.manifest, backup.data).schemaVersion).toBe(schema);

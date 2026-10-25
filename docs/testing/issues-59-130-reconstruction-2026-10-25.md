@@ -36,11 +36,13 @@ The complete accepted browser workflow prefix is retained byte-for-byte:
 SHA-256 `860eeef2fbaa3ef7efefa7e301e5be964923ff320fc74260410ee3af2988b0f6`.
 All seven existing independent partitions, 209 exact screenshot names and their
 28 MiB combined output budget are unchanged. A separate eighth partition adds
-only these six required isolated-synthetic captures:
+only these eight required isolated-synthetic captures:
 
 - `supplier-tasks-1440.png`
 - `supplier-tasks-390.png`
 - `supplier-tasks-conflict-390.png`
+- `supplier-task-inbox-1440.png`
+- `supplier-task-inbox-390.png`
 - `simulation-transparency-1440.png`
 - `simulation-transparency-390.png`
 - `simulation-transparency-error-390.png`
@@ -49,7 +51,7 @@ The new partition accepts at most 1 MiB per encoded PNG / 4 MiB encoded input /
 2 MiB lossless output, with safe regular-file reads, no symlink traversal,
 duplicate rejection, full-pixel and color-metadata proofs, and one-day artifact
 retention. Delivery is required, not a way to turn a failed browser suite green.
-New cumulative output ceiling: 30 MiB / 215 exact names. These are planned
+New cumulative output ceiling: 30 MiB / 217 exact names. These are planned
 captures, not produced or visually approved images at this checkpoint.
 
 ## Completion boundaries
