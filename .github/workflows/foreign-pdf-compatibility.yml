@@ -20,6 +20,8 @@ on:
       - 'lib/server/*pdf*.ts'
       - 'scripts/foreign-pdf/**'
       - 'scripts/assert-no-ghostscript.sh'
+      - 'lib/resource-limits.ts'
+      - 'lib/processing-limit.ts'
       - 'Dockerfile'
       - 'next.config.ts'
       - 'package*.json'
