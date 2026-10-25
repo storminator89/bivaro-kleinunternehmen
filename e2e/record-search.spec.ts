@@ -27,7 +27,7 @@ async function snapshot(userId: string) {
 }
 
 test('record search is bounded, owned and read-only with keyboard/mobile/navigation/retry/stale/session handling', async ({ page, browser }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
   const password = 'SyntheticRecordSearch123!';
   const owner = await prisma.user.create({ data: { email: `record-owner-${randomUUID()}@example.test`, name: 'Synthetic search owner', password: await hashPassword(password), role: 'USER' } });
@@ -39,6 +39,12 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     const foreignCustomer = await prisma.customer.create({ data: { userId: foreign.id, name: 'SYN-SEARCH FOREIGN-PRIVATE' } });
     await prisma.customer.create({ data: { userId: owner.id, name: 'SYN-東京 %_\\' } });
     const foreignInvoice = await prisma.invoice.create({ data: { userId: foreign.id, invoiceNumber: 'SYN-SEARCH-OUT', fileName: 'foreign-private.pdf', storedFileName: 'foreign-private.pdf', parsedData: {} } });
+    // Additional synthetic rows are never opened/downloaded; they exercise all
+    // three page controls without touching real files or any finance action.
+    for (let i = 0; i < 6; i++) {
+      await prisma.invoice.create({ data: { userId: owner.id, invoiceNumber: `SYN-SEARCH-EXTRA-OUT-${i}`, fileName: 'synthetic-unopened.pdf', storedFileName: 'synthetic-unopened.pdf', parsedData: {} } });
+      await prisma.purchaseDocument.create({ data: { userId: owner.id, originalFileName: `SYN-SEARCH-EXTRA-IN-${i}.pdf`, storedFileName: 'synthetic-unopened.pdf', originalSha256: String(i).padStart(64, '0'), originalByteCount: 12, mediaType: 'application/pdf', uploadRequestId: randomUUID() } });
+    }
     await page.setViewportSize({ width: 1440, height: 1000 }); await signIn(page, owner.email, password);
     const pdf = await PDFDocument.create(); pdf.addPage(); const bytes = await pdf.save();
     const outboundResponse = await page.request.post('/api/invoices', { data: { fileName: 'synthetic-search.pdf', invoiceNumber: 'SYN-SEARCH-OUT', parsedData: { currency: 'EUR' }, totalAmount: 10, pdfBytes: Buffer.from(bytes).toString('base64') } });
@@ -56,8 +62,9 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     await input.fill('ab'); await page.waitForTimeout(350); expect(requests).toHaveLength(0);
     await expect(dialog.getByRole('status')).toContainText('ab 3 Zeichen');
     await input.fill('SYN-SEARCH');
-    await expect(dialog.locator('[cmdk-group]').filter({ hasText: 'Datensätze · Kunden' }).getByRole('option')).toHaveCount(6);
-    await expect(dialog.getByText('Weitere Treffer vorhanden · Alle Kunden öffnen (ungefiltert)', { exact: true })).toBeVisible();
+    await expect(dialog.locator('[cmdk-group]').filter({ hasText: 'Datensätze · Kunden' }).getByRole('option')).toHaveCount(7);
+    await expect(dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('option', { name: 'Liste öffnen (ungefiltert) · Kunden', exact: true })).toBeVisible();
     await expect(dialog).not.toContainText('FOREIGN-PRIVATE');
     await expect(dialog.getByRole('option', { name: 'SYN-SEARCH-OUT', exact: false })).toBeVisible();
     await expect(dialog.getByRole('option', { name: 'SYN-SEARCH-IN.pdf', exact: false })).toBeVisible();
@@ -68,6 +75,99 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     expect((await (await page.request.get(`/api/invoices?document=${foreignInvoice.id}`)).json()).items).toEqual([]);
     expect((await page.request.get(`/api/purchase-documents/${foreignReceipt.id}`)).status()).toBe(404);
     expect((await page.request.get(`/api/invoices/download?id=${foreignInvoice.id}&download=true`)).status()).toBe(404);
+    await dialog.getByRole('option', { name: 'Weitere Treffer · Ausgangsbelege', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Ausgangsbelege Seite 2');
+    const outboundSelection = dialog.getByRole('option', { selected: true });
+    await expect(outboundSelection).toHaveCount(1); await expect(outboundSelection).toBeInViewport();
+    await expect(input).toHaveAttribute('aria-activedescendant', (await outboundSelection.getAttribute('id'))!);
+    await expect(dialog.getByRole('status')).toContainText('Kunden Seite 1');
+    await dialog.getByRole('option', { name: 'Weitere Treffer · Eingangsbelege', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Eingangsbelege Seite 2');
+    const inboundSelection = dialog.getByRole('option', { selected: true });
+    await expect(inboundSelection).toHaveCount(1); await expect(inboundSelection).toBeInViewport();
+    await expect(input).toHaveAttribute('aria-activedescendant', (await inboundSelection.getAttribute('id'))!);
+    await expect(dialog.getByRole('status')).toContainText('Ausgangsbelege Seite 2');
+    await dialog.getByRole('option', { name: 'Vorherige Treffer · Ausgangsbelege', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Ausgangsbelege Seite 1');
+    await dialog.getByRole('option', { name: 'Vorherige Treffer · Eingangsbelege', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Eingangsbelege Seite 1');
+    await input.focus();
+
+    // Continue within the palette: no URL hand-off, no unbounded appended rows.
+    // The sixth result becomes the selected keyboard option on the next page.
+    const continuationUrl = page.url();
+    await page.keyboard.press('Home');
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
+    await expect(dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Enter');
+    await expect(dialog.getByRole('status')).toContainText('Kunden Seite 2');
+    await expect(input).toBeFocused();
+    await expect(dialog.getByRole('option', { name: 'SYN-SEARCH Kunde 5', exact: false })).toHaveAttribute('aria-selected', 'true');
+    await expect(input).toHaveAttribute('aria-activedescendant', (await dialog.getByRole('option', { name: 'SYN-SEARCH Kunde 5', exact: false }).getAttribute('id'))!);
+    await expect(dialog.getByRole('option', { name: 'SYN-SEARCH Kunde 0', exact: false })).toHaveCount(0);
+    await expect(dialog.locator('[cmdk-group]').filter({ hasText: 'Datensätze · Kunden' }).getByRole('option')).toHaveCount(4);
+    await expect(page).toHaveURL(continuationUrl);
+    await expect(dialog).toContainText('Treffer können sich beim Blättern ändern');
+    for (const width of [360, 390, 1440]) {
+      await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+      await expect(input).toBeInViewport(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await expect(dialog.getByRole('option', { selected: true })).toBeInViewport();
+      await page.screenshot({ path: testInfo.outputPath(`record-search-continuation-${width}.png`), fullPage: false });
+    }
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`/customers\\?customer=${customers[5].id}`));
+    await expect(page.getByRole('button', { name: 'SYN-SEARCH Kunde 5 bearbeiten', exact: true }).filter({ visible: true })).toBeVisible();
+    await page.goBack(); await expect(page).toHaveURL(continuationUrl);
+    ({ dialog, input } = await openPalette(page)); await expect(input).toHaveValue('');
+    await input.fill('SYN-SEARCH');
+    await dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Kunden Seite 2');
+    await dialog.getByRole('option', { name: 'Vorherige Treffer · Kunden', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Kunden Seite 1');
+    await expect(dialog.getByRole('option', { name: 'SYN-SEARCH Kunde 5', exact: false })).toHaveCount(0);
+
+    // A continuation error retries the same body/page, not an unfiltered list.
+    await page.route('**/api/record-search', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }), { times: 1 });
+    await dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Suche nicht verfügbar');
+    await expect(dialog.getByRole('option', { name: 'Zur ersten Ergebnisseite', exact: true })).toBeVisible();
+    await dialog.getByRole('option', { name: 'Suche erneut versuchen', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Kunden Seite 2');
+    await expect(dialog.getByRole('option', { name: 'SYN-SEARCH Kunde 5', exact: false })).toBeVisible();
+    const nextRequest = requests.at(-1)!;
+    expect(nextRequest.data).toEqual({ query: 'SYN-SEARCH', pages: { customer: 1, outbound: 0, inbound: 0 } });
+    await dialog.getByRole('option', { name: 'Vorherige Treffer · Kunden', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Kunden Seite 1');
+
+    // A same-query page response arriving after new input must be discarded.
+    let pageRelease!: () => void; const pageGate = new Promise<void>(resolve => { pageRelease = resolve; });
+    let pageStarted!: () => void; const pageHeld = new Promise<void>(resolve => { pageStarted = resolve; });
+    await page.route('**/api/record-search', async route => {
+      const body = route.request().postDataJSON();
+      if (body.query === 'SYN-SEARCH' && body.pages?.customer === 1) {
+        pageStarted(); await pageGate;
+        try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [{ type: 'customer', page: 1, hasMore: false, items: [{ type: 'customer', id: customers[5].id, label: 'STALE-CONTINUATION-PRIVATE', href: `/customers?customer=${customers[5].id}` }] }] }) }); } catch { /* Aborted prior-page request. */ }
+      } else await route.continue();
+    }, { times: 1 });
+    await dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true }).click(); await pageHeld;
+    await expect(dialog.getByRole('status')).toContainText('Datensätze werden gesucht');
+    await input.fill('SYN-SEARCH-OUT'); await expect(dialog.getByRole('option', { name: 'SYN-SEARCH-OUT', exact: false })).toBeVisible();
+    pageRelease(); await expect(dialog).not.toContainText('STALE-CONTINUATION-PRIVATE');
+    await input.fill('SYN-SEARCH'); await expect(dialog.getByRole('status')).toContainText('Kunden Seite 1');
+
+    // Model a concurrent deletion between page requests: the empty later page
+    // must retain an owned, read-only way back instead of trapping the user.
+    await page.route('**/api/record-search', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [
+      { type: 'customer', page: 1, hasMore: false, items: [] },
+      { type: 'outbound', page: 0, hasMore: false, items: [] },
+      { type: 'inbound', page: 0, hasMore: false, items: [] },
+    ] }) }), { times: 1 });
+    await dialog.getByRole('option', { name: 'Weitere Treffer · Kunden', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Keine Treffer auf diesen Seiten');
+    await expect(dialog.getByRole('option', { name: 'Vorherige Treffer · Kunden', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(input).toHaveAttribute('aria-activedescendant', (await dialog.getByRole('option', { name: 'Vorherige Treffer · Kunden', exact: true }).getAttribute('id'))!);
+    await page.keyboard.press('Enter');
+    await expect(dialog.getByRole('status')).toContainText('Kunden Seite 1');
 
     for (const width of [360, 390, 1440]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });

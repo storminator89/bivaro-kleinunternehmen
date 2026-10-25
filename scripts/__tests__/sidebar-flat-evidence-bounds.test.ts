@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
+const fullWorkflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
+// Independently appended feature partitions do not redefine accepted legacy proofs.
+const appended = ['      # Eighth independent partition:', '      # Independent record-search partition:']
+  .map(marker => fullWorkflow.indexOf(marker)).filter(index => index >= 0);
+const workflow = fullWorkflow.slice(0, appended.length ? Math.min(...appended) : undefined);
 const start = workflow.indexOf('      # Seventh independent partition:');
 const original = workflow.slice(0, start).trimEnd() + '\n';
 const partition = workflow.slice(start);

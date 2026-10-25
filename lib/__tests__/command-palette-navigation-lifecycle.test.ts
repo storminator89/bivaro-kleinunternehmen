@@ -159,10 +159,10 @@ beforeEach(() => {
   client.session = { user: { id: 'synthetic-owner', role: 'ADMIN', sessionVersion: 1 } };
   client.push.mockReset(); client.signOut.mockReset(); client.setTheme.mockReset(); client.cancelSearch.mockReset();
   client.search.mockReset().mockImplementation((term: string, publish: (state: RecordSearchState) => void) => {
-    publish({ query: term, status: 'ready', result: { groups: [
-      { type: 'customer', items: [{ type: 'customer', id: 11, label: 'Synthetic customer', href: '/customers?customer=11' }], hasMore: true },
-      { type: 'outbound', items: [{ type: 'outbound', id: 12, label: 'Synthetic outbound', href: '/dashboard?tab=invoices&document=12' }], hasMore: true },
-      { type: 'inbound', items: [{ type: 'inbound', id: 13, label: 'Synthetic incoming', href: '/purchases?document=13' }], hasMore: true },
+    publish({ query: term, pages: { customer: 0, outbound: 0, inbound: 0 }, status: 'ready', result: { groups: [
+      { type: 'customer', page: 0, items: [{ type: 'customer', id: 11, label: 'Synthetic customer', href: '/customers?customer=11' }], hasMore: true },
+      { type: 'outbound', page: 0, items: [{ type: 'outbound', id: 12, label: 'Synthetic outbound', href: '/dashboard?tab=invoices&document=12' }], hasMore: true },
+      { type: 'inbound', page: 0, items: [{ type: 'inbound', id: 13, label: 'Synthetic incoming', href: '/purchases?document=13' }], hasMore: true },
     ] } });
     return { cancel: client.cancelSearch, done: Promise.resolve() };
   });
