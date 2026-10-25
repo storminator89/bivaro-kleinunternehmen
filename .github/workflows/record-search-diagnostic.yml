@@ -1,0 +1,124 @@
+name: Record-search focused diagnostic (not acceptance)
+
+on:
+  push:
+    branches: ['diagnostic/record-search-102']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-diagnostic:
+    name: Focused palette regression diagnostic (not acceptance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Install Chromium and system dependencies
+        shell: bash
+        run: |
+          # Bound transport stalls for these commands only; keep the runner's sources and trust settings.
+          apt_config="$(mktemp "${RUNNER_TEMP:?RUNNER_TEMP is required}/bivaro-apt-XXXXXX.conf")"
+          trap 'rm -f -- "$apt_config"' EXIT
+          cat > "$apt_config" <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          APT
+          # APT_CONFIG is read before system fragments. Preserve stricter runner bounds.
+          actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
+          printf '%s\n' "$actual_settings"
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
+            echo '::error::Unexpected per-command APT transport settings.'
+            exit 1
+          fi
+          node_bin="$(command -v node)"
+          playwright_cli="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}/node_modules/playwright/cli.js"
+          test -x "$node_bin"
+          test -f "$playwright_cli"
+          # Playwright's own sudo escalation drops environment variables. Run only its
+          # exact installed dependency installer as root; browser downloads stay non-root.
+          sudo env APT_CONFIG="$apt_config" "$node_bin" "$playwright_cli" install-deps chromium
+          "$node_bin" "$playwright_cli" install chromium
+
+      # PDF/A verification needs Java; real PDF preview needs headed Chromium/Xvfb.
+      - name: Install and verify PDF and virtual display dependencies
+        shell: bash
+        run: |
+          apt_config="$(mktemp "${RUNNER_TEMP:?RUNNER_TEMP is required}/bivaro-apt-XXXXXX.conf")"
+          trap 'rm -f -- "$apt_config"' EXIT
+          cat > "$apt_config" <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          APT
+          actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
+          printf '%s\n' "$actual_settings"
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
+            echo '::error::Unexpected per-command APT transport settings.'
+            exit 1
+          fi
+          sudo env APT_CONFIG="$apt_config" apt-get update
+          sudo env APT_CONFIG="$apt_config" apt-get install -y --no-install-recommends xvfb xauth default-jre-headless util-linux poppler-utils
+          command -v Xvfb
+          command -v xvfb-run
+          command -v xauth
+          xauth -V
+          sh scripts/assert-no-ghostscript.sh
+
+      - name: Install hash-pinned official offline invoice validator
+        run: node scripts/einvoice-validation/install-runtime.mjs "${{ runner.temp }}/bivaro-einvoice"
+
+      - name: Install hash-pinned official own-invoice PDF-A verifier
+        run: node scripts/own-invoice-pdfa/install-runtime.mjs "${{ runner.temp }}/bivaro-verapdf"
+
+      # Diagnostic only: the mandatory full workflow and its 212-image gates remain untouched.
+      # Same supported runner and real dependency bootstrap, no reused server or tenant.
+      - name: Run only the palette regression specs with genuine bootstrap
+        timeout-minutes: 12
+        env:
+          BIVARO_EINVOICE_ASSETS: ${{ runner.temp }}/bivaro-einvoice
+          BIVARO_VERAPDF_BIN: ${{ runner.temp }}/bivaro-verapdf/verapdf
+        run: >-
+          xvfb-run --auto-servernum npm run test:e2e --
+          --headed
+          --workers=1
+          --retries=0
+          --forbid-only
+          --global-timeout=600000
+          --reporter=github
+          --trace=off
+          --project=chromium
+          e2e/record-search.spec.ts
+          e2e/incoming-review-cross-navigation.spec.ts
+          --output="${{ runner.temp }}/bivaro-search-diagnostic-results"
