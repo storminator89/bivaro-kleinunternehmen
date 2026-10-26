@@ -19,6 +19,15 @@ describe('official report normalization, safe failure and no remote entity resol
   it('rejects absent checks, changed engine, foreign original and malformed/untrusted report data', () => {
     for (const bytes of [report({ steps: '' }), report({ engine: 'KoSIT Validator 1.6.2' }), report({ originalHash: 'b'.repeat(64) }), Buffer.from('<broken>'), report({ messages: message('future-severity') })]) expect(() => readOfficialValidationReport(bytes, hash)).toThrow();
   });
+  it('recognizes an official XML parsing failure without inventing later validation steps', () => {
+    const steps = '<r:validationStepResult id="val-xml" valid="false"/>';
+    const parsed = readOfficialValidationReport(report({ valid: false, steps, messages: message('error', 'generic-error') }), hash);
+    expect(parsed).toMatchObject({ status: 'FAILED', checks: { xml: 'FAILED', xsd: 'NOT_RUN', schematron: 'NOT_RUN' } });
+    expect(parsed.findings).toEqual([expect.objectContaining({ ruleId: 'generic-error', severity: 'error' })]);
+    expect(() => readOfficialValidationReport(report({ valid: false, steps }), hash)).toThrow('REPORT_INCOMPLETE');
+    expect(() => readOfficialValidationReport(report({ valid: true, steps, messages: message('error') }), hash)).toThrow('REPORT_INCOMPLETE');
+    expect(() => readOfficialValidationReport(report({ valid: false, steps: `${steps}<r:validationStepResult id="val-xsd" valid="true"/>`, messages: message('error') }), hash)).toThrow('REPORT_INCOMPLETE');
+  });
   it('retains bounded findings without losing a blocking error after the display cap', () => {
     const parsed = readOfficialValidationReport(report({ valid: false, messages: message().repeat(256) + message('error', 'FINAL-BLOCKING-ERROR') }), hash);
     expect(parsed.status).toBe('FAILED'); expect(parsed.findings).toHaveLength(256); expect(parsed.findingsTruncated).toBe(true);
