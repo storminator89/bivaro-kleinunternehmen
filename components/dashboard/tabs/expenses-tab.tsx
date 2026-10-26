@@ -27,6 +27,7 @@ import { Expense, FilterState } from "@/types/dashboard";
 import { LedgerListHeading } from "@/components/dashboard/ledger-list-heading";
 import { formatCurrency } from "@/lib/dashboard-utils";
 import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
+import { ManualEntrySubmitFeedback, type ManualEntrySubmitControls } from '@/components/dashboard/manual-entry-submit-feedback';
 
 type NewExpense = {
   description: string;
@@ -48,8 +49,10 @@ type ExpensesTabProps = {
   newExpense: NewExpense;
   setNewExpense: (expense: NewExpense) => void;
   expenseReceipt: File | null;
+  expenseReceiptInputKey?: number;
   setExpenseReceipt: (file: File | null) => void;
   onSubmit: (e: React.FormEvent) => void;
+  submission?: ManualEntrySubmitControls;
 
   // Filter state
   filters: FilterState['expenses'];
@@ -93,8 +96,10 @@ export function ExpensesTab({
   newExpense,
   setNewExpense,
   expenseReceipt,
+  expenseReceiptInputKey,
   setExpenseReceipt,
   onSubmit,
+  submission,
   filters,
   setFilters,
   uniqueCategories,
@@ -153,6 +158,8 @@ export function ExpensesTab({
 
   const sort = { sortBy: filters.sortBy ?? 'date', sortOrder: filters.sortOrder ?? 'desc' };
   const hasFilters = Boolean(filters.searchTerm || filters.dateRange !== 'all' || filters.taxRelevant !== 'all' || filters.category || filters.hasReceipt !== 'all');
+  const entryLocked = Boolean(submission && submission.state.phase !== 'idle');
+  const entryPending = submission?.state.phase === 'pending';
   return (
     <div className={`bookkeeping-workspace ${styles.workspace}`}>
       <details id="expense-entry" hidden={!entryOpen} className="entry-panel overflow-hidden rounded-xl border bg-card" open={entryOpen} onToggle={event => onEntryOpenChange(event.currentTarget.open)}>
@@ -161,8 +168,9 @@ export function ExpensesTab({
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         </summary>
         <div className="border-t p-4 sm:p-6">
-          {onOpenRecurringExpenses && <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Button variant="outline" size="sm" onClick={onOpenRecurringExpenses}>Wiederkehrende Ausgaben</Button></div>}
-          <form onSubmit={onSubmit} className="space-y-6">
+          {onOpenRecurringExpenses && <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Button variant="outline" size="sm" disabled={entryLocked} onClick={onOpenRecurringExpenses}>Wiederkehrende Ausgaben</Button></div>}
+          <form onSubmit={onSubmit} aria-busy={entryPending}>
+            <fieldset disabled={entryLocked} inert={entryLocked} className="min-w-0 space-y-6">
             <div className={styles.entryFields}>
               <div className={styles.entryDescription}>
                 <Label htmlFor="description" className="text-sm font-medium">Beschreibung</Label>
@@ -212,6 +220,7 @@ export function ExpensesTab({
                 <Label htmlFor="receipt" className="text-sm font-medium">Beleg hochladen (optional)</Label>
                 <div className={styles.attachment}>
                   <Input
+                    key={expenseReceiptInputKey}
                     id="receipt"
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
@@ -283,14 +292,16 @@ export function ExpensesTab({
               </div>
             </div>
             <div>
-              <Button type="submit">
+              <Button type="submit" disabled={entryLocked} aria-busy={entryPending}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
-                Ausgabe speichern
+                {entryPending ? 'Ausgabe wird gespeichert …' : 'Ausgabe speichern'}
               </Button>
             </div>
+            </fieldset>
           </form>
+          <ManualEntrySubmitFeedback controls={submission} nextLabel="Weitere Ausgabe erfassen" />
         </div>
       </details>
 

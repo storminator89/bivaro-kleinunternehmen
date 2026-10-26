@@ -7,9 +7,9 @@ import { createTestDatabase } from './helpers/database';
 import { inferBankCsvMapping, parseBankCsv } from '@/lib/bank-csv';
 import { BANK_IMPORT_MAPPING_VERSION, BANK_IMPORT_PARSER_VERSION } from '@/lib/bank-import-contract';
 import { bankImportEvidenceHash, bankImportRowKeys, bankImportTotals, prepareBankImport } from '@/lib/bank-import-evidence';
-import { bankAllocationsFromBackup, validateBankAllocationGraph } from '@/lib/bank-allocation-backup';
+import { bankAllocationsFromBackup, portableBankAllocations, validateBankAllocationGraph } from '@/lib/bank-allocation-backup';
 import { allocationBasisSnapshot, allocationChangeBasisSnapshot, bankBindingBasisSnapshot } from '@/lib/payment-journal/allocation-evidence';
-import { adjustmentBasisSnapshot, adjustmentFingerprint, financialHash } from '@/lib/payment-journal/adjustment-evidence';
+import { adjustmentBasisSnapshot, adjustmentFingerprint, evidenceDate, financialHash } from '@/lib/payment-journal/adjustment-evidence';
 import { createBackupManifest, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, BACKUP_FEATURE_CAPABILITIES, backupSchemaSupportsBankPaymentAllocations } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 
@@ -42,7 +42,7 @@ function fixture(kind: 'move' | 'refund' | 'correction' = 'move', amount = 40): 
   const changeBasis = allocationChangeBasisSnapshot(binding, root, a, b, null, { expectedAllocationRevision: 0, expectedSourceLedgerVersion: token, expectedTargetLedgerVersion: token, actionDate: '2026-10-21', reason: 'Falsche Rechnung korrigiert' });
   const change = { stableKey: changeKey, bindingStableKey: bindingKey, revision: 1, previousChangeStableKey: null, fromInvoiceId: 10, toInvoiceId: 11, amountCents: String(amount * 100), currency: 'EUR', actionDate: '2026-10-21T00:00:00.000Z', reason: 'Falsche Rechnung korrigiert', idempotencyKey: 'move-once', semanticFingerprint: financialHash(changeBasis), basisSnapshot: changeBasis, contractVersion: 1, recordedAt: recorded };
   const data: Row = { user: { id: source }, customers: [{ id: 5, name: 'Synthetic allocation customer', createdAt: date }], invoices: [a,b], incomes: [{ id: 20, manualRecordId: '54000000-0000-4000-8000-000000000020', manualRecordState: 'LEGACY_UNREVIEWED', manualRecordOrigin: 'PAYMENT_JOURNAL', manualRecordRevision: 0, invoiceId: 10, customerId: 5, description: 'Ein echter Originaleingang', amount, date, taxRelevant: true }],
-    manualFinancialRecordEvents: [],
+    manualFinancialRecordEvents: [], quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [],
     paymentJournalEvents: [root], paymentAdjustments: [], paymentOperations: [{ id: 40, idempotencyKey: 'root-once', kind: 'PAYMENT_RECEIVED', createdAt: recorded }, { id: 41, idempotencyKey: 'move-once', kind: 'PAYMENT_ALLOCATION_CHANGED', createdAt: recorded }],
     bankImportBatches: [batch], bankImportRows: [bankRow], bankPaymentBindings: [binding], paymentAllocationChanges: [change],
     bankMappingProfiles: [], bankMappingProfileRevisions: [], documentNumberingPolicies: [], quoteCreateReceipts: [],
@@ -181,6 +181,36 @@ describe('allocation restore, not command execution', () => {
     expect(repeat.bankPaymentBindings).toEqual({ imported: 0, skipped: 1 });
     expect(repeat.paymentAllocationChanges).toEqual({ imported: 0, skipped: 1 });
     const snapshot = JSON.parse(JSON.stringify((await readBackupSnapshot(target)).data)) as Row;
+    // Preserve the old array-find projection byte for byte while exercising
+    // real restored move/refund/correction graphs, not a duplicate mock graph.
+    const [bindingRows, changeRows, adjustmentRows, paymentRows, bankRows] = await Promise.all([
+      db.client.bankPaymentBinding.findMany({ where: { userId: target } }),
+      db.client.paymentAllocationChange.findMany({ where: { userId: target } }),
+      db.client.paymentAdjustment.findMany({ where: { userId: target }, orderBy: { id: 'asc' } }),
+      db.client.paymentJournalEvent.findMany({ where: { userId: target }, orderBy: { id: 'asc' } }),
+      db.client.bankImportRow.findMany({ where: { userId: target } }),
+    ]);
+    const oldFail = (message: string): never => { throw new Error(`Bank-Zahlungszuordnung: ${message}`); };
+    const oldPortableBindings = (banks: Row[], roots: Row[]) => bindingRows.map(row => ({
+      stableKey: String(row.stableKey), rowStableKey: String(banks.find(bank => bank.id === row.bankImportRowId)?.stableKey ?? oldFail('Bankzeile fehlt.')),
+      originalPaymentKey: String(roots.find(root => root.id === row.paymentJournalEventId)?.idempotencyKey ?? oldFail('Originalzahlung fehlt.')),
+      idempotencyKey: String(row.idempotencyKey), semanticFingerprint: String(row.semanticFingerprint), basisSnapshot: row.basisSnapshot,
+      contractVersion: row.contractVersion, createdAt: evidenceDate(row.createdAt).toISOString(),
+    })).sort((a, b) => a.stableKey.localeCompare(b.stableKey));
+    for (const [banks, roots, message] of [[[], paymentRows, 'Bankzeile fehlt.'], [bankRows, [], 'Originalzahlung fehlt.'], [[], [], 'Bankzeile fehlt.']] as const) {
+      expect(() => oldPortableBindings([...banks], [...roots])).toThrow(new Error(`Bank-Zahlungszuordnung: ${message}`));
+      expect(() => portableBankAllocations(bindingRows, changeRows, [...banks], [...roots])).toThrow(new Error(`Bank-Zahlungszuordnung: ${message}`));
+    }
+    const oldProjection = {
+      ...snapshot,
+      bankPaymentBindings: oldPortableBindings(bankRows, paymentRows),
+      paymentAdjustments: adjustmentRows.map(({ allocationBindingId, allocationChangeId, allocationRevision, allocationBasisSnapshot, ...item }) => ({ ...item, userId: undefined,
+        ...(item.contractVersion === 3 ? { allocationBindingStableKey: bindingRows.find(binding => binding.id === allocationBindingId)?.stableKey, allocationRevision,
+          allocationChangeStableKey: allocationChangeId == null ? null : changeRows.find(change => change.id === allocationChangeId)?.stableKey, allocationBasisSnapshot } : {}),
+      })),
+      paymentJournalEvents: paymentRows.map(item => ({ ...item, userId: undefined, bankPaymentBindingStableKey: bindingRows.find(binding => binding.paymentJournalEventId === item.id)?.stableKey ?? null })),
+    };
+    expect(JSON.stringify(snapshot)).toBe(JSON.stringify(oldProjection));
     expect(snapshot.bankPaymentBindings).toEqual(original.data.bankPaymentBindings);
     expect((snapshot.paymentAllocationChanges as Row[])[0].semanticFingerprint).toBe((original.data.paymentAllocationChanges as Row[])[0].semanticFingerprint);
     expect((snapshot.paymentAdjustments as Row[]).map(row => row.semanticFingerprint)).toEqual((original.data.paymentAdjustments as Row[]).map(row => row.semanticFingerprint));

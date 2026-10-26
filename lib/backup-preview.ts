@@ -28,6 +28,9 @@ export type BackupPreview = {
     bankMappingProfileRevisions: number;
     documentNumberingPolicies: number;
     quoteCreateReceipts: number;
+    quoteReleaseAuthorities: number;
+    quoteReleases: number;
+    quoteElectronicResponses: number;
     bankImportBatches: number;
     bankImportRows: number;
     bankPaymentBindings: number;
@@ -101,6 +104,9 @@ export function createBackupPreview(backup: unknown): BackupPreview {
     bankMappingProfileRevisions: countArray(data, 'bankMappingProfileRevisions'),
     documentNumberingPolicies: countArray(data, 'documentNumberingPolicies'),
     quoteCreateReceipts: countArray(data, 'quoteCreateReceipts'),
+    quoteReleaseAuthorities: countArray(data, 'quoteReleaseAuthorities'),
+    quoteReleases: countArray(data, 'quoteReleases'),
+    quoteElectronicResponses: countArray(data, 'quoteElectronicResponses'),
     bankImportBatches: countArray(data, 'bankImportBatches'),
     bankImportRows: countArray(data, 'bankImportRows'),
     bankPaymentBindings: countArray(data, 'bankPaymentBindings'),
@@ -130,6 +136,7 @@ export function createBackupPreview(backup: unknown): BackupPreview {
   };
 
   const warnings: string[] = [];
+  if (counts.quoteReleaseAuthorities > 0) warnings.push('Angebotsfreigaben und Antworten bleiben historische, gesperrte Nachweise. Wiederherstellen aktiviert keinen öffentlichen Zugriff und bestätigt keine neue Zustimmung. Neue Originalbindungen benötigen ein vollständiges ZIP-Backup; bestehende UUIDs werden nur bei exakt gleichem vollständigem Verlauf übernommen.');
   if (counts.manualFinancialRecordEvents > 0) warnings.push('Manuelle Festschreibungen und reine Betragskorrekturen sind unveränderliche Nachweise, keine zusätzlichen Geldbewegungen. Gleiche UUIDs werden nur bei exakt gleichem vollständigem Verlauf und wirksamer Projektion wiederverwendet; ältere, neuere oder abweichende Zielketten brechen ab. JSON enthält keine Originaldateien; neue archivierte Originalbindungen benötigen ZIP.');
   let manifest: BackupPreview['manifest'];
   if (candidate.version === CURRENT_BACKUP_VERSION) {

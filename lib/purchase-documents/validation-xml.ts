@@ -6,16 +6,22 @@ const CII = 'urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100';
 const RAM = 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100';
 const UBL = 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2';
 const CBC = 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2';
+// XML 1.0 Char production; the Unicode flag preserves valid supplementary pairs.
+const FORBIDDEN_XML_CHARACTER = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\ud800-\udfff\ufffe\uffff]/u;
 export class ValidationXmlError extends Error {
   constructor(readonly code: string) { super(code); }
 }
 export type ValidationXmlIdentity = { format: 'CII' | 'UBL' | null; profile: string | null; supported: boolean };
+function assertXmlCharacters(value: string): void {
+  if (FORBIDDEN_XML_CHARACTER.test(value)) throw new ValidationXmlError('XML_SYNTAX');
+}
 /** Streaming gate only, NOT an XSD/Schematron substitute. SAX never resolves resources. */
 export function inspectValidationXml(bytes: Uint8Array): ValidationXmlIdentity {
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_VALIDATION_XML_BYTES) throw new ValidationXmlError('XML_SIZE_LIMIT');
   let xml: string;
   try { xml = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
   catch { throw new ValidationXmlError('XML_ENCODING'); }
+  assertXmlCharacters(xml);
   // Reject before parsing so even a parser upgrade cannot enable DTD/entity resolution.
   if (/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(xml)) throw new ValidationXmlError('XML_EXTERNAL_CONTENT');
   const encoding = xml.match(/^\s*<\?xml\s[^?]*encoding\s*=\s*['"]([^'"]+)['"]/i)?.[1];
@@ -32,6 +38,7 @@ export function inspectValidationXml(bytes: Uint8Array): ValidationXmlIdentity {
   const sax = parser(true, { xmlns: true });
   sax.onopentag = node => {
     if (++nodes > 20_000 || stack.length >= 64 || Object.keys(node.attributes).length > 64 || performance.now() - started > 1000) throw new ValidationXmlError('XML_RESOURCE_LIMIT');
+    for (const attribute of Object.values(node.attributes)) assertXmlCharacters(attribute.value);
     if (node.uri === 'http://www.w3.org/2001/XInclude') throw new ValidationXmlError('XML_EXTERNAL_CONTENT');
     // Pinned scenarios select the schemas. Even file-only JAXP access is not a
     // repository sandbox for foreign/lax namespaces; never consult input hints.
@@ -53,6 +60,7 @@ export function inspectValidationXml(bytes: Uint8Array): ValidationXmlIdentity {
   };
   const text = (value: string) => {
     if (performance.now() - started > 1000) throw new ValidationXmlError('XML_RESOURCE_LIMIT');
+    assertXmlCharacters(value);
     if (profileDepth && stack.length === profileDepth) {
       profileText += value;
       if (profileText.length > 512) throw new ValidationXmlError('XML_PROFILE_LIMIT');

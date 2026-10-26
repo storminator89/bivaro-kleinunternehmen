@@ -124,6 +124,7 @@ export async function GET(request: Request) {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof ReminderWorkbenchError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     console.error('Error fetching reminders:', error);
     return NextResponse.json({ error: 'Fehler beim Laden der Mahnungen' }, { status: 500 });
   }

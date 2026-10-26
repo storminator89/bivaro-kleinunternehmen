@@ -213,6 +213,17 @@ export async function renderOwnInvoiceLayout(
     return lines.length > 0 ? lines : [''];
   };
 
+  const footerColumnWidth = (contentWidth - 44) / 3;
+  const contactLine = [settings?.email, settings?.telephone].filter(isNonEmptyString).join(' | ');
+  const footerLeft = [companyName, ...companyAddressLines, sellerCountry, contactLine]
+    .filter(isNonEmptyString)
+    .flatMap(value => splitText(value, footerColumnWidth, 7));
+  // Eight footer lines fit below the existing content boundary on every page.
+  // Essential party data must never become an ellipsis or overlap invoice rows.
+  if (footerLeft.length > 8) {
+    throw new OwnInvoiceInputError('Die Ausstelleranschrift und Kontaktdaten sind für das unterstützte Rechnungslayout zu lang. Bitte kürzere Angaben verwenden.');
+  }
+
   const drawCard = (
     x: number,
     topY: number,
@@ -330,9 +341,7 @@ export async function renderOwnInvoiceLayout(
   const drawFooter = (targetPage: number, pageNumber: number, pageCount: number) => {
     const footerFontSize = 7;
     const footerLineHeight = 9;
-    const columnWidth = (contentWidth - 44) / 3;
-    const contactLine = [settings?.email, settings?.telephone].filter(isNonEmptyString).join(' | ');
-    const footerLeft = [companyName, ...companyAddressLines, sellerCountry, contactLine].filter(isNonEmptyString);
+    const columnWidth = footerColumnWidth;
     // Keep routine invoices pixel-positioned as before. Longer supported
     // addresses grow upward into the reserved footer area, not over page numbers.
     const footerStartY = 74 + Math.max(0, footerLeft.length - 5) * footerLineHeight;
@@ -362,7 +371,7 @@ export async function renderOwnInvoiceLayout(
 
     let footerY = footerStartY;
     footerLeft.forEach(line => {
-      paintText(targetPage, truncateText(line, columnWidth, footerFontSize), {
+      paintText(targetPage, line, {
         x: margin,
         y: footerY,
         size: footerFontSize,
@@ -454,25 +463,31 @@ export async function renderOwnInvoiceLayout(
     }
 
     const cardTop = height - 116;
-    const cardHeight = Math.max(128, 58 + customerLines.length * 15);
     const gap = 18;
     const detailsWidth = 214;
     const addressWidth = contentWidth - detailsWidth - gap;
     const detailsX = margin + addressWidth + gap;
+    const displayedCustomerLines = (customerLines.length > 0 ? customerLines : ['Empfänger noch nicht angegeben'])
+      .flatMap((value, index) => splitText(value, addressWidth - 34, index === 0 ? 11 : 10, index === 0 ? boldFont : font)
+        .map(text => ({ text, name: index === 0 })));
+    const cardHeight = Math.max(128, 58 + displayedCustomerLines.length * 15);
+    // Keep the existing header/table geometry and enough room for the first row.
+    if (cardTop - cardHeight - 28 - 20 - 42 - 44 < bottomContentY) {
+      throw new OwnInvoiceInputError('Die Empfängeranschrift ist für das unterstützte Rechnungslayout zu lang. Bitte kürzere Angaben verwenden.');
+    }
 
     drawCard(margin, cardTop, addressWidth, cardHeight, surface, hairline);
     rect(page, { x: margin, y: cardTop - cardHeight, width: 5, height: cardHeight, color: brandAccent });
     paintText(page, 'EMPFÄNGER', { x: margin + 17, y: cardTop - 24, size: 7, font: boldFont, color: brandAccent });
 
-    const displayedCustomerLines = customerLines.length > 0 ? customerLines : ['Empfänger noch nicht angegeben'];
     let addressY = cardTop - 46;
-    displayedCustomerLines.forEach((line, index) => {
-      paintText(page, truncateText(line, addressWidth - 34, index === 0 ? 11 : 10, index === 0 ? boldFont : font), {
+    displayedCustomerLines.forEach(line => {
+      paintText(page, line.text, {
         x: margin + 17,
         y: addressY,
-        size: index === 0 ? 11 : 10,
-        font: index === 0 ? boldFont : font,
-        color: index === 0 ? textColor : mutedColor,
+        size: line.name ? 11 : 10,
+        font: line.name ? boldFont : font,
+        color: line.name ? textColor : mutedColor,
       });
       addressY -= 15;
     });

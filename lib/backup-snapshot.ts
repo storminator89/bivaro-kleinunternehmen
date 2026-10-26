@@ -1,3 +1,6 @@
+import { portableQuoteReleaseGraph, readQuoteReleaseRows } from '@/lib/quote-release-backup-store';
+import { readQuoteReleaseOriginal } from '@/lib/quote-release-original';
+import { MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES } from '@/lib/resource-limits';
 import { MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, manualRecordEventsFromBackup } from '@/lib/manual-financial-record-backup';
 import { MAX_MANUAL_RECORD_BACKUP_EVENTS, type ManualRecordSnapshot } from '@/lib/manual-financial-record-evidence';
 import { readManualRecordOriginal } from '@/lib/manual-financial-record-service';
@@ -114,6 +117,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       bankMappingProfileRevisions,
       documentNumberingPolicies,
       quoteCreateReceipts,
+      quoteReleaseRows,
       settings,
       annualBusinessContextRevisions,
       templates,
@@ -160,6 +164,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       tx.bankMappingProfileRevision.findMany({ where: { userId, profile: { userId } }, orderBy: [{ profileId: 'asc' }, { revision: 'asc' }], select: { profileId: true, revision: true, mutationId: true, configuration: true, createdAt: true } }),
       tx.documentNumberingPolicy.findMany({ where: { userId }, orderBy: [{ type: 'asc' }, { revision: 'asc' }], select: { type: true, revision: true, formatVersion: true, prefix: true, includeYear: true, sequenceWidth: true, startSequence: true, effectiveYear: true, createdAt: true } }),
       tx.quoteCreateReceipt.findMany({ where: { userId }, orderBy: { requestId: 'asc' }, select: { requestId: true, fingerprint: true, pdfSha256: true, invoiceId: true, createdAt: true } }),
+      readQuoteReleaseRows(tx, userId),
       tx.settings.findUnique({ where: { userId } }),
       tx.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } }),
       tx.invoiceTemplate.findMany({ where: { userId } }),
@@ -192,19 +197,28 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
     const allocations = portableBankAllocations(bankPaymentBindings, paymentAllocationChanges, bankImportRows, paymentJournalEvents);
     for (const document of purchaseDocuments) validateSupplierTaskBackupFields(document as unknown as Record<string, unknown>, `purchaseDocuments[${document.id}]`, true);
     const includedOriginalHashes = new Set(purchaseDocuments.map(document => document.originalSha256));
+    // These keys are unique in the source schema. Index once instead of
+    // repeatedly scanning the complete binding/change arrays per projection.
+    const bindingKeysById = new Map(bankPaymentBindings.map(binding => [binding.id, binding.stableKey]));
+    const bindingKeysByPaymentId = new Map(bankPaymentBindings.map(binding => [binding.paymentJournalEventId, binding.stableKey]));
+    const changeKeysById = new Map(paymentAllocationChanges.map(change => [change.id, change.stableKey]));
+    const quoteGraph = portableQuoteReleaseGraph(quoteReleaseRows, userId, invoices);
     const data = {
+      quoteReleaseAuthorities: quoteGraph.authorities,
+      quoteReleases: quoteGraph.releases,
+      quoteElectronicResponses: quoteGraph.responses,
       user: { id: user?.id, email: user?.email, name: user?.name },
       manualFinancialRecordEvents: manualFinancialRecordEvents.map(({ userId: _owner, ...event }) => { void _owner; return event; }),
       expenses: expenses.map((item) => ({ ...item, userId: undefined })),
       incomes: incomes.map((item) => ({ ...item, userId: undefined })),
       paymentAdjustments: paymentAdjustments.map(({ allocationBindingId, allocationChangeId, allocationRevision, allocationBasisSnapshot, ...item }) => ({ ...item, userId: undefined,
-        ...(item.contractVersion === 3 ? { allocationBindingStableKey: bankPaymentBindings.find(binding => binding.id === allocationBindingId)?.stableKey, allocationRevision,
-          allocationChangeStableKey: allocationChangeId == null ? null : paymentAllocationChanges.find(change => change.id === allocationChangeId)?.stableKey, allocationBasisSnapshot } : {}),
+        ...(item.contractVersion === 3 ? { allocationBindingStableKey: allocationBindingId === null ? undefined : bindingKeysById.get(allocationBindingId), allocationRevision,
+          allocationChangeStableKey: allocationChangeId == null ? null : changeKeysById.get(allocationChangeId), allocationBasisSnapshot } : {}),
       })),
       bankPaymentBindings: allocations.bindings,
       paymentAllocationChanges: allocations.changes,
       paymentOperations: paymentOperations.map((item) => ({ ...item, userId: undefined })),
-      paymentJournalEvents: paymentJournalEvents.map((item) => ({ ...item, userId: undefined, bankPaymentBindingStableKey: bankPaymentBindings.find(binding => binding.paymentJournalEventId === item.id)?.stableKey ?? null })),
+      paymentJournalEvents: paymentJournalEvents.map((item) => ({ ...item, userId: undefined, bankPaymentBindingStableKey: bindingKeysByPaymentId.get(item.id) ?? null })),
       invoices: invoices.map((item) => ({ ...item, userId: undefined })),
       purchaseDocuments: purchaseDocuments.map((item) => ({ ...item, userId: undefined })),
       // Orphaned historical proof remains target-owned but is not exported without its original.
@@ -245,6 +259,11 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       if (!expense.storedReceiptFileName) throw new BackupFileConsistencyError('Festgeschriebenes Original fehlt.');
       await readManualRecordOriginal(userId, expense.storedReceiptFileName, root.original);
     }
+  }
+  if (raw.quoteReleases.reduce((bytes, release) => bytes + release.originalBytes, 0) > MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES) throw new BackupFileSizeError('Freigabeoriginale überschreiten die Größenlimits eines vollständigen Backups.');
+  for (const release of raw.quoteReleases) {
+    try { await readQuoteReleaseOriginal(userId, release); }
+    catch { throw new BackupFileConsistencyError('Ein unveränderliches Angebotsfreigabe-Original fehlt oder wurde verändert.'); }
   }
   const endedAt = new Date().toISOString();
   const id = hashJson({ sourceUserId: userId, startedAt, endedAt, data: raw });

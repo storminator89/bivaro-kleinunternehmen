@@ -43,6 +43,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Generated Python bytecode; keep source and native extension modules visible.
+__pycache__/
+*.pyc
+*.pyo
+
 # Upload directory (legacy - public folder)
 /public/uploads
 

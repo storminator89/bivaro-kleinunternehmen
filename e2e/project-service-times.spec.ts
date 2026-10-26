@@ -241,7 +241,7 @@ test('manual project time stays explicit through filters, cancel, retry, invoice
   await page.getByRole('checkbox', { name: 'Leistungsnotiz SYNTHETISCH · Konzept übernehmen', exact: true }).check();
   await page.locator('#invoice-item-price-0').fill('95');
   await expect(selection).toContainText(/142,50\s*€ Positionsnetto/);
-  await page.getByRole('combobox', { name: 'Ausgabeformat', exact: true }).selectOption('xml-only');
+  await page.getByRole('combobox', { name: 'Rechnungsformat', exact: true }).selectOption('xml-only');
   await page.getByLabel('Käuferreferenz / Leitweg-ID', { exact: false }).fill('SYNTHETIC-PROJECT-ORDER');
   const invoice = await createXmlInvoice(page);
   await noFinancialWrites(userId, 1);

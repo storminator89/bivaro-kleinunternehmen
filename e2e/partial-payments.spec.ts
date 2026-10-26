@@ -64,11 +64,11 @@ test('treats a later deliberate equal amount/date/reference as a distinct alloca
       // This isolated tenant has one invoice: avoid opening a dropdown while
       // an unnecessary debounced search replaces the same row underneath it.
       const row = page.getByRole('row').filter({ hasText: invoiceNumber });
-      await expect(page.getByRole('row').filter({ has: page.getByRole('button', { name: /^Zahlungsstatus:/ }) })).toHaveCount(1);
+      await expect(page.getByRole('row').filter({ has: page.getByRole('button', { name: /^(?:Weitere )?Zahlung erfassen$/ }) })).toHaveCount(1);
       await expect(row).toHaveCount(1);
       const state = baseline === '0' ? 'Offen' : 'Teilbezahlt';
-      await row.getByRole('button', { name: `Zahlungsstatus: ${state}`, exact: true }).click();
-      await page.getByRole('menuitem', { name: baseline === '0' ? 'Bezahlt' : 'Weitere Zahlung erfassen', exact: true }).click();
+      await expect(row.getByText(state, { exact: true })).toBeVisible();
+      await row.getByRole('button', { name: baseline === '0' ? 'Zahlung erfassen' : 'Weitere Zahlung erfassen', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
       await expect(dialog.getByText('Zahlung gespeichert', { exact: true })).toHaveCount(0);
       const submit = dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true });

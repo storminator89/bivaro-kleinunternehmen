@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { preJournalBackup } from '../../e2e/helpers/pre-journal-backup';
 import { createBackupManifest, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION } from '@/lib/backup-manifest';
 import { createBackupPreview } from '@/lib/backup-preview';
+import { stripEmptyQuoteReleaseGraphForLegacy } from './helpers/backup-schema';
 
 // Preview is pure validation; a fixture probe must never query an application DB.
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
@@ -9,10 +10,15 @@ vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 describe('real-browser historical restore fixtures keep their exact original capability', () => {
   it.each([[null, true], ['   ', true], ['SYNTHETIC-OLD', false]] as const)('keeps the self-contained source byte-semantically equal to the original historical conversion %j/%j', (invoiceNumber, withIncome) => {
     const backup = preJournalBackup('3.0', invoiceNumber, withIncome);
-    const expected = createBackupManifest({ sourceUserId: backup.data.user.id, generatedAt: backup.exportedAt, data: backup.data });
+    for (const key of ['quoteReleaseAuthorities', 'quoteReleases', 'quoteElectronicResponses']) expect(backup.data).not.toHaveProperty(key);
+    // Explicit known-empty CURRENT comparison only; never change the frozen historical payload.
+    const comparison = { ...backup.data, quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [] };
+    const expected = createBackupManifest({ sourceUserId: backup.data.user.id, generatedAt: backup.exportedAt, data: comparison });
     expected.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION;
+    stripEmptyQuoteReleaseGraphForLegacy({ data: comparison, manifest: expected });
     expected.modelCoverage = expected.modelCoverage.filter(entry => !['ManualFinancialRecordEvent', 'BankMappingProfile', 'BankMappingProfileRevision', 'DocumentNumberingPolicy', 'QuoteCreateReceipt', 'BankPaymentBinding', 'PaymentAllocationChange', 'BankImportBatch', 'BankImportRow', 'EmailOutbox', 'EmailOutboxAttempt', 'PurchaseValidationReport', 'PaymentJournalEvent', 'PaymentAdjustment', 'PaymentOperation', 'AiProviderSettings', 'ServiceArticle', 'DataImportBatch', 'ServiceBillingPlan', 'ServiceBillingPeriod', 'ServiceProject'].includes(entry.model));
     expect(backup.manifest).toEqual(expected);
+    expect(comparison).toEqual(backup.data);
     expect(() => createBackupPreview(backup)).not.toThrow();
   });
   it.each(['2.0', '3.0'] as const)('accepts the actual pre-journal %s preview without advertising new payment models', version => {
@@ -27,7 +33,17 @@ describe('real-browser historical restore fixtures keep their exact original cap
     expect(backup.data).not.toHaveProperty('purchaseValidationReports');
     expect(backup.data).not.toHaveProperty('emailOutbox');
     expect(backup.data).not.toHaveProperty('emailOutboxAttempts');
+    expect(backup.data).not.toHaveProperty('quoteReleaseAuthorities');
+    expect(backup.data).not.toHaveProperty('quoteReleases');
+    expect(backup.data).not.toHaveProperty('quoteElectronicResponses');
     expect(backup.manifest?.modelCoverage.some(entry => ['BankMappingProfile', 'BankMappingProfileRevision', 'DocumentNumberingPolicy', 'QuoteCreateReceipt', 'BankPaymentBinding', 'PaymentAllocationChange', 'BankImportBatch', 'BankImportRow', 'EmailOutbox', 'EmailOutboxAttempt', 'PurchaseValidationReport', 'PaymentAdjustment', 'PaymentOperation'].includes(entry.model))).not.toBe(true);
+  });
+  it('rejects unsupported quote-release history instead of laundering a frozen historical fixture', () => {
+    for (const version of ['2.0', '3.0'] as const) for (const key of ['quoteReleaseAuthorities', 'quoteReleases', 'quoteElectronicResponses']) {
+      const backup = preJournalBackup(version);
+      Object.assign(backup.data, { [key]: [{ retained: 'unsupported synthetic history' }] });
+      expect(() => createBackupPreview(backup)).toThrow(/Schemaidentität|Freigabe/);
+    }
   });
   it.each([['BankPaymentBinding', 'bankPaymentBindings', 'included'], ['PaymentAllocationChange', 'paymentAllocationChanges', 'included'], ['BankImportBatch', 'bankImportBatches', 'included'], ['BankImportRow', 'bankImportRows', 'included'], ['PaymentAdjustment', 'paymentAdjustments', 'included'], ['PurchaseValidationReport', 'purchaseValidationReports', 'included'], ['EmailOutbox', 'emailOutbox', 'excluded'], ['EmailOutboxAttempt', 'emailOutboxAttempts', 'excluded']] as const)('rejects a historical identity falsely advertising the later %s model', (model, key, mode) => {
     const backup = preJournalBackup('3.0');

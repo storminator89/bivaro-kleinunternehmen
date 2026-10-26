@@ -36,7 +36,7 @@ test('saved mobile photo needs explicit source/payment confirmation and safely r
     expect(await prisma.expense.count({ where: { userId: user.id } })).toBe(0);
     await dialog.getByRole('button', { name: 'Prüfentwurf speichern', exact: true }).click();
     await expect(dialog.getByText('Prüfentwurf gespeichert · nicht gebucht', { exact: true })).toBeVisible();
-    await dialog.getByRole('button', { name: 'Kontakt auswählen / anlegen', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Lieferant auswählen', exact: true }).click();
     await dialog.getByRole('button', { name: 'Kontakt neu anlegen', exact: true }).click();
     await dialog.getByLabel('Name *', { exact: true }).fill('Foto Prüfkontakt');
     await dialog.getByRole('button', { name: 'Kontakt speichern', exact: true }).click();
