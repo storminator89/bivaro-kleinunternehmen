@@ -18,7 +18,6 @@ import {
     apiSuccess,
     apiError,
     handleCors,
-    corsHeaders,
 } from '@/lib/api-auth';
 
 export async function OPTIONS(request: NextRequest) {
@@ -100,10 +99,6 @@ export async function GET(request: NextRequest) {
             pageSize,
             total,
             hasMore: skip + transactions.length < total,
-        });
-
-        Object.entries(corsHeaders()).forEach(([key, value]) => {
-            response.headers.set(key, value);
         });
 
         return response;

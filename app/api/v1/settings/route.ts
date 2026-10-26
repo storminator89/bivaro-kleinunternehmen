@@ -69,10 +69,6 @@ export async function GET(request: NextRequest) {
 
     const response = apiSuccess(maskedSettings);
 
-    Object.entries(corsHeaders()).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-
     return response;
   }, { requiredScopes: ['read'] });
 }

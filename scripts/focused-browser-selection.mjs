@@ -96,6 +96,16 @@ const shape = (value, keys) => value && typeof value === 'object' && !Array.isAr
 // Exact reviewed backend contracts run in ordinary CI. They are not browser
 // certification of resource races, tenant isolation or financial projections.
 const serverUnitContracts = {
+  // Exact reviewed duplicate-CORS cleanup routes. AST/token parity establishes
+  // unchanged handlers; ordinary CI owns shared CORS/security contracts, not
+  // browser certification of every handler. New routes/auth sources fail closed.
+  ...Object.fromEntries([
+    'cashbook', 'customers', 'documentation', 'expenses', 'incomes',
+    'invoices', 'invoices/upload', 'recurring-expenses', 'reminders', 'settings',
+  ].map(route => [`app/api/v1/${route}/route.ts`, [
+    'lib/__tests__/api-boundaries.test.ts', 'lib/__tests__/helpers/database.ts',
+    'vitest.config.mts', '.github/workflows/ci.yml',
+  ]])),
   'app/api/backup/full/route.ts': ['lib/__tests__/backup-snapshot-route.test.ts'],
   'app/api/backup/route.ts': ['lib/__tests__/backup-snapshot-route.test.ts'],
   'app/api/dashboard/filter-options/route.ts': ['lib/__tests__/dashboard-filter-options.test.ts'],

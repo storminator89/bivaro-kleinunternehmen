@@ -48,6 +48,27 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(source).not.toMatch(/prisma\.apiKey|request\.(?:post|put|delete)|test\.(?:skip|fixme)|screenshot/);
   });
 
+  it('binds only the ten reviewed CORS cleanup routes to required ordinary-CI contracts and core smoke', () => {
+    const routes = ['cashbook', 'customers', 'documentation', 'expenses', 'incomes',
+      'invoices', 'invoices/upload', 'recurring-expenses', 'reminders', 'settings']
+      .map(route => `app/api/v1/${route}/route.ts`);
+    for (const inventory of [...routes.map(route => [route]), routes]) {
+      const selection = selectFocusedBrowser(inventory);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection.core).toBe(true);
+      expect(selection.criticalMappingRequired).toBe(false);
+      expect(selection.specs).toEqual([]);
+      for (const missing of ['lib/__tests__/api-boundaries.test.ts', 'lib/__tests__/helpers/database.ts',
+        'vitest.config.mts', '.github/workflows/ci.yml']) {
+        const blocked = selectFocusedBrowser(inventory, file => file !== missing);
+        expect(blocked.criticalMappingRequired).toBe(true);
+        expect(blocked.unknownCriticalCount).toBe(inventory.length);
+      }
+    }
+    for (const source of ['app/api/v1/new-resource/route.ts', 'app/api/v1/invoices/export/route.ts', 'lib/api-auth.ts']) {
+      expect(selectFocusedBrowser([source]).criticalMappingRequired).toBe(true);
+    }
+  });
   it('maps only the reviewed owner-version sources to all four bounded cases and retains shared manual-entry coverage', () => {
     const spec = 'e2e/quote-release-owner-surface.spec.ts';
     const sources = ['app/api/quotes/[id]/releases/route.ts', 'app/dashboard/page.tsx',
