@@ -93,6 +93,22 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(selection.criticalMappingRequired).toBe(false);
     expect(selection.specs.map(item => item.file)).toEqual(['e2e/backup-file-inspection.spec.ts', 'e2e/combobox-accessibility.spec.ts']);
   });
+  it('keeps the reviewed documentation checkbox conversion unit-backed with core smoke only', () => {
+    const sources = ['app/settings/documentation/page.tsx', 'lib/documentation-print-markdown.ts'];
+    const unit = 'lib/__tests__/documentation-print-markdown.test.ts';
+    for (const paths of [...sources.map(source => [source]), [...sources, unit]]) {
+      const selection = selectFocusedBrowser(paths);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection).toEqual({ schema: 'bivaro-focused-browser-selection-v1', core: true, specs: [],
+        criticalMappingRequired: false, unknownCriticalCount: 0, unmappedSourceCount: 0 });
+    }
+    const missing = selectFocusedBrowser(sources, () => false);
+    expect(missing.criticalMappingRequired).toBe(true);
+    expect(missing.unknownCriticalCount).toBe(2);
+    expect(missing.specs).toEqual([]);
+    expect(selectFocusedBrowser(['app/api/documentation/route.ts']).criticalMappingRequired).toBe(true);
+    expect(selectFocusedBrowser(['lib/documentation-unknown-contract.ts']).criticalMappingRequired).toBe(true);
+  });
   it('keeps JSON export limits and database grouping explicitly unit-backed, not falsely browser-covered', () => {
     const selection = selectFocusedBrowser(['app/api/backup/route.ts', 'app/api/dashboard/filter-options/route.ts', 'scripts/einvoice-validation/check-official.py']);
     expect(selection.core).toBe(true);

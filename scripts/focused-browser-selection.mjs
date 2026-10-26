@@ -28,6 +28,11 @@ const serverUnitContracts = {
   'lib/processing-limit.ts': ['lib/__tests__/processing-limits.test.ts'],
   'scripts/einvoice-validation/check-official.py': ['scripts/__tests__/einvoice-checker-exit.test.ts', 'scripts/__tests__/einvoice_checker_exit_cases.py'],
 };
+// Exact reviewed presentation conversions are unit-backed; browser scope stays core-only.
+const presentationUnitContracts = {
+  'app/settings/documentation/page.tsx': ['lib/__tests__/documentation-print-markdown.test.ts'],
+  'lib/documentation-print-markdown.ts': ['lib/__tests__/documentation-print-markdown.test.ts'],
+};
 // The existing inspection journey really exports a ZIP and then previews it.
 // Queue races and portable-reference equivalence remain unit-contract evidence.
 const backupInspectionSources = new Set(['app/api/backup/full/route.ts', 'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts']);
@@ -68,6 +73,10 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
+    if (Object.hasOwn(presentationUnitContracts, source)) {
+      if (!presentationUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);
+      continue;
+    }
     if (Object.hasOwn(serverUnitContracts, source)) {
       if (!serverUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);
       if (backupInspectionSources.has(source)) add('e2e/backup-file-inspection.spec.ts', true, source);
