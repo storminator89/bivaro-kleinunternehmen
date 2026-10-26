@@ -134,6 +134,17 @@ const reviewedJourneyContracts = {
   'e2e/documentation-loading.spec.ts': ['scripts/e2e-fixture.mjs', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
   'e2e/feature-backup-roundtrip.spec.ts': ['scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts', 'e2e/helpers/synthetic-login.ts'],
 };
+// Exact payment-reader indexing only: use the real repeated manual-receipt
+// journey, while V2/V3 correction/refund/allocation guards remain in ordinary CI.
+// Required fixture helpers and unit contracts must not silently disappear.
+const paymentPreflightContracts = [
+  'lib/__tests__/full-payment-form.test.ts',
+  'lib/__tests__/payment-adjustment-form.test.ts',
+  'lib/__tests__/payment-allocation-core.test.ts',
+  'lib/__tests__/helpers/database.ts',
+  'scripts/e2e-fixture.mjs',
+  'focused-e2e/core.spec.ts',
+];
 
 // Exact UX sources select real confirmation/replay and dirty/concurrent receipt
 // journeys, not a unit-only exemption. These are required future checks, NOT a
@@ -196,6 +207,11 @@ export function selectFocusedBrowser(paths, exists = () => true) {
       if (!ownerVersionContracts.every(file => exists(file))) unknownCritical.add(source);
       add('e2e/quote-release-owner-surface.spec.ts', true, source);
       // Do not continue: dashboard-content also needs manual-entry coverage.
+    }
+    if (source === 'lib/full-payment-form.ts') {
+      if (!paymentPreflightContracts.every(file => exists(file))) unknownCritical.add(source);
+      add('e2e/partial-payments.spec.ts', true, source);
+      continue;
     }
     if (Object.hasOwn(presentationUnitContracts, source)) {
       if (!presentationUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);

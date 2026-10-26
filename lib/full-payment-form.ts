@@ -182,11 +182,21 @@ export function readEffectivePayments(value: unknown): EffectivePayment[] {
     return root as EffectivePayment;
   });
 }
+/** Preserve Array.find's first match, including separately supplied typed roots. */
+function firstPaymentRootsById(roots: EffectivePayment[]): Map<number, EffectivePayment> {
+  const byId = new Map<number, EffectivePayment>();
+  for (const root of roots) {
+    // Map uses SameValueZero; the previous strict-equality find never matched NaN.
+    if (!Number.isNaN(root.originalPaymentId) && !byId.has(root.originalPaymentId)) byId.set(root.originalPaymentId, root);
+  }
+  return byId;
+}
 export function readRootCapabilities(value: unknown, effectivePayments: EffectivePayment[]): RootCapabilities[] {
   if (!Array.isArray(value) || value.length !== effectivePayments.length) throw new Error(reviewMessage);
+  const rootsById = firstPaymentRootsById(effectivePayments);
   const seen = new Set<number>();
   return value.map(item => {
-    const capability = record(item), root = effectivePayments.find(root => root.originalPaymentId === capability.originalPaymentId);
+    const capability = record(item), root = rootsById.get(capability.originalPaymentId as number);
     if (!root || seen.has(root.originalPaymentId) || cents(capability.correctableCents) > BigInt(root.retainedCents) || cents(capability.refundableCents) > BigInt(root.retainedCents)) throw new Error(reviewMessage);
     for (const [flag, reason] of [['canCorrect', 'correctionReviewReason'], ['canRefund', 'refundReviewReason'], ['canReallocate', 'reallocationReviewReason']] as const) {
       if (typeof capability[flag] !== 'boolean' || (capability[flag] ? capability[reason] !== null : typeof capability[reason] !== 'string')) throw new Error(reviewMessage);
@@ -201,8 +211,9 @@ export function readRootCapabilities(value: unknown, effectivePayments: Effectiv
 export function readOriginAssignments(value: unknown, events: PaymentHistoryEvent[]): EffectivePayment[] {
   const assignments = readEffectivePayments(value);
   if (assignments.length !== events.length) throw new Error(reviewMessage);
+  const assignmentsById = firstPaymentRootsById(assignments);
   for (const event of events) {
-    const assigned = assignments.find(root => root.originalPaymentId === event.id);
+    const assigned = assignmentsById.get(event.id);
     if (!assigned || assigned.originInvoiceId !== event.invoiceId || assigned.amountCents !== event.amountCents
       || assigned.paidAt !== event.paidAt || assigned.source !== event.source || assigned.dateCertainty !== event.dateCertainty) throw new Error(reviewMessage);
   }

@@ -174,6 +174,35 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(value.criticalMappingRequired).toBe(true); expect(value.unknownCriticalCount).toBe(1); expect(value.specs).toEqual([]);
     expect(selectFocusedBrowser(['lib/backup.ts']).criticalMappingRequired).toBe(true);
   });
+  it('maps only the exact payment-preflight reader to real repeated receipts and mandatory financial contracts', () => {
+    const source = 'lib/full-payment-form.ts', spec = 'e2e/partial-payments.spec.ts';
+    const title = 'treats a later deliberate equal amount/date/reference as a distinct allocation';
+    const contracts = ['lib/__tests__/full-payment-form.test.ts', 'lib/__tests__/payment-adjustment-form.test.ts',
+      'lib/__tests__/payment-allocation-core.test.ts', 'lib/__tests__/helpers/database.ts', 'scripts/e2e-fixture.mjs', 'focused-e2e/core.spec.ts'];
+    const inventories = [[source], [source, contracts[0]],
+      [source, contracts[0], 'scripts/focused-browser-selection.mjs', 'scripts/__tests__/focused-browser-selection.test.ts']];
+    for (const paths of inventories) {
+      const selection = selectFocusedBrowser(paths);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection).toEqual({ schema: 'bivaro-focused-browser-selection-v1', core: true,
+        specs: [{ file: spec, titles: [title] }], criticalMappingRequired: false, unknownCriticalCount: 0, unmappedSourceCount: 0 });
+    }
+    for (const absent of [spec, ...contracts]) {
+      const missing = selectFocusedBrowser([source], file => file !== absent);
+      expect(missing.core).toBe(true);
+      expect(missing.criticalMappingRequired).toBe(true);
+      expect(missing.unknownCriticalCount).toBe(1);
+      expect(missing.specs).toEqual(absent === spec ? [] : [{ file: spec, titles: [title] }]);
+    }
+    for (const sibling of ['lib/full-payment-form-next.ts', 'lib/payment-preflight.ts', 'lib/payment-adjustment-form.ts', 'lib/payment-journal/allocation-ledger.ts']) {
+      const unknown = selectFocusedBrowser([source, sibling]);
+      expect(unknown.criticalMappingRequired).toBe(true);
+      expect(unknown.unknownCriticalCount).toBe(1);
+      expect(unknown.specs).toEqual([{ file: spec, titles: [title] }]);
+    }
+    for (const file of [spec, ...contracts]) expect(() => readFileSync(file, 'utf8')).not.toThrow();
+    expect(FOCUSED_SPECS[spec]).toEqual([title]);
+  });
   it('maps only the independent real XML issuance case and explicit server/native invoice contracts', () => {
     const spec = 'e2e/payment-terms.spec.ts';
     const title = 'stale company default requires deliberate refresh, snapshots XML and permits a conscious manual date';
