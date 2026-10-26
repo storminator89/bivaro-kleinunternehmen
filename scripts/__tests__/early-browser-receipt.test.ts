@@ -17,6 +17,7 @@ function fixture(planned = 1) {
   const opened: number[] = [];
   let serial = 0;
   const env = {
+    NODE_ENV: 'test' as const,
     RUNNER_TEMP: '/runner', GITHUB_WORKSPACE: '/repo', GITHUB_OUTPUT: '/actions/output',
     GITHUB_RUN_ID: '12345', GITHUB_RUN_ATTEMPT: '2', BIVARO_BROWSER_RECEIPT_HEAD: 'a'.repeat(40),
     SECRET_ENV: 'NEVER-PUBLISH-SECRET',
