@@ -22,6 +22,12 @@ export const FOCUSED_SPECS = {
   'e2e/manual-entry-submission.spec.ts': [],
   'e2e/dashboard-owner-boundary.spec.ts': [],
   'e2e/service-article-picker-freshness.spec.ts': [],
+  'e2e/quote-release-owner-surface.spec.ts': [
+    'owner versions stay hidden and unwritable when the gate is absent',
+    'owned quote opens the internal version view without public access',
+    'unobserved committed capture stays blocked after close reopen and reload',
+    'owner version 401 removes private draft and history immediately',
+  ],
   'e2e/manual-photo-expense.spec.ts': ['saved mobile photo needs explicit source/payment confirmation and safely replays one original-backed Expense'],
   'e2e/partial-payments.spec.ts': ['treats a later deliberate equal amount/date/reference as a distinct allocation'],
   'e2e/supplier-tasks.spec.ts': [
@@ -105,6 +111,21 @@ const presentationUnitContracts = {
 // Queue races and portable-reference equivalence remain unit-contract evidence.
 const backupInspectionSources = new Set(['app/api/backup/full/route.ts', 'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts']);
 
+// Internal owner evidence only. Exact paths, never a public-token/unknown-critical
+// exemption. Shared dashboard sources still select their other existing journeys.
+const ownerVersionSources = new Set([
+  'app/api/quotes/[id]/releases/route.ts', 'app/dashboard/page.tsx',
+  'components/dashboard/dashboard-content.tsx', 'components/dashboard/tabs/quotes-tab.tsx',
+  'components/dashboard/quote-release-versions-dialog.tsx',
+  'lib/quote-release-owner-access.ts', 'lib/quote-release-owner-capture.ts',
+  'lib/quote-release-owner-client.ts', 'lib/quote-release-owner-contract.ts', 'lib/quote-release-owner-state.ts',
+  'e2e/helpers/quote-release-owner-fixture.ts', 'e2e/quote-release-owner-surface.spec.ts',
+]);
+const ownerVersionContracts = [
+  'lib/__tests__/quote-release-owner-capture.test.ts', 'lib/__tests__/quote-release-owner-state.test.ts',
+  'lib/__tests__/quote-release-owner-route.test.ts', 'lib/__tests__/quote-release-owner-client.test.ts',
+  'e2e/helpers/quote-release-owner-fixture.ts',
+];
 // These bounded cases own their anonymous read boundary or synthetic account.
 // Exact existing contracts are required; this never authorizes a local browser.
 const reviewedJourneyContracts = {
@@ -168,6 +189,12 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
+    const ownerVersion = ownerVersionSources.has(source);
+    if (ownerVersion) {
+      if (!ownerVersionContracts.every(file => exists(file))) unknownCritical.add(source);
+      add('e2e/quote-release-owner-surface.spec.ts', true, source);
+      // Do not continue: dashboard-content also needs manual-entry coverage.
+    }
     if (Object.hasOwn(presentationUnitContracts, source)) {
       if (!presentationUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);
       if (source === 'app/settings/documentation/page.tsx') add('e2e/documentation-loading.spec.ts', true, source);
@@ -192,7 +219,7 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     if (ownJourney) { add(ownJourney.spec, true, source); continue; }
     const packet = packets.find(value => value.paths.includes(source) || value.spec === source);
     if (packet) { add(packet.spec, true, source); continue; }
-    let mapped = knownInfrastructure(source) || Boolean(affectedUx);
+    let mapped = knownInfrastructure(source) || Boolean(affectedUx) || ownerVersion;
     if (Object.hasOwn(FOCUSED_SPECS, source)) { add(source, true, source); mapped = true; }
     if (/^(?:app\/(?:help|page\.tsx)|components\/(?:public\/|public-accounting\/))/u.test(source)) {
       add('e2e/public-help-fragments.spec.ts', false, source);

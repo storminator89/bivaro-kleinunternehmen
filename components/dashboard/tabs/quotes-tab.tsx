@@ -1,6 +1,7 @@
 "use client";
 
 import { QuoteWorkflowDialog } from '@/components/dashboard/quote-workflow-dialog';
+import { QuoteReleaseVersionsDialog } from '@/components/dashboard/quote-release-versions-dialog';
 import { quoteConversionBlockReason, quoteNextAction, type QuoteWorkflowCounts } from '@/lib/quote-workflow';
 import { formatBusinessDateDisplay } from '@/lib/business-date';
 import Link from "next/link";
@@ -50,6 +51,8 @@ export type Quote = {
 };
 
 type QuotesTabProps = {
+    ownerCaptureEnabled?: boolean;
+    ownerCaptureSessionKey?: string;
     quotes: Quote[];
     total: number;
     workflowCounts?: QuoteWorkflowCounts;
@@ -120,6 +123,8 @@ function QuoteStatusBadge({ status, onStatusChange }: { status: string; onStatus
 
 
 export function QuotesTab({
+    ownerCaptureEnabled = false,
+    ownerCaptureSessionKey = '',
     quotes,
     total,
     workflowCounts,
@@ -143,6 +148,7 @@ export function QuotesTab({
     loadQuotes,
 }: QuotesTabProps) {
     const [workflowQuote, setWorkflowQuote] = useState<Quote | null>(null);
+    const [versionSelection, setVersionSelection] = useState<{ quote: Quote; sessionKey: string } | null>(null);
     const [convertingId, setConvertingId] = useState<number | null>(null);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [confirmConvert, setConfirmConvert] = useState<Quote | null>(null);
@@ -256,6 +262,7 @@ export function QuotesTab({
                                     {quote.quoteFollowUpOn && <p>Wiedervorlage: {formatBusinessDateDisplay(quote.quoteFollowUpOn)}</p>}
                                     {quote.convertedInvoice && <Button variant="outline" size="sm" asChild><Link href={`/history?invoiceId=${quote.convertedInvoice.id}`}>Verknüpfte Rechnung ansehen</Link></Button>}
                                     <Button variant="outline" size="sm" onClick={() => setWorkflowQuote(quote)}>Rückmeldung &amp; Nachfassen</Button>
+                                    {ownerCaptureEnabled && <Button variant="outline" size="sm" onClick={() => setVersionSelection({ quote, sessionKey: ownerCaptureSessionKey })}>Interne Versionen</Button>}
                                 </div>
                                 <div className={styles.mobileActions}>
                                     <Button variant="outline" size="sm" className="min-h-11" onClick={() => window.open(`/api/quotes/download?id=${quote.id}`, '_blank')}><Eye className="h-4 w-4" aria-hidden="true" />Ansehen</Button>
@@ -308,6 +315,7 @@ export function QuotesTab({
                                                         <div className={styles.workflowActions}>
                                                             {quote.convertedInvoice && <Button variant="outline" size="sm" asChild><Link href={`/history?invoiceId=${quote.convertedInvoice.id}`}>Verknüpfte Rechnung ansehen</Link></Button>}
                                                             <Button variant="outline" size="sm" onClick={() => setWorkflowQuote(quote)}>Rückmeldung &amp; Nachfassen</Button>
+                                                            {ownerCaptureEnabled && <Button variant="outline" size="sm" onClick={() => setVersionSelection({ quote, sessionKey: ownerCaptureSessionKey })}>Interne Versionen</Button>}
                                                         </div>
                                                         <div className={styles.actionGroup}>
                                                             <span className="sr-only">Aktionen</span>
@@ -448,6 +456,7 @@ export function QuotesTab({
             </div>
 
             {workflowQuote && <QuoteWorkflowDialog key={workflowQuote.id} quote={workflowQuote} onClose={() => setWorkflowQuote(null)} onSaved={() => loadQuotes(page, pageSize)} />}
+            {ownerCaptureEnabled && versionSelection?.sessionKey === ownerCaptureSessionKey && <QuoteReleaseVersionsDialog key={`${ownerCaptureSessionKey}:${versionSelection.quote.id}`} quoteId={versionSelection.quote.id} ownerSessionKey={ownerCaptureSessionKey} quoteLabel={versionSelection.quote.invoiceNumber || 'Angebot'} onClose={() => setVersionSelection(null)} />}
             {/* Confirm: Convert to Invoice */}
             <Dialog open={!!confirmConvert} onOpenChange={() => setConfirmConvert(null)}>
                 <DialogContent>
