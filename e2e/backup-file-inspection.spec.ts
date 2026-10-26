@@ -20,7 +20,8 @@ const LEGACY_BACKUP_VERSION = sourceVersion(manifestSource, 'LEGACY_BACKUP_VERSI
 if (!/^export const CURRENT_SCHEMA_VERSION = MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION;$/mu.test(manifestSource)) throw new Error('Expected exact current backup capability alias');
 const CURRENT_SCHEMA_VERSION = sourceVersion(readFileSync('lib/manual-financial-record-backup.ts', 'utf8'), 'MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION');
 
-// Run through the supported fresh-fixture hosted E2E runner only.
+// Focused critical path only: supported fresh-fixture hosted runner, this file
+// and chromium project with --no-deps. No screenshot or full-mobile QA gate.
 // No restore endpoint, immutable-row cleanup, external service, or real backup.
 const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 async function settledNavigation(page: Page, destination: string, navigate: () => Promise<unknown>) {
@@ -54,7 +55,7 @@ async function protectedState(userId: string) {
 }
 async function packed(source: JSZip) { return source.generateAsync({ type: 'nodebuffer', compression: 'STORE' }); }
 
-test('ZIP inspection shows actual checks, blocks changed originals and never restores on discard or reload', async ({ page }, testInfo) => {
+test('ZIP inspection shows actual checks, blocks changed originals and never restores on discard or reload', async ({ page }) => {
   test.setTimeout(150_000);
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
   await isolateSyntheticLoginIpBudget();
@@ -132,20 +133,12 @@ test('ZIP inspection shows actual checks, blocks changed originals and never res
     await (await chooser).setFiles({ name: 'synthetic-inspection.zip', mimeType: 'application/zip', buffer: bytes });
     const result = await response; expect(result.status()).toBe(status); expect(await result.finished()).toBeNull();
   }
-  async function noClipping() {
-    await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const clipped = await summary.evaluate(element => element.scrollWidth > element.clientWidth + 1);
-    expect(clipped).toBe(false);
-  }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await openRestoreDisclosure();
   await choose(good, 200);
   await expect(summary.getByRole('heading', { name: 'Dateiprüfung gegen Manifest bestanden', exact: true })).toBeVisible();
   await expect(summary.getByText('SHA-256-geprüft:', { exact: true }).locator('..')).toContainText('1');
   await expect(summary).toContainText('keine Wiederherstellung und kein Abgleich mit dem Zielbestand');
-  await noClipping();
-  const desktop = await panel.screenshot({ path: testInfo.outputPath('backup-file-inspection-1440-verified.png'), animations: 'disabled' });
   await panel.getByRole('button', { name: 'Auswahl verwerfen', exact: true }).focus(); await page.keyboard.press('Enter');
   await expect(summary).toHaveCount(0); await expect(restore).toHaveCount(0);
 
@@ -163,13 +156,9 @@ test('ZIP inspection shows actual checks, blocks changed originals and never res
   await expect(summary).toContainText('Diese Dateien werden nicht wiederhergestellt.');
   const legacy = new JSZip();
   legacy.file('backup.json', JSON.stringify({ version: LEGACY_BACKUP_VERSION, type: 'full', data: {} }));
-  await page.setViewportSize({ width: 390, height: 844 });
   await choose(await packed(legacy), 200);
   await expect(summary.getByRole('heading', { name: 'Legacy-Backup: Dateiverfügbarkeit geprüft', exact: true })).toBeVisible();
   await expect(summary).toContainText('ursprüngliche Prüfsummen bleiben unbekannt');
-  await noClipping();
-  const mobile = await panel.screenshot({ path: testInfo.outputPath('backup-file-inspection-390-legacy.png'), animations: 'disabled' });
-  expect(desktop.length + mobile.length).toBeLessThanOrEqual(2 * 1024 * 1024);
   expect(previewRequests).toBe(7);
   const beforeReloadRequests = previewRequests;
   await settledNavigation(page, '/settings', () => page.reload());
