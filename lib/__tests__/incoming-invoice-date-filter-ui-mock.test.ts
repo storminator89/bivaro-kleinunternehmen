@@ -26,6 +26,20 @@ beforeEach(() => { hooks.cursor = 0; hooks.slots = []; hooks.effects = []; vi.cl
 afterEach(() => { for (const slot of hooks.slots) (slot as EffectSlot | undefined)?.cleanup?.(); vi.unstubAllGlobals(); });
 
 describe('explicit read-only invoice-date form (mocked component interactions)', () => {
+  it('starts with a collapsed native keyboard disclosure and never writes on toggle', () => {
+    const details = nodes(tree).find(node => node.type === 'details')!;
+    expect(details.props.open).toBe(false); expect(nodes(tree).some(node => node.type === 'summary' && text(node).startsWith('Rechnungsdatum filtern'))).toBe(true);
+    (details.props.onToggle as (event: unknown) => void)({ currentTarget: { open: true } }); commit();
+    expect(nodes(tree).find(node => node.type === 'details')!.props.open).toBe(true); expect(apply).not.toHaveBeenCalled();
+  });
+  it('opens for accepted/error filters but preserves user closure through same-filter rerenders', () => {
+    value = { invoiceDateFrom: '2026-01-01', invoiceDateTo: '2026-01-31', invoiceDateMissing: 'any' }; commit(); commit();
+    expect(nodes(tree).find(node => node.type === 'details')!.props.open).toBe(true);
+    (nodes(tree).find(node => node.type === 'details')!.props.onToggle as (event: unknown) => void)({ currentTarget: { open: false } }); commit(); commit();
+    expect(nodes(tree).find(node => node.type === 'details')!.props.open).toBe(false);
+    value = { ...value, invoiceDateTo: '2026-02-30' }; commit(); commit();
+    expect(nodes(tree).find(node => node.type === 'details')!.props.open).toBe(true); expect(nodes(tree).some(node => node.props.role === 'alert')).toBe(true);
+  });
   it('labels both mobile-sized calendar inputs and explains excluded unknown/draft/upload dates', () => {
     expect(byId('incoming-invoice-date-from').props).toMatchObject({ type: 'date', min: '0001-01-01', max: '9999-12-31', 'aria-describedby': 'incoming-invoice-date-help' });
     expect(byId('incoming-invoice-date-to').props).toMatchObject({ type: 'date', min: '0001-01-01', max: '9999-12-31' });
@@ -62,6 +76,7 @@ describe('explicit read-only invoice-date form (mocked component interactions)',
     (reset.props.onClick as () => void)(); commit();
     expect(apply).toHaveBeenCalledExactlyOnceWith({ invoiceDateFrom: '', invoiceDateTo: '', invoiceDateMissing: 'any' });
     expect(byId('incoming-invoice-date-from').props.disabled).toBe(false);
+    expect(nodes(tree).find(node => node.type === 'details')!.props.open).toBe(false);
   });
   it('shows malformed direct-link filters honestly and permits explicit clearing', () => {
     value = { invoiceDateFrom: '2026-02-30', invoiceDateTo: '', invoiceDateMissing: 'any' }; commit(); commit();

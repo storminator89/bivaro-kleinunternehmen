@@ -110,3 +110,35 @@ tatsächliche UI-/Mobile-/Dark-/Tastatur-Sichtprüfung. Keine bestehende Capture
 Allowlist, Bildanzahl oder Assertion wurde geändert. Neue visuelle Nachweise
 sind vor deren Veröffentlichung separat mit dem bestehenden Artefaktvertrag
 abzugleichen; hier wird keine Bildabnahme behauptet.
+
+## Risikobasierte mobile UX-Korrektur nach dem ersten Draft-Lauf
+
+Der erste veröffentlichte Kandidat `4e554a12` wurde in der vollständigen
+Hosted-Suite tatsächlich geprüft: CI mit 4.576 bestandenen Fällen und 20
+vorhandenen Skips, einschließlich aller acht neuen echten Datenbank-/API-Fälle,
+vollständige Lint-/Typprüfung, Security und normaler Produktionsbuild bestanden.
+Native PDF-A-/Containerprüfungen bestanden ebenfalls. Der Browserlauf
+`40297603399` scheiterte mit **211 bestanden / 2 fehlgeschlagen**: Die bestehenden
+360-/390px-Listenfortsetzungen konnten den echten ersten Eingangsbeleg bei
+fokussiertem Suchhinweis nicht mehr im Viewport sehen. Das dauerhaft geöffnete
+neue Datumsformular hatte die Liste nach unten verschoben. Die fehlende
+Pflicht-Bildpartition und der ausgelassene nachgelagerte PDF-Rendergate bleiben
+fehlgeschlagen, nicht nachträglich als abgenommen eingeordnet.
+
+Die tatsächliche UX-Korrektur verwendet eine native Tastatur-Disclosure:
+inaktiv zunächst geschlossen, bei akzeptierten aktiven oder fehlerhaften
+Datumsfiltern geöffnet, mit verständlicher Zusammenfassung. Benutzerseitiges
+Schließen bleibt bei unveränderten Filtern trotz Listen-/Detail-Refresh erhalten.
+Zurücksetzen fokussiert die weiterhin sichtbare Zusammenfassung. Input-IDs,
+Owner-/Navigationsguards, Backendfilter und sämtliche bestehenden
+Viewport-Assertions bleiben unverändert; kein erzwungenes Testscrollen und
+keine schwächere Behauptung.
+
+Für diese eng begrenzte Korrektur gilt die anschließend ausdrücklich reduzierte,
+risikobasierte Nutzerfreigabe: **55 reine SSR-/Mock-/Vertragsfälle bestanden**,
+fokussierte Typ- und Lintprüfung statt erneutem vollständigem Browser-/Bildlauf.
+Die eigene mobile Kernreise ist für eine gegebenenfalls notwendige fokussierte
+Hosted-Prüfung angepasst; sie öffnet den Filter ausdrücklich per Tastatur und
+prüft Schließen/Refresh sowie Reset-Fokus. Dies ist noch kein neuer
+Browser-Erfolgsnachweis. Keine zusätzlichen Screenshot-Allowlists, Bildpflichten
+oder 256-/258-Bildnachweise werden für diese Korrektur eingeführt.

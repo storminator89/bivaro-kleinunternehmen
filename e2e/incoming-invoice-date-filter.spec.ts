@@ -89,13 +89,25 @@ test('mobile source-date filters keep boundaries, unknown dates, detail/reload/h
   });
   const row = (id: number) => page.locator(`[data-incoming-document-id="${id}"]`);
   const form = page.getByRole('form', { name: 'Nach Rechnungsdatum filtern', exact: true });
+  const summary = page.locator('summary').filter({ hasText: /^Rechnungsdatum filtern/ });
+  const dateDetails = summary.locator('..');
+  async function openDateFilter() {
+    if (await dateDetails.getAttribute('open') === null) { await summary.focus(); await page.keyboard.press('Enter'); }
+    await expect(form).toBeVisible();
+  }
   await sessionNavigation(page, '/purchases', () => page.goto('/purchases?reviewStatus=ALL'), sessionOwner);
+  await expect(dateDetails).not.toHaveAttribute('open'); await expect(summary).toBeVisible(); await openDateFilter();
   const from = page.getByLabel('Rechnungsdatum von', { exact: true }), to = page.getByLabel('Rechnungsdatum bis (einschließlich)', { exact: true });
   await expect(row(missing.id)).toBeVisible(); await from.fill('2026-01-01'); await to.fill('2026-01-31');
   const apply = form.getByRole('button', { name: 'Datumsfilter anwenden', exact: true }); await apply.focus(); await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/invoiceDateFrom=2026-01-01&invoiceDateTo=2026-01-31/);
   await expect(page.locator('[data-incoming-document-id]')).toHaveCount(2); await expect(row(lower.id)).toBeVisible(); await expect(row(upper.id)).toBeVisible();
   await expect(row(outside.id)).toHaveCount(0); await expect(row(missing.id)).toHaveCount(0); await expect(row(foreignDocument.id)).toHaveCount(0);
+  await summary.focus(); await page.keyboard.press('Enter'); await expect(dateDetails).not.toHaveAttribute('open');
+  const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/purchase-documents');
+  await page.getByRole('button', { name: 'Belegeingang aktualisieren', exact: true }).click(); const refreshedResponse = await refreshed;
+  expect(refreshedResponse.status()).toBe(200); expect(await refreshedResponse.finished()).toBeNull();
+  await expect(page.locator('[data-incoming-document-id]')).toHaveCount(2); await expect(dateDetails).not.toHaveAttribute('open'); await openDateFilter();
   const filteredUrl = page.url();
   await row(lower.id).click(); await expect(page.getByRole('dialog', { name: 'Eingangsbeleg prüfen', exact: true })).toBeVisible();
   await page.keyboard.press('Escape'); await expect(page).toHaveURL(filteredUrl); await expect(row(lower.id)).toBeFocused();
@@ -108,10 +120,17 @@ test('mobile source-date filters keep boundaries, unknown dates, detail/reload/h
   await expect(page).toHaveURL(/invoiceDateMissing=only/); expect(new URL(page.url()).searchParams.has('invoiceDateFrom')).toBe(false);
   await expect(page.locator('[data-incoming-document-id]')).toHaveCount(1); await expect(row(missing.id)).toBeVisible(); await expect(row(missing.id)).toContainText('Entwurfsdatum');
   await form.getByRole('button', { name: 'Datumsfilter zurücksetzen', exact: true }).click(); await expect(page).toHaveURL(/\/purchases\?reviewStatus=ALL$/); await expect(page.locator('[data-incoming-document-id]')).toHaveCount(4);
+  await expect(dateDetails).not.toHaveAttribute('open'); await expect(summary).toBeFocused();
   await page.keyboard.press('Control+k'); const palette = page.getByRole('dialog', { name: 'Befehlspalette', exact: true }); await expect(palette).toBeVisible();
   await palette.getByRole('combobox').fill(prefix); await palette.getByRole('option', { name: 'Passende Liste öffnen · Eingangsbelege', exact: true }).click(); await expect(palette).toBeHidden();
-  await expect(page.getByRole('region', { name: 'Suchfilter · Eingangsbelege', exact: true })).toContainText(prefix);
-  await from.fill('2026-01-01'); await to.fill('2026-01-31'); await apply.click(); await expect(page.locator('[data-incoming-document-id]')).toHaveCount(2);
+  const searchNotice = page.getByRole('region', { name: 'Suchfilter · Eingangsbelege', exact: true });
+  await expect(searchNotice).toContainText(prefix); await expect(searchNotice).toBeFocused();
+  await expect(dateDetails).not.toHaveAttribute('open');
+  // Reproduce the actual mobile regression without a compensating test scroll:
+  // the focused handoff notice and newest owned source must fit together.
+  await expect(page.locator('[data-incoming-document-id]').first()).toHaveAttribute('data-incoming-document-id', String(outside.id));
+  await expect(row(outside.id)).toBeInViewport();
+  await openDateFilter(); await from.fill('2026-01-01'); await to.fill('2026-01-31'); await apply.click(); await expect(page.locator('[data-incoming-document-id]')).toHaveCount(2);
   expect(paletteReads.some(body => body.query === prefix && body.invoiceDateFrom === '2026-01-01' && body.invoiceDateTo === '2026-01-31')).toBe(true);
   expect(page.url()).not.toContain(prefix); expect(blocked).toEqual([]); expect(authDiagnostics).toEqual([]); expect(await snapshot([owner.id, foreign.id])).toEqual(baseline);
 });

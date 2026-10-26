@@ -1,10 +1,24 @@
-import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+import { IncomingInvoiceDateFilter } from '@/components/purchases/incoming-invoice-date-filter';
 import { EMPTY_INVOICE_DATE_FILTER, incomingInvoiceDateBounds, incomingInvoiceDateFilterFromParams, parseIncomingInvoiceDateFilter } from '@/lib/purchase-documents/invoice-date-filter';
 import { purchaseListSearchInput } from '@/lib/record-search/list-contract';
 import { createIncomingListQueryIntents } from '@/components/purchases/incoming-list-query-intents';
 import { createReviewNavigationIntents } from '@/components/purchases/incoming-review-history';
 
 describe('incoming source invoice-date filters (pure calendar contracts)', () => {
+  it('server-renders an inactive native disclosure collapsed without removing input IDs', () => {
+    const html = renderToStaticMarkup(createElement(IncomingInvoiceDateFilter, { value: EMPTY_INVOICE_DATE_FILTER, onApply: vi.fn() }));
+    expect(html.match(/<details[^>]*>/)?.[0]).not.toContain('open='); expect(html).toContain('<summary'); expect(html).toContain('Rechnungsdatum filtern');
+    expect(html).toContain('id="incoming-invoice-date-from"'); expect(html).toContain('id="incoming-invoice-date-to"');
+  });
+  it('server-renders active or malformed direct-link filters open with an informative summary', () => {
+    for (const filter of [{ invoiceDateFrom: '2026-01-01', invoiceDateTo: '2026-01-31', invoiceDateMissing: 'any' }, { invoiceDateFrom: '', invoiceDateTo: '', invoiceDateMissing: 'only' }, { invoiceDateFrom: '2026-02-30', invoiceDateTo: '', invoiceDateMissing: 'any' }]) {
+      const html = renderToStaticMarkup(createElement(IncomingInvoiceDateFilter, { value: filter, onApply: vi.fn() }));
+      expect(html.match(/<details[^>]*>/)?.[0]).toContain('open='); expect(html).toMatch(/2026-01-01 bis 2026-01-31|ohne ausgelesenes Datum|Angaben prüfen/);
+    }
+  });
   it('defaults to no restriction, keeping unknown dates included', () => {
     expect(parseIncomingInvoiceDateFilter({})).toEqual(EMPTY_INVOICE_DATE_FILTER);
     expect(incomingInvoiceDateBounds(EMPTY_INVOICE_DATE_FILTER)).toEqual({});

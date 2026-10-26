@@ -1,10 +1,8 @@
 name: Browser acceptance
 
+# Full release/high-risk acceptance is explicit opt-in, not every feature push.
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
