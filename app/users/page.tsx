@@ -3,7 +3,7 @@
 import { PageHeader } from "@/components/page-header";
 import styles from "@/components/settings/admin-workspace.module.css";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -44,38 +44,60 @@ export default function UsersPage() {
   const _router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [readAccessDenied, setReadAccessDenied] = useState(false);
+  const usersReadRef = useRef({ mounted: false, generation: 0 });
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", email: "", password: "", role: "USER" });
   const [editingUser, setEditingUser] = useState({ id: "", name: "", email: "", password: "", role: "USER" });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const fetchUsers = useCallback(async () => {
+    const read = usersReadRef.current;
+    if (!read.mounted) return;
+    const generation = ++read.generation;
+    const isCurrent = () => read.mounted && read.generation === generation;
+    setLoading(true);
+    setLoadError(false);
+
+    try {
+      const response = await fetch("/api/users");
+      if (!response.ok) {
+        if (isCurrent() && (response.status === 401 || response.status === 403)) setReadAccessDenied(true);
+        throw new Error(`Failed to fetch users (${response.status})`);
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error("Invalid users response");
+      if (isCurrent()) {
+        setUsers(data);
+        setHasLoaded(true);
+        setReadAccessDenied(false);
+      }
+    } catch (error) {
+      if (isCurrent()) {
+        console.error("Failed to fetch users", error);
+        setLoadError(true);
+      }
+    } finally {
+      if (isCurrent()) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (session?.user && (session.user as { role?: string }).role !== "ADMIN") {
       // Redirect or show access denied
       // For now we just let the API handle it, but UI should reflect it
     }
-    fetchUsers();
-  }, [session]);
-
-  const fetchUsers = async () => {
-    try {
-      const response = await fetch("/api/users");
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      } else {
-        // Handle unauthorized
-        if (response.status === 401) {
-          // Maybe redirect
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch users", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const read = usersReadRef.current;
+    read.mounted = true;
+    void fetchUsers();
+    return () => {
+      read.mounted = false;
+      read.generation++;
+    };
+  }, [session, fetchUsers]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Zugang deaktivieren? Anmeldung und API-Schlüssel werden gesperrt. Belege, Buchungen und Protokolle bleiben erhalten.")) return;
@@ -173,9 +195,9 @@ export default function UsersPage() {
     }
   };
 
-  if (loading) {
+  if (loading && (!hasLoaded || readAccessDenied)) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full" role="status" aria-label="Benutzer werden geladen">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
@@ -187,6 +209,23 @@ export default function UsersPage() {
         <ShieldAlert className="h-16 w-16 text-destructive" />
         <h1 className="text-2xl font-bold">Zugriff verweigert</h1>
         <p className="text-muted-foreground">Sie haben keine Berechtigung, diese Seite zu sehen.</p>
+      </div>
+    );
+  }
+
+  if (loadError && (!hasLoaded || readAccessDenied)) {
+    return (
+      <div className={`${styles.workspace} space-y-6`}>
+        <PageHeader title="Benutzer" />
+        <Card className={styles.surface}>
+          <CardHeader>
+            <CardTitle>Zugänge</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p role="alert">Benutzer konnten nicht geladen werden. Bitte versuchen Sie es erneut.</p>
+            <Button onClick={() => void fetchUsers()}>Erneut versuchen</Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -332,6 +371,13 @@ export default function UsersPage() {
           <CardTitle>Zugänge <span className="ml-2 text-sm font-normal text-muted-foreground">{users.length}</span></CardTitle>
         </CardHeader>
         <CardContent>
+          {loading && <p role="status" className="mb-4 text-sm text-muted-foreground">Benutzer werden aktualisiert.</p>}
+          {loadError && (
+            <div className="mb-4 space-y-2">
+              <p role="alert">Benutzer konnten nicht aktualisiert werden. Die angezeigten Daten sind möglicherweise nicht aktuell.</p>
+              <Button onClick={() => void fetchUsers()}>Erneut versuchen</Button>
+            </div>
+          )}
           <Table className={styles.recordTable}>
             <TableHeader>
               <TableRow>
@@ -386,7 +432,7 @@ export default function UsersPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {users.length === 0 && (
+              {users.length === 0 && !loading && !loadError && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-4">
                     Keine Benutzer gefunden.
