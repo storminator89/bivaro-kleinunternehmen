@@ -35,10 +35,10 @@ async function financialSnapshot(userId: string) {
     reminders: await prisma.reminder.findMany({ where, orderBy: { id: 'asc' } }),
   };
 }
-async function authenticatedSession(page: Page, userId: string) {
+async function authenticatedSession(page: Page, user: { id: string; role: 'USER'; sessionVersion: number }) {
   const response = await page.request.get('/api/auth/session');
   expect(response.status()).toBe(200);
-  expect(await response.json()).toMatchObject({ user: { id: userId, role: 'USER', sessionVersion: 1 } });
+  expect(await response.json()).toMatchObject({ user });
 }
 async function painted(page: Page) {
   // A normal rendering boundary after the exact request's terminal event, not
@@ -56,12 +56,15 @@ test('a superseded real duplicate-number read leaves the current number and its 
   // Existing helper creates only synthetic identity/profile/customer data and
   // uses real cookie login; its invoice issuance helpers are never called.
   const [owner, loginRequest] = await Promise.all([bankAllocationAccount(page), loggedIn]);
+  // Compare every genuine session with this fresh fixture's stored generation.
+  const fixtureUser = await prisma.user.findUniqueOrThrow({ where: { id: owner.userId }, select: { sessionVersion: true } });
+  const sessionUser = { id: owner.userId, role: 'USER' as const, sessionVersion: fixtureUser.sessionVersion };
   const loginResponse = await loginRequest.response();
   expect(loginResponse).not.toBeNull();
   expect(loginResponse!.status()).toBe(200);
   expect(await loginResponse!.finished()).toBeNull();
-  expect(await loginResponse!.json()).toMatchObject({ user: { id: owner.userId, role: 'USER', sessionVersion: 1 } });
-  await authenticatedSession(page, owner.userId);
+  expect(await loginResponse!.json()).toMatchObject({ user: sessionUser });
+  await authenticatedSession(page, sessionUser);
 
   const suffix = randomUUID(), a = delayed(`SYNTHETIC-NUMBER-A-${suffix}`, true), b = delayed(`SYNTHETIC-NUMBER-B-${suffix}`, false);
   // One fixture-only metadata row makes the real owner-bound GET return true.
@@ -118,7 +121,7 @@ test('a superseded real duplicate-number read leaves the current number and its 
     const sessionResponse = await (await editorSession).response();
     expect(sessionResponse).not.toBeNull();
     expect(sessionResponse!.status()).toBe(200); expect(await sessionResponse!.finished()).toBeNull();
-    expect(await sessionResponse!.json()).toMatchObject({ user: { id: owner.userId, role: 'USER', sessionVersion: 1 } });
+    expect(await sessionResponse!.json()).toMatchObject({ user: sessionUser });
     expect((await nextNumber).status()).toBe(200);
     await expect(page.getByRole('heading', { name: 'Neue Rechnung', exact: true })).toBeVisible();
     await page.getByLabel('Gespeicherten Kunden auswählen', { exact: true }).selectOption(String(owner.customerId));
@@ -145,7 +148,7 @@ test('a superseded real duplicate-number read leaves the current number and its 
     await expect(page.locator('#invoice-number-error')).toHaveCount(0);
     await expect(create).toBeEnabled();
     await expect(page.getByLabel('Umsatzsteuer', { exact: true })).toHaveValue('small-business');
-    await authenticatedSession(page, owner.userId);
+    await authenticatedSession(page, sessionUser);
     expect(writes).toEqual([]);
     expect(await financialSnapshot(owner.userId)).toEqual(before);
   } catch (error) {
