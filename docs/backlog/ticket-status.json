@@ -2795,5 +2795,138 @@
       "ordinaryLocalBuild": "not rerun; full hosted build required after unlock",
       "localFunctionalExecution": "none"
     }
+  },
+  "githubIssue83CashbookReadLocalCheckpoint20261026": {
+    "observedAt": "2026-10-26T19:42:00Z",
+    "issue": 83,
+    "historicalTicket": "GitHub #83 is not BV-083; all 160 historical ticket objects, status counts and previous checkpoints remain unchanged.",
+    "status": "partial_local_implementation_browser_acceptance_pending",
+    "providerBase": "fc92ca5070c5b2cbbd9b0e3c2d292106f3b49fb7",
+    "sourceTree": "ba499c560b00d60d21dc98f7051ff2626391acc3",
+    "syntheticLocalSourceBase": "16c20192b47285b7108d5571325c3f7b8c29f820",
+    "sourceIdentity": "Exact provider tree; parentless local source-base commit is synthetic, not the provider commit.",
+    "worktreeState": "Uncommitted local-only follow-up patch.",
+    "implementedScope": "Retain shared Kassenbuch header; distinguish initial pending/error/success-empty/populated list reads; only successful [] offers empty creation; disable unavailable actions; validate list payload; explicit duplicate-guarded GET-only retry preserves valid selection and ignores older/unmounted replies.",
+    "unchangedContracts": [
+      "Financial calculations and mutations",
+      "Transaction and daily reads",
+      "API and authorization",
+      "Schema and workflow files",
+      "Historical ticket objects, aggregate counts and earlier checkpoints"
+    ],
+    "localChecks": {
+      "node": "24.22.1",
+      "focusedVitest": {
+        "suites": 2,
+        "passed": 67,
+        "skipped": 0,
+        "files": [
+          "lib/__tests__/cashbook-view-regressions.test.ts",
+          "scripts/__tests__/focused-browser-selection.test.ts"
+        ]
+      },
+      "focusedEslint": "Passed, zero warnings, five changed executable paths.",
+      "scopedTypescript": "Passed exit0, incremental false, 1536 MiB cap; page, regression, authored browser source and selector tests.",
+      "unitLogSha256": "c4f521d5f3bc3ffbfc16d1d853f6e6726ed9e5cd74f61c968c17e26a7f06cf71",
+      "lintAndTypesLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "fullSuiteOrBuild": "Not run."
+    },
+    "authoredBrowserCases": {
+      "file": "e2e/cashbook-loading.spec.ts",
+      "count": 5,
+      "coverage": [
+        "1440/360/390 px: delayed failure, keyboard GET retry and reload",
+        "Confirmed successful empty owner read",
+        "401/403 and malformed successful response delivery"
+      ],
+      "selector": "Exact bounded titles and fail-closed fixture/regression/runner/config/login/core contracts; no financial API exemption.",
+      "execution": "Authored only; no browser or screenshot acceptance established."
+    },
+    "remaining": [
+      "Exact-candidate browser/image acceptance",
+      "Review and separately authorized publication"
+    ],
+    "knownLimitation": "Prior local socket EPERM and denied escalation bootstrap; not retried or bypassed.",
+    "browserServerApiDatabaseExecution": false,
+    "installationOrPrismaRegeneration": false,
+    "newCiRuns": false,
+    "remoteWrites": false,
+    "merged": false,
+    "published": false,
+    "deployed": false,
+    "issueClosed": false,
+    "evidence": [
+      "docs/testing/cashbook-loading-states.md"
+    ],
+    "publicationRecovery20261026": {
+      "observedAt": "2026-10-26T21:26:00Z",
+      "status": "draft_published_mobile_recovery_prepared_hosted_verification_pending",
+      "snapshotInterpretation": "The unchanged 19:42 local snapshot describes its original observation time; browser execution and Draft publication have since occurred as recorded here.",
+      "authorization": "Draft publication and conditional normal merge after required checks passed.",
+      "pullRequest": 227,
+      "pullRequestUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/227",
+      "publishedHead": "778753baf198ce5119d2f25d674b08ac62809b82",
+      "publishedOriginalTreePrefix": "c89f44e",
+      "publishedRealParent": "fc92ca5070c5b2cbbd9b0e3c2d292106f3b49fb7",
+      "firstHostedResults": {
+        "focusedBrowser": {
+          "run": 40403697647,
+          "executed": 6,
+          "scope": "Core plus five authored cases",
+          "passed": 4,
+          "failed": 2,
+          "failure": "360/390px no-horizontal-overflow assertions after populated recovery; initial pending/error states and desktop worked.",
+          "failureLogSha256": "5116a58daf32665c4d9069a3d031c9e8421a3e03f5f087f588192457fae39a6d"
+        },
+        "pdfA": {
+          "run": 40403697662,
+          "status": "success on both architectures"
+        },
+        "ci": {
+          "run": 40403697623,
+          "confirmed": "Tests, security and lint succeeded; build near completion at observation.",
+          "completeSuccessConfirmed": false
+        }
+      },
+      "preparedRecovery": {
+        "scope": "Only page-local cashbook summary/selector min-width:0, full-width and text-overflow containment in app/cashbook/page.tsx, plus geometry-only diagnostics in the existing E2E cases.",
+        "rootCause": "Static inference: long synthetic cashbook UUID name triggers pre-existing intrinsic selector width beyond available mobile width; hosted confirmation pending.",
+        "originalChangedPathCount": 8,
+        "assertionsRemovedOrWeakened": false,
+        "fixtureNamesShortened": false,
+        "unchanged": [
+          "Tables",
+          "Shared CSS and components",
+          "Financial calculations and mutations",
+          "Authentication and APIs",
+          "Schema and workflow files"
+        ],
+        "tree": "Not yet computed; no final recovery source identity claimed.",
+        "hostedVerification": "Pending"
+      },
+      "recoveryLocalChecks": {
+        "focusedVitest": {
+          "suites": 2,
+          "passed": 67,
+          "skipped": 0
+        },
+        "focusedEslint": "Passed, zero warnings.",
+        "scopedTypescript": "Passed exit0.",
+        "unitLogSha256": "ab423301b979011035bbd32e5d450bdcaec6bfccf2ce6cc9d743b173f22bbb48",
+        "lintAndTypesLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "browserServerApiDatabaseExecution": false
+      },
+      "installationPerformed": false,
+      "mergePerformed": false,
+      "deploymentPerformed": false,
+      "remaining": [
+        "Compute exact recovery tree and publish bounded recovery under the existing authorization",
+        "Complete exact-head hosted checks and confirm mobile recovery before any conditional merge"
+      ],
+      "evidence": [
+        "docs/testing/cashbook-loading-states.md",
+        "https://github.com/storminator89/bivaro-kleinunternehmen/pull/227"
+      ]
+    }
   }
 }

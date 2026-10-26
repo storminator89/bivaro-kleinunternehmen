@@ -13,6 +13,11 @@ export const FOCUSED_SPECS = {
     ...[401, 403].map(status => `documentation read delivery status ${status} never restores private fields or offers a generic retry`),
     'malformed successful documentation responses stay unavailable until explicit read recovery and never fabricate save success',
   ],
+  'e2e/cashbook-loading.spec.ts': [
+    ...[1440, 360, 390].map(width => `cashbook keeps its shell at ${width}px through delayed failure, keyboard read retry and reload`),
+    'cashbook offers empty creation only after a successful empty owner read',
+    'cashbook never turns denied or malformed successful deliveries into empty creation or false balances',
+  ],
   'e2e/backup-file-inspection.spec.ts': ['ZIP inspection shows actual checks, blocks changed originals and never restores on discard or reload'],
   'e2e/incoming-invoice-date-filter.spec.ts': ['mobile source-date filters keep boundaries, unknown dates, detail/reload/history and palette continuation read-only'],
   'e2e/registration-status-retry.spec.ts': [],
@@ -132,6 +137,7 @@ const ownerVersionContracts = [
 const reviewedJourneyContracts = {
   'e2e/public-pilot-demo.spec.ts': ['lib/__tests__/pilot-demo.test.ts', 'e2e/helpers/public-read-only.ts', 'public/demo/bivaro-pilot-v1.txt'],
   'e2e/documentation-loading.spec.ts': ['scripts/e2e-fixture.mjs', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
+  'e2e/cashbook-loading.spec.ts': ['lib/__tests__/cashbook-view-regressions.test.ts', 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
   'e2e/feature-backup-roundtrip.spec.ts': ['scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts', 'e2e/helpers/synthetic-login.ts'],
 };
 // Exact payment-reader indexing only: use the real repeated manual-receipt
@@ -192,6 +198,7 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     { spec: 'e2e/registration-status-retry.spec.ts', source: 'app/register/page.tsx' },
     { spec: 'e2e/invoice-number-check-freshness.spec.ts', source: 'components/dashboard/create-invoice-modal.tsx' },
     { spec: 'e2e/users-list-read-retry.spec.ts', source: 'app/users/page.tsx' },
+    { spec: 'e2e/cashbook-loading.spec.ts', source: 'app/cashbook/page.tsx' },
     ...['components/ui/combobox-options.ts', 'components/ui/combobox.tsx', 'components/ui/dialog.tsx'].map(source => ({ spec: 'e2e/combobox-accessibility.spec.ts', source })),
     ...['app/settings/audit-logs/page.tsx', 'lib/audit-log-query.ts'].map(source => ({ spec: 'e2e/audit-log-requests.spec.ts', source })),
     ...['components/dashboard/dashboard-content.tsx', 'components/dashboard/manual-entry-submit-feedback.tsx', 'components/dashboard/modals/edit-modal.tsx',

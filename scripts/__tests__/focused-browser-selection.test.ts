@@ -411,7 +411,7 @@ describe('risk-based browser scope, not full acceptance', () => {
       expect(selectFocusedBrowser([...Object.keys(sources), source]).criticalMappingRequired).toBe(true);
     }
   });
-  it('pins the nine exact active pilot and expanded documentation titles without executing their browser or database modules', () => {
+  it('pins exact active pilot, documentation and cashbook titles without executing their browser or database modules', () => {
     const authoredTitles = (file: string) => {
       const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
       const titles: string[] = [];
@@ -444,7 +444,7 @@ describe('risk-based browser scope, not full acceptance', () => {
       visit(tree);
       return titles;
     };
-    for (const [file, count] of [['e2e/public-pilot-demo.spec.ts', 3], ['e2e/documentation-loading.spec.ts', 6]] as const) {
+    for (const [file, count] of [['e2e/public-pilot-demo.spec.ts', 3], ['e2e/documentation-loading.spec.ts', 6], ['e2e/cashbook-loading.spec.ts', 5]] as const) {
       const titles = FOCUSED_SPECS[file];
       expect(titles).toHaveLength(count);
       expect(authoredTitles(file)).toEqual(titles);
@@ -459,6 +459,29 @@ describe('risk-based browser scope, not full acceptance', () => {
     for (const boundary of ["base.extend", "{ auto: true }", "route.abort('blockedbyclient')", 'blockedCount: 0', 'classifyPublicReadOnlyRequest']) expect(pilot).toContain(boundary);
     const documentation = readFileSync('e2e/documentation-loading.spec.ts', 'utf8');
     for (const boundary of ['expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`)', 'await isolateSyntheticLoginIpBudget()', 'await prisma.user.create', 'route.continue()', 'prisma.documentation.findUniqueOrThrow']) expect(documentation).toContain(boundary);
+  });
+  it('requires the bounded cashbook read journey and its contracts for the page or spec without exempting financial APIs', () => {
+    const file = 'e2e/cashbook-loading.spec.ts';
+    const required = [file, 'lib/__tests__/cashbook-view-regressions.test.ts', 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'];
+    for (const source of ['app/cashbook/page.tsx', file]) {
+      const selection = selectFocusedBrowser([source]);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection.core).toBe(true);
+      expect(selection.criticalMappingRequired).toBe(false);
+      expect(selection.unmappedSourceCount).toBe(0);
+      expect(selection.specs).toEqual([{ file, titles: FOCUSED_SPECS[file] }]);
+      for (const absent of required) {
+        const missing = selectFocusedBrowser([source], candidate => candidate !== absent);
+        expect(missing.criticalMappingRequired).toBe(true);
+        expect(missing.unknownCriticalCount).toBe(1);
+        expect(missing.specs).toEqual([]);
+      }
+    }
+    for (const source of ['app/api/cashbook/route.ts', 'app/api/cashbook/transactions/route.ts', 'lib/cashbook-service.ts']) {
+      expect(selectFocusedBrowser(['app/cashbook/page.tsx', source]).criticalMappingRequired).toBe(true);
+    }
+    const source = readFileSync(file, 'utf8');
+    for (const boundary of ['expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`)', 'await isolateSyntheticLoginIpBudget()', 'await prisma.user.create', 'route.continue()', "await retry.press('Enter')", 'await page.reload()', 'prisma.cashTransaction.count']) expect(source).toContain(boundary);
   });
   it('selects only the real feature-backup restore case with its existing isolated fixture, never unrelated backup suites', () => {
     const file = 'e2e/feature-backup-roundtrip.spec.ts';
