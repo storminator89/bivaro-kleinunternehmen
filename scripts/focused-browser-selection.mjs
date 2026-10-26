@@ -7,11 +7,26 @@ export const FOCUSED_SPECS = {
   'e2e/registration-status-retry.spec.ts': [],
   'e2e/invoice-number-check-freshness.spec.ts': [],
   'e2e/users-list-read-retry.spec.ts': [],
+  'e2e/combobox-accessibility.spec.ts': ['category combobox exposes actual keyboard and pointer choices in entry/edit/recurring dialogs'],
 };
 const code = value => /^(?:app|components|hooks|lib|prisma|scripts|e2e|focused-e2e)\//u.test(value) || /^(?:proxy\.ts|next\.config\.ts|package(?:-lock)?\.json|playwright[^/]*\.ts|\.github\/workflows\/)/u.test(value);
 const knownInfrastructure = value => /^(?:scripts\/|focused-e2e\/|\.github\/workflows\/|e2e\/helpers\/|lib\/__tests__\/|playwright[^/]*\.ts)/u.test(value) || ['package.json', 'package-lock.json', 'next.config.ts', 'proxy.ts'].includes(value);
 const safePath = value => typeof value === 'string' && value.length > 0 && value.length <= 500 && !/[\0-\x1f\x7f]/u.test(value) && !value.startsWith('/') && !value.split('/').includes('..');
 const shape = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+// Exact reviewed backend contracts run in ordinary CI. They are not browser
+// certification of resource races, tenant isolation or financial projections.
+const serverUnitContracts = {
+  'app/api/backup/full/route.ts': ['lib/__tests__/backup-snapshot-route.test.ts'],
+  'app/api/backup/route.ts': ['lib/__tests__/backup-snapshot-route.test.ts'],
+  'app/api/dashboard/filter-options/route.ts': ['lib/__tests__/dashboard-filter-options.test.ts'],
+  'lib/backup-snapshot.ts': ['lib/__tests__/backup-snapshot-route.test.ts', 'lib/__tests__/bank-allocation-backup.test.ts'],
+  'lib/bank-allocation-backup.ts': ['lib/__tests__/bank-allocation-backup.test.ts'],
+  'lib/processing-limit.ts': ['lib/__tests__/processing-limits.test.ts'],
+  'scripts/einvoice-validation/check-official.py': ['scripts/__tests__/einvoice-checker-exit.test.ts', 'scripts/__tests__/einvoice_checker_exit_cases.py'],
+};
+// The existing inspection journey really exports a ZIP and then previews it.
+// Queue races and portable-reference equivalence remain unit-contract evidence.
+const backupInspectionSources = new Set(['app/api/backup/full/route.ts', 'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts']);
 
 export function selectFocusedBrowser(paths, exists = () => true) {
   if (!Array.isArray(paths) || paths.length > 5000 || !paths.every(safePath)) throw Error('Invalid changed-path inventory');
@@ -39,9 +54,15 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     { spec: 'e2e/registration-status-retry.spec.ts', source: 'app/register/page.tsx' },
     { spec: 'e2e/invoice-number-check-freshness.spec.ts', source: 'components/dashboard/create-invoice-modal.tsx' },
     { spec: 'e2e/users-list-read-retry.spec.ts', source: 'app/users/page.tsx' },
+    ...['components/ui/combobox-options.ts', 'components/ui/combobox.tsx', 'components/ui/dialog.tsx'].map(source => ({ spec: 'e2e/combobox-accessibility.spec.ts', source })),
   ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
+    if (Object.hasOwn(serverUnitContracts, source)) {
+      if (!serverUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);
+      if (backupInspectionSources.has(source)) add('e2e/backup-file-inspection.spec.ts', true, source);
+      continue;
+    }
     const readJourney = readJourneys.find(value => value.source === source);
     if (readJourney) { add(readJourney.spec, true, source); continue; }
     const packet = packets.find(value => value.paths.includes(source) || value.spec === source);

@@ -44,6 +44,34 @@ describe('risk-based browser scope, not full acceptance', () => {
     ]);
     expect(selectFocusedBrowser(['lib/new-financial-contract.ts']).criticalMappingRequired).toBe(true);
   });
+  it('selects only actual combobox and backup inspection journeys for the seven-slice packet', () => {
+    const selection = selectFocusedBrowser([
+      '.github/workflows/ci.yml', 'app/api/backup/full/route.ts', 'app/api/backup/route.ts', 'app/api/dashboard/filter-options/route.ts',
+      'components/ui/__tests__/combobox-options.test.ts', 'components/ui/__tests__/dialog-combobox-escape.test.ts',
+      'components/ui/combobox-options.ts', 'components/ui/combobox.tsx', 'components/ui/dialog.tsx',
+      'e2e/auth-dashboard-invoice.spec.ts', 'e2e/combobox-accessibility.spec.ts',
+      'lib/__tests__/backup-snapshot-route.test.ts', 'lib/__tests__/bank-allocation-backup.test.ts',
+      'lib/__tests__/dashboard-filter-options.test.ts', 'lib/__tests__/processing-limits.test.ts',
+      'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts',
+      'scripts/__tests__/einvoice-checker-exit.test.ts', 'scripts/__tests__/einvoice_checker_exit_cases.py', 'scripts/einvoice-validation/check-official.py',
+    ]);
+    expect(validFocusedSelection(selection)).toBe(true);
+    expect(selection.core).toBe(true);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs.map(item => item.file)).toEqual(['e2e/backup-file-inspection.spec.ts', 'e2e/combobox-accessibility.spec.ts']);
+  });
+  it('keeps JSON export limits and database grouping explicitly unit-backed, not falsely browser-covered', () => {
+    const selection = selectFocusedBrowser(['app/api/backup/route.ts', 'app/api/dashboard/filter-options/route.ts', 'scripts/einvoice-validation/check-official.py']);
+    expect(selection.core).toBe(true);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs).toEqual([]);
+    expect(selectFocusedBrowser(['app/api/backup/route.ts'], () => false).criticalMappingRequired).toBe(true);
+  });
+  it('requires the backend unit contracts as well as the actual dependent backup inspection journey', () => {
+    expect(selectFocusedBrowser(['lib/processing-limit.ts']).specs.map(item => item.file)).toEqual(['e2e/backup-file-inspection.spec.ts']);
+    expect(selectFocusedBrowser(['lib/backup-snapshot.ts'], () => false).criticalMappingRequired).toBe(true);
+    expect(selectFocusedBrowser(['lib/new-backup-financial-contract.ts']).criticalMappingRequired).toBe(true);
+  });
   it('does not call unknown critical code UI-only verified or silently start every test', () => {
     const value = selectFocusedBrowser(['lib/new-financial-contract.ts']);
     expect(value.criticalMappingRequired).toBe(true); expect(value.unknownCriticalCount).toBe(1); expect(value.specs).toEqual([]);
