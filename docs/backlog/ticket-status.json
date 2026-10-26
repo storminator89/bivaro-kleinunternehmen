@@ -2857,6 +2857,76 @@
     "issueClosed": false,
     "evidence": [
       "docs/testing/cashbook-loading-states.md"
-    ]
+    ],
+    "publicationRecovery20261026": {
+      "observedAt": "2026-10-26T21:26:00Z",
+      "status": "draft_published_mobile_recovery_prepared_hosted_verification_pending",
+      "snapshotInterpretation": "The unchanged 19:42 local snapshot describes its original observation time; browser execution and Draft publication have since occurred as recorded here.",
+      "authorization": "Draft publication and conditional normal merge after required checks passed.",
+      "pullRequest": 227,
+      "pullRequestUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/pull/227",
+      "publishedHead": "778753baf198ce5119d2f25d674b08ac62809b82",
+      "publishedOriginalTreePrefix": "c89f44e",
+      "publishedRealParent": "fc92ca5070c5b2cbbd9b0e3c2d292106f3b49fb7",
+      "firstHostedResults": {
+        "focusedBrowser": {
+          "run": 40403697647,
+          "executed": 6,
+          "scope": "Core plus five authored cases",
+          "passed": 4,
+          "failed": 2,
+          "failure": "360/390px no-horizontal-overflow assertions after populated recovery; initial pending/error states and desktop worked.",
+          "failureLogSha256": "5116a58daf32665c4d9069a3d031c9e8421a3e03f5f087f588192457fae39a6d"
+        },
+        "pdfA": {
+          "run": 40403697662,
+          "status": "success on both architectures"
+        },
+        "ci": {
+          "run": 40403697623,
+          "confirmed": "Tests, security and lint succeeded; build near completion at observation.",
+          "completeSuccessConfirmed": false
+        }
+      },
+      "preparedRecovery": {
+        "scope": "Only page-local cashbook summary/selector min-width:0, full-width and text-overflow containment in app/cashbook/page.tsx, plus geometry-only diagnostics in the existing E2E cases.",
+        "rootCause": "Static inference: long synthetic cashbook UUID name triggers pre-existing intrinsic selector width beyond available mobile width; hosted confirmation pending.",
+        "originalChangedPathCount": 8,
+        "assertionsRemovedOrWeakened": false,
+        "fixtureNamesShortened": false,
+        "unchanged": [
+          "Tables",
+          "Shared CSS and components",
+          "Financial calculations and mutations",
+          "Authentication and APIs",
+          "Schema and workflow files"
+        ],
+        "tree": "Not yet computed; no final recovery source identity claimed.",
+        "hostedVerification": "Pending"
+      },
+      "recoveryLocalChecks": {
+        "focusedVitest": {
+          "suites": 2,
+          "passed": 67,
+          "skipped": 0
+        },
+        "focusedEslint": "Passed, zero warnings.",
+        "scopedTypescript": "Passed exit0.",
+        "unitLogSha256": "ab423301b979011035bbd32e5d450bdcaec6bfccf2ce6cc9d743b173f22bbb48",
+        "lintAndTypesLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "browserServerApiDatabaseExecution": false
+      },
+      "installationPerformed": false,
+      "mergePerformed": false,
+      "deploymentPerformed": false,
+      "remaining": [
+        "Compute exact recovery tree and publish bounded recovery under the existing authorization",
+        "Complete exact-head hosted checks and confirm mobile recovery before any conditional merge"
+      ],
+      "evidence": [
+        "docs/testing/cashbook-loading-states.md",
+        "https://github.com/storminator89/bivaro-kleinunternehmen/pull/227"
+      ]
+    }
   }
 }

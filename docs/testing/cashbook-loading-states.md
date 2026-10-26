@@ -91,3 +91,49 @@ Browser-Bootstrap-Aktion wurde nicht erneut versucht oder umgangen. Die exakte
 Browser-/Responsive-/Tastaturabnahme bleibt ausstehend, ebenso eine gesonderte
 Veröffentlichungsfreigabe. Kein Push, PR, neues Issue, Merge, Deployment oder
 sonstige Remote-Schreibaktion wurde vorgenommen.
+
+## Autorisierte Veröffentlichung und begrenzte Recovery, 26.10.2026, 21:26 UTC
+
+Der vorstehende lokale Snapshot bleibt als damaliger Stand erhalten. Nach
+Nutzerfreigabe wurde [Draft-PR #227](https://github.com/storminator89/bivaro-kleinunternehmen/pull/227)
+mit echtem Provider-Parent `fc92ca5` und Head
+`778753baf198ce5119d2f25d674b08ac62809b82` veröffentlicht. Alle acht Remote-Blobs
+und Tree `c89f44e988571e3ba67bf1801d2277b4e6615a4e` entsprechen dem unabhängig
+geprüften Ausgangspatch. Kein synthetischer Commit ist Remote-Parent.
+
+Der erste automatische [Focused-Lauf 40403697647](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40403697647)
+führte Core und alle fünf Fälle aus: **4 bestanden / 2 fehlgeschlagen**.
+Bei 360/390 px wurde nach erfolgreicher befüllter Wiederherstellung der strikte
+Überlauftest rot; Desktop, leerer Zustand und abgelehnte/fehlerhafte Antworten
+bestanden. Die Assertions für Pending/Fehler/Retry wurden in den mobilen Fällen
+vor dem Fehler bereits erreicht. Das ist keine vollständige Browserabnahme.
+[PDF-A 40403697662](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40403697662)
+bestand auf x64 und arm64. Allgemeine CI bleibt bis zum terminalen Nachweis
+separat zu beurteilen.
+
+Statische Ursachenanalyse: Der vorhandene Listen-Selector mit langem
+synthetischem UUID-Kassennamen kann über automatische intrinsische Grid-/Flex-
+Mindestbreiten und `max-width: 22rem` breiter als die mobile Inhaltsfläche
+werden. Das ist eine **noch gehostet zu bestätigende Diagnose**, kein lokal
+abgespielter Browsernachweis. Die Recovery begrenzt ausschließlich die
+seitenlokalen Summary-/Selector-Mindestbreiten, setzt den Trigger auf die
+verfügbare Breite und hält den ausgewählten Text darin. Kein globales
+Overflow-Verstecken, keine Tabellen-, Shared-CSS-/Komponenten- oder
+Finanzberechnungsänderung. Die ursprünglichen acht Dateipfade bleiben der Scope.
+
+Alle strikten Überlauf-, Tastatur-, Reload- und übrigen Assertions sowie die
+langen Fixture-Namen bleiben erhalten. Nur geometrische Diagnosewerte
+(Tag/ID/Klassen/Position/Breite, keine Inhaltsdaten) ergänzen bei einem erneuten
+Überlauffehler die gleiche Assertion. Keine Retries, Timeout-Erhöhung oder Skips.
+
+Recovery lokal erneut: **2 Suites / 67 Fälle / 0 Skips**, Target-ESLint ohne
+Warnungen und scoped TypeScript Exit 0; kein lokaler Browser-/Server-/API-/DB-
+Lauf. Unit-Log `bivaro-cashbook-loading-states-83-recovery-unit.log`, SHA-256
+`ab423301b979011035bbd32e5d450bdcaec6bfccf2ce6cc9d743b173f22bbb48`;
+Recovery-Lint-/Types-Logs leer bei Exit 0. Erster Hosted-Fehlerlog
+`bivaro-cashbook-loading-states-83-focused-first-failure.log`, SHA-256
+`5116a58daf32665c4d9069a3d031c9e8421a3e03f5f087f588192457fae39a6d`.
+Die Recovery benötigt erneut exakte Hosted-Prüfung vor normalem Expected-Head-
+Merge; deren endgültige Outcomes werden im PR dokumentiert, ohne reine
+Dokumentations-Commit-Schleifen. Kein Merge oder Live-Installationsdeployment
+ist durch diesen Snapshot behauptet; #224 bleibt deaktiviert.

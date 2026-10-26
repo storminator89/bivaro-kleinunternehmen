@@ -63,6 +63,21 @@ for (const width of [1440, 360, 390]) {
     await expect(main.getByRole('button', { name: 'Kassenbuch erstellen', exact: true })).toHaveCount(0);
     const headingPosition = await heading.boundingBox();
     const createPosition = await create.boundingBox();
+    async function expectNoHorizontalOverflow() {
+      const geometry = await main.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+          overflowing: Array.from(element.querySelectorAll('*')).flatMap(child => {
+            const box = child.getBoundingClientRect();
+            return box.width > 0 && (box.right > bounds.right + 1 || box.left < bounds.left - 1)
+              ? [{ tag: child.tagName, id: child.id, className: child.getAttribute('class'), left: box.left, right: box.right, width: box.width }]
+              : [];
+          }).slice(0, 20),
+        };
+      });
+      expect(geometry.scrollWidth <= geometry.clientWidth, JSON.stringify(geometry)).toBe(true);
+    }
     async function expectStablePendingFrame() {
       for (const [locator, previous] of [[heading, headingPosition], [create, createPosition]] as const) {
         await expect(locator).toBeVisible();
@@ -71,7 +86,7 @@ for (const width of [1440, 360, 390]) {
         expect(Math.abs(current!.x - previous!.x)).toBeLessThanOrEqual(1);
         expect(Math.abs(current!.y - previous!.y)).toBeLessThanOrEqual(1);
       }
-      expect(await main.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await expectNoHorizontalOverflow();
     }
     await create.evaluate(button => (button as HTMLButtonElement).click());
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -97,7 +112,7 @@ for (const width of [1440, 360, 390]) {
     await expect(main.getByRole('region', { name: 'Kassenübersicht', exact: true })).toContainText('37,50');
     await expect(create).toBeEnabled();
     await expect(main.getByRole('alert')).toHaveCount(0);
-    expect(await main.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expectNoHorizontalOverflow();
     await page.screenshot({ path: testInfo.outputPath(`cashbook-read-recovery-${width}.png`), fullPage: true });
     await page.reload();
     await expect(heading).toBeVisible();

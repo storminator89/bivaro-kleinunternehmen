@@ -574,8 +574,8 @@ export default function CashBookPage() {
             {/* Cash Book Selector & Summary */}
             {canShowCashBooks && cashBooks.length > 0 && (
                 <section className={styles.cashOverview} aria-label="Kassenübersicht">
-                    <div className={styles.cashBalance}>
-                        <div className={styles.cashSelection}>
+                    <div className={`${styles.cashBalance} min-w-0`}>
+                        <div className={`${styles.cashSelection} min-w-0`}>
                             <Label htmlFor="cashbook-selector">Aktive Kasse</Label>
                             <Select value={selectedCashBook?.id.toString() || ''} disabled={isSaving} onValueChange={(value) => {
                                 setSelectedCashBookId(Number(value));
@@ -583,7 +583,7 @@ export default function CashBookPage() {
                                 setCashCount({ countedAmount: '', notes: '' });
                                 setCashCountResult(null);
                             }}>
-                                <SelectTrigger id="cashbook-selector"><SelectValue placeholder="Kasse wählen" /></SelectTrigger>
+                                <SelectTrigger id="cashbook-selector" className="w-full min-w-0"><SelectValue className="min-w-0 overflow-hidden" placeholder="Kasse wählen" /></SelectTrigger>
                                 <SelectContent>{cashBooks.map(cb => <SelectItem key={cb.id} value={cb.id.toString()}>{cb.name}</SelectItem>)}</SelectContent>
                             </Select>
                         </div>
