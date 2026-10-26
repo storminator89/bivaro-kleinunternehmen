@@ -115,6 +115,24 @@ describe('generateZugferdXml', () => {
     expect(validation.errors.map(issue => issue.field)).toEqual(expect.arrayContaining(['seller.email', 'buyer.electronicAddress']))
   })
 
+  it.each(['not-an-email', 'one@example.test,two@example.test', 'seller@localhost', 'two@@example.test', 'seller@exa mple.test'])('rejects seller contact email %s before issuing XRechnung', email => {
+    const invoice = createTestInvoice({ buyerReference: 'SYNTHETIC-REF', seller: { ...createTestInvoice().seller, email } });
+    const validation = validateZugferdData(invoice, { profile: 'xrechnung' });
+    expect(validation.isValid).toBe(false);
+    expect(validation.errors.map(issue => issue.field)).toContain('seller.email');
+    expect(() => generateZugferdXml(invoice, { profile: 'xrechnung' })).toThrow('E-Mail-Adresse');
+  });
+
+  it('accepts a valid XRechnung contact email with harmless surrounding whitespace', () => {
+    const invoice = createTestInvoice({ buyerReference: 'SYNTHETIC-REF', seller: { ...createTestInvoice().seller, email: ' seller@example.test ' } });
+    expect(validateZugferdData(invoice, { profile: 'xrechnung' }).isValid).toBe(true);
+  });
+
+  it.each(['#SKONTO#TAGE=14#PROZENT=2.00#\n', 'Zahlbar innerhalb 30 Tagen\n#SKONTO#TAGE=14#PROZENT=2.00#\n'])('preserves the required terminating newline of structured payment terms', paymentTerms => {
+    const xml = generateZugferdXml(createTestInvoice({ buyerReference: 'SYNTHETIC-REF', paymentTerms }), { profile: 'xrechnung' });
+    expect(xml).toContain(`<ram:Description>${paymentTerms}</ram:Description>`);
+  });
+
   it('escapes XML text and attribute values', () => {
     const xml = generateZugferdXml(createTestInvoice({
       invoiceNumber: 'RE&<>' + '"\'',
@@ -158,6 +176,17 @@ describe('generateZugferdXml', () => {
     expect(xml).toContain('<ram:TypeCode>58</ram:TypeCode>')
     expect(xml).toContain('<ram:IBANID>DE89370400440532013000</ram:IBANID>')
   })
+
+  it.each(['DE123', 'DE89370400440532013001', 'DE89-370400440532013000', 'DE31ß370400440532013000', 'DE51ﬀ370400440532013000'])('rejects invalid SEPA IBAN %s before XML generation', iban => {
+    const invoice = createTestInvoice({ paymentMeansCode: '58', seller: { ...createTestInvoice().seller, iban } });
+    expect(validateZugferdData(invoice).errors.map(issue => issue.field)).toContain('seller.iban');
+    expect(() => generateZugferdXml(invoice)).toThrow('Prüfsumme');
+  });
+
+  it('normalizes a valid lowercase SEPA IBAN before validating and serializing it', () => {
+    const xml = generateZugferdXml(createTestInvoice({ paymentMeansCode: '58', seller: { ...createTestInvoice().seller, iban: 'de89 3704 0044 0532 0130 00' } }));
+    expect(xml).toContain('<ram:IBANID>DE89370400440532013000</ram:IBANID>');
+  });
 
   it('requires a bank account for transfer even when the amount is zero', () => {
     const validation = validateZugferdData(createTestInvoice({

@@ -64,7 +64,13 @@ export function readOfficialValidationReport(bytes: Uint8Array, expectedHash: st
   sax.ondoctype = () => { throw new Error('REPORT_XML'); };
   sax.onerror = () => { throw new Error('REPORT_XML'); };
   sax.write(xml).close();
-  if (valid === null || engine !== 'KoSIT Validator 1.6.3' || hash.trim() !== Buffer.from(expectedHash, 'hex').toString('base64') || !steps.has('val-xml') || !steps.has('val-xsd')) throw new Error('REPORT_INCOMPLETE');
+  if (valid === null || engine !== 'KoSIT Validator 1.6.3' || hash.trim() !== Buffer.from(expectedHash, 'hex').toString('base64') || !steps.has('val-xml')) throw new Error('REPORT_INCOMPLETE');
+  // A failed XML parse has no later XSD/Schematron steps in the official report.
+  if (!valid && steps.get('val-xml') === false && hasError) {
+    if (steps.size !== 1) throw new Error('REPORT_INCOMPLETE');
+    return { status: 'FAILED', checks: { xml: 'FAILED', xsd: 'NOT_RUN', schematron: 'NOT_RUN' }, findings, findingsTruncated: truncated };
+  }
+  if (!steps.has('val-xsd')) throw new Error('REPORT_INCOMPLETE');
   // KoSIT intentionally does not execute Schematron after an XSD failure.
   // That is a demonstrated schema rejection, not an unavailable validator.
   if (!valid && steps.get('val-xml') && steps.get('val-xsd') === false && hasError) return { status: 'FAILED', checks: { xml: 'PASSED', xsd: 'FAILED', schematron: 'NOT_RUN' }, findings, findingsTruncated: truncated };

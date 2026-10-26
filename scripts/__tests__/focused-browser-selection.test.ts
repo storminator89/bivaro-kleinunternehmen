@@ -126,6 +126,69 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(value.criticalMappingRequired).toBe(true); expect(value.unknownCriticalCount).toBe(1); expect(value.specs).toEqual([]);
     expect(selectFocusedBrowser(['lib/backup.ts']).criticalMappingRequired).toBe(true);
   });
+  it('maps only the independent real XML issuance case and explicit server/native invoice contracts', () => {
+    const spec = 'e2e/payment-terms.spec.ts';
+    const title = 'stale company default requires deliberate refresh, snapshots XML and permits a conscious manual date';
+    const contracts = {
+      'lib/zugferd-generator.ts': ['lib/__tests__/zugferd-generator.test.ts', 'lib/__tests__/own-invoice-source.test.ts'],
+      'lib/purchase-documents/validation-xml.ts': ['lib/__tests__/purchase-validation-runtime.test.ts', '.github/workflows/ci.yml'],
+      'lib/purchase-documents/validation-report-parser.ts': ['lib/__tests__/purchase-validation-report.test.ts', 'lib/__tests__/purchase-validation-runtime.test.ts', '.github/workflows/ci.yml'],
+      'lib/server/own-invoice-layout.ts': ['lib/__tests__/own-invoice-layout.test.ts', 'lib/__tests__/own-invoice-renderer.test.ts', 'lib/__tests__/own-invoice-source.test.ts', 'lib/__tests__/pdfa3.test.ts', 'lib/__tests__/own-invoice-pdfa-validator.test.ts', 'lib/__tests__/own-invoice-pdfa-acceptance.test.ts', '.github/workflows/own-invoice-pdfa.yml'],
+    };
+    for (const [source, required] of Object.entries(contracts)) {
+      const selection = selectFocusedBrowser([source]);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection.core).toBe(true);
+      expect(selection.criticalMappingRequired).toBe(false);
+      expect(selection.specs).toEqual(source === 'lib/zugferd-generator.ts' ? [{ file: spec, titles: [title] }] : []);
+      for (const absent of required) {
+        const missing = selectFocusedBrowser([source], file => file !== absent);
+        expect(missing.criticalMappingRequired).toBe(true);
+        expect(missing.unknownCriticalCount).toBe(1);
+      }
+    }
+    const selection = selectFocusedBrowser([...Object.keys(contracts), spec]);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs).toEqual([{ file: spec, titles: [title] }]);
+    expect(selectFocusedBrowser(['lib/zugferd-generator.ts'], file => file !== spec).criticalMappingRequired).toBe(true);
+    for (const sibling of ['lib/zugferd-generator-next.ts', 'lib/purchase-documents/validation-xml-next.ts', 'lib/purchase-documents/validation-report-parser-next.ts', 'lib/server/own-invoice-layout-next.ts']) {
+      expect(selectFocusedBrowser([sibling]).criticalMappingRequired).toBe(true);
+      expect(selectFocusedBrowser([...Object.keys(contracts), sibling]).criticalMappingRequired).toBe(true);
+    }
+  });
+  it('retains the exact invoice regression titles, independent XML fixture and separate mandatory native gates', () => {
+    const titles = (file: string) => {
+      const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.ESNext, true);
+      const values = new Set<string>();
+      const isTest = (expression: ts.Expression): boolean => {
+        if (ts.isIdentifier(expression)) return ['it', 'test'].includes(expression.text);
+        if (ts.isCallExpression(expression)) return isTest(expression.expression);
+        return ts.isPropertyAccessExpression(expression) && !['skip', 'todo', 'skipIf'].includes(expression.name.text) && isTest(expression.expression);
+      };
+      const visit = (node: ts.Node) => {
+        if (ts.isCallExpression(node) && isTest(node.expression) && node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) values.add(node.arguments[0].text);
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+      return values;
+    };
+    const mandatory = {
+      'lib/__tests__/zugferd-generator.test.ts': ['rejects seller contact email %s before issuing XRechnung', 'rejects invalid SEPA IBAN %s before XML generation', 'normalizes a valid lowercase SEPA IBAN before validating and serializing it', 'preserves the required terminating newline of structured payment terms'],
+      'lib/__tests__/purchase-validation-runtime.test.ts': ['rejects forbidden XML characters and references without claiming a completed check', 'retains legal XML whitespace, character references and supplementary Unicode', 'rejects wrong sums and a required missing field through official rules, not heuristics', 'keeps accepted informational guidance visibly distinct from an unqualified technical pass'],
+      'lib/__tests__/purchase-validation-report.test.ts': ['recognizes an official XML parsing failure without inventing later validation steps', 'rejects absent checks, changed engine, foreign original and malformed/untrusted report data', 'retains bounded findings without losing a blocking error after the display cap'],
+      'lib/__tests__/own-invoice-layout.test.ts': ['retains ordinary party fields and one-page geometry', 'wraps complete accepted names, streets/house numbers and cities instead of adding ellipses', 'keeps the complete wrapped seller address on every continuation page', 'explicitly rejects accepted source text that cannot fit the recipient block', 'explicitly rejects accepted seller text rather than crossing the reserved footer boundary'],
+    };
+    for (const [file, required] of Object.entries(mandatory)) for (const title of required) expect(titles(file).has(title), `${file}: ${title}`).toBe(true);
+    const xml = readFileSync('e2e/payment-terms.spec.ts', 'utf8');
+    for (const value of ["for (const staleSource of ['COMPANY', 'CUSTOMER'] as const)", 'test(`stale ${staleSource.toLowerCase()} default requires deliberate refresh, snapshots XML and permits a conscious manual date`', 'await fixture(page)', 'await createXml(page)', "pathname === '/api/invoices/upload'", "page.waitForEvent('download')", 'originalBytes.toString', 'expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`)']) expect(xml).toContain(value);
+    const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
+    expect(ci).toContain('node scripts/einvoice-validation/install-runtime.mjs');
+    expect(ci).toContain('BIVARO_EINVOICE_TEST_ASSETS: ${{ runner.temp }}/bivaro-einvoice');
+    const native = readFileSync('.github/workflows/own-invoice-pdfa.yml', 'utf8');
+    for (const value of ['pull_request:', "- 'lib/**'", 'runner: ubuntu-24.04', 'architecture: x64', 'runner: ubuntu-24.04-arm', 'architecture: arm64', 'node scripts/own-invoice-pdfa/install-runtime.mjs', "BIVARO_RUN_OWN_INVOICE_PDFA_ACCEPTANCE: '1'", 'npm test -- lib/__tests__/own-invoice-pdfa-acceptance.test.ts', 'm.cases.length!==10', '!m.malformedLogoPassed', '!m.overlongIdentifierPassed', '!m.overlongUnitPassed']) expect(native).toContain(value);
+    const acceptance = readFileSync('lib/__tests__/own-invoice-pdfa-acceptance.test.ts', 'utf8');
+    for (const name of ['small-business', 'standard-mixed-tax', 'multipage-description-notes', 'large-supported-total', 'unbroken-description-notes', 'licensed-fonts-escaped-title', 'transparent-logo-white-card', 'girocode-final-amount', 'civil-year-0001', 'civil-year-9999']) expect(acceptance).toContain(`name: '${name}'`);
+  });
   it('maps exact currently reviewed PR213/214/215 path inventories without unsupported PDF/browser suites', () => {
     expect(selectFocusedBrowser(['app/api/backup/full/preview/route.ts', 'app/settings/page.tsx', 'components/settings/backup-file-inspection.tsx', 'lib/backup-file-preview.ts', 'e2e/backup-file-inspection.spec.ts']).specs.map(item => item.file)).toEqual(['e2e/backup-file-inspection.spec.ts']);
     const switching = selectFocusedBrowser(['app/help/page.tsx', 'components/public-accounting/switching-checklist.tsx', 'components/public-accounting/switching-checklist.module.css', 'lib/switching-checklist.ts', 'e2e/public-switching-checklist.spec.ts']);

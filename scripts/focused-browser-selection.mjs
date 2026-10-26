@@ -12,6 +12,7 @@ export const FOCUSED_SPECS = {
   'e2e/manual-entry-submission.spec.ts': [],
   'e2e/dashboard-owner-boundary.spec.ts': [],
   'e2e/service-article-picker-freshness.spec.ts': [],
+  'e2e/payment-terms.spec.ts': ['stale company default requires deliberate refresh, snapshots XML and permits a conscious manual date'],
 };
 // Explicit inactive quote-history foundation only. The browser journey checks
 // read-only export/preview compatibility, NOT SQL/restore/audit correctness.
@@ -68,6 +69,14 @@ const serverUnitContracts = {
   'lib/bank-allocation-backup.ts': ['lib/__tests__/bank-allocation-backup.test.ts'],
   'lib/processing-limit.ts': ['lib/__tests__/processing-limits.test.ts'],
   'scripts/einvoice-validation/check-official.py': ['scripts/__tests__/einvoice-checker-exit.test.ts', 'scripts/__tests__/einvoice_checker_exit_cases.py'],
+  'lib/zugferd-generator.ts': ['lib/__tests__/zugferd-generator.test.ts', 'lib/__tests__/own-invoice-source.test.ts'],
+  // Parsing/report contracts run with the pinned real engine in ordinary CI,
+  // not in a browser. Missing contract files still require review.
+  'lib/purchase-documents/validation-xml.ts': ['lib/__tests__/purchase-validation-runtime.test.ts', '.github/workflows/ci.yml'],
+  'lib/purchase-documents/validation-report-parser.ts': ['lib/__tests__/purchase-validation-report.test.ts', 'lib/__tests__/purchase-validation-runtime.test.ts', '.github/workflows/ci.yml'],
+  // Layout is unit/native-backed, NOT browser-certified: the unchanged native
+  // PDF/A workflow runs separately for lib/** on both supported architectures.
+  'lib/server/own-invoice-layout.ts': ['lib/__tests__/own-invoice-layout.test.ts', 'lib/__tests__/own-invoice-renderer.test.ts', 'lib/__tests__/own-invoice-source.test.ts', 'lib/__tests__/pdfa3.test.ts', 'lib/__tests__/own-invoice-pdfa-validator.test.ts', 'lib/__tests__/own-invoice-pdfa-acceptance.test.ts', '.github/workflows/own-invoice-pdfa.yml'],
 };
 // Exact reviewed presentation conversions are unit-backed; browser scope stays core-only.
 const presentationUnitContracts = {
@@ -123,6 +132,9 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     if (Object.hasOwn(serverUnitContracts, source)) {
       if (!serverUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);
       if (backupInspectionSources.has(source)) add('e2e/backup-file-inspection.spec.ts', true, source);
+      // This existing XML-only case owns its synthetic user and really creates,
+      // stores and downloads XML. No first-admin or native-PDF fixture is needed.
+      if (source === 'lib/zugferd-generator.ts') add('e2e/payment-terms.spec.ts', true, source);
       continue;
     }
     if (quoteReleaseFoundation && quoteReleaseFoundationPaths.has(source)) {
