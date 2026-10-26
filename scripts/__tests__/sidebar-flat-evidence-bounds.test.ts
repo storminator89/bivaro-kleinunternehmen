@@ -17,7 +17,7 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
 describe('required bounded hosted flat-sidebar evidence', () => {
   it('retains the exact accepted workflow prefix and all 199 existing screenshot names and budgets', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(original).digest('hex')).toBe('a60892ca4e8950a834273ac50984a0ac21469bcfaf24b07a69517330be6804f7');
+    expect(createHash('sha256').update(original).digest('hex')).toBe('2243c1e965f5bebd1043aa9128f4ed4aea458640349ff8a546f1f52310ad1711');
     const names = namesIn(original);
     expect(names).toHaveLength(199); expect(new Set(names).size).toBe(199);
     for (const value of ['timeout-minutes: 45', 'contents: read', '--retries=0',

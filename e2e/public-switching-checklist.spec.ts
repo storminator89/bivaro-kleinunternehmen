@@ -91,7 +91,7 @@ async function settleReviewCapture(page: Page, target: Locator) {
   })).toBe(true);
 }
 
-test('anonymous switching checklist exports the current self-review without registering or submitting data', async ({ page, baseURL }, testInfo) => {
+test('anonymous switching checklist exports the current self-review without registering or submitting data', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await settledAnonymousHelp(page, baseURL, () => page.goto('/help#umstieg'));
   const origin = new URL(baseURL!).origin;
@@ -123,7 +123,6 @@ test('anonymous switching checklist exports the current self-review without regi
   await expect(checklist.getByLabel('Aktueller Reviewbogen – nur lesbar', { exact: true })).toHaveValue(text);
   await expect(checklist.getByLabel('Aktueller Reviewbogen – nur lesbar', { exact: true })).toHaveAttribute('readonly', '');
   await settleReviewCapture(page, checklist.getByLabel('Aktueller Reviewbogen – nur lesbar', { exact: true }));
-  await page.screenshot({ path: testInfo.outputPath('public-switching-review-desktop.png'), fullPage: false, animations: 'disabled' });
 });
 
 test('all six self-prepared selections retain the manual gate and reset explicitly or on reload', async ({ page, baseURL }) => {
@@ -144,7 +143,7 @@ test('all six self-prepared selections retain the manual gate and reset explicit
   await expect(checklist).toContainText('Ein Neuladen setzt sie zurück');
 });
 
-test('360px public switch preparation remains keyboard reachable with a readable manual fallback', async ({ page, baseURL }, testInfo) => {
+test('360px public switch preparation remains keyboard reachable with a readable manual fallback', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await settledAnonymousHelp(page, baseURL, () => page.goto('/help#umstieg'));
   const checklist = page.locator('#umstieg');
@@ -175,5 +174,4 @@ test('360px public switch preparation remains keyboard reachable with a readable
   await expect(review).toHaveValue(/Selbst vorbereitet: 0 von 6/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await settleReviewCapture(page, review);
-  await page.screenshot({ path: testInfo.outputPath('public-switching-review-mobile.png'), fullPage: false, animations: 'disabled' });
 });
