@@ -1,4 +1,5 @@
 import { RECORD_SEARCH_MAX_LENGTH, RECORD_SEARCH_MIN_LENGTH } from './contract';
+import { parseIncomingInvoiceDateFilter, type IncomingInvoiceDateFilter } from '@/lib/purchase-documents/invoice-date-filter';
 
 export class FilteredListInputError extends Error {
   constructor() { super('INVALID_FILTERED_LIST_INPUT'); this.name = 'FilteredListInputError'; }
@@ -8,7 +9,7 @@ export type InvoiceListSearchInput = {
   paidStatus: 'all' | 'paid' | 'unpaid' | 'partial';
   dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
 };
-export type PurchaseListSearchInput = {
+export type PurchaseListSearchInput = IncomingInvoiceDateFilter & {
   query: string; page: number; limit: number;
   reviewStatus: 'ALL' | 'REVIEW' | 'BOOKED' | 'DISMISSED';
   taskKind: 'all' | 'any' | 'PAYMENT_CHECK' | 'DIRECT_DEBIT_WAIT' | 'CLARIFY';
@@ -47,8 +48,10 @@ export function invoiceListSearchInput(value: unknown): InvoiceListSearchInput {
     dateRange: choice(input.dateRange, ['all', 'thisMonth', 'lastMonth', 'thisYear'], 'all') };
 }
 export function purchaseListSearchInput(value: unknown): PurchaseListSearchInput {
-  const input = object(value, ['query', 'page', 'limit', 'reviewStatus', 'taskKind', 'taskDue']);
-  const result: PurchaseListSearchInput = { query: filteredListQuery(input.query), page: integer(input.page, 1, 100_000), limit: integer(input.limit, 25, 50),
+  const input = object(value, ['query', 'page', 'limit', 'reviewStatus', 'taskKind', 'taskDue', 'invoiceDateFrom', 'invoiceDateTo', 'invoiceDateMissing']);
+  let dates: IncomingInvoiceDateFilter;
+  try { dates = parseIncomingInvoiceDateFilter(input); } catch { throw new FilteredListInputError(); }
+  const result: PurchaseListSearchInput = { ...dates, query: filteredListQuery(input.query), page: integer(input.page, 1, 100_000), limit: integer(input.limit, 25, 50),
     reviewStatus: choice(input.reviewStatus, ['ALL', 'REVIEW', 'BOOKED', 'DISMISSED'], 'ALL'),
     taskKind: choice(input.taskKind, ['all', 'any', 'PAYMENT_CHECK', 'DIRECT_DEBIT_WAIT', 'CLARIFY'], 'all'),
     taskDue: choice(input.taskDue, ['any', 'due', 'later', 'undated'], 'any') };
