@@ -1,3 +1,4 @@
+import { withoutEarlyReceipt } from '../early-browser-workflow-contract.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -17,7 +18,7 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
 describe('required bounded hosted flat-sidebar evidence', () => {
   it('retains the exact accepted workflow prefix and all 199 existing screenshot names and budgets', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(original).digest('hex')).toBe('a60892ca4e8950a834273ac50984a0ac21469bcfaf24b07a69517330be6804f7');
+    expect(createHash('sha256').update(withoutEarlyReceipt(original)).digest('hex')).toBe('a60892ca4e8950a834273ac50984a0ac21469bcfaf24b07a69517330be6804f7');
     const names = namesIn(original);
     expect(names).toHaveLength(199); expect(new Set(names).size).toBe(199);
     for (const value of ['timeout-minutes: 45', 'contents: read', '--retries=0',

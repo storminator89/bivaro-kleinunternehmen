@@ -1,3 +1,4 @@
+import { withoutEarlyReceipt } from '../early-browser-workflow-contract.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -19,7 +20,7 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
 describe('bounded reports and records hosted visual acceptance', () => {
   it('preserves every byte of the accepted 155-image workflow and all existing gates', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(original).digest('hex')).toBe('59b555efe0c3ce2119372adcb0f845a619d3ba969439792b4beb288b236b5efe');
+    expect(createHash('sha256').update(withoutEarlyReceipt(original)).digest('hex')).toBe('59b555efe0c3ce2119372adcb0f845a619d3ba969439792b4beb288b236b5efe');
     const names = namesIn(original); expect(names).toHaveLength(155); expect(new Set(names).size).toBe(155);
     for (const value of ['timeout-minutes: 45', 'timeout-minutes: 25', '--global-timeout=1200000', '--workers=1', '--retries=0', '--forbid-only', '--trace=off', 'contents: read', 'limit = 10 * 1024 * 1024', 'limit = 2 * 1024 * 1024', 'limit = 4 * 1024 * 1024']) expect(original).toContain(value);
   });

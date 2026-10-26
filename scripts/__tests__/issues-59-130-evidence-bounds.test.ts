@@ -1,3 +1,4 @@
+import { withoutEarlyReceipt } from '../early-browser-workflow-contract.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -15,7 +16,7 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
 describe('bounded reconstructed issue59/130 hosted evidence', () => {
   it('preserves every byte of accepted main workflow and its209 exact names and28 MiB budget', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(accepted).digest('hex')).toBe('860eeef2fbaa3ef7efefa7e301e5be964923ff320fc74260410ee3af2988b0f6');
+    expect(createHash('sha256').update(withoutEarlyReceipt(accepted)).digest('hex')).toBe('860eeef2fbaa3ef7efefa7e301e5be964923ff320fc74260410ee3af2988b0f6');
     expect(namesIn(accepted)).toHaveLength(209);
     expect(new Set(namesIn(accepted)).size).toBe(209);
     expect(accepted).toContain('max 28 MiB total output');

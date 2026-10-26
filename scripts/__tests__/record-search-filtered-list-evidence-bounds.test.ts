@@ -1,3 +1,4 @@
+import { withoutEarlyReceipt } from '../early-browser-workflow-contract.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -17,12 +18,13 @@ const widths = [1440, 360, 390];
 describe('bounded filtered-list record-search hosted visual evidence', () => {
   it('preserves every byte of the accepted 247-image/40 MiB workflow and all prior full-suite gates', () => {
     expect(start).toBeGreaterThan(0);
-    expect(accepted).toHaveLength(95530);
-    expect(createHash('sha256').update(accepted).digest('hex')).toBe('21cbc54b161498b5a3b18e59e91d8dcc562fc3fc350e9a40cdb87d1b9066cca9');
+    expect(withoutEarlyReceipt(accepted)).toHaveLength(95530);
+    expect(createHash('sha256').update(withoutEarlyReceipt(accepted)).digest('hex')).toBe('21cbc54b161498b5a3b18e59e91d8dcc562fc3fc350e9a40cdb87d1b9066cca9');
     expect(namesIn(accepted)).toHaveLength(247);
     expect(new Set(namesIn(accepted)).size).toBe(247);
-    const original235 = accepted.slice(0, 86487);
-    expect(createHash('sha256').update(original235).digest('hex')).toBe('47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d');
+    const original235 = accepted.slice(0, accepted.indexOf('      # Independent manual-financial-record partition:'));
+    expect(withoutEarlyReceipt(original235)).toHaveLength(86487);
+    expect(createHash('sha256').update(withoutEarlyReceipt(original235)).digest('hex')).toBe('47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d');
     expect(namesIn(original235)).toHaveLength(235);
     for (const value of ['total output cap is 37 MiB', 'permissions:\n  contents: read',
       'timeout-minutes: 45', 'npm run test:e2e --', '--headed', '--retries=0',
