@@ -239,6 +239,7 @@ export async function GET() {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof BackupFileSizeError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof BackupFileConsistencyError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ZipResourceLimitError) return NextResponse.json({ error: error.message }, { status: 413 });
     console.error('Full backup error:', error);

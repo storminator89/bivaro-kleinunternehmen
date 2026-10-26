@@ -144,6 +144,7 @@ export function CreateInvoiceModal({
   const [includeQRCode, setIncludeQRCode] = useState(false);
   const [invoiceNumberError, setInvoiceNumberError] = useState<string | null>(null);
   const [isCheckingNumber, setIsCheckingNumber] = useState(false);
+  const invoiceNumberCheckRequestRef = useRef(0);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
@@ -556,19 +557,29 @@ export function CreateInvoiceModal({
   // Keep creation disabled during the debounce as well as the request.
   // Otherwise a late duplicate check can disable retry after a successful save
   // whose response was lost.
+  // Abort saves work; ownership guards also reject already-resolving reads.
   useEffect(() => {
-    setIsCheckingNumber(Boolean(invoiceNumber));
-    const checkInvoiceNumber = async () => {
-      if (!invoiceNumber) {
-        setInvoiceNumberError(null);
-        return;
-      }
+    let active = true;
+    const controller = new AbortController();
+    const requestId = ++invoiceNumberCheckRequestRef.current;
+    const editorGeneration = editorGenerationRef.current;
+    const isCurrentCheck = () => active && editorActiveRef.current
+      && requestId === invoiceNumberCheckRequestRef.current
+      && editorGeneration === editorGenerationRef.current;
+    setIsCheckingNumber(isOpen && Boolean(invoiceNumber));
+    if (!isOpen || !invoiceNumber) {
+      setInvoiceNumberError(null);
+      return;
+    }
 
-      setIsCheckingNumber(true);
+    const checkInvoiceNumber = async () => {
+      if (!isCurrentCheck()) return;
+
       try {
-        const res = await fetch(`/api/invoices/check-number?number=${encodeURIComponent(invoiceNumber)}`);
+        const res = await fetch(`/api/invoices/check-number?number=${encodeURIComponent(invoiceNumber)}`, { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
+          if (!isCurrentCheck()) return;
           if (data.exists) {
             setInvoiceNumberError("Diese Rechnungsnummer existiert bereits.");
           } else {
@@ -576,15 +587,19 @@ export function CreateInvoiceModal({
           }
         }
       } catch (error) {
-        console.error("Error checking invoice number:", error);
+        if (isCurrentCheck()) console.error("Error checking invoice number:", error);
       } finally {
-        setIsCheckingNumber(false);
+        if (isCurrentCheck()) setIsCheckingNumber(false);
       }
     };
 
     const timeoutId = setTimeout(checkInvoiceNumber, 500); // Debounce
-    return () => clearTimeout(timeoutId);
-  }, [invoiceNumber]);
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [invoiceNumber, isOpen]);
 
   const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     billingNotesRequestRef.current += 1;
@@ -1241,7 +1256,15 @@ export function CreateInvoiceModal({
                 <Input
                   id="invoice-number"
                   value={invoiceNumber}
-                  onChange={(e) => { numberRequestRef.current += 1; setNumberRefreshing(false); setInvoiceNumber(e.target.value); }}
+                  onChange={(e) => {
+                    numberRequestRef.current += 1;
+                    // Invalidate before the next passive-effect cleanup.
+                    invoiceNumberCheckRequestRef.current += 1;
+                    setNumberRefreshing(false);
+                    setInvoiceNumberError(null);
+                    setIsCheckingNumber(Boolean(e.target.value));
+                    setInvoiceNumber(e.target.value);
+                  }}
                   placeholder="RE-2024-001"
                   aria-invalid={Boolean(invoiceNumberError)}
                   aria-describedby={invoiceNumberError ? "invoice-number-error" : undefined}

@@ -5,13 +5,14 @@ import { createTestDatabase } from './helpers/database';
 const state = vi.hoisted(() => ({ client: null as unknown, transport: vi.fn() }));
 vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
 vi.mock('@/lib/get-user-id', () => ({
-  requireUserId: async () => 'reminder-owner',
+  requireUserId: vi.fn(async () => 'reminder-owner'),
   UnauthorizedError: class extends Error {},
   unauthorizedResponse: () => new Response(null, { status: 401 }),
 }));
 vi.mock('nodemailer', () => ({ default: { createTransport: state.transport } }));
 
 import { GET, POST } from '@/app/api/reminders/route';
+import { requireUserId, UnauthorizedError } from '@/lib/get-user-id';
 import { updateInvoiceStatus } from '@/lib/invoice-payments';
 
 let database: ReturnType<typeof createTestDatabase>;
@@ -47,6 +48,51 @@ beforeAll(async () => {
   ] });
 }, 40_000);
 afterAll(async () => { await database?.cleanup(); });
+
+describe('reminder list error responses', () => {
+  it('returns the source-limit status and code before inspecting an over-limit result', async () => {
+    // Only length is observed before the sentinel: no array or financial fixtures.
+    const findMany = vi.fn(async () => ({ length: 10_001 }));
+    const transaction = vi.fn(async (read: (tx: unknown) => Promise<unknown>) => read({ invoice: { findMany } }));
+    const previous = state.client;
+    state.client = { $transaction: transaction };
+    try {
+      const response = await GET(new Request('http://localhost/api/reminders?includeAll=true'));
+      expect(response.status).toBe(413);
+      expect(await response.json()).toEqual({ error: 'Zu viele Rechnungen. Bitte die Auswahl eingrenzen.', code: 'SOURCE_LIMIT' });
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(findMany).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        take: 10_001,
+        where: { userId: 'reminder-owner', type: 'INVOICE', status: { notIn: ['PAID', 'CANCELLED'] } },
+      }));
+    } finally { state.client = previous; }
+  });
+
+  it('keeps unauthorized requests ahead of the reminder query', async () => {
+    const transaction = vi.fn();
+    const previous = state.client;
+    state.client = { $transaction: transaction };
+    vi.mocked(requireUserId).mockRejectedValueOnce(new UnauthorizedError());
+    try {
+      const response = await GET(new Request('http://localhost/api/reminders?includeAll=true'));
+      expect(response.status).toBe(401);
+      expect(transaction).not.toHaveBeenCalled();
+    } finally { state.client = previous; }
+  });
+
+  it('keeps unexpected failures generic and logs the original error', async () => {
+    const failure = new Error('Synthetic internal failure');
+    const previous = state.client;
+    state.client = { $transaction: vi.fn().mockRejectedValue(failure) };
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(new Request('http://localhost/api/reminders?includeAll=true'));
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'Fehler beim Laden der Mahnungen' });
+      expect(log).toHaveBeenCalledExactlyOnceWith('Error fetching reminders:', failure);
+    } finally { state.client = previous; log.mockRestore(); }
+  });
+});
 
 describe('QA #31: only open invoices are eligible for reminders', () => {
   it('excludes offers, credit notes, paid/cancelled invoices and other tenants from counts and totals', async () => {
