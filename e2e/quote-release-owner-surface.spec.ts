@@ -91,7 +91,8 @@ test('owned quote opens the internal version view without public access', async 
   expect(state.status()).toBe(200);
   expect(await state.json()).toMatchObject({ quoteId: owned.quote.id, publicAccessEnabled: false, eligibility: 'RECEIPT_BOUND', totalVersions: 0, history: [] });
   expect((await page.request.get(`${OWNER_ENABLED_ORIGIN}/api/quotes/${foreign.quote.id}/releases`)).status()).toBe(404);
-  await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
+  const close = dialog.locator('form').getByRole('button', { name: 'Schließen', exact: true });
+  await expect(close).toHaveCount(1); await close.click();
   await expect(dialog).not.toBeVisible(); expect(blocked).toEqual([]);
   expect((await fixture.captureEvidence(owned)).releases).toEqual([]);
   await noFinanceOrForeignChanges();
@@ -117,7 +118,8 @@ test('unobserved committed capture stays blocked after close reopen and reload',
   expect(committedReceipt).not.toBeNull(); expect(posts).toBe(1);
   await expect(dialog.getByRole('button', { name: CAPTURE, exact: true })).toBeDisabled();
   expect(await page.evaluate(key => sessionStorage.getItem(key), uncertaintyKey())).toBe('1');
-  await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
+  const close = dialog.locator('form').getByRole('button', { name: 'Schließen', exact: true });
+  await expect(close).toHaveCount(1); await close.click();
   dialog = await openVersions(page); await fillDraft(page, 'Uncertainty must survive dialog reopening');
   await expect(dialog.getByRole('checkbox')).toBeDisabled();
   await expect(dialog.getByRole('button', { name: CAPTURE, exact: true })).toBeDisabled();
