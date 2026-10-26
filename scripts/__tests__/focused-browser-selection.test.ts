@@ -298,6 +298,34 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(validFocusedSelection({ ...selection, specs: [{ file, titles: ['.*'] }] })).toBe(false);
     expect(validFocusedSelection({ ...selection, specs: [{ file, titles: [...titles, 'unreviewed extra case'] }] })).toBe(false);
   });
+  it('selects only the real feature-backup restore case with its existing isolated fixture, never unrelated backup suites', () => {
+    const file = 'e2e/feature-backup-roundtrip.spec.ts';
+    const title = 'real backup endpoints remap feature histories, preserve legacy high-water marks and reject conflicts atomically';
+    const selection = selectFocusedBrowser([file]);
+    expect(validFocusedSelection(selection)).toBe(true);
+    expect(selection.core).toBe(true);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs).toEqual([{ file, titles: [title] }]);
+    for (const absent of [file, 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts', 'e2e/helpers/synthetic-login.ts']) {
+      const missing = selectFocusedBrowser([file], source => source !== absent);
+      expect(missing.criticalMappingRequired).toBe(true);
+      expect(missing.unknownCriticalCount).toBe(1);
+      expect(missing.specs).toEqual([]);
+    }
+    expect(selectFocusedBrowser(['lib/backup-restore-unreviewed.ts']).criticalMappingRequired).toBe(true);
+    const source = readFileSync(file, 'utf8');
+    const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    const authored: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'test' && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) authored.push(node.arguments[0].text);
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
+    expect(authored).toEqual([title]);
+    for (const boundary of ['expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`)', 'await isolateSyntheticLoginIpBudget()', 'await prisma.user.create', "page.request.get('/api/backup')", "page.request.post('/api/backup/restore'", 'await state(target.id)', 'await state(source.id)', "'20261026093000_add_quote_release_backup_identity'", "'quoteReleaseAuthorities'", "'quoteReleases'", "'quoteElectronicResponses'"]) expect(source).toContain(boundary);
+    expect(source).not.toMatch(/\b(?:test\.(?:skip|fixme|todo)|page\.route)\s*\(/u);
+    for (const titles of [[], ['.*'], [title, 'unreviewed case']]) expect(validFocusedSelection({ ...selection, specs: [{ file, titles }] })).toBe(false);
+  });
   it('rejects arbitrary selectors, shell-looking titles and malformed paths', () => {
     const value = selectFocusedBrowser(['components/app-shell.tsx']);
     expect(validFocusedSelection({ ...value, specs: [{ file: 'e2e/public-help-fragments.spec.ts', titles: ['.*'] }] })).toBe(false);

@@ -1,5 +1,6 @@
 /** Explicit, reviewed browser scope. Unknown critical paths never imply coverage. */
 export const FOCUSED_SPECS = {
+  'e2e/feature-backup-roundtrip.spec.ts': ['real backup endpoints remap feature histories, preserve legacy high-water marks and reject conflicts atomically'],
   'e2e/public-help-fragments.spec.ts': [],
   'e2e/public-switching-checklist.spec.ts': [],
   'e2e/backup-file-inspection.spec.ts': ['ZIP inspection shows actual checks, blocks changed originals and never restores on discard or reload'],
@@ -95,6 +96,11 @@ const presentationUnitContracts = {
 // Queue races and portable-reference equivalence remain unit-contract evidence.
 const backupInspectionSources = new Set(['app/api/backup/full/route.ts', 'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts']);
 
+// Only this real restore case is mapped; fixture safeguards remain unchanged.
+const reviewedJourneyContracts = {
+  'e2e/feature-backup-roundtrip.spec.ts': ['scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts', 'e2e/helpers/synthetic-login.ts'],
+};
+
 // Exact UX sources select real confirmation/replay and dirty/concurrent receipt
 // journeys, not a unit-only exemption. These are required future checks, NOT a
 // claim of browser acceptance: local Chromium execution is currently blocked.
@@ -117,7 +123,7 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   const unknownCritical = new Set();
   let unmappedSourceCount = 0;
   const add = (file, critical, source) => {
-    if (exists(file)) selected.add(file);
+    if (exists(file) && (reviewedJourneyContracts[file] ?? []).every(contract => exists(contract))) selected.add(file);
     else if (critical) unknownCritical.add(source);
     else unmappedSourceCount++;
   };
