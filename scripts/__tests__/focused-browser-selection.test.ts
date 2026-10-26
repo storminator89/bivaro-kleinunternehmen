@@ -94,13 +94,14 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(selection.criticalMappingRequired).toBe(false);
     expect(selection.specs.map(item => item.file)).toEqual(['e2e/backup-file-inspection.spec.ts', 'e2e/combobox-accessibility.spec.ts']);
   });
-  it('keeps the reviewed documentation checkbox conversion unit-backed with core smoke only', () => {
+  it('retains the documentation checkbox unit contract and adds only the real loading journey for its page', () => {
     const sources = ['app/settings/documentation/page.tsx', 'lib/documentation-print-markdown.ts'];
     const unit = 'lib/__tests__/documentation-print-markdown.test.ts';
     for (const paths of [...sources.map(source => [source]), [...sources, unit]]) {
       const selection = selectFocusedBrowser(paths);
       expect(validFocusedSelection(selection)).toBe(true);
-      expect(selection).toEqual({ schema: 'bivaro-focused-browser-selection-v1', core: true, specs: [],
+      expect(selection).toEqual({ schema: 'bivaro-focused-browser-selection-v1', core: true,
+        specs: paths.includes('app/settings/documentation/page.tsx') ? [{ file: 'e2e/documentation-loading.spec.ts', titles: FOCUSED_SPECS['e2e/documentation-loading.spec.ts'] }] : [],
         criticalMappingRequired: false, unknownCriticalCount: 0, unmappedSourceCount: 0 });
     }
     const missing = selectFocusedBrowser(sources, () => false);
@@ -193,7 +194,7 @@ describe('risk-based browser scope, not full acceptance', () => {
   it('maps exact currently reviewed PR213/214/215 path inventories without unsupported PDF/browser suites', () => {
     expect(selectFocusedBrowser(['app/api/backup/full/preview/route.ts', 'app/settings/page.tsx', 'components/settings/backup-file-inspection.tsx', 'lib/backup-file-preview.ts', 'e2e/backup-file-inspection.spec.ts']).specs.map(item => item.file)).toEqual(['e2e/backup-file-inspection.spec.ts']);
     const switching = selectFocusedBrowser(['app/help/page.tsx', 'components/public-accounting/switching-checklist.tsx', 'components/public-accounting/switching-checklist.module.css', 'lib/switching-checklist.ts', 'e2e/public-switching-checklist.spec.ts']);
-    expect(switching.criticalMappingRequired).toBe(false); expect(switching.specs.map(item => item.file)).toEqual(['e2e/public-switching-checklist.spec.ts']);
+    expect(switching.criticalMappingRequired).toBe(false); expect(switching.specs.map(item => item.file)).toEqual(['e2e/public-pilot-demo.spec.ts', 'e2e/public-switching-checklist.spec.ts']);
     expect(selectFocusedBrowser(['app/layout.tsx', 'components/app-shell.tsx', 'app/login/layout.tsx']).specs.map(item => item.file)).toEqual(['e2e/public-help-fragments.spec.ts']);
     expect(selectFocusedBrowser(['lib/payment-preflight.ts']).criticalMappingRequired).toBe(true);
   });
@@ -297,6 +298,92 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(validFocusedSelection({ ...selection, specs: [{ file, titles: [] }] })).toBe(false);
     expect(validFocusedSelection({ ...selection, specs: [{ file, titles: ['.*'] }] })).toBe(false);
     expect(validFocusedSelection({ ...selection, specs: [{ file, titles: [...titles, 'unreviewed extra case'] }] })).toBe(false);
+  });
+  it('attaches only the real pilot and documentation cases, retains old public maps and fails closed on missing contracts', () => {
+    const pilot = 'e2e/public-pilot-demo.spec.ts', documentation = 'e2e/documentation-loading.spec.ts';
+    const sources = {
+      'app/help/page.tsx': [pilot, 'e2e/public-help-fragments.spec.ts', 'e2e/public-switching-checklist.spec.ts'].sort(),
+      'components/public-accounting/pilot-demo.tsx': [pilot, 'e2e/public-help-fragments.spec.ts'].sort(),
+      'components/public-accounting/pilot-demo.module.css': [pilot, 'e2e/public-help-fragments.spec.ts'].sort(),
+      'lib/pilot-demo.ts': [pilot],
+      'app/settings/documentation/page.tsx': [documentation],
+      [pilot]: [pilot], [documentation]: [documentation],
+    };
+    const required = {
+      [pilot]: [pilot, 'lib/__tests__/pilot-demo.test.ts', 'e2e/helpers/public-read-only.ts', 'public/demo/bivaro-pilot-v1.txt'],
+      [documentation]: [documentation, 'scripts/e2e-fixture.mjs', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
+    };
+    for (const [source, specs] of Object.entries(sources)) {
+      const selection = selectFocusedBrowser([source]);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection.core).toBe(true);
+      expect(selection.criticalMappingRequired).toBe(false);
+      expect(selection.specs.map(item => item.file)).toEqual(specs);
+      const own = specs.includes(pilot) ? pilot : documentation;
+      for (const absent of required[own]) {
+        const missing = selectFocusedBrowser([source], file => file !== absent);
+        expect(missing.criticalMappingRequired).toBe(true);
+        expect(missing.unknownCriticalCount).toBe(1);
+        expect(missing.specs.some(item => item.file === own)).toBe(false);
+      }
+    }
+    expect(selectFocusedBrowser(['app/settings/documentation/page.tsx'], file => file !== 'lib/__tests__/documentation-print-markdown.test.ts').criticalMappingRequired).toBe(true);
+    const union = selectFocusedBrowser(Object.keys(sources));
+    expect(union.criticalMappingRequired).toBe(false);
+    expect(union.specs.map(item => item.file)).toEqual([documentation, 'e2e/public-help-fragments.spec.ts', pilot, 'e2e/public-switching-checklist.spec.ts']);
+    for (const source of ['lib/pilot-demo-next.ts', 'app/api/documentation/route.ts', 'lib/documentation-unknown-contract.ts']) {
+      expect(selectFocusedBrowser([source]).criticalMappingRequired).toBe(true);
+      expect(selectFocusedBrowser([...Object.keys(sources), source]).criticalMappingRequired).toBe(true);
+    }
+  });
+  it('pins the nine exact active pilot and expanded documentation titles without executing their browser or database modules', () => {
+    const authoredTitles = (file: string) => {
+      const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+      const titles: string[] = [];
+      const visit = (node: ts.Node, bindings: Record<string, string> = {}) => {
+        if (ts.isFunctionLike(node)) return; // Helper and fixture bodies do not register cases.
+        if (ts.isForOfStatement(node) && ts.isVariableDeclarationList(node.initializer) && ts.isArrayLiteralExpression(node.expression)) {
+          const name = node.initializer.declarations[0]?.name;
+          if (!name || !ts.isIdentifier(name)) throw Error('Unreviewed title loop');
+          for (const value of node.expression.elements) {
+            if (!ts.isNumericLiteral(value) && !ts.isStringLiteral(value)) throw Error('Unreviewed title value');
+            visit(node.statement, { ...bindings, [name.text]: value.text });
+          }
+          return;
+        }
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'test') {
+          const title = node.arguments[0];
+          if (title && ts.isStringLiteralLike(title)) titles.push(title.text);
+          else if (title && ts.isTemplateExpression(title)) {
+            let text = title.head.text;
+            for (const span of title.templateSpans) {
+              if (!ts.isIdentifier(span.expression) || !Object.hasOwn(bindings, span.expression.text)) throw Error('Unreviewed dynamic title');
+              text += bindings[span.expression.text] + span.literal.text;
+            }
+            titles.push(text);
+          }
+          return; // Do not inspect or execute the browser callback body.
+        }
+        ts.forEachChild(node, child => visit(child, bindings));
+      };
+      visit(tree);
+      return titles;
+    };
+    for (const [file, count] of [['e2e/public-pilot-demo.spec.ts', 3], ['e2e/documentation-loading.spec.ts', 6]] as const) {
+      const titles = FOCUSED_SPECS[file];
+      expect(titles).toHaveLength(count);
+      expect(authoredTitles(file)).toEqual(titles);
+      expect(new Set(titles).size).toBe(count);
+      const selection = selectFocusedBrowser([file]);
+      expect(selection.specs).toEqual([{ file, titles }]);
+      for (const replaced of [[], ['.*'], [...titles, 'unreviewed extra case']]) {
+        expect(validFocusedSelection({ ...selection, specs: [{ file, titles: replaced }] })).toBe(false);
+      }
+    }
+    const pilot = readFileSync('e2e/public-pilot-demo.spec.ts', 'utf8');
+    for (const boundary of ["base.extend", "{ auto: true }", "route.abort('blockedbyclient')", 'blockedCount: 0', 'classifyPublicReadOnlyRequest']) expect(pilot).toContain(boundary);
+    const documentation = readFileSync('e2e/documentation-loading.spec.ts', 'utf8');
+    for (const boundary of ['expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`)', 'await isolateSyntheticLoginIpBudget()', 'await prisma.user.create', 'route.continue()', 'prisma.documentation.findUniqueOrThrow']) expect(documentation).toContain(boundary);
   });
   it('rejects arbitrary selectors, shell-looking titles and malformed paths', () => {
     const value = selectFocusedBrowser(['components/app-shell.tsx']);

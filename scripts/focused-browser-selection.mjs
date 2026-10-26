@@ -2,6 +2,16 @@
 export const FOCUSED_SPECS = {
   'e2e/public-help-fragments.spec.ts': [],
   'e2e/public-switching-checklist.spec.ts': [],
+  'e2e/public-pilot-demo.spec.ts': [
+    'anonymous visitor follows the five-step story and retains correction and handoff review limits',
+    'receipt direct link, native Back/Forward, reload and public explanatory download keep the matching step',
+    '360px text alternative, disclosures, matching return and download are keyboard reachable',
+  ],
+  'e2e/documentation-loading.spec.ts': [
+    ...[1440, 360, 390].map(width => `documentation keeps its frame at ${width}px through held reads, failure and explicit retry without losing a failed-save draft`),
+    ...[401, 403].map(status => `documentation read delivery status ${status} never restores private fields or offers a generic retry`),
+    'malformed successful documentation responses stay unavailable until explicit read recovery and never fabricate save success',
+  ],
   'e2e/backup-file-inspection.spec.ts': ['ZIP inspection shows actual checks, blocks changed originals and never restores on discard or reload'],
   'e2e/incoming-invoice-date-filter.spec.ts': ['mobile source-date filters keep boundaries, unknown dates, detail/reload/history and palette continuation read-only'],
   'e2e/registration-status-retry.spec.ts': [],
@@ -86,7 +96,7 @@ const serverUnitContracts = {
   // PDF/A workflow runs separately for lib/** on both supported architectures.
   'lib/server/own-invoice-layout.ts': ['lib/__tests__/own-invoice-layout.test.ts', 'lib/__tests__/own-invoice-renderer.test.ts', 'lib/__tests__/own-invoice-source.test.ts', 'lib/__tests__/pdfa3.test.ts', 'lib/__tests__/own-invoice-pdfa-validator.test.ts', 'lib/__tests__/own-invoice-pdfa-acceptance.test.ts', '.github/workflows/own-invoice-pdfa.yml'],
 };
-// Exact reviewed presentation conversions are unit-backed; browser scope stays core-only.
+// Exact presentation conversions retain their unit contracts; the owning page also has its own journey.
 const presentationUnitContracts = {
   'app/settings/documentation/page.tsx': ['lib/__tests__/documentation-print-markdown.test.ts'],
   'lib/documentation-print-markdown.ts': ['lib/__tests__/documentation-print-markdown.test.ts'],
@@ -95,12 +105,23 @@ const presentationUnitContracts = {
 // Queue races and portable-reference equivalence remain unit-contract evidence.
 const backupInspectionSources = new Set(['app/api/backup/full/route.ts', 'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts']);
 
+// These bounded cases own their anonymous read boundary or synthetic account.
+// Exact existing contracts are required; this never authorizes a local browser.
+const reviewedJourneyContracts = {
+  'e2e/public-pilot-demo.spec.ts': ['lib/__tests__/pilot-demo.test.ts', 'e2e/helpers/public-read-only.ts', 'public/demo/bivaro-pilot-v1.txt'],
+  'e2e/documentation-loading.spec.ts': ['scripts/e2e-fixture.mjs', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
+};
+
 // Exact UX sources select real confirmation/replay and dirty/concurrent receipt
 // journeys, not a unit-only exemption. These are required future checks, NOT a
 // claim of browser acceptance: local Chromium execution is currently blocked.
 // Supplier scope is the three bounded titles above, never the whole suite.
 /** @type {Record<string, string[]>} */
 const affectedUxJourneys = {
+  'app/help/page.tsx': ['e2e/public-pilot-demo.spec.ts'],
+  'components/public-accounting/pilot-demo.tsx': ['e2e/public-pilot-demo.spec.ts'],
+  'components/public-accounting/pilot-demo.module.css': ['e2e/public-pilot-demo.spec.ts'],
+  'lib/pilot-demo.ts': ['e2e/public-pilot-demo.spec.ts'],
   'lib/navigation.ts': ['e2e/ux-progressive-disclosure.spec.ts'],
   'components/dashboard/tabs/invoices-tab.tsx': ['e2e/partial-payments.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
   'components/purchases/document-workspace.module.css': ['e2e/manual-photo-expense.spec.ts', 'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
@@ -117,7 +138,7 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   const unknownCritical = new Set();
   let unmappedSourceCount = 0;
   const add = (file, critical, source) => {
-    if (exists(file)) selected.add(file);
+    if (exists(file) && (reviewedJourneyContracts[file] ?? []).every(contract => exists(contract))) selected.add(file);
     else if (critical) unknownCritical.add(source);
     else unmappedSourceCount++;
   };
@@ -149,6 +170,7 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     if (!code(source)) continue;
     if (Object.hasOwn(presentationUnitContracts, source)) {
       if (!presentationUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);
+      if (source === 'app/settings/documentation/page.tsx') add('e2e/documentation-loading.spec.ts', true, source);
       continue;
     }
     if (Object.hasOwn(serverUnitContracts, source)) {
