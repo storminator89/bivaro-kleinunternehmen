@@ -9,6 +9,13 @@ on:
     branches: [main]
     tags: ['v*']
 
+# main and release metadata can both request latest: one shared publisher scope.
+# Existing runs without this group are not retroactively serialized.
+concurrency:
+  group: docker-publish-bivaro-kleinunternehmen
+  cancel-in-progress: false
+  queue: max
+
 env:
   REGISTRY: docker.io
   # Change this to your Docker Hub username/organization
@@ -58,13 +65,49 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
+      - name: Separate commit/version tags from moving aliases
+        id: tags
+        uses: actions/github-script@v7
+        env:
+          METADATA_TAGS: ${{ steps.meta.outputs.tags }}
+        with:
+          script: |
+            const { splitDockerPublishTags } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/docker-publish-policy.mjs`);
+            const plan = splitDockerPublishTags({ image: process.env.IMAGE_NAME, metadataTags: process.env.METADATA_TAGS, sha: process.env.GITHUB_SHA, eventName: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF });
+            core.setOutput('build-tags', plan.buildTags.join('\n'));
+
       - name: 🏗️ Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.tags.outputs.build-tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+
+      - name: Promote main-branch aliases only from current main
+        uses: actions/github-script@v7
+        env:
+          METADATA_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        with:
+          script: |
+            const { splitDockerPublishTags, movingTagPromotionArgs } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/docker-publish-policy.mjs`);
+            const image = process.env.IMAGE_NAME;
+            const metadataTags = process.env.METADATA_TAGS;
+            const sha = process.env.GITHUB_SHA;
+            const eventName = process.env.GITHUB_EVENT_NAME;
+            const ref = process.env.GITHUB_REF;
+            if (!splitDockerPublishTags({ image, metadataTags, sha, eventName, ref }).movingTags.length) return;
+            // Read after the build. API/validation failure fails closed, never promotes.
+            const { data } = await github.rest.git.getRef({ ...context.repo, ref: 'heads/main' });
+            const args = movingTagPromotionArgs({ image, metadataTags, sha, eventName, ref, currentMainSha: data.object.sha, digest: process.env.IMAGE_DIGEST });
+            if (!args.length) {
+              core.info('Moving aliases skipped: built commit is no longer current main. Commit/version tags remain published.');
+              return;
+            }
+            // No rebuild: copy the just-published complete multiarchitecture index.
+            require('node:child_process').execFileSync('docker', args, { stdio: 'inherit', timeout: 120000 });
