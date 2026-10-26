@@ -27,6 +27,8 @@ import { AnnualBusinessContextSettings } from "@/components/settings/annual-busi
 import { FiscalProfileSettings } from "@/components/onboarding/fiscal-profile-settings";
 import { EMPTY_FISCAL_PROFILE, readFiscalProfile } from "@/lib/fiscal-profile";
 import type { FiscalProfile } from "@/lib/fiscal-profile";
+import type { BackupFileInspection } from "@/lib/backup-file-preview";
+import { BackupFileInspectionSummary } from "@/components/settings/backup-file-inspection";
 
 type RestorePreview = {
   kind: 'json' | 'full';
@@ -39,6 +41,7 @@ type RestorePreview = {
     type: string;
     exportedAt?: string;
     fileCount?: number;
+    fileInspection?: BackupFileInspection;
     totalRecords: number;
     warnings: string[];
     counts: {
@@ -914,6 +917,8 @@ export default function SettingsPage() {
                         <div><strong>Dateien im ZIP:</strong> {restorePreview.preview.fileCount}</div>
                       )}
                     </div>
+
+                    {restorePreview.preview.fileInspection && <BackupFileInspectionSummary inspection={restorePreview.preview.fileInspection} />}
 
                     <div className={styles.restoreCounts}>
                       <span>Kunden: {restorePreview.preview.counts.customers}</span>

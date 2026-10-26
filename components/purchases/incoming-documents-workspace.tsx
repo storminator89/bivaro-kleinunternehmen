@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import type { IncomingDocument, IncomingDocumentList, IncomingDocumentResponse } from '@/lib/purchase-documents/types';
 import { IncomingUpload } from './incoming-upload';
 import { IncomingDocumentReview } from './incoming-document-review';
+import { IncomingInvoiceDateFilter } from './incoming-invoice-date-filter';
 import { SUPPLIER_TASK_LABELS } from './supplier-task-panel';
 import { bindReviewGuardIntents, createReviewNavigationIntents, createReviewTraversalGuard, reviewNavigationDispatcher, reviewPopDispatcher, reviewSessionKey } from './incoming-review-history';
 import { nextReviewDocument, reviewQueueSnapshot, type IncomingNavigationGuard } from './incoming-review-queue';
@@ -78,6 +79,10 @@ function IncomingDocumentsWorkspaceContent() {
   const taskDueParam = params.get('taskDue');
   const taskDue = taskDueParam && ['due', 'later', 'undated'].includes(taskDueParam) ? taskDueParam : 'any';
   const tasksFiltered = taskKind !== 'all' || taskDue !== 'any';
+  const invoiceDateFrom = params.get('invoiceDateFrom') ?? '';
+  const invoiceDateTo = params.get('invoiceDateTo') ?? '';
+  const invoiceDateMissing = params.get('invoiceDateMissing') ?? 'any';
+  const datesFiltered = Boolean(invoiceDateFrom || invoiceDateTo || invoiceDateMissing !== 'any');
   const [searchDraft, setSearchDraft] = useState(search);
   const [data, setData] = useState<IncomingDocumentList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,16 +114,19 @@ function IncomingDocumentsWorkspaceContent() {
     if (search) query.set('search', search);
     if (taskKind !== 'all') query.set('taskKind', taskKind);
     if (taskDue !== 'any') query.set('taskDue', taskDue);
+    if (invoiceDateFrom) query.set('invoiceDateFrom', invoiceDateFrom);
+    if (invoiceDateTo) query.set('invoiceDateTo', invoiceDateTo);
+    if (invoiceDateMissing !== 'any') query.set('invoiceDateMissing', invoiceDateMissing);
     setLoading(true); setLoadError(null);
     const read = listQuery !== undefined
-      ? fetchRecordList<IncomingDocumentList>('inbound', listQuery, { page, limit: INCOMING_PAGE_SIZE, reviewStatus: filter, taskKind, taskDue }, controller.signal)
+      ? fetchRecordList<IncomingDocumentList>('inbound', listQuery, { page, limit: INCOMING_PAGE_SIZE, reviewStatus: filter, taskKind, taskDue, invoiceDateFrom, invoiceDateTo, invoiceDateMissing }, controller.signal)
       : incomingJson<IncomingDocumentList>(`/api/purchase-documents?${query}`, { signal: controller.signal });
     read
       .then(result => { if (!controller.signal.aborted) { setData(result); setSavedChange(false); } })
       .catch(error => { if (!controller.signal.aborted) setLoadError(error instanceof RecordListReadError ? error.message : errorMessage(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [page, filter, search, taskKind, taskDue, refresh, listSearch?.revision, listQuery]);
+  }, [page, filter, search, taskKind, taskDue, invoiceDateFrom, invoiceDateTo, invoiceDateMissing, refresh, listSearch?.revision, listQuery]);
 
   useEffect(() => {
     // Router snapshots can lag behind the actual destination. No route effect
@@ -231,13 +239,17 @@ function IncomingDocumentsWorkspaceContent() {
         {!listSearch && <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="incoming-search">Lieferant, Rechnungsnummer oder Dateiname</Label><div className="flex gap-2"><Input id="incoming-search" type="search" value={searchDraft} onChange={event => setSearchDraft(event.target.value)} maxLength={200} placeholder="Belege durchsuchen" /><Button variant="outline" type="submit" aria-label="Belege suchen"><Search className="size-4" aria-hidden="true" /><span className="hidden sm:inline">Suchen</span></Button></div></div>}
         <div className="space-y-2"><Label htmlFor="incoming-filter">Prüfstatus</Label><select id="incoming-filter" value={filter} onChange={event => updateQuery({ reviewStatus: event.target.value === 'REVIEW' ? null : event.target.value, taskKind: null, taskDue: null, page: null, document: null })} className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:w-48"><option value="REVIEW">Zu prüfen</option><option value="BOOKED">Als Ausgabe erfasst</option><option value="DISMISSED">Verworfen</option><option value="ALL">Alle Belege</option></select></div>
       </form>
+      <IncomingInvoiceDateFilter value={{ invoiceDateFrom, invoiceDateTo, invoiceDateMissing }} onApply={next => updateQuery({
+        invoiceDateFrom: next.invoiceDateFrom || null, invoiceDateTo: next.invoiceDateTo || null,
+        invoiceDateMissing: next.invoiceDateMissing === 'only' ? 'only' : null, page: null, document: null,
+      })} />
       <div className={taskStyles.filters} aria-label="Lieferantenaufgaben filtern">
         <div className={taskStyles.field}><Label htmlFor="incoming-task-kind">Aufgabenart filtern</Label><select id="incoming-task-kind" className={taskStyles.select} value={taskKind} onChange={event => updateQuery({ taskKind: event.target.value === 'all' ? null : event.target.value, reviewStatus: null, page: null, document: null })}><option value="all">Kein Aufgabenartfilter</option><option value="any">Alle aktiven Aufgaben</option>{Object.entries(SUPPLIER_TASK_LABELS).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}</select></div>
         <div className={taskStyles.field}><Label htmlFor="incoming-task-due">Wiedervorlage filtern</Label><select id="incoming-task-due" className={taskStyles.select} value={taskDue} onChange={event => updateQuery({ taskDue: event.target.value === 'any' ? null : event.target.value, reviewStatus: null, page: null, document: null })}><option value="any">Alle Wiedervorlagetage</option><option value="due">Heute/fällig</option><option value="later">Später</option><option value="undated">Ohne Datum</option></select></div>
         <p className={taskStyles.filterHelp}>{tasksFiltered ? `Nur ausdrücklich bestätigte Aufgaben an offenen REVIEW-Belegen. Heute/fällig umfasst überfällige Tage. Server-Kalendertag Europe/Berlin: ${data?.supplierTaskToday ? formatSourceDate(data.supplierTaskToday) : 'wird geladen'}.` : 'Interne Vormerkungen, keine Zahlungszustände. Aufgabenfilter zeigen nur bestätigte offene Aufgaben; keine automatische Aufgabe aus einem ungezahlten Beleg.'}</p>
       </div>
       {loading ? <p role="status" className="flex items-center justify-center gap-2 px-4 py-12 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Belege werden geladen…</p> : loadError ? <div role="alert" className="space-y-3 p-5"><p className="text-sm text-critical-foreground">{savedChange ? `Die Änderung wurde gespeichert, aber die Belegliste konnte nicht aktualisiert werden. Keine erneute Buchung starten. ${loadError}` : loadError}</p><Button variant="outline" onClick={refreshList}>Erneut versuchen</Button></div> : data?.documents.length ? <><div className={styles.columnHeadings} aria-hidden="true"><span>Beleg / Lieferant</span><span>Prüfstatus</span><span>Betrag</span></div><ul aria-label="Eingangsbelege">{data.documents.map(document => <IncomingDocumentRow key={document.id} document={document} onOpen={openDocument} />)}</ul></> : <div className={styles.empty}>
-        <Inbox className="mx-auto mb-3 size-7 text-muted-foreground" aria-hidden="true" /><h3 className="font-medium">{tasksFiltered ? 'Keine passenden aktiven Aufgaben' : search || listSearch ? 'Keine passenden Belege' : filter === 'DISMISSED' ? 'Keine verworfenen Belege' : filter === 'ALL' ? 'Noch keine Eingangsbelege' : filter === 'BOOKED' ? 'Keine als Ausgabe erfassten Belege' : 'Keine Belege zur Prüfung'}</h3>{(search || tasksFiltered || listSearch) && <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Suche, Aufgabenfilter oder Prüfstatus ändern. Aufgaben ohne Datum bleiben separat.</p>}
+        <Inbox className="mx-auto mb-3 size-7 text-muted-foreground" aria-hidden="true" /><h3 className="font-medium">{tasksFiltered ? 'Keine passenden aktiven Aufgaben' : search || listSearch || datesFiltered ? 'Keine passenden Belege' : filter === 'DISMISSED' ? 'Keine verworfenen Belege' : filter === 'ALL' ? 'Noch keine Eingangsbelege' : filter === 'BOOKED' ? 'Keine als Ausgabe erfassten Belege' : 'Keine Belege zur Prüfung'}</h3>{(search || tasksFiltered || listSearch || datesFiltered) && <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Suche, Datumsfilter, Aufgabenfilter oder Prüfstatus ändern. Aufgaben ohne Wiedervorlagetag bleiben separat.</p>}
         {tasksFiltered && <Button variant="link" className="mt-2" onClick={() => updateQuery({ taskKind: null, taskDue: null, page: null })}>Aufgabenfilter zurücksetzen</Button>}
         {search && <Button variant="link" className="mt-2" onClick={() => updateQuery({ search: null, page: null })}>Suche zurücksetzen</Button>}
       </div>}
