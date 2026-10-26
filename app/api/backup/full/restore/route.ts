@@ -3,7 +3,7 @@ import { protectMutation } from '@/lib/request-security';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
-import { restoreBackupData, BackupValidationError } from '@/lib/backup-restore';
+import { restoreBackupData, BackupValidationError, type RestoreFileResolver } from '@/lib/backup-restore';
 import { CURRENT_BACKUP_VERSION, hashBytes, validateBackupManifest } from '@/lib/backup-manifest';
 import { createZipReadBudget, loadZipWithinLimits, readZipEntryWithinLimit, ZipResourceLimitError } from '@/lib/zip-limits';
 import {
@@ -57,8 +57,8 @@ async function postHandler(request: NextRequest) {
       }
     }
 
-    const resolveFile = async (kind: 'invoice' | 'receipt' | 'logo' | 'purchase-document', sourceName: string): Promise<Uint8Array | null> => {
-      const prefix = kind === 'invoice' ? 'invoices' : kind === 'receipt' ? 'receipts' : kind === 'purchase-document' ? 'purchase-documents' : 'logos';
+    const resolveFile: RestoreFileResolver = async (kind, sourceName) => {
+      const prefix = kind === 'invoice' ? 'invoices' : kind === 'receipt' ? 'receipts' : kind === 'purchase-document' ? 'purchase-documents' : kind === 'quote-release-original' ? 'quote-release-originals' : 'logos';
       const expected = manifest?.fileManifest.find((file) => file.kind === kind && file.sourceName === sourceName);
       const entry = zip.file(expected?.zipPath ?? `${prefix}/${sourceName}`);
       if (!entry) return null;

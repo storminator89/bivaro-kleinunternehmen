@@ -54,9 +54,10 @@ export async function GET() {
     const backup = {
       version: CURRENT_BACKUP_VERSION,
       type: 'json',
-      warnings: count('purchaseDocuments') > 0
-        ? ['Eingangsbeleg-Originale sind nicht eingebettet; zur Wiederherstellung ist ein vollständiges ZIP-Backup erforderlich.']
-        : [],
+      warnings: [
+        ...(count('purchaseDocuments') > 0 ? ['Eingangsbeleg-Originale sind nicht eingebettet; zur Wiederherstellung ist ein vollständiges ZIP-Backup erforderlich.'] : []),
+        ...(count('quoteReleases') > 0 ? ['Freigabenachweise enthalten keine Originalbytes. Neue Historien benötigen ZIP; JSON darf nur exakt passende, unabhängig geprüfte Zieloriginale wiederverwenden. Öffentliche Links bleiben geschlossen.'] : []),
+      ],
       exportedAt,
       manifest: createBackupManifest({ sourceUserId: userId, generatedAt: exportedAt, data, snapshot: snapshot.info }),
       user: data.user,
@@ -87,6 +88,9 @@ export async function GET() {
         bankMappingProfileRevisions: count('bankMappingProfileRevisions'),
         documentNumberingPolicies: count('documentNumberingPolicies'),
         quoteCreateReceipts: count('quoteCreateReceipts'),
+        quoteReleaseAuthorities: count('quoteReleaseAuthorities'),
+        quoteReleases: count('quoteReleases'),
+        quoteElectronicResponses: count('quoteElectronicResponses'),
       }
     };
 

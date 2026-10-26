@@ -13,6 +13,47 @@ export const FOCUSED_SPECS = {
   'e2e/dashboard-owner-boundary.spec.ts': [],
   'e2e/service-article-picker-freshness.spec.ts': [],
 };
+// Explicit inactive quote-history foundation only. The browser journey checks
+// read-only export/preview compatibility, NOT SQL/restore/audit correctness.
+// Critical parser/store/original/contract tests and normal security/types/build
+// remain in CI; reviewed synthetic persistence evidence is separate. Shared
+// schema/restore paths require a unique foundation marker in this same packet;
+// unrelated schema/restore changes must obtain their own reviewed mapping.
+const quoteReleaseFoundationPaths = new Set([
+  "app/api/backup/route.ts",
+  "app/api/backup/full/route.ts",
+  "app/api/backup/full/restore/route.ts",
+  "app/api/backup/full/preview/route.ts",
+  "lib/backup-manifest.ts",
+  "lib/backup-preview.ts",
+  "lib/backup-restore.ts",
+  "lib/backup-schema-identities.ts",
+  "lib/backup-snapshot.ts",
+  "lib/manual-financial-record-backup.ts",
+  "lib/quote-release-backup-store.ts",
+  "lib/quote-release-backup.ts",
+  "lib/quote-release-contract.ts",
+  "lib/quote-release-original.ts",
+  "lib/backup-file-preview.ts",
+  "prisma/schema.prisma",
+  "prisma/migrations/20261026090000_add_unactivated_quote_release_persistence/migration.sql",
+  "prisma/migrations/20261026093000_add_quote_release_backup_identity/migration.sql"
+]);
+const quoteReleaseFoundationMarkers = new Set([
+  "lib/backup-schema-identities.ts",
+  "lib/quote-release-backup-store.ts",
+  "lib/quote-release-backup.ts",
+  "lib/quote-release-contract.ts",
+  "lib/quote-release-original.ts",
+  "prisma/migrations/20261026090000_add_unactivated_quote_release_persistence/migration.sql",
+  "prisma/migrations/20261026093000_add_quote_release_backup_identity/migration.sql"
+]);
+const quoteReleaseFoundationContracts = [
+  "lib/__tests__/quote-release-contract.test.ts",
+  "lib/__tests__/quote-release-backup.test.ts",
+  "lib/__tests__/quote-release-backup-store.test.ts",
+  "lib/__tests__/quote-release-original.test.ts"
+];
 const code = value => /^(?:app|components|hooks|lib|prisma|scripts|e2e|focused-e2e)\//u.test(value) || /^(?:proxy\.ts|next\.config\.ts|package(?:-lock)?\.json|playwright[^/]*\.ts|\.github\/workflows\/)/u.test(value);
 const knownInfrastructure = value => /^(?:scripts\/|focused-e2e\/|\.github\/workflows\/|e2e\/helpers\/|lib\/__tests__\/|playwright[^/]*\.ts)/u.test(value) || ['package.json', 'package-lock.json', 'next.config.ts', 'proxy.ts'].includes(value);
 const safePath = value => typeof value === 'string' && value.length > 0 && value.length <= 500 && !/[\0-\x1f\x7f]/u.test(value) && !value.startsWith('/') && !value.split('/').includes('..');
@@ -37,8 +78,10 @@ const presentationUnitContracts = {
 // Queue races and portable-reference equivalence remain unit-contract evidence.
 const backupInspectionSources = new Set(['app/api/backup/full/route.ts', 'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts']);
 
+/** @param {string[]} paths @param {(file: string) => boolean} [exists] */
 export function selectFocusedBrowser(paths, exists = () => true) {
   if (!Array.isArray(paths) || paths.length > 5000 || !paths.every(safePath)) throw Error('Invalid changed-path inventory');
+  const quoteReleaseFoundation = paths.some(source => quoteReleaseFoundationMarkers.has(source));
   const selected = new Set();
   const unknownCritical = new Set();
   let unmappedSourceCount = 0;
@@ -80,6 +123,11 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     if (Object.hasOwn(serverUnitContracts, source)) {
       if (!serverUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);
       if (backupInspectionSources.has(source)) add('e2e/backup-file-inspection.spec.ts', true, source);
+      continue;
+    }
+    if (quoteReleaseFoundation && quoteReleaseFoundationPaths.has(source)) {
+      if (!quoteReleaseFoundationContracts.every(file => exists(file))) unknownCritical.add(source);
+      add('e2e/backup-file-inspection.spec.ts', true, source);
       continue;
     }
     const ownJourney = ownJourneys.find(value => value.source === source);

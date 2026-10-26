@@ -1,3 +1,6 @@
+import { quoteReleaseGraphFromBackup, validateQuoteReleaseOriginalManifest } from '@/lib/quote-release-backup';
+import { preflightQuoteReleaseRestore, restoreQuoteReleaseClosedGraph } from '@/lib/quote-release-backup-store';
+import { readQuoteReleaseOriginal, quoteReleaseOriginalVersion, stageQuoteReleaseOriginal } from '@/lib/quote-release-original';
 import { readManualRecordOriginal } from '@/lib/manual-financial-record-service';
 import { manualRecordEventsFromBackup, validateManualRecordOriginalManifest, preflightManualRecordRestore, restoredManualRecordMetadata, restoreManualRecordEvents } from '@/lib/manual-financial-record-backup';
 import { backupSchemaSupportsSupplierTasks } from '@/lib/backup-manifest';
@@ -72,7 +75,7 @@ import {
 } from '@/lib/upload-path';
 
 type JsonRecord = Record<string, unknown>;
-type FileKind = 'invoice' | 'receipt' | 'logo' | 'purchase-document';
+type FileKind = 'invoice' | 'receipt' | 'logo' | 'purchase-document' | 'quote-release-original';
 // Optional legacy dates need a stable value so dry-run ordering and persisted
 // ordering cannot diverge while importing the same source graph.
 const RESTORE_DEFAULT_DATE = new Date(0);
@@ -118,6 +121,9 @@ type RestoreResult = {
   bankMappingProfileRevisions: { imported: number; skipped: number };
   documentNumberingPolicies: { imported: number; skipped: number };
   quoteCreateReceipts: { imported: number; skipped: number };
+  quoteReleaseAuthorities: { imported: number; skipped: number };
+  quoteReleases: { imported: number; skipped: number };
+  quoteElectronicResponses: { imported: number; skipped: number };
   bankImportBatches: { imported: number; skipped: number };
   bankImportRows: { imported: number; skipped: number };
   bankPaymentBindings: { imported: number; skipped: number };
@@ -934,6 +940,10 @@ export function validateBackupForRestore(backup: unknown): ValidatedBackup {
   }
 
   try {
+    const quoteGraph = quoteReleaseGraphFromBackup(data, manifest?.schemaVersion);
+    if (root.type === 'full' && manifest) validateQuoteReleaseOriginalManifest(quoteGraph, manifest.fileManifest, true);
+  } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Freigabenachweise ungültig'); }
+  try {
     manualRecordEventsFromBackup(data, manifest?.schemaVersion);
     if (root.type === 'full' && manifest) validateManualRecordOriginalManifest(data, manifest.fileManifest, true);
   } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Manueller Finanzverlauf ungültig'); }
@@ -1100,6 +1110,9 @@ function resultTemplate(overwrite: boolean): RestoreResult {
     bankMappingProfileRevisions: { imported: 0, skipped: 0 },
     documentNumberingPolicies: { imported: 0, skipped: 0 },
     quoteCreateReceipts: { imported: 0, skipped: 0 },
+    quoteReleaseAuthorities: { imported: 0, skipped: 0 },
+    quoteReleases: { imported: 0, skipped: 0 },
+    quoteElectronicResponses: { imported: 0, skipped: 0 },
     bankImportBatches: { imported: 0, skipped: 0 },
     bankImportRows: { imported: 0, skipped: 0 },
     bankPaymentBindings: { imported: 0, skipped: 0 },
@@ -1441,6 +1454,15 @@ async function planCustomerMerge(client: Pick<Prisma.TransactionClient, 'custome
   return matches;
 }
 
+/** Preserve full server-side cause without returning raw database/file details. */
+function quoteRestoreValidation(error: unknown): BackupValidationError {
+  const message = error instanceof Error && /^Angebotsfreigabe-(?:Backup|Wiederherstellung):/.test(error.message)
+    ? error.message : 'Geschlossene Freigabenachweise oder ihre unveränderlichen Originale konnten nicht sicher wiederhergestellt werden.';
+  const safe = new BackupValidationError(message);
+  safe.cause = error;
+  return safe;
+}
+
 export async function restoreBackupData(options: RestoreOptions): Promise<RestoreResult> {
   const { userId, overwrite, resolveFile } = options;
   const { data, manifest, warnings: validationWarnings } = validateBackupForRestore(options.backup);
@@ -1452,6 +1474,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
   const mappingProfiles = bankMappingProfilesFromBackup(data, backupSchemaSupportsBankMappingProfiles(manifest?.schemaVersion));
   const numberingPolicies = numberingPoliciesFromBackup(data, backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion));
   const quoteReceipts = quoteCreateReceiptsFromBackup(data, backupSchemaSupportsDocumentNumberingPolicies(manifest?.schemaVersion));
+  const quoteGraph = quoteReleaseGraphFromBackup(data, manifest?.schemaVersion);
+  if (quoteGraph.authorities.length) result.warnings.push('Freigaben und Antworten werden ausschließlich als geschlossene historische Nachweise übernommen. Kein öffentlicher Link und keine neue Zustimmung wird aktiviert.');
   const allocationGraph = validateBankAllocationGraph(data, manifest?.schemaVersion);
   const bankAllocations = bankAllocationsFromBackup(data, manifest?.schemaVersion);
   if (bankImports.batches.length) result.warnings.push('Bankimport-Evidenz wird unverändert wiederhergestellt. Bestehende Quittungen bleiben erhalten; keine Zahlung wird ausgeführt.');
@@ -1461,6 +1485,8 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     throw new BackupValidationError('Eingangsbeleg-Originale erfordern ein vollständiges ZIP-Backup; JSON-Metadaten allein sind nicht wiederherstellbar.');
   }
   const stagedFiles = new Set<string>();
+  const quoteStages = new Set<string>();
+  const quoteOriginalVersions = new Map<string, string>();
   const usedFiles = new Set<string>();
   const fileMap = new Map<string, string>();
   const fileProofs = new Map<string, { sha256: string; bytes: number }>();
@@ -1514,7 +1540,13 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
   };
 
   const removeUnreferencedStage = async (storedName: string): Promise<void> => {
+    // Never adopt a pre-existing archive; uncertain/partial stages remain safe orphans.
+    if (quoteStages.has(storedName)) {
+      const expected = quoteOriginalVersions.get(storedName);
+      if (!expected || await quoteReleaseOriginalVersion(userId, storedName) !== expected) return;
+    }
     const references = await Promise.all([
+      prisma.quoteRelease.count({ where: { userId, originalArchiveName: storedName } }),
       prisma.purchaseDocument.count({ where: { userId, storedFileName: storedName } }),
       prisma.expense.count({ where: { userId, storedReceiptFileName: storedName } }),
       prisma.invoice.count({ where: { userId, storedFileName: storedName } }),
@@ -1611,6 +1643,28 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       }
     }
 
+    let quotePlan: Awaited<ReturnType<typeof preflightQuoteReleaseRestore>>;
+    try { quotePlan = await preflightQuoteReleaseRestore(prisma, userId, quoteGraph, overwrite); }
+    catch (error) { throw quoteRestoreValidation(error); }
+    const reuseOriginals = new Set(quotePlan.reuseReleaseIds);
+    for (const release of quoteGraph.releases) {
+      try {
+        if (reuseOriginals.has(release.id)) {
+          const original = await readQuoteReleaseOriginal(userId, release);
+          quoteOriginalVersions.set(release.originalArchiveName, original.sourceVersion);
+          result.files.skipped++;
+        } else {
+          if (!resolveFile) throw new BackupValidationError('Neue Freigabenachweise benötigen jedes hashgebundene Original aus einem vollständigen ZIP-Backup; JSON-Metadaten reichen nicht.');
+          const bytes = await resolveFile('quote-release-original', release.originalArchiveName);
+          if (!bytes) throw new BackupValidationError('Ein gebundenes Angebotsfreigabe-Original fehlt im ZIP.');
+          const original = await stageQuoteReleaseOriginal(userId, release, bytes, name => { stagedFiles.add(name); quoteStages.add(name); });
+          quoteOriginalVersions.set(release.originalArchiveName, original.sourceVersion);
+          result.files.imported++;
+        }
+        usedFiles.add(release.originalArchiveName);
+      } catch (error) { throw error instanceof BackupValidationError ? error : quoteRestoreValidation(error); }
+    }
+
     // Stage all referenced files before touching the database. JSON backups do
     // not contain bytes; those references stay opaque and are reported as
     // missing instead of creating a corrupt empty PDF/receipt.
@@ -1650,6 +1704,14 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
     if (sourceLogo) await stageFile('logo', sourceLogo, sourceLogo);
 
     await prisma.$transaction(async (tx) => {
+      // Close/replay/import before any ordinary source-row mutation. The exact
+      // preflight repeats here and mandatory financial audit remains in SAME tx.
+      try {
+        const restored = await restoreQuoteReleaseClosedGraph(tx, userId, quoteGraph, overwrite, quotePlan);
+        result.quoteReleaseAuthorities = restored.authorities;
+        result.quoteReleases = restored.releases;
+        result.quoteElectronicResponses = restored.responses;
+      } catch (error) { throw quoteRestoreValidation(error); }
       try {
         const authoritative = await preflightManualRecordRestore(tx, userId, data, manifest?.schemaVersion, overwrite, Boolean(resolveFile));
         if (JSON.stringify([...authoritative.income]) !== JSON.stringify([...manualPlan.income]) || JSON.stringify([...authoritative.expense]) !== JSON.stringify([...manualPlan.expense]) || JSON.stringify([...authoritative.originals]) !== JSON.stringify([...manualPlan.originals])) throw new Error('Manueller Zielverlauf hat sich während der Wiederherstellung verändert.');
@@ -2978,6 +3040,11 @@ export async function restoreBackupData(options: RestoreOptions): Promise<Restor
       } catch (error) { throw new BackupValidationError(error instanceof Error ? error.message : 'Zahlungsberichtigungsgraph ungültig'); }
 
       for (const preserved of preservedQuoteOriginals.values()) if (await getBackupFileVersion(preserved.path) !== preserved.version) throw new BackupValidationError('Unveränderliches Angebots-Original wurde während der Wiederherstellung verändert.');
+
+      for (const [name, expected] of quoteOriginalVersions) {
+        try { if (await quoteReleaseOriginalVersion(userId, name) !== expected) throw new Error('original drift'); }
+        catch (error) { throw quoteRestoreValidation(error); }
+      }
 
       await createFinancialAuditLog({
         userId,

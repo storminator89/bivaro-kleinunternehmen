@@ -6,7 +6,7 @@ import { createTestDatabase } from './helpers/database';
 import {
   BACKUP_FEATURE_CAPABILITIES, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION,
   backupSchemaSupportsPaymentTerms, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsEmailOutbox,
-  backupSchemaSupportsPurchaseValidation, createBackupManifest, validatePaymentTermBackupFields,
+  backupSchemaSupportsPurchaseValidation, createBackupManifest, hashJson, validatePaymentTermBackupFields,
 } from '@/lib/backup-manifest';
 import { stripEmptyBankImportsForLegacy } from './helpers/backup-schema';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
@@ -164,8 +164,9 @@ describe('closed additive payment-term backup contract', () => {
     }
     const backup = historical(source.data);
     (backup.data.customers as Record<string, unknown>[])[0].paymentTermDays = 30;
-    const invalid = pack(backup.data); invalid.manifest.schemaVersion = PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION;
-    expect(() => preview.createBackupPreview(invalid)).toThrow(/Älteres Backupschema/);
+    // Rehash the changed historical model, not a CURRENT export of stripped data.
+    backup.manifest.modelCoverage.find(entry => entry.model === 'Customer')!.sha256 = hashJson(backup.data.customers);
+    expect(() => preview.createBackupPreview(backup)).toThrow(/Älteres Backupschema/);
     expect(() => restore.validateBackupForRestore({ version: '2.0', data: { customers: [{ id: 1, name: 'Synthetic', paymentTermDays: 0 }] } })).toThrow(/Älteres Backupschema/);
   });
 

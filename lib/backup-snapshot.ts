@@ -1,3 +1,6 @@
+import { portableQuoteReleaseGraph, readQuoteReleaseRows } from '@/lib/quote-release-backup-store';
+import { readQuoteReleaseOriginal } from '@/lib/quote-release-original';
+import { MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES } from '@/lib/resource-limits';
 import { MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, manualRecordEventsFromBackup } from '@/lib/manual-financial-record-backup';
 import { MAX_MANUAL_RECORD_BACKUP_EVENTS, type ManualRecordSnapshot } from '@/lib/manual-financial-record-evidence';
 import { readManualRecordOriginal } from '@/lib/manual-financial-record-service';
@@ -114,6 +117,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       bankMappingProfileRevisions,
       documentNumberingPolicies,
       quoteCreateReceipts,
+      quoteReleaseRows,
       settings,
       annualBusinessContextRevisions,
       templates,
@@ -160,6 +164,7 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       tx.bankMappingProfileRevision.findMany({ where: { userId, profile: { userId } }, orderBy: [{ profileId: 'asc' }, { revision: 'asc' }], select: { profileId: true, revision: true, mutationId: true, configuration: true, createdAt: true } }),
       tx.documentNumberingPolicy.findMany({ where: { userId }, orderBy: [{ type: 'asc' }, { revision: 'asc' }], select: { type: true, revision: true, formatVersion: true, prefix: true, includeYear: true, sequenceWidth: true, startSequence: true, effectiveYear: true, createdAt: true } }),
       tx.quoteCreateReceipt.findMany({ where: { userId }, orderBy: { requestId: 'asc' }, select: { requestId: true, fingerprint: true, pdfSha256: true, invoiceId: true, createdAt: true } }),
+      readQuoteReleaseRows(tx, userId),
       tx.settings.findUnique({ where: { userId } }),
       tx.annualBusinessContextRevision.findMany({ where: { userId }, orderBy: { revision: 'asc' } }),
       tx.invoiceTemplate.findMany({ where: { userId } }),
@@ -197,7 +202,11 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
     const bindingKeysById = new Map(bankPaymentBindings.map(binding => [binding.id, binding.stableKey]));
     const bindingKeysByPaymentId = new Map(bankPaymentBindings.map(binding => [binding.paymentJournalEventId, binding.stableKey]));
     const changeKeysById = new Map(paymentAllocationChanges.map(change => [change.id, change.stableKey]));
+    const quoteGraph = portableQuoteReleaseGraph(quoteReleaseRows, userId, invoices);
     const data = {
+      quoteReleaseAuthorities: quoteGraph.authorities,
+      quoteReleases: quoteGraph.releases,
+      quoteElectronicResponses: quoteGraph.responses,
       user: { id: user?.id, email: user?.email, name: user?.name },
       manualFinancialRecordEvents: manualFinancialRecordEvents.map(({ userId: _owner, ...event }) => { void _owner; return event; }),
       expenses: expenses.map((item) => ({ ...item, userId: undefined })),
@@ -250,6 +259,11 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
       if (!expense.storedReceiptFileName) throw new BackupFileConsistencyError('Festgeschriebenes Original fehlt.');
       await readManualRecordOriginal(userId, expense.storedReceiptFileName, root.original);
     }
+  }
+  if (raw.quoteReleases.reduce((bytes, release) => bytes + release.originalBytes, 0) > MAX_BACKUP_ZIP_UNCOMPRESSED_BYTES) throw new BackupFileSizeError('Freigabeoriginale überschreiten die Größenlimits eines vollständigen Backups.');
+  for (const release of raw.quoteReleases) {
+    try { await readQuoteReleaseOriginal(userId, release); }
+    catch { throw new BackupFileConsistencyError('Ein unveränderliches Angebotsfreigabe-Original fehlt oder wurde verändert.'); }
   }
   const endedAt = new Date().toISOString();
   const id = hashJson({ sourceUserId: userId, startedAt, endedAt, data: raw });

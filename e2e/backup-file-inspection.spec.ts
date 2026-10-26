@@ -6,6 +6,7 @@ import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
 import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
+import { QUOTE_RELEASE_BACKUP_SCHEMA_VERSION } from '../lib/backup-schema-identities';
 
 // Read the exact checked-out format identities without importing the server-only
 // backup implementation into Playwright's Node test-discovery process.
@@ -17,8 +18,8 @@ function sourceVersion(source: string, name: string): string {
 }
 const CURRENT_BACKUP_VERSION = sourceVersion(manifestSource, 'CURRENT_BACKUP_VERSION');
 const LEGACY_BACKUP_VERSION = sourceVersion(manifestSource, 'LEGACY_BACKUP_VERSION');
-if (!/^export const CURRENT_SCHEMA_VERSION = MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION;$/mu.test(manifestSource)) throw new Error('Expected exact current backup capability alias');
-const CURRENT_SCHEMA_VERSION = sourceVersion(readFileSync('lib/manual-financial-record-backup.ts', 'utf8'), 'MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION');
+if (!/^export const CURRENT_SCHEMA_VERSION = QUOTE_RELEASE_BACKUP_SCHEMA_VERSION;$/mu.test(manifestSource)) throw new Error('Expected exact current backup capability alias');
+const CURRENT_SCHEMA_VERSION = QUOTE_RELEASE_BACKUP_SCHEMA_VERSION;
 
 // Focused critical path only: supported fresh-fixture hosted runner, this file
 // and chromium project with --no-deps. No screenshot or full-mobile QA gate.

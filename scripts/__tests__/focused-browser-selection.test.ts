@@ -133,6 +133,43 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(selectFocusedBrowser(['app/layout.tsx', 'components/app-shell.tsx', 'app/login/layout.tsx']).specs.map(item => item.file)).toEqual(['e2e/public-help-fragments.spec.ts']);
     expect(selectFocusedBrowser(['lib/payment-preflight.ts']).criticalMappingRequired).toBe(true);
   });
+  it('maps the reviewed inactive quote foundation to its own read-only preview, never to SQL/restore certification', () => {
+    const reviewed = [
+    "app/api/backup/route.ts",
+    "app/api/backup/full/route.ts",
+    "app/api/backup/full/restore/route.ts",
+    "app/api/backup/full/preview/route.ts",
+    "lib/backup-manifest.ts",
+    "lib/backup-preview.ts",
+    "lib/backup-restore.ts",
+    "lib/backup-schema-identities.ts",
+    "lib/backup-snapshot.ts",
+    "lib/manual-financial-record-backup.ts",
+    "lib/quote-release-backup-store.ts",
+    "lib/quote-release-backup.ts",
+    "lib/quote-release-contract.ts",
+    "lib/quote-release-original.ts",
+    "lib/backup-file-preview.ts",
+    "prisma/schema.prisma",
+    "prisma/migrations/20261026090000_add_unactivated_quote_release_persistence/migration.sql",
+    "prisma/migrations/20261026093000_add_quote_release_backup_identity/migration.sql"
+];
+    for (const source of reviewed) {
+      const value = selectFocusedBrowser(['lib/quote-release-backup.ts', source]);
+      expect(value.criticalMappingRequired).toBe(false);
+      expect(value.specs).toEqual([{ file: 'e2e/backup-file-inspection.spec.ts', titles: ['ZIP inspection shows actual checks, blocks changed originals and never restores on discard or reload'] }]);
+    }
+    for (const source of ['prisma/schema.prisma', 'lib/backup-restore.ts', 'app/api/backup/full/restore/route.ts']) {
+      expect(selectFocusedBrowser([source]).criticalMappingRequired).toBe(true);
+    }
+    for (const source of ['lib/quote-release-tokens.ts', 'lib/payment-preflight.ts', 'prisma/migrations/20261027000000_unreviewed/migration.sql']) {
+      expect(selectFocusedBrowser(['lib/quote-release-backup.ts', source]).criticalMappingRequired).toBe(true);
+    }
+    const missingUnit = selectFocusedBrowser(['lib/quote-release-backup.ts'], file => file !== 'lib/__tests__/quote-release-original.test.ts');
+    expect(missingUnit.criticalMappingRequired).toBe(true);
+    const missing = selectFocusedBrowser(['lib/quote-release-backup.ts'], file => file !== 'e2e/backup-file-inspection.spec.ts');
+    expect(missing.criticalMappingRequired).toBe(true); expect(missing.specs).toEqual([]);
+  });
   it('rejects arbitrary selectors, shell-looking titles and malformed paths', () => {
     const value = selectFocusedBrowser(['components/app-shell.tsx']);
     expect(validFocusedSelection({ ...value, specs: [{ file: 'e2e/public-help-fragments.spec.ts', titles: ['.*'] }] })).toBe(false);
