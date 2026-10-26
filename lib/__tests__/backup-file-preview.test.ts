@@ -10,6 +10,8 @@ import type { BackupFileManifestEntry } from '@/lib/backup-manifest';
 import { createBackupPreview } from '@/lib/backup-preview';
 import { createBackupManifest } from './helpers/backup';
 import { isUnrenderedServiceBillingDraft } from '@/lib/service-billing';
+import { createQuoteReleaseSnapshot } from '@/lib/quote-release-contract';
+import { QUOTE_RELEASE_BACKUP_SCHEMA_VERSION } from '@/lib/backup-schema-identities';
 
 // This suite only parses tiny in-memory archives. Any accidental database
 // access is a failure; there is no database, fixture directory, or app server.
@@ -36,16 +38,47 @@ describe('read-only full-backup file inspection', () => {
       user: { id: 'synthetic-source', email: 'source@example.test', name: 'Synthetic source' },
       customers: [], suppliers: [], serviceArticles: [], purchaseDocuments: [], serviceBillingPlans: [], serviceBillingPeriods: [],
       paymentJournalEvents: [], incomes: [], expenses: [], auditLogs: [], invoiceNumberCounters: [],
+      quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [],
       invoices: [{ id: 1, type: 'INVOICE', fileName: 'invoice.pdf', storedFileName: 'invoice.pdf', invoiceNumber: '2026-1', uploadedAt: '2026-01-01T00:00:00.000Z', invoiceDate: '2026-01-01T00:00:00.000Z', parsedData: {}, status: 'DRAFT', issuanceState: 'UNKNOWN' }],
     };
     const backup = { version: '3.0', type: 'full', exportedAt: '2026-01-02T00:00:00.000Z', data,
       manifest: createBackupManifest({ sourceUserId: 'synthetic-source', generatedAt: '2026-01-02T00:00:00.000Z', data, fileManifest: [manifest()] }) };
     const preview = createBackupPreview(backup);
     const zip = await archive({ 'invoices/invoice.pdf': original });
-    expect(await inspectBackupFiles(zip, data, preview.manifest?.fileManifest, createZipReadBudget())).toMatchObject({ status: 'MANIFEST_VERIFIED', verifiedFiles: 1 });
+    expect(await inspectBackupFiles(zip, data, preview.manifest?.fileManifest, createZipReadBudget(), preview.manifest?.schemaVersion)).toMatchObject({ status: 'MANIFEST_VERIFIED', verifiedFiles: 1 });
     const legacy = { version: '2.0', type: 'full', data: { user: data.user, customers: [], invoices: data.invoices, incomes: [], expenses: [] } };
     const oldPreview = createBackupPreview(legacy);
     expect(await inspectBackupFiles(zip, legacy.data, oldPreview.manifest?.fileManifest, createZipReadBudget())).toMatchObject({ status: 'LEGACY_UNVERIFIED', verifiedFiles: 0, checkedFiles: 1 });
+  });
+  it('previews the exact new quote capability with bound ZIP bytes and never activates historical consent', async () => {
+    const uid = (n: number) => `${String(n).padStart(8, '0')}-1111-4111-8111-111111111111`;
+    const createdAt = '2026-01-01T00:00:00.000Z', expiresAt = '2099-01-01T00:00:00.000Z';
+    const frozen = createQuoteReleaseSnapshot({ type: 'QUOTE', fileName: 'synthetic.pdf', invoiceNumber: 'SYNTHETIC', invoiceDate: createdAt, validUntil: expiresAt, totalAmount: 1, parsedData: { synthetic: true } }, original);
+    const sourceName = `${uid(3)}.pdf`, zipPath = `quote-release-originals/${sourceName}`;
+    const entry: BackupFileManifestEntry = { kind: 'quote-release-original', sourceName, zipPath, bytes: original.length, sha256: hash(original) };
+    const data = {
+      user: { id: 'synthetic-source' }, invoices: [], incomes: [], expenses: [], customers: [], suppliers: [], serviceArticles: [], purchaseDocuments: [], serviceBillingPlans: [], serviceBillingPeriods: [], paymentJournalEvents: [], auditLogs: [], invoiceNumberCounters: [],
+      quoteReleaseAuthorities: [{ id: uid(1), sourceInvoiceId: null, revision: 1, currentReleaseId: null, boundCustomerId: null }],
+      quoteReleases: [{ ...frozen, id: uid(2), authorityId: uid(1), generation: 1, previousReleaseId: null, originalArchiveName: sourceName, sourcePayload: '{ "synthetic": true }', createdAt, expiresAt, revokedAt: null, restoredAccessDisabled: 1 }],
+      quoteElectronicResponses: [{ version: 1, authorityId: uid(1), requestId: uid(4), releaseId: uid(2), snapshotSha256: frozen.snapshotSha256, decision: 'ACCEPT', comment: null, recordedAt: '2026-01-02T00:00:00.000Z' }],
+    };
+    const backup = { version: '3.0', type: 'full', data, manifest: createBackupManifest({ sourceUserId: data.user.id, generatedAt: createdAt, data, fileManifest: [entry] }) };
+    const source = new JSZip(); const metadata = JSON.stringify(backup);
+    source.file('backup.json', metadata); source.file(zipPath, original);
+    const zip = await loadZipWithinLimits(await source.generateAsync({ type: 'uint8array', compression: 'STORE' }));
+    const budget = createZipReadBudget(Buffer.byteLength(metadata) + original.length);
+    const parsed = JSON.parse((await readZipEntryWithinLimit(zip.file('backup.json')!, undefined, budget)).toString());
+    const preview = createBackupPreview(parsed);
+    expect(preview.manifest?.schemaVersion).toBe(QUOTE_RELEASE_BACKUP_SCHEMA_VERSION);
+    expect(preview.counts).toMatchObject({ quoteReleaseAuthorities: 1, quoteReleases: 1, quoteElectronicResponses: 1 });
+    expect(preview.totalRecords).toBe(3);
+    expect(preview.warnings).toContainEqual(expect.stringContaining('aktiviert keinen öffentlichen Zugriff'));
+    expect(await inspectBackupFiles(zip, parsed.data, preview.manifest?.fileManifest, budget, preview.manifest?.schemaVersion)).toMatchObject({ status: 'MANIFEST_VERIFIED', referencedFiles: 1, checkedFiles: 1, verifiedFiles: 1, checkedBytes: original.length });
+    expect(budget.consumedBytes).toBe(Buffer.byteLength(metadata) + original.length);
+    await expect(inspectBackupFiles(zip, parsed.data, [entry], createZipReadBudget())).rejects.toBeInstanceOf(BackupFileInspectionError);
+    await expect(inspectBackupFiles(zip, parsed.data, [{ ...entry, zipPath: `invoices/${sourceName}` }], createZipReadBudget(), QUOTE_RELEASE_BACKUP_SCHEMA_VERSION)).rejects.toBeInstanceOf(BackupFileInspectionError);
+    await expect(inspectBackupFiles(zip, parsed.data, [], createZipReadBudget(), QUOTE_RELEASE_BACKUP_SCHEMA_VERSION)).rejects.toBeInstanceOf(BackupFileInspectionError);
+    await expect(inspectBackupFiles(zip, {}, [{ ...entry, kind: 'receipt' }], createZipReadBudget())).rejects.toBeInstanceOf(BackupFileInspectionError);
   });
   it('reads actual bytes and verifies unique manifest paths without extracting any files', async () => {
     const zip = await archive({ 'invoices/invoice.pdf': original });

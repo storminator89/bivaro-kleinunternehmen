@@ -1,0 +1,2 @@
+-- Explicit backup capability union: manual-financial history plus portable closed quote-release evidence.
+-- No business data or access is created or activated by this marker.

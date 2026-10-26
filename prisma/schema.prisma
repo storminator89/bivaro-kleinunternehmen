@@ -38,6 +38,7 @@ model SmtpSettings {
 }
 
 model User {
+  quoteReleaseAuthorities QuoteReleaseAuthority[] @relation("QuoteReleaseOwner")
   bankMappingProfiles BankMappingProfile[]
   id        String   @id @default(uuid())
   email     String   @unique
@@ -157,6 +158,7 @@ model Income {
 }
 
 model Invoice {
+  quoteReleaseSources QuoteReleaseAuthority[] @relation("QuoteReleaseSource")
   // Stable per-editor create identity; imports and existing documents remain null.
   quoteCreateRequestId String?
   quoteCreateFingerprint String?
@@ -1022,4 +1024,68 @@ model ManualFinancialRecordEvent {
   @@unique([userId, mutationId])
   @@unique([recordId, sequence])
   @@index([userId, recordId])
+}
+
+// Unactivated persistence only. CHECKs/triggers/WITHOUT ROWID are enforced by
+// the hand-written migration; audit/archive/backup/restore gates block deployment.
+model QuoteReleaseAuthority {
+  id                String @id @default(uuid())
+  userId            String
+  sourceUserId      String?
+  sourceInvoiceId   Int?
+  revision          Int     @default(0)
+  currentReleaseId  String?
+  boundCustomerId   Int?
+  owner              User          @relation("QuoteReleaseOwner", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  source             Invoice?      @relation("QuoteReleaseSource", fields: [sourceUserId, sourceInvoiceId], references: [userId, id], onDelete: SetNull, onUpdate: Restrict)
+  currentRelease     QuoteRelease? @relation("QuoteReleaseCurrent", fields: [userId, id, currentReleaseId], references: [userId, authorityId, id], onDelete: Restrict, onUpdate: Restrict)
+  releases           QuoteRelease[] @relation("QuoteReleaseHistory")
+
+  @@unique([userId, id])
+  @@unique([sourceUserId, sourceInvoiceId])
+  @@index([boundCustomerId], map: "QuoteReleaseAuthority_boundCustomerId_idx")
+}
+
+model QuoteRelease {
+  id                      String @id
+  userId                  String
+  authorityId             String
+  generation              Int
+  previousReleaseId       String?
+  version                 Int @default(1)
+  sourceFingerprint       String
+  originalSha256          String
+  originalBytes           Int
+  snapshotSha256          String
+  originalArchiveName     String
+  sourcePayload           String
+  createdAt               String @default(dbgenerated("strftime('%Y-%m-%dT%H:%M:%fZ','now')"))
+  expiresAt               String
+  revokedAt               String?
+  restoredAccessDisabled  Int @default(1)
+  authority               QuoteReleaseAuthority @relation("QuoteReleaseHistory", fields: [userId, authorityId], references: [userId, id], onDelete: Restrict, onUpdate: Restrict)
+  currentAuthorities      QuoteReleaseAuthority[] @relation("QuoteReleaseCurrent")
+  previousRelease         QuoteRelease? @relation("QuoteReleasePrevious", fields: [userId, authorityId, previousReleaseId], references: [userId, authorityId, id], onDelete: Restrict, onUpdate: Restrict)
+  subsequentReleases      QuoteRelease[] @relation("QuoteReleasePrevious")
+  responses               QuoteElectronicResponse[] @relation("QuoteReleaseResponses")
+
+  @@unique([userId, authorityId, id])
+  @@unique([userId, authorityId, generation])
+  @@unique([userId, originalArchiveName])
+}
+
+model QuoteElectronicResponse {
+  userId          String
+  requestId       String
+  authorityId     String
+  releaseId       String
+  version         Int @default(1)
+  snapshotSha256  String
+  decision        String
+  comment         String?
+  recordedAt      String @default(dbgenerated("strftime('%Y-%m-%dT%H:%M:%fZ','now')"))
+  release         QuoteRelease @relation("QuoteReleaseResponses", fields: [userId, authorityId, releaseId], references: [userId, authorityId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([userId, requestId])
+  @@unique([userId, releaseId])
 }

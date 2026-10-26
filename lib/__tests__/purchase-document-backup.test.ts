@@ -714,7 +714,7 @@ describe('incoming originals backup and restore', () => {
   });
 
   it('accepts genuine pre-inbox v3 manifests as an empty collection but rejects injected unbound sources', async () => {
-    const data: Record<string, unknown> = { user: { id: 'old-source' }, auditLogs: [], invoiceNumberCounters: [] };
+    const data: Record<string, unknown> = { quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [], user: { id: 'old-source' }, auditLogs: [], invoiceNumberCounters: [] };
     const manifest = createBackupManifest({ sourceUserId: 'old-source', generatedAt: at.toISOString(), data });
     manifest.schemaVersion = PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION;
     stripCsvCatalogForLegacy({ manifest, data });

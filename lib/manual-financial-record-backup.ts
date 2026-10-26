@@ -1,10 +1,11 @@
+import { MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, QUOTE_RELEASE_BACKUP_SCHEMA_VERSION } from '@/lib/backup-schema-identities';
 import type { Prisma } from '@prisma/client';
 import { MAX_MANUAL_RECORD_BACKUP_EVENTS, MAX_MANUAL_RECORD_EVENTS, MANUAL_RECORD_SHA256, MANUAL_RECORD_UUID, manualRecordAmount, manualRecordEventHash, manualRecordHash, type ManualRecordEventEvidence, type ManualRecordSnapshot } from '@/lib/manual-financial-record-evidence';
 import { readManualRecordOriginal } from '@/lib/manual-financial-record-original';
 
 /** Exact closed identity; historical identities must never gain this capability. */
-export const MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION = '20261025090000_add_manual_financial_record_lifecycle';
-export function supportsManualFinancialRecords(schemaVersion?: string): boolean { return schemaVersion === MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION; }
+export { MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION } from '@/lib/backup-schema-identities';
+export function supportsManualFinancialRecords(schemaVersion?: string): boolean { return schemaVersion === MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION || schemaVersion === QUOTE_RELEASE_BACKUP_SCHEMA_VERSION; }
 type Row = Record<string, unknown>;
 type Data = Record<string, unknown>;
 const FIELDS = ['manualRecordId', 'manualRecordState', 'manualRecordOrigin', 'manualRecordRevision'] as const;

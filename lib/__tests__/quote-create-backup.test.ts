@@ -31,7 +31,7 @@ function quote(): Row {
 }
 function receipt(invoice: Row, pdf = bytes): QuoteCreateReceiptBackup { return { requestId: String(invoice.quoteCreateRequestId), fingerprint: String(invoice.quoteCreateFingerprint), pdfSha256: hashBytes(pdf), invoiceId: Number(invoice.id), createdAt: at }; }
 function pack(invoices: Row[] = [], receipts = invoices.map(row => receipt(row))) {
-  const data = { user: { id: 'source-owner' }, invoices, quoteCreateReceipts: receipts, customers: [] as Row[], suppliers: [], serviceArticles: [], purchaseDocuments: [], paymentJournalEvents: [], serviceProjects: [], billingNotes: [], purchaseValidationReports: [], serviceBillingPlans: [], serviceBillingPeriods: [], auditLogs: [], invoiceNumberCounters: [] };
+  const data = { quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [], user: { id: 'source-owner' }, invoices, quoteCreateReceipts: receipts, customers: [] as Row[], suppliers: [], serviceArticles: [], purchaseDocuments: [], paymentJournalEvents: [], serviceProjects: [], billingNotes: [], purchaseValidationReports: [], serviceBillingPlans: [], serviceBillingPeriods: [], auditLogs: [], invoiceNumberCounters: [] };
   return { version: '3.0', type: 'json', data, manifest: createBackupManifest({ sourceUserId: 'source-owner', generatedAt: at, data }) };
 }
 function memoryClient(initial: { invoices?: Row[]; receipts?: Row[]; policies?: Row[]; onTransaction?: () => void } = {}) {

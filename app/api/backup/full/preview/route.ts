@@ -44,7 +44,7 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Das ZIP-Backup enthält keinen vollständigen Export' }, { status: 400 });
       }
       const preview = createBackupPreview(backup);
-      const fileInspection = await inspectBackupFiles(zip, backup.data, preview.manifest?.fileManifest, zipReadBudget);
+      const fileInspection = await inspectBackupFiles(zip, backup.data, preview.manifest?.fileManifest, zipReadBudget, preview.manifest?.schemaVersion);
       const fileCount = fileInspection.archiveFiles;
 
       await auditSecurityEvent(userId, {

@@ -10,7 +10,7 @@ function validateSourceEvidence(document: Record<string, unknown>, label: string
 }
 
 const annual = { version: 1, revision: 1, provenance: 'USER_DECLARED', declaredAt: '2026-10-21T01:02:03.004Z', contextYear: 2026, effectiveFrom: '2026-01-01', foundingYear: null, previousYearTurnoverCents: null, previousYearExternalTurnoverCents: null, completeness: 'UNKNOWN', sourceNote: 'Synthetic own records' };
-const emptyData = () => ({ suppliers: [], expenses: [], incomes: [], invoices: [], purchaseDocuments: [] as Record<string, unknown>[], serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], paymentJournalEvents: [], auditLogs: [], invoiceNumberCounters: [] });
+const emptyData = () => ({ quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [], suppliers: [], expenses: [], incomes: [], invoices: [], purchaseDocuments: [] as Record<string, unknown>[], serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], paymentJournalEvents: [], auditLogs: [], invoiceNumberCounters: [] });
 const packed = (data: Record<string, unknown>, schemaVersion: string) => {
   const manifest = { ...createBackupManifest({ sourceUserId: 'synthetic-schema-source', generatedAt: annual.declaredAt, data }), schemaVersion };
   stripEmptyPaymentAdjustmentsForLegacy({ data, manifest });
