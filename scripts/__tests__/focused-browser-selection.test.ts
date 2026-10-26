@@ -7,6 +7,51 @@ import { FOCUSED_SPECS, selectFocusedBrowser, validFocusedSelection } from '../f
 type FocusedSpec = keyof typeof FOCUSED_SPECS;
 
 describe('risk-based browser scope, not full acceptance', () => {
+  it('maps only the reviewed owner-version sources to all four bounded cases and retains shared manual-entry coverage', () => {
+    const spec = 'e2e/quote-release-owner-surface.spec.ts';
+    const sources = ['app/api/quotes/[id]/releases/route.ts', 'app/dashboard/page.tsx',
+      'components/dashboard/dashboard-content.tsx', 'components/dashboard/tabs/quotes-tab.tsx',
+      'components/dashboard/quote-release-versions-dialog.tsx', 'lib/quote-release-owner-access.ts',
+      'lib/quote-release-owner-capture.ts', 'lib/quote-release-owner-client.ts',
+      'lib/quote-release-owner-contract.ts', 'lib/quote-release-owner-state.ts', 'e2e/helpers/quote-release-owner-fixture.ts'];
+    const titles = [
+      'owner versions stay hidden and unwritable when the gate is absent',
+      'owned quote opens the internal version view without public access',
+      'unobserved committed capture stays blocked after close reopen and reload',
+      'owner version 401 removes private draft and history immediately',
+    ];
+    expect(FOCUSED_SPECS[spec]).toEqual(titles);
+    for (const source of [...sources, spec]) {
+      const selection = selectFocusedBrowser([source]);
+      const expected = [spec, ...(source === 'components/dashboard/dashboard-content.tsx' ? ['e2e/manual-entry-submission.spec.ts'] : [])].sort();
+      expect(validFocusedSelection(selection)).toBe(true); expect(selection.criticalMappingRequired).toBe(false);
+      expect(selection.specs).toEqual(expected.map(file => ({ file, titles: FOCUSED_SPECS[file as FocusedSpec] })));
+    }
+    for (const missing of [spec, 'e2e/helpers/quote-release-owner-fixture.ts',
+      'lib/__tests__/quote-release-owner-capture.test.ts', 'lib/__tests__/quote-release-owner-state.test.ts',
+      'lib/__tests__/quote-release-owner-route.test.ts', 'lib/__tests__/quote-release-owner-client.test.ts']) {
+      for (const inventory of [sources, [spec]]) {
+        expect(selectFocusedBrowser(inventory, file => file !== missing).criticalMappingRequired).toBe(true);
+      }
+    }
+    for (const unreviewed of ['app/api/quotes/[id]/tokens/route.ts', 'lib/quote-release-public-capability.ts']) {
+      expect(selectFocusedBrowser([unreviewed]).criticalMappingRequired).toBe(true);
+    }
+  });
+  it('binds the owner registry to four real serial test declarations, not a wildcard or all-suite fallback', () => {
+    const source = readFileSync('e2e/quote-release-owner-surface.spec.ts', 'utf8');
+    const ast = ts.createSourceFile('owner.spec.ts', source, ts.ScriptTarget.Latest, true);
+    const titles: string[] = [];
+    function visit(node: ts.Node) {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'test'
+        && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) titles.push(node.arguments[0].text);
+      ts.forEachChild(node, visit);
+    }
+    visit(ast);
+    expect(titles).toEqual(FOCUSED_SPECS['e2e/quote-release-owner-surface.spec.ts']);
+    expect(source).toContain("test.describe.configure({ mode: 'serial', retries: 0 })");
+    expect(source).not.toMatch(/test\.(?:skip|fixme)|screenshot|setViewportSize/);
+  });
   it('skips docs-only browser work but keeps a tiny independent core for source', () => {
     expect(selectFocusedBrowser(['README.md', 'docs/backlog/TICKETSTATUS.md']).core).toBe(false);
     expect(selectFocusedBrowser(['components/app-shell.tsx']).specs.map(item => item.file)).toEqual(['e2e/public-help-fragments.spec.ts']);
@@ -58,13 +103,14 @@ describe('risk-based browser scope, not full acceptance', () => {
       expect(validFocusedSelection(selection)).toBe(true);
       expect(selection.core).toBe(true);
       expect(selection.criticalMappingRequired).toBe(false);
-      expect(selection.specs).toEqual([{ file: spec, titles: [] }]);
+      const expected = [spec, ...(paths.includes('components/dashboard/dashboard-content.tsx') ? ['e2e/quote-release-owner-surface.spec.ts'] : [])].sort();
+      expect(selection.specs).toEqual(expected.map(file => ({ file, titles: FOCUSED_SPECS[file as FocusedSpec] })));
     }
     const missing = selectFocusedBrowser(sources, () => false);
     expect(missing.criticalMappingRequired).toBe(true);
     expect(missing.specs).toEqual([]);
   });
-  it('selects only the existing six financial-submit/owner cases alongside core for their exact source union', () => {
+  it('retains financial-submit/owner cases and the required owner-version journey for their shared dashboard source', () => {
     const selection = selectFocusedBrowser([
       'components/dashboard/dashboard-query-provider.tsx', 'docs/testing/dashboard-owner-boundary.md', 'e2e/dashboard-owner-boundary.spec.ts',
       'lib/__tests__/dashboard-owner-boundary.test.ts', 'lib/dashboard-query-lifecycle.ts', 'components/dashboard/dashboard-content.tsx',
@@ -75,7 +121,7 @@ describe('risk-based browser scope, not full acceptance', () => {
     ]);
     expect(validFocusedSelection(selection)).toBe(true);
     expect(selection.criticalMappingRequired).toBe(false);
-    expect(selection.specs.map(item => item.file)).toEqual(['e2e/dashboard-owner-boundary.spec.ts', 'e2e/manual-entry-submission.spec.ts']);
+    expect(selection.specs.map(item => item.file)).toEqual(['e2e/dashboard-owner-boundary.spec.ts', 'e2e/manual-entry-submission.spec.ts', 'e2e/quote-release-owner-surface.spec.ts']);
     expect(selectFocusedBrowser(['lib/new-owner-write-boundary.ts']).criticalMappingRequired).toBe(true);
   });
   it('selects only actual combobox and backup inspection journeys for the seven-slice packet', () => {

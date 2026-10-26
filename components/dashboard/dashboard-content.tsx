@@ -50,7 +50,7 @@ import { useInvoiceDetailSelection } from '@/hooks/use-invoice-detail-selection'
 import { useManualEntrySubmission } from '@/hooks/use-manual-entry-submission';
 import { manualEntryOutcome } from '@/lib/manual-entry-submission';
 
-export function DashboardContent() {
+export function DashboardContent({ ownerQuoteCaptureEnabled = false }: { ownerQuoteCaptureEnabled?: boolean }) {
   const { data: dashboardSession, status: dashboardSessionStatus } = useSession();
   const dashboardSessionKey = reviewSessionKey(dashboardSession, dashboardSessionStatus);
   const requestReviewNavigation = useReviewNavigation();
@@ -1135,6 +1135,8 @@ export function DashboardContent() {
           {/* Angebote Tab */}
           <TabsContent value="quotes" className="space-y-6">
             <QuotesTab
+              ownerCaptureEnabled={ownerQuoteCaptureEnabled && dashboardSessionStatus === 'authenticated' && !!dashboardSession?.user?.id}
+              ownerCaptureSessionKey={dashboardSessionKey}
               isLoading={quotesIsFetching}
               isError={quotesIsError}
               workflowCounts={quotesWorkflowCounts}
