@@ -5,7 +5,7 @@ import { copyAdminText } from "@/components/settings/copy-admin-text";
 
 import styles from "@/components/settings/admin-workspace.module.css";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,21 @@ type ApiKey = {
   createdAt: string;
 };
 
+type ApiKeyListRead =
+  | { status: 'pending' }
+  | { status: 'error' }
+  | { status: 'success'; keys: ApiKey[] };
+
+function isApiKeyList(value: unknown): value is ApiKey[] {
+  const nullableDate = (date: unknown) => date === null || (typeof date === 'string' && Number.isFinite(Date.parse(date)));
+  return Array.isArray(value) && value.every(key => key !== null && typeof key === 'object'
+    && Number.isSafeInteger(key.id) && key.id > 0
+    && typeof key.name === 'string' && typeof key.keyPrefix === 'string'
+    && Array.isArray(key.scopes) && key.scopes.every((scope: unknown) => typeof scope === 'string')
+    && typeof key.isActive === 'boolean' && nullableDate(key.expiresAt) && nullableDate(key.lastUsedAt)
+    && typeof key.createdAt === 'string' && Number.isFinite(Date.parse(key.createdAt)));
+}
+
 type NewApiKey = {
   id: number;
   name: string;
@@ -73,8 +88,11 @@ type NewApiKey = {
 };
 
 export default function ApiKeysPage() {
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [apiKeyListRead, setApiKeyListRead] = useState<ApiKeyListRead>({ status: 'pending' });
+  const apiKeys = apiKeyListRead.status === 'success' ? apiKeyListRead.keys : [];
+  const apiKeyReadId = useRef(0);
+  const apiKeyReadController = useRef<AbortController | null>(null);
+  const isMounted = useRef(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newKeyResult, setNewKeyResult] = useState<NewApiKey | null>(null);
   const [copied, setCopied] = useState(false);
@@ -95,20 +113,30 @@ export default function ApiKeysPage() {
   const [corsError, setCorsError] = useState<string | null>(null);
   const [addingOrigin, setAddingOrigin] = useState(false);
 
-  const fetchApiKeys = async () => {
-    setIsLoading(true);
+  const fetchApiKeys = useCallback(async () => {
+    if (!isMounted.current) return;
+    const readId = ++apiKeyReadId.current;
+    apiKeyReadController.current?.abort();
+    const controller = new AbortController();
+    apiKeyReadController.current = controller;
+    // A refresh invalidates the prior list, including its counts and actions.
+    setApiKeyListRead({ status: 'pending' });
     try {
-      const res = await fetch("/api/api-keys");
-      if (res.ok) {
-        const data = await res.json();
-        setApiKeys(data);
+      const res = await fetch("/api/api-keys", { signal: controller.signal });
+      if (!res.ok) throw new Error('API key list unavailable');
+      const data: unknown = await res.json();
+      if (!isApiKeyList(data)) throw new Error('Invalid API key list');
+      if (isMounted.current && readId === apiKeyReadId.current && !controller.signal.aborted) {
+        setApiKeyListRead({ status: 'success', keys: data });
       }
-    } catch (error) {
-      console.error("Failed to fetch API keys:", error);
+    } catch {
+      if (isMounted.current && readId === apiKeyReadId.current && !controller.signal.aborted) {
+        setApiKeyListRead({ status: 'error' });
+      }
     } finally {
-      setIsLoading(false);
+      if (readId === apiKeyReadId.current) apiKeyReadController.current = null;
     }
-  };
+  }, []);
 
   const fetchCorsSettings = async () => {
     setCorsLoading(true);
@@ -129,9 +157,14 @@ export default function ApiKeysPage() {
   };
 
   useEffect(() => {
+    isMounted.current = true;
     fetchApiKeys();
     fetchCorsSettings();
-  }, []);
+    return () => {
+      isMounted.current = false;
+      apiKeyReadController.current?.abort();
+    };
+  }, [fetchApiKeys]);
 
   const handleCreateKey = async () => {
     if (!keyName.trim()) return;
@@ -306,7 +339,7 @@ export default function ApiKeysPage() {
                 API-Dokumentation
               </Link>
             </Button>
-            <Button onClick={() => setIsCreateModalOpen(true)} aria-label="Neuen API-Key erstellen">
+            <Button onClick={() => setIsCreateModalOpen(true)} disabled={apiKeyListRead.status !== 'success'} aria-label="Neuen API-Key erstellen">
               <Plus className="h-4 w-4 mr-2" />
               Schlüssel erstellen
             </Button>
@@ -318,11 +351,21 @@ export default function ApiKeysPage() {
         {/* API Keys Table */}
         <Card className={styles.surface}>
           <CardHeader>
-            <CardTitle>Schlüssel <span className="ml-2 text-sm font-normal text-muted-foreground">{apiKeys.length}/10 · {apiKeys.filter(key => key.isActive && !isExpired(key.expiresAt)).length} aktiv</span></CardTitle>
+            <CardTitle>Schlüssel <span className="ml-2 text-sm font-normal text-muted-foreground" aria-live="polite">{apiKeyListRead.status === 'success'
+              ? `${apiKeys.length}/10 · ${apiKeys.filter(key => key.isActive && !isExpired(key.expiresAt)).length} aktiv`
+              : 'Anzahl und Status unbekannt'}</span></CardTitle>
+            {apiKeyListRead.status === 'success' && (
+              <Button variant="outline" onClick={fetchApiKeys}>Schlüsselliste aktualisieren</Button>
+            )}
           </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Laden...</div>
+          <CardContent role="region" aria-label="API-Schlüsselliste" aria-busy={apiKeyListRead.status === 'pending'}>
+            {apiKeyListRead.status === 'pending' ? (
+              <div role="status" className="text-center py-8 text-muted-foreground">API-Schlüssel werden geladen…</div>
+            ) : apiKeyListRead.status === 'error' ? (
+              <div className="space-y-3 py-5">
+                <p role="alert">Die API-Schlüssel konnten nicht geladen werden. Anzahl und Status sind nicht bestätigt.</p>
+                <Button variant="outline" onClick={fetchApiKeys}>Erneut versuchen</Button>
+              </div>
             ) : apiKeys.length === 0 ? (
               <div className="flex flex-wrap items-center justify-between gap-4 py-5">
                 <h3 className="text-sm text-muted-foreground">Noch keine Schlüssel</h3>

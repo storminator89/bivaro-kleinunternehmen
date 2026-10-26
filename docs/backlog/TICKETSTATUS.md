@@ -936,3 +936,39 @@ Keine lokalen Browser-/Server-/API-/Datenbankläufe und keine Installation.
 **Recovery-Tree noch nicht festgeschrieben, Hosted-Recoveryabnahme offen;
 kein Merge oder Deployment.** Der historische 160-Ticket-Stand bleibt unverändert.
 [Fortgeschriebene Evidenz](../testing/cashbook-loading-states.md).
+
+
+### 26.10.2026, 23:12 UTC — #83: API-Schlüsselliste nur lokal gegen falsche Leeranzeige abgesichert
+
+GitHub #83 ist nicht BV-083. Dieser zusätzliche lokale Checkpoint ändert keine
+historischen Tickets, Summen oder früheren Einträge. Providerbasis
+`595e5e44525ec0967b627f482bc78f607dcabe15`, exakter verfügbarer Tree
+`7b8916a9f56a609b3b923121e9e26e8b83796254`; lokaler parentloser Basiscommit
+`6da6d480ad0ee4d5f043f22ed5cfffd8a42f04a0` ist **synthetisch, nicht Provider-Abstammung**.
+Die enge Korrektur bleibt lokal uncommitted; kein neuer PR oder Remote-Write.
+
+Nur `app/settings/api-keys/page.tsx` ändert Laufzeitcode: getrennte Lade-/Fehler-/
+Erfolgszustände, unbekannte Anzahl bis zum bestätigten GET, barrierearmer Fehler
+mit explizitem GET-Retry und rein lesendem Listen-Refresh. Nur erfolgreiches `[]`
+zeigt die Leer-Erstellung. Alte Zeilen/Aktionen werden bei unbestätigtem Lesen
+entfernt; Create ist dann deaktiviert. Ungültige Antworten, überholte Requests
+und Unmount werden abgefangen; kein automatischer Retry. Sämtliche bestehenden
+Create-/Toggle-/Delete-/CORS-Handler, die bestätigte Tabelle und der gesamte
+CORS-/Create-/Einmal-Secret-UI-Teil bleiben byte-identisch. Auth, Rollen,
+Server/API, Sicherheit, Schema und Workflows bleiben unverändert.
+
+Tatsächliche lokale Prüfung unter Node 24.22.1: **2 Suites / 63 Tests bestanden,
+0 Skips** (16 reine Seiten-Hook-Fälle + 47 Selektorfälle), gezieltes ESLint ohne
+Warnungen, Scoped TypeScript und Selektorsyntax Exit 0. Ein einzelner Fall auf
+der sauberen exakten Basis reproduziert erwartungsgemäß rot die falsche
+`0/10 · 0 aktiv`-Anzeige. Vier eng gebundene synthetische Browserfälle sind nur
+verfasst, **nicht ausgeführt**; exakte Selektoren schlagen bei fehlender Evidenz
+fehlertoleranzfrei an, ohne Server-/Security-Pfade auszunehmen.
+
+Keine echten Schlüssel, Zugangsdaten oder Berechtigungsaktionen; keine lokalen
+Browser-/Server-/API-/Datenbankläufe, Installation, Prisma-Regeneration,
+Fullsuite, Gesamtbuild oder neuen CI-Läufe. Die bekannte Socket-Grenze wurde
+nicht erneut versucht/umgangen. Kein Merge, Deployment, Release oder
+Issueabschluss. **Browser-/Hosted-/Releaseabnahme bleibt offen.** Unit-Log-SHA-256
+`df528d24399d6c8ec00540befcd8a230ab3fb5e6ef95063f48b864290692b5e3`.
+[Umfang und tatsächliche Evidenz](../testing/api-key-list-read-states.md).
