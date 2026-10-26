@@ -176,12 +176,13 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
 
   const loginQuery = (() => { try { return handoffPeriodQuery(selection).toString(); } catch { return ''; } })();
   return <div className={styles.workspace}>
-    <PageHeader title="Unterlagen übergeben" description="Bivaro-ZIP · Kein DATEV-/ELSTER-Export oder Backup." actions={<Button asChild variant="outline"><Link href="/settings#handoff-settings"><ArrowLeft aria-hidden="true" />Einstellungen</Link></Button>} />
+    <PageHeader title="Unterlagen übergeben" description="Bivaro-ZIP für Ihre Kanzlei · kein DATEV-/ELSTER-Export oder Backup." actions={<Button asChild variant="outline"><Link href="/settings#handoff-settings"><ArrowLeft aria-hidden="true" />Einstellungen</Link></Button>} />
     <ol className={styles.steps} aria-label="Schritte zur Übergabe"><li aria-current={!preview ? 'step' : undefined}><span>1</span>Zeitraum wählen</li><li aria-current={preview ? 'step' : undefined}><span>2</span>Paket prüfen und herunterladen</li></ol>
     <div className={styles.layout}>
       <section className={styles.sheet} aria-labelledby={preview ? 'handoff-review-heading' : 'handoff-period-heading'}>
         {!preview ? <>
-          <h2 id="handoff-period-heading" ref={selectionHeading} tabIndex={-1}>Zeitraum</h2>
+          <h2 id="handoff-period-heading" ref={selectionHeading} tabIndex={-1}>Für welchen Zeitraum?</h2>
+          <p className={styles.muted}>Zuerst die Vorschau prüfen. Ein Download oder Versand wird dadurch noch nicht gestartet.</p>
           {selection.mode === 'range' && <p className={styles.muted}>Maximal 366 Tage, einschließlich Anfang und Ende (UTC).</p>}
           <form onSubmit={loadPreview} aria-busy={busy === 'preview'}>
             <fieldset disabled={Boolean(busy)} className={styles.periodFields}>
@@ -198,6 +199,7 @@ export function HandoffWorkspace({ initialSelection, currentYear }: { initialSel
 
         </> : <>
           <h2 id="handoff-review-heading" ref={reviewHeading} tabIndex={-1}>Paket prüfen und herunterladen</h2>
+          <p className={styles.muted}>Offene Prüfpunkte und Warnungen klären. Nach Änderungen die Vorschau aktualisieren; anschließend das ZIP selbst sicher an die Kanzlei übergeben.</p>
           {readiness && <HandoffTasks preview={preview} readiness={readiness} />}
           <HandoffReview preview={preview} />
           <div className={styles.approval}>

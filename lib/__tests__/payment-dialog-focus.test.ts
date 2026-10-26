@@ -91,7 +91,10 @@ describe('payment dialog focus return stays with the same invoice', () => {
     const dialog = readFileSync('components/dashboard/full-payment-dialog.tsx', 'utf8');
     expect(dialog).toContain('paymentDialogReturnTarget(invoice.id, returnFocusRef.current)?.focus({ preventScroll: true })');
     const browser = readFileSync('e2e/auth-dashboard-invoice.spec.ts', 'utf8');
-    expect(browser).toContain("name: 'Zahlungsstatus: Offen', exact: true })).toBeFocused()");
+    expect(browser).toContain("name: 'Zahlung erfassen', exact: true })).toBeFocused()");
+    const primary = tab.slice(tab.indexOf('const renderInvoicePrimaryAction'), tab.indexOf('const renderInvoiceActions'));
+    expect(primary).toContain('data-invoice-payment-return={invoice.id}');
+    expect(primary).toContain("availableInvoiceStatuses(invoice).includes('PAID')");
   });
   it('keeps the browser focus assertion on the saved payment confirmation rather than every live status', () => {
     const browser = readFileSync('e2e/auth-dashboard-invoice.spec.ts', 'utf8');

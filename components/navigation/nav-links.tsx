@@ -6,6 +6,8 @@ import { useSession, signOut } from "next-auth/react";
 import { SidebarIcon, type SidebarNavIconName } from "@/components/brand/sidebar-icon";
 import { useState, useEffect } from "react";
 import { useReviewNavigation } from "@/components/purchases/use-review-navigation";
+import { ChevronDown } from "lucide-react";
+import { isNavigationItemActive } from "@/lib/navigation";
 
 type NavItem = {
   href: string;
@@ -17,6 +19,8 @@ type NavItem = {
 type NavSection = {
   title: string;
   items: NavItem[];
+  secondaryTitle?: string;
+  secondaryItems?: NavItem[];
 };
 
 export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?: boolean; onNavigate?: () => void }) {
@@ -45,35 +49,7 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
     };
   }, []);
 
-  // Prüft ob ein Link aktiv ist (berücksichtigt auch Query-Parameter)
-  const isActive = (href: string) => {
-    const [path, query] = href.split('?');
-
-    if (pathname.startsWith('/dashboard/invoices/') && href === '/dashboard?tab=invoices') return true;
-    if (pathname.startsWith('/dashboard/quotes/') && href === '/dashboard?tab=quotes') return true;
-
-    if (href === '/settings' && pathname.startsWith('/settings/')) return true;
-
-    // Exakter Pfad-Match (für Unterseiten wie /dashboard/reminders)
-    if (pathname === path && !query) {
-      return !searchParams.get('tab');
-    }
-
-    // Pfad muss übereinstimmen
-    if (pathname !== path) return false;
-
-    // Wenn kein Query-Parameter im href, ist es aktiv wenn auch die URL keinen tab hat
-    if (!query) {
-      return !searchParams.get('tab');
-    }
-
-    // Query-Parameter prüfen
-    const hrefParams = new URLSearchParams(query);
-    const hrefTab = hrefParams.get('tab');
-    const currentTab = searchParams.get('tab');
-
-    return hrefTab === currentTab;
-  };
+  const isActive = (href: string) => isNavigationItemActive(href, pathname, searchParams);
 
   const isAdmin = session?.user?.role === "ADMIN";
 
@@ -91,9 +67,12 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
       items: [
         { href: "/dashboard?tab=invoices", label: "Rechnungen", icon: "nav-invoices", auth: "authenticated" },
         { href: "/dashboard?tab=quotes", label: "Angebote", icon: "nav-quotes", auth: "authenticated" },
+        { href: "/customers", label: "Kunden", icon: "nav-customers", auth: "authenticated" },
+      ],
+      secondaryTitle: "Historie und Mahnwesen",
+      secondaryItems: [
         { href: "/history", label: "Rechnungshistorie", icon: "nav-invoices", auth: "authenticated" },
         { href: "/dashboard/reminders", label: "Mahnwesen", icon: "nav-reminders", auth: "authenticated" },
-        { href: "/customers", label: "Kunden", icon: "nav-customers", auth: "authenticated" },
       ]
     },
     {
@@ -107,7 +86,8 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
     },
     {
       title: "Auswertungen",
-      items: [
+      items: [],
+      secondaryItems: [
         { href: "/dashboard?tab=eur", label: "EÜR", icon: "nav-eur", auth: "authenticated" },
         { href: "/dashboard?tab=gwg", label: "GWG-Verzeichnis", icon: "nav-assets", auth: "authenticated" },
         { href: "/steuer-simulation", label: "Steuer-Simulation", icon: "nav-tax", auth: "authenticated" },
@@ -127,161 +107,90 @@ export function NavLinks({ allowCollapse = true, onNavigate }: { allowCollapse?:
     { href: "/register", label: "Registrieren", icon: "nav-customers", auth: "unauthenticated" }
   ];
 
-  // Collapsed view
-  if (allowCollapse && isCollapsed) {
+  const visibleItems = (items: NavItem[]) => items.filter(item =>
+    item.auth !== "authenticated" || status === "authenticated"
+  );
+  const collapsed = allowCollapse && isCollapsed;
+
+  const renderItem = (item: NavItem) => {
+    const active = isActive(item.href);
     return (
-      <div className="flex h-full flex-col">
-        <ul className="space-y-1 flex-1">
-          {navSections.map((section) => (
-            section.items.map((item) => {
-              if (item.auth === "authenticated" && status !== "authenticated") return null;
-
-              const active = isActive(item.href);
-
-              return (
-                <li key={item.href}>
-                  <Link
-                    onClick={onNavigate}
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    data-active={active}
-                    className={`app-nav-link flex items-center justify-center p-3 ${active
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                      }`}
-                    title={item.label}
-                  >
-                    <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
-                  </Link>
-                </li>
-              );
-            })
-          ))}
-
-          {/* Auth items when collapsed */}
-          {status === "unauthenticated" && authNavItems.map((item) => {
-            const active = isActive(item.href);
-
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  data-active={active}
-                  className={`app-nav-link flex items-center justify-center p-3 ${active
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                    }`}
-                  title={item.label}
-                >
-                  <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-
-        {/* Bottom section when collapsed */}
-        <div className="mt-auto space-y-1 border-t border-border/80 pt-3">
-          {status === "authenticated" && (
-            <button
-              onClick={() => requestNavigation(() => { void signOut({ callbackUrl: '/' }); })}
-              className="flex min-h-11 w-full cursor-pointer items-center justify-center rounded-md p-3 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
-              title="Abmelden"
-            >
-              <SidebarIcon name="nav-logout" className="nav-artwork" size={28} />
-            </button>
-          )}
-        </div>
-      </div>
+      <li key={item.href}>
+        <Link
+          onClick={onNavigate}
+          href={item.href}
+          aria-label={collapsed ? item.label : undefined}
+          aria-current={active ? "page" : undefined}
+          data-active={active}
+          title={collapsed ? item.label : undefined}
+          className={`app-nav-link flex min-h-11 items-center ${collapsed ? 'justify-center p-3' : 'gap-3 px-3 py-2'} ${active
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }`}
+        >
+          <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
+          {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
+        </Link>
+      </li>
     );
-  }
+  };
 
-  // Expanded view with sections
   return (
     <div className="flex h-full flex-col">
       <div className="app-nav-scroll flex-1 space-y-4 overflow-y-auto pr-1">
-        {navSections.map((section) => {
-          const visibleItems = section.items.filter(item =>
-            item.auth !== "authenticated" || status === "authenticated"
+        {collapsed ? (
+          <ul className="space-y-1">
+            {navSections.flatMap(section => visibleItems([...section.items, ...(section.secondaryItems ?? [])])).map(renderItem)}
+            {status === "unauthenticated" && authNavItems.map(renderItem)}
+          </ul>
+        ) : navSections.map(section => {
+          const primary = visibleItems(section.items);
+          const secondary = visibleItems(section.secondaryItems ?? []);
+          if (!primary.length && !secondary.length) return null;
+          const activeSecondary = secondary.find(item => isActive(item.href));
+          // Native disclosure toggles do not add a history entry. A new active
+          // secondary route (including Back/Forward) reveals its current link.
+          const disclosure = secondary.length > 0 && (
+            <details key={`${section.title}:${activeSecondary?.href ?? ''}`} open={Boolean(activeSecondary)} className="group/nav-section">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+                {primary.length > 0
+                  ? <span className="text-xs font-medium">{section.secondaryTitle}</span>
+                  : <h3 className="text-xs font-semibold">{section.title}</h3>}
+                <ChevronDown aria-hidden="true" className="size-4 shrink-0 transition-transform group-open/nav-section:rotate-180" />
+              </summary>
+              <ul className="space-y-1">{secondary.map(renderItem)}</ul>
+            </details>
           );
-
-          if (visibleItems.length === 0) return null;
-
           return (
             <div key={section.title}>
-              <h3 className="px-3 mb-2 text-xs font-semibold text-muted-foreground">
-                {section.title}
-              </h3>
-              <ul className="space-y-1">
-                {visibleItems.map((item) => {
-                      const active = isActive(item.href);
-
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        onClick={onNavigate}
-                        href={item.href}
-                        aria-current={active ? "page" : undefined}
-                        data-active={active}
-                        className={`app-nav-link flex items-center gap-3 px-3 py-2 ${active
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                          }`}
-                      >
-                        <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
-                        <span className="text-sm font-medium">{item.label}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              {primary.length > 0 && <>
+                <h3 className="mb-2 px-3 text-xs font-semibold text-muted-foreground">{section.title}</h3>
+                <ul className="space-y-1">{primary.map(renderItem)}</ul>
+              </>}
+              {disclosure}
             </div>
           );
         })}
 
-        {/* Auth items when expanded */}
-        {status === "unauthenticated" && (
+        {!collapsed && status === "unauthenticated" && (
           <div>
-            <h3 className="px-3 mb-2 text-xs font-semibold text-muted-foreground">
-              Konto
-            </h3>
-            <ul className="space-y-1">
-              {authNavItems.map((item) => {
-                  const active = isActive(item.href);
-
-                return (
-                  <li key={item.href}>
-                    <Link
-                      onClick={onNavigate}
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
-                      data-active={active}
-                      className={`app-nav-link flex min-h-11 items-center gap-3 px-3 py-2 ${active
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                        }`}
-                    >
-                      <SidebarIcon name={item.icon} className="nav-artwork" size={28} />
-                      <span className="text-sm font-medium">{item.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <h3 className="mb-2 px-3 text-xs font-semibold text-muted-foreground">Konto</h3>
+            <ul className="space-y-1">{authNavItems.map(renderItem)}</ul>
           </div>
         )}
       </div>
 
-      {/* Bottom section when expanded */}
       <div className="mt-auto space-y-1 border-t border-border/80 pt-3">
         {status === "authenticated" && (
           <button
+            type="button"
             onClick={() => requestNavigation(() => { void signOut({ callbackUrl: '/' }); })}
-            className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
+            aria-label={collapsed ? "Abmelden" : undefined}
+            title={collapsed ? "Abmelden" : undefined}
+            className={`flex min-h-11 w-full cursor-pointer items-center rounded-md text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive ${collapsed ? 'justify-center p-3' : 'gap-3 px-3 py-2'}`}
           >
             <SidebarIcon name="nav-logout" className="nav-artwork" size={28} />
-            <span className="text-sm font-medium">Abmelden</span>
+            {!collapsed && <span className="text-sm font-medium">Abmelden</span>}
           </button>
         )}
       </div>

@@ -12,6 +12,14 @@ export const FOCUSED_SPECS = {
   'e2e/manual-entry-submission.spec.ts': [],
   'e2e/dashboard-owner-boundary.spec.ts': [],
   'e2e/service-article-picker-freshness.spec.ts': [],
+  'e2e/manual-photo-expense.spec.ts': ['saved mobile photo needs explicit source/payment confirmation and safely replays one original-backed Expense'],
+  'e2e/partial-payments.spec.ts': ['treats a later deliberate equal amount/date/reference as a distinct allocation'],
+  'e2e/supplier-tasks.spec.ts': [
+    'supplier task keyboard/mobile save, explicit source date, dirty cancel, filters, original return and reopened history remain unposted',
+    'rapid specific task filters compose real delayed navigations without broadening or rewriting traversal history',
+    'two real tabs produce 409, unknown committed response is read before retry, and delayed save preserves newer keyboard edits',
+  ],
+  'e2e/ux-progressive-disclosure.spec.ts': ['progressive UX keeps keyboard navigation, active history and setup/editor/handoff intent clear at desktop and mobile'],
 };
 // Explicit inactive quote-history foundation only. The browser journey checks
 // read-only export/preview compatibility, NOT SQL/restore/audit correctness.
@@ -78,6 +86,20 @@ const presentationUnitContracts = {
 // Queue races and portable-reference equivalence remain unit-contract evidence.
 const backupInspectionSources = new Set(['app/api/backup/full/route.ts', 'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts']);
 
+// Exact UX sources select real confirmation/replay and dirty/concurrent receipt
+// journeys, not a unit-only exemption. These are required future checks, NOT a
+// claim of browser acceptance: local Chromium execution is currently blocked.
+// Supplier scope is the three bounded titles above, never the whole suite.
+/** @type {Record<string, string[]>} */
+const affectedUxJourneys = {
+  'lib/navigation.ts': ['e2e/ux-progressive-disclosure.spec.ts'],
+  'components/dashboard/tabs/invoices-tab.tsx': ['e2e/partial-payments.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
+  'components/purchases/document-workspace.module.css': ['e2e/manual-photo-expense.spec.ts', 'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
+  'components/purchases/incoming-document-review.tsx': ['e2e/manual-photo-expense.spec.ts', 'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
+  'components/purchases/incoming-documents-workspace.tsx': ['e2e/manual-photo-expense.spec.ts', 'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
+  'components/purchases/purchase-expense-approval.tsx': ['e2e/manual-photo-expense.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
+};
+
 /** @param {string[]} paths @param {(file: string) => boolean} [exists] */
 export function selectFocusedBrowser(paths, exists = () => true) {
   if (!Array.isArray(paths) || paths.length > 5000 || !paths.every(safePath)) throw Error('Invalid changed-path inventory');
@@ -130,11 +152,13 @@ export function selectFocusedBrowser(paths, exists = () => true) {
       add('e2e/backup-file-inspection.spec.ts', true, source);
       continue;
     }
+    const affectedUx = affectedUxJourneys[source];
+    if (affectedUx) for (const spec of affectedUx) add(spec, true, source);
     const ownJourney = ownJourneys.find(value => value.source === source);
     if (ownJourney) { add(ownJourney.spec, true, source); continue; }
     const packet = packets.find(value => value.paths.includes(source) || value.spec === source);
     if (packet) { add(packet.spec, true, source); continue; }
-    let mapped = knownInfrastructure(source);
+    let mapped = knownInfrastructure(source) || Boolean(affectedUx);
     if (Object.hasOwn(FOCUSED_SPECS, source)) { add(source, true, source); mapped = true; }
     if (/^(?:app\/(?:help|page\.tsx)|components\/(?:public\/|public-accounting\/))/u.test(source)) {
       add('e2e/public-help-fragments.spec.ts', false, source);

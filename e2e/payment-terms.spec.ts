@@ -109,7 +109,7 @@ async function prepareXml(page: Page, customerId: number) {
   await page.locator('#date').fill('2026-03-28');
   await page.locator('#invoice-item-description-0').fill('SYNTHETISCH · Zahlungszielprüfung');
   await page.locator('#invoice-item-price-0').fill('12.34');
-  await page.getByRole('combobox', { name: 'Ausgabeformat', exact: true }).selectOption('xml-only');
+  await page.getByRole('combobox', { name: 'Rechnungsformat', exact: true }).selectOption('xml-only');
   await page.getByLabel('Käuferreferenz / Leitweg-ID', { exact: false }).fill('SYNTHETIC-PAYMENT-TERM');
 }
 
