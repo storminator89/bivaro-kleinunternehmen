@@ -852,3 +852,45 @@ Funktions-/Testlauf wurde dafür gestartet. 68 nicht geteilte #148-Pfade bleiben
 bytegleich, alle 18 bisherigen Statusschlüssel unverändert; der gesamte
 247-Bild-Workflowpräfix ist bytegleich erhalten. Kombinierte Hosted-Abnahme
 bleibt ausdrücklich ausstehend.
+
+
+## 26.10.2026, 19:42 UTC — GitHub #83: Kassenbuch-Lesezustände lokal teilumgesetzt
+
+[GitHub #83](https://github.com/storminator89/bivaro-kleinunternehmen/issues/83)
+ist **nicht BV-083**. Dieser enge lokale Folgecheckpoint ergänzt nur den
+initialen Kassenbuch-Listenabruf; die 160 historischen Ticketobjekte, Summen
+und früheren Checkpoints bleiben unverändert. Basis ist Provider-Main
+`fc92ca5070c5b2cbbd9b0e3c2d292106f3b49fb7`, exakt verfügbarer Tree
+`ba499c560b00d60d21dc98f7051ff2626391acc3`. Der parentlose lokale Basiscommit
+`16c20192b47285b7108d5571325c3f7b8c29f820` ist ausdrücklich **synthetisch und
+nicht der Providercommit**; der Folgepatch ist lokal uncommitted.
+
+Der gemeinsame Kassenbuch-Header bleibt sichtbar. Initiales Laden, Lesefehler,
+bestätigt leere und befüllte Listen sind getrennt; nur erfolgreiches `[]`
+zeigt die Erstellaufforderung. Nicht verfügbare Aktionen sind deaktiviert.
+Ein expliziter, doppelt geschützter GET-Retry schreibt keine Mutation erneut;
+fehlerhafte Listen werden vor Verwendung zurückgewiesen, gültige Auswahl und
+Schutz vor älteren bzw. unmounted Antworten bleiben erhalten. Finanzrechnungen,
+Mutationen, Buchungs-/Tagesabrufe, API, Auth, Schema und Workflowdateien sind
+unverändert.
+
+Tatsächliche enge lokale Prüfung unter Node **24.22.1**: zwei Vitest-Suites,
+**67 bestanden / 0 Skips** (`cashbook-view-regressions` und
+`focused-browser-selection`); gezieltes ESLint für die fünf ausführbaren
+Änderungspfade ohne Warnungen bestanden. Scoped TypeScript für Seite,
+Regressionen, Browserfall-Quellen und Selektortests bestand ebenfalls (Exit0,
+`incremental: false`, 1536-MiB-Cap); kein Gesamtbuild oder Fullsuite-Lauf. Fünf Browserfälle für 1440/360/390 px,
+verzögerten Fehler → Tastatur-GET-Retry → Reload, erfolgreich leere Listen und
+401/403/fehlerhafte Antworten sind **nur verfasst, nicht ausgeführt**. Exakte
+Focused-Selektoren und fehlertoleranzfreie Vertragsprüfungen sind enthalten;
+Finanz-API-Pfade erhalten keine Ausnahme.
+
+**Browser-/Bildabnahme bleibt offen.** Die bekannte lokale Socket-EPERM- und
+abgelehnte Eskalations-Bootstrap-Grenze wurde nicht erneut versucht oder umgangen.
+Keine Server-/API-/Datenbankausführung, Installation, Prisma-Regeneration,
+neuen CI-Läufe oder Remote-Schreibaktionen; kein PR, Merge, Release, Deployment
+oder Issueabschluss. Unit-Log-SHA-256:
+`c4f521d5f3bc3ffbfc16d1d853f6e6726ed9e5cd74f61c968c17e26a7f06cf71`;
+Lint-/Types-Logs sind bei Exit0 leer (SHA-256 jeweils
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`).
+[Umfang und Evidenz](../testing/cashbook-loading-states.md).

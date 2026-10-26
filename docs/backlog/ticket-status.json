@@ -2795,5 +2795,68 @@
       "ordinaryLocalBuild": "not rerun; full hosted build required after unlock",
       "localFunctionalExecution": "none"
     }
+  },
+  "githubIssue83CashbookReadLocalCheckpoint20261026": {
+    "observedAt": "2026-10-26T19:42:00Z",
+    "issue": 83,
+    "historicalTicket": "GitHub #83 is not BV-083; all 160 historical ticket objects, status counts and previous checkpoints remain unchanged.",
+    "status": "partial_local_implementation_browser_acceptance_pending",
+    "providerBase": "fc92ca5070c5b2cbbd9b0e3c2d292106f3b49fb7",
+    "sourceTree": "ba499c560b00d60d21dc98f7051ff2626391acc3",
+    "syntheticLocalSourceBase": "16c20192b47285b7108d5571325c3f7b8c29f820",
+    "sourceIdentity": "Exact provider tree; parentless local source-base commit is synthetic, not the provider commit.",
+    "worktreeState": "Uncommitted local-only follow-up patch.",
+    "implementedScope": "Retain shared Kassenbuch header; distinguish initial pending/error/success-empty/populated list reads; only successful [] offers empty creation; disable unavailable actions; validate list payload; explicit duplicate-guarded GET-only retry preserves valid selection and ignores older/unmounted replies.",
+    "unchangedContracts": [
+      "Financial calculations and mutations",
+      "Transaction and daily reads",
+      "API and authorization",
+      "Schema and workflow files",
+      "Historical ticket objects, aggregate counts and earlier checkpoints"
+    ],
+    "localChecks": {
+      "node": "24.22.1",
+      "focusedVitest": {
+        "suites": 2,
+        "passed": 67,
+        "skipped": 0,
+        "files": [
+          "lib/__tests__/cashbook-view-regressions.test.ts",
+          "scripts/__tests__/focused-browser-selection.test.ts"
+        ]
+      },
+      "focusedEslint": "Passed, zero warnings, five changed executable paths.",
+      "scopedTypescript": "Passed exit0, incremental false, 1536 MiB cap; page, regression, authored browser source and selector tests.",
+      "unitLogSha256": "c4f521d5f3bc3ffbfc16d1d853f6e6726ed9e5cd74f61c968c17e26a7f06cf71",
+      "lintAndTypesLogSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "fullSuiteOrBuild": "Not run."
+    },
+    "authoredBrowserCases": {
+      "file": "e2e/cashbook-loading.spec.ts",
+      "count": 5,
+      "coverage": [
+        "1440/360/390 px: delayed failure, keyboard GET retry and reload",
+        "Confirmed successful empty owner read",
+        "401/403 and malformed successful response delivery"
+      ],
+      "selector": "Exact bounded titles and fail-closed fixture/regression/runner/config/login/core contracts; no financial API exemption.",
+      "execution": "Authored only; no browser or screenshot acceptance established."
+    },
+    "remaining": [
+      "Exact-candidate browser/image acceptance",
+      "Review and separately authorized publication"
+    ],
+    "knownLimitation": "Prior local socket EPERM and denied escalation bootstrap; not retried or bypassed.",
+    "browserServerApiDatabaseExecution": false,
+    "installationOrPrismaRegeneration": false,
+    "newCiRuns": false,
+    "remoteWrites": false,
+    "merged": false,
+    "published": false,
+    "deployed": false,
+    "issueClosed": false,
+    "evidence": [
+      "docs/testing/cashbook-loading-states.md"
+    ]
   }
 }
