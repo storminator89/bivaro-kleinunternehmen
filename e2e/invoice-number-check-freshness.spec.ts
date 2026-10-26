@@ -48,17 +48,19 @@ async function painted(page: Page) {
 
 test('a superseded real duplicate-number read leaves the current number and its checking eligibility intact', async ({ page }) => {
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
-  const loggedIn = page.waitForResponse(async response => {
-    if (response.request().method() !== 'GET' || new URL(response.url()).pathname !== '/api/auth/session' || response.status() !== 200) return false;
-    const session = await response.json();
-    return typeof session?.user?.id === 'string' && session.user.role === 'USER' && session.user.sessionVersion === 1;
-  });
+  // Own the request at its destination-document start. A login-document session
+  // response can lose its body when the existing login flow replaces the page.
+  const loggedIn = page.waitForRequest(request => request.method() === 'GET'
+    && new URL(request.url()).pathname === '/api/auth/session'
+    && new URL(page.url()).pathname === '/dashboard');
   // Existing helper creates only synthetic identity/profile/customer data and
   // uses real cookie login; its invoice issuance helpers are never called.
-  const owner = await bankAllocationAccount(page);
-  const loginResponse = await loggedIn;
-  expect(await loginResponse.finished()).toBeNull();
-  expect(await loginResponse.json()).toMatchObject({ user: { id: owner.userId, role: 'USER', sessionVersion: 1 } });
+  const [owner, loginRequest] = await Promise.all([bankAllocationAccount(page), loggedIn]);
+  const loginResponse = await loginRequest.response();
+  expect(loginResponse).not.toBeNull();
+  expect(loginResponse!.status()).toBe(200);
+  expect(await loginResponse!.finished()).toBeNull();
+  expect(await loginResponse!.json()).toMatchObject({ user: { id: owner.userId, role: 'USER', sessionVersion: 1 } });
   await authenticatedSession(page, owner.userId);
 
   const suffix = randomUUID(), a = delayed(`SYNTHETIC-NUMBER-A-${suffix}`, true), b = delayed(`SYNTHETIC-NUMBER-B-${suffix}`, false);
@@ -107,14 +109,16 @@ test('a superseded real duplicate-number read leaves the current number and its 
   await page.route('**/*', handler);
   const failures = new Set<unknown>();
   try {
-    const editorSession = page.waitForResponse(response => response.request().method() === 'GET'
-      && new URL(response.url()).pathname === '/api/auth/session');
+    const editorSession = page.waitForRequest(request => request.method() === 'GET'
+      && new URL(request.url()).pathname === '/api/auth/session'
+      && new URL(page.url()).pathname === '/dashboard/invoices/new');
     const nextNumber = page.waitForResponse(response => response.request().method() === 'GET'
       && new URL(response.url()).pathname === '/api/invoices/next-number');
     await page.goto('/dashboard/invoices/new');
-    const sessionResponse = await editorSession;
-    expect(sessionResponse.status()).toBe(200); expect(await sessionResponse.finished()).toBeNull();
-    expect(await sessionResponse.json()).toMatchObject({ user: { id: owner.userId, role: 'USER', sessionVersion: 1 } });
+    const sessionResponse = await (await editorSession).response();
+    expect(sessionResponse).not.toBeNull();
+    expect(sessionResponse!.status()).toBe(200); expect(await sessionResponse!.finished()).toBeNull();
+    expect(await sessionResponse!.json()).toMatchObject({ user: { id: owner.userId, role: 'USER', sessionVersion: 1 } });
     expect((await nextNumber).status()).toBe(200);
     await expect(page.getByRole('heading', { name: 'Neue Rechnung', exact: true })).toBeVisible();
     await page.getByLabel('Gespeicherten Kunden auswählen', { exact: true }).selectOption(String(owner.customerId));
