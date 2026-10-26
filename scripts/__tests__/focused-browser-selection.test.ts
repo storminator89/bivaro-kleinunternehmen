@@ -44,6 +44,39 @@ describe('risk-based browser scope, not full acceptance', () => {
     ]);
     expect(selectFocusedBrowser(['lib/new-financial-contract.ts']).criticalMappingRequired).toBe(true);
   });
+  it.each([
+    { spec: 'e2e/audit-log-requests.spec.ts', sources: ['app/settings/audit-logs/page.tsx', 'lib/audit-log-query.ts'] },
+    { spec: 'e2e/manual-entry-submission.spec.ts', sources: ['components/dashboard/dashboard-content.tsx', 'components/dashboard/manual-entry-submit-feedback.tsx',
+      'components/dashboard/modals/edit-modal.tsx', 'components/dashboard/tabs/expenses-tab.tsx', 'components/dashboard/tabs/incomes-tab.tsx',
+      'hooks/use-manual-entry-submission.ts', 'lib/manual-entry-submission.ts'] },
+    { spec: 'e2e/dashboard-owner-boundary.spec.ts', sources: ['components/dashboard/dashboard-query-provider.tsx', 'lib/dashboard-query-lifecycle.ts'] },
+    { spec: 'e2e/service-article-picker-freshness.spec.ts', sources: ['components/dashboard/service-article-picker-state.ts', 'components/dashboard/service-article-picker.tsx'] },
+  ])('maps only the existing own scope for $spec and fails closed if it is absent', ({ spec, sources }) => {
+    for (const paths of [...sources.map(source => [source]), [spec], [...sources, spec]]) {
+      const selection = selectFocusedBrowser(paths);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection.core).toBe(true);
+      expect(selection.criticalMappingRequired).toBe(false);
+      expect(selection.specs).toEqual([{ file: spec, titles: [] }]);
+    }
+    const missing = selectFocusedBrowser(sources, () => false);
+    expect(missing.criticalMappingRequired).toBe(true);
+    expect(missing.specs).toEqual([]);
+  });
+  it('selects only the existing six financial-submit/owner cases alongside core for their exact source union', () => {
+    const selection = selectFocusedBrowser([
+      'components/dashboard/dashboard-query-provider.tsx', 'docs/testing/dashboard-owner-boundary.md', 'e2e/dashboard-owner-boundary.spec.ts',
+      'lib/__tests__/dashboard-owner-boundary.test.ts', 'lib/dashboard-query-lifecycle.ts', 'components/dashboard/dashboard-content.tsx',
+      'components/dashboard/manual-entry-submit-feedback.tsx', 'components/dashboard/modals/edit-modal.tsx', 'components/dashboard/tabs/expenses-tab.tsx',
+      'components/dashboard/tabs/incomes-tab.tsx', 'docs/testing/manual-entry-submit-guard.md', 'e2e/manual-entry-submission.spec.ts',
+      'hooks/use-manual-entry-submission.ts', 'lib/__tests__/cashflow-workspace-design.test.ts', 'lib/__tests__/manual-entry-submission.test.ts',
+      'lib/manual-entry-submission.ts', 'scripts/focused-browser-selection.mjs', 'scripts/__tests__/focused-browser-selection.test.ts',
+    ]);
+    expect(validFocusedSelection(selection)).toBe(true);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs.map(item => item.file)).toEqual(['e2e/dashboard-owner-boundary.spec.ts', 'e2e/manual-entry-submission.spec.ts']);
+    expect(selectFocusedBrowser(['lib/new-owner-write-boundary.ts']).criticalMappingRequired).toBe(true);
+  });
   it('selects only actual combobox and backup inspection journeys for the seven-slice packet', () => {
     const selection = selectFocusedBrowser([
       '.github/workflows/ci.yml', 'app/api/backup/full/route.ts', 'app/api/backup/route.ts', 'app/api/dashboard/filter-options/route.ts',
