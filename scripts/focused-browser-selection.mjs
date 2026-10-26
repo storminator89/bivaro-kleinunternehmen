@@ -3,6 +3,16 @@ export const FOCUSED_SPECS = {
   'e2e/feature-backup-roundtrip.spec.ts': ['real backup endpoints remap feature histories, preserve legacy high-water marks and reject conflicts atomically'],
   'e2e/public-help-fragments.spec.ts': [],
   'e2e/public-switching-checklist.spec.ts': [],
+  'e2e/public-pilot-demo.spec.ts': [
+    'anonymous visitor follows the five-step story and retains correction and handoff review limits',
+    'receipt direct link, native Back/Forward, reload and public explanatory download keep the matching step',
+    '360px text alternative, disclosures, matching return and download are keyboard reachable',
+  ],
+  'e2e/documentation-loading.spec.ts': [
+    ...[1440, 360, 390].map(width => `documentation keeps its frame at ${width}px through held reads, failure and explicit retry without losing a failed-save draft`),
+    ...[401, 403].map(status => `documentation read delivery status ${status} never restores private fields or offers a generic retry`),
+    'malformed successful documentation responses stay unavailable until explicit read recovery and never fabricate save success',
+  ],
   'e2e/backup-file-inspection.spec.ts': ['ZIP inspection shows actual checks, blocks changed originals and never restores on discard or reload'],
   'e2e/incoming-invoice-date-filter.spec.ts': ['mobile source-date filters keep boundaries, unknown dates, detail/reload/history and palette continuation read-only'],
   'e2e/registration-status-retry.spec.ts': [],
@@ -13,6 +23,12 @@ export const FOCUSED_SPECS = {
   'e2e/manual-entry-submission.spec.ts': [],
   'e2e/dashboard-owner-boundary.spec.ts': [],
   'e2e/service-article-picker-freshness.spec.ts': [],
+  'e2e/quote-release-owner-surface.spec.ts': [
+    'owner versions stay hidden and unwritable when the gate is absent',
+    'owned quote opens the internal version view without public access',
+    'unobserved committed capture stays blocked after close reopen and reload',
+    'owner version 401 removes private draft and history immediately',
+  ],
   'e2e/manual-photo-expense.spec.ts': ['saved mobile photo needs explicit source/payment confirmation and safely replays one original-backed Expense'],
   'e2e/partial-payments.spec.ts': ['treats a later deliberate equal amount/date/reference as a distinct allocation'],
   'e2e/supplier-tasks.spec.ts': [
@@ -87,7 +103,7 @@ const serverUnitContracts = {
   // PDF/A workflow runs separately for lib/** on both supported architectures.
   'lib/server/own-invoice-layout.ts': ['lib/__tests__/own-invoice-layout.test.ts', 'lib/__tests__/own-invoice-renderer.test.ts', 'lib/__tests__/own-invoice-source.test.ts', 'lib/__tests__/pdfa3.test.ts', 'lib/__tests__/own-invoice-pdfa-validator.test.ts', 'lib/__tests__/own-invoice-pdfa-acceptance.test.ts', '.github/workflows/own-invoice-pdfa.yml'],
 };
-// Exact reviewed presentation conversions are unit-backed; browser scope stays core-only.
+// Exact presentation conversions retain their unit contracts; the owning page also has its own journey.
 const presentationUnitContracts = {
   'app/settings/documentation/page.tsx': ['lib/__tests__/documentation-print-markdown.test.ts'],
   'lib/documentation-print-markdown.ts': ['lib/__tests__/documentation-print-markdown.test.ts'],
@@ -96,8 +112,26 @@ const presentationUnitContracts = {
 // Queue races and portable-reference equivalence remain unit-contract evidence.
 const backupInspectionSources = new Set(['app/api/backup/full/route.ts', 'lib/backup-snapshot.ts', 'lib/bank-allocation-backup.ts', 'lib/processing-limit.ts']);
 
-// Only this real restore case is mapped; fixture safeguards remain unchanged.
+// Internal owner evidence only. Exact paths, never a public-token/unknown-critical
+// exemption. Shared dashboard sources still select their other existing journeys.
+const ownerVersionSources = new Set([
+  'app/api/quotes/[id]/releases/route.ts', 'app/dashboard/page.tsx',
+  'components/dashboard/dashboard-content.tsx', 'components/dashboard/tabs/quotes-tab.tsx',
+  'components/dashboard/quote-release-versions-dialog.tsx',
+  'lib/quote-release-owner-access.ts', 'lib/quote-release-owner-capture.ts',
+  'lib/quote-release-owner-client.ts', 'lib/quote-release-owner-contract.ts', 'lib/quote-release-owner-state.ts',
+  'e2e/helpers/quote-release-owner-fixture.ts', 'e2e/quote-release-owner-surface.spec.ts',
+]);
+const ownerVersionContracts = [
+  'lib/__tests__/quote-release-owner-capture.test.ts', 'lib/__tests__/quote-release-owner-state.test.ts',
+  'lib/__tests__/quote-release-owner-route.test.ts', 'lib/__tests__/quote-release-owner-client.test.ts',
+  'e2e/helpers/quote-release-owner-fixture.ts',
+];
+// These bounded cases own their anonymous read boundary or synthetic account.
+// Exact existing contracts are required; this never authorizes a local browser.
 const reviewedJourneyContracts = {
+  'e2e/public-pilot-demo.spec.ts': ['lib/__tests__/pilot-demo.test.ts', 'e2e/helpers/public-read-only.ts', 'public/demo/bivaro-pilot-v1.txt'],
+  'e2e/documentation-loading.spec.ts': ['scripts/e2e-fixture.mjs', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
   'e2e/feature-backup-roundtrip.spec.ts': ['scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts', 'e2e/helpers/synthetic-login.ts'],
 };
 
@@ -107,6 +141,10 @@ const reviewedJourneyContracts = {
 // Supplier scope is the three bounded titles above, never the whole suite.
 /** @type {Record<string, string[]>} */
 const affectedUxJourneys = {
+  'app/help/page.tsx': ['e2e/public-pilot-demo.spec.ts'],
+  'components/public-accounting/pilot-demo.tsx': ['e2e/public-pilot-demo.spec.ts'],
+  'components/public-accounting/pilot-demo.module.css': ['e2e/public-pilot-demo.spec.ts'],
+  'lib/pilot-demo.ts': ['e2e/public-pilot-demo.spec.ts'],
   'lib/navigation.ts': ['e2e/ux-progressive-disclosure.spec.ts'],
   'components/dashboard/tabs/invoices-tab.tsx': ['e2e/partial-payments.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
   'components/purchases/document-workspace.module.css': ['e2e/manual-photo-expense.spec.ts', 'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
@@ -153,8 +191,15 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
+    const ownerVersion = ownerVersionSources.has(source);
+    if (ownerVersion) {
+      if (!ownerVersionContracts.every(file => exists(file))) unknownCritical.add(source);
+      add('e2e/quote-release-owner-surface.spec.ts', true, source);
+      // Do not continue: dashboard-content also needs manual-entry coverage.
+    }
     if (Object.hasOwn(presentationUnitContracts, source)) {
       if (!presentationUnitContracts[source].every(file => exists(file))) unknownCritical.add(source);
+      if (source === 'app/settings/documentation/page.tsx') add('e2e/documentation-loading.spec.ts', true, source);
       continue;
     }
     if (Object.hasOwn(serverUnitContracts, source)) {
@@ -176,7 +221,7 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     if (ownJourney) { add(ownJourney.spec, true, source); continue; }
     const packet = packets.find(value => value.paths.includes(source) || value.spec === source);
     if (packet) { add(packet.spec, true, source); continue; }
-    let mapped = knownInfrastructure(source) || Boolean(affectedUx);
+    let mapped = knownInfrastructure(source) || Boolean(affectedUx) || ownerVersion;
     if (Object.hasOwn(FOCUSED_SPECS, source)) { add(source, true, source); mapped = true; }
     if (/^(?:app\/(?:help|page\.tsx)|components\/(?:public\/|public-accounting\/))/u.test(source)) {
       add('e2e/public-help-fragments.spec.ts', false, source);
