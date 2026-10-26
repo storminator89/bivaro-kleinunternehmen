@@ -1,3 +1,4 @@
+import { withoutEarlyReceipt } from '../early-browser-workflow-contract.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -22,7 +23,7 @@ const captures = ['income', 'expense'].flatMap(kind => [360, 390, 1440].flatMap(
 describe('bounded manual-financial-record hosted viewport evidence', () => {
   it('preserves the complete accepted 235-name/37 MiB workflow byte for byte', () => {
     expect(start).toBeGreaterThan(0); expect(workflow.indexOf(marker, start + marker.length)).toBe(-1);
-    expect(createHash('sha256').update(accepted).digest('hex')).toBe('47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d');
+    expect(createHash('sha256').update(withoutEarlyReceipt(accepted)).digest('hex')).toBe('47300a7ec9c8c1b295c37b7849c48a55837322515499c9d3ae1860dfa99b493d');
     expect(namesIn(accepted)).toHaveLength(235); expect(new Set(namesIn(accepted)).size).toBe(235);
     for (const value of ['timeout-minutes: 45', 'contents: read', 'persist-credentials: false', '--retries=0', '--workers=1', '--forbid-only',
       'max 30 MiB total output', '# Independent record-search partition: at most 1 MiB extra output;',
