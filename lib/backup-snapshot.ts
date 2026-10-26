@@ -192,19 +192,24 @@ export async function readBackupSnapshot(userId: string): Promise<BackupSnapshot
     const allocations = portableBankAllocations(bankPaymentBindings, paymentAllocationChanges, bankImportRows, paymentJournalEvents);
     for (const document of purchaseDocuments) validateSupplierTaskBackupFields(document as unknown as Record<string, unknown>, `purchaseDocuments[${document.id}]`, true);
     const includedOriginalHashes = new Set(purchaseDocuments.map(document => document.originalSha256));
+    // These keys are unique in the source schema. Index once instead of
+    // repeatedly scanning the complete binding/change arrays per projection.
+    const bindingKeysById = new Map(bankPaymentBindings.map(binding => [binding.id, binding.stableKey]));
+    const bindingKeysByPaymentId = new Map(bankPaymentBindings.map(binding => [binding.paymentJournalEventId, binding.stableKey]));
+    const changeKeysById = new Map(paymentAllocationChanges.map(change => [change.id, change.stableKey]));
     const data = {
       user: { id: user?.id, email: user?.email, name: user?.name },
       manualFinancialRecordEvents: manualFinancialRecordEvents.map(({ userId: _owner, ...event }) => { void _owner; return event; }),
       expenses: expenses.map((item) => ({ ...item, userId: undefined })),
       incomes: incomes.map((item) => ({ ...item, userId: undefined })),
       paymentAdjustments: paymentAdjustments.map(({ allocationBindingId, allocationChangeId, allocationRevision, allocationBasisSnapshot, ...item }) => ({ ...item, userId: undefined,
-        ...(item.contractVersion === 3 ? { allocationBindingStableKey: bankPaymentBindings.find(binding => binding.id === allocationBindingId)?.stableKey, allocationRevision,
-          allocationChangeStableKey: allocationChangeId == null ? null : paymentAllocationChanges.find(change => change.id === allocationChangeId)?.stableKey, allocationBasisSnapshot } : {}),
+        ...(item.contractVersion === 3 ? { allocationBindingStableKey: allocationBindingId === null ? undefined : bindingKeysById.get(allocationBindingId), allocationRevision,
+          allocationChangeStableKey: allocationChangeId == null ? null : changeKeysById.get(allocationChangeId), allocationBasisSnapshot } : {}),
       })),
       bankPaymentBindings: allocations.bindings,
       paymentAllocationChanges: allocations.changes,
       paymentOperations: paymentOperations.map((item) => ({ ...item, userId: undefined })),
-      paymentJournalEvents: paymentJournalEvents.map((item) => ({ ...item, userId: undefined, bankPaymentBindingStableKey: bankPaymentBindings.find(binding => binding.paymentJournalEventId === item.id)?.stableKey ?? null })),
+      paymentJournalEvents: paymentJournalEvents.map((item) => ({ ...item, userId: undefined, bankPaymentBindingStableKey: bindingKeysByPaymentId.get(item.id) ?? null })),
       invoices: invoices.map((item) => ({ ...item, userId: undefined })),
       purchaseDocuments: purchaseDocuments.map((item) => ({ ...item, userId: undefined })),
       // Orphaned historical proof remains target-owned but is not exported without its original.

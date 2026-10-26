@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+// Explicit opt-in policy header changed; all manual-suite body gates remain intact.
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
 const start = workflow.indexOf('      # Independent record-search partition:');
 const accepted = workflow.slice(0, start).trimEnd() + '\n';
@@ -15,7 +16,7 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
 describe('bounded record-search continuation hosted visual evidence', () => {
   it('preserves the entire accepted 217-image/30 MiB workflow and its authentication/budget gates', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(accepted).digest('hex')).toBe('d73cf8910e667ba4a047b4b88115f31437bbaf6ca2e57955e7170cefe03c1625');
+    expect(createHash('sha256').update(accepted).digest('hex')).toBe('04124a34aede5d577ac4491cea8e55488ba0d58ad3f9a89fc101fd8c03dc272e');
     expect(namesIn(accepted)).toHaveLength(217); expect(new Set(namesIn(accepted)).size).toBe(217);
     for (const value of ['max 30 MiB total output', 'timeout-minutes: 45', 'contents: read', '--retries=0', '--workers=1', '--forbid-only']) expect(accepted).toContain(value);
   });

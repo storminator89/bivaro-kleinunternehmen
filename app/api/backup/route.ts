@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { auditBackup, auditSecurityEvent } from '@/lib/audit-log';
 import { createBackupManifest, CURRENT_BACKUP_VERSION } from '@/lib/backup-manifest';
-import { readBackupSnapshot } from '@/lib/backup-snapshot';
+import { BackupFileSizeError, readBackupSnapshot } from '@/lib/backup-snapshot';
 
 // GET: Export all user data as JSON
 export async function GET() {
@@ -105,6 +105,7 @@ export async function GET() {
     if (error instanceof UnauthorizedError) {
       return unauthorizedResponse();
     }
+    if (error instanceof BackupFileSizeError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Backup error:', error);
     return NextResponse.json({ error: 'Backup fehlgeschlagen' }, { status: 500 });
   }

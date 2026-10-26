@@ -12,6 +12,16 @@ import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Shield } from "lucide-
 import { cn } from "@/lib/utils";
 import { validatePassword, PASSWORD_POLICY_HINT } from "@/lib/password-policy";
 
+type RegistrationReadState =
+  | { state: "checking" | "unavailable" }
+  | {
+      state: "ready";
+      isFirstUser: boolean;
+      allowRegistration: boolean;
+      bootstrapRequired: boolean;
+      bootstrapConsumed: boolean;
+    };
+
 export default function RegisterPage() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -23,11 +33,12 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(true);
-  const [isFirstUser, setIsFirstUser] = useState(false);
-  const [registrationAllowed, setRegistrationAllowed] = useState(false);
-  const [bootstrapRequired, setBootstrapRequired] = useState(false);
-  const [bootstrapConsumed, setBootstrapConsumed] = useState(false);
+  const [registration, setRegistration] = useState<RegistrationReadState>({ state: "checking" });
+  const [statusAttempt, setStatusAttempt] = useState(0);
+  const isFirstUser = registration.state === "ready" && registration.isFirstUser;
+  const registrationAllowed = registration.state === "ready" && registration.allowRegistration;
+  const bootstrapRequired = registration.state === "ready" && registration.bootstrapRequired;
+  const bootstrapConsumed = registration.state === "ready" && registration.bootstrapConsumed;
 
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
@@ -45,24 +56,52 @@ export default function RegisterPage() {
   const strengthLabel = ["", "Sehr schwach", "Schwach", "Gut", "Stark"][passwordStrength];
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const timeout = setTimeout(() => {
+      controller.abort();
+      if (active) setRegistration({ state: "unavailable" });
+    }, 8000);
+
     async function checkRegistrationStatus() {
       try {
-        const res = await fetch("/api/auth/registration-status");
-        if (res.ok) {
-          const data = await res.json();
-          setIsFirstUser(data.isFirstUser);
-          setRegistrationAllowed(data.allowRegistration);
-          setBootstrapRequired(data.bootstrapRequired === true);
-          setBootstrapConsumed(data.bootstrapConsumed === true);
+        const res = await fetch("/api/auth/registration-status", { cache: "no-store", signal: controller.signal });
+        if (!res.ok) throw new Error("Registration status unavailable");
+        const data: unknown = await res.json();
+        if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Invalid registration status");
+        const status = data as Record<string, unknown>;
+        // The endpoint omits bootstrapConsumed for an established installation.
+        if (
+          typeof status.isFirstUser !== "boolean" ||
+          typeof status.allowRegistration !== "boolean" ||
+          typeof status.bootstrapRequired !== "boolean" ||
+          (status.isFirstUser && typeof status.bootstrapConsumed !== "boolean") ||
+          (status.bootstrapConsumed !== undefined && typeof status.bootstrapConsumed !== "boolean")
+        ) {
+          throw new Error("Invalid registration status");
         }
-      } catch (error) {
-        console.error("Failed to check registration status", error);
+        if (active && !controller.signal.aborted) {
+          setRegistration({
+            state: "ready",
+            isFirstUser: status.isFirstUser,
+            allowRegistration: status.allowRegistration,
+            bootstrapRequired: status.bootstrapRequired,
+            bootstrapConsumed: status.bootstrapConsumed === true,
+          });
+        }
+      } catch {
+        if (active && !controller.signal.aborted) setRegistration({ state: "unavailable" });
       } finally {
-        setCheckingStatus(false);
+        clearTimeout(timeout);
       }
     }
-    checkRegistrationStatus();
-  }, []);
+    void checkRegistrationStatus();
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [statusAttempt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,10 +147,35 @@ export default function RegisterPage() {
     }
   };
 
-  if (checkingStatus) {
+  if (registration.state === "checking") {
     return (
       <div className={styles.authStatus}>
         <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" /><h1 className="sr-only">Registrierung wird vorbereitet</h1>
+      </div>
+    );
+  }
+
+  if (registration.state === "unavailable") {
+    return (
+      <div className={styles.authStatus}>
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <h1 className="text-2xl font-semibold tracking-tight">Registrierungsstatus nicht verfügbar</h1>
+            <CardDescription>Der Registrierungsstatus konnte gerade nicht geladen werden.</CardDescription>
+          </CardHeader>
+          <CardContent role="alert">
+            <p className="text-sm text-muted-foreground">
+              Ob neue Konten zugelassen sind, ist derzeit nicht bestätigt. Bitte prüfen Sie den Status erneut oder kehren Sie zur Anmeldung zurück.
+            </p>
+          </CardContent>
+          <CardFooter className="flex flex-col items-start gap-3">
+            <Button type="button" onClick={() => {
+              setRegistration({ state: "checking" });
+              setStatusAttempt(attempt => attempt + 1);
+            }}>Status erneut prüfen</Button>
+            <Link href="/login" className="text-primary hover:underline text-sm">Zurück zur Anmeldung</Link>
+          </CardFooter>
+        </Card>
       </div>
     );
   }
