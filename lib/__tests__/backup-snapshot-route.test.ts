@@ -13,6 +13,7 @@ const control = vi.hoisted(() => ({
   release: null as (() => void) | null,
   driftPath: null as string | null,
   driftEnabled: false,
+  snapshotSizeError: false,
 }));
 const state = vi.hoisted(() => ({ client: null as ReturnType<typeof createTestDatabase>['client'] | null }));
 
@@ -31,6 +32,10 @@ vi.mock('@/lib/backup-snapshot', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/backup-snapshot')>();
   return {
     ...actual,
+    readBackupSnapshot: (...args: Parameters<typeof actual.readBackupSnapshot>) => {
+      if (control.snapshotSizeError) throw new actual.BackupFileSizeError('Synthetic snapshot limit');
+      return actual.readBackupSnapshot(...args);
+    },
     getBackupFileVersion: async (filePath: string) => {
       if (control.driftEnabled && control.driftPath === filePath) {
         control.driftEnabled = false;
@@ -65,6 +70,7 @@ let database: ReturnType<typeof createTestDatabase>;
 let directory: string;
 let storage: typeof import('@/lib/upload-path');
 let exportFull: typeof import('@/app/api/backup/full/route');
+let exportJson: typeof import('@/app/api/backup/route');
 let restoreFull: typeof import('@/app/api/backup/full/restore/route');
 
 beforeAll(async () => {
@@ -75,6 +81,7 @@ beforeAll(async () => {
   try {
     storage = await import('@/lib/upload-path');
     exportFull = await import('@/app/api/backup/full/route');
+    exportJson = await import('@/app/api/backup/route');
     restoreFull = await import('@/app/api/backup/full/restore/route');
   } finally {
     cwd.mockRestore();
@@ -144,6 +151,18 @@ async function restoreZipAs(userId: string, zipBytes: ArrayBuffer): Promise<Resp
 }
 
 describe('full backup snapshot route', () => {
+  it('returns 413 without a partial archive for a typed snapshot resource limit in both exports', async () => {
+    control.snapshotSizeError = true;
+    try {
+      for (const route of [exportJson, exportFull]) {
+        const response = await route.GET();
+        expect(response.status).toBe(413);
+        expect(await response.json()).toEqual({ error: 'Synthetic snapshot limit' });
+        expect(response.headers.get('content-disposition')).toBeNull();
+      }
+    } finally { control.snapshotSizeError = false; }
+  });
+
   it('exports a complete pre-payment snapshot while payment commits during ZIP packing', async () => {
     const source = await createSourceFixture(control.userId, new Uint8Array([1, 2, 3, 4]));
     await database.client.user.create({ data: { id: 'snapshot-route-target', email: 'target@backup.test', password: 'fixture' } });
