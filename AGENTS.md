@@ -44,6 +44,9 @@
 - Playwright E2E tests live in `e2e/` and cover registration, authentication, workspace navigation, invoices, quotes, accounting and security boundaries.
 - Vitest is configured in `vitest.config.mts` with `exclude: ['node_modules/**', '.next/**']` – keep this to prevent build artifacts from being collected.
 - Run browser tests through `npm run test:e2e`; its runner passes an absolute temporary `DATABASE_URL` so the standalone server resolves the same fixture from `.next/standalone/` and removes it afterwards.
+- Default to risk-based verification: build/type checks, focused unit tests, a small core smoke and only explicitly affected browser journeys. Ordinary PR browser checks use `.github/workflows/focused-browser.yml` and `playwright.focused.config.ts`; unsupported critical paths require an explicit reviewed mapping, not an automatic full-suite fallback.
+- The complete browser/256-image workflow is manual opt-in for an actual release or high-risk need, not a routine gate for every independent feature or cosmetic change. Do not start broad browser/image loops or add retry/timeout inflation to obtain a green result. Record small presentation defects separately without blocking unrelated development.
+- Preserve thorough security, data-loss, payment, tax, restore and migration checks. Do not classify failures in those contracts as cosmetic, remove their assertions, claim unrun checks passed, or weaken the isolated fixture/production-build safeguards. Existing ordinary CI/security and relevant native-PDF checks remain applicable.
 - `reuseExistingServer: false` is intentional – E2E tests always spin up a fresh isolated server on port 3100.
 - Run `npx playwright install chromium` once to install the browser binary.
 

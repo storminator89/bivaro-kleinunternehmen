@@ -8,6 +8,10 @@ export const FOCUSED_SPECS = {
   'e2e/invoice-number-check-freshness.spec.ts': [],
   'e2e/users-list-read-retry.spec.ts': [],
   'e2e/combobox-accessibility.spec.ts': ['category combobox exposes actual keyboard and pointer choices in entry/edit/recurring dialogs'],
+  'e2e/audit-log-requests.spec.ts': [],
+  'e2e/manual-entry-submission.spec.ts': [],
+  'e2e/dashboard-owner-boundary.spec.ts': [],
+  'e2e/service-article-picker-freshness.spec.ts': [],
 };
 const code = value => /^(?:app|components|hooks|lib|prisma|scripts|e2e|focused-e2e)\//u.test(value) || /^(?:proxy\.ts|next\.config\.ts|package(?:-lock)?\.json|playwright[^/]*\.ts|\.github\/workflows\/)/u.test(value);
 const knownInfrastructure = value => /^(?:scripts\/|focused-e2e\/|\.github\/workflows\/|e2e\/helpers\/|lib\/__tests__\/|playwright[^/]*\.ts)/u.test(value) || ['package.json', 'package-lock.json', 'next.config.ts', 'proxy.ts'].includes(value);
@@ -48,13 +52,19 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     { spec: 'e2e/public-switching-checklist.spec.ts', marker: /switching-checklist/u,
       paths: ['app/help/page.tsx', 'components/public-accounting/switching-checklist.tsx', 'components/public-accounting/switching-checklist.module.css', 'lib/switching-checklist.ts'] },
   ].filter(packet => exists(packet.spec) && paths.some(source => packet.marker.test(source)));
-  // Existing isolated read-only journeys must follow their runtime source even
+  // Existing reviewed own journeys must follow their runtime source even
   // when a later fix does not edit the spec. A missing journey fails closed.
-  const readJourneys = [
+  const ownJourneys = [
     { spec: 'e2e/registration-status-retry.spec.ts', source: 'app/register/page.tsx' },
     { spec: 'e2e/invoice-number-check-freshness.spec.ts', source: 'components/dashboard/create-invoice-modal.tsx' },
     { spec: 'e2e/users-list-read-retry.spec.ts', source: 'app/users/page.tsx' },
     ...['components/ui/combobox-options.ts', 'components/ui/combobox.tsx', 'components/ui/dialog.tsx'].map(source => ({ spec: 'e2e/combobox-accessibility.spec.ts', source })),
+    ...['app/settings/audit-logs/page.tsx', 'lib/audit-log-query.ts'].map(source => ({ spec: 'e2e/audit-log-requests.spec.ts', source })),
+    ...['components/dashboard/dashboard-content.tsx', 'components/dashboard/manual-entry-submit-feedback.tsx', 'components/dashboard/modals/edit-modal.tsx',
+      'components/dashboard/tabs/expenses-tab.tsx', 'components/dashboard/tabs/incomes-tab.tsx', 'hooks/use-manual-entry-submission.ts', 'lib/manual-entry-submission.ts']
+      .map(source => ({ spec: 'e2e/manual-entry-submission.spec.ts', source })),
+    ...['components/dashboard/dashboard-query-provider.tsx', 'lib/dashboard-query-lifecycle.ts'].map(source => ({ spec: 'e2e/dashboard-owner-boundary.spec.ts', source })),
+    ...['components/dashboard/service-article-picker-state.ts', 'components/dashboard/service-article-picker.tsx'].map(source => ({ spec: 'e2e/service-article-picker-freshness.spec.ts', source })),
   ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
@@ -63,8 +73,8 @@ export function selectFocusedBrowser(paths, exists = () => true) {
       if (backupInspectionSources.has(source)) add('e2e/backup-file-inspection.spec.ts', true, source);
       continue;
     }
-    const readJourney = readJourneys.find(value => value.source === source);
-    if (readJourney) { add(readJourney.spec, true, source); continue; }
+    const ownJourney = ownJourneys.find(value => value.source === source);
+    if (ownJourney) { add(ownJourney.spec, true, source); continue; }
     const packet = packets.find(value => value.paths.includes(source) || value.spec === source);
     if (packet) { add(packet.spec, true, source); continue; }
     let mapped = knownInfrastructure(source);

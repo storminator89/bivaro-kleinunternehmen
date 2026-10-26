@@ -47,6 +47,8 @@ import type { DashboardTab } from "@/hooks/use-dashboard-data";
 import { useDashboardCreateAction } from "@/hooks/use-dashboard-create-action";
 import { buildEURCSVFromFreshSummary } from "@/lib/eur-csv-export";
 import { useInvoiceDetailSelection } from '@/hooks/use-invoice-detail-selection';
+import { useManualEntrySubmission } from '@/hooks/use-manual-entry-submission';
+import { manualEntryOutcome } from '@/lib/manual-entry-submission';
 
 export function DashboardContent() {
   const { data: dashboardSession, status: dashboardSessionStatus } = useSession();
@@ -203,6 +205,40 @@ export function DashboardContent() {
   const [expenseEntryOpen, setExpenseEntryOpen] = useState(false);
   const [incomeEntryOpen, setIncomeEntryOpen] = useState(false);
   const [expenseReceipt, setExpenseReceipt] = useState<File | null>(null);
+  const [expenseReceiptInputKey, setExpenseReceiptInputKey] = useState(0);
+  const expenseSubmission = useManualEntrySubmission();
+  const incomeSubmission = useManualEntrySubmission();
+  const editSubmission = useManualEntrySubmission();
+
+  const clearExpenseDraft = () => {
+    setNewExpense({ description: '', amount: '', date: new Date().toISOString().split('T')[0], category: '', taxRelevant: true, taxDeductiblePercentage: 100, depreciationYears: '' });
+    setExpenseReceipt(null);
+    // File inputs are uncontrolled: changing React state alone keeps the native
+    // selected file and can silently attach it to a later intentional entry.
+    setExpenseReceiptInputKey(current => current + 1);
+  };
+  const clearIncomeDraft = () => {
+    setNewIncome({ description: '', amount: '', date: formatLocalBusinessDate(), customerId: undefined, taxRelevant: true });
+    setIncomeFormError(null);
+  };
+  const expenseSubmitPhase = expenseSubmission.state.phase;
+  const incomeSubmitPhase = incomeSubmission.state.phase;
+  const editSubmitPhase = editSubmission.state.phase;
+  const releaseExpenseAfterCommit = expenseSubmission.releaseAfterCommit;
+  const releaseIncomeAfterCommit = incomeSubmission.releaseAfterCommit;
+  const releaseEditAfterCommit = editSubmission.releaseAfterCommit;
+  // Release an accepted new-entry lease only after React committed the cleared
+  // draft/native-file remount. An old form cannot submit again between the
+  // response and that commit; normal subsequent empty-form entry stays intact.
+  useEffect(() => {
+    if ((expenseSubmitPhase === 'accepted' || expenseSubmitPhase === 'discarding') && newExpense.description === '' && newExpense.amount === '' && expenseReceipt === null) releaseExpenseAfterCommit();
+  }, [expenseSubmitPhase, releaseExpenseAfterCommit, newExpense.description, newExpense.amount, expenseReceipt]);
+  useEffect(() => {
+    if ((incomeSubmitPhase === 'accepted' || incomeSubmitPhase === 'discarding') && newIncome.description === '' && newIncome.amount === '') releaseIncomeAfterCommit();
+  }, [incomeSubmitPhase, releaseIncomeAfterCommit, newIncome.description, newIncome.amount]);
+  useEffect(() => {
+    if ((editSubmitPhase === 'accepted' || editSubmitPhase === 'discarding') && !editModalOpen && itemToEdit === null) releaseEditAfterCommit();
+  }, [editSubmitPhase, releaseEditAfterCommit, editModalOpen, itemToEdit]);
 
   useDashboardCreateAction({
     searchParams, requestedTab: normalizeTab(tabParam), activeTab, router,
@@ -420,100 +456,100 @@ export function DashboardContent() {
 
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    const token = expenseSubmission.begin();
+    if (token === null) return;
+    const draft = { ...newExpense };
+    const receipt = expenseReceipt;
+    let sent = false;
     try {
       const formData = new FormData();
-      formData.append('description', newExpense.description);
-      formData.append('amount', newExpense.amount);
-      formData.append('date', new Date(newExpense.date).toISOString());
-      formData.append('category', newExpense.category);
-      formData.append('taxRelevant', newExpense.taxRelevant.toString());
-      formData.append('taxDeductiblePercentage', newExpense.taxDeductiblePercentage.toString());
-      if (newExpense.depreciationYears) {
-        formData.append('depreciationYears', newExpense.depreciationYears.toString());
+      formData.append('description', draft.description);
+      formData.append('amount', draft.amount);
+      formData.append('date', new Date(draft.date).toISOString());
+      formData.append('category', draft.category);
+      formData.append('taxRelevant', draft.taxRelevant.toString());
+      formData.append('taxDeductiblePercentage', draft.taxDeductiblePercentage.toString());
+      if (draft.depreciationYears) {
+        formData.append('depreciationYears', draft.depreciationYears.toString());
       }
-      if (expenseReceipt) {
-        formData.append('receipt', expenseReceipt);
+      if (receipt) {
+        formData.append('receipt', receipt);
       }
-
+      sent = true;
       const response = await fetch('/api/expenses', {
         method: 'POST',
+        signal: expenseSubmission.signal(token),
         body: formData,
       });
 
-      if (response.ok) {
-        await loadExpenses(1, expensesPageSize);
-        setNewExpense({
-          description: '',
-          amount: '',
-          date: new Date().toISOString().split('T')[0],
-          category: '',
-          taxRelevant: true,
-          taxDeductiblePercentage: 100,
-          depreciationYears: ''
-        });
-        setExpenseReceipt(null);
+      const outcome = await manualEntryOutcome(response);
+      if (!expenseSubmission.current(token)) return;
+      if (outcome.kind === 'accepted') {
+        expenseSubmission.settle(token, { phase: 'accepted', message: '' });
+        clearExpenseDraft();
+        // A failed read after an accepted write must never offer a POST retry.
+        void loadExpenses(1, expensesPageSize).catch(() => {});
+      } else if (outcome.kind === 'rejected') {
+        expenseSubmission.settle(token, { phase: 'idle', message: outcome.message });
       } else {
-        const failure = await response.json().catch(() => null);
-        toast.error(failure?.error || 'Die Ausgabe konnte nicht gespeichert werden.');
+        expenseSubmission.settle(token, { phase: 'unknown', message: '' });
       }
     } catch (error) {
       console.error('Error creating expense:', error);
-      toast.error('Die Ausgabe konnte nicht gespeichert werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.');
+      expenseSubmission.settle(token, { phase: sent ? 'unknown' : 'idle', message: sent ? '' : 'Die Eingaben konnten nicht gesendet werden. Prüfen Sie das Datum.' });
     }
   };
 
   const handleIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const token = incomeSubmission.begin();
+    if (token === null) return;
+    const draft = { ...newIncome };
     setIncomeFormError(null);
 
     try {
       const response = await fetch('/api/incomes', {
         method: 'POST',
+        signal: incomeSubmission.signal(token),
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          description: newIncome.description,
-          amount: parseFloat(newIncome.amount),
-          date: newIncome.date,
-          customerId: newIncome.customerId,
-          taxRelevant: newIncome.taxRelevant
+          description: draft.description,
+          amount: parseFloat(draft.amount),
+          date: draft.date,
+          customerId: draft.customerId,
+          taxRelevant: draft.taxRelevant
         }),
       });
 
-      if (response.ok) {
-        await loadIncomes(1, incomesPageSize);
-        setNewIncome({
-          description: '',
-          amount: '',
-          date: formatLocalBusinessDate(),
-          customerId: undefined,
-          taxRelevant: true
+      const outcome = await manualEntryOutcome(response);
+      if (!incomeSubmission.current(token)) return;
+      if (outcome.kind === 'accepted') {
+        incomeSubmission.settle(token, { phase: 'accepted', message: '' });
+        clearIncomeDraft();
+        void loadIncomes(1, incomesPageSize).catch(() => {});
+      } else if (outcome.kind === 'rejected') {
+        incomeSubmission.settle(token, { phase: 'idle', message: '' });
+        setIncomeFormError({
+          field: outcome.field,
+          message: outcome.field === 'date'
+            ? 'Bitte geben Sie ein gültiges Zahlungsdatum an.'
+            : outcome.message,
         });
       } else {
-        let errorData: { error?: string; field?: string } = {};
-        try {
-          errorData = await response.json();
-        } catch {
-          // Keep the form error useful even when the server does not return JSON.
-        }
-        setIncomeFormError({
-          field: errorData.field,
-          message: errorData.field === 'date'
-            ? 'Bitte geben Sie ein gültiges Zahlungsdatum an.'
-            : errorData.error || 'Die Einnahme konnte nicht gespeichert werden.',
-        });
+        incomeSubmission.settle(token, { phase: 'unknown', message: '' });
       }
     } catch (error) {
       console.error('Error creating income:', error);
-      setIncomeFormError({ message: 'Die Einnahme konnte nicht gespeichert werden.' });
+      incomeSubmission.settle(token, { phase: 'unknown', message: '' });
     }
   };
 
   // Bearbeitungs- und Löschfunktionen
   const openEditModal = (item: Expense | Income, type: 'expense' | 'income', isDuplicate: boolean = false) => {
     if (item.manualRecordState === 'FINALIZED' || manualOverrides[`${type}:${item.id}`] === 'FINALIZED') return;
+    if (!editSubmission.reset()) return;
     const editData: DashboardEditData = {
       ...item,
       amount: item.amount.toString()
@@ -538,24 +574,29 @@ export function DashboardContent() {
   };
 
   const handleEditSave = async (formData: DashboardEditData) => {
+    const token = editSubmission.begin();
+    if (token === null) return;
+    const draft = { ...formData };
+    const kind = editType;
+    let sent = false;
     try {
-      const isNewItem = formData.id === undefined;
+      const isNewItem = draft.id === undefined;
       const method = isNewItem ? 'POST' : 'PUT';
-      const endpoint = editType === 'expense' ? '/api/expenses' : '/api/incomes';
+      const endpoint = kind === 'expense' ? '/api/expenses' : '/api/incomes';
 
-      const dataToSend: Record<string, unknown> = { ...formData };
+      const dataToSend: Record<string, unknown> = { ...draft };
       if (isNewItem) {
         delete dataToSend.id; // ID entfernen, da sie vom Backend generiert wird
         // Für duplizierte Ausgaben, die keinen Beleg haben sollen
-        if (editType === 'expense') {
+        if (kind === 'expense') {
           delete dataToSend.receiptFileName;
           delete dataToSend.storedReceiptFileName;
         }
       }
-      dataToSend.amount = parseFloat(formData.amount); // Betrag als Zahl senden
-      if (editType === 'expense' && typeof dataToSend.date === 'string') {
+      dataToSend.amount = parseFloat(draft.amount); // Betrag als Zahl senden
+      if (kind === 'expense' && typeof dataToSend.date === 'string') {
         dataToSend.date = new Date(dataToSend.date).toISOString();
-      } else if (editType === 'income' && typeof dataToSend.date === 'string') {
+      } else if (kind === 'income' && typeof dataToSend.date === 'string') {
         if (isNewItem) {
           // A duplicate is a new manual write: send its explicit calendar day.
           dataToSend.date = formatBusinessDate(dataToSend.date);
@@ -566,30 +607,34 @@ export function DashboardContent() {
         }
       }
 
+      sent = true;
       const response = await fetch(endpoint, {
         method,
+        signal: editSubmission.signal(token),
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(dataToSend),
       });
 
-      if (response.ok) {
-        if (editType === 'expense') {
-          await loadExpenses(isNewItem ? 1 : expensesPage, expensesPageSize);
-        } else { // income
-          await loadIncomes(isNewItem ? 1 : incomesPage, incomesPageSize);
-        }
-
+      const outcome = await manualEntryOutcome(response, isNewItem ? undefined : draft.id);
+      if (!editSubmission.current(token)) return;
+      if (outcome.kind === 'accepted') {
+        editSubmission.settle(token, { phase: 'accepted', message: '' });
         setEditModalOpen(false);
+        setItemToEdit(null);
+        const refresh = kind === 'expense'
+          ? loadExpenses(isNewItem ? 1 : expensesPage, expensesPageSize)
+          : loadIncomes(isNewItem ? 1 : incomesPage, incomesPageSize);
+        void refresh.catch(() => {});
+      } else if (outcome.kind === 'rejected') {
+        editSubmission.settle(token, { phase: 'idle', message: outcome.message });
       } else {
-        const errorData = await response.json();
-        console.error(`Error ${method}ing ${editType}:`, errorData);
-        toast.error(`Fehler beim Speichern: ${errorData.error || 'Unbekannter Fehler'}`);
+        editSubmission.settle(token, { phase: 'unknown', message: '' });
       }
     } catch (error) {
       console.error(`Error ${editType}:`, error);
-      toast.error(`Ein unerwarteter Fehler ist aufgetreten: ${error instanceof Error ? error.message : String(error)}`);
+      editSubmission.settle(token, { phase: sent ? 'unknown' : 'idle', message: sent ? '' : 'Die Eingaben konnten nicht gesendet werden. Prüfen Sie das Datum.' });
     }
   };
 
@@ -941,10 +986,16 @@ export function DashboardContent() {
               entryOpen={expenseEntryOpen}
               onEntryOpenChange={setExpenseEntryOpen}
               newExpense={newExpense}
-              setNewExpense={setNewExpense}
+              setNewExpense={value => { if (expenseSubmission.editable()) setNewExpense(value); }}
               expenseReceipt={expenseReceipt}
-              setExpenseReceipt={setExpenseReceipt}
+              expenseReceiptInputKey={expenseReceiptInputKey}
+              setExpenseReceipt={value => { if (expenseSubmission.editable()) setExpenseReceipt(value); }}
               onSubmit={handleExpenseSubmit}
+              submission={{ state: expenseSubmission.state, refreshing: expensesIsFetching,
+                onStopWaiting: () => { expenseSubmission.stopWaiting(); },
+                onRefresh: () => { void loadExpenses(expensesPage, expensesPageSize).catch(() => {}); },
+                onDiscard: () => { if (expenseSubmission.discard()) clearExpenseDraft(); },
+              }}
               filters={filters.expenses}
               setFilters={(expenseFilters) => setFilters({ ...filters, expenses: expenseFilters })}
               uniqueCategories={uniqueCategories}
@@ -977,8 +1028,13 @@ export function DashboardContent() {
               entryOpen={incomeEntryOpen}
               onEntryOpenChange={setIncomeEntryOpen}
               newIncome={newIncome}
-              setNewIncome={setNewIncome}
+              setNewIncome={value => { if (incomeSubmission.editable()) setNewIncome(value); }}
               onSubmit={handleIncomeSubmit}
+              submission={{ state: incomeSubmission.state, refreshing: incomesIsFetching,
+                onStopWaiting: () => { incomeSubmission.stopWaiting(); },
+                onRefresh: () => { void loadIncomes(incomesPage, incomesPageSize).catch(() => {}); },
+                onDiscard: () => { if (incomeSubmission.discard()) clearIncomeDraft(); },
+              }}
               formError={incomeFormError}
               customers={customers}
               filters={filters.incomes}
@@ -1139,12 +1195,17 @@ export function DashboardContent() {
         {editModalOpen && itemToEdit && (
           <EditModal
             isOpen={editModalOpen}
-            onClose={() => setEditModalOpen(false)}
+            onClose={() => { if (editSubmission.editable()) { setEditModalOpen(false); setItemToEdit(null); } }}
             onSave={handleEditSave}
             data={itemToEdit}
             type={editType}
             customers={customers}
             uniqueCategories={uniqueCategories}
+            submission={{ state: editSubmission.state, refreshing: editType === 'expense' ? expensesIsFetching : incomesIsFetching,
+              onStopWaiting: () => { editSubmission.stopWaiting(); },
+              onRefresh: () => { void (editType === 'expense' ? loadExpenses(expensesPage, expensesPageSize) : loadIncomes(incomesPage, incomesPageSize)).catch(() => {}); },
+              onDiscard: () => { if (editSubmission.discard()) { setEditModalOpen(false); setItemToEdit(null); } },
+            }}
           />
         )}
 
