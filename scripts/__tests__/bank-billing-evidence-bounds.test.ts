@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+// Explicit opt-in policy header changed; all manual-suite body gates remain intact.
 const workflow = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
 const start = workflow.indexOf('      # New fifth partition:');
 const original = workflow.slice(0, start).trimEnd() + '\n';
@@ -13,7 +14,7 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
 describe('bounded hosted bank and billing redesign acceptance', () => {
   it('preserves the exact accepted workflow, all 125 existing images and prior budgets', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(original).digest('hex')).toBe('fd492ff1d816adbea6a329fa81d3e6c540886c5fef92fe94e5f6886487a6a407');
+    expect(createHash('sha256').update(original).digest('hex')).toBe('8437c1330df9e24495bde1287fde5c7a480621ddafd016a1eda4c68081bf8495');
     const names = namesIn(original); expect(names).toHaveLength(125); expect(new Set(names).size).toBe(125);
     for (const value of ['timeout-minutes: 45', 'limit = 10 * 1024 * 1024', 'limit = 2 * 1024 * 1024', 'contents: read', '--retries=0']) expect(original).toContain(value);
   });
