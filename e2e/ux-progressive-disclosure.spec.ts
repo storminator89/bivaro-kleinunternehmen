@@ -106,7 +106,9 @@ test('progressive UX keeps keyboard navigation, active history and setup/editor/
       await page.goto('/settings#handoff-settings');
       await expect(page.getByRole('button', { name: 'Daten sichern (JSON)', exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Daten und Dateien sichern (ZIP)', exact: true })).toBeVisible();
-      await page.getByRole('link', { name: 'Unterlagen übergeben', exact: true }).click();
+      const handoff = page.locator('#handoff-settings').getByRole('link', { name: 'Unterlagen übergeben', exact: true });
+      await expect(handoff).toHaveAttribute('href', '/handoff');
+      await handoff.click();
       await expect(page).toHaveURL(/\/handoff$/);
       await expect(page.getByRole('heading', { name: 'Für welchen Zeitraum?', exact: true })).toBeVisible();
       await expect(page.getByText('Zuerst die Vorschau prüfen. Ein Download oder Versand wird dadurch noch nicht gestartet.', { exact: true })).toBeVisible();
