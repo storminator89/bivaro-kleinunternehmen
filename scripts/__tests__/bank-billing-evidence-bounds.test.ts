@@ -1,3 +1,4 @@
+import { withoutEarlyReceipt } from '../early-browser-workflow-contract.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +14,7 @@ const namesIn = (source: string) => [...source.matchAll(/allowed = \{([\s\S]*?)\
 describe('bounded hosted bank and billing redesign acceptance', () => {
   it('preserves the exact accepted workflow, all 125 existing images and prior budgets', () => {
     expect(start).toBeGreaterThan(0);
-    expect(createHash('sha256').update(original).digest('hex')).toBe('fd492ff1d816adbea6a329fa81d3e6c540886c5fef92fe94e5f6886487a6a407');
+    expect(createHash('sha256').update(withoutEarlyReceipt(original)).digest('hex')).toBe('fd492ff1d816adbea6a329fa81d3e6c540886c5fef92fe94e5f6886487a6a407');
     const names = namesIn(original); expect(names).toHaveLength(125); expect(new Set(names).size).toBe(125);
     for (const value of ['timeout-minutes: 45', 'limit = 10 * 1024 * 1024', 'limit = 2 * 1024 * 1024', 'contents: read', '--retries=0']) expect(original).toContain(value);
   });

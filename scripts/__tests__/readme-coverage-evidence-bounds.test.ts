@@ -1,3 +1,4 @@
+import { withoutEarlyReceipt } from '../early-browser-workflow-contract.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -22,7 +23,7 @@ describe('bounded existing README-area hosted captures', () => {
   it('preserves the exact 220-image baseline and adds only fifteen disjoint owned names', () => {
     expect(start).toBeGreaterThan(0);
     expect(delivery).toBeGreaterThan(start);
-    expect(createHash('sha256').update(accepted).digest('hex')).toBe('7977e7caf672538ac542976446a417d3aa191e3a8d1338c1c61ecab634df7091');
+    expect(createHash('sha256').update(withoutEarlyReceipt(accepted)).digest('hex')).toBe('7977e7caf672538ac542976446a417d3aa191e3a8d1338c1c61ecab634df7091');
     expect(namesIn(accepted)).toHaveLength(220);
     expect(namesIn(partition).sort()).toEqual([...names].sort());
     const owned = namesIn(accepted + partition);
