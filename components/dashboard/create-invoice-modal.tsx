@@ -1116,6 +1116,7 @@ export function CreateInvoiceModal({
               )}
             </Button>
           </div>
+          <p className="max-w-prose text-sm leading-6 text-muted-foreground">Empfänger und Positionen ausfüllen, Gesamtbetrag prüfen, dann die Rechnungsdatei erstellen. Versand und Zahlung folgen getrennt.</p>
         </DialogHeader>
 
         <p role="status" aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground">
@@ -1538,23 +1539,25 @@ export function CreateInvoiceModal({
               <div className="invoice-summary-body"><dl><div><dt>Nettobetrag</dt><dd>{displayedNetAmount}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayedTaxAmount}</dd></div></dl>
                 {taxMode === 'small-business' && <p className="text-xs text-muted-foreground">Keine Umsatzsteuer gemäß § 19 UStG.</p>}
             <section className={isPage ? "invoice-output space-y-2" : "rounded-md border border-primary/20 bg-primary/5 p-3"} aria-labelledby="invoice-output-title">
-              <Label id="invoice-output-title" htmlFor="invoice-output-mode" className="text-sm font-medium">Ausgabeformat</Label>
+              <Label id="invoice-output-title" htmlFor="invoice-output-mode" className="text-sm font-medium">Rechnungsformat</Label>
               <select
                 id="invoice-output-mode"
                 className="mt-2 flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-2 outline-transparent focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                 value={outputMode}
                 onChange={(e) => setOutputMode(e.target.value as InvoiceOutputMode)}
               >
-                <option value="zugferd-pdf">ZUGFeRD-PDF + XML</option>
-                <option value="xml-only">XRechnung-XML</option>
+                <option value="zugferd-pdf">PDF mit eingebetteter XML (ZUGFeRD)</option>
+                <option value="xml-only">Nur XML (XRechnung)</option>
               </select>
+              <p className="text-xs leading-5 text-muted-foreground">{outputMode === 'xml-only' ? 'Für Empfänger, die eine XRechnung verlangen. E-Mail und Käuferreferenz sind erforderlich.' : 'Lesbare PDF mit eingebetteten elektronischen Rechnungsdaten.'}</p>
             </section>
+            <p id="invoice-create-effect" className="text-xs leading-5 text-muted-foreground">Beim Erstellen werden Rechnungsnummer und Angaben festgeschrieben. Die Datei wird gespeichert und heruntergeladen – nicht versendet. Es wird keine Zahlung erfasst.</p>
 
         {!taxReady && <p id="invoice-tax-blocker" className="text-xs"><a href="#invoice-tax-heading" className="underline underline-offset-4">Steuerbehandlung bestätigen</a>.</p>}
         <DialogFooter className={isPage ? "invoice-create-actions" : undefined}>
           <Button type="button" variant="outline" onClick={requestClose} disabled={isSavingDraft || isGenerating}>Abbrechen</Button>
           {fromDraft && <Button type="button" variant="outline" onClick={saveServiceDraft} disabled={isSavingDraft || isGenerating || !taxMode}>{isSavingDraft ? 'Speichere Entwurf …' : 'Entwurf speichern'}</Button>}
-          <Button type="button" onClick={createInvoiceFile} aria-describedby={!taxReady ? "invoice-tax-blocker" : undefined} disabled={!taxReady || isSavingDraft || isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
+          <Button type="button" onClick={createInvoiceFile} aria-describedby={!taxReady ? "invoice-create-effect invoice-tax-blocker" : "invoice-create-effect"} disabled={!taxReady || isSavingDraft || isGenerating || !customerAddress || !invoiceNumber || !!invoiceNumberError || isCheckingNumber}>
             {isGenerating
               ? (outputMode === 'xml-only' ? "Erstelle XML …" : "Erstelle PDF …")
               : (outputMode === 'xml-only' ? "XML erstellen" : "PDF erstellen")}

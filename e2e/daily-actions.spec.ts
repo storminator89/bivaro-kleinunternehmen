@@ -151,13 +151,13 @@ test('daily actions lead to exact existing workflows, preserve drafts and remain
     await list.getByRole('link', { name: 'Rechnung prüfen: SYNTHETIC-DAILY-PARTIAL', exact: true }).focus(); await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`tab=invoices&document=${invoice.id}`));
     await expect(page.getByText('Ausgewähltes Dokument', { exact: false })).toBeVisible();
-    await page.getByRole('button', { name: 'Details', exact: true }).filter({ visible: true }).click();
+    await page.getByRole('button', { name: /^Details zu Rechnung / }).filter({ visible: true }).click();
     const invoiceDialog = page.getByRole('dialog', { name: 'Rechnungsdetails', exact: true });
     await expect(invoiceDialog.getByText('80,00 €', { exact: true })).toBeVisible();
     await page.keyboard.press('Escape'); await expect(invoiceDialog).toBeHidden();
     await page.goBack(); await expect(page).toHaveURL(/\/dashboard\/today$/);
     await page.goForward(); await expect(page).toHaveURL(new RegExp(`document=${invoice.id}`));
-    await page.reload(); await expect(page.getByRole('button', { name: 'Details', exact: true }).filter({ visible: true })).toBeVisible();
+    await page.reload(); await expect(page.getByRole('button', { name: /^Details zu Rechnung / }).filter({ visible: true })).toBeVisible();
     await page.goBack();
 
     await list.getByRole('link', { name: 'Rückmeldung erfassen: SYNTHETIC-DAILY-FOLLOWUP', exact: true }).click();

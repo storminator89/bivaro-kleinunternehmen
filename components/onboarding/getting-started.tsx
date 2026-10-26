@@ -30,8 +30,22 @@ export function GettingStartedChecklist({ settings, invoiceCount, hasCustomer }:
     { key: 'export', done: false, title: 'Unterlagen',
             href: '/help#export', action: 'Exportwege ansehen' },
   ];
+  const nextStep = progress.nextStep === 'company'
+    ? { href: '/settings#company-settings', action: 'Firmendaten ergänzen', description: 'Eigene Firmendaten für neue Belege hinterlegen.' }
+    : progress.nextStep === 'fiscal'
+      ? { href: '/settings#fiscal-profile', action: 'Steuerprofil einrichten', description: 'Die steuerliche Einordnung selbst auswählen und bestätigen.' }
+      : progress.nextStep === 'invoice'
+        ? hasCustomer
+          ? { href: '/dashboard/invoices/new', action: 'Erste Rechnung erstellen', description: 'Rechnung vorbereiten und Angaben vor dem Speichern prüfen.' }
+          : { href: '/customers', action: 'Kunde anlegen', description: 'Danach die erste Rechnung erstellen.' }
+        : null;
 
-  return <details className={`${styles.panel} ${styles.compactChecklist}`}>
+  return <section className={styles.panel} aria-label="Einrichtung">
+    {nextStep && <div className={styles.nextStep}>
+      <div><p className={styles.nextStepLabel}>Nächster Einrichtungsschritt</p><p className={styles.description}>{nextStep.description}</p></div>
+      <Button asChild><Link href={nextStep.href}>{nextStep.action}</Link></Button>
+    </div>}
+    <details className={styles.compactChecklist}>
     <summary className={styles.summary}>
       <span><h2>Einrichtung</h2></span>
       <span className={styles.progress}>{progress.completed} / 3 gespeichert<ChevronDown aria-hidden="true" /></span>
@@ -50,7 +64,8 @@ export function GettingStartedChecklist({ settings, invoiceCount, hasCustomer }:
       </ol>
 
     </div>
-  </details>;
+    </details>
+  </section>;
 }
 
 export function GettingStarted() {
