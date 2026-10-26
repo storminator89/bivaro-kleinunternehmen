@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Response, type TestInfo } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { hashPassword } from '../lib/password';
@@ -13,6 +13,62 @@ import type { DashboardSummary } from '../hooks/use-dashboard-data';
 const year = new Date().getUTCFullYear();
 const category = 'SYNTHETISCHE vollständig lesbare Betriebsausgaben mit außergewöhnlich langer Kategorienbezeichnung';
 const description = 'SYNTHETISCHES Wirtschaftsgut mit vollständig lesbarer Anschaffungsbeschreibung und dokumentiertem Rechenweg';
+type ReportOwner = { id: string; role: string; sessionVersion: number };
+type AuthDiagnostic = { level: string; code: string; errorName: string };
+const reportAuth = new WeakMap<Page, ReturnType<typeof observeReportAuth>>();
+const diagnosticToken = (value: unknown) => typeof value === 'string' && /^[A-Za-z_][A-Za-z_0-9]{0,63}$/.test(value) ? value : 'Unknown';
+async function ownerSession(response: Response, owner: ReportOwner) {
+  expect(response.status()).toBe(200); expect(await response.finished()).toBeNull();
+  const session = await response.json();
+  expect({ id: session.user?.id, role: session.user?.role, sessionVersion: session.user?.sessionVersion }).toEqual(owner);
+}
+function observeReportAuth(page: Page, owner: ReportOwner) {
+  const diagnostics: AuthDiagnostic[] = [], pending = new Set<Promise<void>>();
+  const record = (diagnostic: AuthDiagnostic) => {
+    if (diagnostics.length < 32) diagnostics.push(diagnostic);
+    else if (diagnostics.length === 32) diagnostics.push({ level: 'error', code: 'AUTH_DIAGNOSTIC_OVERFLOW', errorName: 'Unknown' });
+  };
+  const observe = (check: Promise<void>) => {
+    const tracked = check.catch(error => { record({ level: 'error', code: 'SESSION_OBSERVATION_FAILED', errorName: diagnosticToken(error?.name) }); });
+    pending.add(tracked); void tracked.then(() => pending.delete(tracked));
+  };
+  page.on('request', request => {
+    if (request.method() !== 'GET' || new URL(request.url()).pathname !== '/api/auth/session') return;
+    observe((async () => {
+      const response = await request.response();
+      if (!response) {
+        record({ level: 'error', code: 'SESSION_REQUEST_FAILED', errorName: request.failure()?.errorText === 'net::ERR_ABORTED' ? 'AbortError' : 'NetworkError' });
+        return;
+      }
+      await ownerSession(response, owner);
+    })());
+  });
+  // NextAuth's URL-encoded beacon stringifies nested errors. Its local console
+  // metadata can retain the error name; never persist messages, stacks or URLs.
+  page.on('console', message => {
+    const match = /^\[next-auth\]\[(error|warn|debug)\]\[([A-Z_0-9]{1,64})\]/.exec(message.text());
+    if (!match) return;
+    observe((async () => {
+      const metadata = await message.args()[3]?.jsonValue();
+      record({ level: match[1], code: match[2], errorName: diagnosticToken(metadata?.error?.name ?? metadata?.name) });
+    })());
+  });
+  const settle = async () => {
+    // Wait for exact observed session requests, not an arbitrary delay or global
+    // network-idle heuristic. Repeated reads started during settlement count too.
+    await expect.poll(() => pending.size, { message: 'Every observed session response must finish before navigation' }).toBe(0);
+    expect(diagnostics, 'Unexpected authentication diagnostics (bounded fields only)').toEqual([]);
+  };
+  const healthy = async () => {
+    const session = await page.evaluate(async () => {
+      const response = await fetch('/api/auth/session', { cache: 'no-store' });
+      const body = await response.json();
+      return { status: response.status, id: body.user?.id, role: body.user?.role, sessionVersion: body.user?.sessionVersion };
+    });
+    expect(session).toEqual({ status: 200, ...owner }); await settle();
+  };
+  return { record, settle, healthy };
+}
 function summary(timeRange = 'thisYear', empty = false): DashboardSummary {
   const selectedYear = timeRange === 'lastYear' ? year - 1 : year;
   return {
@@ -32,10 +88,12 @@ async function settled(page: Page) {
   expect(await page.evaluate(() => document.fonts.check('400 14px Inter'))).toBe(true);
 }
 async function navigate(page: Page, destination: string) {
+  await reportAuth.get(page)?.settle();
   const session = page.waitForResponse(response => response.request().method() === 'GET'
     && new URL(response.url()).pathname === '/api/auth/session' && new URL(page.url()).pathname === destination.split('?')[0]);
   await page.goto(destination); const response = await session;
   expect(response.status()).toBe(200); expect(await response.finished()).toBeNull(); await settled(page);
+  await reportAuth.get(page)?.settle();
 }
 async function account(page: Page) {
   expect(process.env.DATABASE_URL).toBe(`file:${e2eDatabasePath()}`);
@@ -45,13 +103,24 @@ async function account(page: Page) {
   await navigate(page, '/login'); await page.getByLabel('E-Mail').fill(user.email); await page.getByLabel('Passwort', { exact: true }).fill(password);
   const session = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/auth/session' && new URL(page.url()).pathname === '/dashboard');
   await page.getByRole('main').getByRole('button', { name: 'Anmelden', exact: true }).click();
-  expect((await session).status()).toBe(200); await expect(page).toHaveURL(/\/dashboard/);
+  const owner = { id: user.id, role: user.role, sessionVersion: user.sessionVersion };
+  await ownerSession(await session, owner); await expect(page).toHaveURL(/\/dashboard/);
+  const auth = observeReportAuth(page, owner); reportAuth.set(page, auth);
   const unexpected: string[] = [];
   await page.route('**/api/**', async route => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(route.request().method())) return route.continue();
+    if (route.request().method() === 'POST' && new URL(route.request().url()).pathname === '/api/auth/_log') {
+      const body = route.request().postDataBuffer();
+      const fields = new URLSearchParams(body && body.length <= 16 * 1024 ? body.toString('utf8') : '');
+      auth.record({ level: diagnosticToken(fields.get('level')), code: diagnosticToken(fields.get('code')), errorName: diagnosticToken(fields.get('name')) });
+      // Logging is not a financial mutation, but an unknown/auth-error beacon is
+      // still a failure. Do not continue it or allow any other auth POST.
+      return route.abort('blockedbyclient');
+    }
     unexpected.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`); await route.abort('blockedbyclient');
   });
-  return { user, unexpected };
+  await auth.healthy();
+  return { user, unexpected, auth };
 }
 async function theme(page: Page, value: 'light' | 'dark') {
   if (await page.locator('html').evaluate(element => element.classList.contains('dark')) !== (value === 'dark')) {
@@ -93,7 +162,8 @@ async function capture(page: Page, info: TestInfo, name: string, workspace: Loca
   expect(png.readUInt32BE(16)).toBe(surface.width); expect(png.readUInt32BE(20)).toBeGreaterThanOrEqual(surface.height);
   process.stdout.write(`Financial reports capture proof: ${JSON.stringify({ name, ...surface, viewport: page.viewportSize(), fullPage: true, pngWidth: png.readUInt32BE(16), pngHeight: png.readUInt32BE(20), encodedBytes: png.length, sha256: createHash('sha256').update(png).digest('hex') })}\n`);
 }
-async function noWrites(userId: string, unexpected: string[]) {
+async function noWrites(page: Page, userId: string, unexpected: string[]) {
+  await reportAuth.get(page)!.healthy();
   expect(unexpected).toEqual([]);
   expect(await prisma.income.count({ where: { userId } })).toBe(0);
   expect(await prisma.expense.count({ where: { userId } })).toBe(0);
@@ -170,12 +240,12 @@ test('EÜR report keeps financial context, responsive modes, disclosures and int
   mode = 'error'; await navigate(page, '/dashboard?tab=eur');
   await expect(page.getByRole('alert').filter({ hasText: 'Kein Export aus zwischengespeicherten Zahlen.' })).toBeVisible(); await expect(workspace).toBeHidden();
   mode = 'full'; await page.getByRole('button', { name: 'Aktuellen EÜR-Stand erneut prüfen', exact: true }).click(); await expect(workspace).toBeVisible();
-  await noWrites(user.id, unexpected);
+  await noWrites(page, user.id, unexpected);
 });
 
 test('GWG integrated register preserves responsive values, period and read-only export', async ({ page }, info) => {
   test.setTimeout(120_000);
-  const { user, unexpected } = await account(page), requests: string[] = [];
+  const { user, unexpected, auth } = await account(page), requests: string[] = [];
   let mode: 'full' | 'empty' | 'error' = 'full';
   await page.route('**/api/dashboard/assets?*', async route => {
     const query = new URL(route.request().url()).searchParams; requests.push(query.toString());
@@ -204,11 +274,11 @@ test('GWG integrated register preserves responsive values, period and read-only 
   await expect.poll(() => requests.some(query => query.includes('timeRange=lastYear'))).toBe(true);
   await page.route('**/api/dashboard/summary?*', route => route.fulfill({ json: summary('thisYear', true) }));
   await navigate(page, '/dashboard?tab=eur');
-  await page.goBack(); await expect(page).toHaveURL(/tab=gwg/); await expect(workspace).toBeVisible();
-  await page.goForward(); await expect(page).toHaveURL(/tab=eur/);
-  await page.goBack(); await expect(page).toHaveURL(/tab=gwg/); await expect(workspace).toBeVisible();
+  await auth.settle(); await page.goBack(); await expect(page).toHaveURL(/tab=gwg/); await expect(workspace).toBeVisible(); await settled(page); await auth.healthy();
+  await auth.settle(); await page.goForward(); await expect(page).toHaveURL(/tab=eur/); await settled(page); await auth.healthy();
+  await auth.settle(); await page.goBack(); await expect(page).toHaveURL(/tab=gwg/); await expect(workspace).toBeVisible(); await settled(page); await auth.healthy();
   mode = 'empty'; await navigate(page, '/dashboard?tab=gwg'); await expect(workspace.getByText('Keine GWG-Anschaffungen gefunden', { exact: true })).toBeVisible();
   mode = 'error'; await navigate(page, '/dashboard?tab=gwg');
   await expect(page.getByRole('alert').filter({ hasText: 'Die Anlagendaten konnten nicht geladen werden' })).toBeVisible(); await expect(workspace).toBeHidden();
-  mode = 'full'; await navigate(page, '/dashboard?tab=gwg'); await expect(workspace).toBeVisible(); await noWrites(user.id, unexpected);
+  mode = 'full'; await navigate(page, '/dashboard?tab=gwg'); await expect(workspace).toBeVisible(); await noWrites(page, user.id, unexpected);
 });
