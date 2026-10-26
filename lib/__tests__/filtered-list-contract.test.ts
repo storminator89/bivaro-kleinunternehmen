@@ -20,7 +20,7 @@ describe('body-only filtered list contracts', () => {
   });
   it('uses ordinary list defaults and page bounds, not the palette 20-page cap', () => {
     expect(invoiceListSearchInput({ query: ' abc ' })).toEqual({ query: 'abc', page: 1, pageSize: 20, paidStatus: 'all', dateRange: 'all' });
-    expect(purchaseListSearchInput({ query: 'abc' })).toEqual({ query: 'abc', page: 1, limit: 25, reviewStatus: 'ALL', taskKind: 'all', taskDue: 'any' });
+    expect(purchaseListSearchInput({ query: 'abc' })).toEqual({ query: 'abc', page: 1, limit: 25, reviewStatus: 'ALL', taskKind: 'all', taskDue: 'any', invoiceDateFrom: '', invoiceDateTo: '', invoiceDateMissing: 'any' });
     expect(invoiceListSearchInput({ query: 'abc', page: 101, pageSize: 1 }).page).toBe(101);
     expect(purchaseListSearchInput({ query: 'abc', page: 100_000, limit: 50 }).page).toBe(100_000);
     for (const page of [0, -1, 1.5, '1', null, Infinity, NaN, Number.MAX_SAFE_INTEGER]) expect(() => invoiceListSearchInput({ query: 'abc', page })).toThrow();

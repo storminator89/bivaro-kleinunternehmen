@@ -15,6 +15,7 @@ import { findPurchaseDuplicateHints } from './duplicates';
 import { closedSourceAiExtractionState } from './ai-provenance';
 import { isPhotoMedia, type ManualPhotoSnapshot } from './manual-photo-contract';
 import { PURCHASE_PARSE_STATUSES, PURCHASE_REVIEW_STATUSES } from './types';
+import { incomingInvoiceDateBounds, incomingInvoiceDateFilterFromParams } from './invoice-date-filter';
 
 // Paginated reads must not materialize lineItems (or any full parsedData JSON).
 const SOURCE_METADATA_SELECT = {
@@ -134,10 +135,16 @@ export async function listPurchaseDocuments(userId: string, params: URLSearchPar
   if (reviewStatus && !PURCHASE_REVIEW_STATUSES.includes(reviewStatus as PurchaseReviewStatus)) throw new PurchaseDocumentError('Ungültiger Prüfstatus.');
   const search = params.get('search')?.trim() ?? '';
   if (search.length > 200) throw new PurchaseDocumentError('Suchtext ist zu lang.');
+  let dateFilter: ReturnType<typeof incomingInvoiceDateFilterFromParams>;
+  try { dateFilter = incomingInvoiceDateFilterFromParams(params); }
+  catch { throw new PurchaseDocumentError('Bitte gültige, widerspruchsfreie Rechnungsdatumfilter angeben.', 400, 'INVALID_DATE_FILTER'); }
+  const dateBounds = incomingInvoiceDateBounds(dateFilter);
+  const dateWhere: Prisma.PurchaseDocumentWhereInput = dateFilter.invoiceDateMissing === 'only' ? { invoiceDate: null }
+    : dateFilter.invoiceDateFrom || dateFilter.invoiceDateTo ? { invoiceDate: dateBounds } : {};
   const taskFilters = parseSupplierTaskFilters(params);
   const taskActive = taskFilters.kind !== null || taskFilters.due !== 'any';
   if (taskActive && reviewStatus && reviewStatus !== 'REVIEW') throw new PurchaseDocumentError('Aktive Vormerkungen gehören ausschließlich zu offenen Belegen.');
-  const where: Prisma.PurchaseDocumentWhereInput = { ...(taskActive ? { reviewStatus: 'REVIEW', supplierTaskKind: taskFilters.kind && taskFilters.kind !== 'any' ? taskFilters.kind : { not: null }, supplierTaskConfirmationRequired: false,
+  const where: Prisma.PurchaseDocumentWhereInput = { ...dateWhere, ...(taskActive ? { reviewStatus: 'REVIEW', supplierTaskKind: taskFilters.kind && taskFilters.kind !== 'any' ? taskFilters.kind : { not: null }, supplierTaskConfirmationRequired: false,
     ...(taskFilters.due === 'due' ? { supplierTaskFollowUpDate: { lte: taskFilters.today } } : taskFilters.due === 'later' ? { supplierTaskFollowUpDate: { gt: taskFilters.today } } : taskFilters.due === 'undated' ? { supplierTaskFollowUpDate: null } : {}) } : {}), userId, ...(reviewStatus ? { reviewStatus } : {}), ...(search ? { OR: [{ originalFileName: { contains: search } }, { supplierName: { contains: search } }, { invoiceNumber: { contains: search } }, { reviewDraftSearch: { contains: search } }] } : {}) };
   return prisma.$transaction(async tx => {
     const orderBy: Prisma.PurchaseDocumentOrderByWithRelationInput[] = taskActive ? [{ supplierTaskFollowUpDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }] : [{ uploadedAt: 'desc' }, { id: 'desc' }];
@@ -149,6 +156,9 @@ export async function listPurchaseDocuments(userId: string, params: URLSearchPar
         : taskFilters.due === 'undated' ? Prisma.sql`AND "supplierTaskFollowUpDate" IS NULL` : Prisma.empty;
       const kindMatch = taskFilters.kind && taskFilters.kind !== 'any' ? Prisma.sql`AND "supplierTaskKind" = ${taskFilters.kind}` : Prisma.empty;
       const match = Prisma.sql`${ownedRecordMatch('inbound', userId, paletteQuery)}
+        ${dateFilter.invoiceDateMissing === 'only' ? Prisma.sql`AND "invoiceDate" IS NULL` : Prisma.empty}
+        ${dateBounds.gte ? Prisma.sql`AND "invoiceDate" >= ${dateBounds.gte}` : Prisma.empty}
+        ${dateBounds.lte ? Prisma.sql`AND "invoiceDate" <= ${dateBounds.lte}` : Prisma.empty}
         ${reviewStatus ? Prisma.sql`AND "reviewStatus" = ${reviewStatus}` : Prisma.empty}
         ${taskActive ? Prisma.sql`AND "reviewStatus" = 'REVIEW' AND "supplierTaskKind" IS NOT NULL AND "supplierTaskConfirmationRequired" = ${false} ${kindMatch} ${dueMatch}` : Prisma.empty}`;
       // Only this page's IDs are materialized; the SQL count does not load
