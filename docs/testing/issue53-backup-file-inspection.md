@@ -129,3 +129,23 @@ claimed available.
 No new browser/CI run, publication, merge or deployment was started. Complete
 browser/visual, ordinary build, repository regression and actual isolated
 restore/rollback acceptance remain separate gates. Issue #53 stays open.
+
+
+## Initial exact-head hosted discovery failure and narrow correction
+
+Draft PR #213 first published head
+`caf218c09f2ce9bdb93147ac2e727b60b27dcdb6` with the exact reviewed feature
+tree. [Browser run 40298590532](https://github.com/storminator89/bivaro-kleinunternehmen/actions/runs/40298590532)
+failed during Playwright discovery, **before any browser case executed**:
+`Cannot find module 'server-only'` was reached through the new E2E's runtime
+`backup-manifest` import. The later missing screenshot-partition errors are
+consequences of that discovery failure, not independent UI evidence.
+
+The narrow test-only correction reads the exact checked-out version-string
+assignments and current capability alias as source text. It preserves precise
+current/legacy/schema assertions without importing the server implementation,
+adding an alias/dependency, or weakening the `server-only` guard. Remaining
+runtime imports are the same Node/Playwright/JSZip/password/Prisma/isolated-login
+helpers already used by the accepted E2E suite. Application code and all
+financial/restore/security checks are unchanged. New exact-head hosted checks
+are required; the failed discovery run has no browser or visual acceptance.

@@ -1,13 +1,26 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import JSZip from 'jszip';
 import { hashPassword } from '../lib/password';
 import { prisma } from '../lib/prisma';
-import { CURRENT_BACKUP_VERSION, CURRENT_SCHEMA_VERSION, LEGACY_BACKUP_VERSION } from '../lib/backup-manifest';
 import { e2eDatabasePath } from '../scripts/e2e-fixture.mjs';
 import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 
-// AUTHORED ONLY: run through the supported fresh-fixture hosted E2E runner.
+// Read the exact checked-out format identities without importing the server-only
+// backup implementation into Playwright's Node test-discovery process.
+const manifestSource = readFileSync('lib/backup-manifest.ts', 'utf8');
+function sourceVersion(source: string, name: string): string {
+  const match = source.match(new RegExp(`^export const ${name} = '([^']+)';$`, 'mu'));
+  if (!match) throw new Error(`Expected exact source declaration for ${name}`);
+  return match[1];
+}
+const CURRENT_BACKUP_VERSION = sourceVersion(manifestSource, 'CURRENT_BACKUP_VERSION');
+const LEGACY_BACKUP_VERSION = sourceVersion(manifestSource, 'LEGACY_BACKUP_VERSION');
+if (!/^export const CURRENT_SCHEMA_VERSION = MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION;$/mu.test(manifestSource)) throw new Error('Expected exact current backup capability alias');
+const CURRENT_SCHEMA_VERSION = sourceVersion(readFileSync('lib/manual-financial-record-backup.ts', 'utf8'), 'MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION');
+
+// Run through the supported fresh-fixture hosted E2E runner only.
 // No restore endpoint, immutable-row cleanup, external service, or real backup.
 const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 async function settledNavigation(page: Page, destination: string, navigate: () => Promise<unknown>) {
