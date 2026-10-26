@@ -2928,5 +2928,74 @@
         "https://github.com/storminator89/bivaro-kleinunternehmen/pull/227"
       ]
     }
+  },
+  "githubIssue83ApiKeyListReadLocalCheckpoint20261026": {
+    "observedAt": "2026-10-26T23:12:00Z",
+    "githubIssue": 83,
+    "historicalTicket": "Not BV-083; historical ticket records and summaries unchanged.",
+    "status": "Local implementation with focused checks; browser, hosted and release acceptance open.",
+    "providerMain": "595e5e44525ec0967b627f482bc78f607dcabe15",
+    "exactBaseTree": "7b8916a9f56a609b3b923121e9e26e8b83796254",
+    "syntheticLocalBase": "6da6d480ad0ee4d5f043f22ed5cfffd8a42f04a0",
+    "providerAncestry": false,
+    "worktree": "bivaro-api-key-list-read-83",
+    "changeState": "local uncommitted",
+    "runtimeScope": [
+      "app/settings/api-keys/page.tsx list-read UI/lifecycle only"
+    ],
+    "implemented": [
+      "Explicit pending/error/success with unknown counts until validated GET",
+      "Empty-list creation only for successful []",
+      "Accessible status/error and deliberate GET retry/read-only refresh",
+      "Unconfirmed reads hide prior rows/actions and disable header create",
+      "Malformed delivery rejection, abort/latest-read and unmount guards; no automatic retry"
+    ],
+    "byteIdentical": [
+      "Existing create/delete/toggle/clipboard/scope/date/CORS handlers",
+      "CORS read function",
+      "Entire CORS/create/one-time-secret UI tail",
+      "Existing confirmed-list table"
+    ],
+    "unchanged": [
+      "Authentication and roles",
+      "Server/API routes and API-key generation/storage",
+      "Security policy",
+      "Schema and dependencies",
+      "Workflow files"
+    ],
+    "checks": {
+      "node": "24.22.1",
+      "focusedVitest": {
+        "suites": 2,
+        "passed": 63,
+        "skipped": 0,
+        "apiKeyListCases": 16,
+        "selectorCases": 47
+      },
+      "focusedEslint": "Passed, zero warnings",
+      "scopedTypescript": "Passed exit 0; no incremental cache; 1536 MiB cap",
+      "selectorSyntax": "Passed exit 0",
+      "exactBaseRegressionProbe": "One selected unit case expected red: 0/10 · 0 aktiv before confirmed GET",
+      "regionPreservation": "Four byte-identical region checks passed"
+    },
+    "authoredBrowserCases": 4,
+    "browserExecuted": false,
+    "actualKeyOrCredentialOrPermissionActions": false,
+    "localServerApiDatabaseExecuted": false,
+    "fullSuiteOrBuildExecuted": false,
+    "installationOrPrismaRegeneration": false,
+    "newCiRunOrRemoteWrite": false,
+    "prMergeDeploymentOrIssueClosure": false,
+    "socketPermissionBoundary": "Known blocked browser bootstrap not retried or bypassed.",
+    "evidence": [
+      "docs/testing/api-key-list-read-states.md",
+      "bivaro-api-key-list-read-83-preservation.json"
+    ],
+    "unitLogSha256": "df528d24399d6c8ec00540befcd8a230ab3fb5e6ef95063f48b864290692b5e3",
+    "remaining": [
+      "Independent review of exact local patch",
+      "Browser/layout acceptance on authorized supported target",
+      "Exact-head hosted and release acceptance before any completion claim"
+    ]
   }
 }

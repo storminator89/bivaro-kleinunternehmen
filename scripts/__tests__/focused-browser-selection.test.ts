@@ -7,6 +7,47 @@ import { FOCUSED_SPECS, selectFocusedBrowser, validFocusedSelection } from '../f
 type FocusedSpec = keyof typeof FOCUSED_SPECS;
 
 describe('risk-based browser scope, not full acceptance', () => {
+  it('maps only the exact API-key list page to four synthetic read-only cases and fails closed for missing evidence', () => {
+    const source = 'app/settings/api-keys/page.tsx';
+    const spec = 'e2e/api-key-list-read.spec.ts';
+    const contracts = ['lib/__tests__/api-key-list-read-state.test.ts', 'scripts/e2e-fixture.mjs',
+      'scripts/run-e2e.mjs', 'playwright.config.ts', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'];
+    const titles = [
+      ...[1440, 360, 390].map(width => `API key list at ${width}px distinguishes held failure, keyboard GET retry, stale refresh and confirmed empty reload without writes`),
+      'API key list refuses denied network invalid JSON and malformed successful deliveries until deliberate read recovery',
+    ];
+    expect(FOCUSED_SPECS[spec]).toEqual(titles);
+    for (const paths of [[source], [spec], [source, spec, ...contracts]]) {
+      const selection = selectFocusedBrowser(paths);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection).toEqual({ schema: 'bivaro-focused-browser-selection-v1', core: true,
+        specs: [{ file: spec, titles }], criticalMappingRequired: false, unknownCriticalCount: 0, unmappedSourceCount: 0 });
+    }
+    for (const missing of [spec, ...contracts]) {
+      for (const paths of [[source], [spec]]) {
+        const selection = selectFocusedBrowser(paths, file => file !== missing);
+        expect(selection.criticalMappingRequired).toBe(true);
+        expect(selection.unknownCriticalCount).toBe(1);
+        expect(selection.specs).toEqual([]);
+      }
+    }
+    for (const unreviewed of ['app/api/api-keys/route.ts', 'app/api/cors-settings/route.ts', 'lib/api-auth.ts', 'lib/api-key-list-next.ts']) {
+      const selection = selectFocusedBrowser([source, unreviewed]);
+      expect(selection.criticalMappingRequired).toBe(true);
+      expect(selection.unknownCriticalCount).toBe(1);
+    }
+  });
+  it('binds API-key list selectors to real synthetic GET-only cases without key creation or policy claims', () => {
+    const source = readFileSync('e2e/api-key-list-read.spec.ts', 'utf8');
+    expect(source).toContain('for (const width of [1440, 360, 390])');
+    expect(source).toContain('test(`API key list at ${width}px distinguishes held failure, keyboard GET retry, stale refresh and confirmed empty reload without writes`');
+    expect(source).toContain("test('API key list refuses denied network invalid JSON and malformed successful deliveries until deliberate read recovery'");
+    expect(source).toContain("expect(route.request().method()).toBe('GET')");
+    expect(source).toContain("expect(method).toBe('GET')");
+    expect(source).toContain('e2eDatabasePath()');
+    expect(source).not.toMatch(/prisma\.apiKey|request\.(?:post|put|delete)|test\.(?:skip|fixme)|screenshot/);
+  });
+
   it('binds only the ten reviewed CORS cleanup routes to required ordinary-CI contracts and core smoke', () => {
     const routes = ['cashbook', 'customers', 'documentation', 'expenses', 'incomes',
       'invoices', 'invoices/upload', 'recurring-expenses', 'reminders', 'settings']
