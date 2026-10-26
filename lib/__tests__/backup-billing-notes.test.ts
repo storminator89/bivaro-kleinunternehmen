@@ -25,6 +25,7 @@ afterAll(async () => { await database?.cleanup(); });
 function makeBackup(options: { sourceUserId?: string; mismatchedInvoiceCustomer?: boolean; unassignedNote?: boolean; duplicateNote?: boolean } = {}) {
   const sourceUserId = options.sourceUserId ?? 'billing-source';
   const data = {
+    quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [],
     user: { id: sourceUserId, email: `${sourceUserId}@backup.test`, name: 'Source' },
     customers: [
       { id: 10, name: 'Billing customer', internalNote: 'Call after 10:00', noteVisibility: 'EDITOR', createdAt: '2026-01-01T00:00:00.000Z' },

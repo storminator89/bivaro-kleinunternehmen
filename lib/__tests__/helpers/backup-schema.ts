@@ -1,10 +1,26 @@
 import { supportsManualFinancialRecords } from '@/lib/manual-financial-record-backup';
+import { QUOTE_RELEASE_BACKUP_SCHEMA_VERSION } from '@/lib/backup-schema-identities';
 import { MANUAL_RECORD_UUID } from '@/lib/manual-financial-record-evidence';
 import { backupSchemaSupportsSupplierTasks, backupSchemaSupportsBankMappingProfiles, backupSchemaSupportsDocumentNumberingPolicies, backupSchemaSupportsBankPaymentAllocations, backupSchemaSupportsBankImportEvidence, backupSchemaSupportsAiExtraction, backupSchemaSupportsServiceBilling, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, backupSchemaSupportsPurchaseValidation, backupSchemaSupportsEmailOutbox, hashJson } from '@/lib/backup-manifest';
+/** Historical fixtures may discard only a provably empty, well-shaped graph.
+ * Never erase real or malformed evidence to make an older identity pass. */
+export function stripEmptyQuoteReleaseGraphForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string; count?: number }[] } }) {
+  if (backup.manifest.schemaVersion === QUOTE_RELEASE_BACKUP_SCHEMA_VERSION) return;
+  const sections = [['quoteReleaseAuthorities', 'QuoteReleaseAuthority'], ['quoteReleases', 'QuoteRelease'], ['quoteElectronicResponses', 'QuoteElectronicResponse']] as const;
+  if (sections.some(([key, model]) => {
+    const value = backup.data[key];
+    const coverage = backup.manifest.modelCoverage.find(entry => entry.model === model);
+    return (Object.hasOwn(backup.data, key) && (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || value.length !== 0 || Reflect.ownKeys(value).length !== 1)) || (coverage?.count !== undefined && coverage.count !== 0);
+  })) return;
+  for (const [key] of sections) delete backup.data[key];
+  const models: readonly string[] = sections.map(([, model]) => model);
+  backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter(entry => !models.includes(entry.model));
+}
 /** Only empty, unreviewed generated metadata may be removed for a genuine
  * historical fixture. Real history, finalized/recorded states and malformed
  * partial evidence must remain visible and fail the old runtime contract. */
 export function stripEmptyManualFinancialRecordsForLegacy(backup: { data: Record<string, unknown>; manifest: { schemaVersion?: string; modelCoverage: { model: string; sha256?: string }[] } }) {
+  stripEmptyQuoteReleaseGraphForLegacy(backup);
   if (supportsManualFinancialRecords(backup.manifest.schemaVersion)) return;
   const events = backup.data.manualFinancialRecordEvents;
   if (Object.hasOwn(backup.data, 'manualFinancialRecordEvents') && (!Array.isArray(events) || events.length !== 0)) return;

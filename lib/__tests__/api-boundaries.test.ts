@@ -190,6 +190,40 @@ describe('external API boundaries', () => {
     expect(JSON.parse(audit[1].newValues!).name).toBe('Renamed fixture');
   });
 
+  it('rejects malformed and out-of-Prisma-range customer IDs without mutation or audit', async () => {
+    const customer = await database.client.customer.create({ data: { userId: 'api-fixture', name: 'ID boundary fixture' } });
+    const customersBefore = await database.client.customer.findMany({ orderBy: { id: 'asc' } });
+    const auditsBefore = await database.client.auditLog.findMany({ where: { entityType: 'Customer' }, orderBy: { id: 'asc' } });
+    const invalidIds = [`${customer.id}junk`, `${customer.id}.5`, `${customer.id}e2`, 'NaN', '0', '-1', '2147483648', '9007199254740991'];
+    for (const id of invalidIds) {
+      for (const [method, handler] of [['PUT', PUT], ['DELETE', DELETE]] as const) {
+        const response = await handler(request(`/api/v1/customers?id=${encodeURIComponent(id)}`, method, method === 'PUT' ? { name: 'Must not change' } : undefined));
+        expect(response.status, `${method} ${id}`).toBe(400);
+        expect((await response.json()).error.code).toBe('VALIDATION_ERROR');
+      }
+    }
+    expect(await database.client.customer.findMany({ orderBy: { id: 'asc' } })).toEqual(customersBefore);
+    expect(await database.client.auditLog.findMany({ where: { entityType: 'Customer' }, orderBy: { id: 'asc' } })).toEqual(auditsBefore);
+  });
+
+  it('keeps valid Int IDs, leading-zero decimal IDs and tenant boundaries intact', async () => {
+    const customer = await database.client.customer.create({ data: { userId: 'api-fixture', name: 'Valid ID fixture' } });
+    await database.client.user.create({ data: { id: 'customer-id-other-owner', email: 'customer-id-other-owner@test.invalid', password: 'unused' } });
+    const foreign = await database.client.customer.create({ data: { userId: 'customer-id-other-owner', name: 'Other owner unchanged' } });
+    for (const [method, handler] of [['PUT', PUT], ['DELETE', DELETE]] as const) {
+      const body = method === 'PUT' ? { name: 'Must not change' } : undefined;
+      expect((await handler(request('/api/v1/customers?id=2147483647', method, body))).status).toBe(404);
+      expect((await handler(request(`/api/v1/customers?id=${foreign.id}`, method, body))).status).toBe(404);
+    }
+    expect((await database.client.customer.findUniqueOrThrow({ where: { id: foreign.id } })).name).toBe('Other owner unchanged');
+    expect((await PUT(request(`/api/v1/customers?id=00${customer.id}`, 'PUT', { name: 'Valid update' }))).status).toBe(200);
+    const deleted = await DELETE(request(`/api/v1/customers?id=${customer.id}`, 'DELETE'));
+    expect(deleted.status).toBe(200);
+    expect((await deleted.json()).data).toEqual({ deleted: true, id: customer.id });
+    const audits = await database.client.auditLog.findMany({ where: { userId: 'api-fixture', entityType: 'Customer', entityId: String(customer.id) }, orderBy: { id: 'asc' } });
+    expect(audits.map(audit => audit.action)).toEqual(['UPDATE', 'DELETE']);
+  });
+
   it('keeps income/expense foreign keys and linked mutations tenant-safe', async () => {
     await database.client.user.create({ data: { id: 'foreign-api', email: 'foreign-api@test.invalid', password: 'unused' } });
     const foreignCustomer = await database.client.customer.create({ data: { userId: 'foreign-api', name: 'Foreign customer' } });

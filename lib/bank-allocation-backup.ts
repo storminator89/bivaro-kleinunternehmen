@@ -163,9 +163,11 @@ export function validateBankAllocationGraph(data: Row, schemaVersion?: string, o
 /** Raw DB rows become stable references; no local ID enters the portable financial proof. */
 export function portableBankAllocations(bindings: Row[], changes: Row[], bankRows: Row[], roots: Row[]): BankAllocationBackup {
   const bindingById = new Map(bindings.map(row => [row.id, row])), changeById = new Map(changes.map(row => [row.id, row]));
+  const bankRowById = new Map(bankRows.map(row => [row.id, row]));
+  const rootById = new Map(roots.map(row => [row.id, row]));
   return {
-    bindings: bindings.map(row => ({ stableKey: String(row.stableKey), rowStableKey: String(bankRows.find(bank => bank.id === row.bankImportRowId)?.stableKey ?? fail('Bankzeile fehlt.')),
-      originalPaymentKey: String(roots.find(root => root.id === row.paymentJournalEventId)?.idempotencyKey ?? fail('Originalzahlung fehlt.')),
+    bindings: bindings.map(row => ({ stableKey: String(row.stableKey), rowStableKey: String(bankRowById.get(row.bankImportRowId)?.stableKey ?? fail('Bankzeile fehlt.')),
+      originalPaymentKey: String(rootById.get(row.paymentJournalEventId)?.idempotencyKey ?? fail('Originalzahlung fehlt.')),
       idempotencyKey: String(row.idempotencyKey), semanticFingerprint: String(row.semanticFingerprint), basisSnapshot: row.basisSnapshot as Prisma.InputJsonValue,
       contractVersion: row.contractVersion as 1, createdAt: evidenceDate(row.createdAt).toISOString() })).sort((a, b) => a.stableKey.localeCompare(b.stableKey)),
     changes: changes.map(row => ({ stableKey: String(row.stableKey), bindingStableKey: String(bindingById.get(row.bindingId)?.stableKey ?? fail('Bindung fehlt.')),

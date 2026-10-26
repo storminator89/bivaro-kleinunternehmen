@@ -34,6 +34,7 @@ const paidAt = '2026-01-05T00:00:00.000Z';
 const createdAt = '2026-01-08T12:00:00.000Z';
 function makeBackup(unknown = false) {
   const data = {
+    quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [],
     serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], suppliers: [], purchaseDocuments: [],
     user: { id: 'journal-source' }, customers: [], expenses: [], auditLogs: [], invoiceNumberCounters: [],
     invoices: [{ id: 10, type: 'INVOICE', invoiceNumber: '2026-101', fileName: 'invoice.pdf', storedFileName: 'invoice.pdf',
@@ -258,7 +259,7 @@ describe('immutable payment journal backup', () => {
 
   it('rejects destructive overwrite of journal targets, including pre-journal backup versions', async () => {
     const before = await database.client.paymentJournalEvent.findFirstOrThrow({ where: { userId: 'journal-target' } });
-    const old = envelope({ serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], user: { id: 'journal-source' }, customers: [], expenses: [], incomes: [], invoices: [], auditLogs: [], invoiceNumberCounters: [] });
+    const old = envelope({ quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [], serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], user: { id: 'journal-source' }, customers: [], expenses: [], incomes: [], invoices: [], auditLogs: [], invoiceNumberCounters: [] });
     old.manifest.schemaVersion = PRE_PAYMENT_JOURNAL_SCHEMA_VERSION; stripEmptyPaymentAdjustmentsForLegacy(old); stripCsvCatalogForLegacy(old);
     old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => entry.model !== 'PaymentJournalEvent');
     expect(() => restore.validateBackupForRestore(old)).not.toThrow();

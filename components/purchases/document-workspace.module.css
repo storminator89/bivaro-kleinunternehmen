@@ -11,6 +11,8 @@
 .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, .35fr); gap: var(--space-md); align-items: end; padding: var(--space-md) var(--space-lg); border-block: 1px solid var(--color-rule); background: var(--color-paper-2); }
 .toolbar label { color: var(--color-ink-2); font-size: var(--text-xs); }
 .toolbar input, .toolbar select { min-width: 0; width: 100%; min-height: 2.75rem; background: var(--color-paper); }
+.optionalFilters { border-bottom: 1px solid var(--color-rule); }
+.optionalFilters > summary { min-height: 2.75rem; padding: var(--space-sm) var(--space-lg); cursor: pointer; font-size: var(--text-sm); font-weight: 500; }
 .columnHeadings, .recordButton { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(7rem, .55fr); gap: var(--space-lg); padding-inline: var(--space-lg); }
 .columnHeadings { padding-block: var(--space-sm); color: var(--color-muted); font-size: var(--text-xs); }
 .columnHeadings > :last-child { text-align: right; }
@@ -55,7 +57,7 @@
   .expenseSource > div { margin-top: 0; }
 }
 @media (max-width: 479px) {
-  .listHeading, .toolbar, .recordButton, .pagination, .uploadPanel, .expenseSummary, .expenseFacts, .expenseSource { padding: var(--space-md); }
+  .listHeading, .toolbar, .recordButton, .pagination, .uploadPanel, .expenseSummary, .expenseFacts, .expenseSource, .optionalFilters > summary { padding: var(--space-md); }
   .expenseNotice { margin-inline: var(--space-md); }
   .toolbar input, .toolbar select { font-size: var(--text-base); }
   .expenseSource a { max-width: 100%; height: auto; white-space: normal; }

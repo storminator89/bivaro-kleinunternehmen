@@ -1,0 +1,60 @@
+BIVARO – SYNTHETISCHES ERKLÄRBLATT – KEINE ECHTE RECHNUNG
+Erklärblatt-Version 1 · Quellreferenz 68287de1256fa058eb221f59ee1b101f25170781
+Die Quellreferenz benennt den fachlichen Ausgangsstand, nicht einen abgenommenen Build.
+Kein aus einem abgenommenen Build erzeugtes PDF, Original, Screenshot oder ZIP. Kein Importformat.
+Nur synthetische Erläuterung, keine echte Rechnung, kein Import und kein geprüfter Produktexport. Kein Konto, keine Buchung und kein Versand durch diesen Textablauf. Ein Demo-Erfolg ist keine Produkt-, Umstiegs- oder Steuerfreigabe.
+
+ANNAHMEN
+Alle IDs, Beträge, Daten, Betriebe und Vorgänge sind erfunden. Keine echten Namen, Konten oder Nummernkreise.
+Einfacher Inlandsfall in EUR; ausgestellte gewöhnliche Kleinunternehmerrechnung, manuelle Zahlung, kein Kassenbuch und keine Steuerfreigabe.
+Beispielzeitraum: 2026-10-01 bis 2026-10-31
+
+1. Rechnung prüfen
+Unser erfundener Musterbetrieb stellt SYN-DEMO-RE-001 über 300,00 EUR für eine einfache Inlandsleistung aus. Für dieses Beispiel wird ein bereits geklärtes Kleinunternehmerprofil angenommen.
+Im Produkt: Firmendaten und Kunde vorbereiten, Rechnung erstellen. Positionen, Leistungsdatum und Steuerprofil vor der Ausgabe prüfen.
+Beispielstand: 300,00 EUR offen. Eine Rechnung ist noch kein Geldeingang.
+Die Annahme im Beispiel prüft weder Ihre Berechtigung noch die fachliche Richtigkeit einer echten Rechnung.
+Öffentlicher Textschritt: /help#demo-rechnung
+
+2. Teilzahlung erfassen
+Als Teilzahlung werden zunächst 100,00 EUR am 02.10.2026 erfasst (SYN-DEMO-ZA-001). Den absichtlichen Erfassungsfehler entdecken wir in Schritt 4.
+Im Produkt: Rechnung → Zahlung erfassen. Betrag, tatsächliches Zahlungsdatum und Referenz am Nachweis prüfen; erst dann verbindlich bestätigen.
+Vorläufiger Beispielstand: 200,00 EUR offen. Die Zahlung erzeugt die zugehörige Einnahme; nicht nochmals manuell erfassen.
+Kein Bankabgleich. Bei unklarer Speicherung zuerst den Zahlungsverlauf prüfen oder dieselbe Anfrage unverändert wiederholen.
+Öffentlicher Textschritt: /help#demo-teilzahlung
+
+3. Ausgabe mit Beleg verbinden
+Der Musterbetrieb bezahlt am 03.10.2026 Büromaterial für 40,00 EUR. Das getrennte Ausgabenbeispiel trägt SYN-DEMO-BE-001; es mindert nicht den offenen Rechnungsbetrag.
+Im Produkt: Ausgabe mit Beschreibung, Zahlungsdatum und Betrag erfassen, Kategorie und Steuerzuordnung prüfen, Beleg hochladen und Originalzuordnung prüfen.
+Beispielstand: 40,00 EUR Ausgabe mit Belegbezug. Ein Upload allein bucht keine Ausgabe.
+Unten steht nur ein erklärender Textbeleg, kein hochladbares Rechnungsoriginal und kein Produkt-Screenshot.
+Öffentlicher Textschritt: /help#demo-beleg
+
+4. Fehler nachvollziehbar korrigieren
+Der Abgleich am 04.10.2026 zeigt: Von den erfassten 100,00 EUR sind 20,00 EUR nie eingegangen. Es geht nicht um Geld auf einer anderen Rechnung und nicht um eine Rückzahlung.
+Im Produkt: Rechnung → Zahlung erfassen → Korrektur / Erstattung dokumentieren → Korrektur. Ursprünglichen Zahlungsnachweis wählen; 20,00 EUR, Entdeckungsdatum, Grund und prüfbaren Bezug angeben und „nie eingegangen“ bestätigen.
+Beispielstand: 80,00 EUR gültig eingegangen, 220,00 EUR noch offen. Originalzahlung und separate Korrektur SYN-DEMO-KO-001 bleiben nachvollziehbar.
+Original nicht überschreiben. Korrektur wirkt am ursprünglichen Zahlungstag; Entdeckungsdatum bleibt getrennt. Erstattung bedeutet tatsächlich bereits zurückgezahltes Geld, benötigt einen geprüften vollständigen Stornobezug und löst nie eine Überweisung aus. Steuerliche Zuordnung bleibt prüfpflichtig; betroffene EÜR-/Steuerausgaben können gesperrt sein.
+Öffentlicher Textschritt: /help#demo-korrektur
+
+5. Unterlagen geprüft übergeben
+Für Oktober 2026 werden Rechnung, ursprüngliche Zahlung, separate Korrektur, Ausgabe und Originalbezug gemeinsam abgeglichen. Es wird hier kein Übergabepaket erzeugt.
+Im Produkt: Unterlagen übergeben → Zeitraum wählen → Vorschau und Warnungen prüfen → ZIP herunterladen. Paket selbst prüfen und mit der Kanzlei abstimmen; kein automatischer Versand.
+Kontrollwerte dieses Falls: 300,00 EUR Rechnungsbetrag, 80,00 EUR gültiger Eingang, 220,00 EUR offen und 40,00 EUR separate Ausgabe. Diese Werte nicht zu einer Einnahmensumme addieren.
+Bivaro-Format 2 enthält payments.csv und adjustments.csv; Korrekturen bleiben UNREVIEWED. Kein zugesicherter DATEV-Import, ELSTER-Versand oder vollständiger GoBD-Prüfexport. Fehlende Originale und Warnungen zuerst klären.
+Öffentlicher Textschritt: /help#demo-uebergabe
+
+SYNTHETISCHER TEXTBELEG – NUR ERLÄUTERUNG
+Bezug: SYN-DEMO-BE-001
+Beschreibung: erfundenes Büromaterial
+Beispiel-Zahlungsdatum: 2026-10-03
+Beispielbetrag: 40,00 EUR
+Kein Rechnungsoriginal, keine Vorlage für echte Rechnungen und keine Aussage zum Vorsteuerabzug.
+Zurück zum passenden Schritt: /help#demo-beleg
+
+PRODUKT, KONZEPT UND OFFENER NACHWEIS
+Der Text beschreibt vorhandene Bedienwege am genannten Quellstand; Ihre Installation und Version gesondert prüfen.
+Selbstbetrieb, betreute Instanz und SaaS haben denselben fachlichen Ablauf. Verfügbarkeit, Kosten und Zuständigkeit für Einrichtung, Updates, Sicherung, Wiederherstellung und Ausstieg mit dem Betreiber klären. Nicht zugesagte Varianten bleiben Konzept, kein buchbares Angebot.
+Ausland/Reverse Charge, Anzahlungen/Schlussrechnungen, Kassenbuch, ungeklärte Altzahlungen und vollständige Regelbesteuerung werden hier nicht demonstriert. Bei solchen oder ungeklärten Fällen stoppen und fachlich prüfen lassen.
+Versionierte Produktdateien/Screenshots aus dem tatsächlich abgenommenen Build, Browser-Abnahme und freiwilliger Empfängerreview bleiben gesondert nachzuweisen. Dieses Erklärblatt ersetzt diese Nachweise nicht.
+Nächster Schritt ohne Anmeldung: /help#umstieg – sechs Punkte für den manuellen Review vorbereiten.

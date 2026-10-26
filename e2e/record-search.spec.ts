@@ -220,7 +220,7 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     await dialog.getByRole('option', { name: 'SYN-SEARCH-OUT', exact: false }).click();
     await expect(page).toHaveURL(new RegExp(`tab=invoices&document=${outbound.id}`));
     const selectedResponse = await selectedRead; expect(selectedResponse.status()).toBe(200); const selectedData = await selectedResponse.json(); expect(selectedData.items.map((item: { id: number }) => item.id)).toEqual([outbound.id]);
-    await page.getByRole('button', { name: 'Details', exact: true }).filter({ visible: true }).click();
+    await page.getByRole('button', { name: /^Details zu Rechnung / }).filter({ visible: true }).click();
     const details = page.getByRole('dialog', { name: 'Rechnungsdetails', exact: true }); await expect(details).toBeVisible(); await expect(details).toContainText('Rechnung SYN-SEARCH-OUT'); await expect(details).toContainText('synthetic-search.pdf'); await page.keyboard.press('Escape');
     // The existing selected-list API deliberately uses 200 + empty items for
     // unavailable IDs. Its original-download endpoint rejects the same foreign
@@ -228,7 +228,7 @@ test('record search is bounded, owned and read-only with keyboard/mobile/navigat
     const foreignRead = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/api/invoices' && url.searchParams.get('document') === String(foreignInvoice.id); });
     await page.goto(`/dashboard?tab=invoices&document=${foreignInvoice.id}`);
     const foreignResponse = await foreignRead; expect(foreignResponse.status()).toBe(200); expect((await foreignResponse.json()).items).toEqual([]);
-    await expect(page.getByRole('button', { name: 'Details', exact: true }).filter({ visible: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Details zu Rechnung / }).filter({ visible: true })).toHaveCount(0);
     await expect(page.getByText('foreign-private.pdf', { exact: true })).toHaveCount(0);
     ({ dialog, input } = await openPalette(page)); await input.fill('SYN-SEARCH-IN'); await dialog.getByRole('option', { name: 'SYN-SEARCH-IN.pdf', exact: false }).click(); await expect(page).toHaveURL(new RegExp(`/purchases\\?document=${inbound.id}`)); await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape');
     ({ dialog, input } = await openPalette(page)); await input.fill('no-synthetic-match'); await expect(dialog.getByRole('status')).toContainText('Keine eigenen Datensätze');

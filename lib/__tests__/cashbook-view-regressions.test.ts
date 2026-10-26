@@ -9,7 +9,7 @@ const hooks = vi.hoisted(() => ({
   effects: [] as (() => void)[],
   dirty: true,
 }));
-type EffectSlot = { dependencies: unknown[]; cleanup?: () => void };
+type EffectSlot = { dependencies: unknown[]; cleanup?: () => void; effect?: () => (() => void) | void };
 vi.mock('react', async importOriginal => {
   const actual = await importOriginal<typeof import('react')>();
   const changed = (previous: unknown[] | undefined, next: unknown[]) =>
@@ -39,7 +39,7 @@ vi.mock('react', async importOriginal => {
       const index = hooks.cursor++;
       const previous = hooks.slots[index] as EffectSlot | undefined;
       if (changed(previous?.dependencies, dependencies)) {
-        const slot: EffectSlot = { dependencies };
+        const slot: EffectSlot = { dependencies, effect };
         hooks.slots[index] = slot;
         hooks.effects.push(() => { previous?.cleanup?.(); slot.cleanup = effect() || undefined; });
       }
@@ -101,6 +101,12 @@ async function flush() {
   throw new Error('Page did not settle');
 }
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+const validBook = { id: 1, name: 'Hauptkasse', initialBalance: 100, currentBalance: 100, transactionCount: 0, currency: 'EUR', isActive: true };
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => { resolve = done; });
+  return { promise, resolve };
+}
 function journal(book: Book) {
   let balance = book.initialBalance;
   return transactions.filter(transaction => transaction.cashBookId === book.id).map(transaction => {
@@ -127,6 +133,7 @@ beforeEach(() => {
   books = [{ id: 1, name: 'Hauptkasse', initialBalance: 100 }, { id: 2, name: 'Zweitkasse', initialBalance: 5 }];
   transactions = [];
   pendingOldTransactions = undefined; pendingOldDailyBalance = undefined; deferOldReads = false;
+  vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.stubGlobal('alert', vi.fn());
   vi.stubGlobal('fetch', vi.fn(async (resource: string, options?: RequestInit) => {
     const url = new URL(resource, 'http://unit.test');
@@ -135,7 +142,7 @@ beforeEach(() => {
     if (url.pathname === '/api/cashbook') {
       if (method === 'POST') { const created = { ...body, id: 3 }; books.unshift(created); return json(created); }
       if (method === 'DELETE') { books = books.filter(book => book.id !== Number(url.searchParams.get('id'))); return json({ success: true }); }
-      return json(books.map(book => ({ ...book, currentBalance: journal(book).at(-1)?.runningBalance ?? book.initialBalance, transactionCount: journal(book).length })));
+      return json(books.map(book => ({ currency: 'EUR', isActive: true, ...book, currentBalance: journal(book).at(-1)?.runningBalance ?? book.initialBalance, transactionCount: journal(book).length })));
     }
     const book = books.find(item => item.id === Number(url.searchParams.get('cashBookId'))) ?? books[0];
     if (url.pathname.endsWith('/transactions')) {
@@ -160,7 +167,119 @@ beforeEach(() => {
   }));
 });
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => {
+  for (const slot of hooks.slots) (slot as EffectSlot | undefined)?.cleanup?.();
+  vi.unstubAllGlobals(); vi.restoreAllMocks();
+});
+
+describe('cashbook initial list read states (#83)', () => {
+  function expectHeader() {
+    expect(find(node => node.props.title === 'Kassenbuch')).toBeDefined();
+  }
+  function expectUnavailable() {
+    expectHeader();
+    expect(text(find(node => node.props.role === 'alert'))).toBe('Die Kassenbücher konnten nicht geladen werden.');
+    expect(text(tree)).not.toContain('Kein Kassenbuch vorhanden');
+    expect(nodes(tree).some(node => text(node) === 'Kassenbuch erstellen' && typeof node.props.onClick === 'function')).toBe(false);
+    expect(nodes(tree).some(node => node.props.id === 'cashbook-selector')).toBe(false);
+    expect(find(node => text(node) === 'Neue Kasse' && typeof node.props.onClick === 'function').props.disabled).toBe(true);
+  }
+
+  it('keeps the shared header and announces pending reads; only a confirmed empty list offers creation', async () => {
+    const pending = deferred<Response>(); vi.mocked(fetch).mockReturnValueOnce(pending.promise);
+    await flush();
+    expectHeader();
+    expect(text(find(node => node.props.role === 'status'))).toBe('Kassenbuch wird geladen…');
+    expect(find(node => node.props['aria-label'] === 'Kassenbuch laden').props['aria-busy']).toBe(true);
+    expect(text(tree)).not.toContain('Kein Kassenbuch vorhanden');
+    expect(nodes(tree).some(node => text(node) === 'Kassenbuch erstellen' && typeof node.props.onClick === 'function')).toBe(false);
+    expect(find(node => text(node) === 'Neue Kasse' && typeof node.props.onClick === 'function').props.disabled).toBe(true);
+    pending.resolve(json([])); await flush();
+    expectHeader();
+    expect(text(tree)).toContain('Kein Kassenbuch vorhanden');
+    expect(nodes(tree).some(node => text(node) === 'Kassenbuch erstellen' && typeof node.props.onClick === 'function')).toBe(true);
+    expect(find(node => text(node) === 'Neue Kasse' && typeof node.props.onClick === 'function').props.disabled).toBe(false);
+    expect(nodes(tree).some(node => node.props.role === 'alert' || node.props.role === 'status')).toBe(false);
+    expect(vi.mocked(fetch).mock.calls).toEqual([['/api/cashbook']]);
+  });
+
+  it.each([
+    ['401', () => Promise.resolve(new Response('{}', { status: 401 }))],
+    ['403', () => Promise.resolve(new Response('{}', { status: 403 }))],
+    ['503', () => Promise.resolve(new Response('{}', { status: 503 }))],
+    ['network failure', () => Promise.reject(new Error('Synthetic read failure'))],
+    ['invalid JSON', () => Promise.resolve(new Response('{'))],
+    ['null JSON', () => Promise.resolve(json(null))],
+    ['non-array JSON', () => Promise.resolve(json({ cashBooks: [] }))],
+    ['null entry', () => Promise.resolve(json([null]))],
+    ['bad ID', () => Promise.resolve(json([{ ...validBook, id: '1' }]))],
+    ['bad name', () => Promise.resolve(json([{ ...validBook, name: {} }]))],
+    ['bad balance', () => Promise.resolve(json([{ ...validBook, currentBalance: '100' }]))],
+    ['bad count', () => Promise.resolve(json([{ ...validBook, transactionCount: -1 }]))],
+    ['duplicate IDs', () => Promise.resolve(json([validBook, validBook]))],
+  ])('never treats %s as empty and recovers only with an explicit GET', async (_label, failure) => {
+    vi.mocked(fetch).mockImplementationOnce(failure); await flush(); expectUnavailable();
+    expect(vi.mocked(fetch).mock.calls).toEqual([['/api/cashbook']]);
+    const pending = deferred<Response>(); vi.mocked(fetch).mockReturnValueOnce(pending.promise);
+    const retry = find(node => text(node) === 'Erneut versuchen' && typeof node.props.onClick === 'function');
+    invoke(retry, 'onClick'); invoke(retry, 'onClick'); await flush();
+    expectHeader();
+    expect(nodes(tree).some(node => node.props.role === 'status')).toBe(true);
+    expect(nodes(tree).some(node => text(node) === 'Kassenbuch erstellen' && typeof node.props.onClick === 'function')).toBe(false);
+    expect(text(tree)).not.toContain('Erneut versuchen');
+    expect(vi.mocked(fetch).mock.calls).toEqual([['/api/cashbook'], ['/api/cashbook']]);
+    pending.resolve(json([validBook])); await flush();
+    expect(summary()).toContain('100,00');
+    expect(nodes(tree).some(node => node.props.role === 'alert' || node.props.role === 'status')).toBe(false);
+    expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
+    expect(alert).not.toHaveBeenCalled();
+  });
+
+  it('allows legitimate nullable descriptions and extra API metadata without changing summaries', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(json([{ ...validBook, description: null, extraMetadata: { retained: true } }]));
+    await flush();
+    expect(summary()).toContain('100,00');
+    expect(nodes(tree).some(node => node.props.role === 'alert')).toBe(false);
+  });
+
+  it('ignores an older initial response and its finally after a Strict Mode effect replay', async () => {
+    const oldRead = deferred<Response>(), latestRead = deferred<Response>();
+    vi.mocked(fetch).mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(latestRead.promise);
+    await flush();
+    // Replay mounted effects with their cleanup, as React Strict Mode does.
+    for (const slot of hooks.slots as EffectSlot[]) {
+      if (slot?.effect) { slot.cleanup?.(); slot.cleanup = slot.effect() || undefined; }
+    }
+    oldRead.resolve(json([])); await flush();
+    expectHeader();
+    expect(nodes(tree).some(node => node.props.role === 'status')).toBe(true);
+    expect(text(tree)).not.toContain('Kein Kassenbuch vorhanden');
+    latestRead.resolve(json([validBook])); await flush();
+    expect(summary()).toContain('100,00');
+  });
+
+  it('preserves a valid selected book after failed mutation-summary refresh and GET-only recovery', async () => {
+    await flush();
+    invoke(find(node => typeof node.props.onValueChange === 'function' && node.props.value === '1'), 'onValueChange', '2'); await flush();
+    const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+    let failNextListRead = true;
+    vi.mocked(fetch).mockImplementation((resource, options) => {
+      if (resource === '/api/cashbook' && !options?.method && failNextListRead) {
+        failNextListRead = false;
+        return Promise.resolve(new Response('{}', { status: 503 }));
+      }
+      return originalFetch(resource, options);
+    });
+    await bookTransaction('EINNAHME', '2', 'Synthetic selected-book income');
+    expectUnavailable();
+    const writesBeforeRetry = vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method && options.method !== 'GET');
+    click('Erneut versuchen'); await flush();
+    expect(find(node => typeof node.props.onValueChange === 'function' && node.props.value === '2')).toBeDefined();
+    expect(summary()).toContain('7,00');
+    expect(summary()).toContain('1 Buchungen insgesamt');
+    expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method && options.method !== 'GET')).toEqual(writesBeforeRetry);
+  });
+});
 
 describe('cashbook canonical selection and mutation refresh (#22)', () => {
   it('uses opening balance immediately after creation and selects the new canonical summary', async () => {

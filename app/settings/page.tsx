@@ -27,6 +27,8 @@ import { AnnualBusinessContextSettings } from "@/components/settings/annual-busi
 import { FiscalProfileSettings } from "@/components/onboarding/fiscal-profile-settings";
 import { EMPTY_FISCAL_PROFILE, readFiscalProfile } from "@/lib/fiscal-profile";
 import type { FiscalProfile } from "@/lib/fiscal-profile";
+import type { BackupFileInspection } from "@/lib/backup-file-preview";
+import { BackupFileInspectionSummary } from "@/components/settings/backup-file-inspection";
 
 type RestorePreview = {
   kind: 'json' | 'full';
@@ -39,6 +41,7 @@ type RestorePreview = {
     type: string;
     exportedAt?: string;
     fileCount?: number;
+    fileInspection?: BackupFileInspection;
     totalRecords: number;
     warnings: string[];
     counts: {
@@ -758,6 +761,7 @@ export default function SettingsPage() {
             {/* Backup erstellen */}
             <div className="space-y-3">
               <h3 className={styles.backupTitle}>JSON · Ohne Dateien</h3>
+              <p className="text-sm text-muted-foreground">Nur Daten sichern. Hochgeladene Originaldateien sind nicht enthalten; für eine Sicherung mit Dateien ZIP wählen.</p>
 
               <Button
                 type="button"
@@ -774,7 +778,7 @@ export default function SettingsPage() {
                 ) : (
                   <>
                     <Download className="mr-2 h-4 w-4" />
-                    Backup herunterladen
+                    Daten sichern (JSON)
                   </>
                 )}
               </Button>
@@ -783,10 +787,10 @@ export default function SettingsPage() {
             {/* Vollständiges Backup */}
             <div className="space-y-3">
               <h3 className={styles.backupTitle}>ZIP · Mit Dateien</h3>
+              <p className="text-sm text-muted-foreground">Daten und gespeicherte Dateien gemeinsam sichern. Die heruntergeladene Datei anschließend sicher aufbewahren.</p>
 
               <Button
                 type="button"
-                variant="outline"
                 onClick={handleFullBackupDownload}
                 disabled={fullBackupLoading}
                 className="w-full"
@@ -799,7 +803,7 @@ export default function SettingsPage() {
                 ) : (
                   <>
                     <Download className="mr-2 h-4 w-4" />
-                    Vollständiges Backup (ZIP)
+                    Daten und Dateien sichern (ZIP)
                   </>
                 )}
               </Button>
@@ -915,6 +919,8 @@ export default function SettingsPage() {
                       )}
                     </div>
 
+                    {restorePreview.preview.fileInspection && <BackupFileInspectionSummary inspection={restorePreview.preview.fileInspection} />}
+
                     <div className={styles.restoreCounts}>
                       <span>Kunden: {restorePreview.preview.counts.customers}</span>
                       <span>Projekte: {restorePreview.preview.counts.serviceProjects ?? 0}</span>
@@ -978,7 +984,8 @@ export default function SettingsPage() {
           <h2 className={styles.sectionTitle}>Unterlagen übergeben</h2>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button variant="outline" asChild><Link href="/handoff" aria-label="Unterlagen übergeben"><FileText aria-hidden="true" />Öffnen</Link></Button>
+          <p className="text-sm text-muted-foreground">Zeitraum wählen, Paket prüfen und als ZIP selbst an Ihre Kanzlei übergeben. Kein automatischer Versand, DATEV-/ELSTER-Export oder wiederherstellbares Backup.</p>
+          <Button variant="outline" asChild><Link href="/handoff" aria-label="Unterlagen übergeben"><FileText aria-hidden="true" />Übergabe vorbereiten</Link></Button>
         </CardContent>
       </Card>
 

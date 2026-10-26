@@ -35,6 +35,7 @@ afterAll(async () => {
 
 function makeBackup() {
   const data = {
+    quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [],
     user: { id: 'source-owner', email: 'source@backup.test', name: 'Source' },
     customers: [{ id: 10, name: 'Restore customer', createdAt: '2026-01-01T00:00:00.000Z' }],
     invoices: [{

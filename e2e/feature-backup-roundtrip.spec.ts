@@ -16,6 +16,9 @@ type FeatureData = Record<string, unknown> & {
   bankMappingProfileRevisions: PortableBankMappingProfileRevision[];
   documentNumberingPolicies: NumberingPolicyBackup[];
   quoteCreateReceipts: QuoteCreateReceiptBackup[];
+  quoteReleaseAuthorities: unknown[];
+  quoteReleases: unknown[];
+  quoteElectronicResponses: unknown[];
   manualFinancialRecordEvents: unknown[];
   incomes: Record<string, unknown>[];
   expenses: Record<string, unknown>[];
@@ -117,7 +120,19 @@ test('real backup endpoints remap feature histories, preserve legacy high-water 
   expect(exported.headers()['content-disposition']).toContain('attachment;');
   const backup = await exported.json() as Backup;
   expect(backup.version).toBe('3.0');
-  expect(backup.manifest.schemaVersion).toBe('20261025090000_add_manual_financial_record_lifecycle');
+  expect(backup.manifest.schemaVersion).toBe('20261026093000_add_quote_release_backup_identity');
+  // This fresh owner has no release history, but the current identity must
+  // export all three capability sections and their integrity-covered entries.
+  for (const [key, model] of [
+    ['quoteReleaseAuthorities', 'QuoteReleaseAuthority'],
+    ['quoteReleases', 'QuoteRelease'],
+    ['quoteElectronicResponses', 'QuoteElectronicResponse'],
+  ] as const) {
+    expect(backup.data[key]).toEqual([]);
+    expect(backup.manifest.modelCoverage.filter(entry => entry.key === key)).toEqual([
+      expect.objectContaining({ model, mode: 'included', count: 0, sha256: hashJson([]) }),
+    ]);
+  }
   // Prove the independent pure calculation matches this actual server export
   // before using it to reach immutable-history conflicts with changed data.
   expect(reseal(structuredClone(backup)).manifest).toStrictEqual(backup.manifest);

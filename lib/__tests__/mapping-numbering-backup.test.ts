@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { QUOTE_RELEASE_BACKUP_SCHEMA_VERSION } from '@/lib/backup-schema-identities';
 import { describe, expect, it, vi } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { BACKUP_FEATURE_CAPABILITIES, BANK_MAPPING_PROFILES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, MAPPING_NUMBERING_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, backupSchemaSupportsBankMappingProfiles, backupSchemaSupportsDocumentNumberingPolicies, createBackupManifest, validateBackupManifest } from '@/lib/backup-manifest';
@@ -30,7 +31,7 @@ function policyFixture() {
   return [{ type: 'INVOICE', revision: 1, formatVersion: 1, prefix: 'RE-', includeYear: true, sequenceWidth: 4, startSequence: 30, effectiveYear: 2026, createdAt: at }];
 }
 function dataFixture() {
-  return { user: { id: 'synthetic-source' }, manualFinancialRecordEvents: [], customers: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], invoices: [], paymentJournalEvents: [], paymentAdjustments: [], paymentOperations: [], serviceProjects: [], billingNotes: [], purchaseValidationReports: [], serviceBillingPlans: [], serviceBillingPeriods: [], bankImportBatches: [], bankImportRows: [], bankPaymentBindings: [], paymentAllocationChanges: [], bankMappingProfiles: [], bankMappingProfileRevisions: [], documentNumberingPolicies: [], quoteCreateReceipts: [], auditLogs: [], invoiceNumberCounters: [] } as Record<string, unknown>;
+  return { quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [], user: { id: 'synthetic-source' }, manualFinancialRecordEvents: [], customers: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], invoices: [], paymentJournalEvents: [], paymentAdjustments: [], paymentOperations: [], serviceProjects: [], billingNotes: [], purchaseValidationReports: [], serviceBillingPlans: [], serviceBillingPeriods: [], bankImportBatches: [], bankImportRows: [], bankPaymentBindings: [], paymentAllocationChanges: [], bankMappingProfiles: [], bankMappingProfileRevisions: [], documentNumberingPolicies: [], quoteCreateReceipts: [], auditLogs: [], invoiceNumberCounters: [] } as Record<string, unknown>;
 }
 function manifestFixture(data = dataFixture()) {
   return { data, manifest: createBackupManifest({ sourceUserId: 'synthetic-source', generatedAt: at, data }) };
@@ -48,7 +49,7 @@ function bankFixture(profiles = profileFixture()) {
 describe('closed standalone and combined backup identities', () => {
   it('preserves the historical identity and never infers capability from timestamps', () => {
     expect(MAPPING_NUMBERING_SCHEMA_VERSION).toBe('20261024030000_combine_mapping_profiles_numbering');
-    expect(CURRENT_SCHEMA_VERSION).toBe('20261025090000_add_manual_financial_record_lifecycle');
+    expect(CURRENT_SCHEMA_VERSION).toBe(QUOTE_RELEASE_BACKUP_SCHEMA_VERSION);
     expect(BANK_MAPPING_PROFILES_SCHEMA_VERSION).toBe('20261024010000_add_bank_mapping_profiles');
     expect(DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION).toBe('20261024020000_add_document_numbering_policy');
     expect(BACKUP_FEATURE_CAPABILITIES[BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION]).not.toHaveProperty('bankMappingProfiles');

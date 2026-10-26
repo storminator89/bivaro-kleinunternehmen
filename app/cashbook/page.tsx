@@ -56,7 +56,7 @@ import { de } from 'date-fns/locale';
 interface CashBook {
     id: number;
     name: string;
-    description?: string;
+    description?: string | null;
     initialBalance: number;
     currency: string;
     isActive: boolean;
@@ -76,6 +76,25 @@ interface CashTransaction {
     taxRelevant: boolean;
     notes?: string;
     cashBookId: number;
+}
+
+// A successful HTTP response is not yet a usable list. Reject malformed
+// summaries before they can become an empty state, selector or balance.
+function isCashBookList(value: unknown): value is CashBook[] {
+    if (!Array.isArray(value)) return false;
+    const ids = new Set<number>();
+    return value.every(book => {
+        if (!book || typeof book !== 'object'
+            || !Number.isSafeInteger(book.id) || book.id <= 0 || ids.has(book.id)
+            || typeof book.name !== 'string' || !book.name.trim()
+            || (book.description != null && typeof book.description !== 'string')
+            || typeof book.initialBalance !== 'number' || !Number.isFinite(book.initialBalance)
+            || typeof book.currentBalance !== 'number' || !Number.isFinite(book.currentBalance)
+            || !Number.isSafeInteger(book.transactionCount) || book.transactionCount < 0
+            || typeof book.currency !== 'string' || typeof book.isActive !== 'boolean') return false;
+        ids.add(book.id);
+        return true;
+    });
 }
 
 interface DailyBalance {
@@ -127,6 +146,9 @@ export default function CashBookPage() {
     const [transactions, setTransactions] = useState<CashTransaction[]>([]);
     const [dailyBalance, setDailyBalance] = useState<DailyBalance | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasLoadedCashBooks, setHasLoadedCashBooks] = useState(false);
+    const [cashBookLoadError, setCashBookLoadError] = useState<string | null>(null);
+    const cashBookRetryPending = useRef(false);
     const [error, setError] = useState<string | null>(null);
 
     // Modal States
@@ -181,23 +203,44 @@ export default function CashBookPage() {
         try {
             const res = await fetch('/api/cashbook');
             if (!res.ok) throw new Error('Cash book refresh failed');
-            const data: CashBook[] = await res.json();
+            const data: unknown = await res.json();
+            if (!isCashBookList(data)) throw new Error('Invalid cash book list');
             if (requestId !== cashBookRequest.current) return;
             setCashBooks(data);
             setSelectedCashBookId(current =>
                 data.some(book => book.id === current) ? current : (data[0]?.id ?? null)
             );
+            setHasLoadedCashBooks(true);
+            setCashBookLoadError(null);
             setError(null);
         } catch (err) {
             if (requestId !== cashBookRequest.current) return;
             console.error('Error loading cash books:', err);
-            setError('Fehler beim Laden der Kassenbücher');
+            setCashBookLoadError('Die Kassenbücher konnten nicht geladen werden.');
+        } finally {
+            if (requestId === cashBookRequest.current) setIsLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        loadCashBooks().finally(() => setIsLoading(false));
+        const request = cashBookRequest;
+        void loadCashBooks();
+        return () => { request.current++; };
     }, [loadCashBooks]);
+
+    // Read recovery must never resubmit a create/edit/delete action. The ref
+    // also guards two activations before React renders the pending state.
+    const retryLoadCashBooks = async () => {
+        if (cashBookRetryPending.current) return;
+        cashBookRetryPending.current = true;
+        setIsLoading(true);
+        setCashBookLoadError(null);
+        try {
+            await loadCashBooks();
+        } finally {
+            cashBookRetryPending.current = false;
+        }
+    };
 
     // Separate cancellable reads prevent responses for a previous cash book,
     // page or date from overwriting the currently displayed data.
@@ -470,13 +513,7 @@ export default function CashBookPage() {
         }
     };
 
-    if (isLoading) {
-        return (
-            <div role="status" aria-label="Kassenbuch wird geladen" className="flex items-center justify-center min-h-[400px]">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        );
-    }
+    const canShowCashBooks = hasLoadedCashBooks && !isLoading && !cashBookLoadError;
 
     return (
         <div className={`${styles.cashWorkspace} space-y-6`}>
@@ -486,11 +523,12 @@ export default function CashBookPage() {
                     <Button
                         onClick={() => setShowNewCashBookModal(true)}
                         variant="outline"
+                        disabled={!canShowCashBooks}
                     >
                         <Plus className="h-4 w-4 mr-2" />
                         Neue Kasse
                     </Button>
-                    {selectedCashBook && (
+                    {canShowCashBooks && selectedCashBook && (
                         <>
                             <Button
                                 onClick={() => setShowNewTransactionModal(true)}
@@ -503,9 +541,24 @@ export default function CashBookPage() {
                 </div>
 </>} />
 
-            {error && <div role="alert" className={styles.errorNotice}>{error}</div>}
+            {(isLoading || cashBookLoadError) && (
+                <section aria-label="Kassenbuch laden" aria-busy={isLoading}>
+                    {isLoading ? (
+                        <div role="status" aria-label="Kassenbuch wird geladen" className="flex items-center justify-center gap-3 min-h-[400px]">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+                            <span>Kassenbuch wird geladen…</span>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div role="alert" className={styles.errorNotice}>{cashBookLoadError}</div>
+                            <Button variant="outline" onClick={() => void retryLoadCashBooks()}>Erneut versuchen</Button>
+                        </div>
+                    )}
+                </section>
+            )}
+            {error && !cashBookLoadError && <div role="alert" className={styles.errorNotice}>{error}</div>}
             {/* No cash book message */}
-            {cashBooks.length === 0 && (
+            {canShowCashBooks && cashBooks.length === 0 && (
                 <Card className="bg-muted/50">
                     <CardContent className="flex flex-col items-center justify-center py-12">
                         <BookOpen className="h-8 w-8 text-muted-foreground mb-4" aria-hidden="true" />
@@ -519,10 +572,10 @@ export default function CashBookPage() {
             )}
 
             {/* Cash Book Selector & Summary */}
-            {cashBooks.length > 0 && (
+            {canShowCashBooks && cashBooks.length > 0 && (
                 <section className={styles.cashOverview} aria-label="Kassenübersicht">
-                    <div className={styles.cashBalance}>
-                        <div className={styles.cashSelection}>
+                    <div className={`${styles.cashBalance} min-w-0`}>
+                        <div className={`${styles.cashSelection} min-w-0`}>
                             <Label htmlFor="cashbook-selector">Aktive Kasse</Label>
                             <Select value={selectedCashBook?.id.toString() || ''} disabled={isSaving} onValueChange={(value) => {
                                 setSelectedCashBookId(Number(value));
@@ -530,7 +583,7 @@ export default function CashBookPage() {
                                 setCashCount({ countedAmount: '', notes: '' });
                                 setCashCountResult(null);
                             }}>
-                                <SelectTrigger id="cashbook-selector"><SelectValue placeholder="Kasse wählen" /></SelectTrigger>
+                                <SelectTrigger id="cashbook-selector" className="w-full min-w-0"><SelectValue className="min-w-0 overflow-hidden" placeholder="Kasse wählen" /></SelectTrigger>
                                 <SelectContent>{cashBooks.map(cb => <SelectItem key={cb.id} value={cb.id.toString()}>{cb.name}</SelectItem>)}</SelectContent>
                             </Select>
                         </div>
@@ -546,7 +599,7 @@ export default function CashBookPage() {
             )}
 
             {/* Main Content Tabs */}
-            {selectedCashBook && (
+            {canShowCashBooks && selectedCashBook && (
                 <Tabs value={activeTab} onValueChange={setActiveTab} className={styles.cashTabs}>
                     <div className={styles.cashToolbar}>
                         <TabsList className={styles.cashTabList}>

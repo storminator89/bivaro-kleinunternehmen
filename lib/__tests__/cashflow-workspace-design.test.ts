@@ -11,6 +11,9 @@ import { describe, expect, it } from 'vitest';
 // Normalize those exact boundaries below; retain EVERY original baseline hash.
 // The replacement's data/handlers/labels/disabled state and FINALIZED guard are
 // independently asserted, not silently exempted from the contract.
+// #169 adds only reviewed local submission-state UI around the same financial
+// bindings. Normalize its exact attributes/optional props/conditional save copy
+// below and assert each addition independently; do not replace baseline hashes.
 const baseline = {
   "incomes": {
     "bindings": "46b7f287098b8efb2a9743529fa46a19dbef8cb31b437d9672a0090e66912863",
@@ -65,7 +68,25 @@ for (const kind of ['incomes', 'expenses'] as const) {
   const declarations: Record<string, string> = {};
   const lifecycleBindings: string[][] = [];
   const lifecycleProps: string[] = [];
+  const submissionAttrs: string[] = [];
+  const submissionProps: string[] = [];
+  const submissionFeedback: string[][] = [];
+  const submissionCopy: string[] = [];
+  const submissionDeclarations: Record<string, string> = {};
   function inspect(n: ts.Node, source = tree) {
+    if (source === tree && ts.isJsxSelfClosingElement(n) && n.tagName.getText(source) === 'ManualEntrySubmitFeedback') {
+      submissionFeedback.push(n.attributes.properties.map(attribute => attribute.getText(source)).sort());
+      return;
+    }
+    if (source === tree && ts.isJsxExpression(n)) {
+      const label = kind === 'incomes' ? 'Einnahme' : 'Ausgabe';
+      const exactCopy = `{entryPending ? '${label} wird gespeichert …' : '${label} speichern'}`;
+      if (n.getText(source) === exactCopy) {
+        submissionCopy.push(exactCopy);
+        copy.push(`${label} speichern`);
+        return;
+      }
+    }
     if (source === tree && ts.isJsxSelfClosingElement(n) && n.tagName.getText(source) === 'IncomeRowActions') {
       lifecycleBindings.push(n.attributes.properties.map(attribute => attribute.getText(source)).sort());
       return; // Only this exact reviewed extraction is normalized below.
@@ -73,6 +94,21 @@ for (const kind of ['incomes', 'expenses'] as const) {
     if (ts.isJsxAttribute(n) && n.name.getText(source) !== 'className') {
       const element = n.parent.parent;
       if (ts.isJsxOpeningElement(element) || ts.isJsxSelfClosingElement(element)) {
+        if (source === tree) {
+          const tag = element.tagName.getText(source);
+          const attribute = n.getText(source);
+          const has = (text: string) => element.attributes.properties.some(property => property.getText(source) === text);
+          const reviewed =
+            (tag === 'form' && attribute === 'aria-busy={entryPending}') ||
+            (tag === 'fieldset' && ['disabled={entryLocked}', 'inert={entryLocked}'].includes(attribute)) ||
+            (tag === 'Button' && has('type="submit"') && ['disabled={entryLocked}', 'aria-busy={entryPending}'].includes(attribute)) ||
+            (tag === 'Button' && has('onClick={onOpenRecurringExpenses}') && attribute === 'disabled={entryLocked}') ||
+            (tag === 'Input' && has('id="receipt"') && attribute === 'key={expenseReceiptInputKey}');
+          if (reviewed) {
+            submissionAttrs.push(`${tag}${has('onClick={onOpenRecurringExpenses}') ? '[recurring]' : ''}:${attribute}`);
+            return;
+          }
+        }
         if (source === tree && element.tagName.getText(source) === 'ExpenseRowActions' && n.name.getText(source) === 'onManualRecord') {
           lifecycleBindings.push([n.getText(source)]);
           return; // Existing expense action/data bindings remain fingerprinted.
@@ -81,13 +117,18 @@ for (const kind of ['incomes', 'expenses'] as const) {
       }
     }
     if (ts.isJsxText(n) && n.getText(source).trim()) copy.push(n.getText(source).trim().replace(/\s+/g, ' '));
+    if (source === tree && ts.isVariableDeclaration(n) && ['entryLocked', 'entryPending'].includes(n.name.getText(source))) {
+      submissionDeclarations[n.name.getText(source)] = n.getText(source).replace(/\s+/g, ' ');
+    }
     if ((ts.isFunctionDeclaration(n) || ts.isTypeAliasDeclaration(n) || ts.isVariableDeclaration(n)) && n.name && ['IncomeInvoiceAttribution', 'IncomesTabProps', 'ExpensesTabProps', 'allCategories', 'sort', 'hasFilters'].includes(n.name.getText(source))) {
       let declaration = n.getText(source);
       if (ts.isTypeAliasDeclaration(n) && ts.isTypeLiteralNode(n.type) && ['IncomesTabProps', 'ExpensesTabProps'].includes(n.name.text)) {
         const extension = n.type.members.filter(member => member.name?.getText(source) === 'onManualRecord');
         lifecycleProps.push(...extension.map(member => member.getText(source)));
+        submissionProps.push(...n.type.members.filter(member => ['submission', 'expenseReceiptInputKey'].includes(member.name?.getText(source) ?? '')).map(member => member.getText(source)));
         // Remove precisely the approved optional property, not arbitrary props.
         declaration = declaration.replace(/onManualRecord\?: ManualRecordOpener;\s*/u, '');
+        declaration = declaration.replace(/submission\?: ManualEntrySubmitControls;\s*/u, '').replace(/expenseReceiptInputKey\?: number;\s*/u, '');
       }
       declarations[n.name.getText(source)] = digest(declaration);
     }
@@ -107,6 +148,21 @@ for (const kind of ['incomes', 'expenses'] as const) {
       } else {
         expect(lifecycleBindings).toEqual([['onManualRecord={onManualRecord}'], ['onManualRecord={onManualRecord}']]);
       }
+    });
+    it('permits only the reviewed local submit-state UI while retaining every original financial binding/hash', () => {
+      const label = kind === 'incomes' ? 'Einnahme' : 'Ausgabe';
+      expect(submissionProps.sort()).toEqual((kind === 'incomes' ? ['submission?: ManualEntrySubmitControls;']
+        : ['expenseReceiptInputKey?: number;', 'submission?: ManualEntrySubmitControls;']).sort());
+      expect(submissionDeclarations).toEqual({
+        entryLocked: "entryLocked = Boolean(submission && submission.state.phase !== 'idle')",
+        entryPending: "entryPending = submission?.state.phase === 'pending'",
+      });
+      const expectedAttrs = ['form:aria-busy={entryPending}', 'fieldset:disabled={entryLocked}', 'fieldset:inert={entryLocked}',
+        'Button:disabled={entryLocked}', 'Button:aria-busy={entryPending}'];
+      if (kind === 'expenses') expectedAttrs.push('Button[recurring]:disabled={entryLocked}', 'Input:key={expenseReceiptInputKey}');
+      expect(submissionAttrs.sort()).toEqual(expectedAttrs.sort());
+      expect(submissionFeedback).toEqual([['controls={submission}', `nextLabel="Weitere ${label} erfassen"`].sort()]);
+      expect(submissionCopy).toEqual([`{entryPending ? '${label} wird gespeichert …' : '${label} speichern'}`]);
     });
     it('keeps the client boundary first and search first in filter DOM order', () => {
       expect(text.trimStart().startsWith('"use client";')).toBe(true);

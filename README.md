@@ -10,6 +10,8 @@ Selbst gehostet · Angebote bis Belegprüfung · Heller und dunkler Modus
 
 </div>
 
+Weitere Projekte und Hintergründe: [ForgeIdeas von Patrick Meyhöfer](https://forgeideas.de/).
+
 ## Funktionen
 
 | Bereich | Aktueller Funktionsumfang |

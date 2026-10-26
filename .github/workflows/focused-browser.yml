@@ -1,0 +1,92 @@
+name: Focused browser checks
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: focused-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused:
+    name: Core smoke and affected approved journeys (not full acceptance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - name: Read changed path metadata without shell interpolation
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const files = await github.paginate(github.rest.pulls.listFiles, { owner: context.repo.owner, repo: context.repo.repo, pull_number: context.issue.number, per_page: 100 });
+            const expected = context.payload.pull_request.changed_files;
+            if (!Number.isInteger(expected) || expected < 0 || expected > 3000 || files.length !== expected) throw new Error('Incomplete changed path inventory');
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'bivaro-focused-changed-paths.json'), JSON.stringify(files.flatMap(file => file.previous_filename ? [file.previous_filename, file.filename] : [file.filename])), { flag: 'wx', mode: 0o600 });
+      - name: Select explicit affected browser scope
+        id: selection
+        run: node scripts/select-focused-browser.mjs "$RUNNER_TEMP/bivaro-focused-changed-paths.json"
+      - name: Install locked dependencies without lifecycle scripts
+        if: steps.selection.outputs.run == 'true'
+        run: npm ci --ignore-scripts
+      - name: Generate Prisma Client
+        if: steps.selection.outputs.run == 'true'
+        run: npx prisma generate
+      - name: Install Chromium and system dependencies
+        if: steps.selection.outputs.run == 'true'
+        shell: bash
+        run: |
+          # Bound transport stalls for these commands only; keep the runner's sources and trust settings.
+          apt_config="$(mktemp "${RUNNER_TEMP:?RUNNER_TEMP is required}/bivaro-apt-XXXXXX.conf")"
+          trap 'rm -f -- "$apt_config"' EXIT
+          cat > "$apt_config" <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          APT
+          # APT_CONFIG is read before system fragments. Preserve stricter runner bounds.
+          actual_settings="$(sudo env APT_CONFIG="$apt_config" apt-config shell BIVARO_APT_RETRIES Acquire::Retries BIVARO_APT_HTTP_TIMEOUT Acquire::http::Timeout BIVARO_APT_HTTPS_TIMEOUT Acquire::https::Timeout)"
+          printf '%s\n' "$actual_settings"
+          mapfile -t settings_lines <<< "$actual_settings"
+          if (( ${#settings_lines[@]} != 3 )) ||
+             [[ "${settings_lines[0]}" != "BIVARO_APT_RETRIES='1'" ]] ||
+             [[ ! "${settings_lines[1]}" =~ ^BIVARO_APT_HTTP_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]] ||
+             [[ ! "${settings_lines[2]}" =~ ^BIVARO_APT_HTTPS_TIMEOUT=\'([1-9]|1[0-9]|20)\'$ ]]; then
+            echo '::error::Unexpected per-command APT transport settings.'
+            exit 1
+          fi
+          node_bin="$(command -v node)"
+          playwright_cli="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}/node_modules/playwright/cli.js"
+          test -x "$node_bin"
+          test -f "$playwright_cli"
+          # Playwright's own sudo escalation drops environment variables. Run only its
+          # exact installed dependency installer as root; browser downloads stay non-root.
+          sudo env APT_CONFIG="$apt_config" "$node_bin" "$playwright_cli" install-deps chromium
+          "$node_bin" "$playwright_cli" install chromium
+
+
+      - name: Run core smoke and only the approved affected journeys
+        if: steps.selection.outputs.run == 'true'
+        timeout-minutes: 20
+        env:
+          BIVARO_FOCUSED_SELECTION: ${{ steps.selection.outputs.selection }}
+        run: >-
+          npm run test:e2e -- --config=playwright.focused.config.ts
+          --workers=1 --retries=0 --forbid-only --trace=off
+          --global-timeout=900000
+          --output="${{ runner.temp }}/bivaro-focused-browser-results"
+      # No full-image partitions, PDF/native tools, raw logs or fixture uploads.

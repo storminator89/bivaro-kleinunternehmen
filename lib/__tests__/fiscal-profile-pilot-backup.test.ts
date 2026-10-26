@@ -25,6 +25,7 @@ afterAll(async () => { await database?.cleanup(); });
 
 function backup(settings: Record<string, unknown>) {
   const data = {
+    quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [],
     user: { id: 'fiscal-backup-source' }, settings,
     serviceBillingPlans: [], serviceBillingPeriods: [], serviceArticles: [], suppliers: [], purchaseDocuments: [], paymentJournalEvents: [],
     invoices: [], incomes: [], expenses: [], customers: [], auditLogs: [], invoiceNumberCounters: [],

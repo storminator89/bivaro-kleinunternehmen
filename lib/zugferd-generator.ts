@@ -70,6 +70,8 @@ export const SMALL_BUSINESS_EXEMPTION_REASON =
 const FACTUR_X_GUIDELINE_ID = 'urn:cen.eu:en16931:2017';
 const XRECHNUNG_GUIDELINE_ID =
   'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0';
+// Match the contact-email rule in the pinned XRechnung Schematron (BR-DE-28).
+const XRECHNUNG_CONTACT_EMAIL_PATTERN = /^[^@\s]+@([^@.\s]+\.)+[^@.\s]+$/;
 const SUPPORTED_CURRENCY_CODES = new Set([
   'AED', 'ARS', 'AUD', 'BGN', 'BRL', 'CAD', 'CHF', 'CLP', 'CNY', 'COP', 'CZK', 'DKK', 'EUR', 'GBP',
   'HKD', 'HRK', 'HUF', 'IDR', 'ILS', 'INR', 'ISK', 'JPY', 'KRW', 'MXN', 'MYR', 'NOK', 'NZD', 'PHP',
@@ -133,6 +135,23 @@ function isFiniteNumber(value: unknown): value is number {
 function countDigits(value: string): number {
   const digits = value.match(/\d/g);
   return digits ? digits.length : 0;
+}
+
+function normalizeIban(value: string): string {
+  // Do not Unicode-fold characters such as ß into different account characters.
+  return value.replace(/\s+/g, '').replace(/[a-z]/g, character => character.toUpperCase());
+}
+
+/** BR-DE-19 format and mod-97 check, not a bank-account ownership check. */
+function isValidSepaIban(value: string): boolean {
+  const iban = normalizeIban(value);
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{0,30}$/.test(iban)) return false;
+  let remainder = 0;
+  for (const character of `${iban.slice(4)}${iban.slice(0, 4)}`) {
+    const digits = /[A-Z]/.test(character) ? String(character.charCodeAt(0) - 55) : character;
+    for (const digit of digits) remainder = (remainder * 10 + Number(digit)) % 97;
+  }
+  return remainder === 1;
 }
 
 type ParsedAddress = { lines: string[]; postcode: string; city: string; countryCode: string };
@@ -259,6 +278,7 @@ export function validateZugferdData(data: ZugferdData, options: ZugferdValidatio
   if (!isNonEmptyString(data.seller.taxNumber) && !isNonEmptyString(data.seller.vatId)) addError(errors, 'seller.taxNumber', 'Steuernummer oder USt-IdNr. des Rechnungsausstellers fehlt.');
   if (profile === 'xrechnung') {
     if (!isNonEmptyString(data.seller.email)) addError(errors, 'seller.email', 'Für XRechnung ist eine E-Mail des Rechnungsausstellers erforderlich.');
+    else if (!XRECHNUNG_CONTACT_EMAIL_PATTERN.test(data.seller.email.trim())) addError(errors, 'seller.email', 'Für XRechnung ist eine gültige E-Mail-Adresse des Rechnungsausstellers erforderlich.');
     if (!isNonEmptyString(data.seller.telephone)) addError(errors, 'seller.telephone', 'Telefonnummer des Rechnungsausstellers fehlt. Für XRechnung muss sie hinterlegt sein.');
     else if (countDigits(data.seller.telephone) < 3) addError(errors, 'seller.telephone', 'Telefonnummer des Rechnungsausstellers muss mindestens drei Ziffern enthalten.');
     if (!isNonEmptyString(data.buyer.email) && !isNonEmptyString(data.buyer.electronicAddress?.value)) addError(errors, 'buyer.electronicAddress', 'Für XRechnung ist eine elektronische Käuferadresse erforderlich.');
@@ -284,7 +304,9 @@ export function validateZugferdData(data: ZugferdData, options: ZugferdValidatio
   const paymentMeansCode = data.paymentMeansCode || '30';
   if (!['30', '58', '10'].includes(paymentMeansCode)) addError(errors, 'paymentMeansCode', 'Zahlungsmittelcode wird nicht unterstützt.');
   if (paymentMeansCode === '30' || paymentMeansCode === '58') {
-    if (!isNonEmptyString(data.seller.iban?.replace(/\s+/g, ''))) addError(errors, 'seller.iban', `Für Zahlungsmittelcode ${paymentMeansCode} ist ein Zahlungskonto erforderlich.`);
+    const account = data.seller.iban?.replace(/\s+/g, '');
+    if (!isNonEmptyString(account)) addError(errors, 'seller.iban', `Für Zahlungsmittelcode ${paymentMeansCode} ist ein Zahlungskonto erforderlich.`);
+    else if (paymentMeansCode === '58' && !isValidSepaIban(account)) addError(errors, 'seller.iban', 'Für SEPA-Überweisungen ist eine gültige IBAN mit korrekter Prüfsumme erforderlich.');
   }
   if (calculated && calculated.grossAmount > 0) {
     if (!isValidDate(data.dueDate) && !isNonEmptyString(data.paymentTerms)) addError(errors, 'paymentTerms', 'Bei positivem Zahlbetrag ist ein Fälligkeitsdatum oder eine Zahlungsbedingung erforderlich.');
@@ -375,8 +397,10 @@ export function generateZugferdXml(data: ZugferdData, options: GenerateZugferdXm
         <ram:BasisAmount>${formatAmount(group.basisAmount)}</ram:BasisAmount><ram:CategoryCode>${group.category}</ram:CategoryCode><ram:RateApplicablePercent>${formatDecimal(group.rate, 2)}</ram:RateApplicablePercent>
       </ram:ApplicableTradeTax>`).join('');
   const paymentTermsXml = data.dueDate || data.paymentTerms ? `
-      <ram:SpecifiedTradePaymentTerms>${data.paymentTerms ? `<ram:Description>${escapeXml(data.paymentTerms.trim())}</ram:Description>` : ''}${data.dueDate ? `<ram:DueDateDateTime><udt:DateTimeString format="102">${dueDate}</udt:DateTimeString></ram:DueDateDateTime>` : ''}</ram:SpecifiedTradePaymentTerms>` : '';
-  const normalizedIban = data.seller.iban?.replace(/\s+/g, '');
+      <ram:SpecifiedTradePaymentTerms>${data.paymentTerms ? `<ram:Description>${escapeXml(data.paymentTerms)}</ram:Description>` : ''}${data.dueDate ? `<ram:DueDateDateTime><udt:DateTimeString format="102">${dueDate}</udt:DateTimeString></ram:DueDateDateTime>` : ''}</ram:SpecifiedTradePaymentTerms>` : '';
+  const normalizedIban = paymentMeansCode === '58'
+    ? (data.seller.iban ? normalizeIban(data.seller.iban) : undefined)
+    : data.seller.iban?.replace(/\s+/g, '');
   const paymentAccountXml = (paymentMeansCode === '30' || paymentMeansCode === '58') && normalizedIban ? `<ram:PayeePartyCreditorFinancialAccount><ram:IBANID>${escapeXml(normalizedIban)}</ram:IBANID></ram:PayeePartyCreditorFinancialAccount>${data.seller.bic ? `<ram:PayeeSpecifiedCreditorFinancialInstitution><ram:BICID>${escapeXml(data.seller.bic)}</ram:BICID></ram:PayeeSpecifiedCreditorFinancialInstitution>` : ''}` : '';
   const paymentMeansXml = `<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode>${paymentMeansCode}</ram:TypeCode>${paymentAccountXml}</ram:SpecifiedTradeSettlementPaymentMeans>`;
   const sellerContactEmail = data.seller.email ? `<ram:EmailURIUniversalCommunication><ram:URIID>${escapeXml(data.seller.email)}</ram:URIID></ram:EmailURIUniversalCommunication>` : '';

@@ -213,6 +213,9 @@ for (const width of [1440, 360, 390]) {
     await expect(page.locator('#invoice-date-filter')).toBeVisible(); await expect(ledger.locator('[aria-label="Zahlungsstatus"]')).toBeVisible();
 
     await beginList(page, inbound, data.query); const sourceList = page.getByRole('list', { name: 'Eingangsbelege', exact: true });
+    const taskFilters = page.locator('summary').filter({ hasText: /^Lieferantenaufgaben filtern(?: · aktiv)?$/ });
+    await expect(taskFilters).toBeVisible();
+    if (!await page.getByLabel('Aufgabenart filtern', { exact: true }).isVisible()) await taskFilters.click();
     await expect(page.getByLabel('Prüfstatus', { exact: true })).toHaveValue('ALL'); await expect(page.getByLabel('Aufgabenart filtern', { exact: true })).toBeVisible(); await expect(page.getByLabel('Wiedervorlage filtern', { exact: true })).toBeVisible();
     await expect(sourceList.getByRole('button')).toHaveCount(25); await expect(sourceList).not.toContainText('PRIVATE-FIELD-INBOUND'); await expect(sourceList).not.toContainText('FOREIGN-IN');
     const sourceTrigger = page.locator(`[data-incoming-document-id="${data.incoming.id}"]`);
