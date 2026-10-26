@@ -19,6 +19,31 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(selectFocusedBrowser(['components/purchases/incoming-invoice-date-filter.tsx', 'lib/purchase-documents/service.ts', 'lib/record-search/list-contract.ts']).specs.map(item => item.file)).toEqual(['e2e/incoming-invoice-date-filter.spec.ts']);
     expect(selectFocusedBrowser(['lib/backup-file-preview.ts', 'app/settings/page.tsx']).specs.map(item => item.file)).toEqual(['e2e/backup-file-inspection.spec.ts']);
   });
+  it.each([
+    ['app/register/page.tsx', 'e2e/registration-status-retry.spec.ts', 'lib/__tests__/registration-status-read.test.ts'],
+    ['components/dashboard/create-invoice-modal.tsx', 'e2e/invoice-number-check-freshness.spec.ts', 'lib/__tests__/invoice-number-check-freshness.test.ts'],
+    ['app/users/page.tsx', 'e2e/users-list-read-retry.spec.ts', 'lib/__tests__/users-read-state.test.ts'],
+  ])('keeps the existing read-only journey attached to %s, including source-only follow-ups', (source, spec, unit) => {
+    for (const inventory of [[source], [spec], [source, spec, unit]]) {
+      const selection = selectFocusedBrowser(inventory);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection.core).toBe(true);
+      expect(selection.criticalMappingRequired).toBe(false);
+      expect(selection.specs).toEqual([{ file: spec, titles: [] }]);
+    }
+    const missing = selectFocusedBrowser([source], () => false);
+    expect(missing.criticalMappingRequired).toBe(true);
+    expect(missing.unknownCriticalCount).toBe(1);
+    expect(missing.specs).toEqual([]);
+  });
+  it('unions only the three changed read journeys without a broad suite fallback', () => {
+    const selection = selectFocusedBrowser(['app/register/page.tsx', 'components/dashboard/create-invoice-modal.tsx', 'app/users/page.tsx']);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs.map(item => item.file)).toEqual([
+      'e2e/invoice-number-check-freshness.spec.ts', 'e2e/registration-status-retry.spec.ts', 'e2e/users-list-read-retry.spec.ts',
+    ]);
+    expect(selectFocusedBrowser(['lib/new-financial-contract.ts']).criticalMappingRequired).toBe(true);
+  });
   it('does not call unknown critical code UI-only verified or silently start every test', () => {
     const value = selectFocusedBrowser(['lib/new-financial-contract.ts']);
     expect(value.criticalMappingRequired).toBe(true); expect(value.unknownCriticalCount).toBe(1); expect(value.specs).toEqual([]);

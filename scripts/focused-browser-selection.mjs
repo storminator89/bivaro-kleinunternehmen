@@ -4,6 +4,9 @@ export const FOCUSED_SPECS = {
   'e2e/public-switching-checklist.spec.ts': [],
   'e2e/backup-file-inspection.spec.ts': ['ZIP inspection shows actual checks, blocks changed originals and never restores on discard or reload'],
   'e2e/incoming-invoice-date-filter.spec.ts': ['mobile source-date filters keep boundaries, unknown dates, detail/reload/history and palette continuation read-only'],
+  'e2e/registration-status-retry.spec.ts': [],
+  'e2e/invoice-number-check-freshness.spec.ts': [],
+  'e2e/users-list-read-retry.spec.ts': [],
 };
 const code = value => /^(?:app|components|hooks|lib|prisma|scripts|e2e|focused-e2e)\//u.test(value) || /^(?:proxy\.ts|next\.config\.ts|package(?:-lock)?\.json|playwright[^/]*\.ts|\.github\/workflows\/)/u.test(value);
 const knownInfrastructure = value => /^(?:scripts\/|focused-e2e\/|\.github\/workflows\/|e2e\/helpers\/|lib\/__tests__\/|playwright[^/]*\.ts)/u.test(value) || ['package.json', 'package-lock.json', 'next.config.ts', 'proxy.ts'].includes(value);
@@ -30,8 +33,17 @@ export function selectFocusedBrowser(paths, exists = () => true) {
     { spec: 'e2e/public-switching-checklist.spec.ts', marker: /switching-checklist/u,
       paths: ['app/help/page.tsx', 'components/public-accounting/switching-checklist.tsx', 'components/public-accounting/switching-checklist.module.css', 'lib/switching-checklist.ts'] },
   ].filter(packet => exists(packet.spec) && paths.some(source => packet.marker.test(source)));
+  // Existing isolated read-only journeys must follow their runtime source even
+  // when a later fix does not edit the spec. A missing journey fails closed.
+  const readJourneys = [
+    { spec: 'e2e/registration-status-retry.spec.ts', source: 'app/register/page.tsx' },
+    { spec: 'e2e/invoice-number-check-freshness.spec.ts', source: 'components/dashboard/create-invoice-modal.tsx' },
+    { spec: 'e2e/users-list-read-retry.spec.ts', source: 'app/users/page.tsx' },
+  ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
+    const readJourney = readJourneys.find(value => value.source === source);
+    if (readJourney) { add(readJourney.spec, true, source); continue; }
     const packet = packets.find(value => value.paths.includes(source) || value.spec === source);
     if (packet) { add(packet.spec, true, source); continue; }
     let mapped = knownInfrastructure(source);
