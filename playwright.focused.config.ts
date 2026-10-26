@@ -8,13 +8,13 @@ if (!validFocusedSelection(selection) || !selection.core || selection.criticalMa
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export default defineConfig({
   ...baseline,
-  testDir: './', fullyParallel: false, workers: 1, retries: 0, forbidOnly: true,
+  testDir: './focused-e2e', fullyParallel: false, workers: 1, retries: 0, forbidOnly: true,
   reporter: [['github']],
   use: { ...baseline.use, ...devices['Desktop Chrome'], trace: 'off' },
   projects: [
-    { name: 'focused-core', testMatch: '**/focused-e2e/core.spec.ts' },
+    { name: 'focused-core', testDir: './focused-e2e', testMatch: 'core.spec.ts' },
     ...selection.specs.map((spec: { file: string; titles: string[] }) => ({
-      name: 'focused-' + spec.file.slice(4, -8), testMatch: '**/' + spec.file, dependencies: ['focused-core'],
+      name: 'focused-' + spec.file.slice(4, -8), testDir: './e2e', testMatch: spec.file.slice(4), dependencies: ['focused-core'],
       ...(spec.titles.length ? { grep: new RegExp('(?:' + spec.titles.map(escape).join('|') + ')$') } : {}),
     })),
   ],

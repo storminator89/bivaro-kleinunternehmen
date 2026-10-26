@@ -1,4 +1,7 @@
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import path from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { selectFocusedBrowser, validFocusedSelection } from '../focused-browser-selection.mjs';
 
@@ -34,6 +37,29 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(validFocusedSelection({ ...value, specs: [{ file: '../outside.spec.ts', titles: [] }] })).toBe(false);
     expect(() => selectFocusedBrowser(['../private'])).toThrow(); expect(() => selectFocusedBrowser(['a\nsecret'])).toThrow();
     expect(selectFocusedBrowser(['lib/backup.ts'], () => false).criticalMappingRequired).toBe(true);
+  });
+  it('scopes project roots so generated standalone and dependency copies are never discovered', () => {
+    const source = readFileSync('playwright.focused.config.ts', 'utf8');
+    const selection = selectFocusedBrowser(['components/app-shell.tsx']);
+    const exports: { default?: { testDir: string; projects: { testDir: string; testMatch: string }[] } } = {};
+    const context = vm.createContext({ exports, Buffer, process: { env: { BIVARO_FOCUSED_SELECTION: JSON.stringify(selection) } }, require(name: string) {
+      if (name === '@playwright/test') return { defineConfig: (value: unknown) => value, devices: { 'Desktop Chrome': {} } };
+      if (name === './playwright.config') return { use: {}, webServer: { command: 'never executed in a pure config check' } };
+      if (name === './scripts/focused-browser-selection.mjs') return { validFocusedSelection };
+      throw Error('Unexpected pure config dependency');
+    } });
+    vm.runInContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, context);
+    const config = exports.default!;
+    expect(config.testDir).toBe('./focused-e2e');
+    expect(config.projects.map(project => [project.testDir, project.testMatch])).toEqual([
+      ['./focused-e2e', 'core.spec.ts'], ['./e2e', 'public-help-fragments.spec.ts'],
+    ]);
+    const inventory = ['focused-e2e/core.spec.ts', '.next/standalone/focused-e2e/core.spec.ts', 'node_modules/copy/focused-e2e/core.spec.ts', 'e2e/public-help-fragments.spec.ts', '.next/standalone/e2e/public-help-fragments.spec.ts'];
+    const collected = inventory.filter(file => config.projects.some(project => {
+      const relative = path.relative(path.resolve(project.testDir), path.resolve(file));
+      return !relative.startsWith('..') && !path.isAbsolute(relative) && path.basename(relative) === project.testMatch;
+    }));
+    expect(collected).toEqual(['focused-e2e/core.spec.ts', 'e2e/public-help-fragments.spec.ts']);
   });
   it('makes full image acceptance manual and retains only scoped ordinary PR work', () => {
     const full = readFileSync('.github/workflows/browser-acceptance.yml', 'utf8');
