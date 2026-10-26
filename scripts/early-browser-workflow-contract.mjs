@@ -36,6 +36,35 @@ export const EARLY_RECEIPT_STEPS = [
   '',
 ].join('\n');
 
+export const PUBLIC_FRAGMENT_STEPS = [
+  '      # Preserve only bounded, schema-validated public fragment failure diagnostics.',
+  '      - name: Finalize bounded public fragment diagnostics',
+  '        id: public-fragments',
+  '        if: ' + expression('always()'),
+  '        continue-on-error: true',
+  '        timeout-minutes: 1',
+  '        env:',
+  '          BIVARO_BROWSER_RECEIPT_HEAD: ' + expression('github.event.pull_request.head.sha || github.sha'),
+  '          BIVARO_PUBLIC_FRAGMENT_DIRECTORY: ' + expression('steps.functional-suite.outputs.public_fragment_directory'),
+  '          BIVARO_BROWSER_SUITE_OUTCOME: ' + expression('steps.functional-suite.outcome'),
+  '        run: node scripts/finalize-public-fragments.mjs',
+  '',
+  '      - name: Upload bounded public fragment diagnostics',
+  '        if: ' + expression("always() && steps.public-fragments.outputs.public_fragment_ready == 'true'"),
+  '        continue-on-error: true',
+  '        timeout-minutes: 1',
+  '        uses: actions/upload-artifact@v4',
+  '        with:',
+  '          name: public-fragment-failure-diagnostics',
+  '          path: ' + expression('steps.public-fragments.outputs.public_fragment_directory') + '/public-fragments.json',
+  '          retention-days: 1',
+  '          if-no-files-found: warn',
+  '          include-hidden-files: false',
+  '          compression-level: 0',
+  '',
+  '',
+].join('\n');
+
 function replaceOnce(source, before, after) {
   if (source.split(before).length !== 2) throw new Error('Expected exactly one reviewed early-receipt delta');
   return source.replace(before, after);
@@ -49,8 +78,16 @@ export function addEarlyReceipt(source) {
   return replaceOnce(result, next, EARLY_RECEIPT_STEPS + next);
 }
 
+export function addPublicFragmentDelivery(source) {
+  const next = '      - name: Require both real final-byte browser cases and render all their PDF pages\n';
+  return replaceOnce(source, next, PUBLIC_FRAGMENT_STEPS + next);
+}
+
 /** Only historical hash/length inputs use this strict inverse, never raw safety guards. */
 export function withoutEarlyReceipt(source) {
+  if (source.includes('      # Preserve only bounded, schema-validated public fragment failure diagnostics.')) {
+    source = replaceOnce(source, PUBLIC_FRAGMENT_STEPS, '');
+  }
   const additions = [NEW_FUNCTIONAL_HEADER, NEW_FUNCTIONAL_ENV, NEW_REPORTER, EARLY_RECEIPT_STEPS];
   if (!additions.some(value => source.includes(value))) return source;
   let result = replaceOnce(source, EARLY_RECEIPT_STEPS, '');

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import EarlyBrowserReceiptReporter, { createReceiptReporter, finalizeReceipt, validReceipt, MAX_FAILURES, MAX_RECEIPT_BYTES } from '../early-browser-receipt.mjs';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { addEarlyReceipt, withoutEarlyReceipt, NEW_REPORTER, EARLY_RECEIPT_STEPS } from '../early-browser-workflow-contract.mjs';
+import { addEarlyReceipt, addPublicFragmentDelivery, withoutEarlyReceipt, NEW_REPORTER, EARLY_RECEIPT_STEPS, PUBLIC_FRAGMENT_STEPS } from '../early-browser-workflow-contract.mjs';
 
 function fixture(planned = 1) {
   const files = new Map<string, string>();
@@ -205,7 +205,7 @@ describe('strict additive early-receipt workflow contract', () => {
   it('restores the complete accepted workflow with every original byte/hash and all raw gates intact', () => {
     const restored = withoutEarlyReceipt(raw);
     expect(createHash('sha256').update(restored).digest('hex')).toBe('18f4700c90176f53ce97257fda3b05e8332a30c57ae68c7b2841d4551d3b0249');
-    expect(addEarlyReceipt(restored)).toBe(raw);
+    expect(addPublicFragmentDelivery(addEarlyReceipt(restored))).toBe(raw);
     expect(raw).toContain(NEW_REPORTER);
     expect(raw).toContain(EARLY_RECEIPT_STEPS);
     expect(raw.match(/allowed = \{/g)).toHaveLength(12);
@@ -230,5 +230,16 @@ describe('strict additive early-receipt workflow contract', () => {
     expect(() => withoutEarlyReceipt(raw.replace(NEW_REPORTER, NEW_REPORTER + NEW_REPORTER))).toThrow();
     expect(() => withoutEarlyReceipt(raw.replace(EARLY_RECEIPT_STEPS, ''))).toThrow();
     expect(() => withoutEarlyReceipt(raw.replace('browser-early-functional-receipt', 'different-artifact'))).toThrow();
+  });
+  it('delivers only a separate bounded public diagnostic file before the unchanged required evidence gates', () => {
+    expect(createHash('sha256').update(PUBLIC_FRAGMENT_STEPS).digest('hex')).toBe('f1e5a532504defc5c5d9982020afca8202ddd685aa01c2230a7d27bf8c36fd92');
+    expect(raw.indexOf(PUBLIC_FRAGMENT_STEPS)).toBeGreaterThan(raw.indexOf(EARLY_RECEIPT_STEPS));
+    expect(raw.indexOf(PUBLIC_FRAGMENT_STEPS)).toBeLessThan(raw.indexOf('      - name: Require both real final-byte browser cases'));
+    expect(PUBLIC_FRAGMENT_STEPS).toContain('/public-fragments.json');
+    expect(PUBLIC_FRAGMENT_STEPS).toContain('steps.functional-suite.outcome');
+    expect(PUBLIC_FRAGMENT_STEPS.match(/timeout-minutes: 1/g)).toHaveLength(2);
+    expect(PUBLIC_FRAGMENT_STEPS).not.toMatch(/secrets\.|DATABASE_URL|uploads|test-results|\*|trace|\.log/u);
+    expect(() => withoutEarlyReceipt(raw.replace(PUBLIC_FRAGMENT_STEPS, PUBLIC_FRAGMENT_STEPS + PUBLIC_FRAGMENT_STEPS))).toThrow();
+    expect(() => withoutEarlyReceipt(raw.replace('public-fragment-failure-diagnostics', 'unreviewed-artifact'))).toThrow();
   });
 });

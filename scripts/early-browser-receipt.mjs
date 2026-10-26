@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
+import { createPublicFragmentCollector } from './public-fragment-diagnostics.mjs';
 
 export const MAX_RECEIPT_BYTES = 64 * 1024;
 export const MAX_FAILURES = 64;
@@ -252,10 +253,10 @@ export function finalizeReceipt({ env = process.env, io = fs, warn = () => conso
 }
 
 export default class EarlyBrowserReceiptReporter {
-  constructor() { this.reporter = createReceiptReporter(); }
+  constructor() { this.reporter = createReceiptReporter(); this.fragments = createPublicFragmentCollector(); }
   printsToStdio() { return false; }
-  onBegin(config, suite) { this.reporter.onBegin(config, suite); }
-  onTestEnd(test, result) { this.reporter.onTestEnd(test, result); }
+  onBegin(config, suite) { this.reporter.onBegin(config, suite); this.fragments.onBegin(config, suite); }
+  onTestEnd(test, result) { this.reporter.onTestEnd(test, result); this.fragments.onTestEnd(test, result); }
   onError(error) { this.reporter.onError(error); }
-  onEnd(result) { this.reporter.onEnd(result); }
+  onEnd(result) { this.reporter.onEnd(result); this.fragments.onEnd(result); }
 }

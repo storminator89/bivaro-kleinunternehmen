@@ -151,6 +151,31 @@ jobs:
           include-hidden-files: false
           compression-level: 0
 
+      # Preserve only bounded, schema-validated public fragment failure diagnostics.
+      - name: Finalize bounded public fragment diagnostics
+        id: public-fragments
+        if: ${{ always() }}
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          BIVARO_BROWSER_RECEIPT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          BIVARO_PUBLIC_FRAGMENT_DIRECTORY: ${{ steps.functional-suite.outputs.public_fragment_directory }}
+          BIVARO_BROWSER_SUITE_OUTCOME: ${{ steps.functional-suite.outcome }}
+        run: node scripts/finalize-public-fragments.mjs
+
+      - name: Upload bounded public fragment diagnostics
+        if: ${{ always() && steps.public-fragments.outputs.public_fragment_ready == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-fragment-failure-diagnostics
+          path: ${{ steps.public-fragments.outputs.public_fragment_directory }}/public-fragments.json
+          retention-days: 1
+          if-no-files-found: warn
+          include-hidden-files: false
+          compression-level: 0
+
       - name: Require both real final-byte browser cases and render all their PDF pages
         env:
           EVIDENCE: ${{ runner.temp }}/bivaro-own-invoice-browser
