@@ -11,7 +11,7 @@ vi.mock('@/lib/prisma', () => ({ get prisma() { return state.client; } }));
 const at = '2026-10-24T00:00:00.000Z';
 function fixture() {
   const id = randomUUID();
-  const data = { user: { id: 'synthetic-source' }, customers: [], suppliers: [], serviceArticles: [], purchaseDocuments: [], invoices: [], paymentJournalEvents: [], serviceProjects: [], billingNotes: [], purchaseValidationReports: [], serviceBillingPlans: [], serviceBillingPeriods: [], auditLogs: [], invoiceNumberCounters: [],
+  const data = { quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [], user: { id: 'synthetic-source' }, customers: [], suppliers: [], serviceArticles: [], purchaseDocuments: [], invoices: [], paymentJournalEvents: [], serviceProjects: [], billingNotes: [], purchaseValidationReports: [], serviceBillingPlans: [], serviceBillingPeriods: [], auditLogs: [], invoiceNumberCounters: [],
     bankMappingProfiles: [{ id, revision: 1, deletedAt: null, deleteMutationId: null, createdAt: at, updatedAt: at }],
     bankMappingProfileRevisions: [{ profileId: id, revision: 1, mutationId: randomUUID(), configuration: { version: 1, name: 'Synthetisches Profil', parserVersion: BANK_IMPORT_PARSER_VERSION, mappingVersion: BANK_IMPORT_MAPPING_VERSION, delimiter: ';', mapping: { headerRow: 0, date: 0, amount: 1, credit: null, debit: null, currency: null, counterparty: null, reference: null, externalId: null, decimalSeparator: ',', accountAlias: 'Synthetisches Konto', defaultCurrency: 'EUR', amountMode: 'signed' }, headerHashes: ['1'.repeat(64), '2'.repeat(64)] }, createdAt: at }],
     documentNumberingPolicies: [{ type: 'INVOICE', revision: 1, formatVersion: 1, prefix: 'RE-', includeYear: true, sequenceWidth: 4, startSequence: 1, effectiveYear: 2026, createdAt: at }],
@@ -38,7 +38,9 @@ describe('shared backup integration without a database', () => {
       committed.splice(0, committed.length, ...draft);
       return result;
     });
-    state.client = { annualBusinessContextRevision: { findMany: async () => [] }, quoteCreateReceipt: { findMany: async () => [] }, $transaction: transaction };
+    const emptyQuoteHistory = { findMany: async (query: unknown) => { expect(query).toMatchObject({ where: { userId: 'target-owner' } }); return []; } };
+    state.client = { annualBusinessContextRevision: { findMany: async () => [] }, quoteCreateReceipt: { findMany: async () => [] },
+      quoteReleaseAuthority: emptyQuoteHistory, quoteRelease: emptyQuoteHistory, quoteElectronicResponse: emptyQuoteHistory, $transaction: transaction };
     await expect(restoreBackupData({ userId: 'target-owner', backup, overwrite: false })).rejects.toThrow(/Nummernformat-Revision weicht/);
     expect(transaction).toHaveBeenCalledOnce();
     expect(attempted).toHaveLength(1);

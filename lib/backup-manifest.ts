@@ -1,3 +1,5 @@
+import { QUOTE_RELEASE_BACKUP_SCHEMA_VERSION } from '@/lib/backup-schema-identities';
+import { quoteReleaseGraphFromBackup, validateQuoteReleaseOriginalManifest } from '@/lib/quote-release-backup';
 import { MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, supportsManualFinancialRecords, manualRecordEventsFromBackup, validateManualRecordOriginalManifest } from '@/lib/manual-financial-record-backup';
 import { validateSupplierTaskBackupFields } from '@/lib/purchase-documents/supplier-task-backup';
 import { validateQuoteCreateBackup, validateQuoteOriginalManifest } from '@/lib/quote-create-backup';
@@ -24,7 +26,7 @@ export const DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION = '20261024020000_add_do
 /** Explicit capability union; the marker migration changes no business data. */
 export const MAPPING_NUMBERING_SCHEMA_VERSION = '20261024030000_combine_mapping_profiles_numbering';
 export const SUPPLIER_TASKS_SCHEMA_VERSION = '20261024040000_add_supplier_tasks';
-export const CURRENT_SCHEMA_VERSION = MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION;
+export const CURRENT_SCHEMA_VERSION = QUOTE_RELEASE_BACKUP_SCHEMA_VERSION;
 export const PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION = '20261022030000_combine_projects_outbox_validation';
 // Compatibility name used by the independent bank-evidence candidate.
 export const PROJECT_OUTBOX_VALIDATION_SCHEMA_VERSION = PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION;
@@ -51,11 +53,12 @@ export const PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION = '20261021054000_add_purc
 export const PRE_QUOTE_FOLLOWUP_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_DATA_IMPORT_SCHEMA_VERSION = '20261021054000_add_purchase_review_drafts';
 export const PRE_ANNUAL_CONTEXT_SCHEMA_VERSION = PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION;
-export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, SUPPLIER_TASKS_SCHEMA_VERSION, MAPPING_NUMBERING_SCHEMA_VERSION, BANK_MAPPING_PROFILES_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
-export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, SUPPLIER_TASKS_SCHEMA_VERSION, MAPPING_NUMBERING_SCHEMA_VERSION, BANK_MAPPING_PROFILES_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
+export const QUOTE_WORKFLOW_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, SUPPLIER_TASKS_SCHEMA_VERSION, MAPPING_NUMBERING_SCHEMA_VERSION, BANK_MAPPING_PROFILES_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION];
+export const REVIEW_DRAFT_SCHEMAS: readonly string[] = [CURRENT_SCHEMA_VERSION, MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, SUPPLIER_TASKS_SCHEMA_VERSION, MAPPING_NUMBERING_SCHEMA_VERSION, BANK_MAPPING_PROFILES_SCHEMA_VERSION, DOCUMENT_NUMBERING_POLICIES_SCHEMA_VERSION, BANK_PAYMENT_ALLOCATIONS_SCHEMA_VERSION, PAYMENT_BANK_IMPORT_SCHEMA_VERSION, PAYMENT_TERMS_SCHEMA_VERSION, BANK_IMPORT_EVIDENCE_SCHEMA_VERSION, PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_OUTBOX_SCHEMA_VERSION, PROJECT_PURCHASE_VALIDATION_SCHEMA_VERSION, DURABLE_EMAIL_OUTBOX_SCHEMA_VERSION, PURCHASE_VALIDATION_SCHEMA_VERSION, PROJECT_SERVICE_TIMES_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, RECURRING_BALANCE_DAILY_SCHEMA_VERSION, GROWTH_AI_REMINDER_SCHEMA_VERSION, RECURRING_SERVICE_SCHEMA_VERSION, GROWTH_AI_SCHEMA_VERSION, GROWTH_SCHEMA_VERSION, AI_RECEIPT_EXTRACTION_SCHEMA_VERSION, REMINDER_BALANCE_SCHEMA_VERSION, COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION, DATA_IMPORT_SCHEMA_VERSION, QUOTE_WORKFLOW_SCHEMA_VERSION, MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION];
 /** Closed registry: new unions add identities; timestamps never infer capabilities. */
-export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean; recurringServiceDrafts: boolean; paymentAdjustments: boolean; projectServiceTimes: boolean; emailOutbox: boolean; purchaseValidationReports: boolean; paymentTerms: boolean; bankImportEvidence: boolean; bankPaymentAllocations?: boolean; bankMappingProfiles?: boolean; documentNumberingPolicies?: boolean; supplierTasks?: boolean; manualFinancialRecords?: boolean }>> = Object.freeze({
-  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, bankMappingProfiles: true, documentNumberingPolicies: true, supplierTasks: true, manualFinancialRecords: true }),
+export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoApproval: boolean; annualContext: boolean; dataImport: boolean; quoteWorkflow: boolean; aiReceiptExtraction: boolean; reminderBalance: boolean; recurringServiceDrafts: boolean; paymentAdjustments: boolean; projectServiceTimes: boolean; emailOutbox: boolean; purchaseValidationReports: boolean; paymentTerms: boolean; bankImportEvidence: boolean; bankPaymentAllocations?: boolean; bankMappingProfiles?: boolean; documentNumberingPolicies?: boolean; supplierTasks?: boolean; manualFinancialRecords?: boolean; quoteReleaseEvidence?: boolean }>> = Object.freeze({
+  [CURRENT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, bankMappingProfiles: true, documentNumberingPolicies: true, supplierTasks: true, manualFinancialRecords: true, quoteReleaseEvidence: true }),
+  [MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, bankMappingProfiles: true, documentNumberingPolicies: true, supplierTasks: true, manualFinancialRecords: true }),
   [SUPPLIER_TASKS_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, bankMappingProfiles: true, documentNumberingPolicies: true, supplierTasks: true }),
   [MAPPING_NUMBERING_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, bankMappingProfiles: true, documentNumberingPolicies: true }),
   [BANK_MAPPING_PROFILES_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: true, annualContext: true, dataImport: true, quoteWorkflow: true, aiReceiptExtraction: true, reminderBalance: true, recurringServiceDrafts: true, paymentAdjustments: true, projectServiceTimes: true, emailOutbox: true, purchaseValidationReports: true, paymentTerms: true, bankImportEvidence: true, bankPaymentAllocations: true, bankMappingProfiles: true }),
@@ -85,6 +88,9 @@ export const BACKUP_FEATURE_CAPABILITIES: Readonly<Record<string, { manualPhotoA
   [ANNUAL_CONTEXT_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: true, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false, emailOutbox: false, purchaseValidationReports: false, paymentTerms: false, bankImportEvidence: false }),
   [PRE_MANUAL_PHOTO_APPROVAL_SCHEMA_VERSION]: Object.freeze({ manualPhotoApproval: false, annualContext: false, dataImport: false, quoteWorkflow: false, aiReceiptExtraction: false, reminderBalance: false, recurringServiceDrafts: false, paymentAdjustments: false, projectServiceTimes: false, emailOutbox: false, purchaseValidationReports: false, paymentTerms: false, bankImportEvidence: false }),
 });
+export function backupSchemaSupportsQuoteReleases(schemaVersion?: string): boolean {
+  return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.quoteReleaseEvidence === true;
+}
 export function backupSchemaSupportsSupplierTasks(schemaVersion?: string): boolean {
   return schemaVersion !== undefined && BACKUP_FEATURE_CAPABILITIES[schemaVersion]?.supplierTasks === true;
 }
@@ -178,7 +184,7 @@ export type BackupCoverageEntry = {
 };
 
 export type BackupFileManifestEntry = {
-  kind: 'invoice' | 'receipt' | 'logo' | 'purchase-document';
+  kind: 'invoice' | 'receipt' | 'logo' | 'purchase-document' | 'quote-release-original';
   sourceName: string;
   zipPath?: string;
   bytes: number;
@@ -223,6 +229,9 @@ export type BackupManifest = {
 export type BackupManifestData = Record<string, unknown>;
 
 const COVERAGE = [
+  { model: 'QuoteReleaseAuthority', key: 'quoteReleaseAuthorities', mode: 'included' as const, reason: 'Portable retained authority UUID and high-water; restore never relinks or activates incoming authority.' },
+  { model: 'QuoteRelease', key: 'quoteReleases', mode: 'included' as const, reason: 'Immutable frozen original bindings; imported history is detached and permanently access-disabled.' },
+  { model: 'QuoteElectronicResponse', key: 'quoteElectronicResponses', mode: 'included' as const, reason: 'Immutable historical response only, never new recipient consent or restored public access.' },
   { model: 'ManualFinancialRecordEvent', key: 'manualFinancialRecordEvents', mode: 'included' as const, reason: 'Immutable manual finalization and amount-only evidence; snapshots are never additive money.' },
   { model: 'User', key: 'user', mode: 'metadata-only' as const, reason: 'Identity and password remain target-owned.' },
   { model: 'AppSettings', key: 'appSettings', mode: 'excluded' as const, reason: 'Host-wide bootstrap setting, not tenant data.' },
@@ -493,6 +502,8 @@ export function createBackupManifest(options: {
   fileManifest?: BackupFileManifestEntry[];
   snapshot?: BackupSnapshotInfo;
 }): BackupManifest {
+  const quoteGraph = quoteReleaseGraphFromBackup(options.data, CURRENT_SCHEMA_VERSION);
+  validateQuoteReleaseOriginalManifest(quoteGraph, options.fileManifest ?? [], false);
   const modelCoverage: BackupCoverageEntry[] = COVERAGE.filter(entry => entry.model !== 'AnnualBusinessContextRevision' || options.data.annualBusinessContextRevisions !== undefined).map((entry) => ({
     ...entry,
     count: coverageCount(options.data, entry.key),
@@ -559,7 +570,9 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   validateQuoteCreateBackup(data, backupSchemaSupportsDocumentNumberingPolicies(value.schemaVersion));
   validateBankAllocationCapability(data, value.schemaVersion);
   manualRecordEventsFromBackup(data, value.schemaVersion);
+  const quoteGraph = quoteReleaseGraphFromBackup(data, value.schemaVersion);
   const expectedCoverage = COVERAGE.filter((entry) =>
+    (backupSchemaSupportsQuoteReleases(value.schemaVersion) || !['QuoteReleaseAuthority', 'QuoteRelease', 'QuoteElectronicResponse'].includes(entry.model)) &&
     (supportsManualFinancialRecords(value.schemaVersion) || entry.model !== 'ManualFinancialRecordEvent') &&
     (backupSchemaSupportsBankMappingProfiles(value.schemaVersion) || !['BankMappingProfile', 'BankMappingProfileRevision'].includes(entry.model)) &&
     (backupSchemaSupportsDocumentNumberingPolicies(value.schemaVersion) || !['DocumentNumberingPolicy', 'QuoteCreateReceipt'].includes(entry.model)) &&
@@ -641,13 +654,13 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
   for (const item of value.fileManifest) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('Backup-Manifest enthält einen ungültigen Dateieintrag');
     const file = item as BackupFileManifestEntry;
-    if (!['invoice', 'receipt', 'logo', 'purchase-document'].includes(file.kind) || typeof file.sourceName !== 'string' || file.sourceName.length === 0) {
+    if (!['invoice', 'receipt', 'logo', 'purchase-document', 'quote-release-original'].includes(file.kind) || typeof file.sourceName !== 'string' || file.sourceName.length === 0) {
       throw new Error('Backup-Manifest Dateieintrag enthält keine gültige Quelle');
     }
     if (!Number.isSafeInteger(file.bytes) || file.bytes < 0 || !/^[a-f0-9]{64}$/iu.test(file.sha256)) {
       throw new Error(`Backup-Manifest Dateieintrag für ${file.sourceName} ist ungültig`);
     }
-    if (file.zipPath !== undefined && (typeof file.zipPath !== 'string' || !/^(?:invoices|receipts|logos|purchase-documents)\/[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(file.zipPath))) {
+    if (file.zipPath !== undefined && (typeof file.zipPath !== 'string' || !/^(?:invoices|receipts|logos|purchase-documents|quote-release-originals)\/[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(file.zipPath))) {
       throw new Error(`Backup-Manifest Dateipfad für ${file.sourceName} ist ungültig`);
     }
     if (file.sourceVersion !== undefined && (typeof file.sourceVersion !== 'string' || file.sourceVersion.length === 0)) {
@@ -657,6 +670,7 @@ export function validateBackupManifest(manifest: unknown, data: BackupManifestDa
     if (seenFiles.has(fileKey)) throw new Error(`Backup-Manifest enthält die Datei doppelt: ${fileKey}`);
     seenFiles.add(fileKey);
   }
+  validateQuoteReleaseOriginalManifest(quoteGraph, value.fileManifest, false);
   validateQuoteOriginalManifest(data, value.fileManifest, false);
   validateManualRecordOriginalManifest(data, value.fileManifest, false);
   if (value.snapshot !== undefined) {

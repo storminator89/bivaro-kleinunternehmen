@@ -19,21 +19,25 @@ import { getRecommendedExpenseCategories } from "@/lib/eur-line-mapping";
 import { isPrivateCategory } from "@/lib/private-categories";
 import { formatBusinessDate } from "@/lib/business-date";
 import { expensePercentageInput, parseExpensePercentage, EXPENSE_PERCENTAGE_ERROR } from "./expense-percentage";
+import { ManualEntrySubmitFeedback, type ManualEntrySubmitControls } from '@/components/dashboard/manual-entry-submit-feedback';
 
 type EditModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: DashboardEditData) => void;
+  onSave: (data: DashboardEditData) => void | Promise<void>;
   data: DashboardEditData;
   type: 'expense' | 'income';
   customers: Customer[];
   uniqueCategories?: string[];
+  submission?: ManualEntrySubmitControls;
 };
 
-export function EditModal({ isOpen, onClose, onSave, data, type, customers = [], uniqueCategories = [] }: EditModalProps) {
+export function EditModal({ isOpen, onClose, onSave, data, type, customers = [], uniqueCategories = [], submission }: EditModalProps) {
   const [formData, setFormData] = useState(data);
   const [percentageInput, setPercentageInput] = useState(() => expensePercentageInput(data.taxDeductiblePercentage));
   const percentage = parseExpensePercentage(percentageInput);
+  const locked = Boolean(submission && submission.state.phase !== 'idle');
+  const pending = submission?.state.phase === 'pending';
 
   // Combine user's existing categories with EÜR-recommended categories
   // Filter out user categories that are synonyms (already mapped to EÜR lines)
@@ -82,17 +86,18 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (locked) return;
     if (type === 'expense') {
       if (percentage === null) return;
-      onSave({ ...formData, taxDeductiblePercentage: percentage });
+      void onSave({ ...formData, taxDeductiblePercentage: percentage });
     } else {
-      onSave(formData);
+      void onSave(formData);
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg">
+    <Dialog open={isOpen} onOpenChange={open => { if (!open && !locked) onClose(); }}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto bg-card border rounded-xl shadow-lg" showCloseButton={!locked} onEscapeKeyDown={event => { if (locked) event.preventDefault(); }} onInteractOutside={event => { if (locked) event.preventDefault(); }}>
         <DialogHeader className="border-b pb-4">
           <DialogTitle className="text-xl font-semibold">
             {type === 'expense' ? 'Ausgabe bearbeiten' : 'Einnahme bearbeiten'}
@@ -101,7 +106,8 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
             Nehmen Sie Änderungen an Ihrer {type === 'expense' ? 'Ausgabe' : 'Einnahme'} vor. Klicken Sie auf Speichern, wenn Sie fertig sind.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} aria-busy={pending}>
+          <fieldset disabled={locked} inert={locked} className="min-w-0 space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="edit-description" className="text-sm font-medium">Beschreibung</Label>
             <Input
@@ -235,12 +241,14 @@ export function EditModal({ isOpen, onClose, onSave, data, type, customers = [],
             </div>
           )}
           <DialogFooter className="border-t pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={locked}>
               Abbrechen
             </Button>
-            <Button type="submit">Speichern</Button>
+            <Button type="submit" disabled={locked} aria-busy={pending}>{pending ? 'Wird gespeichert …' : 'Speichern'}</Button>
           </DialogFooter>
+          </fieldset>
         </form>
+        <ManualEntrySubmitFeedback controls={submission} />
       </DialogContent>
     </Dialog>
   );

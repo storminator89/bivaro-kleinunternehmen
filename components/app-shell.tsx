@@ -15,6 +15,7 @@ import { UserMenu } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-switch";
 import { usePageTitle } from "@/hooks/use-page-title";
 import publicStyles from "@/components/public-accounting/pilot-public.module.css";
+import { RecordListSearchProvider } from "@/components/record-search/record-list-search-provider";
 
 function PageHeading() {
   const title = usePageTitle();
@@ -96,7 +97,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   // Eingeloggter Benutzer mit Sidebar
-  return (
+  const workspace = (
     <div className="flex min-h-screen app-workspace">
       <a
         href="#main-content"
@@ -195,4 +196,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
+  // Keep the query-dependent workspace boundary stable across private routes.
+  // Public document content must not depend on this private streamed fallback:
+  // native fragment targets need to be available when the browser parses them.
+  return <Suspense fallback={null}><RecordListSearchProvider>{workspace}</RecordListSearchProvider></Suspense>;
 }

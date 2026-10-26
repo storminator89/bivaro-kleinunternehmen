@@ -25,6 +25,13 @@ export async function OPTIONS(request: NextRequest) {
   return handleCors(request);
 }
 
+function customerMutationId(value: string): number | null {
+  if (!/^\d+$/.test(value)) return null;
+  const id = Number(value);
+  // Customer.id is Prisma Int, not SQLite's wider underlying rowid range.
+  return Number.isSafeInteger(id) && id > 0 && id <= 2_147_483_647 ? id : null;
+}
+
 // GET /api/v1/customers
 export async function GET(request: NextRequest) {
   return withApiAuth(request, async ({ userId }) => {
@@ -141,6 +148,8 @@ async function putHandler(request: NextRequest) {
     if (!id) {
       return apiError('Customer ID is required', 400, 'MISSING_ID');
     }
+    const parsedId = customerMutationId(id);
+    if (parsedId === null) return apiError('Invalid customer ID', 400, 'VALIDATION_ERROR');
 
     let body;
     try {
@@ -161,7 +170,7 @@ async function putHandler(request: NextRequest) {
 
     // Check if customer exists and belongs to user
     const existing = await prisma.customer.findFirst({
-      where: { id: parseInt(id), userId },
+      where: { id: parsedId, userId },
     });
 
     if (!existing) {
@@ -169,7 +178,7 @@ async function putHandler(request: NextRequest) {
     }
 
     const customer = await prisma.customer.update({
-      where: { id: parseInt(id) },
+      where: { id: parsedId },
       data: {
         ...(name !== undefined && { name: name.trim() }),
         ...(contactPerson !== undefined && { contactPerson: contactPerson?.trim() || null }),
@@ -200,10 +209,12 @@ async function deleteHandler(request: NextRequest) {
     if (!id) {
       return apiError('Customer ID is required', 400, 'MISSING_ID');
     }
+    const parsedId = customerMutationId(id);
+    if (parsedId === null) return apiError('Invalid customer ID', 400, 'VALIDATION_ERROR');
 
     // Check if customer exists and belongs to user
     const existing = await prisma.customer.findFirst({
-      where: { id: parseInt(id), userId },
+      where: { id: parsedId, userId },
     });
 
     if (!existing) {
@@ -229,7 +240,7 @@ async function deleteHandler(request: NextRequest) {
     }
     await auditDelete(userId, 'Customer', existing);
 
-    const response = apiSuccess({ deleted: true, id: parseInt(id) });
+    const response = apiSuccess({ deleted: true, id: parsedId });
     Object.entries(corsHeaders()).forEach(([key, value]) => {
       response.headers.set(key, value);
     });

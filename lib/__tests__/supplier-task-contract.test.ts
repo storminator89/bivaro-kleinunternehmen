@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, QUOTE_RELEASE_BACKUP_SCHEMA_VERSION } from '@/lib/backup-schema-identities';
 import { stripEmptyBankImportsForLegacy, stripEmptyProjectServiceTimesForLegacy } from './helpers/backup-schema';
 import { createBackupManifest as createFixtureManifest } from './helpers/backup';
 import { isSupplierTaskDay, parseSupplierTask, parseSupplierTaskFilters, supplierTaskBerlinDay, supplierTaskDto } from '@/lib/purchase-documents/supplier-task';
@@ -48,12 +49,13 @@ describe('supplier task calendar and explicit contract', () => {
 describe('exact additive supplier task backup capability', () => {
   const empty = { supplierTaskKind: null, supplierTaskFollowUpDate: null, supplierTaskConfirmationRequired: false };
   it('only adds the named exact identity, never promotes existing or arbitrary future identities', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe('20261025090000_add_manual_financial_record_lifecycle');
+    expect(CURRENT_SCHEMA_VERSION).toBe(QUOTE_RELEASE_BACKUP_SCHEMA_VERSION);
     expect(backupSchemaSupportsSupplierTasks(SUPPLIER_TASKS_SCHEMA_VERSION)).toBe(true);
     expect(backupSchemaSupportsSupplierTasks(CURRENT_SCHEMA_VERSION)).toBe(true);
     expect(backupSchemaSupportsSupplierTasks(MAPPING_NUMBERING_SCHEMA_VERSION)).toBe(false);
     expect(BACKUP_FEATURE_CAPABILITIES[MAPPING_NUMBERING_SCHEMA_VERSION]).toMatchObject({ bankMappingProfiles: true, documentNumberingPolicies: true });
-    for (const key of [...Object.keys(BACKUP_FEATURE_CAPABILITIES).filter(key => ![CURRENT_SCHEMA_VERSION, SUPPLIER_TASKS_SCHEMA_VERSION].includes(key)), '99999999999999_add_supplier_tasks', undefined]) expect(backupSchemaSupportsSupplierTasks(key)).toBe(false);
+    expect(backupSchemaSupportsSupplierTasks(MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION)).toBe(true);
+    for (const key of [...Object.keys(BACKUP_FEATURE_CAPABILITIES).filter(key => ![CURRENT_SCHEMA_VERSION, MANUAL_FINANCIAL_RECORD_SCHEMA_VERSION, SUPPLIER_TASKS_SCHEMA_VERSION].includes(key)), '99999999999999_add_supplier_tasks', undefined]) expect(backupSchemaSupportsSupplierTasks(key)).toBe(false);
   });
   it('requires complete current columns and rejects any future columns on historical capabilities, even null', () => {
     expect(() => validateSupplierTaskBackupFields(empty, 'document', true)).not.toThrow();
@@ -80,7 +82,7 @@ describe('exact additive supplier task backup capability', () => {
         expect(() => validateSupplierTaskBackupFields(backup.data.purchaseDocuments[0], 'source', false)).toThrow();
       }
     }
-    const data: Record<string, unknown> = { purchaseDocuments: [{ supplierTaskKind: 'CLARIFY' }] };
+    const data: Record<string, unknown> = { quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [], purchaseDocuments: [{ supplierTaskKind: 'CLARIFY' }] };
     createFixtureManifest({ sourceUserId: 'synthetic', generatedAt: '2026-10-25T00:00:00.000Z', data });
     expect((data.purchaseDocuments as Record<string, unknown>[])[0]).not.toHaveProperty('supplierTaskFollowUpDate');
   });

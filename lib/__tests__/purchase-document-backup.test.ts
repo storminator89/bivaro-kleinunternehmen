@@ -12,7 +12,7 @@ import { withProcessingSlot } from '@/lib/processing-limit';
 import JSZip from 'jszip';
 import { NextRequest } from 'next/server';
 import { createTestDatabase } from './helpers/database';
-import { hashBytes, CURRENT_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
+import { hashBytes, hashJson, CURRENT_SCHEMA_VERSION, ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_ANNUAL_CONTEXT_SCHEMA_VERSION, PRE_PURCHASE_REVIEW_DRAFTS_SCHEMA_VERSION, PRE_PAYMENT_JOURNAL_SCHEMA_VERSION, PRE_SUPPLIERS_SCHEMA_VERSION, PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION, validateBackupManifest } from '@/lib/backup-manifest';
 import type { PurchaseParsePreview } from '@/lib/purchase-documents/types';
 
 const state = vi.hoisted(() => ({ client: null as PrismaClient | null, userId: 'incoming-backup-source', failFinalAudit: false }));
@@ -162,7 +162,8 @@ describe('incoming originals backup and restore', () => {
         // rejection below is not an unrelated invalid relationship/media state.
         expect(() => createBackupPreview(backup)).not.toThrow();
         document.reviewedSourceSnapshot = { provenance: 'MANUAL_PHOTO_REVIEW', originalSha256: document.originalSha256, snapshotVersion: 1 };
-        refreshManifest(backup); backup.manifest.schemaVersion = schemaVersion; stripEmptyPaymentAdjustmentsForLegacy(backup); backup.manifest.modelCoverage = backup.manifest.modelCoverage.filter((entry: { model: string }) => entry.model !== 'AiProviderSettings');
+        // Keep the already validated historical graph/identity; rehash only the injected document metadata.
+        backup.manifest.modelCoverage.find((entry: { model: string }) => entry.model === 'PurchaseDocument')!.sha256 = hashJson(backup.data.purchaseDocuments);
         expect(() => validateBackupManifest(backup.manifest, backup.data)).toThrow(/reviewedSourceSnapshot/);
         expect(() => createBackupPreview(backup)).toThrow(/reviewedSourceSnapshot/);
         for (const overwrite of [false, true]) await expect(restore.restoreBackupData({ userId: targetUser, backup, overwrite, resolveFile: resolver })).rejects.toThrow(/reviewedSourceSnapshot/);
@@ -714,7 +715,7 @@ describe('incoming originals backup and restore', () => {
   });
 
   it('accepts genuine pre-inbox v3 manifests as an empty collection but rejects injected unbound sources', async () => {
-    const data: Record<string, unknown> = { user: { id: 'old-source' }, auditLogs: [], invoiceNumberCounters: [] };
+    const data: Record<string, unknown> = { quoteReleaseAuthorities: [], quoteReleases: [], quoteElectronicResponses: [], user: { id: 'old-source' }, auditLogs: [], invoiceNumberCounters: [] };
     const manifest = createBackupManifest({ sourceUserId: 'old-source', generatedAt: at.toISOString(), data });
     manifest.schemaVersion = PRE_PURCHASE_DOCUMENTS_SCHEMA_VERSION;
     stripCsvCatalogForLegacy({ manifest, data });

@@ -4,7 +4,8 @@ import { AUDIT_ENTITY_LABELS, AUDIT_ACTION_LABELS } from '@/lib/audit-presentati
 import { PageHeader } from "@/components/page-header";
 import styles from "@/components/settings/admin-workspace.module.css";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useReducer, useRef } from 'react';
+import { auditLogQueryParams, auditLogQueryReducer, initialAuditLogQueryState, type AuditLogQuery, type AuditLogQueryAction } from '@/lib/audit-log-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,60 +144,64 @@ const ENTITY_LABELS: Record<string, string> = AUDIT_ENTITY_LABELS;
 const ACTION_NAMES: Record<string, string> = AUDIT_ACTION_LABELS;
 
 export default function AuditLogsPage() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [{ draft, query }, dispatch] = useReducer(auditLogQueryReducer, undefined, initialAuditLogQueryState);
+  const [result, setResult] = useState<
+    | { query: AuditLogQuery; status: 'success'; logs: AuditLog[]; pagination: Pagination }
+    | { query: AuditLogQuery; status: 'error' }
+    | null
+  >(null);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const requestGeneration = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
 
-  // Filters
-  const [entityType, setEntityType] = useState<string>('all');
-  const [action, setAction] = useState<string>('all');
-  const [_searchQuery, _setSearchQuery] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [page, setPage] = useState(1);
-
-  const fetchLogs = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set('page', page.toString());
-      params.set('limit', '25');
-
-      if (entityType && entityType !== 'all') params.set('entityType', entityType);
-      if (action && action !== 'all') params.set('action', action);
-      if (startDate) params.set('startDate', new Date(startDate).toISOString());
-      if (endDate) params.set('endDate', new Date(endDate + 'T23:59:59').toISOString());
-
-      const response = await fetch(`/api/audit-logs?${params.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setLogs(data.logs);
-        setPagination(data.pagination);
-      }
-    } catch (error) {
-      console.error('Error fetching audit logs:', error);
-    }
-    setIsLoading(false);
-  }, [page, entityType, action, startDate, endDate]);
+  // Results belong to their exact applied query, never to a newer draft/page.
+  const currentResult = result?.query === query ? result : null;
+  const isLoading = currentResult === null;
+  const hasError = currentResult?.status === 'error';
+  const logs = currentResult?.status === 'success' ? currentResult.logs : [];
+  const pagination = currentResult?.status === 'success' ? currentResult.pagination : null;
+  const hasUnappliedFilters = draft.entityType !== query.filters.entityType || draft.action !== query.filters.action
+    || draft.startDate !== query.filters.startDate || draft.endDate !== query.filters.endDate;
 
   useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+    const generation = ++requestGeneration.current;
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const isCurrent = () => !controller.signal.aborted && generation === requestGeneration.current;
 
-  const handleSearch = () => {
-    setPage(1);
-    fetchLogs();
+    async function fetchLogs() {
+      try {
+        const response = await fetch(`/api/audit-logs?${auditLogQueryParams(query)}`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`Audit log request failed: ${response.status}`);
+        const data: { logs: AuditLog[]; pagination: Pagination } = await response.json();
+        if (!Array.isArray(data.logs) || !data.pagination) throw new Error('Invalid audit log response');
+        if (isCurrent()) setResult({ query, status: 'success', logs: data.logs, pagination: data.pagination });
+      } catch {
+        if (isCurrent()) setResult({ query, status: 'error' });
+      }
+    }
+
+    void fetchLogs();
+    return () => {
+      controller.abort();
+      if (activeRequest.current === controller) activeRequest.current = null;
+    };
+  }, [query]);
+
+  const changeRequest = (action: Exclude<AuditLogQueryAction, { type: 'edit' }>) => {
+    // Invalidate synchronously, before React commits and cleans up the old effect.
+    ++requestGeneration.current;
+    activeRequest.current?.abort();
+    setSelectedLog(null);
+    dispatch(action);
   };
 
-  const handleReset = () => {
-    setEntityType('all');
-    setAction('all');
-    _setSearchQuery('');
-    setStartDate('');
-    setEndDate('');
-    setPage(1);
+  const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    changeRequest({ type: 'apply' });
   };
+
+  const handleReset = () => changeRequest({ type: 'reset' });
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -246,10 +251,10 @@ export default function AuditLogsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={styles.filterGrid}>
+            <form onSubmit={handleSearch} className={styles.filterGrid}>
               <div>
                 <Label htmlFor="entityType">Bereich</Label>
-                <Select value={entityType} onValueChange={setEntityType}>
+                <Select value={draft.entityType} onValueChange={(value) => dispatch({ type: 'edit', field: 'entityType', value })}>
                   <SelectTrigger id="entityType" className="w-full">
                     <SelectValue placeholder="Alle Bereiche" />
                   </SelectTrigger>
@@ -264,7 +269,7 @@ export default function AuditLogsPage() {
 
               <div>
                 <Label htmlFor="action">Aktion</Label>
-                <Select value={action} onValueChange={setAction}>
+                <Select value={draft.action} onValueChange={(value) => dispatch({ type: 'edit', field: 'action', value })}>
                   <SelectTrigger id="action" className="w-full">
                     <SelectValue placeholder="Alle Aktionen" />
                   </SelectTrigger>
@@ -282,8 +287,8 @@ export default function AuditLogsPage() {
                 <Input
                   id="startDate"
                   type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  value={draft.startDate}
+                  onChange={(e) => dispatch({ type: 'edit', field: 'startDate', value: e.target.value })}
                 />
               </div>
 
@@ -292,21 +297,22 @@ export default function AuditLogsPage() {
                 <Input
                   id="endDate"
                   type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  value={draft.endDate}
+                  onChange={(e) => dispatch({ type: 'edit', field: 'endDate', value: e.target.value })}
                 />
               </div>
 
               <div className="flex items-end gap-2">
-                <Button onClick={handleSearch} className="flex-1">
+                <Button type="submit" className="flex-1">
                   <Search className="h-4 w-4 mr-2" />
                   Suchen
                 </Button>
-                <Button variant="outline" onClick={handleReset} aria-label="Filter zurücksetzen">
+                <Button type="button" variant="outline" onClick={handleReset} aria-label="Filter zurücksetzen">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
-            </div>
+            </form>
+            {hasUnappliedFilters && <p role="status" className="mt-3 text-sm text-muted-foreground">Filter mit „Suchen“ anwenden.</p>}
           </CardContent>
         </Card>
 
@@ -315,11 +321,19 @@ export default function AuditLogsPage() {
           <CardHeader>
             <CardTitle>Aktivitäten <span className="ml-2 text-sm font-normal text-muted-foreground">Auszug · {pagination ? pagination.total : '—'}</span></CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent aria-busy={isLoading}>
             {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div role="status" className="text-center py-8 text-muted-foreground">
                 <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
                 Laden...
+              </div>
+            ) : hasError ? (
+              <div role="alert" className="text-center py-8 space-y-3">
+                <p>Audit-Log konnte nicht geladen werden. Es werden keine alten Ergebnisse angezeigt.</p>
+                <Button type="button" variant="outline" onClick={() => changeRequest({ type: 'retry' })}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Erneut versuchen
+                </Button>
               </div>
             ) : logs.length === 0 ? (
               <div className="text-center py-12">
@@ -426,8 +440,8 @@ export default function AuditLogsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setPage(page - 1)}
-                        disabled={page <= 1}
+                        onClick={() => changeRequest({ type: 'page', page: query.page - 1 })}
+                        disabled={query.page <= 1}
                       >
                         <ChevronLeft className="h-4 w-4 mr-1" />
                         Zurück
@@ -435,7 +449,7 @@ export default function AuditLogsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setPage(page + 1)}
+                        onClick={() => changeRequest({ type: 'page', page: query.page + 1 })}
                         disabled={!pagination.hasMore}
                       >
                         Weiter

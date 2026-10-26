@@ -2,7 +2,7 @@ import { stripEmptyBankImportsForLegacy } from './helpers/backup-schema';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { createTestDatabase } from './helpers/database';
-import { createBackupManifest, CURRENT_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes } from '@/lib/backup-manifest';
+import { createBackupManifest, CURRENT_SCHEMA_VERSION, PAYMENT_ADJUSTMENTS_SCHEMA_VERSION, backupSchemaSupportsPaymentAdjustments, backupSchemaSupportsProjectServiceTimes, hashJson } from '@/lib/backup-manifest';
 import { readBackupSnapshot } from '@/lib/backup-snapshot';
 import { createBackupPreview } from '@/lib/backup-preview';
 import { restoreBackupData, validateBackupForRestore } from '@/lib/backup-restore';
@@ -94,9 +94,8 @@ describe('exact project and manual-duration backup contract', () => {
     for (const field of ['projectId', 'durationMinutes', 'captureKey', 'captureFingerprint', 'deletedAt']) {
       const old = historical(original);
       (old.data.billingNotes as Record<string, unknown>[])[0][field] = null;
-      old.manifest = { ...createBackupManifest({ sourceUserId, generatedAt: fixed.toISOString(), data: old.data }), schemaVersion: PAYMENT_ADJUSTMENTS_SCHEMA_VERSION };
-      stripEmptyBankImportsForLegacy(old);
-      old.manifest.modelCoverage = old.manifest.modelCoverage.filter(entry => !['ServiceProject', 'PurchaseValidationReport', 'EmailOutbox', 'EmailOutboxAttempt'].includes(entry.model));
+      // Preserve the genuine historical identity/coverage; only this row changed.
+      old.manifest.modelCoverage.find(entry => entry.model === 'BillingNote')!.sha256 = hashJson(old.data.billingNotes);
       expect(() => validateBackupForRestore(old)).toThrow(/Älteres Backupschema/);
       const missing = structuredClone(original); delete (missing.data.billingNotes as Record<string, unknown>[])[0][field];
       expect(() => validateBackupForRestore(pack(missing.data))).toThrow(/explizit nullable/);

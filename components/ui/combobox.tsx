@@ -3,6 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { comboboxHighlightedIndex, comboboxOptions, nextComboboxIndex, type ComboboxHighlight } from './combobox-options';
 
 export interface ComboboxProps {
   value: string;
@@ -27,31 +28,41 @@ export function Combobox({
 }: ComboboxProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState(value);
-  const [highlightedIndex, setHighlightedIndex] = React.useState(-1);
+  const [highlight, setHighlight] = React.useState<ComboboxHighlight | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const listRef = React.useRef<HTMLUListElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const generatedId = React.useId();
+  const inputId = id ?? generatedId;
+  const listboxId = `${inputId}-options`;
 
   // Sync inputValue with external value
   React.useEffect(() => {
     setInputValue(value);
+    setHighlight(null);
   }, [value]);
 
-  // Filter options based on input
-  const filteredOptions = React.useMemo(() => {
-    if (!inputValue.trim()) return options;
-    const search = inputValue.toLowerCase().trim();
-    return options.filter((option) =>
-      option.toLowerCase().includes(search)
-    );
-  }, [inputValue, options]);
+  const selectableOptions = React.useMemo(
+    () => comboboxOptions(options, inputValue, allowCustom),
+    [options, inputValue, allowCustom]
+  );
+  const highlightedIndex = comboboxHighlightedIndex(highlight, selectableOptions, value);
+  const activeOption = isOpen ? selectableOptions[highlightedIndex] : undefined;
+  const highlightOption = (index: number) => setHighlight({ index, options: selectableOptions, value });
+  const moveHighlight = (direction: 1 | -1) => setHighlight(current => ({
+    index: nextComboboxIndex(comboboxHighlightedIndex(current, selectableOptions, value), selectableOptions.length, direction),
+    options: selectableOptions,
+    value,
+  }));
 
   // Close dropdown when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        // Commit the value when clicking outside
+        setHighlight(null);
+        // Preserve established blur commits: raw input (including whitespace),
+        // unlike explicit custom selection/Enter which uses the trimmed value.
         if (inputValue !== value) {
           onChange(inputValue);
         }
@@ -65,43 +76,47 @@ export function Combobox({
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
       setIsOpen(true);
+      highlightOption(nextComboboxIndex(-1, selectableOptions.length, e.key === 'ArrowDown' ? 1 : -1));
       return;
     }
 
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setHighlightedIndex((prev) =>
-          prev < filteredOptions.length - 1 ? prev + 1 : 0
-        );
+        moveHighlight(1);
         break;
       case "ArrowUp":
         e.preventDefault();
-        setHighlightedIndex((prev) =>
-          prev > 0 ? prev - 1 : filteredOptions.length - 1
-        );
+        moveHighlight(-1);
         break;
       case "Enter":
         e.preventDefault();
-        if (highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
-          selectOption(filteredOptions[highlightedIndex]);
+        if (activeOption) {
+          selectOption(activeOption.value);
         } else if (allowCustom && inputValue.trim()) {
           onChange(inputValue.trim());
           setIsOpen(false);
+          setHighlight(null);
         }
         break;
       case "Escape":
+        if (isOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         setIsOpen(false);
-        setHighlightedIndex(-1);
+        setHighlight(null);
         break;
       case "Tab":
-        if (isOpen && highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
-          selectOption(filteredOptions[highlightedIndex]);
+        if (activeOption) {
+          selectOption(activeOption.value);
         } else if (inputValue !== value) {
           onChange(inputValue);
         }
         setIsOpen(false);
+        setHighlight(null);
         break;
     }
   };
@@ -110,7 +125,7 @@ export function Combobox({
     setInputValue(option);
     onChange(option);
     setIsOpen(false);
-    setHighlightedIndex(-1);
+    setHighlight(null);
     inputRef.current?.focus();
   };
 
@@ -118,7 +133,7 @@ export function Combobox({
     const newValue = e.target.value;
     setInputValue(newValue);
     setIsOpen(true);
-    setHighlightedIndex(-1);
+    setHighlight(null);
   };
 
   const handleFocus = () => {
@@ -139,7 +154,13 @@ export function Combobox({
     <div ref={containerRef} className="relative">
       <Input
         ref={inputRef}
-        id={id}
+        id={inputId}
+        role="combobox"
+        data-inline-combobox="true"
+        aria-autocomplete="list"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-activedescendant={activeOption ? `${listboxId}-${highlightedIndex}` : undefined}
         value={inputValue}
         onChange={handleInputChange}
         onFocus={handleFocus}
@@ -152,15 +173,22 @@ export function Combobox({
       {/* Dropdown indicator */}
       <button
         type="button"
+        aria-label="Vorschläge anzeigen"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? listboxId : undefined}
         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
         onClick={() => {
-          setIsOpen(!isOpen);
+          const nextOpen = !isOpen;
           inputRef.current?.focus();
+          setIsOpen(nextOpen);
+          if (!nextOpen) setHighlight(null);
         }}
+        onMouseDown={event => event.preventDefault()}
         tabIndex={-1}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
           className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")}
           fill="none"
           viewBox="0 0 24 24"
@@ -174,27 +202,36 @@ export function Combobox({
       {isOpen && (
         <ul
           ref={listRef}
+          id={listboxId}
+          role="listbox"
+          aria-label="Vorschläge"
           className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover py-1 text-popover-foreground shadow-lg"
         >
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option, index) => (
+          {selectableOptions.map((option, index) => (
               <li
-                key={option}
+                key={`${option.kind}:${option.value}`}
+                id={`${listboxId}-${index}`}
+                role="option"
+                aria-selected={highlightedIndex === index}
                 className={cn(
                   "relative cursor-pointer select-none px-3 py-2 text-sm",
+                  option.kind === 'custom' && index > 0 && 'border-t',
                   highlightedIndex === index
                     ? "bg-accent text-accent-foreground"
                     : "hover:bg-muted",
-                  value === option && "font-medium"
+                  value === option.value && "font-medium"
                 )}
-                onClick={() => selectOption(option)}
-                onMouseEnter={() => setHighlightedIndex(index)}
+                onClick={() => selectOption(option.value)}
+                onMouseDown={event => event.preventDefault()}
+                onMouseEnter={() => highlightOption(index)}
               >
-                <div className="flex items-center justify-between">
-                  <span>{option}</span>
-                  {value === option && (
+                <div className={option.kind === 'custom' ? 'flex items-center gap-2' : 'flex items-center justify-between'}>
+                  {option.kind === 'custom' && <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>}
+                  <span>{option.kind === 'custom' ? `„${option.value}" erstellen` : option.value}</span>
+                  {value === option.value && (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                       className="h-4 w-4 text-primary"
                       viewBox="0 0 20 20"
                       fill="currentColor"
@@ -208,64 +245,8 @@ export function Combobox({
                   )}
                 </div>
               </li>
-            ))
-          ) : inputValue.trim() && allowCustom ? (
-            <li
-              className={cn(
-                "relative cursor-pointer select-none px-3 py-2 text-sm",
-                highlightedIndex === 0 ? "bg-accent text-accent-foreground" : "hover:bg-muted"
-              )}
-              onClick={() => selectOption(inputValue.trim())}
-              onMouseEnter={() => setHighlightedIndex(0)}
-            >
-              <div className="flex items-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 text-muted-foreground"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <span>„{inputValue.trim()}" erstellen</span>
-              </div>
-            </li>
-          ) : (
-            <li className="px-3 py-2 text-sm text-muted-foreground">
-              {emptyMessage}
-            </li>
-          )}
-          
-          {/* Show "create new" option if typing and option doesn't exist exactly */}
-          {inputValue.trim() &&
-            allowCustom &&
-            filteredOptions.length > 0 &&
-            !filteredOptions.some((o) => o.toLowerCase() === inputValue.toLowerCase().trim()) && (
-              <li
-                className={cn(
-                  "relative cursor-pointer select-none border-t px-3 py-2 text-sm",
-                  highlightedIndex === filteredOptions.length
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-muted"
-                )}
-                onClick={() => selectOption(inputValue.trim())}
-                onMouseEnter={() => setHighlightedIndex(filteredOptions.length)}
-              >
-                <div className="flex items-center gap-2">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 text-muted-foreground"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span>„{inputValue.trim()}" erstellen</span>
-                </div>
-              </li>
-            )}
+            ))}
+          {selectableOptions.length === 0 && <li role="presentation" className="px-3 py-2 text-sm text-muted-foreground">{emptyMessage}</li>}
         </ul>
       )}
     </div>

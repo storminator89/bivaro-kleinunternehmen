@@ -113,7 +113,7 @@ describe('payment terms and bank evidence exact combined backup contract', () =>
     bankOnly.manifest.schemaVersion = BANK_IMPORT_EVIDENCE_SCHEMA_VERSION;
     stripEmptyBankImportsForLegacy(bankOnly);
     expect(() => restore.validateBackupForRestore(bankOnly)).not.toThrow();
-    const historic = structuredClone(paymentOnly); withoutPaymentTerms(historic.data);
+    const historic = structuredClone(source); historic.data.bankImportBatches = []; historic.data.bankImportRows = []; withoutPaymentTerms(historic.data);
     historic.manifest = createBackupManifest({ sourceUserId: sourceId, generatedAt: fixed.toISOString(), data: historic.data });
     historic.manifest.schemaVersion = PROJECT_OUTBOX_PURCHASE_VALIDATION_SCHEMA_VERSION;
     stripEmptyBankImportsForLegacy(historic);

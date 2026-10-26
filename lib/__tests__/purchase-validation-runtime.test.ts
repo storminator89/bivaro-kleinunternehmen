@@ -31,6 +31,17 @@ describe('bounded technical XML gate, not conformity validation', () => {
       xml(`<c:CustomizationID>${XRECHNUNG_PROFILE}</c:CustomizationID>`),
     ]) expect(() => inspectValidationXml(bytes)).toThrow();
   });
+  it.each(['\u0000', '\u0001', '\u000b', '\ufffe', '\uffff', '&#x1;', '&#1;'])('rejects forbidden XML characters and references without claiming a completed check', async character => {
+    for (const content of [`<c:Note>${character}</c:Note>`, `<c:Note example="${character}"/>`]) {
+      const bytes = xml(content);
+      expect(() => inspectValidationXml(bytes)).toThrow('XML_SYNTAX');
+      const result = await validatePurchaseOriginal({ bytes, expectedSha256: hash(bytes), mediaType: 'application/xml' }, { assetsRoot: '/tmp/absent-bivaro-validator-assets' });
+      expect(result).toMatchObject({ status: 'FAILED', reasonCode: 'XML_SYNTAX', checks: { xml: 'FAILED', xsd: 'NOT_RUN', schematron: 'NOT_RUN' }, accountingApproval: 'NOT_PERFORMED' });
+    }
+  });
+  it('retains legal XML whitespace, character references and supplementary Unicode', () => {
+    expect(inspectValidationXml(xml('<c:Note example="&#x9;">\t\r\nÄ &#x20AC; 😀</c:Note>')).supported).toBe(true);
+  });
   it('never promotes extraction, unknown profiles, absent tools or original hash mismatches to VALID', async () => {
     const bytes = await fixture('valid-ubl.xml');
     const result = await validatePurchaseOriginal({ bytes, expectedSha256: hash(bytes), mediaType: 'application/xml' }, { assetsRoot: '/tmp/absent-bivaro-validator-assets', now: new Date('2026-10-21T00:00:00.000Z') });

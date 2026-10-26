@@ -66,9 +66,9 @@ export async function issueAllocationInvoice(page: Page, userId: string, custome
   // A generated/uploaded PDF is not automatically an issued invoice. Complete
   // the real dashboard lifecycle; never patch status or issuance in the fixture.
   await expect(page).toHaveURL(/\/dashboard\?tab=invoices/u);
-  await page.locator(`button[data-invoice-payment-return="${saved.id}"]:visible`).click();
+  await page.getByRole('button', { name: `Weitere Aktionen fuer Rechnung ${number}`, exact: true }).filter({ visible: true }).click();
   const sent = page.waitForResponse(response => new URL(response.url()).pathname === '/api/invoices' && response.request().method() === 'PUT');
-  await page.getByRole('menuitem', { name: 'Gesendet', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Als versendet markieren', exact: true }).click();
   expect((await sent).status()).toBe(200);
   await expect.poll(() => prisma.invoice.count({ where: { userId, invoiceNumber: number, issuanceState: 'ISSUED' } })).toBe(1);
   const invoice = await prisma.invoice.findFirstOrThrow({ where: { userId, invoiceNumber: number } });

@@ -59,9 +59,10 @@ describe('AI evidence backup boundaries',()=>{
     expect(await database.client.invoice.findUniqueOrThrow({where:{id:quote.id}})).toEqual(quote);
 
     const old={...manifest,schemaVersion:COMBINED_PHOTO_ANNUAL_SCHEMA_VERSION,modelCoverage:manifest.modelCoverage.filter(entry=>entry.model!=='AiProviderSettings')};
-    stripEmptyPaymentAdjustmentsForLegacy({ data: captured.data, manifest: old });
-    expect(()=>validateBackupManifest(old,captured.data)).toThrow(/KI-Herkunft/);
-    expect(()=>restore.validateBackupForRestore({...backup,manifest:old})).toThrow(/KI-Herkunft/);
+    const oldData=structuredClone(captured.data);
+    stripEmptyPaymentAdjustmentsForLegacy({ data: oldData, manifest: old });
+    expect(()=>validateBackupManifest(old,oldData)).toThrow(/KI-Herkunft/);
+    expect(()=>restore.validateBackupForRestore({...backup,data:oldData,manifest:old})).toThrow(/KI-Herkunft/);
     const injected={...captured.data,aiProviderSettings:{keyCiphertext:'never-import'}};
     expect(()=>validateBackupManifest(createBackupManifest({sourceUserId:'ai-backup-source',generatedAt:new Date().toISOString(),data:injected}),injected)).toThrow(/Provider-Konfiguration/);
   });
