@@ -67,26 +67,48 @@ describe('quote workspace presentation-only redesign contract', () => {
   });
   it('retains all 49 original handlers, IDs, field types, destinations and return-focus hooks', () => {
     const actual: Record<string, number> = {};
+    const ownerAdditions: Record<string, number> = {};
     visit(node => {
       if (!ts.isJsxAttribute(node)) return;
       const name = node.name.getText(source);
       if (!/^(on[A-Z]|id$|name$|type$|href$|data-)/.test(name)) return;
       const key = name + ':' + (node.initializer?.getText(source).replace(/\s+/g, ' ').trim() || 'true');
+      const element = node.parent.parent;
+      const tag = ts.isJsxOpeningElement(element) || ts.isJsxSelfClosingElement(element) ? element.tagName.getText(source) : '';
+      // Inventory exactly the reviewed owner additions separately. Never refresh
+      // the original baseline or ignore arbitrary new handlers/destinations.
+      const ownerClick = tag === 'Button' && key === 'onClick:{() => setVersionSelection({ quote, sessionKey: ownerCaptureSessionKey })}';
+      const ownerClose = tag === 'QuoteReleaseVersionsDialog' && key === 'onClose:{() => setVersionSelection(null)}';
+      if (ownerClick || ownerClose) { ownerAdditions[key] = (ownerAdditions[key] || 0) + 1; return; }
       actual[key] = (actual[key] || 0) + 1;
     });
     expect(actual).toEqual(expectedAttributes);
     expect(Object.values(actual).reduce((sum, count) => sum + count, 0)).toBe(49);
+    expect(ownerAdditions).toEqual({
+      'onClick:{() => setVersionSelection({ quote, sessionKey: ownerCaptureSessionKey })}': 2,
+      'onClose:{() => setVersionSelection(null)}': 1,
+    });
   });
 
-  it('does not change the quote types, status choices, conversion or deletion logic', () => {
+  it('preserves original quote/status/convert/delete hashes and inventories only two optional owner props', () => {
     const actual: Record<string, string> = {};
+    const ownerProps: string[] = [];
     visit(node => {
       if (!(ts.isTypeAliasDeclaration(node) || ts.isVariableDeclaration(node))) return;
       const name = node.name.getText(source);
       if (!(name in expectedLogic)) return;
-      actual[name] = createHash('sha256').update(node.getText(source).replace(/\s+/g, ' ')).digest('hex');
+      let original = node.getText(source);
+      if (name === 'QuotesTabProps' && ts.isTypeAliasDeclaration(node) && ts.isTypeLiteralNode(node.type)) {
+        for (const member of node.type.members) {
+          if (!ts.isPropertySignature(member) || !['ownerCaptureEnabled', 'ownerCaptureSessionKey'].includes(member.name.getText(source))) continue;
+          ownerProps.push(member.getText(source).replace(/\s+/g, ' '));
+          original = original.replace(member.getFullText(source), '');
+        }
+      }
+      actual[name] = createHash('sha256').update(original.replace(/\s+/g, ' ')).digest('hex');
     });
     expect(actual).toEqual(expectedLogic);
+    expect(ownerProps).toEqual(['ownerCaptureEnabled?: boolean;', 'ownerCaptureSessionKey?: string;']);
     expect(text.match(/quoteConversionBlockReason\(quote, workflowDate\)/g)).toHaveLength(4);
     expect(text.match(/quoteNextAction\(quote, workflowDate\)/g)).toHaveLength(4);
   });
