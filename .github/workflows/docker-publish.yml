@@ -34,16 +34,38 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
+      - name: Skip already obsolete main before Docker work
+        id: prebuild
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { dockerPublicationKind, dockerPrebuildDecision } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/docker-publish-policy.mjs`);
+            const input = { sha: process.env.GITHUB_SHA, eventName: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF };
+            let currentMainSha;
+            if (dockerPublicationKind(input) === 'main') {
+              const { data } = await github.rest.git.getRef({ ...context.repo, ref: 'heads/main' });
+              currentMainSha = data.object.sha;
+            }
+            const decision = dockerPrebuildDecision({ ...input, currentMainSha });
+            core.setOutput('publish', decision === 'build');
+            core.setOutput('decision', decision);
+            if (decision === 'skip-obsolete-main') {
+              core.notice('SKIPPED_OBSOLETE_MAIN: no new SHA image is built; existing images and tags remain unchanged.');
+            }
+
       - name: 🐳 Set up Docker Buildx
+        if: steps.prebuild.outputs.publish == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: 🔑 Login to Docker Hub
+        if: steps.prebuild.outputs.publish == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: 📋 Extract metadata
+        if: steps.prebuild.outputs.publish == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -66,6 +88,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Separate commit/version tags from moving aliases
+        if: steps.prebuild.outputs.publish == 'true'
         id: tags
         uses: actions/github-script@v7
         env:
@@ -77,6 +100,7 @@ jobs:
             core.setOutput('build-tags', plan.buildTags.join('\n'));
 
       - name: 🏗️ Build and push
+        if: steps.prebuild.outputs.publish == 'true'
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -89,6 +113,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
       - name: Promote main-branch aliases only from current main
+        if: steps.prebuild.outputs.publish == 'true'
         uses: actions/github-script@v7
         env:
           METADATA_TAGS: ${{ steps.meta.outputs.tags }}

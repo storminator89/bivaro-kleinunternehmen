@@ -8,12 +8,23 @@ function validSha(sha) {
   return typeof sha === 'string' && /^[a-f0-9]{40}$/.test(sha);
 }
 
-export function splitDockerPublishTags({ image, metadataTags, sha, eventName, ref }) {
+export function dockerPublicationKind({ sha, eventName, ref }) {
   const releaseRef = typeof ref === 'string' && ref.length <= 1024 && ref.startsWith('refs/tags/v')
     && !/[\u0000-\u0020\u007f/]/.test(ref.slice('refs/tags/'.length));
-  if (eventName !== 'push' || (ref !== 'refs/heads/main' && !releaseRef)) {
+  if (!validSha(sha) || eventName !== 'push' || (ref !== 'refs/heads/main' && !releaseRef)) {
     throw new Error('Unsupported Docker publication event or ref');
   }
+  return ref === 'refs/heads/main' ? 'main' : 'release';
+}
+
+export function dockerPrebuildDecision(input) {
+  if (dockerPublicationKind(input) === 'release') return 'build';
+  if (!validSha(input.currentMainSha)) throw new Error('Invalid Docker prebuild provenance');
+  return input.sha === input.currentMainSha ? 'build' : 'skip-obsolete-main';
+}
+
+export function splitDockerPublishTags({ image, metadataTags, sha, eventName, ref }) {
+  const kind = dockerPublicationKind({ sha, eventName, ref });
   if (!validImage(image) || !validSha(sha) || typeof metadataTags !== 'string' || metadataTags.length > 4096) {
     throw new Error('Invalid Docker publication metadata');
   }
@@ -25,7 +36,7 @@ export function splitDockerPublishTags({ image, metadataTags, sha, eventName, re
     throw new Error('Invalid Docker publication tags');
   }
   // Deliberate v* release metadata (including implicit latest) keeps its old semantics.
-  if (ref.startsWith('refs/tags/')) return { buildTags: tags, movingTags: [] };
+  if (kind === 'release') return { buildTags: tags, movingTags: [] };
   const movingTags = tags.filter(tag => tag === `${image}:main` || tag === `${image}:latest`);
   return { buildTags: tags.filter(tag => !movingTags.includes(tag)), movingTags };
 }
