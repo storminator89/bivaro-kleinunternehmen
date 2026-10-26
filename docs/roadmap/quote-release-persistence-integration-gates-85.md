@@ -11,6 +11,15 @@ containing another quote-release schema revision needs a data-preserving upgrade
 never DROP/reset retained history to make it fit. Production migration/settings/
 recovery acceptance remains outstanding.
 
+`createdAt` and `recordedAt` are required canonical strings without ORM or SQL
+defaults. Live writers must supply the database statement clock with a fixed,
+parameterized SQL insert; the fresh-insert triggers still enforce that clock.
+Historical restore explicitly supplies each validated retained instant. This
+avoids Prisma's SQLite TEXT-expression introspection becoming an incorrect
+literal timestamp default. The six unique-index maps match the actual inline
+SQLite identities; the hard schema-drift check must return a genuinely empty
+diff, not a filtered or allowlisted result.
+
 ## Storage and restore invariants
 
 Authority has an immutable portable UUID independent of its nullable owned source
@@ -91,6 +100,12 @@ isolation or audit correctness.
   21-case in-memory inspector suite passed. Snapshot binding/change indexes and
   both JSON/full-export size-error 413 responses are preserved with the graph.
   These are bounded checks, not whole-application or hosted acceptance.
+- The required-time schema passed private Prisma validation/generation and a
+  genuinely empty read-only diff against the complete synthetic migration chain.
+  A narrow native fixture rejected both omitted required timestamps and verified
+  an internal SQL-clock insert/CAS with mandatory-audit failure rollback and
+  checked new-stage cleanup. This adds no capture service or endpoint here and
+  is not a replacement for hosted CI or production recovery acceptance.
 
 ## Still not enabled or accepted
 

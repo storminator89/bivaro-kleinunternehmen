@@ -1041,8 +1041,8 @@ model QuoteReleaseAuthority {
   currentRelease     QuoteRelease? @relation("QuoteReleaseCurrent", fields: [userId, id, currentReleaseId], references: [userId, authorityId, id], onDelete: Restrict, onUpdate: Restrict)
   releases           QuoteRelease[] @relation("QuoteReleaseHistory")
 
-  @@unique([userId, id])
-  @@unique([sourceUserId, sourceInvoiceId])
+  @@unique([userId, id], map: "sqlite_autoindex_QuoteReleaseAuthority_2")
+  @@unique([sourceUserId, sourceInvoiceId], map: "sqlite_autoindex_QuoteReleaseAuthority_3")
   @@index([boundCustomerId], map: "QuoteReleaseAuthority_boundCustomerId_idx")
 }
 
@@ -1059,7 +1059,8 @@ model QuoteRelease {
   snapshotSha256          String
   originalArchiveName     String
   sourcePayload           String
-  createdAt               String @default(dbgenerated("strftime('%Y-%m-%dT%H:%M:%fZ','now')"))
+  // Required: live insert supplies the SQL statement clock, historical restore its validated retained instant.
+  createdAt               String
   expiresAt               String
   revokedAt               String?
   restoredAccessDisabled  Int @default(1)
@@ -1069,9 +1070,9 @@ model QuoteRelease {
   subsequentReleases      QuoteRelease[] @relation("QuoteReleasePrevious")
   responses               QuoteElectronicResponse[] @relation("QuoteReleaseResponses")
 
-  @@unique([userId, authorityId, id])
-  @@unique([userId, authorityId, generation])
-  @@unique([userId, originalArchiveName])
+  @@unique([userId, authorityId, id], map: "sqlite_autoindex_QuoteRelease_2")
+  @@unique([userId, authorityId, generation], map: "sqlite_autoindex_QuoteRelease_3")
+  @@unique([userId, originalArchiveName], map: "sqlite_autoindex_QuoteRelease_4")
 }
 
 model QuoteElectronicResponse {
@@ -1083,9 +1084,10 @@ model QuoteElectronicResponse {
   snapshotSha256  String
   decision        String
   comment         String?
-  recordedAt      String @default(dbgenerated("strftime('%Y-%m-%dT%H:%M:%fZ','now')"))
+  // Required: no ORM literal/application-clock default may impersonate the SQL statement clock.
+  recordedAt      String
   release         QuoteRelease @relation("QuoteReleaseResponses", fields: [userId, authorityId, releaseId], references: [userId, authorityId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@id([userId, requestId])
-  @@unique([userId, releaseId])
+  @@unique([userId, releaseId], map: "sqlite_autoindex_QuoteElectronicResponse_2")
 }

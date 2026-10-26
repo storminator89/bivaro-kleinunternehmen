@@ -38,7 +38,7 @@ CREATE TABLE "QuoteRelease" (
  "originalArchiveName" TEXT NOT NULL CHECK(length("originalArchiveName") BETWEEN 1 AND 255 AND instr("originalArchiveName",'/')=0 AND instr("originalArchiveName",char(92))=0 AND "originalArchiveName" NOT IN ('.','..')),
  -- Private retained source JSON, NOT a public recipient DTO or live customer lookup.
  "sourcePayload" TEXT NOT NULL CHECK(json_valid("sourcePayload") AND length(CAST("sourcePayload" AS BLOB))<=1048576),
- "createdAt" TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')) CHECK(typeof("createdAt")='text' AND length("createdAt")=24 AND strftime('%Y-%m-%dT%H:%M:%fZ',"createdAt") IS "createdAt"),
+ "createdAt" TEXT NOT NULL CHECK(typeof("createdAt")='text' AND length("createdAt")=24 AND strftime('%Y-%m-%dT%H:%M:%fZ',"createdAt") IS "createdAt"),
  "expiresAt" TEXT NOT NULL CHECK((typeof("expiresAt")='text' AND length("expiresAt")=24 AND strftime('%Y-%m-%dT%H:%M:%fZ',"expiresAt") IS "expiresAt") AND "expiresAt">"createdAt"),
  "revokedAt" TEXT CHECK("revokedAt" IS NULL OR ((typeof("revokedAt")='text' AND length("revokedAt")=24 AND strftime('%Y-%m-%dT%H:%M:%fZ',"revokedAt") IS "revokedAt") AND "revokedAt">="createdAt")),
  -- Defaults closed. Fresh owner intent must explicitly use 0. Detached historical
@@ -61,7 +61,7 @@ CREATE TABLE "QuoteElectronicResponse" (
  "decision" TEXT NOT NULL CHECK("decision" IN ('ACCEPT','REJECT')),
  -- JS command parser remains normative for UTF-16/trim/control semantics.
  "comment" TEXT CHECK("comment" IS NULL OR (typeof("comment")='text' AND length("comment") BETWEEN 1 AND 500 AND "comment"=trim("comment"))),
- "recordedAt" TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')) CHECK(typeof("recordedAt")='text' AND length("recordedAt")=24 AND strftime('%Y-%m-%dT%H:%M:%fZ',"recordedAt") IS "recordedAt"),
+ "recordedAt" TEXT NOT NULL CHECK(typeof("recordedAt")='text' AND length("recordedAt")=24 AND strftime('%Y-%m-%dT%H:%M:%fZ',"recordedAt") IS "recordedAt"),
  PRIMARY KEY("userId","requestId"),
  UNIQUE("userId","releaseId"),
  FOREIGN KEY("userId","authorityId","releaseId") REFERENCES "QuoteRelease"("userId","authorityId","id") ON DELETE RESTRICT ON UPDATE RESTRICT
