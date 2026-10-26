@@ -1,0 +1,27 @@
+.demo { display: grid; gap: 1rem; min-width: 0; margin-top: 1rem; overflow-wrap: anywhere; }
+.demo .label { color: var(--bivaro-color-accent); font-size: .875rem; font-weight: 600; }
+.limit { padding: 1rem; border-left: 3px solid var(--bivaro-color-accent); background: var(--color-paper-2); font-size: .9375rem; }
+.demo a { display: inline-flex; align-items: center; min-height: 44px; color: var(--bivaro-color-accent); text-decoration: underline; text-underline-offset: 4px; }
+.demo a:focus-visible, .demo summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+.index ol { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; padding: 0; margin: 0; list-style: none; }
+.index a { font-size: .875rem; }
+.steps { display: grid; gap: 1.5rem; margin: 0; padding: 0; list-style: none; }
+.steps > li { min-width: 0; padding-top: 1.5rem; border-top: 1px solid var(--color-rule); }
+.steps section { display: grid; gap: .75rem; }
+.demo .result { color: var(--color-ink); font-size: .9375rem; }
+.result strong { font-weight: 600; }
+.demo .warning { padding-left: .75rem; border-left: 2px solid var(--bivaro-color-accent); color: var(--color-ink-2); font-size: .9375rem; }
+.details { min-width: 0; font-size: .9375rem; }
+.details > summary { min-height: 44px; padding-block: .75rem; cursor: pointer; color: var(--color-ink-2); font-weight: 500; }
+.details p + p { margin-top: .75rem; }
+.links { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; font-size: .875rem; font-weight: 600; }
+.receipt, .worksheet { min-width: 0; padding: 1rem; border: 1px solid var(--color-rule); border-radius: .75rem; background: var(--color-paper-2); }
+.receipt { margin: .5rem 0; }
+.receipt figcaption { font-weight: 600; color: var(--color-ink); }
+.receipt dl { margin-block: 1rem; }
+.receipt dl > div { display: grid; gap: .15rem; margin-top: .75rem; }
+.receipt dt { font-size: .875rem; font-weight: 600; }
+.receipt dd { margin: 0; }
+.worksheet > a { font-weight: 600; }
+.worksheet > p { font-size: .875rem; }
+.sheet { margin: 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; color: var(--color-ink-2); }
