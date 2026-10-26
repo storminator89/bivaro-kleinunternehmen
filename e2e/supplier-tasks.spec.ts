@@ -12,6 +12,20 @@ import { isolateSyntheticLoginIpBudget } from './helpers/synthetic-login';
 // No fake browser or HTTP clock: every filter reads the actual server Berlin day.
 const review = (page: Page) => page.getByRole('dialog', { name: 'Eingangsbeleg prüfen', exact: true });
 const panel = (page: Page) => review(page).getByRole('region', { name: 'Lieferantenaufgabe · interne Vormerkung', exact: true });
+async function openTaskDisclosure(page: Page) {
+  const summary = review(page).locator('summary').filter({ hasText: /^Später klären · interne Vormerkung(?: · vorhanden)?$/ });
+  await expect(summary).toBeVisible();
+  if (!await panel(page).isVisible()) await summary.click();
+  await expect(panel(page)).toBeVisible();
+}
+async function openTaskFilters(page: Page) {
+  const summary = page.locator('summary').filter({ hasText: /^Lieferantenaufgaben filtern(?: · aktiv)?$/ });
+  const kind = page.getByLabel('Aufgabenart filtern', { exact: true });
+  await expect(summary).toBeVisible();
+  if (!await kind.isVisible()) await summary.click();
+  await expect(kind).toBeVisible();
+  await expect(page.getByLabel('Wiedervorlage filtern', { exact: true })).toBeVisible();
+}
 const headers = (page: Page) => ({ Origin: new URL(page.url()).origin, 'Sec-Fetch-Site': 'same-origin' });
 async function account(page: Page) {
   const fixture = `file:${e2eDatabasePath()}`;
@@ -184,6 +198,7 @@ test('supplier task keyboard/mobile save, explicit source date, dirty cancel, fi
   await page.goto('/purchases'); const row = page.locator(`[data-incoming-document-id="${source.document.id}"]`);
   await row.focus(); await expect(row).toBeFocused(); await page.keyboard.press('Enter');
   await expect(review(page).getByRole('heading', { name: 'Eingangsbeleg prüfen', exact: true })).toBeFocused();
+  await openTaskDisclosure(page);
   await expect(panel(page)).toContainText('nicht bezahlt / nicht bankgeprüft');
   await expect(panel(page).getByLabel('Wiedervorlagetag (optional)', { exact: true })).toHaveValue('');
   await panel(page).getByLabel('Aufgabenart', { exact: true }).focus(); await page.keyboard.press('d');
@@ -224,6 +239,7 @@ test('supplier task keyboard/mobile save, explicit source date, dirty cancel, fi
   const today = (await todayResponse.json()).supplierTaskToday as string; expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   const past = await upload(page, 'PAST'), future = await upload(page, 'FUTURE'), undated = await upload(page, 'UNDATED');
   await setTask(page, past.document, 'PAYMENT_CHECK', '2000-01-01'); await setTask(page, future.document, 'CLARIFY', '9999-12-31'); await setTask(page, undated.document, 'CLARIFY', null);
+  await openTaskFilters(page);
   await page.getByLabel('Aufgabenart filtern', { exact: true }).selectOption('any');
   await page.getByLabel('Wiedervorlage filtern', { exact: true }).selectOption('due');
   await expect(page.locator(`[data-incoming-document-id="${past.document.id}"]`)).toBeVisible();
@@ -267,6 +283,7 @@ inboxNavigationTest('rapid specific task filters compose real delayed navigation
   const base = `inboxProbe=${probe}`, kind = `${base}&taskKind=CLARIFY`, dueQuery = `${base}&taskKind=PAYMENT_CHECK&taskDue=due`;
   const allIds = [due, otherDue, payment, later, undated, unmarked].map(source => source.document.id);
   await page.goto(`/purchases?${base}&page=2`);
+  await openTaskFilters(page);
   const kindSelect = page.getByLabel('Aufgabenart filtern', { exact: true }), dueSelect = page.getByLabel('Wiedervorlage filtern', { exact: true });
   const search = page.getByLabel('Lieferant, Rechnungsnummer oder Dateiname', { exact: true });
   const firstKind = await delayInboxNavigation(query => query.get('inboxProbe') === probe && query.get('taskKind') === 'PAYMENT_CHECK' && !query.has('taskDue') && !query.has('search'));
@@ -336,6 +353,7 @@ inboxNavigationTest('rapid specific task filters compose real delayed navigation
 
   // A Back traversal while another query response waits also owns its exact
   // existing entry; an old response must not replace it or its Forward entry.
+  await openTaskFilters(page);
   const traversal = await delayInboxNavigation(query => query.get('inboxProbe') === probe && query.get('taskKind') === 'any');
   try {
     await kindSelect.selectOption('any'); await traversal.started;
@@ -350,10 +368,10 @@ inboxNavigationTest('rapid specific task filters compose real delayed navigation
 test('two real tabs produce 409, unknown committed response is read before retry, and delayed save preserves newer keyboard edits', async ({ page, context }, info) => {
   test.setTimeout(150_000); await page.setViewportSize({ width: 390, height: 844 });
   const user = await account(page), source = await upload(page, 'CONFLICT'), before = await finances(user.id);
-  await page.goto(`/purchases?document=${source.document.id}`); await expect(panel(page)).toBeVisible();
+  await page.goto(`/purchases?document=${source.document.id}`); await openTaskDisclosure(page); await expect(panel(page)).toBeVisible();
   const other = await context.newPage();
   try {
-    await other.goto(`/purchases?document=${source.document.id}`); await expect(panel(other)).toBeVisible();
+    await other.goto(`/purchases?document=${source.document.id}`); await openTaskDisclosure(other); await expect(panel(other)).toBeVisible();
     await panel(other).getByLabel('Aufgabenart', { exact: true }).selectOption('CLARIFY'); await panel(other).getByRole('button', { name: 'Vormerkung speichern', exact: true }).click();
     await expect(panel(other)).toContainText('Vormerkung gespeichert · keine Zahlungs- oder Buchungswirkung');
     await review(page).getByRole('button', { name: 'Neu laden', exact: true }).click(); await expect(panel(page).getByLabel('Aufgabenart', { exact: true })).toHaveValue('CLARIFY');

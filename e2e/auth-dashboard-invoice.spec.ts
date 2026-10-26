@@ -665,7 +665,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect((await page.request.post('/api/settings', { data: invoiceIssuer })).ok()).toBe(true);
 
     await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
-    await page.getByRole('combobox', { name: 'Ausgabeformat', exact: true }).selectOption('xml-only');
+    await page.getByRole('combobox', { name: 'Rechnungsformat', exact: true }).selectOption('xml-only');
     await page.getByLabel('Umsatzsteuer').selectOption('standard');
     await page.getByRole('checkbox', { name: /Steuerbehandlung für dieses Dokument bestätigen/ }).check();
     await page.getByLabel('Empfänger (Name & Anschrift)').fill('E2E Kunde\nBuchhaltung\nKundenweg 2\n10115 Berlin');
@@ -776,8 +776,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       const openPayment = async () => {
         if (workspace === 'dashboard') {
           const row = page.getByRole('row').filter({ hasText: invoiceNumber });
-          await row.getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true }).click();
-          await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).click();
+          await expect(row.getByText('Offen', { exact: true })).toBeVisible();
+          await row.getByRole('button', { name: 'Zahlung erfassen', exact: true }).click();
         } else {
           const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: invoiceNumber, exact: true }) });
           await card.getByRole('button', { name: 'Zahlung erfassen', exact: true }).focus();
@@ -940,8 +940,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       const record = () => width < 1280 ? page.getByRole('article').filter({ hasText: invoiceNumber }) : page.getByRole('row').filter({ hasText: invoiceNumber });
       await expect(record()).toHaveCount(1);
       const open = async (state: 'Offen' | 'Teilbezahlt') => {
-        await record().getByRole('button', { name: `Zahlungsstatus: ${state}`, exact: true }).click();
-        await page.getByRole('menuitem', { name: state === 'Offen' ? 'Bezahlt' : 'Weitere Zahlung erfassen', exact: true }).click();
+        await expect(record().getByText(state, { exact: true })).toBeVisible();
+        await record().getByRole('button', { name: state === 'Offen' ? 'Zahlung erfassen' : 'Weitere Zahlung erfassen', exact: true }).click();
         const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
         await expect(dialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true })).toBeEnabled();
         return dialog;
@@ -952,7 +952,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
       expect(await journal()).toEqual(before);
-      await expect(record().getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true })).toBeFocused();
+      await expect(record().getByRole('button', { name: 'Zahlung erfassen', exact: true })).toBeFocused();
       dialog = await open('Offen');
       await dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true }).fill('40,00');
       await dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true }).fill('2026-09-30');
@@ -1054,8 +1054,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await page.goto('/dashboard?tab=invoices');
     await searchPartialInvoiceAndWait(page, invoiceNumber);
     const row = page.getByRole('row').filter({ hasText: invoiceNumber });
-    await row.getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).click();
+    await expect(row.getByText('Offen', { exact: true })).toBeVisible();
+    await row.getByRole('button', { name: 'Zahlung erfassen', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
     let activeDialog = dialog;
     let submit = activeDialog.getByRole('button', { name: 'Zahlung verbindlich erfassen', exact: true });
@@ -1087,8 +1087,8 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect(concurrent.status()).toBe(201);
     await page.reload();
     await searchPartialInvoiceAndWait(page, invoiceNumber);
-    await row.getByRole('button', { name: 'Zahlungsstatus: Teilbezahlt', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Weitere Zahlung erfassen', exact: true }).click();
+    await expect(row.getByText('Teilbezahlt', { exact: true })).toBeVisible();
+    await row.getByRole('button', { name: 'Weitere Zahlung erfassen', exact: true }).click();
     activeDialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
     submit = activeDialog.getByRole('button', { name: /^(Zahlung verbindlich erfassen|Unverändert erneut bestätigen)$/ });
     await expect(submit).toBeEnabled();
@@ -1158,7 +1158,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.getByText('Nur nachweislich unausgestellte Entwürfe ohne Zahlung sind löschbar.', { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('protected-invoice-mobile.png'), fullPage: true, animations: 'disabled' });
     await page.keyboard.press('Escape');
-    await card.getByRole('button', { name: 'Details', exact: true }).click();
+    await card.getByRole('button', { name: /^Details zu Rechnung / }).click();
     const details = page.getByRole('dialog');
     await expect(details.getByRole('button', { name: 'PDF öffnen', exact: true })).toBeVisible();
     await expect(details.getByText('Rechnungsbetrag', { exact: true })).toBeVisible();
@@ -1414,7 +1414,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(page.locator('#invoice-item-description-0')).toHaveValue('Serverwartung');
     await expect(page.locator('#invoice-item-quantity-0')).toHaveValue('2');
     await page.locator('#invoice-item-price-0').fill('95');
-    await page.getByRole('combobox', { name: 'Ausgabeformat', exact: true }).selectOption('xml-only');
+    await page.getByRole('combobox', { name: 'Rechnungsformat', exact: true }).selectOption('xml-only');
     await page.getByLabel('Käuferreferenz / Leitweg-ID', { exact: false }).fill('E2E-ORDER');
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: testInfo.outputPath('billing-assistant-desktop.png'), fullPage: true });
@@ -2007,7 +2007,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     await expect(dialog.getByRole('region', { name: 'Empfänger / Käufer', exact: true })).toContainText('Synthetischer eigener Betrieb');
     expect((await (await page.request.get('/api/suppliers?limit=50')).json()).total).toBe(suppliersBefore.total);
     expect(await purchaseFinancialSnapshot(page)).toEqual(before);
-    await dialog.getByRole('button', { name: 'Kontakt auswählen / anlegen', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Lieferant auswählen', exact: true }).click();
     await expect(dialog.getByRole('heading', { name: 'Lieferantenkontakt auswählen', exact: true })).toBeFocused();
     await dialog.getByRole('button', { name: 'Kontakt neu anlegen', exact: true }).click();
     await expect(dialog.getByLabel('Name *', { exact: true })).toBeFocused();
@@ -2041,7 +2041,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     expect(selected.supplierCandidate?.name).toBe('Synthetischer Originalverkäufer');
     expect(selected.buyerCandidate?.name).toBe('Synthetischer eigener Betrieb');
     expect(selected.originalRef).toEqual(source.originalRef);
-    await expect(dialog.getByRole('button', { name: 'Kontakt wechseln / verwalten', exact: true })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: 'Lieferant ändern', exact: true })).toBeFocused();
     await openPurchaseDetails(page);
     await expectBlankPurchaseChoices(page);
     await fillPurchaseDetails(page, 'Synthetische Beschaffung 101');
@@ -2131,10 +2131,10 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const before = await purchaseFinancialSnapshot(page);
     const second = await uploadPurchaseFixture(page, 'BOOKING-E2E-102');
     const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Kontakt auswählen / anlegen', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Lieferant auswählen', exact: true }).click();
     await selectPurchaseSupplier(page, bookingSupplier.name);
     const selectedBeforeEdit = await readPurchase(page, second.id);
-    await dialog.getByRole('button', { name: 'Kontakt wechseln / verwalten', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Lieferant ändern', exact: true }).click();
     const contact = dialog.getByRole('listitem').filter({ hasText: bookingSupplier.name });
     await contact.getByRole('button', { name: 'Bearbeiten', exact: true }).click();
     await dialog.getByLabel('Name *', { exact: true }).fill('E2E explizit geänderter Lieferantenkontakt');
@@ -2211,7 +2211,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     const before = await purchaseFinancialSnapshot(page);
     const duplicate = await uploadPurchaseFixture(page, 'BOOKING-E2E-101', '<!-- distinct synthetic duplicate bytes -->');
     const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Kontakt auswählen / anlegen', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Lieferant auswählen', exact: true }).click();
     await selectPurchaseSupplier(page, 'E2E explizit geänderter Lieferantenkontakt');
     await openPurchaseDetails(page); await fillPurchaseDetails(page, 'Synthetischer Dublettenkonflikt');
     await confirmPurchaseChoices(page);
@@ -2255,7 +2255,7 @@ test.describe.serial('auth, dashboard and invoice flow', () => {
     ]) {
       await uploadPurchaseFixture(page, fixture.number, '', { ...fixture, supported: false });
       const dialog = page.getByRole('dialog');
-      await dialog.getByRole('button', { name: 'Kontakt auswählen / anlegen', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Lieferant auswählen', exact: true }).click();
       await selectPurchaseSupplier(page, 'E2E explizit geänderter Lieferantenkontakt');
       await expect(dialog.getByRole('button', { name: 'Als Ausgabe erfassen', exact: true })).toBeDisabled();
       await expect(dialog).toContainText(/Nur EUR-Rechnungen|Gutschriften und andere Dokumenttypen|unterstützten Buchungsregeln/);

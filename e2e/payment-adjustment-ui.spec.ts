@@ -188,9 +188,8 @@ test('mobile keyboard correction is cancellable, immutable, reloadable and repla
     expect(await snapshot(userId, invoice.id)).toEqual(afterCorrection);
     await page.keyboard.press('Escape');
 
-    const paymentStatus = page.getByRole('button', { name: 'Zahlungsstatus: Offen', exact: true });
-    await paymentStatus.focus(); await page.keyboard.press('Enter');
-    await page.getByRole('menuitem', { name: 'Bezahlt', exact: true }).focus(); await page.keyboard.press('Enter');
+    const paymentAction = page.getByRole('button', { name: 'Zahlung erfassen', exact: true });
+    await paymentAction.focus(); await page.keyboard.press('Enter');
     dialog = page.getByRole('dialog', { name: 'Zahlungen und Korrekturen', exact: true });
     await expect(dialog.getByLabel('Eingegangener Betrag (EUR)', { exact: true })).toHaveValue('120.00');
     await dialog.getByLabel('Tatsächliches Zahlungsdatum', { exact: true }).fill(replacementDate);

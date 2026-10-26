@@ -3,7 +3,8 @@ import vm from 'node:vm';
 import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { selectFocusedBrowser, validFocusedSelection } from '../focused-browser-selection.mjs';
+import { FOCUSED_SPECS, selectFocusedBrowser, validFocusedSelection } from '../focused-browser-selection.mjs';
+type FocusedSpec = keyof typeof FOCUSED_SPECS;
 
 describe('risk-based browser scope, not full acceptance', () => {
   it('skips docs-only browser work but keeps a tiny independent core for source', () => {
@@ -232,6 +233,70 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(missingUnit.criticalMappingRequired).toBe(true);
     const missing = selectFocusedBrowser(['lib/quote-release-backup.ts'], file => file !== 'e2e/backup-file-inspection.spec.ts');
     expect(missing.criticalMappingRequired).toBe(true); expect(missing.specs).toEqual([]);
+  });
+  it.each([
+    ['lib/navigation.ts', ['e2e/ux-progressive-disclosure.spec.ts']],
+    ['components/dashboard/tabs/invoices-tab.tsx', ['e2e/partial-payments.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts']],
+    ...['components/purchases/document-workspace.module.css', 'components/purchases/incoming-document-review.tsx', 'components/purchases/incoming-documents-workspace.tsx']
+      .map(source => [source, ['e2e/manual-photo-expense.spec.ts', 'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts']]),
+    ['components/purchases/purchase-expense-approval.tsx', ['e2e/manual-photo-expense.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts']],
+  ] as [string, FocusedSpec[]][])('attaches exact real affected UX journeys to %s and fails closed on any missing journey', (source, specs) => {
+    const selection = selectFocusedBrowser([source]);
+    expect(validFocusedSelection(selection)).toBe(true);
+    expect(selection.core).toBe(true);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.unmappedSourceCount).toBe(0);
+    expect(selection.specs).toEqual(specs.map(file => ({ file, titles: FOCUSED_SPECS[file] })));
+    for (const absent of specs) {
+      const missing = selectFocusedBrowser([source], file => file !== absent);
+      expect(missing.core).toBe(true);
+      expect(missing.criticalMappingRequired).toBe(true);
+      expect(missing.unknownCriticalCount).toBe(1);
+      expect(missing.specs.map(spec => spec.file)).toEqual(specs.filter(file => file !== absent));
+    }
+  });
+  it('unions the UX packet with existing invoice freshness and core without a broad or unit-only fallback', () => {
+    const sources = ['lib/navigation.ts', 'components/dashboard/tabs/invoices-tab.tsx', 'components/dashboard/create-invoice-modal.tsx',
+      'components/purchases/document-workspace.module.css', 'components/purchases/incoming-document-review.tsx',
+      'components/purchases/incoming-documents-workspace.tsx', 'components/purchases/purchase-expense-approval.tsx'];
+    const selection = selectFocusedBrowser(sources);
+    expect(validFocusedSelection(selection)).toBe(true);
+    expect(selection.core).toBe(true);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs.map(spec => spec.file)).toEqual(['e2e/invoice-number-check-freshness.spec.ts', 'e2e/manual-photo-expense.spec.ts',
+      'e2e/partial-payments.spec.ts', 'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts']);
+    expect(selection.specs.find(spec => spec.file === 'e2e/supplier-tasks.spec.ts')?.titles).toHaveLength(3);
+    expect(selection.specs.find(spec => spec.file === 'e2e/partial-payments.spec.ts')?.titles).toEqual(['treats a later deliberate equal amount/date/reference as a distinct allocation']);
+    for (const source of ['lib/navigation-unknown.ts', 'components/purchases/new-approval-boundary.tsx', 'lib/purchase-documents/new-approval.ts', 'app/api/purchase-documents/new-write/route.ts']) {
+      expect(selectFocusedBrowser([...sources, source]).criticalMappingRequired).toBe(true);
+    }
+  });
+  it('adds UX journeys without suppressing the existing critical invoice-date feature packet', () => {
+    const selection = selectFocusedBrowser(['components/purchases/incoming-documents-workspace.tsx', 'e2e/incoming-invoice-date-filter.spec.ts']);
+    expect(validFocusedSelection(selection)).toBe(true);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs.map(spec => spec.file)).toEqual(['e2e/incoming-invoice-date-filter.spec.ts', 'e2e/manual-photo-expense.spec.ts',
+      'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts']);
+    expect(selectFocusedBrowser(['components/purchases/incoming-documents-workspace.tsx', 'e2e/incoming-invoice-date-filter.spec.ts'],
+      file => file !== 'e2e/manual-photo-expense.spec.ts').criticalMappingRequired).toBe(true);
+  });
+  it.each(['e2e/manual-photo-expense.spec.ts', 'e2e/partial-payments.spec.ts', 'e2e/supplier-tasks.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'] as const)('pins bounded UX selectors to real exact authored titles in %s', file => {
+    const titles = FOCUSED_SPECS[file];
+    expect(titles.length).toBeGreaterThan(0);
+    expect(new Set(titles).size).toBe(titles.length);
+    const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+    const authored: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node) && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) authored.push(node.arguments[0].text);
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
+    for (const title of titles) expect(authored.filter(value => value === title)).toHaveLength(1);
+    const selection = selectFocusedBrowser([file]);
+    expect(selection.specs).toEqual([{ file, titles }]);
+    expect(validFocusedSelection({ ...selection, specs: [{ file, titles: [] }] })).toBe(false);
+    expect(validFocusedSelection({ ...selection, specs: [{ file, titles: ['.*'] }] })).toBe(false);
+    expect(validFocusedSelection({ ...selection, specs: [{ file, titles: [...titles, 'unreviewed extra case'] }] })).toBe(false);
   });
   it('rejects arbitrary selectors, shell-looking titles and malformed paths', () => {
     const value = selectFocusedBrowser(['components/app-shell.tsx']);

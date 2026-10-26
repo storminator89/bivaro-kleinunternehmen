@@ -44,7 +44,7 @@
 .recordStatus { display: grid; justify-items: start; gap: var(--space-xs); }
 .recordStatus > p { margin: 0; max-width: 100%; overflow-wrap: anywhere; line-height: 1.6; }
 .recordActions { display: flex; flex-wrap: wrap; gap: var(--space-xs); padding-top: var(--space-sm); border-top: 1px solid var(--color-rule); }
-.recordActions > button { flex: 1; }
+.recordActions > :is(button, a) { flex: 1; min-width: 0; min-height: 2.75rem; white-space: normal; }
 .desktopList { padding: 0 var(--space-lg); }
 .desktopList :global(table) { table-layout: fixed; width: 100%; font-size: var(--text-sm); }
 .desktopList :global(th) { color: var(--color-muted); font-size: var(--text-xs); }
@@ -68,7 +68,8 @@
 .workspace .documentSymbol { margin-top: var(--space-xs); width: var(--space-lg); height: var(--space-lg); border: 0; border-radius: 0; background: transparent; }
 .documentSymbol :global(span) { width: var(--space-lg) !important; height: var(--space-lg) !important; }
 .desktopActions { display: flex; flex-wrap: wrap; justify-content: end; gap: var(--space-2xs); }
-.desktopActions :global(button) { padding-inline: var(--space-xs); }
+.desktopActions :is(button, a) { padding-inline: var(--space-sm); min-height: 2.75rem; max-width: 100%; white-space: normal; text-align: center; }
+.desktopActions > [data-invoice-primary-action] { flex-basis: 100%; }
 .pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-md); padding: var(--space-md) var(--space-lg); border-top: 1px solid var(--color-rule); border-radius: 0 0 var(--radius-card) var(--radius-card); background: var(--color-paper-2); }
 .pagination > div { min-width: 0; font-size: var(--text-xs); }
 .pagination > div:last-child { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
@@ -118,6 +119,7 @@
   .statusFilter { grid-column: 1 / -1; grid-row: 2; }
 }
 @media (max-width: 639px) {
+  .recordActions > [data-invoice-primary-action] { flex-basis: 100%; }
   .workspace .statusSwitch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workspace .filterBar input, .workspace .filterBar select { font-size: var(--text-base); }
   .ledgerHeader { padding: var(--space-md) var(--space-md) 0; }

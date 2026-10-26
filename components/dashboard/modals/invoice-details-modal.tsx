@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Download, Eye, FileCode2, List, X } from 'lucide-react';
+import { ChevronDown, Download, Eye, FileCode2, X } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -110,56 +110,46 @@ export function InvoiceDetailsModal({ isOpen, onClose, invoice, onPaymentHistory
         </div>
         <DialogFooter className="!flex-col gap-3 border-t border-border bg-secondary/40 px-6 pb-6 pt-4 sm:px-8 sm:pb-8">
           <div className="grid w-full min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2">
-            <Button
-              type="button"
-              className="w-full"
-              disabled={invoice.hasPdfFile === false}
-              onClick={() => {
+            {invoice.hasPdfFile !== false && <>
+              <Button type="button" className="h-auto min-h-11 w-full whitespace-normal" onClick={() => {
                 window.open(`/api/invoices/download?id=${invoice.id}`, '_blank');
-              }}
-            >
-              <Eye aria-hidden="true" />
-              PDF öffnen
-            </Button>
-            {invoice.hasEInvoiceXml && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  window.open(`/api/invoices/viewer?id=${invoice.id}`, '_blank');
-                }}
-              >
-                <List aria-hidden="true" />
-                Vorschau
+              }}>
+                <Eye aria-hidden="true" />PDF öffnen
               </Button>
-            )}
-            {invoice.hasEInvoiceXml && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  window.open(`/api/invoices/download?id=${invoice.id}&format=xml&download=true`, '_blank');
-                }}
-              >
-                <FileCode2 aria-hidden="true" />
-                XML
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={invoice.hasPdfFile === false}
-              onClick={() => {
+              <Button type="button" variant="outline" className="h-auto min-h-11 w-full whitespace-normal" onClick={() => {
                 window.open(`/api/invoices/download?id=${invoice.id}&download=true`, '_blank');
-              }}
-            >
-              <Download aria-hidden="true" />
-              Download
-            </Button>
+              }}>
+                <Download aria-hidden="true" />PDF herunterladen
+              </Button>
+            </>}
+            {invoice.hasPdfFile === false && invoice.hasEInvoiceXml && (
+              <Button type="button" className="h-auto min-h-11 w-full whitespace-normal min-[420px]:col-span-2" onClick={() => {
+                window.open(`/api/invoices/viewer?id=${invoice.id}`, '_blank');
+              }}>
+                <FileCode2 aria-hidden="true" />E-Rechnung ansehen
+              </Button>
+            )}
+            {invoice.hasPdfFile === false && !invoice.hasEInvoiceXml && <p className="text-sm text-muted-foreground min-[420px]:col-span-2">Noch keine Rechnungsdatei vorhanden.</p>}
           </div>
+          {invoice.hasEInvoiceXml && (
+            <details className="group w-full rounded-lg border border-border bg-card px-3 text-sm">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 py-2 font-medium focus-visible:outline-2 focus-visible:outline-ring">
+                Weitere Dateiformate<ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="grid gap-2 border-t border-border py-3 min-[420px]:grid-cols-2">
+                {invoice.hasPdfFile !== false && <Button type="button" variant="outline" className="h-auto min-h-11 w-full whitespace-normal" onClick={() => {
+                  window.open(`/api/invoices/viewer?id=${invoice.id}`, '_blank');
+                }}>
+                  <FileCode2 aria-hidden="true" />E-Rechnung ansehen
+                </Button>}
+                <Button type="button" variant="outline" className="h-auto min-h-11 w-full whitespace-normal" onClick={() => {
+                  window.open(`/api/invoices/download?id=${invoice.id}&format=xml&download=true`, '_blank');
+                }}>
+                  <Download aria-hidden="true" />XML herunterladen
+                </Button>
+              </div>
+            </details>
+          )}
           <Button type="button" variant="ghost" className="w-full" onClick={onClose}>
             Schließen
           </Button>
