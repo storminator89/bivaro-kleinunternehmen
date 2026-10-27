@@ -2997,5 +2997,22 @@
       "Browser/layout acceptance on authorized supported target",
       "Exact-head hosted and release acceptance before any completion claim"
     ]
+  },
+  "quoteRounding230PublicationCheckpoint20261027": {
+    "observedAt": "2026-10-27T06:18:00Z",
+    "githubIssue": 230,
+    "status": "Authorized publication prepared; exact-head hosted checks and conditional merge pending.",
+    "scope": "Angebotsanzeige, neues PDF und Speichern verwenden denselben vorhandenen Cent-Rechner; ungültige Eingaben verwerfen die veraltete Vorschau. Historische Originale bleiben unverändert.",
+    "actualPreparedPacketEvidence": "15 gezielte Rechner-/Angebotstests und fünf unabhängige PDF-/Betragsvergleiche im eingefrorenen Paket bestanden. Zwei verfasste Browserfälle noch nicht ausgeführt.",
+    "remaining": [
+      "Publish reviewed source with real provider ancestry",
+      "Pass automatic exact-head required checks and mapped browser acceptance",
+      "Conditional normal merge and terminal main/native/Docker publication verification"
+    ],
+    "liveInstallationDeployment": false,
+    "historicalRecordsUnchanged": true,
+    "evidence": [
+      "docs/testing/quote-rounding-230.md"
+    ]
   }
 }

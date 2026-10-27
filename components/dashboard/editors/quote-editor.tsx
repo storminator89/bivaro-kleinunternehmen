@@ -16,6 +16,7 @@ import { ArrowLeft, Copy, Eye, EyeOff, Loader2, Plus, RefreshCw, Trash2 } from "
 import { DocumentTaxProfileFields } from "@/components/dashboard/document-tax-profile-fields";
 import { type DocumentFiscalSettings, type DocumentTaxMode, type DocumentTaxSelection, type DocumentTaxCase, resolveDocumentTaxState, isSupportedDocumentTaxCase } from "@/lib/document-tax-profile";
 import { cn } from "@/lib/utils";
+import { calculateInvoiceAmounts, type CalculatedInvoiceAmounts } from "@/lib/invoice-calculation";
 import styles from "@/components/dashboard/sales-workspace.module.css";
 
 interface QuoteEditorProps {
@@ -187,8 +188,34 @@ export function QuoteEditor({
         amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €',
         []);
 
+    // Partial numeric edits must not crash render or imply a valid zero total.
+    let displayedAmounts: CalculatedInvoiceAmounts | undefined;
+    let amountError = '';
+    try {
+        displayedAmounts = calculateInvoiceAmounts(items);
+    } catch (error) {
+        amountError = error instanceof Error ? error.message : 'Die Angebotsbeträge konnten nicht berechnet werden.';
+    }
+
+    // Invalid edits must not retain a document from the previous valid amounts.
+    useEffect(() => {
+        if (!amountError) return;
+        previewGenerationRef.current += 1;
+        if (previewTimeoutRef.current) {
+            clearTimeout(previewTimeoutRef.current);
+            previewTimeoutRef.current = null;
+        }
+        if (previewUrlRef.current) {
+            URL.revokeObjectURL(previewUrlRef.current);
+            previewUrlRef.current = null;
+        }
+        setPreviewUrl(null);
+        setIsGeneratingPreview(false);
+    }, [amountError]);
+
     const generatePDFBytes = useCallback(async (): Promise<Uint8Array> => {
         if (!taxReady) throw new Error("Bitte zuerst Steuerbehandlung und unterstützten Steuerfall bestätigen.");
+        const amounts = calculateInvoiceAmounts(items);
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage();
         const { width, height } = page.getSize();
@@ -302,14 +329,11 @@ export function QuoteEditor({
         drawTextRight('Gesamt', colX.total - 5, y, 9, boldFont, accentColor);
         y -= 25;
 
-        let netTotal = 0;
-        let taxTotal = 0;
+        const netTotal = amounts.netAmount;
+        const taxTotal = amounts.taxAmount;
 
         items.forEach((item, index) => {
-            const lineNet = item.quantity * item.unitPrice;
-            const lineTax = lineNet * (item.taxRate / 100);
-            netTotal += lineNet;
-            taxTotal += lineTax;
+            const lineNet = amounts.lines[index].netAmount;
 
             const maxDescWidth = colX.qty - colX.desc - 10;
             const descLines: string[] = [];
@@ -354,7 +378,7 @@ export function QuoteEditor({
         // Totals
         const totalX = width - margin;
         const labelX = totalX - 90;
-        const grossTotal = netTotal + taxTotal;
+        const grossTotal = amounts.grossAmount;
 
         page.drawLine({ start: { x: labelX - 40, y: y + 5 }, end: { x: totalX, y: y + 5 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
         y -= 15;
@@ -444,7 +468,7 @@ export function QuoteEditor({
 
     // Live preview
     const generatePreview = useCallback(async () => {
-        if (!showPreview || !taxReady) return;
+        if (!showPreview || !taxReady || amountError) return;
         const generationId = ++previewGenerationRef.current;
         setIsGeneratingPreview(true);
         try {
@@ -460,7 +484,7 @@ export function QuoteEditor({
         } finally {
             if (previewGenerationRef.current === generationId) setIsGeneratingPreview(false);
         }
-    }, [showPreview, generatePDFBytes, taxReady]);
+    }, [showPreview, generatePDFBytes, taxReady, amountError]);
 
     useEffect(() => {
         if (!showPreview) return;
@@ -511,15 +535,8 @@ export function QuoteEditor({
             });
             const pdfBase64 = await base64Promise;
 
-            // Calculate total
-            let netTotal = 0;
-            let taxTotal = 0;
-            items.forEach(item => {
-                const lineNet = item.quantity * item.unitPrice;
-                netTotal += lineNet;
-                taxTotal += lineNet * (item.taxRate / 100);
-            });
-            const totalAmount = netTotal + taxTotal;
+            // Use the same rounded lines and grouped tax as PDF and invoice.
+            const totalAmount = calculateInvoiceAmounts(items).grossAmount;
 
             const parsedData = {
                 taxMode,
@@ -585,10 +602,7 @@ export function QuoteEditor({
         }
     };
 
-    // Mirror the existing PDF/save arithmetic so the displayed and saved quote agree.
-    const netTotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-    const taxTotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice * (item.taxRate / 100), 0);
-    const displayAmount = (amount: number) => Number.isFinite(amount) ? formatCurrency(amount) : '–';
+    const displayAmount = (amount?: number) => typeof amount === 'number' && Number.isFinite(amount) ? formatCurrency(amount) : '–';
 
     const requestClose = () => { if (!savingRef.current) onCancel(); };
     const blockBusyEditorInteraction = (event: SyntheticEvent) => {
@@ -649,7 +663,7 @@ export function QuoteEditor({
                                     <div className="space-y-2"><Label htmlFor={`quote-item-${index}-unit-price`}>Einzelpreis</Label><Input id={`quote-item-${index}-unit-price`} type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateItem(index, 'unitPrice', e.target.value)} className="text-right tabular-nums" /></div>
                                     <div className="space-y-2"><Label htmlFor={`quote-item-${index}-tax`}>Steuer (%)</Label><Input id={`quote-item-${index}-tax`} type="number" min="0" step="1" disabled={!taxMode || taxMode === 'small-business'} value={item.taxRate} onChange={e => updateItem(index, 'taxRate', e.target.value)} className="text-right tabular-nums" /></div>
                                 </div>
-                                <div className={styles.lineAmount}><span>Positionsbetrag · Netto</span><strong>{displayAmount(item.quantity * item.unitPrice)}</strong></div>
+                                <div className={styles.lineAmount}><span>Positionsbetrag · Netto</span><strong>{displayAmount(displayedAmounts?.lines[index].netAmount)}</strong></div>
                             </fieldset>)}
                         </div>
                         <Button type="button" variant="outline" onClick={addItem} className="mt-4 gap-2"><Plus className="h-4 w-4" aria-hidden="true" />Position hinzufügen</Button>
@@ -658,12 +672,13 @@ export function QuoteEditor({
                 </div>
                 <aside className={styles.editorRail} aria-label="Angebotsübersicht">
                     <section className={styles.totalPanel} aria-labelledby="quote-total-title">
-                        <div className={styles.totalHero}><h2 id="quote-total-title">Angebotssumme</h2><div aria-live="polite">{displayAmount(netTotal + taxTotal)}</div><p>{items.length} {items.length === 1 ? "Position" : "Positionen"} · EUR</p></div>
+                        <div className={styles.totalHero}><h2 id="quote-total-title">Angebotssumme</h2><div aria-live="polite">{displayAmount(displayedAmounts?.grossAmount)}</div><p>{items.length} {items.length === 1 ? "Position" : "Positionen"} · EUR</p></div>
                         <div className={styles.totalBody}>
-                            <dl className={styles.totals}><div><dt>Nettobetrag</dt><dd>{displayAmount(netTotal)}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayAmount(taxTotal)}</dd></div></dl>
+                            <dl className={styles.totals}><div><dt>Nettobetrag</dt><dd>{displayAmount(displayedAmounts?.netAmount)}</dd></div><div><dt>Umsatzsteuer</dt><dd>{displayAmount(displayedAmounts?.taxAmount)}</dd></div></dl>
+                            {amountError && <p id="quote-amount-error" role="alert" className="text-sm text-destructive">{amountError}</p>}
                             {validUntil && <p className={styles.railNote}>Gültig bis {new Date(`${validUntil}T12:00:00`).toLocaleDateString('de-DE')}</p>}
                             {!taxReady && <p id="quote-tax-blocker" className={styles.railNote}><a href="#quote-tax-heading" className="underline underline-offset-4">Steuerbehandlung bestätigen</a>.</p>}
-                            <Button className="w-full" onClick={handleGenerateAndSave} aria-describedby={!taxReady ? "quote-tax-blocker" : undefined} disabled={!taxReady || isGenerating || numberRefreshing || !customerAddress || !quoteNumber} aria-busy={isGenerating} aria-label={isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}>{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isGenerating ? "Erstelle Angebot..." : <><span className="sm:hidden">Angebot erstellen</span><span className="hidden sm:inline">Angebot erstellen & speichern</span></>}</Button>
+                            <Button className="w-full" onClick={handleGenerateAndSave} aria-describedby={[!taxReady && "quote-tax-blocker", amountError && "quote-amount-error"].filter(Boolean).join(" ") || undefined} disabled={!taxReady || Boolean(amountError) || isGenerating || numberRefreshing || !customerAddress || !quoteNumber} aria-busy={isGenerating} aria-label={isGenerating ? "Erstelle Angebot..." : "Angebot erstellen & speichern"}>{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}{isGenerating ? "Erstelle Angebot..." : <><span className="sm:hidden">Angebot erstellen</span><span className="hidden sm:inline">Angebot erstellen & speichern</span></>}</Button>
                             <Button variant="ghost" className="w-full" onClick={requestClose} disabled={isGenerating}>Abbrechen</Button>
                         </div>
                     </section>
