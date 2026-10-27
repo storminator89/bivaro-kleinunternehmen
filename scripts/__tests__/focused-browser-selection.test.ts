@@ -178,6 +178,13 @@ describe('risk-based browser scope, not full acceptance', () => {
     ]);
     expect(selectFocusedBrowser(['lib/new-financial-contract.ts']).criticalMappingRequired).toBe(true);
   });
+  it('maps HTTP browser identities to the real save/retry journey and fails closed if it is absent', () => {
+    const spec = 'e2e/invoice-http-request-id.spec.ts';
+    const selection = selectFocusedBrowser(['lib/browser-request-id.ts']);
+    expect(selection.criticalMappingRequired).toBe(false);
+    expect(selection.specs).toEqual([{ file: spec, titles: FOCUSED_SPECS[spec] }]);
+    expect(selectFocusedBrowser(['lib/browser-request-id.ts'], file => file !== spec).criticalMappingRequired).toBe(true);
+  });
   it.each([
     { spec: 'e2e/audit-log-requests.spec.ts', sources: ['app/settings/audit-logs/page.tsx', 'lib/audit-log-query.ts'] },
     { spec: 'e2e/manual-entry-submission.spec.ts', sources: ['components/dashboard/dashboard-content.tsx', 'components/dashboard/manual-entry-submit-feedback.tsx',

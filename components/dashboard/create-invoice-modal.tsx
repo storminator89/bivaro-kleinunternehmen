@@ -1,4 +1,5 @@
 "use client";
+import { createBrowserRequestId } from "@/lib/browser-request-id";
 import { paymentToday, addPaymentCalendarDays, isPaymentBusinessDate, paymentTermSuggestion, type PaymentTermSelection } from "@/lib/payment-terms";
 import type { ServiceBillingDraftSeed } from "@/lib/service-billing";
 import { ServiceArticlePicker } from "@/components/dashboard/service-article-picker";
@@ -253,7 +254,7 @@ export function CreateInvoiceModal({
     setSelectedTemplateId("");
     setIsSaveTemplateOpen(false);
     setNewTemplateName("");
-    setGeneratedRequestId(globalThis.crypto?.randomUUID?.() ?? null);
+    setGeneratedRequestId(createBrowserRequestId());
     setOutputMode('zugferd-pdf');
     setSettings(null);
     setTaxSelection(null);

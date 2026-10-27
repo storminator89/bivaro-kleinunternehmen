@@ -1,0 +1,16 @@
+/** A stable retry identity, including on ordinary HTTP LAN origins.
+ * getRandomValues is available outside secure contexts; randomUUID is not.
+ * Never substitute Math.random for cryptographic randomness.
+ */
+export function createBrowserRequestId(): string {
+  const crypto = globalThis.crypto;
+  if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID();
+  if (typeof crypto?.getRandomValues !== 'function') {
+    throw new Error('Der Browser kann keine sichere Rechnungskennung erzeugen. Bitte einen aktuellen Browser verwenden.');
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}

@@ -1,5 +1,6 @@
 /** Explicit, reviewed browser scope. Unknown critical paths never imply coverage. */
 export const FOCUSED_SPECS = {
+  'e2e/invoice-http-request-id.spec.ts': ['HTTP-compatible invoice identity survives a lost save response without duplicate issuance'],
   'e2e/mcp-access.spec.ts': ['LAN agent access defaults to read-only, scopes writes explicitly and revokes immediately'],
   'e2e/feature-backup-roundtrip.spec.ts': ['real backup endpoints remap feature histories, preserve legacy high-water marks and reject conflicts atomically'],
   'e2e/public-help-fragments.spec.ts': [],
@@ -237,6 +238,7 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   // Existing reviewed own journeys must follow their runtime source even
   // when a later fix does not edit the spec. A missing journey fails closed.
   const ownJourneys = [
+    { spec: 'e2e/invoice-http-request-id.spec.ts', source: 'lib/browser-request-id.ts' },
     { spec: 'e2e/registration-status-retry.spec.ts', source: 'app/register/page.tsx' },
     { spec: 'e2e/invoice-number-check-freshness.spec.ts', source: 'components/dashboard/create-invoice-modal.tsx' },
     { spec: 'e2e/users-list-read-retry.spec.ts', source: 'app/users/page.tsx' },
