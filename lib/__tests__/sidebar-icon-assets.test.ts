@@ -30,7 +30,7 @@ it.each(names)('keeps %s decorative and backed by genuine transparent generated 
   expect(stats.channels[3].max).toBeGreaterThanOrEqual(250);
 });
 
-it('uses alpha masks and inherited state ink without changing the dashboard artwork family', async () => {
+it('shares alpha masks and inherited state ink between navigation and search without changing dashboard artwork', async () => {
   const css = await readFile(path.join(process.cwd(), 'app/globals.css'), 'utf8');
   const sidebarRules = css.match(/^\s*\.sidebar-icon \{([^}]+)\}/m)?.[1] ?? '';
   expect(sidebarRules).toContain('background: currentColor');
@@ -41,6 +41,8 @@ it('uses alpha masks and inherited state ink without changing the dashboard artw
   const navigation = await readFile(path.join(process.cwd(), 'components/navigation/nav-links.tsx'), 'utf8');
   expect(navigation).not.toContain('<BivaroIcon');
   const palette = await readFile(path.join(process.cwd(), 'components/command-palette.tsx'), 'utf8');
-  expect(palette).toContain('<BivaroIcon');
-  expect(palette).not.toContain('SidebarIcon');
+  expect(palette).not.toContain('BivaroIcon');
+  expect(palette).toContain('<SidebarIcon name={Icon} size={26} />');
+  expect(palette).toContain('<SidebarIcon name={RECORD_SEARCH_GROUPS[group.type].icon} size={26} />');
+  expect(palette).toContain('SidebarNavIconName');
 });

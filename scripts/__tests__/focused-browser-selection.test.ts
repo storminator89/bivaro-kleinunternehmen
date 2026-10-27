@@ -69,6 +69,49 @@ describe('risk-based browser scope, not full acceptance', () => {
       expect(selectFocusedBrowser([source]).criticalMappingRequired).toBe(true);
     }
   });
+  it('maps only palette and its presentation spec to the single flat-icon case with required fixture contracts', () => {
+    const source = 'components/command-palette.tsx', spec = 'e2e/search-flat-icons.spec.ts';
+    const title = 'search shares flat navigation icons while labels keyboard and close remain intact';
+    const contracts = ['lib/__tests__/sidebar-icon-assets.test.ts', 'scripts/e2e-fixture.mjs', 'e2e/helpers/synthetic-login.ts',
+      'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts'];
+    expect(FOCUSED_SPECS[spec]).toEqual([title]);
+    for (const paths of [[source], [spec], [source, spec, ...contracts]]) {
+      const selection = selectFocusedBrowser(paths);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection).toEqual({ schema: 'bivaro-focused-browser-selection-v1', core: true,
+        specs: [{ file: spec, titles: [title] }], criticalMappingRequired: false, unknownCriticalCount: 0, unmappedSourceCount: 0 });
+    }
+    for (const missing of [spec, ...contracts]) {
+      for (const changed of [source, spec]) {
+        const selection = selectFocusedBrowser([changed], file => file !== missing);
+        expect(selection.criticalMappingRequired).toBe(true);
+        expect(selection.unknownCriticalCount).toBe(1);
+        expect(selection.specs).toEqual([]);
+      }
+    }
+    for (const sibling of ['app/api/record-search/route.ts', 'lib/record-search/client.ts', 'lib/new-search-write.ts', 'components/record-search/unknown.tsx']) {
+      const selection = selectFocusedBrowser([source, sibling]);
+      expect(selection.criticalMappingRequired).toBe(true);
+      expect(selection.unknownCriticalCount).toBe(1);
+      expect(selection.specs).toEqual([{ file: spec, titles: [title] }]);
+    }
+    for (const file of [spec, ...contracts]) expect(() => readFileSync(file, 'utf8')).not.toThrow();
+  });
+  it('binds the flat-icon registry to its one actual non-skipped presentation declaration', () => {
+    const file = 'e2e/search-flat-icons.spec.ts', source = readFileSync(file, 'utf8');
+    const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    const titles: string[] = [];
+    function visit(node: ts.Node) {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'test'
+        && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) titles.push(node.arguments[0].text);
+      ts.forEachChild(node, visit);
+    }
+    visit(ast);
+    expect(titles).toEqual(FOCUSED_SPECS[file]);
+    expect(source).toContain('e2eDatabasePath()');
+    expect(source).toContain('await isolateSyntheticLoginIpBudget()');
+    expect(source).not.toMatch(/test\.(?:skip|fixme)/);
+  });
   it('maps only the reviewed owner-version sources to all four bounded cases and retains shared manual-entry coverage', () => {
     const spec = 'e2e/quote-release-owner-surface.spec.ts';
     const sources = ['app/api/quotes/[id]/releases/route.ts', 'app/dashboard/page.tsx',

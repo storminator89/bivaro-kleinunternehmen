@@ -972,3 +972,35 @@ nicht erneut versucht/umgangen. Kein Merge, Deployment, Release oder
 Issueabschluss. **Browser-/Hosted-/Releaseabnahme bleibt offen.** Unit-Log-SHA-256
 `df528d24399d6c8ec00540befcd8a230ab3fb5e6ef95063f48b864290692b5e3`.
 [Umfang und tatsächliche Evidenz](../testing/api-key-list-read-states.md).
+
+### 26.10.2026, 23:30 UTC — #228: flache Suchsymbole lokal vereinheitlicht, Browserabnahme offen
+
+Nach frischer Gegenprüfung von `main` @ `595e5e44525ec0967b627f482bc78f607dcabe15`
+(Tree `7b8916a9f56a609b3b923121e9e26e8b83796254`) ist der gemeldete Restbestand
+bestätigt: Suchaktionen und Datensatztreffer verwenden alte `BivaroIcon`-Bilder,
+die Navigation dagegen bereits gemeinsame `SidebarIcon`-Alpha-Masken. Nach
+Duplikatprüfung wurde [#228](https://github.com/storminator89/bivaro-kleinunternehmen/issues/228)
+angelegt. Die lokale Korrektur tauscht nur diesen Renderer bei unveränderten
+26px, begrenzt die Icon-Namen und blendet dekorative Theme-SVGs für Screenreader
+aus. Labels, Such-/Seiten-/Navigations-/Fokuslogik, CSS, Assets, APIs, Finanzwerte,
+Schema, Dependencies, Workflows und Testselektor bleiben unverändert.
+
+Vorhandene Asset-/Renderer-Suite: **16 bestanden / 0 Skips**. Der aktualisierte
+Quellvertrag schlägt am Original erwartungsgemäß genau einmal fehl
+(15 bestanden); nach Wiederherstellung der Korrektur erneut 16 bestanden.
+Gezieltes und vollständiges ESLint ohne ESLint-Warnungen, Scoped TypeScript
+mit Repository-Typdeklarationen Exit0 und `git diff --check` bestanden.
+Kein Voll-Typescript, Produktionsbuild oder vollständiger Unit-Lauf in diesem
+kleinen Paket.
+
+Ein einzelner Browserfall für 1440/360/390px, beide Themes, Masken/Labels,
+Tastaturauswahl, Escape/Fokusrückkehr und vorhandene Kommandonavigation ist
+**nur verfasst, nicht ausgeführt**. Mock-Suchantworten sind ausdrücklich kein
+Backend-/Mandanten-/Finanznachweis. Exakte Focused-Zuordnung und echte Bildkontrolle
+bleiben offen; keine breite Such-/Fullsuite. Die bekannte lokale
+Socket-EPERM-/abgelehnte Bootstrap-Grenze wurde nicht erneut versucht oder umgangen.
+Keine Browser-/Server-/API-/Datenbankläufe, Installation, Prisma-Regeneration
+oder neuen CI-Läufe. Remote nur das freigegebene Issue angelegt; kein Source-
+Publish, PR, Merge, Release, Deployment oder Issueabschluss. Historische
+160-Ticket-Objekte und Statussummen bleiben unverändert.
+[Umfang, Checks und Log-Hashes](../testing/search-flat-icons-228.md).
