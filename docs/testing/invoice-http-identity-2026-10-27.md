@@ -42,3 +42,32 @@ no production validation, timeout or assertion was loosened.
 
 Deployment verification is recorded separately with the private server release
 receipt. Existing invoices and issued files must not be rewritten by deployment.
+
+## Production deployment
+
+Runtime commit `56be237d6b0f47b8a78ba660afe5544ff04bef84` is active on the LAN
+server as `bivaro:http-invoice-56be237`, image ID
+`sha256:fb86e80d020fdac7667241516d9e81f5fd0046357502b56aae48f8a29f81173a`.
+
+The clean allowlisted runtime excludes `.env`, databases, uploads and backups.
+The existing native runtime and one-page layout are retained. Preflight against
+an isolated data copy passed all 65 migration checksums, integrity/foreign keys,
+old-column and original-file preservation plus MCP read-only boundaries.
+
+A fresh network-isolated server container passed real registration/login,
+settings, dashboard, PDF preview and final PDF/A rendering. Both PDFs have one
+page with four positions and GiroCode. A real final PDF upload with MANUAL
+payment-term provenance succeeded, and replay returned the same invoice;
+exactly one invoice and no Income/payment/expense were created in that fixture.
+
+Deployment held the shared updater/cleanup lock and verified a consistent
+database backup and persistent-volume archive before switching. Production is
+healthy; login and five static assets return 200. Database values, original files,
+volumes and existing environment were preserved. MCP is enabled with writes
+disabled. Private backup/receipt: `/opt/bivaro/releases/20261027-56be237d6b0f/`.
+
+The authenticated production invoice editor was also opened read-only through
+the real `http://192.168.0.126:7689` origin. It loaded the company tax profile,
+customer choices and next number without failure; no production invoice was
+created during that browser check. Already-open pages require reloading to use
+the updated client code.
