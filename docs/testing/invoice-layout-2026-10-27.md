@@ -47,4 +47,36 @@ Final synthetic acceptance PDF SHA-256:
 
 ![Exact final PDF rendered with Poppler](../screenshots/2026-10-27/invoice-four-items.png)
 
-Status: local, uncommitted implementation; not deployed.
+Status at initial verification: local, uncommitted implementation; not deployed.
+
+## Authorized production deployment
+
+The user subsequently requested deployment to the existing LAN server. Runtime
+commit `e64c1a220eab4a47c5ff97f0c1c7cfcd1b8e5b4d` was deployed as
+`bivaro:invoice-layout-e64c1a2`, image ID
+`sha256:13e1b9b6f457d4ef63d3982655671d0997a816e37f682c12aa0f396a29685e82`.
+
+- The exported standalone runtime was allowlisted; `.env`, databases, backups
+  and uploads were excluded. The existing native PDF runtime was retained.
+- The server preflight used a separate temporary database/files copy, verified
+  all 65 migration checksums, database integrity, old-column hashes, sequences
+  and original file hashes. MCP initialization/read access and denied writes
+  passed on the copy.
+- An additional fresh, network-isolated server container passed registration,
+  login, settings and dashboard checks. The real render endpoint generated
+  both preview and independently validated final PDF/A with **one page each**
+  for four two-line positions, GiroCode and a custom/tax note. Rendering created
+  no financial records.
+- Production switch held the updater/cleanup lock. A consistent database backup,
+  full persistent-volume archive, previous Compose configuration and rollback
+  image were retained before the change. No new migration was introduced.
+- Production health is healthy; login and five static assets return 200.
+  Anonymous invoice/MCP access remains denied, and dashboard redirects to login.
+  Existing environment, mount/port/network configuration, old database values
+  and original files were preserved. MCP remains enabled with writes disabled;
+  the nightly image cleanup timer remains active.
+
+Private server receipts and rollback material:
+`/opt/bivaro/releases/20261027-e64c1a220eab/`.
+Production issued PDFs were not rewritten; the layout applies when rendering
+previews and new invoice files.
