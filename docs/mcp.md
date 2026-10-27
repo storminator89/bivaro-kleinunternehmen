@@ -7,6 +7,14 @@ keinen Internetzugang und keine Portfreigabe am Router. Die vorhandene App stell
 auch MCP bereit. Standardmäßig ist MCP deaktiviert; Schreibzugriff bleibt separat
 standardmäßig gesperrt. Keine Schemaänderung oder Datenmigration erforderlich.
 
+## Oberfläche
+
+Geprüfte Testansichten mit synthetischen Zugängen; keine produktiven Schlüssel.
+
+[Desktop](screenshots/2026-10-27/mcp-access-1440.png) · [Mobil](screenshots/2026-10-27/mcp-access-390.png)
+
+![Agent-Zugang mit expliziter Lese-/Schreibfreigabe und deaktiviertem Test-Leseschlüssel](screenshots/2026-10-27/mcp-access-1440.png)
+
 ## Im lokalen Netzwerk einrichten
 
 Empfohlen: HTTPS über einen lokalen Reverse Proxy, beispielsweise Caddy mit interner
