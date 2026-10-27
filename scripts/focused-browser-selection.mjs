@@ -28,6 +28,7 @@ export const FOCUSED_SPECS = {
   'e2e/invoice-number-check-freshness.spec.ts': [],
   'e2e/users-list-read-retry.spec.ts': [],
   'e2e/combobox-accessibility.spec.ts': ['category combobox exposes actual keyboard and pointer choices in entry/edit/recurring dialogs'],
+  'e2e/search-flat-icons.spec.ts': ['search shares flat navigation icons while labels keyboard and close remain intact'],
   'e2e/audit-log-requests.spec.ts': [],
   'e2e/manual-entry-submission.spec.ts': [],
   'e2e/dashboard-owner-boundary.spec.ts': [],
@@ -149,6 +150,7 @@ const ownerVersionContracts = [
 // These bounded cases own their anonymous read boundary or synthetic account.
 // Exact existing contracts are required; this never authorizes a local browser.
 const reviewedJourneyContracts = {
+  'e2e/search-flat-icons.spec.ts': ['lib/__tests__/sidebar-icon-assets.test.ts', 'scripts/e2e-fixture.mjs', 'e2e/helpers/synthetic-login.ts', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts'],
   'e2e/public-pilot-demo.spec.ts': ['lib/__tests__/pilot-demo.test.ts', 'e2e/helpers/public-read-only.ts', 'public/demo/bivaro-pilot-v1.txt'],
   'e2e/documentation-loading.spec.ts': ['scripts/e2e-fixture.mjs', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
   'e2e/api-key-list-read.spec.ts': ['lib/__tests__/api-key-list-read-state.test.ts', 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
@@ -210,6 +212,7 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   // Existing reviewed own journeys must follow their runtime source even
   // when a later fix does not edit the spec. A missing journey fails closed.
   const ownJourneys = [
+    { spec: 'e2e/search-flat-icons.spec.ts', source: 'components/command-palette.tsx' },
     { spec: 'e2e/registration-status-retry.spec.ts', source: 'app/register/page.tsx' },
     { spec: 'e2e/invoice-number-check-freshness.spec.ts', source: 'components/dashboard/create-invoice-modal.tsx' },
     { spec: 'e2e/users-list-read-retry.spec.ts', source: 'app/users/page.tsx' },

@@ -2997,5 +2997,55 @@
       "Browser/layout acceptance on authorized supported target",
       "Exact-head hosted and release acceptance before any completion claim"
     ]
+  },
+  "searchFlatIcons228Local20261026": {
+    "observedAt": "2026-10-26T23:30:00Z",
+    "issue": 228,
+    "issueUrl": "https://github.com/storminator89/bivaro-kleinunternehmen/issues/228",
+    "status": "local_implementation_checked_browser_and_publication_pending",
+    "providerBaseCommit": "595e5e44525ec0967b627f482bc78f607dcabe15",
+    "providerBaseTree": "7b8916a9f56a609b3b923121e9e26e8b83796254",
+    "sourceIdentity": "Fresh provider blob SHAs for palette/navigation/SidebarIcon/asset-test/search-contract match isolated exact-tree synthetic source base; local base is not the provider commit.",
+    "implemented": "Replace legacy command and record-row navigation artwork with existing SidebarIcon alpha masks at unchanged 26px; narrow icon-name union; explicitly decorative theme SVGs. Preserve labels and all search/navigation/focus behavior.",
+    "checks": {
+      "focusedUnit": {
+        "suites": 1,
+        "passed": 16,
+        "skipped": 0
+      },
+      "baselineRegression": "Expected original-source failure: 1 failed and 15 passed; candidate restored and 16 passed.",
+      "focusedEslint": "Passed, zero warnings",
+      "fullEslint": "Passed, zero ESLint warnings; npm notices only",
+      "scopedTypescript": "Passed exit 0 with repository type augmentations; initial incomplete-scope config corrected, no source fix needed",
+      "diffCheck": "Passed",
+      "fullTypescript": "Not run",
+      "productionBuild": "Not run",
+      "fullUnitSuite": "Not run"
+    },
+    "browser": {
+      "file": "e2e/search-flat-icons.spec.ts",
+      "title": "search shares flat navigation icons while labels keyboard and close remain intact",
+      "status": "Authored only, not executed; screenshots not inspected.",
+      "scope": "One presentation case; existing fresh isolated fixture and real synthetic login, mocked record responses, light/dark, 1440/360/390px, masks/labels/keyboard/Escape/focus-return. No backend/tenant/financial acceptance claimed.",
+      "focusedMapping": "Exact palette-to-single-title integration remains with selector owner; selector files untouched."
+    },
+    "remaining": [
+      "Exact-candidate focused browser and actual screenshot inspection",
+      "Integrate reviewed focused mapping",
+      "Review and separately authorized source publication"
+    ],
+    "browserServerApiDatabaseExecution": false,
+    "installationOrPrismaRegeneration": false,
+    "newCiRuns": false,
+    "remoteWrites": [
+      "Authorized issue #228 creation only; no source publication"
+    ],
+    "merged": false,
+    "published": false,
+    "deployed": false,
+    "issueClosed": false,
+    "evidence": [
+      "docs/testing/search-flat-icons-228.md"
+    ]
   }
 }

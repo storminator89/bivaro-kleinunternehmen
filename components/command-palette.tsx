@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
-import { BivaroIcon, type BivaroIconName } from "@/components/brand/bivaro-icon";
+import { SidebarIcon, type SidebarNavIconName } from "@/components/brand/sidebar-icon";
 import { cn } from "@/lib/utils";
 import { RECORD_SEARCH_GROUPS, RECORD_SEARCH_MAX_LENGTH, RECORD_SEARCH_MAX_PAGE, RECORD_SEARCH_MIN_LENGTH, recordSearchPages, sameRecordSearchPages, type RecordSearchPages, type RecordSearchType } from '@/lib/record-search/contract';
 import { startRecordSearch, type RecordSearchState } from '@/lib/record-search/client';
@@ -25,7 +25,7 @@ type CommandItem = {
   label: string;
   hint?: string;
   group: string;
-  icon: React.ComponentType<{ className?: string }> | BivaroIconName;
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: true }> | SidebarNavIconName;
   keywords?: string[];
   adminOnly?: boolean;
   action: (helpers: CommandHelpers) => void;
@@ -242,7 +242,7 @@ function AuthenticatedCommandPalette() {
             <Command.Group key={group.type} heading={`Datensätze · ${RECORD_SEARCH_GROUPS[group.type].title} · Seite ${group.page + 1}`} className="px-1 py-1 text-xs font-semibold text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider">
               {!group.items.length && <p className="px-3 py-2 text-xs">Auf dieser Seite keine Treffer mehr.</p>}
               {group.items.map(item => <Command.Item key={`${item.type}:${item.id}`} ref={node => rememberSelection(`record:${item.type}:${item.id}`, node)} value={`record:${item.type}:${item.id}`} onSelect={() => navigate(item.href)} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground">
-                <BivaroIcon name={RECORD_SEARCH_GROUPS[group.type].icon} size={26} /><span className="min-w-0 flex-1 truncate" title={item.label}>{item.label}</span><span aria-hidden="true" className="text-muted-foreground">↗</span>
+                <SidebarIcon name={RECORD_SEARCH_GROUPS[group.type].icon} size={26} /><span className="min-w-0 flex-1 truncate" title={item.label}>{item.label}</span><span aria-hidden="true" className="text-muted-foreground">↗</span>
               </Command.Item>)}
               {group.page > 0 && <Command.Item ref={node => rememberSelection(`record-page:${group.type}:back`, node)} value={`record-page:${group.type}:back`} onSelect={() => changePage(group.type, -1)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm text-foreground data-[selected=true]:bg-accent">Vorherige Treffer · {RECORD_SEARCH_GROUPS[group.type].title}</Command.Item>}
               {group.hasMore && group.page < RECORD_SEARCH_MAX_PAGE && <Command.Item value={`record-page:${group.type}:next`} onSelect={() => changePage(group.type, 1)} className="min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm text-foreground data-[selected=true]:bg-accent">Weitere Treffer · {RECORD_SEARCH_GROUPS[group.type].title}</Command.Item>}
@@ -270,7 +270,7 @@ function AuthenticatedCommandPalette() {
                       "data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground",
                     )}
                   >
-                    {typeof Icon === "string" ? <BivaroIcon name={Icon} size={26} /> : <Icon className="h-4 w-4 text-muted-foreground" />}
+                    {typeof Icon === "string" ? <SidebarIcon name={Icon} size={26} /> : <Icon aria-hidden={true} className="h-4 w-4 text-muted-foreground" />}
                     <span className="flex-1">{item.label}</span>
                     {item.hint && (
                       <span className="text-xs text-muted-foreground">{item.hint}</span>
