@@ -73,7 +73,13 @@ const cases: MatrixCase[] = [
   { name: 'licensed-fonts-escaped-title', invoice: () => source({ invoiceNumber: 'TEST-&-001',
     notes: 'Ä Ö Ü ß € – Ελληνικά Пример; keine stillschweigend fehlenden Glyphen.' }) },
   { name: 'transparent-logo-white-card', logo: true, invoice: () => source() },
-  { name: 'girocode-final-amount', qr: true, invoice: () => source({ invoiceNumber: 'TEST-QR-001', includeQRCode: true }) },
+  { name: 'girocode-final-amount', qr: true, invoice: () => source({ invoiceNumber: 'TEST-QR-001', includeQRCode: true,
+    buyerReference: '', notes: 'Vielen Dank für Ihren Auftrag!',
+    items: [9, 16, 23, 30].map(day => ({
+      description: `IHK - Training KI Manager K17 (FJ26/K17) ${day}.10.2026 4. Modul Tag 1`,
+      quantity: 3, unitPrice: 114, unit: 'Stunde', taxRate: 0,
+    })),
+  }) },
   { name: 'civil-year-0001', invoice: () => source({ date: '0001-01-01', dueDate: '0001-01-15', deliveryDate: '0001-01-01' }) },
   { name: 'civil-year-9999', invoice: () => source({ date: '9999-12-15', dueDate: '9999-12-31', deliveryDate: '9999-12-15' }) },
 ];
@@ -186,6 +192,7 @@ let overlongUnitPassed = false;
         expect(await readFile(path.join(directory, 'logo.png'))).toEqual(transparentLogo);
       }
       if (item.qr) {
+        expect(pdf.getPageCount()).toBe(1);
         const payload = ['BCD', '002', '1', 'SCT', invoice.settings.bic, invoice.settings.companyName,
           invoice.settings.iban, `EUR${calculateInvoiceAmounts(invoice.items).grossAmount.toFixed(2)}`, '', '', invoice.invoiceNumber].join('\n');
         const png = await QRCode.toBuffer(payload, { errorCorrectionLevel: 'M', type: 'png', margin: 4 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import PDFKitDocument from 'pdfkit';
+import { PDFDocument } from 'pdf-lib';
 import { OwnInvoiceInputError, ownInvoiceToZugferdData, parseOwnInvoiceSource, type OwnInvoiceSource } from '@/lib/own-invoice-source';
 import { validateZugferdData } from '@/lib/zugferd-generator';
 import { renderOwnInvoiceLayout } from '@/lib/server/own-invoice-layout';
@@ -28,18 +29,26 @@ function source(overrides: Partial<OwnInvoiceSource> = {}): OwnInvoiceSource {
 function document() {
   const doc = new PDFKitDocument({ autoFirstPage: false, bufferPages: true });
   documents.push(doc);
-  doc.on('data', () => undefined);
+  const chunks: Buffer[] = [];
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
   doc.registerFont('InvoiceRegular', fonts[0]);
   doc.registerFont('InvoiceBold', fonts[1]);
   const pageText = new Map<object, string[]>();
+  const positioned: Array<{ text: string; y: number }> = [];
   const originalText = doc.text.bind(doc);
   const text = vi.spyOn(doc, 'text').mockImplementation(((...args: unknown[]) => {
+    if (typeof args[2] === 'number') positioned.push({ text: String(args[0]), y: args[2] });
     const values = pageText.get(doc.page) ?? [];
     values.push(String(args[0]));
     pageText.set(doc.page, values);
     return Reflect.apply(originalText, doc, args);
   }) as typeof doc.text);
-  return { doc, visible: () => normalize(text.mock.calls.map(call => String(call[0])).join(' ')),
+  return { doc, bytes: () => new Promise<Buffer>((resolve, reject) => {
+    doc.once('end', () => resolve(Buffer.concat(chunks)));
+    doc.once('error', reject);
+    doc.end();
+  }), visible: () => normalize(text.mock.calls.map(call => String(call[0])).join(' ')),
+    positioned: () => positioned,
     visiblePages: () => [...pageText.values()].map(values => normalize(values.join(' '))) };
 }
 
@@ -48,6 +57,41 @@ afterEach(() => {
 });
 
 describe('own-invoice essential party layout (real PDFKit/font metrics)', () => {
+  it.each(['', 'Vielen Dank für Ihren Auftrag!'])('keeps four two-line items, GiroCode and complete tax notes on one page (notes: %s)', async notes => {
+    const input = source({ invoiceNumber: 'TEST-2026-05', buyerReference: '', customerId: '1', includeQRCode: true, notes,
+      items: [9, 16, 23, 30].map(day => ({
+        description: `IHK - Training KI Manager K17 (FJ26/K17) ${day}.10.2026 4. Modul Tag 1`,
+        quantity: 3, unit: 'Stunde', unitPrice: 114, taxRate: 0,
+      })),
+    });
+    const output = document();
+    await renderOwnInvoiceLayout(output.doc, input, {});
+    expect(output.doc.bufferedPageRange().count).toBe(1);
+    const visible = output.visiblePages()[0];
+    for (const item of input.items) expect(visible).toContain(item.description);
+    for (const text of ['GiroCode', '1.368,00 €', 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', 'Seite 1 von 1']) {
+      expect(visible).toContain(text);
+    }
+    if (notes) expect(visible).toContain(notes);
+    for (const entry of output.positioned().filter(entry => entry.text.includes('§ 19') || (notes && entry.text === notes))) {
+      expect(entry.y).toBeLessThanOrEqual(841.89 - 128);
+    }
+    const pdf = await output.bytes();
+    expect((await PDFDocument.load(pdf)).getPageCount()).toBe(1);
+  });
+
+  it('paginates long notes without losing their final line or the required tax sentence', async () => {
+    const notes = Array.from({ length: 85 }, (_, index) => `Vollständiger Hinweis ${index + 1}`).join('\n');
+    const output = document();
+    await renderOwnInvoiceLayout(output.doc, source({ notes }), {});
+    expect(output.doc.bufferedPageRange().count).toBeGreaterThan(1);
+    for (const note of notes.split('\n')) expect(output.visible()).toContain(note);
+    expect(output.visiblePages().at(-1)).toContain('Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.');
+    for (const entry of output.positioned().filter(entry => entry.text.startsWith('Vollständiger Hinweis') || entry.text.includes('§ 19'))) {
+      expect(entry.y).toBeLessThanOrEqual(841.89 - 128);
+    }
+  });
+
   it('retains ordinary party fields and one-page geometry', async () => {
     const input = source();
     const output = document();

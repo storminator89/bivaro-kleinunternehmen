@@ -544,7 +544,7 @@ export async function renderOwnInvoiceLayout(
       const availableLines = Math.max(1, Math.floor((y - bottomContentY - 26) / 12));
       const descLines = remainingLines.slice(0, availableLines);
       remainingLines = remainingLines.slice(descLines.length);
-      const rowHeight = Math.max(38, descLines.length * 12 + 20);
+      const rowHeight = Math.max(38, descLines.length * 12 + 16);
       const rowTop = y;
       const rowBottom = rowTop - rowHeight;
       const fillColor = index % 2 === 0 ? surface : white;
@@ -661,7 +661,7 @@ export async function renderOwnInvoiceLayout(
     fitNumber(formatCurrency(grossTotal), totalCardWidth - 32 - boldFont.widthOfTextAtSize('Gesamtbetrag', 8.5) - 8, 14, boldFont).size,
     boldFont, white);
 
-  y = summaryTop - summaryHeight - 24;
+  y = summaryTop - summaryHeight - 16;
 
   const noteLines: string[] = [];
   if (notes.trim()) {
@@ -712,7 +712,19 @@ export async function renderOwnInvoiceLayout(
   };
 
   if (noteLines.length > 0) {
-    drawTextBlockCard('Hinweise', noteLines);
+    // Short payment/tax notes need no separate heading band. Reserve their
+    // actual height so a single required tax sentence cannot orphan a page.
+    if (noteLines.length <= 3) {
+      const cardHeight = 12 + noteLines.length * 12;
+      ensureSpace(cardHeight);
+      drawCard(margin, y, contentWidth, cardHeight, surface, hairline);
+      noteLines.forEach((value, index) => {
+        if (value) paintText(page, value, { x: margin + 16, y: y - 15 - index * 12, size: 9, font, color: mutedColor });
+      });
+      y -= cardHeight + 14;
+    } else {
+      drawTextBlockCard('Hinweise', noteLines);
+    }
   }
 
   if (y - 30 >= bottomContentY) {
