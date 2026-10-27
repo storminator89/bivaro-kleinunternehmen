@@ -17,6 +17,7 @@ const STATIC_TITLES: Record<string, string> = {
   "/customers/import": "CSV-Import",
   "/history": "Rechnungshistorie",
   "/settings": "Einstellungen",
+  "/settings/mcp": "Agent-Zugang",
   "/handoff": "Unterlagen übergeben",
   "/settings/api-keys": "API-Schlüssel",
   "/settings/api-keys/docs": "API-Dokumentation",

@@ -1,5 +1,6 @@
 /** Explicit, reviewed browser scope. Unknown critical paths never imply coverage. */
 export const FOCUSED_SPECS = {
+  'e2e/mcp-access.spec.ts': ['LAN agent access defaults to read-only, scopes writes explicitly and revokes immediately'],
   'e2e/feature-backup-roundtrip.spec.ts': ['real backup endpoints remap feature histories, preserve legacy high-water marks and reject conflicts atomically'],
   'e2e/public-help-fragments.spec.ts': [],
   'e2e/public-switching-checklist.spec.ts': [],
@@ -197,9 +198,23 @@ const affectedUxJourneys = {
   'components/purchases/purchase-expense-approval.tsx': ['e2e/manual-photo-expense.spec.ts', 'e2e/ux-progressive-disclosure.spec.ts'],
 };
 
+// MCP owns its new transport and key-management packet. This map is bounded to
+// these exact files and retains independent crypto/tenant/financial unit gates.
+const mcpRuntimeSources = new Set([
+  'app/api/mcp/route.ts', 'app/.well-known/oauth-protected-resource/api/mcp/route.ts',
+  'lib/mcp/auth.ts', 'lib/mcp/config.ts', 'lib/mcp/catalog.ts', 'lib/mcp/read.ts',
+  'lib/mcp/write.ts', 'lib/mcp/server.ts', 'lib/mcp/errors.ts',
+  'app/settings/mcp/page.tsx', 'components/settings/mcp-access.tsx',
+]);
+const mcpSharedSources = new Set(['app/api/api-keys/route.ts', 'lib/audit-log.ts', 'app/settings/page.tsx', 'hooks/use-page-title.ts']);
+const mcpContracts = ['lib/__tests__/mcp.test.ts', 'lib/__tests__/mcp-auth.test.ts', 'lib/__tests__/mcp-access-keys.test.ts',
+  'lib/__tests__/helpers/database.ts', 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs',
+  'scripts/mcp-browser-env.mjs', 'playwright.focused.config.ts', 'focused-e2e/core.spec.ts'];
+
 /** @param {string[]} paths @param {(file: string) => boolean} [exists] */
 export function selectFocusedBrowser(paths, exists = () => true) {
   if (!Array.isArray(paths) || paths.length > 5000 || !paths.every(safePath)) throw Error('Invalid changed-path inventory');
+  const mcpPacket = paths.some(source => mcpRuntimeSources.has(source));
   const quoteReleaseFoundation = paths.some(source => quoteReleaseFoundationMarkers.has(source));
   const selected = new Set();
   const unknownCritical = new Set();
@@ -237,6 +252,11 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
+    if (mcpRuntimeSources.has(source) || (mcpPacket && mcpSharedSources.has(source)) || source === 'e2e/mcp-access.spec.ts') {
+      if (!mcpContracts.every(file => exists(file))) unknownCritical.add(source);
+      add('e2e/mcp-access.spec.ts', true, source);
+      continue;
+    }
     if (quoteRoundingSources.has(source)) {
       if (!quoteRoundingContracts.every(file => exists(file))) unknownCritical.add(source);
       add('e2e/quote-rounding.spec.ts', true, source);

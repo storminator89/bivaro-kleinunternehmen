@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/get-user-id';
 import { generateApiKey } from '@/lib/api-auth';
-import { createAuditLog } from '@/lib/audit-log';
+import { createAuditLog, auditSecurityEvent } from '@/lib/audit-log';
 
 // GET - List all API keys for the current user
 export async function GET(_request: Request) {
@@ -68,7 +68,7 @@ async function postHandler(request: NextRequest) {
     }
 
     // Validate scopes
-    const validScopes = ['read', 'write', 'delete', '*'];
+    const validScopes = ['read', 'write', 'delete', '*', 'mcp:read', 'mcp:write'];
     const requestedScopes = scopes || ['read', 'write'];
 
     if (!Array.isArray(requestedScopes)) {
@@ -79,6 +79,17 @@ async function postHandler(request: NextRequest) {
       if (!validScopes.includes(scope)) {
         return NextResponse.json({ error: `Invalid scope: ${scope}. Valid scopes: ${validScopes.join(', ')}` }, { status: 400 });
       }
+    }
+
+    const isMcp = requestedScopes.some(scope => typeof scope === 'string' && scope.startsWith('mcp:'));
+    if (isMcp && (!requestedScopes.includes('mcp:read') || requestedScopes.some(scope => !['mcp:read', 'mcp:write'].includes(scope)))) {
+      return NextResponse.json({ error: 'MCP-Zugänge benötigen mcp:read und dürfen keine REST-Rechte enthalten.' }, { status: 400 });
+    }
+    if (requestedScopes.includes('mcp:write') && process.env.BIVARO_MCP_ALLOW_WRITES !== '1') {
+      return NextResponse.json({ error: 'MCP-Schreibzugriff ist am Server gesperrt.' }, { status: 403 });
+    }
+    if (isMcp && (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365)) {
+      return NextResponse.json({ error: 'MCP-Zugänge benötigen eine Laufzeit von 1 bis 365 Tagen.' }, { status: 400 });
     }
 
     // Check max API keys per user (limit to 10)
@@ -123,6 +134,8 @@ async function postHandler(request: NextRequest) {
         expiresAt: apiKey.expiresAt,
       },
     });
+
+    if (isMcp) await auditSecurityEvent(userId, { event: 'MCP_ACCESS_CREATED', outcome: 'success', severity: 'info', metadata: { apiKeyId: apiKey.id, scopes: requestedScopes } });
 
     // Return the full key ONLY on creation (never shown again)
     return NextResponse.json({

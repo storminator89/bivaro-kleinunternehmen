@@ -396,7 +396,8 @@ export type SecurityEventName =
   | 'AI_PROVIDER_SETTINGS_CHANGED'
   | 'AI_PROVIDER_CONNECTION_TEST'
   | 'AUTH_SMTP_SETTINGS_CHANGED'
-  | 'ADMIN_USER_CHANGE';
+  | 'ADMIN_USER_CHANGE'
+  | 'MCP_ACCESS_CREATED';
 
 export type SecurityEventOutcome = 'success' | 'failure' | 'blocked';
 export type SecurityEventSeverity = 'info' | 'warning' | 'critical';

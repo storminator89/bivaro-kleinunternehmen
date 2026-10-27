@@ -44,7 +44,7 @@ export default defineConfig({
     {
       name: 'chromium',
       dependencies: ['chromium-bootstrap'],
-      testIgnore: ['**/auth-dashboard-invoice.spec.ts', '**/security-hardening.spec.ts', '**/ai-receipt-native.spec.ts'],
+      testIgnore: ['**/auth-dashboard-invoice.spec.ts', '**/security-hardening.spec.ts', '**/ai-receipt-native.spec.ts', '**/mcp-access.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],
