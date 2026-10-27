@@ -7,6 +7,31 @@ import { FOCUSED_SPECS, selectFocusedBrowser, validFocusedSelection } from '../f
 type FocusedSpec = keyof typeof FOCUSED_SPECS;
 
 describe('risk-based browser scope, not full acceptance', () => {
+  it('maps exact quote rounding source to two monetary journeys and fails closed on missing contracts', () => {
+    const spec = 'e2e/quote-rounding.spec.ts';
+    const contracts = ['lib/invoice-calculation.ts', 'lib/__tests__/invoice-calculation.test.ts', 'lib/__tests__/quote-calculation.test.ts',
+      'e2e/helpers/synthetic-login.ts', 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts'];
+    for (const source of ['components/dashboard/editors/quote-editor.tsx', spec]) {
+      const selection = selectFocusedBrowser([source]);
+      expect(validFocusedSelection(selection)).toBe(true);
+      expect(selection.criticalMappingRequired).toBe(false);
+      expect(selection.unmappedSourceCount).toBe(0);
+      expect(selection.specs).toEqual([{ file: spec, titles: FOCUSED_SPECS[spec] }]);
+      for (const missing of [spec, ...contracts]) expect(selectFocusedBrowser([source], file => file !== missing).criticalMappingRequired).toBe(true);
+    }
+    // Do not turn a UI mapping into blanket quote-API/calculator coverage.
+    for (const unreviewed of ['app/api/quotes/route.ts', 'lib/invoice-calculation.ts']) expect(selectFocusedBrowser([unreviewed]).criticalMappingRequired).toBe(true);
+    const source = readFileSync(spec, 'utf8');
+    const ast = ts.createSourceFile(spec, source, ts.ScriptTarget.Latest, true);
+    const titles: string[] = [];
+    function visit(node: ts.Node) {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'test' && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) titles.push(node.arguments[0].text);
+      ts.forEachChild(node, visit);
+    }
+    visit(ast);
+    expect(titles).toEqual(FOCUSED_SPECS[spec]);
+    expect(source).toContain("test.describe.configure({ mode: 'serial', retries: 0 })");
+  });
   it('maps only the exact API-key list page to four synthetic read-only cases and fails closed for missing evidence', () => {
     const source = 'app/settings/api-keys/page.tsx';
     const spec = 'e2e/api-key-list-read.spec.ts';

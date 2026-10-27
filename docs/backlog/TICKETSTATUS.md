@@ -972,3 +972,11 @@ nicht erneut versucht/umgangen. Kein Merge, Deployment, Release oder
 Issueabschluss. **Browser-/Hosted-/Releaseabnahme bleibt offen.** Unit-Log-SHA-256
 `df528d24399d6c8ec00540befcd8a230ab3fb5e6ef95063f48b864290692b5e3`.
 [Umfang und tatsächliche Evidenz](../testing/api-key-list-read-states.md).
+
+### 27.10.2026, 06:18 UTC — #230: Angebotsrundung zur autorisierten Veröffentlichung vorbereitet
+
+Angebotsanzeige, neues PDF und Speichern verwenden denselben vorhandenen Cent-Rechner; ungültige Eingaben verwerfen die veraltete Vorschau. Historische Originale bleiben unverändert.
+
+15 gezielte Rechner-/Angebotstests und fünf unabhängige PDF-/Betragsvergleiche im eingefrorenen Paket bestanden. Zwei verfasste Browserfälle noch nicht ausgeführt. Die Freigabe umfasst Veröffentlichung und schrittweisen normalen Merge erst nach erfolgreichen erforderlichen Prüfungen auf dem exakten Head. Neue erforderliche Hosted-Prüfungen, Browserabnahme (soweit zugeordnet), Merge und abschließende Main-/Native-/Docker-Evidenz stehen noch aus. Kein Deployment auf einer Installation, keine realen Finanzaktionen, keine neuen Dienste oder Sicherheits-/Hoständerungen. Historische 160-Ticket-Einträge und Summen bleiben unverändert.
+
+[quote-rounding-230.md](../testing/quote-rounding-230.md).

@@ -46,6 +46,10 @@ export const FOCUSED_SPECS = {
     'two real tabs produce 409, unknown committed response is read before retry, and delayed save preserves newer keyboard edits',
   ],
   'e2e/ux-progressive-disclosure.spec.ts': ['progressive UX keeps keyboard navigation, active history and setup/editor/handoff intent clear at desktop and mobile'],
+  'e2e/quote-rounding.spec.ts': [
+    'zero-tax half-cent quote keeps displayed, saved and downloaded PDF totals at 10.02 EUR',
+    '19-percent half-cent quote keeps displayed, saved and downloaded PDF totals at 11.92 EUR',
+  ],
   'e2e/payment-terms.spec.ts': ['stale company default requires deliberate refresh, snapshots XML and permits a conscious manual date'],
 };
 // Explicit inactive quote-history foundation only. The browser journey checks
@@ -155,6 +159,14 @@ const reviewedJourneyContracts = {
   'e2e/cashbook-loading.spec.ts': ['lib/__tests__/cashbook-view-regressions.test.ts', 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts'],
   'e2e/feature-backup-roundtrip.spec.ts': ['scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts', 'e2e/helpers/synthetic-login.ts'],
 };
+// Exact quote editor monetary contract, not an exemption for quote APIs,
+// invoice calculation or historical originals. Missing evidence fails closed.
+const quoteRoundingSources = new Set(['components/dashboard/editors/quote-editor.tsx', 'e2e/quote-rounding.spec.ts']);
+const quoteRoundingContracts = [
+  'lib/invoice-calculation.ts', 'lib/__tests__/invoice-calculation.test.ts', 'lib/__tests__/quote-calculation.test.ts',
+  'e2e/helpers/synthetic-login.ts', 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts', 'focused-e2e/core.spec.ts',
+];
+
 // Exact payment-reader indexing only: use the real repeated manual-receipt
 // journey, while V2/V3 correction/refund/allocation guards remain in ordinary CI.
 // Required fixture helpers and unit contracts must not silently disappear.
@@ -225,6 +237,11 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
+    if (quoteRoundingSources.has(source)) {
+      if (!quoteRoundingContracts.every(file => exists(file))) unknownCritical.add(source);
+      add('e2e/quote-rounding.spec.ts', true, source);
+      continue;
+    }
     const ownerVersion = ownerVersionSources.has(source);
     if (ownerVersion) {
       if (!ownerVersionContracts.every(file => exists(file))) unknownCritical.add(source);
