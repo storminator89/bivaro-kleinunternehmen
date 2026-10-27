@@ -1009,6 +1009,11 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <Card className={`${styles.surface} ${styles.destination}`}>
+        <CardHeader><h2 className={styles.sectionTitle}>Agent-Zugang</h2></CardHeader>
+        <CardContent><Button variant="outline" asChild><Link href="/settings/mcp">MCP verwalten<ChevronRight className="ml-2 h-4 w-4" /></Link></Button></CardContent>
+      </Card>
+
       {/* Audit Log */}
       <Card className={`${styles.surface} ${styles.destination}`} id="audit-settings">
         <CardHeader>

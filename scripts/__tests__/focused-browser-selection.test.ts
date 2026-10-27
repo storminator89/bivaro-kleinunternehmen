@@ -3,6 +3,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import { mcpBrowserEnv } from '../mcp-browser-env.mjs';
 import { FOCUSED_SPECS, selectFocusedBrowser, validFocusedSelection } from '../focused-browser-selection.mjs';
 type FocusedSpec = keyof typeof FOCUSED_SPECS;
 
@@ -612,6 +613,7 @@ describe('risk-based browser scope, not full acceptance', () => {
     const context = vm.createContext({ exports, Buffer, process: { env: { BIVARO_FOCUSED_SELECTION: JSON.stringify(selection) } }, require(name: string) {
       if (name === '@playwright/test') return { defineConfig: (value: unknown) => value, devices: { 'Desktop Chrome': {} } };
       if (name === './playwright.config') return { use: {}, webServer: { command: 'never executed in a pure config check' } };
+      if (name === './scripts/mcp-browser-env.mjs') return { mcpBrowserEnv };
       if (name === './scripts/focused-browser-selection.mjs') return { validFocusedSelection };
       throw Error('Unexpected pure config dependency');
     } });
@@ -646,5 +648,19 @@ describe('risk-based browser scope, not full acceptance', () => {
     expect(core.indexOf('expect(process.env.DATABASE_URL)')).toBeLessThan(core.indexOf('request.post('));
     expect(core).toContain("expect(process.env.GITHUB_ACTIONS).toBe('true')");
     expect(core).toContain("expect(baseURL).toBe('http://127.0.0.1:3100')");
+  });
+});
+
+describe('MCP bounded browser mapping', () => {
+  it('maps exact MCP runtime to its real HTTP journey and fails closed for missing crypto/key/fixture contracts', () => {
+    const source = 'lib/mcp/auth.ts', spec = 'e2e/mcp-access.spec.ts';
+    const selected = selectFocusedBrowser([source]);
+    expect(selected.criticalMappingRequired).toBe(false);
+    expect(selected.specs).toEqual([{ file: spec, titles: FOCUSED_SPECS[spec] }]);
+    for (const missing of [spec, 'lib/__tests__/mcp.test.ts', 'lib/__tests__/mcp-auth.test.ts', 'lib/__tests__/mcp-access-keys.test.ts', 'scripts/mcp-browser-env.mjs']) expect(selectFocusedBrowser([source], file => file !== missing).criticalMappingRequired).toBe(true);
+    // Shared auth changes are not covered by a marker-free UI-only packet.
+    expect(selectFocusedBrowser(['app/api/api-keys/route.ts']).criticalMappingRequired).toBe(true);
+    expect(selectFocusedBrowser([source, 'app/api/api-keys/route.ts']).criticalMappingRequired).toBe(false);
+    expect(selectFocusedBrowser([source, 'app/api/unreviewed/route.ts']).criticalMappingRequired).toBe(true);
   });
 });

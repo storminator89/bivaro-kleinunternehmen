@@ -210,6 +210,26 @@ Open `http://localhost:3000/register` and create the first admin account using t
 
 **Existing installation:** back up the database and uploads; stop all database writers before migrations. Use one app instance per SQLite database. `docker compose down -v` deletes data. [Setup, updates, backups, SMTP/AI and development](docs/operations/getting-started.en.md).
 
+## MCP access for agents
+
+Agents on your LAN connect to `/api/mcp` using **Streamable HTTP**. Create a
+separate MCP key under **Settings → Agent access**. In client fields using
+`KEY=VALUE`, enter:
+
+```text
+Authorization=Bearer <MCP-key>
+```
+
+**Enable writes:** Set `BIVARO_MCP_ALLOW_WRITES=1` on the server and **recreate** the
+app container with the updated environment. Then create a new agent key with
+**Allow writes**, replace the key in the agent and reload its tools. Existing
+read-only keys retain their permissions. Five read tools and five write tools
+cover customers, suppliers and payment evidence; they do not transfer money.
+
+API keys work without OAuth. An existing provider such as Authentik is optional;
+OAuth requires HTTPS and an explicit user mapping.
+[LAN setup, container commands, write permissions and OAuth (German)](docs/mcp.md).
+
 ## Essential limitations
 
 - **No tax or compliance certification:** technical PDF/XML validation is not business approval; no ELSTER filing.
