@@ -25,7 +25,8 @@ DNS/Hosts auf den Proxy zeigen lassen, dessen Port nur im LAN freigeben. HTTP-Po
 Caddy den ursprünglichen Host erhalten (Standard); Forwarded-Header ersetzen keine
 Zugriffsprüfung. Ein rein lokales Zertifikat macht den Dienst nicht öffentlich.
 
-In der Umgebung des **App-Containers** konfigurieren und den Container neu starten:
+In der Umgebung des **App-Containers** konfigurieren und den Container mit der
+geänderten Umgebung neu erstellen:
 
 ```dotenv
 BIVARO_MCP_ENABLED=1
@@ -64,6 +65,17 @@ reine Cloud-Agents ohne eigene Netzwerkbrücke nicht erreichbar.
 4. Als Streamable-HTTP-Server die angezeigte URL mit
    `Authorization: Bearer <Schlüssel>` eintragen. Der Server akzeptiert keine
    Schlüssel in URL-Parametern, Cookies oder Tool-Argumenten.
+
+Hat der Client ein Feld **Header (KEY=VALUE)**, dort genau eine Zeile eintragen:
+
+```text
+Authorization=Bearer <MCP-Schlüssel>
+```
+
+Den Platzhalter durch den vollständigen Schlüssel ersetzen, ohne Anführungszeichen
+und mit einem Leerzeichen nach `Bearer`. Anschließend **„Werkzeuge laden“** wählen:
+ein Leseschlüssel bietet **5 Lesewerkzeuge**. **„Mit OAuth verbinden“** nur bei einem
+bereits eingerichteten OAuth-Anbieter verwenden.
 
 Beispiel für Clients mit JSON-MCP-Konfiguration (deren Format prüfen):
 
@@ -130,12 +142,50 @@ Hostkonfiguration sowie Datenbank-/Backup-Dateien sind nicht lesbar.
 
 ## Schreiben bewusst zuschalten
 
-1. Serverbetreiber setzt `BIVARO_MCP_ALLOW_WRITES=1` und startet die App neu.
-2. Benutzer erstellt einen **neuen**, ausdrücklich schreibberechtigten Agent-Zugang.
-   Bereits ausgegebene Leseschlüssel werden dadurch nicht erweitert.
-3. Nur diesem Agent diesen Schlüssel geben. In seinem Client Werkzeugfreigaben
-   für tatsächliche Änderungen aktivieren; Tool-Annotationen ersetzen keine
-   menschliche Zustimmung.
+Es sind **zwei Freigaben** erforderlich: am Server und für den einzelnen Zugang.
+MCP muss bereits mit `BIVARO_MCP_ENABLED=1` und einer gültigen URL eingerichtet sein.
+
+1. Serverbetreiber setzt `BIVARO_MCP_ALLOW_WRITES=1` in der wirksamen
+   Container-Konfiguration. Die mitgelieferten Compose-Dateien übernehmen den Wert
+   aus `.env`; bei einem fest eingetragenen Wert unter `environment` diesen direkt
+   in der verwendeten Compose-Datei ändern.
+2. Konfiguration prüfen und den App-Container **neu erstellen**. Ein bloßes
+   `docker restart` oder `docker compose restart` übernimmt keine geänderten
+   Umgebungsvariablen. Im Projektverzeichnis mit denselben Compose-Dateien und
+   demselben Projektnamen wie beim bisherigen Start arbeiten.
+
+   Für die Standard-Compose-Datei im Repository:
+
+   ```bash
+   docker compose config --quiet
+   docker compose up -d --no-deps --force-recreate buchhaltung
+   ```
+
+   Für die Docker-Hub-Compose-Datei im Repository:
+
+   ```bash
+   docker compose -f docker-compose.hub.yml config --quiet
+   docker compose -f docker-compose.hub.yml up -d --no-deps --force-recreate bivaro
+   ```
+
+   Bei eigenen Dateinamen oder einem zusätzlichen Produktions-Override die
+   entsprechenden `-f`-Optionen beibehalten. Keine Volumes löschen.
+3. Unter **Einstellungen → Agent-Zugang** einen **neuen** Zugang erstellen und
+   **„Schreiben erlauben“** auswählen. Bereits ausgegebene Leseschlüssel werden
+   dadurch nicht erweitert. Bleibt die Auswahl gesperrt, ist die Serverfreigabe
+   noch nicht in der laufenden Container-Umgebung angekommen.
+4. Nur diesem Agent den neuen Schlüssel geben. Im Client den bisherigen
+   Bearer-Schlüssel ersetzen und **„Werkzeuge laden“** erneut anklicken. Es sollten
+   **10 Werkzeuge: 5 zum Lesen und 5 zum Schreiben** erscheinen. In seinem Client
+   Werkzeugfreigaben für tatsächliche Änderungen aktivieren; Tool-Annotationen
+   ersetzen keine menschliche Zustimmung.
+
+Bei OAuth ist kein neuer API-Schlüssel nötig: Zusätzlich zur Serverfreigabe muss
+für das zugeordnete Subjekt `write: true` konfiguriert sein und das Access Token den
+Scope `mcp:write` sowie `mcp:read` enthalten. Nach einer geänderten
+Betreiberkonfiguration den Container neu erstellen, im Agenten die nötigen Scopes
+neu autorisieren und die Werkzeuge neu laden. Die [OAuth-Einrichtung](#optional-vorhandenen-oauth-anbieter-anbinden)
+beschreibt den vollständigen Tokenvertrag.
 
 Der Server bietet dann fünf Schreibwerkzeuge:
 
@@ -156,8 +206,8 @@ unterbrochenen Antwort erst nach dem Kontakt suchen. Bestandsänderungen verlier
 bei zwischenzeitlichen Änderungen ihre Freigabe und müssen frisch gelesen werden.
 Für rückwirkende Zahlungen keine Zeitpunkte oder Referenzen erraten.
 
-`BIVARO_MCP_ALLOW_WRITES=0` entzieht sämtlichen Agent-Zugängen Schreibrechte sofort
-nach Neustart. Einzelne Zugänge in der Oberfläche deaktivieren. Neue Rechte werden
+`BIVARO_MCP_ALLOW_WRITES=0` entzieht sämtlichen Agent-Zugängen Schreibrechte, sobald
+der App-Container mit dieser Umgebung neu erstellt wurde. Einzelne Zugänge in der Oberfläche deaktivieren. Neue Rechte werden
 bei jeder HTTP-Anfrage ermittelt; es gibt keinen wiederverwendbaren Mandanten-
 Sessionzustand. Werkzeugaufrufe werden mit Werkzeugname, Zugang und Ergebnis
 protokolliert, ohne Token oder komplette Anfragen zu protokollieren.

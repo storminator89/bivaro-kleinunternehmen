@@ -212,6 +212,28 @@ docker compose up -d --build
 
 **Bestehende Installation:** Datenbank und Uploads sichern, vor Migrationen alle DB-Schreiber stoppen. Eine App-Instanz je SQLite-Datenbank; `docker compose down -v` löscht Daten. [Einrichtung, Updates, Backup, SMTP/KI und Entwicklung](docs/operations/getting-started.de.md).
 
+## Agent-Zugang über MCP
+
+Agents im lokalen Netzwerk verbinden sich per **Streamable HTTP** mit `/api/mcp`.
+Unter **Einstellungen → Agent-Zugang** einen eigenen MCP-Schlüssel erstellen. In
+Client-Feldern mit dem Format `KEY=VALUE` eintragen:
+
+```text
+Authorization=Bearer <MCP-Schlüssel>
+```
+
+**Schreiben freigeben:** Am Server `BIVARO_MCP_ALLOW_WRITES=1` setzen und den
+App-Container mit der geänderten Umgebung **neu erstellen**. Anschließend einen
+neuen Agent-Zugang mit **„Schreiben erlauben“** erstellen, dessen Schlüssel im
+Agenten hinterlegen und **„Werkzeuge laden“** erneut anklicken. Bestehende
+Leseschlüssel bleiben schreibgeschützt. Dann stehen fünf Lese- und fünf
+Schreibwerkzeuge für Kunden, Lieferanten und Zahlungsnachweise bereit; sie führen
+keine Überweisungen aus.
+
+API-Schlüssel funktionieren ohne OAuth. Ein vorhandener OAuth-Anbieter wie
+Authentik ist optional; die Anbindung benötigt HTTPS und eine explizite
+Benutzerzuordnung. [LAN-Einrichtung, Container-Befehle, Schreibrechte und OAuth](docs/mcp.md).
+
 ## Wichtige Grenzen
 
 - **Keine Steuer- oder Compliance-Zertifizierung:** technische PDF-/XML-Prüfung ist keine fachliche Freigabe; kein ELSTER-Versand.
