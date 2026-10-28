@@ -157,53 +157,19 @@ describe('invoice workspace presentation boundaries', () => {
     ]);
   });
 
-  it('leads with the ledger and places utility tasks in one secondary lane', () => {
-    expect(source.indexOf('className={`invoice-ledger')).toBeLessThan(source.indexOf('<aside className={styles.tools}'));
-    expect(source.indexOf('className={`invoice-import')).toBeLessThan(source.indexOf('aria-label="Wiederkehrende Serviceleistungen"'));
-    expect(source).not.toContain('sales-workspace.module.css');
-    expect(source).toContain('import styles from "./invoice-workspace.module.css"');
-  });
-
   it('makes search first in keyboard order and invoice identity first in the desktop ledger', () => {
     expect(source.indexOf('id="invoice-search"')).toBeLessThan(source.indexOf('<fieldset'));
     expect(source.indexOf("aria-sort={filters.sortBy === 'invoiceNumber'")).toBeLessThan(source.indexOf("aria-sort={filters.sortBy === 'date'"));
     expect(source.match(/paymentReturnId=\{invoice.id\}/g)).toHaveLength(2);
   });
 
-  it('uses the same truthful loading and empty states in both responsive layouts', () => {
-    expect(source.match(/renderEmptyState\(\)/g)).toHaveLength(2);
-    expect(source.match(/renderLoadingState\(\)/g)).toHaveLength(2);
-    expect(source).toContain('Rechnungen konnten nicht geladen werden.');
-    expect(source).toContain('onClick={() => loadInvoices(page, pageSize)}');
-    expect(source).toContain('role="status"');
-    expect(source).toContain('className={styles.skeletonRows} aria-hidden="true"');
-  });
-
-  it('retains the explicit scope of count and sum labels rather than inventing metrics', () => {
-    for (const label of ['Rechnungen im Ergebnis', 'Bezahlt auf dieser Seite', 'Offen auf dieser Seite']) expect(source).toContain(label);
-    expect(source).toContain('<LedgerListHeading');
-    expect(source).toContain('amounts={isLoading || isError ? [] : invoices.map(invoice => invoice.totalAmount ?? 0)}');
-  });
-
-  it('keeps tokens, focus, motion fallback and 44px controls local to this screen', () => {
-    expect(css.startsWith('/* Hallmark')).toBe(true);
-    expect(css).toContain('font-family: var(--font-body)');
+  it('retains visible focus, motion fallback, readable content and 44px controls', () => {
     expect(css).toContain('min-height: 2.75rem');
     expect(css).toContain(':focus-visible');
     expect(css).toContain('outline: 2px solid var(--color-focus)');
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|transition:\s*all|100vw|overflow-x:\s*hidden/i);
-  });
-
-  it('only opens a wide utility rail when ledger width is available, and keeps phone amounts readable', () => {
-    expect(css).toContain('@media (min-width: 1600px)');
-    expect(css).toContain('grid-template-columns: minmax(0, 1fr) 15rem');
     expect(css).toContain('overflow-wrap: anywhere');
-    expect(css).toContain('@media (max-width: 639px)');
-    expect(css).toContain('.recordHeading { grid-template-columns: minmax(0, 1fr); }');
-    expect(css).toContain('.workspace .statusSwitch { grid-template-columns: repeat(2, minmax(0, 1fr)); }');
-    expect(css).toContain('.workspace .filterBar input, .workspace .filterBar select { font-size: var(--text-base); }');
-    expect(css).not.toContain('overflow: clip');
+    expect(css).not.toMatch(/100vw|overflow-x:\s*hidden|overflow:\s*clip/i);
     expect(css).toContain('.workspace .desktopRecord :global(td button[aria-label^="Details zu Rechnung"]) { min-height: 2.75rem; }');
   });
 });

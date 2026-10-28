@@ -335,26 +335,8 @@ export function DashboardContent({ ownerQuoteCaptureEnabled = false }: { ownerQu
   const filteredExpenses = expenses.map(item => ({ ...item, manualRecordState: protectedManualRecordState(item.manualRecordState, manualOverrides[`expense:${item.id}`]) }));
   const filteredIncomes = incomes.map(item => ({ ...item, manualRecordState: protectedManualRecordState(item.manualRecordState, manualOverrides[`income:${item.id}`]) }));
 
-  // Rechnungen sortieren
-  const sortedInvoices = [...invoices].sort((a, b) => {
-    const { sortBy, sortOrder } = filters.invoices;
-    let comparison = 0;
-
-    if (sortBy === 'date') {
-      const dateA = a.invoiceDate ? new Date(a.invoiceDate).getTime() : new Date(a.uploadedAt).getTime();
-      const dateB = b.invoiceDate ? new Date(b.invoiceDate).getTime() : new Date(b.uploadedAt).getTime();
-      comparison = dateA - dateB;
-    } else if (sortBy === 'invoiceNumber') {
-      const numA = a.invoiceNumber || '';
-      const numB = b.invoiceNumber || '';
-      comparison = numA.localeCompare(numB, 'de', { numeric: true });
-    } else if (sortBy === 'amount') {
-      comparison = (a.totalAmount || 0) - (b.totalAmount || 0);
-    }
-
-    return sortOrder === 'asc' ? comparison : -comparison;
-  });
-  const filteredInvoices = sortedInvoices;
+  // The server sorts the complete ledger before pagination.
+  const filteredInvoices = invoices;
 
   // Handlers
   const handleExportReceipts = async () => {
@@ -650,32 +632,24 @@ export function DashboardContent({ ownerQuoteCaptureEnabled = false }: { ownerQu
 
     const { id, type } = itemToDelete;
     setIsDeleting(true);
+    let deleted = false;
 
     try {
-      if (type === 'invoice') {
-        const response = await fetch(`/api/invoices?id=${id}`, {
-          method: 'DELETE',
-        });
-
-        if (response.ok) {
-          await loadInvoices(invoicesPage, invoicesPageSize);
-          setDeleteModalOpen(false);
-          setItemToDelete(null);
-        }
-      } else {
-        const endpoint = type === 'expense' ? `/api/expenses?id=${id}` : `/api/incomes?id=${id}`;
-        const response = await fetch(endpoint, {
-          method: 'DELETE',
-        });
-
-        if (response.ok) {
-          if (type === 'expense') await loadExpenses(expensesPage, expensesPageSize);
-          else await loadIncomes(incomesPage, incomesPageSize);
-          setDeleteModalOpen(false);
-          setItemToDelete(null);
-        }
+      const endpoint = type === 'invoice' ? `/api/invoices?id=${id}` : type === 'expense' ? `/api/expenses?id=${id}` : `/api/incomes?id=${id}`;
+      const response = await fetch(endpoint, { method: 'DELETE' });
+      if (!response.ok) {
+        const failure = await response.json().catch(() => null);
+        toast.error(failure?.error || 'Der Eintrag konnte nicht gelöscht werden.');
+        return;
       }
+      deleted = true;
+      setDeleteModalOpen(false);
+      setItemToDelete(null);
+      if (type === 'invoice') await loadInvoices(invoicesPage, invoicesPageSize);
+      else if (type === 'expense') await loadExpenses(expensesPage, expensesPageSize);
+      else await loadIncomes(incomesPage, incomesPageSize);
     } catch (error) {
+      toast.error(deleted ? 'Der Eintrag wurde gelöscht. Die Liste konnte nicht aktualisiert werden.' : 'Der Eintrag konnte nicht gelöscht werden. Laden Sie die Liste zur Prüfung erneut.');
       console.error(`Error deleting ${type}:`, error);
     } finally {
       setIsDeleting(false);
@@ -804,10 +778,18 @@ export function DashboardContent({ ownerQuoteCaptureEnabled = false }: { ownerQu
   };
 
   const handleQuoteDelete = async (quoteId: number) => {
+    let deleted = false;
     try {
       const res = await fetch(`/api/quotes?id=${quoteId}`, { method: 'DELETE' });
-      if (res.ok) await loadQuotes(quotesPage, quotesPageSize);
+      if (!res.ok) {
+        const failure = await res.json().catch(() => null);
+        toast.error(failure?.error || 'Das Angebot konnte nicht gelöscht werden.');
+        return;
+      }
+      deleted = true;
+      await loadQuotes(quotesPage, quotesPageSize);
     } catch (err) {
+      toast.error(deleted ? 'Das Angebot wurde gelöscht. Die Liste konnte nicht aktualisiert werden.' : 'Das Angebot konnte nicht gelöscht werden. Laden Sie die Liste zur Prüfung erneut.');
       console.error('Error deleting quote:', err);
     }
   };

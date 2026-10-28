@@ -3014,5 +3014,177 @@
     "evidence": [
       "docs/testing/quote-rounding-230.md"
     ]
+  },
+  "localAppAudit20261028": {
+    "observedAt": "2026-10-28",
+    "baseCommit": "982f87ea00c0cb632c6ef716ecd565740e70ee79",
+    "status": "local_uncommitted_verified_with_standard_build_browser_blocked",
+    "historicalTicketChanges": [],
+    "historicalTicketCountsUnchanged": true,
+    "implementedScope": [
+      "Global invoice sorting before pagination and private palette continuation; visible DELETE rejections.",
+      "UTC calendar boundaries and impossible expense/cashbook date validation.",
+      "Strict API key field validation and logo upload file-type validation."
+    ],
+    "verifiedTests": {
+      "uiList": {
+        "suites": 4,
+        "tests": 25
+      },
+      "calendar": {
+        "suites": 6,
+        "testsPerTimeZone": 36,
+        "timeZones": [
+          "UTC",
+          "Europe/Berlin",
+          "America/Los_Angeles"
+        ]
+      },
+      "financialIntegration": {
+        "suites": 4,
+        "tests": 43
+      },
+      "apiKeyLogo": {
+        "suites": 2,
+        "tests": 9
+      },
+      "securityBoundaries": {
+        "suites": 7,
+        "tests": 69
+      },
+      "productionDependencyAuditVulnerabilities": 0,
+      "combinedRuntime": {
+        "suites": 28,
+        "tests": 222,
+        "seconds": 13.78,
+        "exitCode": 0
+      },
+      "scripts": {
+        "passedSuites": 36,
+        "skippedSuites": 1,
+        "passedTests": 406,
+        "skippedTests": 6,
+        "seconds": 52.18,
+        "exitCode": 0
+      },
+      "selectorSubset": {
+        "suites": 2,
+        "tests": 56,
+        "includedInScriptsTotal": true
+      },
+      "disjointFinalRunAggregate": {
+        "passedSuites": 64,
+        "skippedSuites": 1,
+        "passedTests": 628,
+        "skippedTests": 6,
+        "separateRuns": true,
+        "subsetAndTimeZoneRepeatsNotAdded": true
+      }
+    },
+    "limitations": [
+      "Targeted source review; no confirmed exploitable security vulnerability, not comprehensive security clearance.",
+      "Standard build/browser runner blocked before tests by Turbopack CSS worker local port EPERM, including approved retry. Invoice browser case/screenshot authored but unrun. Supported Webpack build, final type/lint, combined28 suites222 tests and full script suite passed; selector evidence is not browser execution.",
+      "No schema migration, push, PR, merge, deployment or production database access.",
+      "Initial sandbox unit/script fixture child-process EPERM prevented execution; approved isolated-fixture reruns passed."
+    ],
+    "evidence": [
+      "docs/testing/app-audit-fixes-2026-10-28.md",
+      "e2e/invoice-list-sorting.spec.ts"
+    ],
+    "verifiedChecks": {
+      "fullRepositoryLint": "passed exit0 including final rerun after selector changes",
+      "standardBuild": "blocked before browser tests by Turbopack CSS worker port EPERM",
+      "browser": "not executed; prerequisite standard build blocked; exactly2 cases discovered via --list --no-deps only",
+      "webpackBuild": "passed exit0 including TypeScript and notice postbuild; existing PDF worker createRequire tracing warnings",
+      "focusedBrowserSelectorMapping": {
+        "review": "independently accepted explicit bounded mapping",
+        "core": true,
+        "specs": 4,
+        "unknownCriticalCount": 0,
+        "unmappedSourceCount": 0,
+        "broadFallback": false
+      },
+      "types": "tsc --noEmit --incremental false passed exit0 after selector changes"
+    },
+    "localEphemeralLogs": [
+      "/tmp/bivaro-audit-20261028-final-tests.log",
+      "/tmp/bivaro-audit-20261028-webpack-build.log",
+      "/tmp/bivaro-audit-20261028-types.log",
+      "/tmp/bivaro-audit-20261028-lint.log",
+      "/tmp/bivaro-audit-20261028-dependencies.log",
+      "/tmp/bivaro-audit-20261028-boundaries.log",
+      "/tmp/bivaro-audit-20261028-security-browser.log",
+      "/tmp/bivaro-audit-20261028-browser-discovery.log"
+    ]
+  },
+  "testQualityReview20261028": {
+    "observedAt": "2026-10-28",
+    "status": "local_uncommitted_bounded_test_cleanup_verified",
+    "historicalTicketChanges": [],
+    "historicalTicketCountsUnchanged": true,
+    "priorAuditTestCount": {
+      "passed": 628,
+      "historicalSnapshotBeforeCleanup": true
+    },
+    "scope": [
+      "Five cosmetic UI cases removed; two invoice source inventories replaced with five actual render/callback tests; pure class/design assertions reduced.",
+      "Independent date parser/endpoint probes replace cross-product repetition; tax wrapper contract replaces three approximate zone cases while exhaustive references remain.",
+      "Repeated browser-selector missing-evidence packets grouped without weakening fail-closed contracts; three README gallery layout assertions removed."
+    ],
+    "retainedContracts": [
+      "Financial/payment, ownership/privacy/security, recovery/idempotency and accessibility guards remain.",
+      "Specific muted text/surface contrast collision assertion retained; broad source fingerprints deferred until equal behavior coverage exists.",
+      "No whole testfile deleted; no production logic/schema/migration changes in this cleanup step."
+    ],
+    "verified": {
+      "finalCombined": {
+        "suites": 13,
+        "tests": 146,
+        "seconds": 0.732,
+        "exitCode": 0,
+        "explicitFreshTemporaryDatabaseUrl": true
+      },
+      "fullLintExitCode": 0,
+      "fullTypesExitCode": 0,
+      "overlappingBusinessSubset": {
+        "suites": 16,
+        "tests": 126,
+        "timeZone": "America/Los_Angeles",
+        "notAddedToCombined": true
+      },
+      "ui": {
+        "beforeSuites": 6,
+        "beforeTests": 47,
+        "afterSuites": 7,
+        "afterTests": 45
+      },
+      "mutations": "Three invoice behavior mutants and three selector mutants caught; cosmetic invoice root-class rename passes all five render tests; selected domain old-bug regressions detected. No global mutation score."
+    },
+    "incident": {
+      "scope": "Earlier date-validation mutation probe lacked explicit fresh DATABASE_URL and exposed missing Prisma mock.",
+      "confirmedReads": 2,
+      "syntheticOwner": "date-owner",
+      "syntheticId": 1,
+      "result": "404 before source-proven later financial/audit write paths",
+      "databaseTargetIndependentlyIdentified": false,
+      "databaseInspected": false,
+      "filesystemDatabaseInvarianceAsserted": false,
+      "recovery": "Rejecting Prisma transaction mock with not-called assertions; every subsequent test invocation receives fresh explicit temporary DATABASE_URL; integration fixtures remain isolated."
+    },
+    "limitations": [
+      "Bounded sampled test review, not all testfiles assessed.",
+      "No new application build/browser/screenshot/hosted/release claim; prior standard Turbopack/browser EPERM remains open.",
+      "Earlier UI pure-render runs predated explicit fresh DATABASE_URL on every invocation; subsequent probes/reruns satisfy expanded protection.",
+      "Overlapping focused counts and repeated time zones are not summed."
+    ],
+    "localEphemeralLogs": [
+      "/tmp/bivaro-test-quality-20261028-final.log",
+      "/tmp/bivaro-test-quality-20261028-lint.log",
+      "/tmp/bivaro-test-quality-20261028-types.log"
+    ],
+    "evidence": [
+      "docs/testing/test-quality-review-2026-10-28.md",
+      "docs/testing/app-audit-fixes-2026-10-28.md"
+    ]
   }
 }

@@ -1,3 +1,4 @@
+import { InvoiceListSortError, parseInvoiceListSort } from '@/lib/invoice-list-sort';
 import { readInvoiceList } from '@/lib/server/invoice-list';
 import { protectMutation } from '@/lib/request-security';
 import { NextResponse } from 'next/server';
@@ -161,12 +162,14 @@ export async function GET(request: Request) {
     const document = url.searchParams.get('document');
     if (document !== null && (!/^[1-9]\d*$/.test(document) || !Number.isSafeInteger(Number(document)))) return NextResponse.json({ error: 'Ungültige Dokument-ID' }, { status: 400 });
     return await readInvoiceList(userId, request.headers, {
+      sort: parseInvoiceListSort(url.searchParams.get('sortBy') ?? undefined, url.searchParams.get('sortOrder') ?? undefined),
       page, pageSize, search: url.searchParams.get('search') || '', paidStatus: url.searchParams.get('paidStatus'),
       dateRange: url.searchParams.get('dateRange') as 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null,
       ...(document !== null ? { documentId: Number(document) } : {}),
     });
   } catch (error) {
     if (error instanceof UnauthorizedError) return unauthorizedResponse();
+    if (error instanceof InvoiceListSortError) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof PaymentJournalError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     throw error;
   }

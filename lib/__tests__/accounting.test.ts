@@ -82,10 +82,10 @@ describe("shared accounting rules", () => {
     const current = getDateRange("thisYear", now);
     const previous = getDateRange("lastYear", now);
 
-    expect(current.start?.getFullYear()).toBe(2026);
-    expect(current.endExclusive?.getFullYear()).toBe(2027);
-    expect(previous.start?.getFullYear()).toBe(2025);
-    expect(previous.endExclusive?.getFullYear()).toBe(2026);
+    expect(current.start?.getUTCFullYear()).toBe(2026);
+    expect(current.endExclusive?.getUTCFullYear()).toBe(2027);
+    expect(previous.start?.getUTCFullYear()).toBe(2025);
+    expect(previous.endExclusive?.getUTCFullYear()).toBe(2026);
   });
 
   it("clamps rolling month ranges at the end of shorter months", () => {

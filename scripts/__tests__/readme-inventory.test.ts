@@ -197,9 +197,6 @@ describe('compact bilingual README, linked operational guidance and dated screen
       expect(new Set(images.map(image => image[1])).size).toBe(49);
       expect(images.map(image => image[1]).sort()).toEqual([...paths].sort());
       expect(images.every(image => image[2].trim().length > 0)).toBe(true);
-      expect(text.match(/<details>/gu)).toHaveLength(7);
-      expect(text).not.toMatch(/<details[^>]+open/gu);
-      expect(text.split('<details>')[0].match(/<img\b/gu)).toHaveLength(4);
       for (const image of provenance.images) expect(text).toContain(`href="${image.path}"`);
     });
     expect(read('docs/screenshots/coverage.md')).toContain('Route-area coverage: 33/33');

@@ -1,3 +1,4 @@
+import { getLedgerDateFilter } from '@/lib/business-date';
 import { PAYMENT_ADJUSTMENT_REVIEW_RESPONSE, assertPositiveOnlySnapshot, PaymentAdjustmentConsumerError } from '@/lib/payment-journal/consumer-guard';
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
@@ -29,26 +30,8 @@ async function parseFilters(url: URL): Promise<Prisma.IncomeWhereInput> {
     where.taxRelevant = false;
   }
 
-  if (dateRange && dateRange !== 'all') {
-    const now = new Date();
-    const thisMonth = now.getMonth();
-    const thisYear = now.getFullYear();
-    if (dateRange === 'thisMonth') {
-      const start = new Date(thisYear, thisMonth, 1);
-      const end = new Date(thisYear, thisMonth + 1, 0, 23, 59, 59, 999);
-      where.date = { gte: start, lte: end };
-    } else if (dateRange === 'lastMonth') {
-      const prevMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-      const prevYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-      const start = new Date(prevYear, prevMonth, 1);
-      const end = new Date(prevYear, prevMonth + 1, 0, 23, 59, 59, 999);
-      where.date = { gte: start, lte: end };
-    } else if (dateRange === 'thisYear') {
-      const start = new Date(thisYear, 0, 1);
-      const end = new Date(thisYear, 11, 31, 23, 59, 59, 999);
-      where.date = { gte: start, lte: end };
-    }
-  }
+  const dateFilter = getLedgerDateFilter(dateRange);
+  if (dateFilter) where.date = dateFilter;
 
   if (search) {
     where.OR = [

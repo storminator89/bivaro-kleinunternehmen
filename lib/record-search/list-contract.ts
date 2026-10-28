@@ -1,3 +1,4 @@
+import { parseInvoiceListSort, type InvoiceListSort } from '@/lib/invoice-list-sort';
 import { RECORD_SEARCH_MAX_LENGTH, RECORD_SEARCH_MIN_LENGTH } from './contract';
 import { parseIncomingInvoiceDateFilter, type IncomingInvoiceDateFilter } from '@/lib/purchase-documents/invoice-date-filter';
 
@@ -6,6 +7,7 @@ export class FilteredListInputError extends Error {
 }
 export type InvoiceListSearchInput = {
   query: string; page: number; pageSize: number;
+  sort?: InvoiceListSort;
   paidStatus: 'all' | 'paid' | 'unpaid' | 'partial';
   dateRange: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear';
 };
@@ -41,9 +43,11 @@ export function customerListSearchInput(value: unknown): { query: string } {
   return { query: filteredListQuery(input.query) };
 }
 export function invoiceListSearchInput(value: unknown): InvoiceListSearchInput {
-  const input = object(value, ['query', 'page', 'pageSize', 'paidStatus', 'dateRange']);
+  const input = object(value, ['query', 'page', 'pageSize', 'paidStatus', 'dateRange', 'sortBy', 'sortOrder']);
   const pageSize = integer(input.pageSize, 20, 100);
-  return { query: filteredListQuery(input.query), page: integer(input.page, 1, Math.floor(Number.MAX_SAFE_INTEGER / pageSize)), pageSize,
+  let sort: InvoiceListSort | undefined;
+  try { sort = parseInvoiceListSort(input.sortBy, input.sortOrder); } catch { throw new FilteredListInputError(); }
+  return { sort, query: filteredListQuery(input.query), page: integer(input.page, 1, Math.floor(Number.MAX_SAFE_INTEGER / pageSize)), pageSize,
     paidStatus: choice(input.paidStatus, ['all', 'paid', 'unpaid', 'partial'], 'all'),
     dateRange: choice(input.dateRange, ['all', 'thisMonth', 'lastMonth', 'thisYear'], 'all') };
 }

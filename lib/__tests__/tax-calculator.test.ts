@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
     calculateIncomeTax,
+    calculateIncomeTaxForYear,
     calculateSolidaritySurcharge,
     calculateSolidaritySurchargeForYear,
     calculateTradeTax,
@@ -36,28 +37,11 @@ describe('calculateIncomeTax', () => {
         })
     })
 
-    describe('Zone 3 (17.800€ - 69.878€)', () => {
-        it('should calculate tax for 30.000€ income', () => {
-            const tax = calculateIncomeTax(30000)
-            // Expected: ~4.100€ (slightly lower than 2024 due to higher Grundfreibetrag)
-            expect(tax).toBeGreaterThan(3800)
-            expect(tax).toBeLessThan(5000)
-        })
-
-        it('should calculate tax at end of Zone 3', () => {
-            const tax = calculateIncomeTax(69878)
-            // Before Zone 4 starts
-            expect(tax).toBeGreaterThan(17000)
-            expect(tax).toBeLessThan(20000)
-        })
-    })
-
-    describe('Zone 4 (69.879€ - 277.825€)', () => {
-        it('should apply 42% marginal rate for 100.000€ income', () => {
-            const tax = calculateIncomeTax(100000)
-            // 0.42 * 100000 - 11135.63 = 30864.37
-            expect(tax).toBeCloseTo(30864.37, 0)
-        })
+    it('defaults to the current tariff and forwards an explicitly selected year', () => {
+        // Exact tariff values for both years are independently checked at every
+        // whole euro in tax-reference-grid.test.ts. This test owns the alias contract.
+        expect(calculateIncomeTax(30000)).toBe(calculateIncomeTaxForYear(30000, 2026))
+        expect(calculateIncomeTax(30000, 2025)).toBe(calculateIncomeTaxForYear(30000, 2025))
     })
 
     describe('Zone 5 - Reichensteuer (>277.825€)', () => {

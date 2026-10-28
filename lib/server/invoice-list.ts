@@ -1,3 +1,5 @@
+import { getLedgerDateFilter } from '@/lib/business-date';
+import { compareInvoiceListRows, type InvoiceListSort } from '@/lib/invoice-list-sort';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -13,6 +15,7 @@ export type InvoiceListReadOptions = {
   page: number; pageSize: number; search?: string; paidStatus?: string | null;
   dateRange?: 'all' | 'thisMonth' | 'lastMonth' | 'thisYear' | null;
   documentId?: number;
+  sort?: InvoiceListSort;
   /** Body-only palette match; never a URL search parameter. */
   recordQuery?: string;
 };
@@ -33,31 +36,14 @@ export async function readInvoiceList(userId: string, headers: Headers, options:
   // Financial filters are applied to the validated complete ledger below,
   // before pagination and count. A partial allocation is never fully paid.
 
-  if (dateRange && dateRange !== 'all') {
-    const now = new Date();
-    const thisMonth = now.getMonth();
-    const thisYear = now.getFullYear();
-    let start: Date | undefined;
-    let end: Date | undefined;
-    if (dateRange === 'thisMonth') {
-      start = new Date(thisYear, thisMonth, 1);
-      end = new Date(thisYear, thisMonth + 1, 0, 23, 59, 59, 999);
-    } else if (dateRange === 'lastMonth') {
-      const prevMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-      const prevYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-      start = new Date(prevYear, prevMonth, 1);
-      end = new Date(prevYear, prevMonth + 1, 0, 23, 59, 59, 999);
-    } else if (dateRange === 'thisYear') {
-      start = new Date(thisYear, 0, 1);
-      end = new Date(thisYear, 11, 31, 23, 59, 59, 999);
-    }
-    if (start && end) {
-      dateMatch = Prisma.sql`AND (("invoiceDate" >= ${start} AND "invoiceDate" <= ${end}) OR ("invoiceDate" IS NULL AND "uploadedAt" >= ${start} AND "uploadedAt" <= ${end}))`;
-      where.OR = [
-        { invoiceDate: { gte: start, lte: end } },
-        { AND: [{ invoiceDate: null }, { uploadedAt: { gte: start, lte: end } }] },
-      ];
-    }
+  const dateFilter = getLedgerDateFilter(dateRange ?? null);
+  if (dateFilter) {
+    const { gte: start, lt: endExclusive } = dateFilter;
+    dateMatch = Prisma.sql`AND (("invoiceDate" >= ${start} AND "invoiceDate" < ${endExclusive}) OR ("invoiceDate" IS NULL AND "uploadedAt" >= ${start} AND "uploadedAt" < ${endExclusive}))`;
+    where.OR = [
+      { invoiceDate: dateFilter },
+      { AND: [{ invoiceDate: null }, { uploadedAt: dateFilter }] },
+    ];
   }
 
   if (search) {
@@ -166,5 +152,7 @@ export async function readInvoiceList(userId: string, headers: Headers, options:
     if (paidStatus === 'partial') return invoice.status !== 'CANCELLED' && invoice.paymentSummary?.paymentState === 'PARTIAL';
     return true;
   });
+  const sort = options.sort;
+  if (sort) filtered.sort((a, b) => compareInvoiceListRows(a, b, sort));
   return NextResponse.json({ items: filtered.slice(skip, skip + pageSize), total: filtered.length, page, pageSize });
 }

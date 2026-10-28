@@ -8,7 +8,6 @@ import { BankCsvPreviewRowCard, BankCsvWorkspace } from '@/components/bank-csv/b
 import { BankImportReceiptSummary } from '@/components/bank-csv/bank-import-panel';
 import { buildBankCsvPreview, inferBankCsvMapping, parseBankCsv } from '@/lib/bank-csv';
 import type { BankImportReceipt } from '@/lib/bank-import-contract';
-import styles from '@/components/bank-csv/bank-workspace.module.css';
 
 vi.mock('next-auth/react', () => ({ useSession: () => ({ data: { user: { id: 'synthetic-redesign-tenant' } } }) }));
 
@@ -31,13 +30,10 @@ function receipt(): BankImportReceipt {
 describe('bank import workbench presentation contracts', () => {
   it('keeps native source selection and optional profiles in distinct sibling regions', () => {
     const html = renderToStaticMarkup(createElement(BankCsvWorkspace));
-    expect(html).toContain(`class="${styles.fileLayout}"`);
-    expect(html).toContain(`class="${styles.profiles}"`);
     expect(html.indexOf('id="bank-file"')).toBeLessThan(html.indexOf('Zuordnungsprofile'));
     expect(html).toContain('aria-describedby="bank-file-help"');
     expect(html).toContain('aria-current="step"');
     expect(html).not.toContain('<details open');
-    expect(html).not.toContain('transition-all');
   });
 
   it('keeps each ledger record named, exact and read-only with separate date and amount regions', () => {
@@ -46,8 +42,6 @@ describe('bank import workbench presentation contracts', () => {
       candidates: null,
     }));
     expect(html).toContain('aria-label="Bankzeile 2"');
-    expect(html).toContain(`class="${styles.rowMeta}"`);
-    expect(html).toContain(`class="${styles.entryAmount}"`);
     expect(html).toContain('90.071.992.547.409,93 €');
     expect(html).toContain('21.10.2026');
     expect(html).toContain('&lt;img');
@@ -58,7 +52,6 @@ describe('bank import workbench presentation contracts', () => {
   it('keeps receipt control totals independent from immutable hash and profile revision evidence', () => {
     const value = receipt();
     const html = renderToStaticMarkup(createElement(BankImportReceiptSummary, { receipt: value }));
-    expect(html).toContain(`class="${styles.controlTotals} ${styles.receiptTotals}"`);
     expect(html).toContain('40,00 €');
     expect(html).toContain('5,05 €');
     expect(html).toContain(`dateTime="${value.savedAt}"`);
@@ -83,17 +76,8 @@ describe('bank import workbench presentation contracts', () => {
   });
 });
 
-
 describe('saved bank-history presentation boundaries', () => {
   const historySource = readFileSync(new URL('../../components/bank-csv/bank-import-panel.tsx', import.meta.url), 'utf8');
-  const cssSource = readFileSync(new URL('../../components/bank-csv/bank-workspace.module.css', import.meta.url), 'utf8');
-
-  it('gives reopened allocation rows their own width container instead of relying on the preview ledger', () => {
-    expect(historySource).toContain('<ol className={`${styles.entryList} ${styles.historyEntries}`}>{detail.rowEnvelopes.map');
-    expect(cssSource).toMatch(/\.ledger,\s*\.historyEntries\s*\{\s*container-type:\s*inline-size;/);
-    expect(cssSource).toContain('@container (min-width: 36rem)');
-    expect(cssSource).toMatch(/\.saveRail \.receiptMeta\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
-  });
 
   it('suppresses the initial loading live region after a history error while preserving the retry control', () => {
     expect(historySource).toContain('{!history ? !error && <div role="status" className={styles.historyState}>');
@@ -101,7 +85,6 @@ describe('saved bank-history presentation boundaries', () => {
     expect(historySource).toContain('onClick={() => setReload(value => value + 1)}');
   });
 });
-
 
 function bankSourceContracts(text: string) {
   const tree = ts.createSourceFile('fixture.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);

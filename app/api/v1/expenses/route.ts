@@ -1,3 +1,4 @@
+import { parseLegacyAccountingDate } from '@/lib/business-date';
 import { createManualExpense, updateManualExpense, deleteManualExpense, ExpenseMutationError } from '@/lib/expense-service';
 import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
 import { SourceLinkedExpenseError } from '@/lib/source-linked-expense';
@@ -35,9 +36,11 @@ function parseDate(value: unknown, fallbackNow = false): Date {
     if (fallbackNow) return new Date();
     throw new ExpenseMutationError(400, 'VALIDATION_ERROR', 'Invalid date');
   }
-  const date = new Date(String(value));
-  if (!Number.isFinite(date.getTime())) throw new ExpenseMutationError(400, 'VALIDATION_ERROR', 'Invalid date');
-  return date;
+  try {
+    return parseLegacyAccountingDate(String(value));
+  } catch {
+    throw new ExpenseMutationError(400, 'VALIDATION_ERROR', 'Invalid date');
+  }
 }
 
 function parseAmount(value: unknown, required = false): number | undefined {

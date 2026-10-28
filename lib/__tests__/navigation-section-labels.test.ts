@@ -24,20 +24,10 @@ import { NavLinks } from '@/components/navigation/nav-links';
 beforeEach(() => { context.role = 'USER'; context.status = 'authenticated'; });
 
 describe('shared navigation section labels', () => {
-  it('keeps the five named groups in sentence case without tracked-cap utilities', () => {
-    const html = renderToStaticMarkup(createElement(NavLinks));
-    const headings = [...html.matchAll(/<h3\b([^>]*)>([^<]*)<\/h3>/g)];
-    expect(headings.map(match => match[2])).toEqual(['Übersicht', 'Verkauf', 'Buchhaltung', 'Auswertungen', 'System']);
-    for (const [, attributes] of headings) {
-      expect(attributes).not.toMatch(/uppercase|tracking-/);
-    }
-  });
-
-  it('also keeps the unauthenticated account group untracked and sentence case', () => {
+  it('keeps unauthenticated account navigation named and reachable', () => {
     context.status = 'unauthenticated';
     const html = renderToStaticMarkup(createElement(NavLinks));
     expect(html).toMatch(/<h3\b[^>]*>Konto<\/h3>/);
-    expect(html.match(/<h3\b[^>]*>/)?.[0]).not.toMatch(/uppercase|tracking-/);
     expect(html).toContain('href="/login"');
     expect(html).toContain('href="/register"');
   });

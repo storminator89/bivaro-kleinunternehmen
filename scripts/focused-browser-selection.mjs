@@ -1,5 +1,6 @@
 /** Explicit, reviewed browser scope. Unknown critical paths never imply coverage. */
 export const FOCUSED_SPECS = {
+  'e2e/invoice-list-sorting.spec.ts': ['invoice list sorts the complete ledger, continues palette sorting and explains denied deletion'],
   'e2e/invoice-http-request-id.spec.ts': ['HTTP-compatible invoice identity survives a lost save response without duplicate issuance'],
   'e2e/mcp-access.spec.ts': ['LAN agent access defaults to read-only, scopes writes explicitly and revokes immediately'],
   'e2e/feature-backup-roundtrip.spec.ts': ['real backup endpoints remap feature histories, preserve legacy high-water marks and reject conflicts atomically'],
@@ -212,11 +213,51 @@ const mcpContracts = ['lib/__tests__/mcp.test.ts', 'lib/__tests__/mcp-auth.test.
   'lib/__tests__/helpers/database.ts', 'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs',
   'scripts/mcp-browser-env.mjs', 'playwright.focused.config.ts', 'focused-e2e/core.spec.ts'];
 
+// Reviewed 2026-10-28 audit packets. Unique regression markers bind these
+// mappings to the reviewed patch; an unrelated/source-only critical change
+// still needs its own review. Existence is a dependency check, not evidence
+// that tests passed. Ordinary CI retains all financial and security checks.
+const invoiceSortSources = new Set([
+  'app/api/invoices/route.ts', 'lib/server/invoice-list.ts', 'lib/invoice-list-sort.ts',
+  'lib/record-search/list-contract.ts', 'hooks/use-dashboard-data.ts',
+  'hooks/use-record-invoice-list.ts', 'components/dashboard/dashboard-content.tsx',
+]);
+const invoiceSortContracts = [
+  'lib/__tests__/invoice-list-sorting.test.ts', 'lib/__tests__/record-invoice-list-sort-client.test.ts',
+  'lib/__tests__/invoice-list-calendar-boundaries.test.ts', 'lib/__tests__/helpers/database.ts',
+  'scripts/e2e-fixture.mjs', 'scripts/run-e2e.mjs', 'playwright.config.ts',
+  'e2e/helpers/synthetic-login.ts', 'focused-e2e/core.spec.ts', '.github/workflows/ci.yml',
+];
+const calendarAuditSources = new Set([
+  'lib/business-date.ts', 'lib/accounting.ts', 'lib/cashbook-service.ts', 'lib/tax-summary.ts',
+  'app/api/incomes/route.ts', 'app/api/incomes/export/route.ts',
+  'app/api/expenses/route.ts', 'app/api/expenses/export/route.ts', 'app/api/v1/expenses/route.ts',
+]);
+const calendarAuditContracts = [
+  'lib/__tests__/ledger-calendar-boundaries.test.ts', 'lib/__tests__/ledger-date-filter-routes.test.ts',
+  'lib/__tests__/legacy-accounting-date-input.test.ts', 'lib/__tests__/income-business-date.test.ts',
+  'lib/__tests__/accounting.test.ts', 'lib/__tests__/tax-summary.test.ts',
+  'lib/__tests__/cashbook-nonnegative.test.ts', 'lib/__tests__/eur-export-accounting.test.ts',
+  'lib/__tests__/api-boundaries.test.ts', 'lib/__tests__/helpers/database.ts',
+  'vitest.config.mts', '.github/workflows/ci.yml',
+];
+const keyValidationContracts = [...mcpContracts, 'lib/__tests__/api-auth.test.ts', '.github/workflows/ci.yml', 'playwright.security.config.ts'];
+const logoValidationContracts = [
+  'lib/__tests__/logo-upload-validation.test.ts', 'lib/__tests__/file-security-integration.test.ts',
+  'lib/__tests__/upload-path.test.ts', 'lib/__tests__/private-upload-routing.test.ts',
+  'lib/__tests__/request-security.test.ts', 'lib/__tests__/resource-limits.test.ts',
+  'lib/__tests__/helpers/database.ts', '.github/workflows/ci.yml', 'playwright.security.config.ts',
+];
+
 /** @param {string[]} paths @param {(file: string) => boolean} [exists] */
 export function selectFocusedBrowser(paths, exists = () => true) {
   if (!Array.isArray(paths) || paths.length > 5000 || !paths.every(safePath)) throw Error('Invalid changed-path inventory');
   const mcpPacket = paths.some(source => mcpRuntimeSources.has(source));
   const quoteReleaseFoundation = paths.some(source => quoteReleaseFoundationMarkers.has(source));
+  const invoiceSortPacket = paths.includes('e2e/invoice-list-sorting.spec.ts');
+  const calendarAuditPacket = paths.includes('lib/__tests__/ledger-calendar-boundaries.test.ts');
+  const keyValidationPacket = paths.includes('lib/__tests__/mcp-access-keys.test.ts');
+  const logoValidationPacket = paths.includes('lib/__tests__/logo-upload-validation.test.ts');
   const selected = new Set();
   const unknownCritical = new Set();
   let unmappedSourceCount = 0;
@@ -254,6 +295,28 @@ export function selectFocusedBrowser(paths, exists = () => true) {
   ];
   for (const source of [...new Set(paths)]) {
     if (!code(source)) continue;
+    const invoiceSort = source === 'e2e/invoice-list-sorting.spec.ts' || (invoiceSortPacket && invoiceSortSources.has(source));
+    if (invoiceSort) {
+      if (!invoiceSortContracts.every(file => exists(file))) unknownCritical.add(source);
+      add('e2e/invoice-list-sorting.spec.ts', true, source);
+      // Shared dashboard keeps its existing owner/manual-entry journeys.
+      if (source !== 'components/dashboard/dashboard-content.tsx') continue;
+    }
+    if (calendarAuditPacket && calendarAuditSources.has(source)) {
+      if (!calendarAuditContracts.every(file => exists(file))) unknownCritical.add(source);
+      // UTC/input/financial integrity is unit-backed, not browser-certified.
+      continue;
+    }
+    if (keyValidationPacket && source === 'app/api/api-keys/route.ts') {
+      if (!keyValidationContracts.every(file => exists(file))) unknownCritical.add(source);
+      add('e2e/mcp-access.spec.ts', true, source);
+      continue;
+    }
+    if (logoValidationPacket && source === 'app/api/settings/upload-logo/route.ts') {
+      if (!logoValidationContracts.every(file => exists(file))) unknownCritical.add(source);
+      // Malformed multipart and file ownership stay in exact unit/security CI.
+      continue;
+    }
     if (mcpRuntimeSources.has(source) || (mcpPacket && mcpSharedSources.has(source)) || source === 'e2e/mcp-access.spec.ts') {
       if (!mcpContracts.every(file => exists(file))) unknownCritical.add(source);
       add('e2e/mcp-access.spec.ts', true, source);

@@ -5,6 +5,7 @@ import {
   calculateExpenseDeductionForYear,
   getDateRange,
   getIncomeAccountingDate,
+  isDateInCalendarYear,
   isDateInRange,
   isIncludedIncome,
   type AccountingTimeRange,
@@ -50,8 +51,8 @@ export type TaxSummary = {
 
 function dateOnlyRange(year: number) {
   return {
-    start: new Date(year, 0, 1),
-    endExclusive: new Date(year + 1, 0, 1),
+    start: new Date(Date.UTC(year, 0, 1)),
+    endExclusive: new Date(Date.UTC(year + 1, 0, 1)),
   };
 }
 
@@ -114,7 +115,7 @@ export function buildTaxSummary(input: TaxSummaryInput): TaxSummary {
     const base = annualBasis
       ? ((expense.depreciationYears ?? 0) > 0
         ? calculateExpenseDeductionForYear({ ...expense, taxDeductiblePercentage: 100 }, targetYear)
-        : (new Date(expense.date).getFullYear() === targetYear ? expense.amount : 0))
+        : (isDateInCalendarYear(expense.date, targetYear) ? expense.amount : 0))
       : expense.amount;
     return sum + base * (1 - percentage / 100);
   }, 0);

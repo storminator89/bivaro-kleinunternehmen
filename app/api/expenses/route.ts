@@ -1,3 +1,4 @@
+import { BusinessDateError, getLedgerDateFilter, parseLegacyAccountingDate } from '@/lib/business-date';
 import { createManualExpense, updateManualExpense, deleteManualExpense, ExpenseMutationError } from '@/lib/expense-service';
 import { ManualFinancialRecordError } from '@/lib/manual-financial-record-evidence';
 import { SourceLinkedExpenseError } from '@/lib/source-linked-expense';
@@ -65,6 +66,8 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: 'Ungültige Abschreibungsdauer' }, { status: 400 });
       }
 
+      const parsedDate = dateStr ? parseLegacyAccountingDate(dateStr) : new Date();
+
       let receiptFileName = null;
       let storedReceiptFileName = null;
 
@@ -93,14 +96,6 @@ async function postHandler(request: NextRequest) {
         storedReceiptFileName = await writeTenantFile(userId, receipt.name, buffer);
       }
 
-      // Ausgabe in der Datenbank speichern
-      const parsedDate = dateStr ? new Date(dateStr) : new Date();
-      if (Number.isNaN(parsedDate.getTime())) {
-        if (storedReceiptFileName) {
-          try { await deleteTenantFile(userId, storedReceiptFileName); } catch { /* best-effort orphan cleanup */ }
-        }
-        return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
-      }
       try {
         const expense = await createManualExpense(userId, { description, amount: parsedAmount, date: parsedDate, category: category || null, taxRelevant,
           taxDeductiblePercentage: parsedDeductible, receiptFileName, storedReceiptFileName, depreciationYears: parsedDepreciation });
@@ -157,7 +152,7 @@ async function postHandler(request: NextRequest) {
       if (dateValue === null) {
         return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
       }
-      const parsedDate = dateValue === undefined ? new Date() : new Date(dateValue);
+      const parsedDate = dateValue === undefined ? new Date() : parseLegacyAccountingDate(dateValue);
       if (Number.isNaN(parsedDate.getTime())) {
         return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
       }
@@ -168,6 +163,7 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json(expense);
     }
   } catch (error: unknown) {
+    if (error instanceof BusinessDateError) return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
     if (error instanceof ManualFinancialRecordError || error instanceof ExpenseMutationError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {
@@ -213,26 +209,8 @@ export async function GET(request: NextRequest) {
     if (hasReceipt === 'yes') where.storedReceiptFileName = { not: null };
     if (hasReceipt === 'no') where.storedReceiptFileName = null;
 
-    if (dateRange && dateRange !== 'all') {
-      const now = new Date();
-      const thisMonth = now.getMonth();
-      const thisYear = now.getFullYear();
-      if (dateRange === 'thisMonth') {
-        const start = new Date(thisYear, thisMonth, 1);
-        const end = new Date(thisYear, thisMonth + 1, 0, 23, 59, 59, 999);
-        where.date = { gte: start, lte: end };
-      } else if (dateRange === 'lastMonth') {
-        const prevMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-        const prevYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-        const start = new Date(prevYear, prevMonth, 1);
-        const end = new Date(prevYear, prevMonth + 1, 0, 23, 59, 59, 999);
-        where.date = { gte: start, lte: end };
-      } else if (dateRange === 'thisYear') {
-        const start = new Date(thisYear, 0, 1);
-        const end = new Date(thisYear, 11, 31, 23, 59, 59, 999);
-        where.date = { gte: start, lte: end };
-      }
-    }
+    const dateFilter = getLedgerDateFilter(dateRange);
+    if (dateFilter) where.date = dateFilter;
 
     if (search) {
       where.OR = [
@@ -322,7 +300,7 @@ async function putHandler(request: Request) {
     if (dateValue === null) {
       return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
     }
-    const parsedDate = dateValue === undefined ? undefined : new Date(dateValue);
+    const parsedDate = dateValue === undefined ? undefined : parseLegacyAccountingDate(dateValue);
     if (parsedDate && Number.isNaN(parsedDate.getTime())) {
       return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
     }
@@ -331,6 +309,7 @@ async function putHandler(request: Request) {
       category: categoryText, taxRelevant: parsedTaxRelevant, taxDeductiblePercentage: parsedDeductible, receiptUrl: receiptUrlText, depreciationYears: parsedDepreciation });
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof BusinessDateError) return NextResponse.json({ error: 'Ungültiges Datum' }, { status: 400 });
     if (error instanceof ManualFinancialRecordError || error instanceof ExpenseMutationError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof SourceLinkedExpenseError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof UnauthorizedError) {

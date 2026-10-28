@@ -69,3 +69,30 @@ export function formatLocalBusinessDate(value: Date = new Date()): string {
     String(value.getDate()).padStart(2, '0'),
   ].join('-');
 }
+
+/** UTC calendar boundaries shared by ledger lists and their exports. */
+export function getLedgerDateFilter(range: string | null, now = new Date()): { gte: Date; lt: Date } | undefined {
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  if (range === 'thisMonth') {
+    return { gte: new Date(Date.UTC(year, month, 1)), lt: new Date(Date.UTC(year, month + 1, 1)) };
+  }
+  if (range === 'lastMonth') {
+    return { gte: new Date(Date.UTC(year, month - 1, 1)), lt: new Date(Date.UTC(year, month, 1)) };
+  }
+  if (range === 'thisYear') {
+    return { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) };
+  }
+  return undefined;
+}
+
+/** Preserve legacy timestamp inputs, but never normalize an impossible calendar day. */
+export function parseLegacyAccountingDate(value: string | number): Date {
+  const calendar = typeof value === 'string' ? value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[Tt\s]|$)/) : null;
+  if (calendar) {
+    parseBusinessDate(`${calendar[1]}-${calendar[2].padStart(2, '0')}-${calendar[3].padStart(2, '0')}`);
+  }
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) throw new BusinessDateError();
+  return date;
+}

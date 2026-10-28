@@ -13,6 +13,16 @@ import { requireUserId, UnauthorizedError, unauthorizedResponse } from '@/lib/ge
 import { generateApiKey } from '@/lib/api-auth';
 import { createAuditLog, auditSecurityEvent } from '@/lib/audit-log';
 
+function parseKeyId(value: unknown): number | null {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !/^[1-9]\d*$/.test(value))) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 // GET - List all API keys for the current user
 export async function GET(_request: Request) {
   try {
@@ -61,15 +71,16 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
+    if (!isJsonObject(body)) return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     const { name, scopes, expiresInDays } = body;
 
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    if (typeof name !== 'string' || name.trim().length === 0 || name.trim().length > 255) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
     // Validate scopes
     const validScopes = ['read', 'write', 'delete', '*', 'mcp:read', 'mcp:write'];
-    const requestedScopes = scopes || ['read', 'write'];
+    const requestedScopes = scopes === undefined ? ['read', 'write'] : scopes;
 
     if (!Array.isArray(requestedScopes)) {
       return NextResponse.json({ error: 'Scopes must be an array' }, { status: 400 });
@@ -81,6 +92,12 @@ async function postHandler(request: NextRequest) {
       }
     }
 
+    if (expiresInDays !== undefined && expiresInDays !== null &&
+      (typeof expiresInDays !== 'number' || !Number.isSafeInteger(expiresInDays) || expiresInDays < 1 ||
+        !Number.isFinite(new Date(Date.now() + expiresInDays * 86_400_000).getTime()))) {
+      return NextResponse.json({ error: 'Expiration must be a positive whole number of days' }, { status: 400 });
+    }
+
     const isMcp = requestedScopes.some(scope => typeof scope === 'string' && scope.startsWith('mcp:'));
     if (isMcp && (!requestedScopes.includes('mcp:read') || requestedScopes.some(scope => !['mcp:read', 'mcp:write'].includes(scope)))) {
       return NextResponse.json({ error: 'MCP-Zugänge benötigen mcp:read und dürfen keine REST-Rechte enthalten.' }, { status: 400 });
@@ -88,7 +105,7 @@ async function postHandler(request: NextRequest) {
     if (requestedScopes.includes('mcp:write') && process.env.BIVARO_MCP_ALLOW_WRITES !== '1') {
       return NextResponse.json({ error: 'MCP-Schreibzugriff ist am Server gesperrt.' }, { status: 403 });
     }
-    if (isMcp && (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365)) {
+    if (isMcp && (typeof expiresInDays !== 'number' || !Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365)) {
       return NextResponse.json({ error: 'MCP-Zugänge benötigen eine Laufzeit von 1 bis 365 Tagen.' }, { status: 400 });
     }
 
@@ -162,7 +179,7 @@ async function deleteHandler(request: NextRequest) {
   try {
     const userId = await requireUserId();
     const url = new URL(request.url);
-    const id = url.searchParams.get('id');
+    const id = parseKeyId(url.searchParams.get('id'));
 
     if (!id) {
       return NextResponse.json({ error: 'API key ID is required' }, { status: 400 });
@@ -170,7 +187,7 @@ async function deleteHandler(request: NextRequest) {
 
     // Check if API key exists and belongs to user
     const existing = await prisma.apiKey.findFirst({
-      where: { id: parseInt(id), userId },
+      where: { id, userId },
     });
 
     if (!existing) {
@@ -179,7 +196,7 @@ async function deleteHandler(request: NextRequest) {
 
     // Delete the API key (cascades to logs)
     await prisma.apiKey.delete({
-      where: { id: parseInt(id) },
+      where: { id, userId },
     });
 
     // Audit log
@@ -217,15 +234,22 @@ async function putHandler(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { id, name, isActive } = body;
+    if (!isJsonObject(body)) return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    const { name, isActive } = body;
+    const id = parseKeyId(body.id);
 
     if (!id) {
       return NextResponse.json({ error: 'API key ID is required' }, { status: 400 });
     }
 
+    if ((name !== undefined && (typeof name !== 'string' || !name.trim() || name.trim().length > 255)) ||
+      (isActive !== undefined && typeof isActive !== 'boolean')) {
+      return NextResponse.json({ error: 'Invalid API key name or active state' }, { status: 400 });
+    }
+
     // Check if API key exists and belongs to user
     const existing = await prisma.apiKey.findFirst({
-      where: { id: parseInt(id), userId },
+      where: { id, userId },
     });
 
     if (!existing) {
@@ -233,10 +257,10 @@ async function putHandler(request: NextRequest) {
     }
 
     const apiKey = await prisma.apiKey.update({
-      where: { id: parseInt(id) },
+      where: { id, userId },
       data: {
-        ...(name !== undefined && { name: name.trim() }),
-        ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+        ...(typeof name === 'string' && { name: name.trim() }),
+        ...(typeof isActive === 'boolean' && { isActive }),
       },
       select: {
         id: true,

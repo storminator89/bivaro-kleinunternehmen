@@ -8,6 +8,92 @@ Historische Git-Basis: `0208c62f26ff60cf855dfef21e74e0ff6466e7c9`; keine Aussage
 
 Diese Übersicht enthält alle 160 Backlog-Tickets. Der Status ist der aktuelle Arbeitsstand dieser Welle und ersetzt weder die im Backlog offenen ACs noch fachliche, rechtliche oder produktive Freigaben. „Vorgeschlagen“ bedeutet ausdrücklich, dass in dieser Welle keine Umsetzung vorliegt. Architektur-Discovery ist separat von Produktimplementierung ausgewiesen.
 
+## Testqualitätsbereinigung vom 28.10.2026
+
+Separater lokaler uncommitted Wartungsschritt nach der Fehlerprüfung; **keine
+weitere Änderung an Produktionslogik, Schema oder Datenmigration**. Der frühere
+Auditstand von 628 bestandenen Tests ist historisch und wird nicht als heutige
+Gesamtprüfung übernommen. Alle **160 historischen Ticketobjekte und die Summen
+3 abgeschlossen / 21 teilumgesetzt / 4 Discovery / 132 vorgeschlagen** bleiben
+unverändert; keine BV-Ticket-ID oder fachliche Abnahme wird neu vergeben.
+
+Entfernt wurden fünf reine UI-Layout-/Großschreibungsfälle, dekorative
+Klassen-/Designinventare und drei README-Galerieform-Assertions. Zwei
+Rechnungs-Quelltextinventare wurden durch fünf Render-/Callbackfälle ersetzt;
+die Datums-Requestmatrix wird durch unabhängige Parser-/Endpunktproben und
+einen gültigen Schalttag gesichert. Drei breite Steuerzonenfälle wurden durch
+einen Jahresweitergabe-Vertrag ersetzt; das exhaustive Referenzraster bleibt.
+Der Browserselektor gruppiert wiederholte fehlende Nachweise bei unverändertem
+Fail-closed-Vertrag. Sicherheits-, Finanz-, Owner-, Recovery-, Fokus- und
+konkrete Textkontrast-Guards bleiben erhalten; kein Testfile wurde ganz gelöscht.
+
+Finale gemeinsame Prüfung: **13 Suites / 146 Tests in 0,732 s bestanden**, mit
+explizitem neuem temporärem `DATABASE_URL`; vollständiger Lint und abschließende
+Typprüfung jeweils **Exit 0**. Der zusätzliche fachliche Teilnachweis von
+16 Suites / 126 Tests überschneidet sich und wird nicht addiert. Gezielte
+Mutationen zeigen, dass echte falsche Zustände erkannt werden, während eine
+rein kosmetische Klassenumbenennung die neuen Renderfälle bestehen lässt.
+Dies ist kein globaler Mutation-Score und keine neue Browser-/Buildabnahme.
+
+**Prüfvorkommnis:** Eine frühere Datums-Mutationsprobe hatte kein explizites
+neues `DATABASE_URL`; zwei synthetische Kassenbuchfälle erreichten über den
+geerbten/defaultkonfigurierten Prisma-Pfad bestätigte Leseabfragen und endeten
+mit 404 vor den im Quellcode nachgelagerten Finanz-/Audit-Schreibpfaden. Das
+tatsächliche Datenbankziel wurde nicht unabhängig identifiziert; keine
+Datenbankinspektion und keine Behauptung bewiesener Dateisystemunverändertheit.
+Recovery: expliziter ablehnender Prisma-Transaktionsmock mit Nichtaufrufassertion
+sowie neue temporäre `DATABASE_URL` für jeden weiteren Testlauf. Historische
+Vorfalls-/Auditquellen bleiben erhalten. Keine Veröffentlichung/Produktivfreigabe;
+vorheriger Turbopack-/Browserblocker bleibt offen.
+
+Einzelentscheidungen, erhaltene Verträge, tatsächliche Gegenproben und lokale
+Protokolle: [Testqualitätsbericht](../testing/test-quality-review-2026-10-28.md).
+
+## Lokaler Wartungscheck vom 28.10.2026
+
+Separater Fehler-/Sicherheits-/Konsistenzcheck auf Basis
+`982f87ea00c0cb632c6ef716ecd565740e70ee79`; **lokale uncommitted Umsetzung**,
+keine historische Ticketneubewertung. Die 160 Ticketobjekte und Statussummen
+bleiben **3 abgeschlossen / 21 teilumgesetzt / 4 Discovery / 132 vorgeschlagen**.
+Es wurde keine neue BV-Ticket-ID erfunden und kein bestehendes AC abgeschlossen.
+
+Korrigiert: globale Rechnungssortierung vor Pagination einschließlich privater
+Palettenfortsetzung; sichtbare Löschfehler; UTC-Kalendergrenzen in Listen,
+Exporten und Steuerberechnungen; Ablehnung unmöglicher Ausgaben-/Kassenbuchdaten;
+strikte API-Schlüsselwerte und Logo-Dateifelder. Bisher keine bestätigte
+ausnutzbare Sicherheitslücke in der begrenzten Quellcodestichprobe.
+
+Nachweise: UI **4 Suites / 25 Tests**, Kalender **6 Suites / 36 Tests je UTC,
+Berlin und Los Angeles**, bestehende Finanzintegration **4 Suites / 43 Tests**,
+API-Schlüssel/Logo **2 Suites / 9 Tests**, zusätzliche Sicherheitsgrenzen
+**7 Suites / 69 Tests** bestanden; Produktionsabhängigkeitsaudit meldet **0**.
+Die Zeitzonenwiederholungen sind dieselben Fälle. Isolierte temporäre
+SQLite-Fixtures; ein anfängliches Prisma-`EPERM` wurde mit freigegebener
+Prozessausführung behoben, ohne Fixture-Schutz abzuschwächen.
+
+**Finale lokale Anwendungsprüfung: 28 Suites / 222 Tests in 13,78 s, voller
+Lint und unterstützter Webpack-Produktionsbuild einschließlich Typprüfung und
+Notice-Postbuild bestanden (je Exit 0).** Die genannten Teilmengen werden nicht
+zusätzlich gezählt. Bestehende PDF-Worker-`createRequire`-Tracingwarnungen bleiben.
+Der Standard-Browserrunner scheiterte vor Tests auch im freigegebenen
+Wiederholungslauf: Turbopack-CSS-Worker konnte keinen lokalen Port binden
+(`EPERM`). Der begrenzte Rechnungs-Browserfall/Screenshot bleibt deshalb
+verfasst, aber unausgeführt; Standardbuild und Browserabnahme bleiben offen.
+Eine begrenzte Testentdeckung mit `--list --no-deps` erkannte genau Erstadmin
+und neue Sortierregression; kein Browserlauf. Abschließende Typprüfung und
+voller Lint nach expliziter CI-Selektorzuordnung bestanden. Vollständige
+Skripttests: **36 Suites bestanden / 1 übersprungen, 406 Tests bestanden /
+6 übersprungen in 52,18 s**; die Selektor-Teilmenge von 56 Tests wird nicht
+zusätzlich gezählt. Der unabhängig geprüfte Selektor erkennt den Patch als
+Core + vier begrenzte Specs, **0 unbekannte kritische / 0 nicht zugeordnete
+Quellpfade**; keine pauschale Gesamtsuite oder Browserabnahmebehauptung.
+Die disjunkten finalen Anwendungs-/Skriptläufe ergeben zusammen **64 Suites
+bestanden / 1 übersprungen, 628 Tests bestanden / 6 übersprungen**; dies ist
+kein einzelner Gesamtlauf.
+Keine Migration, Veröffentlichung oder Produktionsfreigabe. Einzelbefunde,
+Dateien, tatsächliche Tests und verbleibende Grenzen:
+[Wartungsbericht](../testing/app-audit-fixes-2026-10-28.md).
+
 ## Lokaler Integrationscheckpoint: GitHub-Issue #96 vom 23.10.2026, 00:28 UTC
 
 [GitHub-Issue #96](https://github.com/storminator89/bivaro-kleinunternehmen/issues/96)

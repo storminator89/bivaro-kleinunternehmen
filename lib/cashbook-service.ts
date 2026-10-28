@@ -1,3 +1,4 @@
+import { parseLegacyAccountingDate } from '@/lib/business-date';
 import { assertManualRecordNotFinalized } from '@/lib/manual-financial-record-evidence';
 import { assertExpenseNotSourceLinked, SourceLinkedExpenseError } from '@/lib/source-linked-expense';
 import { Prisma } from '@prisma/client';
@@ -29,9 +30,11 @@ function idValue(value: unknown): number {
 }
 
 function dateValue(value: unknown): Date {
-  const date = value === undefined ? new Date() : new Date(String(value));
-  if (!Number.isFinite(date.getTime())) throw new CashbookError('Ungültiges Datum');
-  return date;
+  try {
+    return value === undefined ? new Date() : parseLegacyAccountingDate(String(value));
+  } catch {
+    throw new CashbookError('Ungültiges Datum');
+  }
 }
 
 function textValue(value: unknown, required = false): string | null {

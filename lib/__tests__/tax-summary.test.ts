@@ -4,6 +4,26 @@ import { buildTaxSummary } from "@/lib/tax-summary";
 const annualNow = new Date("2026-06-15T12:00:00.000Z");
 
 describe("buildTaxSummary", () => {
+  it("keeps UTC year-edge bookings and deduction shares in their calendar year", () => {
+    const summary = buildTaxSummary({
+      year: 2026,
+      timeRange: "thisYear",
+      now: annualNow,
+      incomes: [
+        { amount: 100, date: "2026-01-01T00:00:00.000Z", taxRelevant: true },
+        { amount: 900, date: "2027-01-01T00:00:00.000Z", taxRelevant: true },
+      ],
+      expenses: [
+        { amount: 40, date: "2026-01-01T00:00:00.000Z", taxRelevant: true, taxDeductiblePercentage: 50 },
+        { amount: 80, date: "2027-01-01T00:00:00.000Z", taxRelevant: false },
+      ],
+    });
+    expect(summary.totalIncome).toBe(100);
+    expect(summary.totalExpenses).toBe(20);
+    expect(summary.partialDeductionShortfall).toBe(20);
+    expect(summary.nonTaxRelevantExpenseCount).toBe(0);
+  });
+
   it("aggregates more than the list API page size", () => {
     const incomes = Array.from({ length: 101 }, (_, id) => ({
       amount: 10,

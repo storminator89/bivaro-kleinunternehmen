@@ -24,9 +24,9 @@ async function postHandler(request: NextRequest) {
 
     const boundedBody = await readRequestBodyWithinLimit(request, MAX_LOGO_UPLOAD_BYTES + 128 * 1024);
     const formData = await requestWithBody(request, boundedBody).formData();
-    const file = formData.get('file') as File | null;
+    const file = formData.get('file');
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 });
     }
 

@@ -18,7 +18,7 @@ vi.mock('@/lib/api-auth', async () => {
   };
 });
 
-import { POST as postWebIncome } from '@/app/api/incomes/route';
+import { GET as getWebIncomes, POST as postWebIncome } from '@/app/api/incomes/route';
 import { POST as postApiIncome } from '@/app/api/v1/incomes/route';
 import { createManualIncome } from '@/lib/income-service';
 
@@ -55,6 +55,28 @@ function apiRequest(body: object) {
 }
 
 describe('manual income business dates', () => {
+  it('filters persisted UTC business dates at month and year boundaries', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-12-15T12:00:00.000Z'));
+    await database.client.income.createMany({ data: [
+      { userId: 'income-date-user', description: 'filter-edge previous', amount: 1, date: new Date('2026-11-30T00:00:00.000Z') },
+      { userId: 'income-date-user', description: 'filter-edge first', amount: 1, date: new Date('2026-12-01T00:00:00.000Z') },
+      { userId: 'income-date-user', description: 'filter-edge last', amount: 1, date: new Date('2026-12-31T00:00:00.000Z') },
+      { userId: 'income-date-user', description: 'filter-edge next', amount: 1, date: new Date('2027-01-01T00:00:00.000Z') },
+    ] });
+    for (const [range, expected] of [
+      ['thisMonth', ['filter-edge first', 'filter-edge last']],
+      ['lastMonth', ['filter-edge previous']],
+      ['thisYear', ['filter-edge previous', 'filter-edge first', 'filter-edge last']],
+    ] as const) {
+      const response = await getWebIncomes(new Request(`http://localhost/api/incomes?search=filter-edge&dateRange=${range}`));
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.items.map((income: { description: string }) => income.description).sort()).toEqual([...expected].sort());
+    }
+    await database.client.income.deleteMany({ where: { userId: 'income-date-user', description: { startsWith: 'filter-edge' } } });
+  });
+
   it('uses the same explicit calendar date in Web and v1 when saved in January', async () => {
     // Freeze only Date so the request is evaluated in January while Prisma's
     // timers and transaction timeouts remain real.

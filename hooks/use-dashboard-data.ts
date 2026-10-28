@@ -121,7 +121,7 @@ export function useDashboardData({
 
   const [invoicesPage, setInvoicesPage] = useState(1);
   const [invoicesPageSize, setInvoicesPageSize] = useState(10);
-  const recordInvoiceList = useRecordInvoiceList(activeTab === 'invoices', invoicesPageSize);
+  const recordInvoiceList = useRecordInvoiceList(activeTab === 'invoices', invoicesPageSize, filters.invoices);
 
   const expenseSearch = useDebouncedValue(filters.expenses.searchTerm);
   const incomeSearch = useDebouncedValue(filters.incomes.searchTerm);
@@ -156,6 +156,8 @@ export function useDashboardData({
     paidStatus: filters.invoices.paidStatus !== "all" ? filters.invoices.paidStatus : undefined,
     dateRange: filters.invoices.dateRange !== "all" ? filters.invoices.dateRange : undefined,
     search: invoiceSearch || undefined,
+    sortBy: filters.invoices.sortBy,
+    sortOrder: filters.invoices.sortOrder,
   });
   const quotesQueryString = toQuery({
     document: selectedDocument === null ? undefined : selectedDocument || "0",
@@ -294,6 +296,8 @@ export function useDashboardData({
     filters.invoices.paidStatus,
     filters.invoices.dateRange,
     filters.invoices.searchTerm,
+    filters.invoices.sortBy,
+    filters.invoices.sortOrder,
   ]);
 
   useEffect(() => {

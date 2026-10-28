@@ -168,11 +168,11 @@ export function getDateRange(
 /** Match date-fns subMonths semantics for dates such as 31 May -> 28 Feb. */
 function subtractMonthsClamped(value: Date, months: number): Date {
   const result = new Date(value);
-  const day = result.getDate();
-  result.setDate(1);
-  result.setMonth(result.getMonth() - months);
-  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
-  result.setDate(Math.min(day, lastDay));
+  const day = result.getUTCDate();
+  result.setUTCDate(1);
+  result.setUTCMonth(result.getUTCMonth() - months);
+  const lastDay = new Date(Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)).getUTCDate();
+  result.setUTCDate(Math.min(day, lastDay));
   return result;
 }
 
